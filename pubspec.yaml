@@ -1,0 +1,48 @@
+name: material_ledger
+description: "Construction Material Ledger — The Architectural Ledger"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Routing
+  go_router: ^14.8.1
+
+  # Typography
+  google_fonts:
+
+  # UI Utilities
+  gap:
+  flutter_svg: ^2.0.17
+
+  # Utilities
+  intl:
+
+  # Persistence
+  shared_preferences:
+
+  # UUID generation
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/icons/
+    - assets/images/
