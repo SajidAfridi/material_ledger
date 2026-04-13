@@ -48,6 +48,7 @@ class RequestLineItem {
     required this.materialNameSecondary,
     required this.quantity,
     required this.unitSymbol,
+    this.spec = '',
   });
 
   final String materialId;
@@ -56,12 +57,16 @@ class RequestLineItem {
   final double quantity;
   final String unitSymbol;
 
+  /// Short spec description, e.g. "OPC-43 Grade", "12mm / Grade 60"
+  final String spec;
+
   RequestLineItem copyWith({double? quantity}) => RequestLineItem(
     materialId: materialId,
     materialName: materialName,
     materialNameSecondary: materialNameSecondary,
     quantity: quantity ?? this.quantity,
     unitSymbol: unitSymbol,
+    spec: spec,
   );
 
   Map<String, dynamic> toJson() => {
@@ -70,6 +75,7 @@ class RequestLineItem {
     'materialNameSecondary': materialNameSecondary,
     'quantity': quantity,
     'unitSymbol': unitSymbol,
+    'spec': spec,
   };
 
   factory RequestLineItem.fromJson(Map<String, dynamic> json) =>
@@ -79,5 +85,6 @@ class RequestLineItem {
         materialNameSecondary: json['materialNameSecondary'] as String? ?? '',
         quantity: (json['quantity'] as num).toDouble(),
         unitSymbol: json['unitSymbol'] as String,
+        spec: json['spec'] as String? ?? '',
       );
 }

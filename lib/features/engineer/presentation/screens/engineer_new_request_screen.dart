@@ -9,16 +9,22 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/material_item.dart';
+import '../../../../shared/models/material_request.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 
-/// Create Material Requisition screen.
+/// Create Material Requisition screen (redesigned).
 ///
-/// Mobile: single column (project → notes → items list).
-/// Web (≥840): two-panel layout — left: project + notes, right: requested items table.
+/// **Mobile**: Single-column form — project selector → selected items
+/// (with "Browse & Add More" link) → notes → submit button.
+///
+/// **Web (≥840)**: Three-panel layout —
+/// left: category sidebar, center: material browsing grid,
+/// right: "The Ledger" cart with items, project tag, priority & submit.
 class EngineerNewRequestScreen extends ConsumerStatefulWidget {
   const EngineerNewRequestScreen({super.key});
 
@@ -53,6 +59,8 @@ class _EngineerNewRequestScreenState
 
     setState(() => _saving = true);
 
+    final priority = ref.read(selectedPriorityProvider);
+
     ref
         .read(materialRequestsProvider.notifier)
         .addRequest(
@@ -60,6 +68,7 @@ class _EngineerNewRequestScreenState
           projectNameSecondary: selectedProject.nameSecondary,
           itemCount: lineItems.length,
           lineItems: lineItems,
+          priority: priority,
           notes: _notesController.text.trim().isNotEmpty
               ? _notesController.text.trim()
               : null,
@@ -69,6 +78,7 @@ class _EngineerNewRequestScreenState
     // Clear draft state
     ref.read(draftLineItemsProvider.notifier).clear();
     ref.read(selectedProjectProvider.notifier).state = null;
+    ref.read(selectedPriorityProvider.notifier).state = RequestPriority.normal;
     _notesController.clear();
 
     if (!mounted) return;
@@ -78,48 +88,6 @@ class _EngineerNewRequestScreenState
       SnackBar(
         content: Text(AppStrings.requestSubmitted.primary),
         backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        ),
-      ),
-    );
-    context.go(RoutePaths.engineerHome);
-  }
-
-  void _saveDraft() {
-    final selectedProject = ref.read(selectedProjectProvider);
-    final lineItems = ref.read(draftLineItemsProvider);
-
-    if (selectedProject == null && lineItems.isEmpty) {
-      _showError('Add a project or items to save a draft');
-      return;
-    }
-
-    ref
-        .read(materialRequestsProvider.notifier)
-        .saveDraft(
-          projectName: selectedProject?.name ?? 'Untitled Draft',
-          projectNameSecondary: selectedProject?.nameSecondary ?? '',
-          itemCount: lineItems.length,
-          lineItems: lineItems,
-          notes: _notesController.text.trim().isNotEmpty
-              ? _notesController.text.trim()
-              : null,
-          siteLocation: selectedProject?.siteLocation,
-        );
-
-    // Clear draft state
-    ref.read(draftLineItemsProvider.notifier).clear();
-    ref.read(selectedProjectProvider.notifier).state = null;
-    _notesController.clear();
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(AppStrings.draftSaved.primary),
-        backgroundColor: AppColors.primary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -148,186 +116,281 @@ class _EngineerNewRequestScreenState
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isWide = screenWidth >= 840;
 
+    if (isWide) {
+      return _buildWideLayout(lang, screenWidth);
+    }
+    return _buildMobileLayout(lang);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  MOBILE LAYOUT
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildMobileLayout(AppLanguage lang) {
+    final lineItems = ref.watch(draftLineItemsProvider);
+
     return SafeArea(
-      child: Column(
-        children: [
-          // Scrollable content
-          Expanded(
-            child: CustomScrollView(
-              slivers: [
-                // ─── Title ──────────────────────────────────
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenHorizontal,
-                    AppSpacing.xxl,
-                    AppSpacing.screenHorizontal,
-                    0,
+      child: CustomScrollView(
+        slivers: [
+          // ─── Title ─────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screenHorizontal,
+              AppSpacing.xxl,
+              AppSpacing.screenHorizontal,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppStrings.newMaterialRequest.primary,
+                    style: GoogleFonts.inter(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                      color: AppColors.onSurface,
+                    ),
                   ),
-                  sliver: SliverToBoxAdapter(
+                  const Gap(AppSpacing.xs),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      AppStrings.newMaterialRequest.secondary(lang),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                      textDirection: lang.isRtl
+                          ? TextDirection.rtl
+                          : TextDirection.ltr,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SliverGap(AppSpacing.xxl),
+
+          // ─── Select Project ────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(child: _ProjectSelector(lang: lang)),
+          ),
+
+          const SliverGap(AppSpacing.xxl),
+
+          // ─── Selected Items Header ─────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: BilingualText(
+                      english: AppStrings.selectedItems.primary,
+                      secondary: AppStrings.selectedItems.secondary(lang),
+                      englishStyle: AppTypography.titleMedium.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (lineItems.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusFull,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.shopping_cart_rounded,
+                            size: 14,
+                            color: AppColors.onPrimary,
+                          ),
+                          const Gap(AppSpacing.xs),
+                          Text(
+                            '${lineItems.length} ${AppStrings.itemsSelected.primary.split(' ').first}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.onPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          const SliverGap(AppSpacing.lg),
+
+          // ─── Item Cards ────────────────────────────────
+          if (lineItems.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenHorizontal,
+              ),
+              sliver: SliverList.separated(
+                itemCount: lineItems.length,
+                separatorBuilder: (_, __) => const Gap(AppSpacing.listItemGap),
+                itemBuilder: (_, index) {
+                  final item = lineItems[index];
+                  return _MobileItemCard(
+                    item: item,
+                    lang: lang,
+                    onRemove: () => ref
+                        .read(draftLineItemsProvider.notifier)
+                        .removeItem(item.materialId),
+                    onQuantityChanged: (qty) => ref
+                        .read(draftLineItemsProvider.notifier)
+                        .updateQuantity(item.materialId, qty),
+                  );
+                },
+              ),
+            ),
+
+          // ─── Empty State ───────────────────────────────
+          if (lineItems.isEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenHorizontal,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: LedgerCard(
+                  child: Center(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          AppStrings.createMaterialRequisition.primary,
-                          style: GoogleFonts.inter(
-                            fontSize: isWide ? 32 : 22,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                            color: AppColors.onSurface,
+                        Icon(
+                          Icons.playlist_add_rounded,
+                          size: 48,
+                          color: AppColors.onSurfaceVariant.withValues(
+                            alpha: 0.2,
                           ),
                         ),
-                        const Gap(AppSpacing.sm),
-                        if (isWide)
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  AppStrings.createReqSubtitle.primary,
-                                  style: AppTypography.bodyMedium.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                              const Gap(AppSpacing.md),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.md,
-                                  vertical: AppSpacing.xs,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: BorderRadius.circular(
-                                    AppSpacing.radiusFull,
-                                  ),
-                                ),
-                                child: Text(
-                                  AppStrings.createReqSubtitle.secondary(lang),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.onSurfaceVariant,
-                                    height: 1.5,
-                                  ),
-                                  textDirection: TextDirection.rtl,
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                AppStrings.createReqSubtitle.primary,
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.onSurfaceVariant,
-                                ),
-                              ),
-                              const Gap(AppSpacing.xs),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.md,
-                                  vertical: AppSpacing.xs,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: BorderRadius.circular(
-                                    AppSpacing.radiusFull,
-                                  ),
-                                ),
-                                child: Text(
-                                  AppStrings.createReqSubtitle.secondary(lang),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.onSurfaceVariant,
-                                    height: 1.5,
-                                  ),
-                                  textDirection: TextDirection.rtl,
-                                ),
-                              ),
-                            ],
-                          ),
+                        const Gap(AppSpacing.md),
+                        Text(
+                          AppStrings.addMoreItems.primary,
+                          style: AppTypography.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ),
                   ),
                 ),
+              ),
+            ),
 
-                const SliverGap(AppSpacing.xxl),
+          const SliverGap(AppSpacing.lg),
 
-                // ─── Body ───────────────────────────────────
-                if (isWide)
-                  _buildWideLayout(lang)
-                else
-                  _buildMobileLayout(lang),
+          // ─── Browse & Add More Button ──────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(child: _BrowseAndAddButton(lang: lang)),
+          ),
 
-                const SliverGap(AppSpacing.colossal),
-              ],
+          const SliverGap(AppSpacing.xxl),
+
+          // ─── Additional Notes ──────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _NotesSection(controller: _notesController, lang: lang),
             ),
           ),
 
-          // ─── Bottom Action Bar ─────────────────────────
-          _BottomActionBar(
-            onSaveDraft: _saveDraft,
-            onSubmit: _saving ? null : _submit,
-            isLoading: _saving,
-            lang: lang,
+          const SliverGap(AppSpacing.xxl),
+
+          // ─── Submit Button ─────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PrimaryButton(
+                    label: AppStrings.submitRequest.primary,
+                    icon: Icons.send_rounded,
+                    isLoading: _saving,
+                    isExpanded: true,
+                    onPressed: _saving ? null : _submit,
+                  ),
+                  const Gap(AppSpacing.xs),
+                  Center(
+                    child: Text(
+                      AppStrings.submitRequest.secondary(lang),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.onSurfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                        height: 1.5,
+                      ),
+                      textDirection: lang.isRtl
+                          ? TextDirection.rtl
+                          : TextDirection.ltr,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
+
+          const SliverGap(AppSpacing.colossal),
         ],
       ),
     );
   }
 
-  // ─── Wide: Two-Panel Layout ──────────────────────────────────
-  Widget _buildWideLayout(AppLanguage lang) {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenHorizontal,
-      ),
-      sliver: SliverToBoxAdapter(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left panel: Project + Notes
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _ProjectSelector(lang: lang),
-                  const Gap(AppSpacing.xxl),
-                  _NotesSection(controller: _notesController, lang: lang),
-                  const Gap(AppSpacing.xxl),
-                  _StockAvailabilityBanner(lang: lang),
-                ],
-              ),
-            ),
-            const Gap(AppSpacing.xxl),
-            // Right panel: Items table
-            Expanded(flex: 3, child: _RequestedItemsSection(lang: lang)),
-          ],
-        ),
-      ),
-    );
-  }
+  // ═══════════════════════════════════════════════════════════════
+  //  WEB / DESKTOP LAYOUT — 3-Panel
+  // ═══════════════════════════════════════════════════════════════
 
-  // ─── Mobile: Single Column Layout ────────────────────────────
-  Widget _buildMobileLayout(AppLanguage lang) {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.screenHorizontal,
-      ),
-      sliver: SliverToBoxAdapter(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ProjectSelector(lang: lang),
-            const Gap(AppSpacing.xxl),
-            _NotesSection(controller: _notesController, lang: lang),
-            const Gap(AppSpacing.xxl),
-            _StockAvailabilityBanner(lang: lang),
-            const Gap(AppSpacing.xxl),
-            _RequestedItemsSection(lang: lang),
-          ],
-        ),
+  Widget _buildWideLayout(AppLanguage lang, double screenWidth) {
+    return SafeArea(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ─── Left Sidebar ────────────────────────────
+          _WebCategorySidebar(lang: lang),
+
+          // ─── Center Panel: Material Browsing ─────────
+          Expanded(flex: 3, child: _WebBrowsingPanel(lang: lang)),
+
+          // ─── Right Panel: The Ledger Cart ────────────
+          SizedBox(
+            width: screenWidth >= 1200 ? 360 : 320,
+            child: _WebLedgerPanel(
+              lang: lang,
+              notesController: _notesController,
+              saving: _saving,
+              onSubmit: _saving ? null : _submit,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -363,7 +426,7 @@ class _ProjectSelector extends ConsumerWidget {
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
           child: DropdownButtonFormField<String>(
-            initialValue: selected?.id,
+            value: selected?.id,
             hint: Text(
               AppStrings.selectProject.primary,
               style: AppTypography.bodyLarge.copyWith(
@@ -403,470 +466,46 @@ class _ProjectSelector extends ConsumerWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// NOTES SECTION
+// MOBILE — Item Card
 // ═══════════════════════════════════════════════════════════════════
 
-class _NotesSection extends StatelessWidget {
-  const _NotesSection({required this.controller, required this.lang});
-  final TextEditingController controller;
-  final AppLanguage lang;
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isWide = screenWidth >= 840;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        BilingualText(
-          english: AppStrings.generalNotes.primary,
-          secondary: AppStrings.generalNotes.secondary(lang),
-          englishStyle: AppTypography.titleSmall.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const Gap(AppSpacing.md),
-        TextFormField(
-          controller: controller,
-          maxLines: isWide ? 5 : 3,
-          style: isWide ? AppTypography.bodyLarge : AppTypography.bodyMedium,
-          decoration: InputDecoration(
-            hintText: AppStrings.generalNotesPlaceholder.primary,
-            hintStyle:
-                (isWide ? AppTypography.bodyLarge : AppTypography.bodyMedium)
-                    .copyWith(
-                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-                    ),
-          ),
-        ),
-        const Gap(AppSpacing.sm),
-        Text(
-          AppStrings.generalNotesHelper.primary,
-          style: AppTypography.bodySmall,
-        ),
-        const Gap(AppSpacing.xxs),
-        Text(
-          AppStrings.generalNotesHelper.secondary(lang),
-          style: TextStyle(
-            fontSize: 10,
-            color: AppColors.onSurfaceVariant,
-            height: 1.5,
-          ),
-          textDirection: TextDirection.rtl,
-        ),
-      ],
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// STOCK AVAILABILITY BANNER
-// ═══════════════════════════════════════════════════════════════════
-
-class _StockAvailabilityBanner extends StatelessWidget {
-  const _StockAvailabilityBanner({required this.lang});
-  final AppLanguage lang;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.primaryContainer.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline_rounded, size: 20, color: AppColors.primary),
-          const Gap(AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppStrings.stockAvailability.primary,
-                  style: AppTypography.titleSmall.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Gap(AppSpacing.xs),
-                Text(
-                  AppStrings.stockAvailabilityDesc.primary,
-                  style: AppTypography.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// REQUESTED ITEMS SECTION
-// ═══════════════════════════════════════════════════════════════════
-
-class _RequestedItemsSection extends ConsumerWidget {
-  const _RequestedItemsSection({required this.lang});
-  final AppLanguage lang;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lineItems = ref.watch(draftLineItemsProvider);
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isWide = screenWidth >= 840;
-
-    return LedgerCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              isWide ? AppSpacing.xxl : AppSpacing.lg,
-              AppSpacing.xl,
-              isWide ? AppSpacing.xxl : AppSpacing.lg,
-              AppSpacing.lg,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: BilingualText(
-                    english: AppStrings.requestedItems.primary,
-                    secondary: AppStrings.requestedItems.secondary(lang),
-                    englishStyle: isWide
-                        ? AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                          )
-                        : AppTypography.titleSmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                  ),
-                ),
-                _AddItemButton(lang: lang),
-              ],
-            ),
-          ),
-
-          // Column headers (wide only)
-          if (isWide && lineItems.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      AppStrings.materialName.primary.toUpperCase(),
-                      style: AppTypography.labelMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      AppStrings.quantity.primary.toUpperCase(),
-                      style: AppTypography.labelMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Text(
-                      AppStrings.unit.primary.toUpperCase(),
-                      style: AppTypography.labelMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 48,
-                    child: Text(
-                      AppStrings.action.primary,
-                      style: AppTypography.labelMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          if (lineItems.isNotEmpty) const Gap(AppSpacing.sm),
-
-          // Items
-          ...lineItems.map(
-            (item) => _RequestedItemRow(
-              item: item,
-              lang: lang,
-              isWide: isWide,
-              onRemove: () => ref
-                  .read(draftLineItemsProvider.notifier)
-                  .removeItem(item.materialId),
-              onQuantityChanged: (qty) => ref
-                  .read(draftLineItemsProvider.notifier)
-                  .updateQuantity(item.materialId, qty),
-            ),
-          ),
-
-          // Empty state
-          if (lineItems.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.colossal),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.playlist_add_rounded,
-                      size: 48,
-                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.2),
-                    ),
-                    const Gap(AppSpacing.md),
-                    Text(
-                      AppStrings.addMoreItems.primary,
-                      style: AppTypography.bodySmall,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          const Gap(AppSpacing.md),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// ADD ITEM BUTTON (opens picker)
-// ═══════════════════════════════════════════════════════════════════
-
-class _AddItemButton extends ConsumerWidget {
-  const _AddItemButton({required this.lang});
-  final AppLanguage lang;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isWide = screenWidth >= 840;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showMaterialPicker(context, ref),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: isWide ? AppSpacing.lg : AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              width: 1.5,
-            ),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.add_rounded, size: 16, color: AppColors.primary),
-              const Gap(AppSpacing.xs),
-              Text(
-                isWide
-                    ? '${AppStrings.addNewItem.primary} | ${AppStrings.addNewItem.secondary(lang)}'
-                    : AppStrings.addNewItem.primary,
-                style: GoogleFonts.inter(
-                  fontSize: isWide ? 12 : 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showMaterialPicker(BuildContext context, WidgetRef ref) {
-    final materials = ref.read(materialsProvider);
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surfaceContainerLowest,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.radiusXl),
-        ),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.3,
-          maxChildSize: 0.85,
-          expand: false,
-          builder: (ctx, scrollController) {
-            return Column(
-              children: [
-                // Handle
-                const Gap(AppSpacing.md),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const Gap(AppSpacing.lg),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xxl,
-                  ),
-                  child: Text(
-                    AppStrings.selectMaterial.primary,
-                    style: AppTypography.titleLarge,
-                  ),
-                ),
-                const Gap(AppSpacing.lg),
-                Expanded(
-                  child: ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                    ),
-                    itemCount: materials.length,
-                    separatorBuilder: (_, _) =>
-                        const Gap(AppSpacing.listItemGap),
-                    itemBuilder: (_, index) {
-                      final m = materials[index];
-                      return LedgerCard(
-                        onTap: () {
-                          ref
-                              .read(draftLineItemsProvider.notifier)
-                              .addItem(
-                                RequestLineItem(
-                                  materialId: m.id,
-                                  materialName: m.name,
-                                  materialNameSecondary: m.urduName,
-                                  quantity: 1,
-                                  unitSymbol: m.unit.symbol,
-                                ),
-                              );
-                          Navigator.of(ctx).pop();
-                        },
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceContainerHigh,
-                                borderRadius: BorderRadius.circular(
-                                  AppSpacing.radiusSm,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.inventory_2_outlined,
-                                size: 18,
-                                color: AppColors.onSurfaceVariant.withValues(
-                                  alpha: 0.5,
-                                ),
-                              ),
-                            ),
-                            const Gap(AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(m.name, style: AppTypography.titleSmall),
-                                  if (m.urduName.isNotEmpty)
-                                    Text(
-                                      m.urduName,
-                                      style: AppTypography.bodySmall,
-                                      textDirection: TextDirection.rtl,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              m.unit.symbol.toUpperCase(),
-                              style: AppTypography.labelMedium.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// REQUESTED ITEM ROW
-// ═══════════════════════════════════════════════════════════════════
-
-class _RequestedItemRow extends StatefulWidget {
-  const _RequestedItemRow({
+class _MobileItemCard extends StatefulWidget {
+  const _MobileItemCard({
     required this.item,
     required this.lang,
-    required this.isWide,
     required this.onRemove,
     required this.onQuantityChanged,
   });
 
   final RequestLineItem item;
   final AppLanguage lang;
-  final bool isWide;
   final VoidCallback onRemove;
   final ValueChanged<double> onQuantityChanged;
 
   @override
-  State<_RequestedItemRow> createState() => _RequestedItemRowState();
+  State<_MobileItemCard> createState() => _MobileItemCardState();
 }
 
-class _RequestedItemRowState extends State<_RequestedItemRow> {
+class _MobileItemCardState extends State<_MobileItemCard> {
   late final TextEditingController _qtyController;
 
   @override
   void initState() {
     super.initState();
     _qtyController = TextEditingController(
-      text: widget.item.quantity.toStringAsFixed(0),
+      text: widget.item.quantity.toStringAsFixed(
+        widget.item.quantity.truncateToDouble() == widget.item.quantity ? 0 : 1,
+      ),
     );
   }
 
   @override
-  void didUpdateWidget(covariant _RequestedItemRow oldWidget) {
+  void didUpdateWidget(covariant _MobileItemCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.quantity != widget.item.quantity) {
-      _qtyController.text = widget.item.quantity.toStringAsFixed(0);
+      _qtyController.text = widget.item.quantity.toStringAsFixed(
+        widget.item.quantity.truncateToDouble() == widget.item.quantity ? 0 : 1,
+      );
     }
   }
 
@@ -878,52 +517,97 @@ class _RequestedItemRowState extends State<_RequestedItemRow> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isWide) {
-      return Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xxl,
-          vertical: AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: AppColors.outlineVariant.withValues(alpha: 0.08),
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            // Name
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.item.materialName,
-                    style: AppTypography.titleSmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (widget.item.materialNameSecondary.isNotEmpty)
+    return LedgerCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: Name + spec chip + delete
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      widget.item.materialNameSecondary,
-                      style: AppTypography.bodySmall.copyWith(fontSize: 11),
-                      textDirection: TextDirection.rtl,
+                      widget.item.materialName,
+                      style: AppTypography.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
+                    if (widget.item.spec.isNotEmpty) ...[
+                      const Gap(AppSpacing.xs),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xxs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusSm,
+                          ),
+                        ),
+                        child: Text(
+                          widget.item.spec,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-            // Quantity input
-            Expanded(
-              flex: 1,
-              child: SizedBox(
-                width: 80,
+              IconButton(
+                onPressed: widget.onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+                color: AppColors.error.withValues(alpha: 0.7),
+                iconSize: 20,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+
+          const Gap(AppSpacing.md),
+
+          // Bottom row: Qty label + input + unit
+          Row(
+            children: [
+              Text(
+                'Qty:',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              const Gap(AppSpacing.sm),
+              SizedBox(
+                width: 64,
                 child: TextFormField(
                   controller: _qtyController,
                   keyboardType: TextInputType.number,
-                  style: AppTypography.bodyLarge,
+                  style: AppTypography.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                   textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.sm,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerHigh,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                   onChanged: (v) {
                     final qty = double.tryParse(v);
                     if (qty != null && qty > 0) {
@@ -932,114 +616,14 @@ class _RequestedItemRowState extends State<_RequestedItemRow> {
                   },
                 ),
               ),
-            ),
-            // Unit chip
-            Expanded(
-              flex: 1,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryContainer.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                  ),
-                  child: Text(
-                    widget.item.unitSymbol.toUpperCase(),
-                    style: AppTypography.labelMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
+              const Gap(AppSpacing.sm),
+              Text(
+                widget.item.unitSymbol,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.onSurfaceVariant,
                 ),
               ),
-            ),
-            // Delete
-            SizedBox(
-              width: 48,
-              child: Center(
-                child: IconButton(
-                  onPressed: widget.onRemove,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  color: AppColors.error,
-                  iconSize: 20,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Mobile: compact card row
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.item.materialName,
-                  style: AppTypography.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (widget.item.materialNameSecondary.isNotEmpty)
-                  Text(
-                    widget.item.materialNameSecondary,
-                    style: AppTypography.bodySmall.copyWith(fontSize: 11),
-                    textDirection: TextDirection.rtl,
-                  ),
-              ],
-            ),
-          ),
-          const Gap(AppSpacing.sm),
-          SizedBox(
-            width: 64,
-            child: TextFormField(
-              controller: _qtyController,
-              keyboardType: TextInputType.number,
-              style: AppTypography.bodyMedium,
-              textAlign: TextAlign.center,
-              onChanged: (v) {
-                final qty = double.tryParse(v);
-                if (qty != null && qty > 0) widget.onQuantityChanged(qty);
-              },
-            ),
-          ),
-          const Gap(AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.primaryContainer.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-            ),
-            child: Text(
-              widget.item.unitSymbol.toUpperCase(),
-              style: AppTypography.labelMedium.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-                fontSize: 11,
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: widget.onRemove,
-            icon: const Icon(Icons.delete_outline_rounded),
-            color: AppColors.error,
-            iconSize: 18,
-            visualDensity: VisualDensity.compact,
+            ],
           ),
         ],
       ),
@@ -1048,82 +632,1341 @@ class _RequestedItemRowState extends State<_RequestedItemRow> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BOTTOM ACTION BAR
+// MOBILE — "Browse & Add More" Dashed Button
 // ═══════════════════════════════════════════════════════════════════
 
-class _BottomActionBar extends StatelessWidget {
-  const _BottomActionBar({
-    required this.onSaveDraft,
-    required this.onSubmit,
-    required this.isLoading,
-    required this.lang,
-  });
-
-  final VoidCallback onSaveDraft;
-  final VoidCallback? onSubmit;
-  final bool isLoading;
+class _BrowseAndAddButton extends StatelessWidget {
+  const _BrowseAndAddButton({required this.lang});
   final AppLanguage lang;
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isWide = screenWidth >= 840;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.go(RoutePaths.engineerBrowse),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: CustomPaint(
+          painter: _DashedBorderPainter(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            strokeWidth: 1.5,
+            radius: AppSpacing.radiusMd,
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.lg,
+              horizontal: AppSpacing.lg,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_shopping_cart_rounded,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                const Gap(AppSpacing.sm),
+                Text(
+                  AppStrings.browseAndAddMore.primary,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const Gap(AppSpacing.md),
+                Text(
+                  AppStrings.browseAndAddMore.secondary(lang),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primary.withValues(alpha: 0.6),
+                    height: 1.5,
+                  ),
+                  textDirection: lang.isRtl
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paints a dashed rounded rectangle border.
+class _DashedBorderPainter extends CustomPainter {
+  _DashedBorderPainter({
+    required this.color,
+    this.strokeWidth = 1.5,
+    this.radius = 12.0,
+    this.dashWidth = 8.0,
+    this.dashGap = 5.0,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+  final double dashWidth;
+  final double dashGap;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    final rRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Radius.circular(radius),
+    );
+
+    final path = Path()..addRRect(rRect);
+    final metrics = path.computeMetrics();
+
+    for (final metric in metrics) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final end = (distance + dashWidth).clamp(0.0, metric.length);
+        final extracted = metric.extractPath(distance, end);
+        canvas.drawPath(extracted, paint);
+        distance += dashWidth + dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      color != oldDelegate.color ||
+      strokeWidth != oldDelegate.strokeWidth ||
+      radius != oldDelegate.radius;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NOTES SECTION
+// ═══════════════════════════════════════════════════════════════════
+
+class _NotesSection extends StatelessWidget {
+  const _NotesSection({required this.controller, required this.lang});
+  final TextEditingController controller;
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        BilingualText(
+          english: AppStrings.additionalNotesOptional.primary,
+          secondary: AppStrings.additionalNotesOptional.secondary(lang),
+          englishStyle: AppTypography.titleSmall.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const Gap(AppSpacing.md),
+        TextFormField(
+          controller: controller,
+          maxLines: 3,
+          style: AppTypography.bodyMedium,
+          decoration: InputDecoration(
+            hintText: AppStrings.generalNotesPlaceholder.primary,
+            hintStyle: AppTypography.bodyMedium.copyWith(
+              color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEB — Left Category Sidebar
+// ═══════════════════════════════════════════════════════════════════
+
+class _WebCategorySidebar extends ConsumerWidget {
+  const _WebCategorySidebar({required this.lang});
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentFilter = ref.watch(browseCategoryFilterProvider);
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isWide ? AppSpacing.xxl : AppSpacing.lg,
-        vertical: AppSpacing.lg,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: AppSpacing.ambientBlur,
-            offset: Offset.zero,
+      width: 220,
+      color: AppColors.surfaceContainerLowest,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.xxl,
+              AppSpacing.xl,
+              AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppStrings.materialOps.primary,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const Gap(AppSpacing.xxs),
+                Text(
+                  AppStrings.engineersPortal.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Gap(AppSpacing.lg),
+
+          // Categories section label
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Text(
+              AppStrings.categories.primary,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary.withValues(alpha: 0.6),
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+
+          const Gap(AppSpacing.sm),
+
+          // Category items
+          _SidebarNavItem(
+            icon: Icons.inventory_2_outlined,
+            activeIcon: Icons.inventory_2_rounded,
+            label: AppStrings.browse.primary,
+            secondary: AppStrings.browse.secondary(lang),
+            isActive: currentFilter == BrowseCategoryFilter.all,
+            lang: lang,
+            onTap: () => ref.read(browseCategoryFilterProvider.notifier).state =
+                BrowseCategoryFilter.all,
+          ),
+          _SidebarNavItem(
+            icon: Icons.assignment_outlined,
+            activeIcon: Icons.assignment_rounded,
+            label: AppStrings.requests.primary,
+            secondary: AppStrings.requests.secondary(lang),
+            isActive: false,
+            lang: lang,
+            onTap: () => context.go(RoutePaths.engineerHome),
+          ),
+          _SidebarNavItem(
+            icon: Icons.architecture_outlined,
+            activeIcon: Icons.architecture_rounded,
+            label: 'Projects',
+            secondary: AppStrings.selectProject.secondary(lang),
+            isActive: false,
+            lang: lang,
+            onTap: () {},
+          ),
+
+          const Gap(AppSpacing.xxl),
+
+          // Structure section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Text(
+              AppStrings.structure.primary,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary.withValues(alpha: 0.6),
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+
+          const Gap(AppSpacing.sm),
+
+          _SidebarSubItem(
+            label: 'Valves & Fittings',
+            isActive: currentFilter == BrowseCategoryFilter.valvesFittings,
+            onTap: () => ref.read(browseCategoryFilterProvider.notifier).state =
+                BrowseCategoryFilter.valvesFittings,
+          ),
+          _SidebarSubItem(
+            label: 'Pipes & Ducts',
+            isActive: currentFilter == BrowseCategoryFilter.pipesDucts,
+            onTap: () => ref.read(browseCategoryFilterProvider.notifier).state =
+                BrowseCategoryFilter.pipesDucts,
+          ),
+          _SidebarSubItem(
+            label: 'Fasteners & Tools',
+            isActive: currentFilter == BrowseCategoryFilter.fasteners,
+            onTap: () => ref.read(browseCategoryFilterProvider.notifier).state =
+                BrowseCategoryFilter.fasteners,
+          ),
+
+          const Spacer(),
+
+          // Bottom items
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.help_outline_rounded,
+                  size: 18,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+                const Gap(AppSpacing.sm),
+                Text(
+                  AppStrings.support.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              0,
+              AppSpacing.xl,
+              AppSpacing.xxl,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.logout_rounded,
+                  size: 18,
+                  color: AppColors.error.withValues(alpha: 0.6),
+                ),
+                const Gap(AppSpacing.sm),
+                Text(
+                  AppStrings.signOut.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.error.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            // Save as Draft
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onSaveDraft,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isWide ? AppSpacing.xl : AppSpacing.md,
-                    vertical: AppSpacing.md,
+    );
+  }
+}
+
+class _SidebarNavItem extends StatelessWidget {
+  const _SidebarNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.secondary,
+    required this.isActive,
+    required this.lang,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final String secondary;
+  final bool isActive;
+  final AppLanguage lang;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
+          ),
+          color: isActive
+              ? AppColors.primaryFixed.withValues(alpha: 0.15)
+              : Colors.transparent,
+          child: Row(
+            children: [
+              Icon(
+                isActive ? activeIcon : icon,
+                size: 20,
+                color: isActive
+                    ? AppColors.primary
+                    : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+              const Gap(AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: isActive
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isActive
+                            ? AppColors.primary
+                            : AppColors.onSurface,
+                      ),
+                    ),
+                    Text(
+                      secondary,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isActive
+                            ? AppColors.primary.withValues(alpha: 0.5)
+                            : AppColors.onSurfaceVariant.withValues(alpha: 0.4),
+                        height: 1.4,
+                      ),
+                      textDirection: lang.isRtl
+                          ? TextDirection.rtl
+                          : TextDirection.ltr,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarSubItem extends StatelessWidget {
+  const _SidebarSubItem({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              const Gap(AppSpacing.xxxl),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                    color: isActive
+                        ? AppColors.primary
+                        : AppColors.onSurfaceVariant,
                   ),
-                  child: Text(
-                    isWide
-                        ? '${AppStrings.saveAsDraft.primary} | ${AppStrings.saveAsDraft.secondary(lang)}'
-                        : AppStrings.saveAsDraft.primary,
-                    style: GoogleFonts.inter(
-                      fontSize: isWide ? 14 : 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.onSurface,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEB — Center Browsing Panel
+// ═══════════════════════════════════════════════════════════════════
+
+class _WebBrowsingPanel extends ConsumerWidget {
+  const _WebBrowsingPanel({required this.lang});
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final materials = ref.watch(webFilteredMaterialsProvider);
+    final stockFilter = ref.watch(webStockFilterProvider);
+
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ─── Title ──────────────────────────────────
+          Row(
+            children: [
+              Text(
+                '${AppStrings.newMaterialRequest.primary} | ',
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                  color: AppColors.onSurface,
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  AppStrings.newMaterialRequest.secondary(lang),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                  textDirection: lang.isRtl
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                ),
+              ),
+            ],
+          ),
+
+          const Gap(AppSpacing.xs),
+
+          Text(
+            'Select materials from the active inventory to add to your ledger.',
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+
+          const Gap(AppSpacing.xxl),
+
+          // ─── Search Bar ─────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Gap(AppSpacing.lg),
+                Icon(
+                  Icons.search_rounded,
+                  size: 20,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+                const Gap(AppSpacing.sm),
+                Expanded(
+                  child: TextField(
+                    onChanged: (query) {
+                      ref.read(browseSearchQueryProvider.notifier).state =
+                          query;
+                    },
+                    style: AppTypography.bodyLarge,
+                    decoration: InputDecoration(
+                      hintText:
+                          '${AppStrings.searchMaterials.primary} | ${AppStrings.searchMaterials.secondary(lang)}',
+                      hintStyle: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.onSurfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.lg,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Gap(AppSpacing.lg),
+
+          // ─── Filter Chips ───────────────────────────
+          Row(
+            children: [
+              _StockFilterChip(
+                label: AppStrings.allItems.primary,
+                isSelected: stockFilter == WebStockFilter.all,
+                onTap: () => ref.read(webStockFilterProvider.notifier).state =
+                    WebStockFilter.all,
+              ),
+              const Gap(AppSpacing.sm),
+              _StockFilterChip(
+                label: AppStrings.availableFilter.primary,
+                isSelected: stockFilter == WebStockFilter.available,
+                onTap: () => ref.read(webStockFilterProvider.notifier).state =
+                    WebStockFilter.available,
+              ),
+              const Gap(AppSpacing.sm),
+              _StockFilterChip(
+                label: AppStrings.lowStockFilter.primary,
+                isSelected: stockFilter == WebStockFilter.lowStock,
+                onTap: () => ref.read(webStockFilterProvider.notifier).state =
+                    WebStockFilter.lowStock,
+              ),
+            ],
+          ),
+
+          const Gap(AppSpacing.xxl),
+
+          // ─── Material Grid ──────────────────────────
+          Expanded(
+            child: materials.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 48,
+                          color: AppColors.onSurfaceVariant.withValues(
+                            alpha: 0.2,
+                          ),
+                        ),
+                        const Gap(AppSpacing.md),
+                        Text(
+                          'No materials found',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 1.35,
+                          crossAxisSpacing: AppSpacing.lg,
+                          mainAxisSpacing: AppSpacing.lg,
+                        ),
+                    itemCount: materials.length,
+                    itemBuilder: (_, index) {
+                      final m = materials[index];
+                      return _WebMaterialCard(material: m, lang: lang);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StockFilterChip extends StatelessWidget {
+  const _StockFilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+            border: isSelected
+                ? null
+                : Border.all(
+                    color: AppColors.outlineVariant.withValues(alpha: 0.3),
+                  ),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? AppColors.onPrimary : AppColors.onSurface,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Web Material Card ─────────────────────────────────────────────
+
+class _WebMaterialCard extends ConsumerWidget {
+  const _WebMaterialCard({required this.material, required this.lang});
+  final MaterialItem material;
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLowStock = material.stockStatus == StockStatus.lowStock;
+    final isOutOfStock = material.stockStatus == StockStatus.outOfStock;
+    final statusLabel = isLowStock
+        ? 'LOW STOCK'
+        : isOutOfStock
+        ? 'OUT OF STOCK'
+        : 'IN STOCK';
+    final statusColor = isLowStock
+        ? AppColors.warning
+        : isOutOfStock
+        ? AppColors.error
+        : AppColors.success;
+
+    return LedgerCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top: placeholder image + stock badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Placeholder
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  size: 24,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.3),
+                ),
+              ),
+              const Gap(AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Stock badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xxs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusSm,
+                        ),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: GoogleFonts.inter(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: statusColor,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const Gap(AppSpacing.xs),
+                    Text(
+                      material.name,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.onSurface,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const Gap(AppSpacing.xs),
+
+          // Secondary name
+          Text(
+            material.urduName,
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+              height: 1.4,
+            ),
+            textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
+          ),
+
+          // Spec info
+          Text(
+            material.category.label,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+
+          const Spacer(),
+
+          // Bottom: stock count + add button
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${material.formattedQuantity} Available',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: isOutOfStock
+                      ? null
+                      : () {
+                          ref
+                              .read(draftLineItemsProvider.notifier)
+                              .addItem(
+                                RequestLineItem(
+                                  materialId: material.id,
+                                  materialName: material.name,
+                                  materialNameSecondary: material.urduName,
+                                  quantity: 1,
+                                  unitSymbol: material.unit.symbol,
+                                  spec: material.category.label,
+                                ),
+                              );
+                        },
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isOutOfStock
+                          ? AppColors.surfaceContainerHigh
+                          : AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.add_rounded,
+                      size: 20,
+                      color: isOutOfStock
+                          ? AppColors.onSurfaceVariant.withValues(alpha: 0.3)
+                          : AppColors.onPrimary,
                     ),
                   ),
                 ),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WEB — Right Panel: "The Ledger" Cart
+// ═══════════════════════════════════════════════════════════════════
+
+class _WebLedgerPanel extends ConsumerWidget {
+  const _WebLedgerPanel({
+    required this.lang,
+    required this.notesController,
+    required this.saving,
+    required this.onSubmit,
+  });
+
+  final AppLanguage lang;
+  final TextEditingController notesController;
+  final bool saving;
+  final VoidCallback? onSubmit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lineItems = ref.watch(draftLineItemsProvider);
+    final priority = ref.watch(selectedPriorityProvider);
+    final selectedProject = ref.watch(selectedProjectProvider);
+
+    return Container(
+      color: AppColors.surfaceContainerLow,
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.xxl),
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppStrings.theLedger.primary,
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.onSurface,
+                            ),
+                          ),
+                          Text(
+                            AppStrings.theLedger.secondary(lang),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.onSurfaceVariant,
+                              height: 1.5,
+                            ),
+                            textDirection: lang.isRtl
+                                ? TextDirection.rtl
+                                : TextDirection.ltr,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (lineItems.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.xs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.error,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusFull,
+                          ),
+                        ),
+                        child: Text(
+                          '${lineItems.length} ${AppStrings.itemsSelected.primary}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.onError,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                const Gap(AppSpacing.xxl),
+
+                // Line items
+                if (lineItems.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.colossal,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.add_shopping_cart_rounded,
+                            size: 40,
+                            color: AppColors.onSurfaceVariant.withValues(
+                              alpha: 0.15,
+                            ),
+                          ),
+                          const Gap(AppSpacing.md),
+                          Text(
+                            'Click + on materials to add them here',
+                            style: AppTypography.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                ...lineItems.map(
+                  (item) => _WebLedgerItem(
+                    item: item,
+                    lang: lang,
+                    onRemove: () => ref
+                        .read(draftLineItemsProvider.notifier)
+                        .removeItem(item.materialId),
+                    onQuantityChanged: (qty) => ref
+                        .read(draftLineItemsProvider.notifier)
+                        .updateQuantity(item.materialId, qty),
+                  ),
+                ),
+
+                const Gap(AppSpacing.xxl),
+
+                // Project Tag
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '${AppStrings.projectTag.primary} | ',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.onSurface,
+                          ),
+                        ),
+                        Text(
+                          AppStrings.projectTag.secondary(lang),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                          textDirection: lang.isRtl
+                              ? TextDirection.rtl
+                              : TextDirection.ltr,
+                        ),
+                        const Gap(AppSpacing.lg),
+                        if (selectedProject?.siteLocation != null)
+                          Flexible(
+                            child: Text(
+                              selectedProject!.siteLocation!,
+                              style: AppTypography.bodyMedium,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const Gap(AppSpacing.md),
+                    _ProjectSelector(lang: lang),
+                  ],
+                ),
+
+                const Gap(AppSpacing.xxl),
+
+                // Priority Level
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '${AppStrings.priorityLevel.primary} | ',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.onSurface,
+                          ),
+                        ),
+                        Text(
+                          AppStrings.priorityLevel.secondary(lang),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                          textDirection: lang.isRtl
+                              ? TextDirection.rtl
+                              : TextDirection.ltr,
+                        ),
+                      ],
+                    ),
+                    const Gap(AppSpacing.md),
+                    Row(
+                      children: [
+                        _PriorityChip(
+                          label: AppStrings.normal.primary,
+                          isSelected: priority == RequestPriority.normal,
+                          onTap: () =>
+                              ref
+                                      .read(selectedPriorityProvider.notifier)
+                                      .state =
+                                  RequestPriority.normal,
+                        ),
+                        const Gap(AppSpacing.sm),
+                        _PriorityChip(
+                          label: AppStrings.high.primary,
+                          isSelected: priority == RequestPriority.urgent,
+                          onTap: () =>
+                              ref
+                                      .read(selectedPriorityProvider.notifier)
+                                      .state =
+                                  RequestPriority.urgent,
+                        ),
+                        const Gap(AppSpacing.sm),
+                        _PriorityChip(
+                          label: AppStrings.urgent.primary,
+                          isSelected: priority == RequestPriority.critical,
+                          onTap: () =>
+                              ref
+                                      .read(selectedPriorityProvider.notifier)
+                                      .state =
+                                  RequestPriority.critical,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const Gap(AppSpacing.xxl),
+              ],
             ),
-            Gap(isWide ? AppSpacing.lg : AppSpacing.md),
-            // Submit
-            Expanded(
-              child: PrimaryButton(
-                label: AppStrings.submitRequest.primary,
-                icon: Icons.send_rounded,
-                isLoading: isLoading,
-                isExpanded: true,
-                onPressed: onSubmit,
+          ),
+
+          // Submit button
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.xxl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PrimaryButton(
+                  label: AppStrings.submitRequisition.primary,
+                  isLoading: saving,
+                  isExpanded: true,
+                  onPressed: onSubmit,
+                ),
+                const Gap(AppSpacing.xs),
+                Center(
+                  child: Text(
+                    AppStrings.submitRequisition.secondary(lang),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                      height: 1.5,
+                    ),
+                    textDirection: lang.isRtl
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Web Ledger Item (with +/- stepper) ────────────────────────────
+
+class _WebLedgerItem extends StatelessWidget {
+  const _WebLedgerItem({
+    required this.item,
+    required this.lang,
+    required this.onRemove,
+    required this.onQuantityChanged,
+  });
+
+  final RequestLineItem item;
+  final AppLanguage lang;
+  final VoidCallback onRemove;
+  final ValueChanged<double> onQuantityChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Name + remove
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.materialName,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.onSurface,
+                      ),
+                    ),
+                    if (item.materialNameSecondary.isNotEmpty)
+                      Text(
+                        item.materialNameSecondary,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
+                          height: 1.4,
+                        ),
+                        textDirection: lang.isRtl
+                            ? TextDirection.rtl
+                            : TextDirection.ltr,
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onRemove,
+                icon: const Icon(Icons.close_rounded),
+                iconSize: 18,
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+
+          const Gap(AppSpacing.md),
+
+          // Quantity stepper
+          Row(
+            children: [
+              // Minus button
+              _StepperButton(
+                icon: Icons.remove,
+                onTap: item.quantity > 1
+                    ? () => onQuantityChanged(item.quantity - 1)
+                    : null,
+              ),
+              // Quantity display
+              Container(
+                width: 56,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                decoration: const BoxDecoration(
+                  color: AppColors.surfaceContainerHighest,
+                ),
+                child: Text(
+                  item.quantity.toStringAsFixed(
+                    item.quantity.truncateToDouble() == item.quantity ? 0 : 1,
+                  ),
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+              ),
+              // Plus button
+              _StepperButton(
+                icon: Icons.add,
+                onTap: () => onQuantityChanged(item.quantity + 1),
+              ),
+              const Gap(AppSpacing.md),
+              Text(
+                item.unitSymbol.isNotEmpty
+                    ? item.unitSymbol[0].toUpperCase() +
+                          item.unitSymbol.substring(1)
+                    : '',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepperButton extends StatelessWidget {
+  const _StepperButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: onTap != null
+                ? AppColors.onSurface
+                : AppColors.onSurfaceVariant.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Priority Chip ─────────────────────────────────────────────────
+
+class _PriorityChip extends StatelessWidget {
+  const _PriorityChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: isSelected ? AppColors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              border: isSelected
+                  ? null
+                  : Border.all(
+                      color: AppColors.outlineVariant.withValues(alpha: 0.4),
+                    ),
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? AppColors.onPrimary : AppColors.onSurface,
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

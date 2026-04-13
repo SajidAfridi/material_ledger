@@ -1079,6 +1079,135 @@ abstract final class AppStrings {
     hi: 'त्वरित कार्रवाई',
   );
 
+  // ─── New Request Screen (Redesigned) ────────────────────────────
+  static const newMaterialRequest = TranslatableString(
+    en: 'New Material Request',
+    ar: 'طلب مواد جديد',
+    ur: 'میٹیریل کی نئی درخواست',
+    hi: 'नई सामग्री अनुरोध',
+  );
+  static const selectedItems = TranslatableString(
+    en: 'Selected Items',
+    ar: 'العناصر المختارة',
+    ur: 'منتخب اشیاء',
+    hi: 'चयनित आइटम',
+  );
+  static const browseAndAddMore = TranslatableString(
+    en: 'Browse & Add More',
+    ar: 'تصفح وأضف المزيد',
+    ur: 'مزید اشیاء شامل کریں',
+    hi: 'ब्राउज़ करें और जोड़ें',
+  );
+  static const additionalNotesOptional = TranslatableString(
+    en: 'Additional Notes (Optional)',
+    ar: 'ملاحظات إضافية (اختياري)',
+    ur: 'اضافی نوٹ (اختیاری)',
+    hi: 'अतिरिक्त नोट्स (वैकल्पिक)',
+  );
+  static const submitRequisition = TranslatableString(
+    en: 'Submit Requisition',
+    ar: 'تقديم الطلب',
+    ur: 'درخواست جمع کروائیں',
+    hi: 'मांग पत्र जमा करें',
+  );
+  static const theLedger = TranslatableString(
+    en: 'The Ledger',
+    ar: 'دفتر الطلبات',
+    ur: 'درخواست لیجر',
+    hi: 'लेजर',
+  );
+  static const projectTag = TranslatableString(
+    en: 'Project Tag',
+    ar: 'علامة المشروع',
+    ur: 'پروجیکٹ ٹیگ',
+    hi: 'प्रोजेक्ट टैग',
+  );
+  static const priorityLevel = TranslatableString(
+    en: 'Priority Level',
+    ar: 'مستوى الأولوية',
+    ur: 'ترجیحی سطح',
+    hi: 'प्राथमिकता स्तर',
+  );
+  static const allItems = TranslatableString(
+    en: 'ALL ITEMS',
+    ar: 'كل العناصر',
+    ur: 'تمام اشیاء',
+    hi: 'सभी आइटम',
+  );
+  static const availableFilter = TranslatableString(
+    en: 'AVAILABLE',
+    ar: 'متاح',
+    ur: 'دستیاب',
+    hi: 'उपलब्ध',
+  );
+  static const lowStockFilter = TranslatableString(
+    en: 'LOW STOCK',
+    ar: 'مخزون منخفض',
+    ur: 'کم اسٹاک',
+    hi: 'कम स्टॉक',
+  );
+  static const searchMaterials = TranslatableString(
+    en: 'Search Materials...',
+    ar: 'ابحث عن المواد...',
+    ur: 'اشیاء تلاش کریں...',
+    hi: 'सामग्री खोजें...',
+  );
+  static const materialOps = TranslatableString(
+    en: 'Material Ops',
+    ar: 'عمليات المواد',
+    ur: 'مواد آپریشنز',
+    hi: 'सामग्री संचालन',
+  );
+  static const engineersPortal = TranslatableString(
+    en: 'Engineers Portal',
+    ar: 'بوابة المهندسين',
+    ur: 'انجینئرز پورٹل',
+    hi: 'इंजीनियर पोर्टल',
+  );
+
+  static const structure = TranslatableString(
+    en: 'STRUCTURE',
+    ar: 'الهيكل',
+    ur: 'ساخت',
+    hi: 'संरचना',
+  );
+  static const support = TranslatableString(
+    en: 'Support',
+    ar: 'الدعم',
+    ur: 'مدد',
+    hi: 'सहायता',
+  );
+  static const signOut = TranslatableString(
+    en: 'Sign Out',
+    ar: 'تسجيل الخروج',
+    ur: 'سائن آؤٹ',
+    hi: 'साइन आउट',
+  );
+  static const itemsSelected = TranslatableString(
+    en: 'Items Selected',
+    ar: 'عناصر مختارة',
+    ur: 'آئٹمز منتخب',
+    hi: 'आइटम चयनित',
+  );
+  static const normal = TranslatableString(
+    en: 'Normal',
+    ar: 'عادي',
+    ur: 'عام',
+    hi: 'सामान्य',
+  );
+  static const high = TranslatableString(
+    en: 'High',
+    ar: 'عالي',
+    ur: 'زیادہ',
+    hi: 'उच्च',
+  );
+  static const urgent = TranslatableString(
+    en: 'Urgent',
+    ar: 'عاجل',
+    ur: 'فوری',
+    hi: 'अत्यावश्यक',
+  );
+
   // ─── Draft ──────────────────────────────────────────────────────
   static const draftSaved = TranslatableString(
     en: 'Draft saved successfully',

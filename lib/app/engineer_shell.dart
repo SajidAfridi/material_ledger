@@ -1,17 +1,24 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants/constants.dart';
+import '../shared/models/app_language.dart';
+import '../shared/models/app_strings.dart';
+import '../shared/providers/language_provider.dart';
+import '../shared/providers/notification_provider.dart';
 import 'router.dart';
 
 /// Engineer shell — responsive navigation.
 ///
-/// Mobile (< 840px): Bottom NavigationBar with 4 tabs.
-/// Tablet/Desktop (≥ 840px): NavigationRail on the left + content area.
+/// Mobile (< 840px): Custom bottom navigation with floating "New Request" CTA.
+/// Tablet/Desktop (≥ 840px): Custom NavigationRail with highlighted CTA.
 ///
-/// Tabs: My Requests, Browse Materials, New Request, Profile.
-class EngineerShellScreen extends StatelessWidget {
+/// Tabs: My Requests · Browse · **New Request** · Profile
+class EngineerShellScreen extends ConsumerWidget {
   const EngineerShellScreen({super.key, required this.child});
 
   final Widget child;
@@ -20,25 +27,26 @@ class EngineerShellScreen extends StatelessWidget {
     _NavItem(
       icon: Icons.assignment_outlined,
       activeIcon: Icons.assignment_rounded,
-      label: 'My Requests',
+      translatable: AppStrings.requests,
       path: RoutePaths.engineerHome,
     ),
     _NavItem(
       icon: Icons.inventory_2_outlined,
       activeIcon: Icons.inventory_2_rounded,
-      label: 'Browse',
+      translatable: AppStrings.browse,
       path: RoutePaths.engineerBrowse,
     ),
+    // Index 2 is the special "New Request" CTA
     _NavItem(
-      icon: Icons.add_circle_outline_rounded,
-      activeIcon: Icons.add_circle_rounded,
-      label: 'New Request',
+      icon: Icons.add_rounded,
+      activeIcon: Icons.add_rounded,
+      translatable: AppStrings.newRequest,
       path: RoutePaths.engineerNewRequest,
     ),
     _NavItem(
       icon: Icons.person_outlined,
       activeIcon: Icons.person_rounded,
-      label: 'Profile',
+      translatable: AppStrings.profile,
       path: RoutePaths.engineerProfile,
     ),
   ];
@@ -52,76 +60,64 @@ class EngineerShellScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final currentIndex = _currentIndex(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final useRail = screenWidth >= 840;
+    final lang = ref.watch(languageProvider);
 
     if (useRail) {
-      return _buildRailLayout(context, currentIndex);
+      return _buildRailLayout(context, ref, currentIndex, screenWidth, lang);
     }
-    return _buildMobileLayout(context, currentIndex);
+    return _buildMobileLayout(context, ref, currentIndex, lang);
   }
 
-  // ─── Mobile: Bottom NavigationBar ──────────────────────────────
-  Widget _buildMobileLayout(BuildContext context, int currentIndex) {
+  // ─── Mobile: Custom Bottom NavigationBar ───────────────────────
+  Widget _buildMobileLayout(
+    BuildContext context,
+    WidgetRef ref,
+    int currentIndex,
+    AppLanguage lang,
+  ) {
+    final unreadCount = ref.watch(unreadNotificationCountProvider);
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: currentIndex,
-        onDestinationSelected: (index) {
-          context.go(_navItems[index].path);
-        },
-        destinations: _navItems.map((item) {
-          return NavigationDestination(
-            icon: Icon(item.icon),
-            selectedIcon: Icon(item.activeIcon),
-            label: item.label,
-          );
-        }).toList(),
+      bottomNavigationBar: _LedgerBottomBar(
+        currentIndex: currentIndex,
+        items: _navItems,
+        unreadCount: unreadCount,
+        lang: lang,
+        onItemTap: (index) => context.go(_navItems[index].path),
       ),
     );
   }
 
-  // ─── Desktop/Web: NavigationRail ───────────────────────────────
-  Widget _buildRailLayout(BuildContext context, int currentIndex) {
+  // ─── Desktop/Web: Custom NavigationRail ─────────────────────────
+  Widget _buildRailLayout(
+    BuildContext context,
+    WidgetRef ref,
+    int currentIndex,
+    double screenWidth,
+    AppLanguage lang,
+  ) {
+    final isExtended = screenWidth >= 1200;
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: Row(
         children: [
-          // ─── Rail ──────────────────────────────────────
-          Container(
-            color: AppColors.surfaceContainerLowest,
-            child: NavigationRail(
-              selectedIndex: currentIndex,
-              onDestinationSelected: (index) {
-                context.go(_navItems[index].path);
-              },
-              extended: MediaQuery.sizeOf(context).width >= 1200,
-              backgroundColor: AppColors.surfaceContainerLowest,
-              indicatorColor: AppColors.primaryFixed,
-              labelType: MediaQuery.sizeOf(context).width >= 1200
-                  ? NavigationRailLabelType.none
-                  : NavigationRailLabelType.all,
-              leading: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.xxl,
-                  horizontal: AppSpacing.md,
-                ),
-                child: _buildRailHeader(context),
-              ),
-              destinations: _navItems.map((item) {
-                return NavigationRailDestination(
-                  icon: Icon(item.icon),
-                  selectedIcon: Icon(item.activeIcon),
-                  label: Text(item.label),
-                );
-              }).toList(),
-            ),
+          // ─── Custom Rail ──────────────────────────────
+          _LedgerNavRail(
+            currentIndex: currentIndex,
+            items: _navItems,
+            isExtended: isExtended,
+            lang: lang,
+            onItemTap: (index) => context.go(_navItems[index].path),
           ),
 
-          // ─── Content ──────────────────────────────────
+          // ─── Content ────────────────────────────────
           Expanded(
             child: Center(
               child: ConstrainedBox(
@@ -134,48 +130,402 @@ class EngineerShellScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ─── Rail Header ───────────────────────────────────────────────
-  Widget _buildRailHeader(BuildContext context) {
-    final isExtended = MediaQuery.sizeOf(context).width >= 1200;
+// ═══════════════════════════════════════════════════════════════════
+//  MOBILE — Custom Bottom Navigation Bar
+// ═══════════════════════════════════════════════════════════════════
 
+class _LedgerBottomBar extends StatelessWidget {
+  const _LedgerBottomBar({
+    required this.currentIndex,
+    required this.items,
+    required this.unreadCount,
+    required this.lang,
+    required this.onItemTap,
+  });
+
+  final int currentIndex;
+  final List<_NavItem> items;
+  final int unreadCount;
+  final AppLanguage lang;
+  final ValueChanged<int> onItemTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest.withValues(alpha: 0.92),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.scrim.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: AppSpacing.sm,
+                bottom: bottomPadding > 0 ? 0 : AppSpacing.sm,
+              ),
+              child: SizedBox(
+                height: 64,
+                child: Row(
+                  children: List.generate(items.length, (index) {
+                    if (index == 2) {
+                      // ─── Highlighted "New Request" CTA ─────────
+                      return Expanded(
+                        child: _NewRequestFab(
+                          isActive: currentIndex == 2,
+                          lang: lang,
+                          onTap: () => onItemTap(2),
+                        ),
+                      );
+                    }
+
+                    return Expanded(
+                      child: _BottomBarItem(
+                        item: items[index],
+                        isActive: currentIndex == index,
+                        showBadge: index == 0 && unreadCount > 0,
+                        lang: lang,
+                        onTap: () => onItemTap(index),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Standard Bottom Bar Item ─────────────────────────────────────
+
+class _BottomBarItem extends StatelessWidget {
+  const _BottomBarItem({
+    required this.item,
+    required this.isActive,
+    required this.onTap,
+    required this.lang,
+    this.showBadge = false,
+  });
+
+  final _NavItem item;
+  final bool isActive;
+  final VoidCallback onTap;
+  final AppLanguage lang;
+  final bool showBadge;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // ─── Icon with optional indicator pill ──────────
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.symmetric(
+              horizontal: isActive ? AppSpacing.lg : 0,
+              vertical: AppSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primaryFixed.withValues(alpha: 0.5)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  isActive ? item.activeIcon : item.icon,
+                  size: 24,
+                  color: isActive
+                      ? AppColors.primary
+                      : AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+                if (showBadge)
+                  Positioned(
+                    top: -2,
+                    right: -4,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.warning,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+
+          // ─── Bilingual Label ──────────────────────────────
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              color: isActive
+                  ? AppColors.primary
+                  : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+              letterSpacing: isActive ? 0.1 : 0,
+            ),
+            child: Text(item.translatable.primary),
+          ),
+          Text(
+            item.translatable.secondary(lang),
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              color: isActive
+                  ? AppColors.primary.withValues(alpha: 0.6)
+                  : AppColors.onSurfaceVariant.withValues(alpha: 0.4),
+              height: 1.3,
+            ),
+            textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Floating "New Request" CTA Button ────────────────────────────
+
+class _NewRequestFab extends StatelessWidget {
+  const _NewRequestFab({
+    required this.isActive,
+    required this.lang,
+    required this.onTap,
+  });
+
+  final bool isActive;
+  final AppLanguage lang;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // ─── Gradient pill button ──────────────────────
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.add_rounded,
+                  size: 20,
+                  color: AppColors.onPrimary,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  'New',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onPrimary,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+
+          // ─── Bilingual Label ──────────────────────────
+          Text(
+            AppStrings.newRequest.secondary(lang),
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary.withValues(alpha: 0.7),
+              height: 1.3,
+            ),
+            textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DESKTOP — Custom Navigation Rail
+// ═══════════════════════════════════════════════════════════════════
+
+class _LedgerNavRail extends StatelessWidget {
+  const _LedgerNavRail({
+    required this.currentIndex,
+    required this.items,
+    required this.isExtended,
+    required this.lang,
+    required this.onItemTap,
+  });
+
+  final int currentIndex;
+  final List<_NavItem> items;
+  final bool isExtended;
+  final AppLanguage lang;
+  final ValueChanged<int> onItemTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: isExtended ? 240 : 80,
+      color: AppColors.surfaceContainerLowest,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // ─── Brand Header ────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.xxl,
+                horizontal: AppSpacing.md,
+              ),
+              child: _RailHeader(isExtended: isExtended),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // ─── Nav Items ───────────────────────────────
+            ...List.generate(items.length, (index) {
+              if (index == 2) {
+                // ─── Highlighted "New Request" CTA ─────
+                return Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isExtended ? AppSpacing.lg : AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: _RailNewRequestButton(
+                    isExtended: isExtended,
+                    isActive: currentIndex == 2,
+                    lang: lang,
+                    onTap: () => onItemTap(2),
+                  ),
+                );
+              }
+
+              return _RailItem(
+                item: items[index],
+                isActive: currentIndex == index,
+                isExtended: isExtended,
+                lang: lang,
+                onTap: () => onItemTap(index),
+              );
+            }),
+
+            const Spacer(),
+
+            // ─── Subtle version text ─────────────────────
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+              child: Text(
+                isExtended ? 'GodownPro v1.0' : 'v1.0',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.onSurfaceVariant.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Rail Brand Header ────────────────────────────────────────────
+
+class _RailHeader extends StatelessWidget {
+  const _RailHeader({required this.isExtended});
+
+  final bool isExtended;
+
+  @override
+  Widget build(BuildContext context) {
     if (isExtended) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.inventory_2_rounded,
-                size: 18,
-                color: Colors.white,
-              ),
-            ),
-          ),
+          _buildLogo(),
           const SizedBox(width: AppSpacing.md),
-          Text(
-            'GodownPro',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.onSurface,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'GodownPro',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onSurface,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'گودام پرو',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+              ],
             ),
           ),
         ],
       );
     }
 
+    return _buildLogo();
+  }
+
+  Widget _buildLogo() {
     return Container(
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Center(
@@ -185,16 +535,321 @@ class EngineerShellScreen extends StatelessWidget {
   }
 }
 
+// ─── Rail Standard Item ──────────────────────────────────────────
+
+class _RailItem extends StatelessWidget {
+  const _RailItem({
+    required this.item,
+    required this.isActive,
+    required this.isExtended,
+    required this.lang,
+    required this.onTap,
+  });
+
+  final _NavItem item;
+  final bool isActive;
+  final bool isExtended;
+  final AppLanguage lang;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isExtended) {
+      return _buildExtendedItem();
+    }
+    return _buildCompactItem();
+  }
+
+  Widget _buildExtendedItem() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xxs,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primaryFixed.withValues(alpha: 0.4)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isActive ? item.activeIcon : item.icon,
+                  size: 22,
+                  color: isActive
+                      ? AppColors.primary
+                      : AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item.translatable.primary,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: isActive
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: isActive
+                              ? AppColors.primary
+                              : AppColors.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        item.translatable.secondary(lang),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                          color: isActive
+                              ? AppColors.primary.withValues(alpha: 0.5)
+                              : AppColors.onSurfaceVariant.withValues(
+                                  alpha: 0.45,
+                                ),
+                          height: 1.4,
+                        ),
+                        textDirection: lang.isRtl
+                            ? TextDirection.rtl
+                            : TextDirection.ltr,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                // Active indicator dot
+                if (isActive)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactItem() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 80,
+            height: 56,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isActive ? AppSpacing.lg : AppSpacing.sm,
+                    vertical: AppSpacing.xxs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppColors.primaryFixed.withValues(alpha: 0.5)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  ),
+                  child: Icon(
+                    isActive ? item.activeIcon : item.icon,
+                    size: 22,
+                    color: isActive
+                        ? AppColors.primary
+                        : AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.translatable.secondary(lang),
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    color: isActive
+                        ? AppColors.primary
+                        : AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                  textDirection: lang.isRtl
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Rail "New Request" CTA Button ────────────────────────────────
+
+class _RailNewRequestButton extends StatelessWidget {
+  const _RailNewRequestButton({
+    required this.isExtended,
+    required this.isActive,
+    required this.lang,
+    required this.onTap,
+  });
+
+  final bool isExtended;
+  final bool isActive;
+  final AppLanguage lang;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isExtended) {
+      return _buildExtended();
+    }
+    return _buildCompact();
+  }
+
+  Widget _buildExtended() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.add_rounded,
+                      size: 20,
+                      color: AppColors.onPrimary,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      AppStrings.newRequest.primary,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.onPrimary,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  AppStrings.newRequest.secondary(lang),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.onPrimary.withValues(alpha: 0.7),
+                    height: 1.3,
+                  ),
+                  textDirection: lang.isRtl
+                      ? TextDirection.rtl
+                      : TextDirection.ltr,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompact() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.add_rounded,
+                  size: 24,
+                  color: AppColors.onPrimary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════════════════
+
 class _NavItem {
   const _NavItem({
     required this.icon,
     required this.activeIcon,
-    required this.label,
+    required this.translatable,
     required this.path,
   });
 
   final IconData icon;
   final IconData activeIcon;
-  final String label;
+  final TranslatableString translatable;
   final String path;
 }

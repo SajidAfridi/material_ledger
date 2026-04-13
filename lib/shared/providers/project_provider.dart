@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/project.dart';
 import '../models/material_item.dart';
+import '../models/material_request.dart';
+import '../models/project.dart';
 import 'inventory_provider.dart';
 
 // ─── Admin-created Projects ──────────────────────────────────────
@@ -142,6 +143,36 @@ class DraftLineItemsNotifier extends StateNotifier<List<RequestLineItem>> {
 // ─── Selected project for new request ────────────────────────────
 
 final selectedProjectProvider = StateProvider<Project?>((ref) => null);
+
+// ─── Priority selection for new request ──────────────────────────
+
+final selectedPriorityProvider = StateProvider<RequestPriority>(
+  (ref) => RequestPriority.normal,
+);
+
+// ─── Web Stock Filter ────────────────────────────────────────────
+
+/// Stock filter for the web new-request material browsing panel.
+enum WebStockFilter { all, available, lowStock }
+
+final webStockFilterProvider = StateProvider<WebStockFilter>(
+  (ref) => WebStockFilter.all,
+);
+
+/// Filtered materials for the web new-request center panel.
+/// Composes category, search, and stock filter.
+final webFilteredMaterialsProvider = Provider<List<MaterialItem>>((ref) {
+  final base = ref.watch(browseMaterialsProvider);
+  final stockFilter = ref.watch(webStockFilterProvider);
+
+  return switch (stockFilter) {
+    WebStockFilter.all => base,
+    WebStockFilter.available =>
+      base.where((m) => m.stockStatus == StockStatus.inStock).toList(),
+    WebStockFilter.lowStock =>
+      base.where((m) => m.stockStatus == StockStatus.lowStock).toList(),
+  };
+});
 
 // ─── Mock Data ──────────────────────────────────────────────────
 
