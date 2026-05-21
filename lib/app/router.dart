@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
+import '../features/engineer/presentation/screens/engineer_create_project_screen.dart';
 import '../features/engineer/presentation/screens/engineer_home_screen.dart';
 import '../features/engineer/presentation/screens/engineer_new_request_screen.dart';
+import '../features/engineer/presentation/screens/engineer_projects_screen.dart';
 import '../features/engineer/presentation/screens/engineer_profile_screen.dart';
 import '../features/engineer/presentation/screens/request_detail_screen.dart';
 import '../features/login/presentation/screens/login_screen.dart';
@@ -30,6 +32,8 @@ abstract final class RoutePaths {
   // ─── Engineer (default post-login) ─────────────────────────
   static const String engineerHome = '/';
   static const String engineerBrowse = '/browse';
+  static const String engineerProjects = '/projects';
+  static const String engineerCreateProject = '/projects/new';
   static const String engineerNewRequest = '/new-request';
   static const String engineerProfile = '/profile';
   static const String requestDetail = '/request/:id';
@@ -131,6 +135,16 @@ GoRouter createAppRouter({
             path: RoutePaths.engineerBrowse,
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: EngineerBrowseScreen()),
+          ),
+          GoRoute(
+            path: RoutePaths.engineerProjects,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: EngineerProjectsScreen()),
+          ),
+          GoRoute(
+            path: RoutePaths.engineerCreateProject,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: EngineerCreateProjectScreen()),
           ),
           GoRoute(
             path: RoutePaths.engineerNewRequest,

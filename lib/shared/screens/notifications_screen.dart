@@ -533,7 +533,7 @@ class _FilterChips extends StatelessWidget {
       child: Row(
         children: [
           _Chip(
-            label: AppStrings.filterAll.primary,
+            label: AppStrings.filterAllUpper.primary,
             isSelected: selected == NotificationFilter.all,
             onTap: () => onChanged(NotificationFilter.all),
           ),

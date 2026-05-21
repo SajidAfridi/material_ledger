@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +7,6 @@ import '../core/constants/constants.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/providers/language_provider.dart';
-import '../shared/providers/notification_provider.dart';
 import 'router.dart';
 
 /// Engineer shell — responsive navigation.
@@ -17,7 +14,7 @@ import 'router.dart';
 /// Mobile (< 840px): Custom bottom navigation with floating "New Request" CTA.
 /// Tablet/Desktop (≥ 840px): Custom NavigationRail with highlighted CTA.
 ///
-/// Tabs: My Requests · Browse · **New Request** · Profile
+/// Tabs: Dashboard · Browse · Projects · Profile
 class EngineerShellScreen extends ConsumerWidget {
   const EngineerShellScreen({super.key, required this.child});
 
@@ -25,9 +22,9 @@ class EngineerShellScreen extends ConsumerWidget {
 
   static const _navItems = [
     _NavItem(
-      icon: Icons.assignment_outlined,
-      activeIcon: Icons.assignment_rounded,
-      translatable: AppStrings.requests,
+      icon: Icons.dashboard_outlined,
+      activeIcon: Icons.dashboard_rounded,
+      translatable: AppStrings.dashboard,
       path: RoutePaths.engineerHome,
     ),
     _NavItem(
@@ -36,12 +33,11 @@ class EngineerShellScreen extends ConsumerWidget {
       translatable: AppStrings.browse,
       path: RoutePaths.engineerBrowse,
     ),
-    // Index 2 is the special "New Request" CTA
     _NavItem(
-      icon: Icons.add_rounded,
-      activeIcon: Icons.add_rounded,
-      translatable: AppStrings.newRequest,
-      path: RoutePaths.engineerNewRequest,
+      icon: Icons.account_tree_outlined,
+      activeIcon: Icons.account_tree_rounded,
+      translatable: AppStrings.projects,
+      path: RoutePaths.engineerProjects,
     ),
     _NavItem(
       icon: Icons.person_outlined,
@@ -53,6 +49,7 @@ class EngineerShellScreen extends ConsumerWidget {
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
+    if (location == RoutePaths.engineerCreateProject) return 2;
     for (int i = 0; i < _navItems.length; i++) {
       if (location == _navItems[i].path) return i;
     }
@@ -79,16 +76,17 @@ class EngineerShellScreen extends ConsumerWidget {
     int currentIndex,
     AppLanguage lang,
   ) {
-    final unreadCount = ref.watch(unreadNotificationCountProvider);
-
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: child,
+      floatingActionButton: _FloatingNewRequestFab(
+        lang: lang,
+        onTap: () => context.go(RoutePaths.engineerNewRequest),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: _LedgerBottomBar(
         currentIndex: currentIndex,
         items: _navItems,
-        unreadCount: unreadCount,
-        lang: lang,
         onItemTap: (index) => context.go(_navItems[index].path),
       ),
     );
@@ -140,15 +138,11 @@ class _LedgerBottomBar extends StatelessWidget {
   const _LedgerBottomBar({
     required this.currentIndex,
     required this.items,
-    required this.unreadCount,
-    required this.lang,
     required this.onItemTap,
   });
 
   final int currentIndex;
   final List<_NavItem> items;
-  final int unreadCount;
-  final AppLanguage lang;
   final ValueChanged<int> onItemTap;
 
   @override
@@ -156,53 +150,26 @@ class _LedgerBottomBar extends StatelessWidget {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
 
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest.withValues(alpha: 0.92),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.scrim.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: AppSpacing.sm,
+            bottom: bottomPadding > 0 ? 0 : AppSpacing.sm,
           ),
-        ],
-      ),
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: AppSpacing.sm,
-                bottom: bottomPadding > 0 ? 0 : AppSpacing.sm,
-              ),
-              child: SizedBox(
-                height: 64,
-                child: Row(
-                  children: List.generate(items.length, (index) {
-                    if (index == 2) {
-                      // ─── Highlighted "New Request" CTA ─────────
-                      return Expanded(
-                        child: _NewRequestFab(
-                          isActive: currentIndex == 2,
-                          lang: lang,
-                          onTap: () => onItemTap(2),
-                        ),
-                      );
-                    }
-
-                    return Expanded(
-                      child: _BottomBarItem(
-                        item: items[index],
-                        isActive: currentIndex == index,
-                        showBadge: index == 0 && unreadCount > 0,
-                        lang: lang,
-                        onTap: () => onItemTap(index),
-                      ),
-                    );
-                  }),
-                ),
-              ),
+          child: SizedBox(
+            height: 68,
+            child: Row(
+              children: List.generate(items.length, (index) {
+                return Expanded(
+                  child: _BottomBarItem(
+                    item: items[index],
+                    isActive: currentIndex == index,
+                    onTap: () => onItemTap(index),
+                  ),
+                );
+              }),
             ),
           ),
         ),
@@ -218,15 +185,11 @@ class _BottomBarItem extends StatelessWidget {
     required this.item,
     required this.isActive,
     required this.onTap,
-    required this.lang,
-    this.showBadge = false,
   });
 
   final _NavItem item;
   final bool isActive;
   final VoidCallback onTap;
-  final AppLanguage lang;
-  final bool showBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -246,7 +209,7 @@ class _BottomBarItem extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isActive
-                  ? AppColors.primaryFixed.withValues(alpha: 0.5)
+                  ? AppColors.onPrimary.withValues(alpha: 0.18)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
             ),
@@ -255,53 +218,26 @@ class _BottomBarItem extends StatelessWidget {
               children: [
                 Icon(
                   isActive ? item.activeIcon : item.icon,
-                  size: 24,
+                  size: 22,
                   color: isActive
-                      ? AppColors.primary
-                      : AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+                      ? AppColors.onPrimary
+                      : AppColors.onPrimary.withValues(alpha: 0.7),
                 ),
-                if (showBadge)
-                  Positioned(
-                    top: -2,
-                    right: -4,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.warning,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.xxs),
-
-          // ─── Bilingual Label ──────────────────────────────
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
               color: isActive
-                  ? AppColors.primary
-                  : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
-              letterSpacing: isActive ? 0.1 : 0,
+                  ? AppColors.onPrimary
+                  : AppColors.onPrimary.withValues(alpha: 0.75),
+              letterSpacing: 0.2,
             ),
             child: Text(item.translatable.primary),
-          ),
-          Text(
-            item.translatable.secondary(lang),
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              color: isActive
-                  ? AppColors.primary.withValues(alpha: 0.6)
-                  : AppColors.onSurfaceVariant.withValues(alpha: 0.4),
-              height: 1.3,
-            ),
-            textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
           ),
         ],
       ),
@@ -311,14 +247,9 @@ class _BottomBarItem extends StatelessWidget {
 
 // ─── Floating "New Request" CTA Button ────────────────────────────
 
-class _NewRequestFab extends StatelessWidget {
-  const _NewRequestFab({
-    required this.isActive,
-    required this.lang,
-    required this.onTap,
-  });
+class _FloatingNewRequestFab extends StatelessWidget {
+  const _FloatingNewRequestFab({required this.lang, required this.onTap});
 
-  final bool isActive;
   final AppLanguage lang;
   final VoidCallback onTap;
 
@@ -326,61 +257,40 @@ class _NewRequestFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // ─── Gradient pill button ──────────────────────
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.25),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+      child: Container(
+        width: 72,
+        height: 116,
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.3),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.add_rounded,
-                  size: 20,
-                  color: AppColors.onPrimary,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  'New',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onPrimary,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ],
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.add_rounded, size: 34, color: AppColors.onPrimary),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              AppStrings.newRequest.secondary(lang),
+              style: const TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w500,
+                color: AppColors.onPrimary,
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-
-          // ─── Bilingual Label ──────────────────────────
-          Text(
-            AppStrings.newRequest.secondary(lang),
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary.withValues(alpha: 0.7),
-              height: 1.3,
-            ),
-            textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -426,22 +336,6 @@ class _LedgerNavRail extends StatelessWidget {
 
             // ─── Nav Items ───────────────────────────────
             ...List.generate(items.length, (index) {
-              if (index == 2) {
-                // ─── Highlighted "New Request" CTA ─────
-                return Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isExtended ? AppSpacing.lg : AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: _RailNewRequestButton(
-                    isExtended: isExtended,
-                    isActive: currentIndex == 2,
-                    lang: lang,
-                    onTap: () => onItemTap(2),
-                  ),
-                );
-              }
-
               return _RailItem(
                 item: items[index],
                 isActive: currentIndex == index,
@@ -450,6 +344,19 @@ class _LedgerNavRail extends StatelessWidget {
                 onTap: () => onItemTap(index),
               );
             }),
+
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isExtended ? AppSpacing.lg : AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              child: _RailNewRequestButton(
+                isExtended: isExtended,
+                lang: lang,
+                onTap: () =>
+                    GoRouter.of(context).go(RoutePaths.engineerNewRequest),
+              ),
+            ),
 
             const Spacer(),
 
@@ -715,13 +622,11 @@ class _RailItem extends StatelessWidget {
 class _RailNewRequestButton extends StatelessWidget {
   const _RailNewRequestButton({
     required this.isExtended,
-    required this.isActive,
     required this.lang,
     required this.onTap,
   });
 
   final bool isExtended;
-  final bool isActive;
   final AppLanguage lang;
   final VoidCallback onTap;
 

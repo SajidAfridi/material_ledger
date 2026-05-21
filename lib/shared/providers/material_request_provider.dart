@@ -7,14 +7,6 @@ import 'language_provider.dart';
 
 const _kRequestsKey = 'material_requests_list_v2';
 
-/// Filter mode for the request list.
-enum RequestFilter { all, recent, drafts }
-
-/// Current filter selection.
-final requestFilterProvider = StateProvider<RequestFilter>(
-  (ref) => RequestFilter.all,
-);
-
 /// All material requests for the engineer.
 final materialRequestsProvider =
     StateNotifierProvider<MaterialRequestsNotifier, List<MaterialRequest>>((
@@ -118,32 +110,17 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
   }
 }
 
-/// Filtered requests based on the active filter.
-final filteredRequestsProvider = Provider<List<MaterialRequest>>((ref) {
-  final filter = ref.watch(requestFilterProvider);
+/// Count of open (pending + available) requests across all projects —
+/// used by the Engineer Dashboard "Open requests" stat tile.
+final openRequestCountProvider = Provider<int>((ref) {
   final all = ref.watch(materialRequestsProvider);
-
-  switch (filter) {
-    case RequestFilter.all:
-      return all;
-    case RequestFilter.recent:
-      final cutoff = DateTime.now().subtract(const Duration(days: 7));
-      return all.where((r) => r.requestDate.isAfter(cutoff)).toList();
-    case RequestFilter.drafts:
-      return all.where((r) => r.status == RequestStatus.draft).toList();
-  }
-});
-
-/// Count of pending requests.
-final pendingRequestCountProvider = Provider<int>((ref) {
-  final all = ref.watch(materialRequestsProvider);
-  return all.where((r) => r.status == RequestStatus.pending).length;
-});
-
-/// Count of draft requests.
-final draftRequestCountProvider = Provider<int>((ref) {
-  final all = ref.watch(materialRequestsProvider);
-  return all.where((r) => r.status == RequestStatus.draft).length;
+  return all
+      .where(
+        (r) =>
+            r.status == RequestStatus.pending ||
+            r.status == RequestStatus.available,
+      )
+      .length;
 });
 
 // ─── Seed Data (used on first launch) ───────────────────────────────

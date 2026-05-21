@@ -304,6 +304,48 @@ abstract final class AppStrings {
     ur: 'مواد محفوظ کریں',
     hi: 'सामग्री सहेजें',
   );
+  static const editMaterial = TranslatableString(
+    en: 'Edit Material',
+    ar: 'تعديل المادة',
+    ur: 'مواد ترمیم کریں',
+    hi: 'सामग्री संपादित करें',
+  );
+  static const saveChanges = TranslatableString(
+    en: 'Save Changes',
+    ar: 'حفظ التغييرات',
+    ur: 'تبدیلیاں محفوظ کریں',
+    hi: 'परिवर्तन सहेजें',
+  );
+  static const filterAll = TranslatableString(
+    en: 'All',
+    ar: 'الكل',
+    ur: 'سب',
+    hi: 'सभी',
+  );
+  static const filterIncoming = TranslatableString(
+    en: 'Incoming',
+    ar: 'الوارد',
+    ur: 'آنے والا',
+    hi: 'आने वाला',
+  );
+  static const filterOutgoing = TranslatableString(
+    en: 'Outgoing',
+    ar: 'الصادر',
+    ur: 'جانے والا',
+    hi: 'जाने वाला',
+  );
+  static const filterByType = TranslatableString(
+    en: 'Filter by type',
+    ar: 'تصفية حسب النوع',
+    ur: 'قسم کے مطابق فلٹر',
+    hi: 'प्रकार से फ़िल्टर',
+  );
+  static const searchMaterialsHint = TranslatableString(
+    en: 'Search materials...',
+    ar: 'البحث في المواد...',
+    ur: 'مواد تلاش کریں...',
+    hi: 'सामग्री खोजें...',
+  );
   static const fieldRequired = TranslatableString(
     en: 'This field is required',
     ar: 'هذا الحقل مطلوب',
@@ -604,7 +646,7 @@ abstract final class AppStrings {
     ur: 'الرٹس تلاش کریں...',
     hi: 'सिस्टम अलर्ट खोजें...',
   );
-  static const filterAll = TranslatableString(
+  static const filterAllUpper = TranslatableString(
     en: 'ALL',
     ar: 'الكل',
     ur: 'سب',
@@ -1300,6 +1342,211 @@ abstract final class AppStrings {
     ar: 'تراخيص المصادر المفتوحة',
     ur: 'اوپن سورس لائسنس',
     hi: 'ओपन सोर्स लाइसेंस',
+  );
+  // ─── Engineer Dashboard (Architectural Ledger) ──────────────────
+  static const engineeringPrecision = TranslatableString(
+    en: 'Engineering Precision',
+    ar: 'الدقة الهندسية',
+    ur: 'انجینئرنگ کی درستگی',
+    hi: 'इंजीनियरिंग परिशुद्धता',
+  );
+  static const searchParameters = TranslatableString(
+    en: 'Search parameters...',
+    ar: 'ابحث في المعايير...',
+    ur: 'سرچ پیرامیٹرز...',
+    hi: 'पैरामीटर खोजें...',
+  );
+  static const projectSwitcher = TranslatableString(
+    en: 'Project Switcher',
+    ar: 'محوّل المشاريع',
+    ur: 'پروجیکٹ سونچر',
+    hi: 'प्रोजेक्ट स्विचर',
+  );
+  static const phase = TranslatableString(
+    en: 'Phase',
+    ar: 'مرحلة',
+    ur: 'فیز',
+    hi: 'चरण',
+  );
+  static const planReadyForApproval = TranslatableString(
+    en: 'Plan ready for your approval',
+    ar: 'الخطة جاهزة لموافقتك',
+    ur: 'آپ کی منظوری کے لیے پلان تیار ہے',
+    hi: 'योजना आपकी स्वीकृति के लिए तैयार है',
+  );
+  static const activeProjects = TranslatableString(
+    en: 'Active projects',
+    ar: 'المشاريع النشطة',
+    ur: 'فعال پروجیکٹس',
+    hi: 'सक्रिय परियोजनाएं',
+  );
+  static const actionsNeeded = TranslatableString(
+    en: 'Actions needed',
+    ar: 'إجراءات مطلوبة',
+    ur: 'اقدامات درکار ہیں',
+    hi: 'कार्रवाई आवश्यक',
+  );
+  static const openRequests = TranslatableString(
+    en: 'Open requests',
+    ar: 'طلبات مفتوحة',
+    ur: 'کھلی درخواستیں',
+    hi: 'खुले अनुरोध',
+  );
+  static const myProjects = TranslatableString(
+    en: 'My projects',
+    ar: 'مشاريعي',
+    ur: 'میرے پروجیکٹس',
+    hi: 'मेरी परियोजनाएं',
+  );
+  static const projects = TranslatableString(
+    en: 'Projects',
+    ar: 'المشاريع',
+    ur: 'پروجیکٹس',
+    hi: 'परियोजनाएं',
+  );
+  static const addAnotherProject = TranslatableString(
+    en: 'Add another project',
+    ar: 'إضافة مشروع آخر',
+    ur: 'ایک اور پروجیکٹ شامل کریں',
+    hi: 'एक और परियोजना जोड़ें',
+  );
+  static const createProject = TranslatableString(
+    en: 'Create project',
+    ar: 'إنشاء مشروع',
+    ur: 'پروجیکٹ بنائیں',
+    hi: 'परियोजना बनाएं',
+  );
+  static const projectCreated = TranslatableString(
+    en: 'Project created',
+    ar: 'تم إنشاء المشروع',
+    ur: 'پروجیکٹ بن گیا',
+    hi: 'परियोजना बनाई गई',
+  );
+  static const totalLabel = TranslatableString(
+    en: 'total',
+    ar: 'الإجمالي',
+    ur: 'کل',
+    hi: 'कुल',
+  );
+  static const filterAllShort = TranslatableString(
+    en: 'All',
+    ar: 'الكل',
+    ur: 'سب',
+    hi: 'सभी',
+  );
+  static const filterActive = TranslatableString(
+    en: 'Active',
+    ar: 'نشط',
+    ur: 'فعال',
+    hi: 'सक्रिय',
+  );
+  static const filterPlanning = TranslatableString(
+    en: 'Planning',
+    ar: 'تخطيط',
+    ur: 'منصوبہ بندی',
+    hi: 'योजना',
+  );
+  static const filterOnHold = TranslatableString(
+    en: 'On hold',
+    ar: 'متوقف',
+    ur: 'رکا ہوا',
+    hi: 'रुका हुआ',
+  );
+  static const filterCompleted = TranslatableString(
+    en: 'Completed',
+    ar: 'مكتمل',
+    ur: 'مکمل',
+    hi: 'पूर्ण',
+  );
+  static const approvePlan = TranslatableString(
+    en: 'Approve plan',
+    ar: 'الموافقة على الخطة',
+    ur: 'پلان منظور کریں',
+    hi: 'योजना स्वीकृत करें',
+  );
+  static const allDispatched = TranslatableString(
+    en: 'All dispatched',
+    ar: 'تم إرسال الكل',
+    ur: 'سب بھیج گئے',
+    hi: 'सभी भेजे गए',
+  );
+  static const updatedAgo = TranslatableString(
+    en: 'Updated',
+    ar: 'تم التحديث',
+    ur: 'اپڈیٹ',
+    hi: 'अपडेट',
+  );
+  static const materialFeed = TranslatableString(
+    en: 'Material Feed',
+    ar: 'تدفق المواد',
+    ur: 'میٹیریل فیڈ',
+    hi: 'सामग्री फ़ीड',
+  );
+  static const realTimeDispatches = TranslatableString(
+    en: 'Real-time dispatches',
+    ar: 'إرساليات فورية',
+    ur: 'ریئل ٹائم ڈسپیچز',
+    hi: 'रीयल-टाइम प्रेषण',
+  );
+  static const viewLogisticsHistory = TranslatableString(
+    en: 'View Logistics History',
+    ar: 'عرض سجل اللوجستيات',
+    ur: 'لاجسٹکس کی تاریخ دیکھیں',
+    hi: 'लॉजिस्टिक्स इतिहास देखें',
+  );
+  static const dispatchTo = TranslatableString(
+    en: 'To',
+    ar: 'إلى',
+    ur: 'کی طرف',
+    hi: 'को',
+  );
+  static const dispatchAssigned = TranslatableString(
+    en: 'Assigned',
+    ar: 'مُعيَّن',
+    ur: 'تفویض شدہ',
+    hi: 'सौंपा गया',
+  );
+  static const noProjectsInFilter = TranslatableString(
+    en: 'No projects in this filter',
+    ar: 'لا توجد مشاريع في هذا الفلتر',
+    ur: 'اس فلٹر میں کوئی پروجیکٹ نہیں',
+    hi: 'इस फ़िल्टर में कोई परियोजना नहीं',
+  );
+  static const showAll = TranslatableString(
+    en: 'Show all',
+    ar: 'عرض الكل',
+    ur: 'سب دکھائیں',
+    hi: 'सभी दिखाएं',
+  );
+  static const openRequestsLabel = TranslatableString(
+    en: 'open requests',
+    ar: 'طلبات مفتوحة',
+    ur: 'کھلی درخواستیں',
+    hi: 'खुले अनुरोध',
+  );
+  static const minuteAbbrev = TranslatableString(
+    en: 'm ago',
+    ar: 'د مضت',
+    ur: 'منٹ پہلے',
+    hi: 'मिनट पहले',
+  );
+  static const hourAbbrev = TranslatableString(
+    en: 'h ago',
+    ar: 'س مضت',
+    ur: 'گھنٹے پہلے',
+    hi: 'घंटे पहले',
+  );
+  static const dayAbbrev = TranslatableString(
+    en: 'd ago',
+    ar: 'ي مضت',
+    ur: 'دن پہلے',
+    hi: 'दिन पहले',
+  );
+  static const justNow = TranslatableString(
+    en: 'just now',
+    ar: 'الآن',
+    ur: 'ابھی',
+    hi: 'अभी',
   );
 }
 

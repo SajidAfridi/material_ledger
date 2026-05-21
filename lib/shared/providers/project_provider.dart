@@ -7,8 +7,18 @@ import 'inventory_provider.dart';
 
 // ─── Admin-created Projects ──────────────────────────────────────
 
-/// All available projects (admin-created).
-final projectsProvider = Provider<List<Project>>((ref) => _mockProjects);
+/// All available projects.
+final projectsProvider = StateNotifierProvider<ProjectsNotifier, List<Project>>(
+  (ref) => ProjectsNotifier(_mockProjects),
+);
+
+class ProjectsNotifier extends StateNotifier<List<Project>> {
+  ProjectsNotifier(super.initialProjects);
+
+  void addProject(Project project) {
+    state = [project, ...state];
+  }
+}
 
 // ─── Browse Screen Providers ──────────────────────────────────────
 
@@ -174,43 +184,164 @@ final webFilteredMaterialsProvider = Provider<List<MaterialItem>>((ref) {
   };
 });
 
+// ─── Engineer Dashboard — Project Filter ─────────────────────────
+
+/// Filter applied to the dashboard "My projects" list.
+enum DashboardProjectFilter { all, active, planning, onHold, completed }
+
+final engineerProjectFilterProvider = StateProvider<DashboardProjectFilter>(
+  (ref) => DashboardProjectFilter.all,
+);
+
+/// Projects filtered by the active dashboard filter.
+final engineerFilteredProjectsProvider = Provider<List<Project>>((ref) {
+  final filter = ref.watch(engineerProjectFilterProvider);
+  final projects = ref.watch(projectsProvider);
+  return switch (filter) {
+    DashboardProjectFilter.all => projects,
+    DashboardProjectFilter.active =>
+      projects.where((p) => p.phase?.state == ProjectState.active).toList(),
+    DashboardProjectFilter.planning =>
+      projects.where((p) => p.phase?.state == ProjectState.planning).toList(),
+    DashboardProjectFilter.onHold =>
+      projects.where((p) => p.phase?.state == ProjectState.onHold).toList(),
+    DashboardProjectFilter.completed =>
+      projects.where((p) => p.phase?.state == ProjectState.completed).toList(),
+  };
+});
+
+/// First project currently awaiting engineer approval (if any).
+final pendingApprovalProjectProvider = Provider<Project?>((ref) {
+  final projects = ref.watch(projectsProvider);
+  for (final p in projects) {
+    if (p.awaitingApproval) return p;
+  }
+  return null;
+});
+
+/// Phase shown in the dashboard header — derived from the pending-approval
+/// project, or the first active project, or the first project.
+final currentPhaseProvider = Provider<({Project project, ProjectPhase phase})?>(
+  (ref) {
+    final projects = ref.watch(projectsProvider);
+    if (projects.isEmpty) return null;
+    final candidate = projects.firstWhere(
+      (p) => p.awaitingApproval && p.phase != null,
+      orElse: () => projects.firstWhere(
+        (p) => p.phase?.state == ProjectState.active,
+        orElse: () => projects.first,
+      ),
+    );
+    final phase = candidate.phase;
+    if (phase == null) return null;
+    return (project: candidate, phase: phase);
+  },
+);
+
+/// Count of projects in any non-completed state.
+final activeProjectCountProvider = Provider<int>((ref) {
+  return ref
+      .watch(projectsProvider)
+      .where((p) => p.phase?.state != ProjectState.completed)
+      .length;
+});
+
+/// Count of projects requiring engineer attention (approvals).
+final actionsNeededCountProvider = Provider<int>((ref) {
+  return ref.watch(projectsProvider).where((p) => p.awaitingApproval).length;
+});
+
 // ─── Mock Data ──────────────────────────────────────────────────
 
-final _mockProjects = [
-  const Project(
+final _now = DateTime.now();
+
+final _mockProjects = <Project>[
+  Project(
     id: 'proj-001',
-    name: 'Al-Burj Tower — HVAC Fit-Out',
-    nameSecondary: 'البرج ٹاور — ایچ وی اے سی',
-    siteLocation: 'Block A, Sector 7',
+    name: 'Al Raha Beach Tower C — HVAC',
+    nameSecondary: 'الراحہ بیچ ٹاور سی — ایچ وی اے سی',
+    siteLocation: 'Al Raha Beach, Abu Dhabi',
+    clientName: 'Aldar Properties',
+    phase: const ProjectPhase(
+      number: 1,
+      name: 'Planning',
+      nameSecondary: 'پلاننگ',
+      state: ProjectState.planning,
+    ),
+    lastUpdated: _now.subtract(const Duration(hours: 1)),
+    awaitingApproval: true,
   ),
-  const Project(
+  Project(
     id: 'proj-002',
-    name: 'Marina Bay Mall — Chiller Plant',
-    nameSecondary: 'مرینا بے مال — چلر پلانٹ',
-    siteLocation: 'Zone E, Basement Level',
+    name: 'Musaffah Warehouse — Chiller Install',
+    nameSecondary: 'مصفح گودام — چلر انسٹال',
+    siteLocation: 'Musaffah, Abu Dhabi',
+    clientName: 'Gulf Industrial',
+    phase: const ProjectPhase(
+      number: 2,
+      name: 'Active',
+      nameSecondary: 'فعال',
+      state: ProjectState.active,
+    ),
+    lastUpdated: _now.subtract(const Duration(hours: 3)),
+    openRequestCount: 3,
   ),
-  const Project(
+  Project(
     id: 'proj-003',
-    name: 'Green Valley Hospital — AHU Installation',
-    nameSecondary: 'گرین ویلی ہسپتال — اے ایچ یو',
-    siteLocation: 'Phase 2, Medical Wing',
+    name: 'Khalidiyah Residences — Duct Work',
+    nameSecondary: 'خالدیہ رہائش گاہیں — ڈکٹ ورک',
+    siteLocation: 'Al Khalidiyah, Abu Dhabi',
+    clientName: 'Bloom Properties',
+    phase: const ProjectPhase(
+      number: 2,
+      name: 'Active',
+      nameSecondary: 'فعال',
+      state: ProjectState.active,
+    ),
+    lastUpdated: _now.subtract(const Duration(hours: 6)),
+    openRequestCount: 2,
   ),
-  const Project(
+  Project(
     id: 'proj-004',
-    name: 'Heritage Hotel — Ductwork',
-    nameSecondary: 'ہیریٹیج ہوٹل — ڈکٹ ورک',
-    siteLocation: 'Downtown, Heritage Block',
+    name: 'Corniche Clinic — FCU Replacement',
+    nameSecondary: 'کارنیش کلینک — ایف سی یو متبادل',
+    siteLocation: 'Corniche Road, Abu Dhabi',
+    clientName: 'DOH',
+    phase: const ProjectPhase(
+      number: 2,
+      name: 'Active',
+      nameSecondary: 'فعال',
+      state: ProjectState.active,
+    ),
+    lastUpdated: _now.subtract(const Duration(days: 1)),
+    allDispatched: true,
   ),
-  const Project(
+  Project(
     id: 'proj-005',
     name: 'City Centre — Piping & Valves',
     nameSecondary: 'سٹی سنٹر — پائپنگ اور والوز',
     siteLocation: 'Commercial District',
+    clientName: 'Aldar Commercial',
+    phase: const ProjectPhase(
+      number: 1,
+      name: 'Planning',
+      nameSecondary: 'پلاننگ',
+      state: ProjectState.planning,
+    ),
+    lastUpdated: _now.subtract(const Duration(days: 2)),
   ),
-  const Project(
+  Project(
     id: 'proj-006',
     name: 'Industrial Zone — Boiler Room',
     nameSecondary: 'صنعتی زون — بوائلر روم',
     siteLocation: 'Zone F, Industrial Area',
+    clientName: 'Mubadala',
+    phase: const ProjectPhase(
+      number: 3,
+      name: 'On Hold',
+      nameSecondary: 'رکا ہوا',
+      state: ProjectState.onHold,
+    ),
+    lastUpdated: _now.subtract(const Duration(days: 4)),
   ),
 ];

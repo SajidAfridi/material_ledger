@@ -138,6 +138,48 @@ class TransactionsNotifier extends StateNotifier<List<InventoryTransaction>> {
   }
 }
 
+// ─── Transaction Filter ──────────────────────────────────────────
+
+/// Filter applied to the transactions list.
+enum TransactionFilter { all, incoming, outgoing }
+
+final transactionFilterProvider = StateProvider<TransactionFilter>(
+  (ref) => TransactionFilter.all,
+);
+
+/// Inventory search query for the inventory screen.
+final inventorySearchQueryProvider = StateProvider<String>((ref) => '');
+
+/// Filtered transactions based on the active filter.
+final filteredTransactionsProvider = Provider<List<InventoryTransaction>>((
+  ref,
+) {
+  final filter = ref.watch(transactionFilterProvider);
+  final all = ref.watch(transactionsProvider);
+  return switch (filter) {
+    TransactionFilter.all => all,
+    TransactionFilter.incoming =>
+      all.where((t) => t.type == TransactionType.incoming).toList(),
+    TransactionFilter.outgoing =>
+      all.where((t) => t.type == TransactionType.outgoing).toList(),
+  };
+});
+
+/// Filtered materials based on search query.
+final filteredMaterialsProvider = Provider<List<MaterialItem>>((ref) {
+  final query = ref.watch(inventorySearchQueryProvider).toLowerCase().trim();
+  final materials = ref.watch(materialsProvider);
+  if (query.isEmpty) return materials;
+  return materials
+      .where(
+        (m) =>
+            m.name.toLowerCase().contains(query) ||
+            m.urduName.toLowerCase().contains(query) ||
+            m.category.label.toLowerCase().contains(query),
+      )
+      .toList();
+});
+
 // ─── Derived Providers ───────────────────────────────────────────
 
 /// Total stock value across all materials.

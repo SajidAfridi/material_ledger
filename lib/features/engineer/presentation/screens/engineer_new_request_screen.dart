@@ -12,7 +12,6 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_item.dart';
 import '../../../../shared/models/material_request.dart';
 import '../../../../shared/models/project.dart';
-import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
@@ -249,7 +248,7 @@ class _EngineerNewRequestScreenState
               ),
               sliver: SliverList.separated(
                 itemCount: lineItems.length,
-                separatorBuilder: (_, __) => const Gap(AppSpacing.listItemGap),
+                separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
                 itemBuilder: (_, index) {
                   final item = lineItems[index];
                   return _MobileItemCard(
@@ -426,7 +425,7 @@ class _ProjectSelector extends ConsumerWidget {
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
           child: DropdownButtonFormField<String>(
-            value: selected?.id,
+            initialValue: selected?.id,
             hint: Text(
               AppStrings.selectProject.primary,
               style: AppTypography.bodyLarge.copyWith(
@@ -702,15 +701,13 @@ class _DashedBorderPainter extends CustomPainter {
     required this.color,
     this.strokeWidth = 1.5,
     this.radius = 12.0,
-    this.dashWidth = 8.0,
-    this.dashGap = 5.0,
   });
 
   final Color color;
   final double strokeWidth;
   final double radius;
-  final double dashWidth;
-  final double dashGap;
+  final double dashWidth = 8.0;
+  final double dashGap = 5.0;
 
   @override
   void paint(Canvas canvas, Size size) {

@@ -10,11 +10,26 @@ import '../../../../shared/models/material_item.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../widgets/add_material_sheet.dart';
+import '../widgets/edit_material_sheet.dart';
 import '../../../transactions/presentation/widgets/record_transaction_sheet.dart';
 
 /// Inventory — Material listing screen.
-class InventoryScreen extends ConsumerWidget {
+class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
+
+  @override
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends ConsumerState<InventoryScreen> {
+  bool _searchVisible = false;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _openAddMaterial(BuildContext context) {
     showModalBottomSheet(
@@ -27,6 +42,21 @@ class InventoryScreen extends ConsumerWidget {
         minChildSize: 0.5,
         maxChildSize: 0.95,
         builder: (_, controller) => const AddMaterialSheet(),
+      ),
+    );
+  }
+
+  void _openEditMaterial(BuildContext context, MaterialItem material) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, controller) => EditMaterialSheet(material: material),
       ),
     );
   }
@@ -48,9 +78,10 @@ class InventoryScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
-    final materials = ref.watch(materialsProvider);
+    final materials = ref.watch(filteredMaterialsProvider);
+    final allMaterials = ref.watch(materialsProvider);
     final currency = ref.watch(currencyProvider);
 
     return SafeArea(
@@ -80,12 +111,36 @@ class InventoryScreen extends ConsumerWidget {
                   ),
                   Row(
                     children: [
-                      if (materials.isNotEmpty)
+                      if (allMaterials.isNotEmpty)
                         IconButton(
-                          onPressed: () {},
-                          icon: const Icon(Icons.search_rounded),
+                          onPressed: () {
+                            setState(() {
+                              _searchVisible = !_searchVisible;
+                              if (!_searchVisible) {
+                                _searchController.clear();
+                                ref
+                                        .read(
+                                          inventorySearchQueryProvider.notifier,
+                                        )
+                                        .state =
+                                    '';
+                              }
+                            });
+                          },
+                          icon: Icon(
+                            _searchVisible
+                                ? Icons.search_off_rounded
+                                : Icons.search_rounded,
+                          ),
                           style: IconButton.styleFrom(
-                            backgroundColor: AppColors.surfaceContainerLowest,
+                            backgroundColor: _searchVisible
+                                ? AppColors.primaryContainer.withValues(
+                                    alpha: 0.15,
+                                  )
+                                : AppColors.surfaceContainerLowest,
+                            foregroundColor: _searchVisible
+                                ? AppColors.primary
+                                : null,
                           ),
                         ),
                       const Gap(AppSpacing.xs),
@@ -104,11 +159,77 @@ class InventoryScreen extends ConsumerWidget {
             ),
           ),
 
+          // ─── Search Bar ──────────────────────────────────
+          if (_searchVisible)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenHorizontal,
+                0,
+                AppSpacing.screenHorizontal,
+                AppSpacing.md,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    onChanged: (q) =>
+                        ref.read(inventorySearchQueryProvider.notifier).state =
+                            q,
+                    style: AppTypography.bodyMedium,
+                    decoration: InputDecoration(
+                      hintText: AppStrings.searchMaterialsHint.primary,
+                      hintStyle: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.onSurfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: AppColors.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // ─── Content ─────────────────────────────────────
-          if (materials.isEmpty)
+          if (allMaterials.isEmpty)
             _buildEmptyState(lang, context)
+          else if (materials.isEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.screenHorizontal,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: LedgerCard(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.colossal),
+                      child: Text(
+                        'No materials match your search.',
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
           else
-            _buildMaterialList(materials, lang, currency, context, ref),
+            _buildMaterialList(materials, lang, currency, context),
 
           // Bottom spacing
           const SliverGap(AppSpacing.xxl),
@@ -171,7 +292,6 @@ class InventoryScreen extends ConsumerWidget {
     dynamic lang,
     dynamic currency,
     BuildContext context,
-    WidgetRef ref,
   ) {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(
@@ -186,6 +306,7 @@ class InventoryScreen extends ConsumerWidget {
             item: item,
             currency: currency,
             onTap: () => _openRecordTransaction(context, item),
+            onEdit: () => _openEditMaterial(context, item),
             onDelete: () => _confirmDelete(context, ref, item),
           );
         },
@@ -250,12 +371,14 @@ class _MaterialCard extends StatelessWidget {
     required this.item,
     required this.currency,
     required this.onTap,
+    required this.onEdit,
     required this.onDelete,
   });
 
   final MaterialItem item;
   final dynamic currency;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -340,6 +463,14 @@ class _MaterialCard extends StatelessWidget {
                 ),
               ),
               const Gap(AppSpacing.sm),
+              IconButton(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.onSurfaceVariant,
+                ),
+                tooltip: AppStrings.editMaterial.primary,
+              ),
               IconButton(
                 onPressed: onDelete,
                 icon: const Icon(Icons.delete_outline_rounded, size: 20),

@@ -68,13 +68,19 @@ class BilingualText extends ConsumerWidget {
         lang == AppLanguage.english ||
         lang == AppLanguage.arabic) {
       return TextStyle(
-        fontSize: enFontSize - 2,
+        fontSize: (enFontSize - 5).clamp(8, 24).toDouble(),
         fontWeight: FontWeight.w400,
-        height: 1.5,
-        color: AppColors.onSurfaceVariant,
+        height: 1.15,
+        color: AppColors.onSurfaceVariant.withValues(alpha: 0.9),
       );
     }
-    // Urdu gets extra line-height and Nastaliq style.
-    return AppTypography.urduStyle(englishFontSize: enFontSize);
+    // Urdu keeps Nastaliq but uses a smaller scale to reduce visual dominance.
+    return AppTypography.urduStyle(
+      englishFontSize: (enFontSize - 2).clamp(10, 28).toDouble(),
+    ).copyWith(
+      fontSize: (enFontSize - 5).clamp(8, 20).toDouble(),
+      height: 1.35,
+      color: AppColors.onSurfaceVariant.withValues(alpha: 0.9),
+    );
   }
 }
