@@ -247,7 +247,7 @@ class _ComparisonSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader(
-          title: 'Why GodownPro?',
+          title: 'Why Yorks GodownPro?',
           subtitle: 'گوداؤن پرو کیوں؟',
         ),
         const Gap(AppSpacing.lg),
@@ -728,7 +728,7 @@ class _AppInfoCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'GodownPro',
+                      'Yorks GodownPro',
                       style: GoogleFonts.inter(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -760,7 +760,7 @@ class _AppInfoCard extends StatelessWidget {
             label: 'Languages',
             value: 'English · Arabic · Urdu · Hindi',
           ),
-          const _InfoRow(label: 'Developer', value: 'GodownPro Team'),
+          const _InfoRow(label: 'Developer', value: 'Yorks GodownPro Team'),
           const _InfoRow(label: 'Version', value: '1.0.0'),
           const _InfoRow(label: 'Build', value: 'April 2026'),
         ],
@@ -835,9 +835,9 @@ class _Footer extends StatelessWidget {
                 label: AppStrings.openSourceLicenses.primary,
                 onTap: () => showLicensePage(
                   context: context,
-                  applicationName: 'GodownPro',
+                  applicationName: 'Yorks GodownPro',
                   applicationVersion: '1.0.0',
-                  applicationLegalese: '© 2026 GodownPro. All rights reserved.',
+                  applicationLegalese: '© 2026 Yorks GodownPro. All rights reserved.',
                 ),
               ),
             ],
@@ -848,7 +848,7 @@ class _Footer extends StatelessWidget {
 
         // ─── Copyright ────────────────────────────────────
         Text(
-          '© 2026 GodownPro — The Architectural Ledger',
+          '© 2026 Yorks GodownPro — The Architectural Ledger',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
           ),

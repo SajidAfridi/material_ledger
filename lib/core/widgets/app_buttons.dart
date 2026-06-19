@@ -64,12 +64,17 @@ class PrimaryButton extends StatelessWidget {
                     Icon(icon, size: 20, color: AppColors.onPrimary),
                     const SizedBox(width: AppSpacing.sm),
                   ],
-                  Text(
-                    label,
-                    style: AppTypography.labelLarge.copyWith(
-                      color: onPressed != null
-                          ? AppColors.onPrimary
-                          : AppColors.onSurfaceVariant,
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.labelLarge.copyWith(
+                        color: onPressed != null
+                            ? AppColors.onPrimary
+                            : AppColors.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   if (icon != null && isTrailingIcon) ...[
@@ -123,7 +128,14 @@ class SecondaryButton extends StatelessWidget {
             Icon(icon, size: 20),
             const SizedBox(width: AppSpacing.sm),
           ],
-          Text(label),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
         ],
       ),
     );

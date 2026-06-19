@@ -1,0 +1,615 @@
+GodownPro
+Software Requirements Specification (SRS)
+Yorks Airconditioning and Refrigeration LLC SPC  —  Abu Dhabi, UAE
+Document Type
+SRS v1.0
+Status
+Final — MVP
+Prepared for
+Yorks AC Leadership
+Classification
+Confidential
+1.  Introduction
+1.1  Purpose of this Document
+This Software Requirements Specification defines the complete functional and non-functional requirements for GodownPro — a material and project management system built for Yorks Airconditioning and Refrigeration LLC SPC. It serves as the authoritative reference for design, development, testing, and client acceptance of the MVP.
+1.2  The Problem Being Solved
+Yorks currently manages all material requests through handwritten slips and verbal communication between site engineers and the store employee. This process creates five critical business problems:
+Problem
+Business Impact
+No visibility of stock for engineers on site
+Engineers request items without knowing availability, causing delays and incorrect orders
+No approval chain — material leaves store without formal sign-off
+No accountability for who authorised what, leading to untracked material loss
+No audit trail — handwritten slips get lost or are illegible
+Impossible to reconstruct what was issued to which project for costing or disputes
+No real-time status — engineer has no idea if request is being processed
+Engineers call procurement repeatedly, wasting time on both sides
+No project cost data — accountant cannot see material usage per project
+Projects regularly exceed material budgets with no data to explain why
+1.3  Solution Summary
+GodownPro replaces the paper process with a Flutter mobile app for engineers and a Flutter web app for the office, both connected to a single Firebase backend in real time. The system enforces a structured two-phase workflow — Planning before work starts and Execution during site work — with a complete non-deletable audit trail of every action.
+2.  Scope
+In Scope — MVP
+Out of Scope — Post MVP
+Flutter Mobile App for engineers (iOS + Android)
+WhatsApp / SMS notifications
+Flutter Web App for procurement and admin
+PDF printable dispatch slips
+Firebase Authentication — admin-controlled accounts only
+External purchase order module with supplier management
+Phase 1 — Project creation and material planning workflow
+Barcode and QR code scanning for stock updates
+Phase 2 — Fast site material request and dispatch workflow
+Multi-warehouse / multi-location inventory
+Inventory management with auto stock deduction on dispatch
+Offline mode for poor-signal sites
+Comment thread and back-and-forth between engineer and procurement
+Client-facing portal
+Diff view and re-approval on plan edits
+Advanced analytics, trend charts, KPI dashboards
+Real-time in-app notifications
+ERP or accounting software integration
+Non-deletable system-wide audit trail
+Automated cost forecasting
+Admin user management and access control panel
+3.  User Roles
+Role
+Platform
+Description
+Count
+Engineer
+Mobile App
+Site engineer who creates projects, submits material plans, and makes day-to-day requests from site during execution
+Multiple
+Procurement
+Web App
+Office staff who reviews plans, comments with engineers, arranges material from store or externally, and dispatches to site
+1–3
+Admin
+Web App
+Single administrator with full system control — manages users, inventory, projects, approvals, and audit trail
+1
+There is no self-signup anywhere in the system. The Admin creates every user account, assigns the role, and sets the initial password. Engineers cannot access procurement screens. Procurement cannot access admin screens. These restrictions are enforced at the database level — not just in the UI.
+4.  Functional Requirements
+Priority legend: Must Have = required for MVP launch. Should Have = important, included if time allows. Could Have = desirable, deferred to v1.1.
+4.1  Authentication & Access Control
+ID
+Requirement
+Priority
+FR-001
+The system shall support email and password authentication using Firebase Authentication.
+Must Have
+FR-002
+There shall be no user self-registration or sign-up screen anywhere in the application.
+Must Have
+FR-003
+The Admin shall be able to create, edit, and deactivate user accounts from the web app.
+Must Have
+FR-004
+Each user account shall have exactly one assigned role: Engineer, Procurement, or Admin.
+Must Have
+FR-005
+After login, the system shall automatically route the user to the correct home screen based on their role.
+Must Have
+FR-006
+A deactivated user shall be immediately denied access on their next request — active sessions shall be invalidated.
+Must Have
+FR-007
+The Admin shall be able to reset any user's password from the admin panel.
+Must Have
+FR-008
+Engineers shall only see projects they are assigned to — not all projects in the system.
+Must Have
+FR-009
+The Admin shall be able to grant or revoke inventory read access per individual engineer.
+Must Have
+FR-010
+All role-based access restrictions shall be enforced by Firestore Security Rules — not client-side logic alone.
+Must Have
+4.2  Project Management
+ID
+Requirement
+Priority
+FR-011
+An Engineer shall be able to create a new project with the following fields: Project Name, Client Name, Location, Building Name, Floor Numbers, Start Date, Expected End Date (optional), Site Notes (optional).
+Must Have
+FR-012
+A project shall have a lifecycle status: Planning, Active, Completed, On Hold.
+Must Have
+FR-013
+A project moves from Planning to Active only after the engineer gives final Phase 1 approval.
+Must Have
+FR-014
+The Admin shall be able to view, edit, and delete any project in the system.
+Must Have
+FR-015
+Engineers shall see all projects assigned to them in a single list sorted by last activity.
+Must Have
+FR-016
+Each project shall display its current phase (Phase 1 or Phase 2) and open request count at a glance.
+Must Have
+4.3  Phase 1 — Material Planning Workflow
+ID
+Requirement
+Priority
+FR-017
+An Engineer shall be able to create a material plan for a project by selecting items from the inventory list or adding custom items.
+Must Have
+FR-018
+Each item in the plan shall record: Description, Brand, Country of Origin, Size, Quantity, Unit, RAL Colour (where applicable).
+Must Have
+FR-019
+The Engineer shall be able to edit the plan freely before submitting it to procurement.
+Must Have
+FR-020
+On submission, Procurement shall receive an in-app notification immediately.
+Must Have
+FR-021
+When procurement opens the plan, the system shall automatically green-tick any item that exists in inventory with sufficient stock.
+Must Have
+FR-022
+Items that are in inventory but below the requested quantity shall be flagged with a low-stock warning — not auto-ticked.
+Must Have
+FR-023
+Items not found in inventory shall remain un-ticked for procurement to arrange externally.
+Must Have
+FR-024
+Procurement and Engineer shall be able to exchange comments on individual items or the overall plan via a comment thread.
+Must Have
+FR-025
+Procurement shall be able to mark each item as Arranged when it has been confirmed available (from store or external source).
+Must Have
+FR-026
+When all items are arranged, Procurement shall click 'Mark Done' to send the plan back to the Engineer for final review.
+Must Have
+FR-027
+The Engineer shall review the arranged plan and either Approve it or Reject specific items with a written reason.
+Must Have
+FR-028
+If the Engineer rejects items, Procurement shall be notified and the relevant items shall return to Arranging status.
+Must Have
+FR-029
+When the Engineer gives final approval, the project status shall change to Active and Phase 2 becomes available.
+Must Have
+FR-030
+If the Engineer edits any item in the plan after Procurement has marked Done, the changed items shall be highlighted in a diff view and those items shall require re-review by Procurement.
+Must Have
+FR-031
+The diff view shall clearly show the previous value and the new value for every changed field.
+Must Have
+FR-032
+Unchanged items shall not require re-approval when a partial edit triggers re-review.
+Must Have
+FR-033
+Every version of the plan shall be stored — the system shall maintain a full edit history.
+Should Have
+4.4  Phase 2 — Execution Request Workflow
+ID
+Requirement
+Priority
+FR-034
+An Engineer shall be able to create a material request against an Active project at any time during execution.
+Must Have
+FR-035
+The Engineer shall select items from inventory or create custom items using the standard fields.
+Must Have
+FR-036
+The Engineer shall be able to set an urgency level for each request: Normal or Urgent.
+Must Have
+FR-037
+On submission, Procurement shall receive an in-app notification immediately.
+Must Have
+FR-038
+Phase 2 requests shall have no additional approval gate — Procurement shall dispatch directly.
+Must Have
+FR-039
+Procurement shall be able to dispatch the full quantity, a partial quantity, or place the request on hold with a note.
+Must Have
+FR-040
+When Procurement dispatches, the inventory stock level for each dispatched item shall auto-decrement by the dispatched quantity.
+Must Have
+FR-041
+The Engineer shall receive an in-app notification the moment their request is dispatched (full or partial).
+Must Have
+FR-042
+The request status screen shall show each item with quantity requested versus quantity dispatched.
+Must Have
+FR-043
+If an item is partially dispatched, the remaining quantity shall remain open and Procurement shall be expected to fulfil it.
+Must Have
+FR-044
+The Engineer shall be able to cancel a Phase 2 request only before Procurement has taken any action on it.
+Must Have
+FR-045
+Custom items created by Engineers during Phase 2 shall be reviewed by Procurement and can be added to the main inventory by Procurement or Admin.
+Should Have
+4.5  Inventory Management
+ID
+Requirement
+Priority
+FR-046
+The inventory shall store the following fields per item: Description, Brand/Supplier, Country of Origin, Size, Quantity, Unit, RAL Colour, Unit Cost (AED), Category, Store Location.
+Must Have
+FR-047
+Procurement shall be able to add, edit, and update inventory items.
+Must Have
+FR-048
+The Admin shall be able to add, edit, delete, and manually adjust stock levels for any inventory item.
+Must Have
+FR-049
+Engineers with inventory access permission shall be able to browse the inventory in read-only mode.
+Must Have
+FR-050
+The inventory shall support search by description, brand, or size, and filter by category.
+Must Have
+FR-051
+Each item shall display a stock status badge: In Stock (green), Low Stock (amber), Out of Stock (red).
+Must Have
+FR-052
+Out-of-stock items shall be visible to engineers but cannot be selected in the standard item picker — only as a custom item request.
+Must Have
+FR-053
+The inventory shall support a minimum stock threshold per item, below which the item is flagged as Low Stock.
+Must Have
+FR-054
+The RAL Colour field shall be mandatory for all grilles, diffusers, dampers, and access door items.
+Must Have
+FR-055
+The inventory shall support a minimum of 28 categories as defined in the Yorks stock list.
+Must Have
+FR-056
+All stock deductions shall be recorded with the request ID, dispatched quantity, and timestamp for full traceability.
+Must Have
+4.6  Notifications
+ID
+Requirement
+Priority
+FR-057
+The system shall deliver real-time in-app notifications without requiring a page refresh.
+Must Have
+FR-058
+Engineer submits Phase 1 plan — Procurement receives notification immediately.
+Must Have
+FR-059
+Procurement comments on an item — Engineer receives notification immediately.
+Must Have
+FR-060
+Procurement marks plan Done — Engineer receives notification immediately.
+Must Have
+FR-061
+Engineer approves Phase 1 — Procurement receives notification immediately.
+Must Have
+FR-062
+Engineer rejects Phase 1 items — Procurement receives notification immediately.
+Must Have
+FR-063
+Engineer edits plan after Procurement marks Done — Procurement receives diff notification immediately.
+Must Have
+FR-064
+Engineer submits Phase 2 request — Procurement receives notification immediately.
+Must Have
+FR-065
+Procurement dispatches items — Engineer receives notification immediately.
+Must Have
+FR-066
+Any request with no action for 24 hours — Admin receives an alert notification.
+Must Have
+FR-067
+Users shall be able to see all past notifications in a notification centre, with read/unread status.
+Must Have
+4.7  Admin Panel
+ID
+Requirement
+Priority
+FR-068
+The Admin shall have read access to every record in the system without exception.
+Must Have
+FR-069
+The Admin shall be able to create user accounts with name, email, role, and initial password.
+Must Have
+FR-070
+The Admin shall be able to deactivate a user, immediately preventing their access.
+Must Have
+FR-071
+The Admin shall be able to approve, reject, or delete any request regardless of its current status.
+Must Have
+FR-072
+The Admin shall be able to delete any project from the system.
+Must Have
+FR-073
+The Admin shall be able to view a complete, real-time audit trail of every action taken by every user.
+Must Have
+FR-074
+The Admin shall be able to filter the audit trail by user, action type, project, and date range.
+Must Have
+FR-075
+The Admin shall be able to export the audit trail to CSV.
+Must Have
+FR-076
+The Admin shall be able to view a cost report showing total material value dispatched per project.
+Must Have
+FR-077
+The Admin shall be able to grant or revoke inventory read access per individual engineer at any time.
+Must Have
+4.8  Audit Trail
+ID
+Requirement
+Priority
+FR-078
+Every action in the system shall be automatically recorded to the audit log — no manual logging required.
+Must Have
+FR-079
+Each audit log entry shall record: action type, actor name, actor role, related project, related document ID, human-readable description, and exact timestamp.
+Must Have
+FR-080
+The audit log shall be non-deletable — no user, including the Admin, shall be able to delete or modify any log entry.
+Must Have
+FR-081
+The following actions shall be logged as a minimum: project created, plan submitted, item auto-ticked, comment added, plan marked done, plan approved, plan rejected, plan edited (with diff), Phase 2 request submitted, items dispatched, stock updated, user created, user deactivated, access granted, access revoked, request deleted by admin.
+Must Have
+FR-082
+The audit trail shall be searchable and filterable by the Admin at any time.
+Must Have
+5.  Non-Functional Requirements
+Non-functional requirements define how the system performs and behaves — not just what it does. Each requirement below includes a measurable target so it can be objectively tested and accepted.
+5.1  Performance
+ID
+Attribute
+Requirement
+Measurable Target
+NFR-001
+Response Time
+All user actions (submit, approve, dispatch) shall complete and reflect on screen within 2 seconds under normal network conditions.
+Tested at 50 concurrent users. 95th percentile response time ≤ 2s.
+NFR-002
+Real-time Updates
+A status change triggered by one user shall appear on another user's screen within 3 seconds without a manual refresh.
+Measured end-to-end via Firestore real-time stream. Target: ≤ 3s.
+NFR-003
+App Load Time
+The mobile app shall be fully interactive within 4 seconds on a standard 4G connection.
+Measured from app open to home screen ready. Target: ≤ 4s on 4G.
+NFR-004
+Web App Load Time
+The web app shall be fully interactive within 3 seconds on a standard office broadband connection.
+Measured via Chrome DevTools Lighthouse. Target: Performance score ≥ 80.
+NFR-005
+Inventory Search
+A search query on the inventory shall return results within 1 second for a dataset of up to 1,000 items.
+Tested with 1,000 inventory records. Query response ≤ 1s.
+5.2  Reliability & Availability
+ID
+Attribute
+Requirement
+Measurable Target
+NFR-006
+Uptime
+The system shall be available 99.5% of the time, excluding scheduled Firebase maintenance windows.
+Monitored via Firebase Hosting and Firestore SLA. Target: ≤ 43.8 hours downtime per year.
+NFR-007
+Data Integrity
+No data shall be lost or corrupted in the event of a network disconnect during a write operation.
+Firestore offline persistence enabled on mobile. All writes confirmed server-side before UI updates.
+NFR-008
+Concurrent Users
+The system shall support at least 50 simultaneous users without performance degradation.
+Load tested at 50 concurrent sessions. Response time NFR-001 still met.
+NFR-009
+Error Handling
+All user-facing errors shall display a clear, actionable message — no raw error codes or stack traces shall be shown.
+Reviewed in QA. Zero raw errors visible to end users.
+NFR-010
+Stock Deduction Accuracy
+Inventory stock deduction on dispatch shall be atomic — either the full deduction succeeds or no deduction happens. No partial writes.
+Implemented via Firestore transactions. Tested under network interruption scenarios.
+5.3  Security
+ID
+Attribute
+Requirement
+Measurable Target
+NFR-011
+Authentication
+All API requests to Firebase shall be authenticated. Unauthenticated requests shall be rejected with a 403 response.
+Firestore Security Rules. All requests tested unauthenticated — zero data returned.
+NFR-012
+Role Enforcement
+Role-based access shall be enforced at the Firestore database level — not solely in the application UI.
+Security Rules pen-tested by attempting cross-role reads/writes via API. Zero violations permitted.
+NFR-013
+Data in Transit
+All data transmitted between the app and Firebase shall use TLS 1.2 or higher.
+Default Firebase HTTPS. Verified via SSL Labs scan. TLS 1.2+ required.
+NFR-014
+Password Security
+User passwords shall be stored as Firebase Authentication hashed credentials — never in plaintext anywhere.
+Firebase Auth handles hashing (bcrypt). No passwords stored in Firestore.
+NFR-015
+Audit Immutability
+The audit log collection shall have a Firestore Security Rule that denies all write and delete operations from any client, including admin.
+Security Rule tested: write attempt to activityLog returns Permission Denied for all roles.
+NFR-016
+Session Management
+User sessions shall expire after 7 days of inactivity, requiring re-login.
+Firebase Auth persistent token expiry configured. Tested after 7-day idle.
+NFR-017
+Admin Account
+The Admin account shall be created directly in Firebase Authentication — not exposed via any registration flow.
+No registration endpoint exists. Admin UID is manually set in Firestore.
+5.4  Usability
+ID
+Attribute
+Requirement
+Measurable Target
+NFR-018
+Mobile Usability
+The mobile app shall be fully usable with one hand on a 360px wide screen without horizontal scrolling.
+Tested on Samsung Galaxy A series (360px width). All core flows complete one-handed.
+NFR-019
+Task Completion
+A new engineer with no training shall be able to submit a Phase 2 material request within 3 minutes of opening the app for the first time.
+Usability test with 3 untrained users. Average task time recorded. Target: ≤ 3 minutes.
+NFR-020
+Tap Target Size
+All interactive elements on mobile (buttons, list items, form fields) shall have a minimum tap target of 44 x 44 points.
+Tested against Apple HIG and Material Design guidelines. All targets measured.
+NFR-021
+Error Prevention
+Destructive actions (delete project, delete request, revoke access) shall require a confirmation step before execution.
+All destructive actions have a two-step confirm dialog. Tested in QA.
+NFR-022
+Status Clarity
+Every request and project shall display a colour-coded status badge that is immediately understandable without reading the label.
+User comprehension tested with 5 users. Target: 90% correctly identify status from badge colour alone.
+NFR-023
+Offline Feedback
+If the mobile app loses connectivity, a clear banner shall inform the engineer. Submitted requests shall be queued and sent when connection restores.
+Tested by disabling mobile data mid-submission. Offline banner appears. Data sent on reconnect.
+5.5  Maintainability & Scalability
+ID
+Attribute
+Requirement
+Measurable Target
+NFR-024
+Codebase
+The system shall use a single shared codebase (Flutter) for both mobile and web, maintained by a single developer.
+One Flutter project. Platform-specific code isolated to platform folders only.
+NFR-025
+Database Scalability
+The Firestore data model shall support growth to 500 projects, 10,000 inventory items, and 100,000 request records without schema changes.
+Data model designed and reviewed against Firestore scaling guidelines. No denormalisation limits hit.
+NFR-026
+Deployment
+New versions of the web app shall be deployable to production with a single CLI command (firebase deploy).
+Deployment tested end-to-end. Target: zero downtime deployment.
+NFR-027
+Environment Separation
+The system shall have separate Firebase projects for Development and Production environments.
+Two Firebase projects configured. Production credentials never used in development.
+NFR-028
+Code Documentation
+All Firebase Security Rules and complex Firestore queries shall be commented explaining the intent.
+Code review checklist item. 100% of security rules documented.
+5.6  Compatibility
+ID
+Attribute
+Requirement
+Measurable Target
+NFR-029
+Mobile OS
+The mobile app shall support Android 8.0 (API 26) and above, and iOS 13.0 and above.
+Tested on Android 8, 10, 13 and iOS 13, 15, 17.
+NFR-030
+Web Browsers
+The web app shall be fully functional on Chrome (v90+), Edge (v90+), and Safari (v14+).
+Cross-browser tested. All core workflows verified on each browser.
+NFR-031
+Screen Sizes
+The web app shall be fully usable at 1280px width and above. Tablet view (768px+) shall be readable but not required to be optimised for MVP.
+Tested at 1280px, 1440px, 1920px. All layouts verified.
+NFR-032
+Internet Connection
+The system shall function correctly on a standard 4G mobile connection (minimum 10 Mbps).
+Performance tested on throttled 4G network in Chrome DevTools.
+6.  Constraints & Assumptions
+Type
+Item
+Constraint
+The system is built exclusively on Flutter and Firebase. No other backend infrastructure is introduced in the MVP.
+Constraint
+There is a single developer. Scope is fixed to what can be delivered to production quality by one person.
+Constraint
+All users must have a working internet connection to use the system. Full offline mode is out of scope for MVP.
+Constraint
+Firebase free-tier limits apply during development. Production will use the Blaze pay-as-you-go plan.
+Assumption
+Yorks will provide the complete inventory data (descriptions, quantities, costs, store locations) for initial data seeding.
+Assumption
+The Admin will be a technically capable person who can manage users via the admin panel without additional training.
+Assumption
+Engineers have company-issued or personal Android or iOS smartphones with internet access.
+Assumption
+Procurement team has access to a desktop or laptop with a modern web browser in the office.
+Assumption
+All users will use the system in English. Multilingual support is not required for MVP.
+7.  MVP Acceptance Criteria
+The following criteria must all be met for the MVP to be considered complete and ready for client handover. Each criterion is binary — it either passes or it does not.
+#
+Acceptance Criterion
+Test Method
+AC-01
+Admin can create an Engineer and Procurement user, assign roles, and both can log in successfully on their respective apps.
+Manual test
+AC-02
+Engineer creates a project with all required fields and it appears in their project list.
+Manual test
+AC-03
+Engineer adds items to Phase 1 plan. Items in inventory are auto-green-ticked. Low stock items show amber warning.
+Manual test with pre-loaded inventory
+AC-04
+Engineer submits plan. Procurement receives in-app notification within 5 seconds.
+Timed manual test
+AC-05
+Procurement and Engineer can exchange comments on a plan item. Both see updates in real time.
+Two-device simultaneous test
+AC-06
+Procurement marks plan Done. Engineer receives notification. Engineer approves. Project moves to Active.
+End-to-end manual test
+AC-07
+Engineer edits plan after Procurement marks Done. Changed items are highlighted in diff view. Unchanged items are unaffected.
+Manual test with deliberate plan edit
+AC-08
+Engineer submits Phase 2 request. Procurement sees it immediately in the requests queue with correct urgency badge.
+Two-device simultaneous test
+AC-09
+Procurement dispatches items. Stock levels in inventory decrement correctly. Engineer sees dispatched status in real time.
+Two-device test with inventory stock verification
+AC-10
+Procurement partially dispatches 2 of 3 items. Engineer sees 2 issued and 1 outstanding. Stock decrements only for 2.
+Manual test with partial dispatch
+AC-11
+Admin revokes an engineer's access. That engineer's next login or request is denied immediately.
+Manual test — revoke then try to access
+AC-12
+Admin views the audit trail. Every action from AC-01 through AC-11 is recorded with actor name, role, and timestamp.
+Audit trail review after all tests
+AC-13
+Audit log entry cannot be deleted — even by Admin. Firestore Security Rule blocks all writes to activityLog.
+API-level security rule test
+AC-14
+A Phase 2 urgent request submitted by engineer appears at the top of the procurement queue above normal requests.
+Manual test with mixed urgency requests
+AC-15
+System handles 10 simultaneous active users without errors or data inconsistency.
+Coordinated multi-user test session
+8.  Glossary
+Term
+Definition
+Phase 1
+The planning phase of a project — occurs before site work begins. Engineer creates a material plan, procurement arranges items, engineer gives final approval.
+Phase 2
+The execution phase — occurs during active site work. Engineers submit fast material requests which procurement dispatches directly.
+Material Plan
+A list of items the engineer expects to need for a project, submitted in Phase 1.
+Material Request
+A day-to-day request for items submitted by an engineer during Phase 2 execution.
+Auto-tick
+Automatic green confirmation applied by the system to items in a Phase 1 plan that exist in inventory with sufficient stock.
+Dispatch
+The act of procurement confirming and releasing physical materials to be delivered to a site engineer.
+Diff View
+A screen showing the differences between two versions of a material plan — highlighting what was added, removed, or changed.
+RAL Colour
+A standardised European colour reference system used in HVAC for grilles, dampers, and diffusers (e.g. RAL 9006 = silver grey).
+Audit Trail
+A permanent, non-deletable chronological log of every action taken by every user in the system.
+Custom Item
+A material item created by an engineer that does not yet exist in the inventory, submitted with description fields for procurement to source.
+Firestore
+Google Firebase's NoSQL real-time document database used as the primary data store.
+Firebase Auth
+Google Firebase's authentication service used for email/password login.
+Flutter
+Google's cross-platform UI framework used to build both the mobile and web applications from a single codebase.
+SRS
+Software Requirements Specification — this document.
+GodownPro SRS v1.0  —  Yorks Airconditioning and Refrigeration LLC SPC  —  Confidential

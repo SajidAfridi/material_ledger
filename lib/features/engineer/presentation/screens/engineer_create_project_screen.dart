@@ -7,7 +7,9 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/project.dart';
+import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 
 /// Lightweight project creation flow for engineers.
@@ -26,9 +28,12 @@ class _EngineerCreateProjectScreenState
   final _secondaryNameController = TextEditingController();
   final _clientController = TextEditingController();
   final _locationController = TextEditingController();
-  final _phaseNameController = TextEditingController(text: 'Planning');
+  final _buildingNameController = TextEditingController();
+  final _floorNumbersController = TextEditingController();
+  final _siteNotesController = TextEditingController();
 
-  ProjectState _state = ProjectState.planning;
+  DateTime? _startDate = DateTime.now();
+  DateTime? _expectedEndDate;
 
   @override
   void dispose() {
@@ -36,32 +41,88 @@ class _EngineerCreateProjectScreenState
     _secondaryNameController.dispose();
     _clientController.dispose();
     _locationController.dispose();
-    _phaseNameController.dispose();
+    _buildingNameController.dispose();
+    _floorNumbersController.dispose();
+    _siteNotesController.dispose();
     super.dispose();
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _selectStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+        // If expected end date is before start date, clear it
+        if (_expectedEndDate != null && _expectedEndDate!.isBefore(picked)) {
+          _expectedEndDate = null;
+        }
+      });
+    }
+  }
+
+  Future<void> _selectExpectedEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate:
+          _expectedEndDate ??
+          (_startDate ?? DateTime.now()).add(const Duration(days: 30)),
+      firstDate: _startDate ?? DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _expectedEndDate = picked;
+      });
+    }
   }
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    if (_startDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.startDateRequired.primary)),
+      );
+      return;
+    }
 
     final now = DateTime.now();
     final project = Project(
       id: 'proj-${now.microsecondsSinceEpoch}',
       name: _nameController.text.trim(),
       nameSecondary: _secondaryNameController.text.trim(),
-      clientName: _emptyToNull(_clientController.text),
-      siteLocation: _emptyToNull(_locationController.text),
-      phase: ProjectPhase(
+      clientName: _clientController.text.trim(),
+      siteLocation: _locationController.text.trim(),
+      buildingName: _buildingNameController.text.trim(),
+      floorNumbers: _floorNumbersController.text.trim(),
+      startDate: _startDate,
+      expectedEndDate: _expectedEndDate,
+      siteNotes: _emptyToNull(_siteNotesController.text),
+      phase: const ProjectPhase(
         number: 1,
-        name: _phaseNameController.text.trim().isEmpty
-            ? _state.label
-            : _phaseNameController.text.trim(),
-        nameSecondary: '',
-        state: _state,
+        name: 'Planning',
+        nameSecondary: 'پلاننگ',
+        state: ProjectState.planning,
       ),
       lastUpdated: now,
     );
 
     ref.read(projectsProvider.notifier).addProject(project);
+    ref.logAudit(
+      action: 'Project created',
+      module: AuditModule.materials,
+      refId: project.id,
+      detail: project.name,
+    );
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(AppStrings.projectCreated.primary)));
@@ -112,12 +173,12 @@ class _EngineerCreateProjectScreenState
                             children: [
                               LedgerTextField(
                                 controller: _nameController,
-                                label: 'Project name',
-                                hintText: 'e.g. Sector 7-G Tower C — HVAC',
+                                label: AppStrings.projectName.primary,
+                                urduHint: AppStrings.projectName.ur,
                                 autofocus: true,
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return 'Project name is required';
+                                    return AppStrings.fieldRequired.primary;
                                   }
                                   if (value.trim().length < 3) {
                                     return 'Enter at least 3 characters';
@@ -128,46 +189,111 @@ class _EngineerCreateProjectScreenState
                               const Gap(AppSpacing.lg),
                               LedgerTextField(
                                 controller: _secondaryNameController,
-                                label: 'Secondary name',
-                                hintText: 'Optional Urdu / Arabic name',
+                                label: AppStrings.projectNameSecondary.primary,
+                                urduHint: AppStrings.projectNameSecondary.ur,
                               ),
                               const Gap(AppSpacing.lg),
                               LedgerTextField(
                                 controller: _clientController,
-                                label: 'Client',
-                                hintText: 'Client or company name',
+                                label: AppStrings.clientName.primary,
+                                urduHint: AppStrings.clientName.ur,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return AppStrings
+                                        .clientNameRequired
+                                        .primary;
+                                  }
+                                  return null;
+                                },
                               ),
                               const Gap(AppSpacing.lg),
                               LedgerTextField(
                                 controller: _locationController,
-                                label: 'Site location',
-                                hintText: 'City, area, or plot location',
+                                label: AppStrings.siteLocation.primary,
+                                urduHint: AppStrings.siteLocation.ur,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return AppStrings.locationRequired.primary;
+                                  }
+                                  return null;
+                                },
                               ),
                               const Gap(AppSpacing.lg),
                               LedgerTextField(
-                                controller: _phaseNameController,
-                                label: 'Phase name',
-                                hintText: 'Planning, Active, Procurement...',
+                                controller: _buildingNameController,
+                                label: AppStrings.buildingName.primary,
+                                urduHint: AppStrings.buildingName.ur,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return AppStrings
+                                        .buildingNameRequired
+                                        .primary;
+                                  }
+                                  return null;
+                                },
                               ),
                               const Gap(AppSpacing.lg),
-                              _StateDropdown(
-                                value: _state,
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  setState(() {
-                                    _state = value;
-                                    if (_phaseNameController.text
-                                            .trim()
-                                            .isEmpty ||
-                                        ProjectState.values.any(
-                                          (state) =>
-                                              state.label ==
-                                              _phaseNameController.text.trim(),
-                                        )) {
-                                      _phaseNameController.text = value.label;
-                                    }
-                                  });
+                              LedgerTextField(
+                                controller: _floorNumbersController,
+                                label: AppStrings.floorNumbers.primary,
+                                urduHint: AppStrings.floorNumbers.ur,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return AppStrings
+                                        .floorNumbersRequired
+                                        .primary;
+                                  }
+                                  return null;
                                 },
+                              ),
+                              const Gap(AppSpacing.lg),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: LedgerTextField(
+                                      controller: TextEditingController(
+                                        text: _formatDate(_startDate),
+                                      ),
+                                      label: AppStrings.startDate.primary,
+                                      urduHint: AppStrings.startDate.ur,
+                                      readOnly: true,
+                                      onTap: _selectStartDate,
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today_rounded,
+                                      ),
+                                      validator: (value) {
+                                        if (_startDate == null) {
+                                          return AppStrings
+                                              .startDateRequired
+                                              .primary;
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                  ),
+                                  const Gap(AppSpacing.md),
+                                  Expanded(
+                                    child: LedgerTextField(
+                                      controller: TextEditingController(
+                                        text: _formatDate(_expectedEndDate),
+                                      ),
+                                      label: AppStrings.expectedEndDate.primary,
+                                      urduHint: AppStrings.expectedEndDate.ur,
+                                      readOnly: true,
+                                      onTap: _selectExpectedEndDate,
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today_rounded,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Gap(AppSpacing.lg),
+                              LedgerTextField(
+                                controller: _siteNotesController,
+                                label: AppStrings.siteNotes.primary,
+                                urduHint: AppStrings.siteNotes.ur,
+                                maxLines: 3,
                               ),
                               const Gap(AppSpacing.xxl),
                               PrimaryButton(
@@ -213,37 +339,6 @@ class _Header extends StatelessWidget {
             style: AppTypography.headlineSmall.copyWith(
               fontWeight: FontWeight.w800,
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StateDropdown extends StatelessWidget {
-  const _StateDropdown({required this.value, required this.onChanged});
-
-  final ProjectState value;
-  final ValueChanged<ProjectState?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Project status', style: AppTypography.titleSmall),
-        const Gap(AppSpacing.sm),
-        DropdownButtonFormField<ProjectState>(
-          initialValue: value,
-          items: ProjectState.values
-              .map(
-                (state) =>
-                    DropdownMenuItem(value: state, child: Text(state.label)),
-              )
-              .toList(),
-          onChanged: onChanged,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.flag_outlined),
           ),
         ),
       ],

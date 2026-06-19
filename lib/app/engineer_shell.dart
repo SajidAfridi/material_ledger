@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants/constants.dart';
+import '../core/feedback/feedback_service.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/providers/language_provider.dart';
+import '../shared/sync/sync_status_banner.dart';
 import 'router.dart';
 
 /// Engineer shell — responsive navigation.
@@ -16,9 +18,11 @@ import 'router.dart';
 ///
 /// Tabs: Dashboard · Browse · Projects · Profile
 class EngineerShellScreen extends ConsumerWidget {
-  const EngineerShellScreen({super.key, required this.child});
+  const EngineerShellScreen({super.key, required this.navigationShell});
 
-  final Widget child;
+  /// The indexed-stack shell — keeps all four tabs mounted so switching tabs
+  /// never loses typed quantities or search filters.
+  final StatefulNavigationShell navigationShell;
 
   static const _navItems = [
     _NavItem(
@@ -47,18 +51,19 @@ class EngineerShellScreen extends ConsumerWidget {
     ),
   ];
 
-  int _currentIndex(BuildContext context) {
-    final location = GoRouterState.of(context).uri.path;
-    if (location == RoutePaths.engineerCreateProject) return 2;
-    for (int i = 0; i < _navItems.length; i++) {
-      if (location == _navItems[i].path) return i;
-    }
-    return 0;
+  /// Switch tabs, preserving each branch's state. A light haptic tick confirms
+  /// the change without the worker looking down.
+  void _goBranch(int index) {
+    AppFeedback.tabSwitch();
+    navigationShell.goBranch(
+      index,
+      initialLocation: index == navigationShell.currentIndex,
+    );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentIndex = _currentIndex(context);
+    final currentIndex = navigationShell.currentIndex;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final useRail = screenWidth >= 840;
     final lang = ref.watch(languageProvider);
@@ -76,18 +81,32 @@ class EngineerShellScreen extends ConsumerWidget {
     int currentIndex,
     AppLanguage lang,
   ) {
+    final onNewRequest =
+        GoRouterState.of(context).uri.path == RoutePaths.engineerNewRequest;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      body: child,
-      floatingActionButton: _FloatingNewRequestFab(
-        lang: lang,
-        onTap: () => context.go(RoutePaths.engineerNewRequest),
+      body: Column(
+        children: [
+          const SyncStatusBanner(),
+          Expanded(child: navigationShell),
+        ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      // The "New Request" CTA lives in the bottom bar — a centred, popped-out
+      // button docked into the navigation.
+      floatingActionButton: _CenterAddButton(
+        isActive: onNewRequest,
+        onTap: () {
+          AppFeedback.primaryAction();
+          context.go(RoutePaths.engineerNewRequest);
+        },
+      ),
+      // Centre-docked but lowered — a real FAB location (not a Transform), so
+      // the tappable area moves down WITH the button and stays easy to hit.
+      floatingActionButtonLocation: const _LoweredCenterDockedFab(),
       bottomNavigationBar: _LedgerBottomBar(
         currentIndex: currentIndex,
         items: _navItems,
-        onItemTap: (index) => context.go(_navItems[index].path),
+        onItemTap: _goBranch,
       ),
     );
   }
@@ -112,16 +131,23 @@ class EngineerShellScreen extends ConsumerWidget {
             items: _navItems,
             isExtended: isExtended,
             lang: lang,
-            onItemTap: (index) => context.go(_navItems[index].path),
+            onItemTap: _goBranch,
           ),
 
           // ─── Content ────────────────────────────────
           Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: child,
-              ),
+            child: Column(
+              children: [
+                const SyncStatusBanner(),
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: navigationShell,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -149,38 +175,58 @@ class _LedgerBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
 
+    const radius = BorderRadius.vertical(top: Radius.circular(26));
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.only(
-            top: AppSpacing.sm,
-            bottom: bottomPadding > 0 ? 0 : AppSpacing.sm,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: radius,
+        // Raised, floating 3D surface.
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.30),
+            blurRadius: 28,
+            spreadRadius: 1,
+            offset: const Offset(0, -6),
           ),
-          child: SizedBox(
-            height: 68,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: AppSpacing.sm,
+              bottom: bottomPadding > 0 ? 0 : AppSpacing.sm,
+            ),
+            child: SizedBox(
+              height: 68,
             child: Row(
-              children: List.generate(items.length, (index) {
-                return Expanded(
-                  child: _BottomBarItem(
-                    item: items[index],
-                    isActive: currentIndex == index,
-                    onTap: () => onItemTap(index),
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  // Reserve the centre slot for the docked "New Request" button.
+                  if (index == items.length ~/ 2) const SizedBox(width: 76),
+                  Expanded(
+                    child: _BottomBarItem(
+                      item: items[index],
+                      isActive: currentIndex == index,
+                      onTap: () => onItemTap(index),
+                    ),
                   ),
-                );
-              }),
+                ],
+              ],
             ),
           ),
         ),
       ),
+    ),
     );
   }
 }
 
 // ─── Standard Bottom Bar Item ─────────────────────────────────────
 
-class _BottomBarItem extends StatelessWidget {
+class _BottomBarItem extends StatefulWidget {
   const _BottomBarItem({
     required this.item,
     required this.isActive,
@@ -192,108 +238,160 @@ class _BottomBarItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_BottomBarItem> createState() => _BottomBarItemState();
+}
+
+class _BottomBarItemState extends State<_BottomBarItem> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final isActive = widget.isActive;
     return GestureDetector(
-      onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // ─── Icon with optional indicator pill ──────────
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(
-              horizontal: isActive ? AppSpacing.lg : 0,
-              vertical: AppSpacing.xs,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      // Press dip-and-pop — same feel as the hero +; the tab stays in place.
+      child: AnimatedScale(
+        scale: _pressed ? 0.86 : 1.0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutBack,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // ─── Icon with optional indicator pill ──────────
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(
+                horizontal: isActive ? AppSpacing.lg : 0,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppColors.onPrimary.withValues(alpha: 0.18)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              ),
+              child: Icon(
+                isActive ? item.activeIcon : item.icon,
+                size: 22,
+                color: isActive
+                    ? AppColors.onPrimary
+                    : AppColors.onPrimary.withValues(alpha: 0.7),
+              ),
             ),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? AppColors.onPrimary.withValues(alpha: 0.18)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+            const SizedBox(height: AppSpacing.xxs),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive
+                    ? AppColors.onPrimary
+                    : AppColors.onPrimary.withValues(alpha: 0.75),
+                letterSpacing: 0.2,
+              ),
+              child: Text(item.translatable.primary),
             ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  isActive ? item.activeIcon : item.icon,
-                  size: 22,
-                  color: isActive
-                      ? AppColors.onPrimary
-                      : AppColors.onPrimary.withValues(alpha: 0.7),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 200),
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              color: isActive
-                  ? AppColors.onPrimary
-                  : AppColors.onPrimary.withValues(alpha: 0.75),
-              letterSpacing: 0.2,
-            ),
-            child: Text(item.translatable.primary),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-// ─── Floating "New Request" CTA Button ────────────────────────────
+// ─── Centred, popped-out "New Request" button (docked in the bottom bar) ──
 
-class _FloatingNewRequestFab extends StatelessWidget {
-  const _FloatingNewRequestFab({required this.lang, required this.onTap});
+class _CenterAddButton extends StatefulWidget {
+  const _CenterAddButton({required this.onTap, required this.isActive});
 
-  final AppLanguage lang;
   final VoidCallback onTap;
+  final bool isActive;
+
+  @override
+  State<_CenterAddButton> createState() => _CenterAddButtonState();
+}
+
+class _CenterAddButtonState extends State<_CenterAddButton> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 72,
-        height: 116,
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
+      // Opaque + the full 72px square is the hit area → easy to tap.
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      child: AnimatedScale(
+        // Press dips it, release springs it back past 1.0 — an elegant pop.
+        scale: _pressed ? 0.86 : 1.0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutBack,
+        child: Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            // Top-lit → bottom-shaded gradient gives the disc a 3D sphere look.
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primaryContainer,
+                AppColors.primary,
+                AppColors.onPrimaryFixed,
+              ],
+              stops: [0.0, 0.55, 1.0],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.add_rounded, size: 34, color: AppColors.onPrimary),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              AppStrings.newRequest.secondary(lang),
-              style: const TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w500,
-                color: AppColors.onPrimary,
-                height: 1.2,
+            border: Border.all(color: AppColors.surface, width: 4),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.45),
+                blurRadius: 18,
+                spreadRadius: 1,
+                offset: const Offset(0, 8),
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
-            ),
-          ],
+              BoxShadow(
+                color: AppColors.scrim.withValues(alpha: 0.22),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Icon(
+            Icons.add_rounded,
+            size: widget.isActive ? 36 : 34,
+            color: AppColors.onPrimary,
+          ),
         ),
       ),
     );
   }
+}
+
+/// Centre-docked, but lowered so the hero button tucks into the bar. Because
+/// this adjusts the FAB's *layout* position (not a paint transform), the hit
+/// area stays aligned with what you see.
+class _LoweredCenterDockedFab extends StandardFabLocation
+    with FabCenterOffsetX, FabDockedOffsetY {
+  const _LoweredCenterDockedFab();
+
+  @override
+  double getOffsetY(
+    ScaffoldPrelayoutGeometry scaffoldGeometry,
+    double adjustment,
+  ) =>
+      super.getOffsetY(scaffoldGeometry, adjustment) + 30;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -353,8 +451,10 @@ class _LedgerNavRail extends StatelessWidget {
               child: _RailNewRequestButton(
                 isExtended: isExtended,
                 lang: lang,
-                onTap: () =>
-                    GoRouter.of(context).go(RoutePaths.engineerNewRequest),
+                onTap: () {
+                  AppFeedback.primaryAction();
+                  GoRouter.of(context).go(RoutePaths.engineerNewRequest);
+                },
               ),
             ),
 

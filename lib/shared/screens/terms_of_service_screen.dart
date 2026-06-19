@@ -227,7 +227,7 @@ class _AcceptanceNotice extends StatelessWidget {
           const Gap(AppSpacing.md),
           Expanded(
             child: Text(
-              'By accessing or using GodownPro, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use the application.',
+              'By accessing or using Yorks GodownPro, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use the application.',
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.primary,
                 fontWeight: FontWeight.w500,
@@ -413,7 +413,7 @@ class _FooterNotice extends StatelessWidget {
         ),
         const Gap(AppSpacing.xl),
         Text(
-          '© 2026 GodownPro — All Rights Reserved',
+          '© 2026 Yorks GodownPro — All Rights Reserved',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.onSurfaceVariant.withValues(alpha: 0.45),
           ),
@@ -439,7 +439,7 @@ const _sections = [
     title: '1. License to Use',
     titleSecondary: '1. استعمال کا لائسنس',
     paragraphs: [
-      'GodownPro grants you a limited, non-exclusive, non-transferable, revocable license to use the application solely for your internal warehouse management operations.',
+      'Yorks GodownPro grants you a limited, non-exclusive, non-transferable, revocable license to use the application solely for your internal warehouse management operations.',
       'This license does not include the right to sublicense, sell, resell, transfer, assign, or commercially exploit the application in any way.',
     ],
   ),
@@ -448,7 +448,7 @@ const _sections = [
     title: '2. Acceptable Use',
     titleSecondary: '2. قابل قبول استعمال',
     paragraphs: [
-      'You agree to use GodownPro only for lawful warehouse and inventory management purposes. The following uses are strictly prohibited:',
+      'You agree to use Yorks GodownPro only for lawful warehouse and inventory management purposes. The following uses are strictly prohibited:',
     ],
     bullets: [
       'Recording fictitious or fraudulent inventory transactions',
@@ -463,9 +463,9 @@ const _sections = [
     title: '3. Inventory Data Responsibility',
     titleSecondary: '3. انوینٹری ڈیٹا کی ذمہ داری',
     paragraphs: [
-      'You are solely responsible for the accuracy and integrity of all inventory data entered into GodownPro. This includes material quantities, prices, project names, and transaction records.',
-      'GodownPro provides tools to manage your data but does not verify the accuracy of the information you enter. Decisions made based on GodownPro data are your sole responsibility.',
-      'Regular data backups are your responsibility. GodownPro is not liable for data loss resulting from device failure, uninstallation, or other circumstances.',
+      'You are solely responsible for the accuracy and integrity of all inventory data entered into Yorks GodownPro. This includes material quantities, prices, project names, and transaction records.',
+      'Yorks GodownPro provides tools to manage your data but does not verify the accuracy of the information you enter. Decisions made based on Yorks GodownPro data are your sole responsibility.',
+      'Regular data backups are your responsibility. Yorks GodownPro is not liable for data loss resulting from device failure, uninstallation, or other circumstances.',
     ],
   ),
   _TermsSectionData(
@@ -473,8 +473,8 @@ const _sections = [
     title: '4. Material Requisitions',
     titleSecondary: '4. مواد کی درخواستیں',
     paragraphs: [
-      'Material requisitions created within GodownPro are internal workflow tools. They do not constitute legally binding purchase orders unless explicitly printed, signed, and processed through your organization\'s official procurement channels.',
-      'GodownPro is not responsible for procurement decisions, vendor negotiations, or financial commitments made based on requisitions generated within the application.',
+      'Material requisitions created within Yorks GodownPro are internal workflow tools. They do not constitute legally binding purchase orders unless explicitly printed, signed, and processed through your organization\'s official procurement channels.',
+      'Yorks GodownPro is not responsible for procurement decisions, vendor negotiations, or financial commitments made based on requisitions generated within the application.',
     ],
   ),
   _TermsSectionData(
@@ -482,7 +482,7 @@ const _sections = [
     title: '5. Disclaimer of Warranties',
     titleSecondary: '5. ضمانت کا دستبرداری',
     paragraphs: [
-      'GodownPro is provided "AS IS" without warranty of any kind, express or implied. We do not warrant that the application will be error-free, uninterrupted, or free of security vulnerabilities.',
+      'Yorks GodownPro is provided "AS IS" without warranty of any kind, express or implied. We do not warrant that the application will be error-free, uninterrupted, or free of security vulnerabilities.',
       'We do not warrant the accuracy of any stock valuations, financial calculations, or inventory counts generated by the application. All figures should be verified against your physical inventory.',
     ],
   ),
@@ -491,7 +491,7 @@ const _sections = [
     title: '6. Limitation of Liability',
     titleSecondary: '6. ذمہ داری کی حد',
     paragraphs: [
-      'To the maximum extent permitted by applicable law, GodownPro and its developers shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the application.',
+      'To the maximum extent permitted by applicable law, Yorks GodownPro and its developers shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the application.',
       'This includes but is not limited to: loss of inventory data, incorrect stock valuations, procurement errors, or business interruption caused by application downtime or malfunction.',
     ],
   ),
@@ -501,7 +501,7 @@ const _sections = [
     titleSecondary: '7. شرائط میں تبدیلیاں',
     paragraphs: [
       'We reserve the right to modify these Terms of Service at any time. We will notify users of material changes through an in-app notification or upon next login.',
-      'Your continued use of GodownPro after changes have been posted constitutes your acceptance of the revised Terms. If you do not agree to the new Terms, you should discontinue use of the application.',
+      'Your continued use of Yorks GodownPro after changes have been posted constitutes your acceptance of the revised Terms. If you do not agree to the new Terms, you should discontinue use of the application.',
     ],
   ),
 ];

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_item.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 import '../widgets/add_material_sheet.dart';
-import '../widgets/edit_material_sheet.dart';
 import '../../../transactions/presentation/widgets/record_transaction_sheet.dart';
 
 /// Inventory — Material listing screen.
@@ -56,7 +58,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         initialChildSize: 0.92,
         minChildSize: 0.5,
         maxChildSize: 0.95,
-        builder: (_, controller) => EditMaterialSheet(material: material),
+        builder: (_, controller) => AddMaterialSheet(material: material),
       ),
     );
   }
@@ -83,6 +85,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final materials = ref.watch(filteredMaterialsProvider);
     final allMaterials = ref.watch(materialsProvider);
     final currency = ref.watch(currencyProvider);
+    final canSeeCost = ref.watch(currentRoleProvider).canSeeCost;
 
     return SafeArea(
       child: CustomScrollView(
@@ -143,6 +146,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                                 : null,
                           ),
                         ),
+                      if (ref.watch(currentRoleProvider).canReceiveGoods) ...[
+                        const Gap(AppSpacing.xs),
+                        IconButton(
+                          tooltip: AppStrings.receiveGoods.primary,
+                          onPressed: () =>
+                              context.push(RoutePaths.goodsReceipt),
+                          icon: const Icon(Icons.move_to_inbox_rounded),
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.primaryContainer
+                                .withValues(alpha: 0.15),
+                            foregroundColor: AppColors.primary,
+                          ),
+                        ),
+                      ],
                       const Gap(AppSpacing.xs),
                       IconButton(
                         onPressed: () => _openAddMaterial(context),
@@ -229,7 +246,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
               ),
             )
           else
-            _buildMaterialList(materials, lang, currency, context),
+            _buildMaterialList(materials, lang, currency, canSeeCost, context),
 
           // Bottom spacing
           const SliverGap(AppSpacing.xxl),
@@ -291,6 +308,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     List<MaterialItem> materials,
     dynamic lang,
     dynamic currency,
+    bool canSeeCost,
     BuildContext context,
   ) {
     return SliverPadding(
@@ -305,6 +323,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           return _MaterialCard(
             item: item,
             currency: currency,
+            canSeeCost: canSeeCost,
             onTap: () => _openRecordTransaction(context, item),
             onEdit: () => _openEditMaterial(context, item),
             onDelete: () => _confirmDelete(context, ref, item),
@@ -370,6 +389,7 @@ class _MaterialCard extends StatelessWidget {
   const _MaterialCard({
     required this.item,
     required this.currency,
+    required this.canSeeCost,
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
@@ -377,6 +397,7 @@ class _MaterialCard extends StatelessWidget {
 
   final MaterialItem item;
   final dynamic currency;
+  final bool canSeeCost;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -415,7 +436,17 @@ class _MaterialCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(item.name, style: AppTypography.titleSmall),
-                    if (item.urduName.isNotEmpty) ...[
+                    if (item.specSummary.isNotEmpty) ...[
+                      const Gap(AppSpacing.xxs),
+                      Text(
+                        item.specSummary,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ] else if (item.urduName.isNotEmpty) ...[
                       const Gap(AppSpacing.xxs),
                       Text(
                         item.urduName,
@@ -436,17 +467,28 @@ class _MaterialCard extends StatelessWidget {
                 label: AppStrings.quantity.primary,
                 value: item.formattedQuantity,
               ),
-              const Gap(AppSpacing.xxl),
-              _StatBlock(
-                label: AppStrings.unitPrice.primary,
-                value: currency.format(item.unitPrice),
-              ),
-              const Gap(AppSpacing.xxl),
-              _StatBlock(
-                label: AppStrings.totalValue.primary,
-                value: currency.format(item.totalValue),
-                valueColor: AppColors.primary,
-              ),
+              if (item.reservedQty > 0) ...[
+                const Gap(AppSpacing.xxl),
+                _StatBlock(
+                  label: AppStrings.reserved.primary,
+                  value:
+                      '${item.reservedQty.toStringAsFixed(item.reservedQty.truncateToDouble() == item.reservedQty ? 0 : 2)} ${item.unit.symbol}',
+                  valueColor: AppColors.warning,
+                ),
+              ],
+              if (canSeeCost) ...[
+                const Gap(AppSpacing.xxl),
+                _StatBlock(
+                  label: AppStrings.unitPrice.primary,
+                  value: currency.format(item.unitPrice),
+                ),
+                const Gap(AppSpacing.xxl),
+                _StatBlock(
+                  label: AppStrings.totalValue.primary,
+                  value: currency.format(item.totalValue),
+                  valueColor: AppColors.primary,
+                ),
+              ],
             ],
           ),
           const Gap(AppSpacing.md),

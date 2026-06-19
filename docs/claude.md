@@ -411,15 +411,15 @@ When language mode is English, secondary text falls back to **Arabic** so the UI
 - [x] **Shared Language/Currency picker sheets** — extracted to `core/widgets/`, used by both Engineer Profile and Admin Settings
 - [x] **Engineer Profile** — functional language/currency pickers, About navigation, logout
 - [x] **HVAC Supply Optimization** — categories (valves, pipes, fittings, fasteners, ducts, insulation, electrical, copper, tools), units (ft, in, sets, boxes, rolls), 45+ seed materials, HVAC-themed projects and requests, browse filters (Valves & Fittings / Pipes & Ducts / Fasteners & Tools)
+- [x] Transaction filtering (fully wired transaction filter dropdown matching `transactionFilterProvider`)
+- [x] Material editing (extended `AddMaterialSheet` to support editing existing items, and removed duplicate `EditMaterialSheet` logic)
+- [x] Unit test suite for `MaterialsNotifier` (covering HVAC seed materials loading, add/update/delete actions, quantity adjustments, and negative quantity clamping behavior)
 
 ## 9. What's Not Yet Implemented 🚧
 
 - [ ] Dark mode theme
-- [ ] Transaction filtering (icon present, not wired)
-- [ ] Material editing (only add/delete, no edit)
 - [ ] Backend / cloud sync (Backup & Sync is placeholder)
 - [ ] Real authentication (currently mock — any credentials work)
-- [ ] Unit tests (only default `widget_test.dart` exists)
 - [ ] Mobile screenshots adaptation (web designs implemented, mobile pending review)
 
 ---

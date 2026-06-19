@@ -13,6 +13,7 @@ import '../../../../shared/models/material_request.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/services/receipt_pdf.dart';
 
 /// Request detail screen — shows full info for a single material request.
 ///
@@ -46,6 +47,34 @@ class RequestDetailScreen extends ConsumerWidget {
     final timeFormat = DateFormat('hh:mm a');
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isWide = screenWidth >= 840;
+
+    void showReceiptError(Object e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${AppStrings.couldNotOpenReceipt.primary}: $e')),
+      );
+    }
+
+    Future<void> printReceipt() async {
+      try {
+        await printRequestReceipt(request);
+      } catch (e) {
+        showReceiptError(e);
+      }
+    }
+
+    Future<void> downloadReceipt() async {
+      try {
+        // Anchor the iOS/iPad share popover to the visible content area.
+        final box = context.findRenderObject() as RenderBox?;
+        final bounds = box != null
+            ? box.localToGlobal(Offset.zero) & box.size
+            : null;
+        await shareRequestReceipt(request, bounds: bounds);
+      } catch (e) {
+        showReceiptError(e);
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -124,6 +153,38 @@ class RequestDetailScreen extends ConsumerWidget {
                     ),
                     const Gap(AppSpacing.xl),
 
+                    // Receipt / return actions (Phase 2 reverse flows)
+                    if (request.status == RequestStatus.dispatched ||
+                        request.status == RequestStatus.partial) ...[
+                      PrimaryButton(
+                        label: AppStrings.confirmReceipt.primary,
+                        icon: Icons.inventory_2_rounded,
+                        onPressed: () => context.push(
+                          RoutePaths.confirmReceiptPath(request.id),
+                        ),
+                      ),
+                      const Gap(AppSpacing.sm),
+                      SecondaryButton(
+                        label: AppStrings.returnMaterial.primary,
+                        icon: Icons.assignment_return_rounded,
+                        onPressed: () => context.push(
+                          RoutePaths.returnStore,
+                          extra: request.projectName,
+                        ),
+                      ),
+                      const Gap(AppSpacing.xl),
+                    ] else if (request.status == RequestStatus.received) ...[
+                      SecondaryButton(
+                        label: AppStrings.returnMaterial.primary,
+                        icon: Icons.assignment_return_rounded,
+                        onPressed: () => context.push(
+                          RoutePaths.returnStore,
+                          extra: request.projectName,
+                        ),
+                      ),
+                      const Gap(AppSpacing.xl),
+                    ],
+
                     // Action buttons — draft vs submitted
                     if (request.status == RequestStatus.draft)
                       _DraftActionButtons(
@@ -137,19 +198,16 @@ class RequestDetailScreen extends ConsumerWidget {
                           const Spacer(),
                           _ActionButton(
                             label: AppStrings.downloadReceipt.primary,
-                            secondaryLabel: AppStrings.downloadReceipt
-                                .secondary(lang),
                             icon: Icons.download_rounded,
                             isPrimary: false,
+                            onTap: downloadReceipt,
                           ),
                           const Gap(AppSpacing.md),
                           _ActionButton(
                             label: AppStrings.printOrder.primary,
-                            secondaryLabel: AppStrings.printOrder.secondary(
-                              lang,
-                            ),
                             icon: Icons.print_rounded,
                             isPrimary: true,
+                            onTap: printReceipt,
                           ),
                         ],
                       )
@@ -159,21 +217,18 @@ class RequestDetailScreen extends ConsumerWidget {
                           Expanded(
                             child: _ActionButton(
                               label: AppStrings.downloadReceipt.primary,
-                              secondaryLabel: AppStrings.downloadReceipt
-                                  .secondary(lang),
                               icon: Icons.download_rounded,
                               isPrimary: false,
+                              onTap: downloadReceipt,
                             ),
                           ),
                           const Gap(AppSpacing.md),
                           Expanded(
                             child: _ActionButton(
                               label: AppStrings.printOrder.primary,
-                              secondaryLabel: AppStrings.printOrder.secondary(
-                                lang,
-                              ),
                               icon: Icons.print_rounded,
                               isPrimary: true,
+                              onTap: printReceipt,
                             ),
                           ),
                         ],
@@ -196,12 +251,12 @@ class RequestDetailScreen extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: _StatCard(
-                              label: AppStrings.totalValueLabel.primary,
-                              labelSecondary: AppStrings.totalValueLabel
-                                  .secondary(lang),
-                              value: 'Rs. 1.2M',
-                              subtitle:
-                                  '${AppStrings.budgetCode.primary}: CON-24-X',
+                              label: AppStrings.priority.primary,
+                              labelSecondary: AppStrings.priority.secondary(
+                                lang,
+                              ),
+                              value: request.priority.label,
+                              subtitle: request.status.label,
                             ),
                           ),
                           const Gap(AppSpacing.listItemGap),
@@ -235,12 +290,12 @@ class RequestDetailScreen extends ConsumerWidget {
                             children: [
                               Expanded(
                                 child: _StatCard(
-                                  label: AppStrings.totalValueLabel.primary,
-                                  labelSecondary: AppStrings.totalValueLabel
-                                      .secondary(lang),
-                                  value: 'Rs. 1.2M',
-                                  subtitle:
-                                      '${AppStrings.budgetCode.primary}: CON-24-X',
+                                  label: AppStrings.priority.primary,
+                                  labelSecondary: AppStrings.priority.secondary(
+                                    lang,
+                                  ),
+                                  value: request.priority.label,
+                                  subtitle: request.status.label,
                                 ),
                               ),
                               const Gap(AppSpacing.listItemGap),
@@ -349,9 +404,12 @@ class RequestDetailScreen extends ConsumerWidget {
     return switch (status) {
       RequestStatus.draft => StatusChip.info(status.label),
       RequestStatus.pending => StatusChip.warning(status.label),
-      RequestStatus.available => StatusChip.success(status.label),
-      RequestStatus.deployed => StatusChip.info(status.label),
-      RequestStatus.rejected => StatusChip.error(status.label),
+      RequestStatus.sourcing => StatusChip.warning(status.label),
+      RequestStatus.partial => StatusChip.warning(status.label),
+      RequestStatus.dispatched => StatusChip.info(status.label),
+      RequestStatus.received => StatusChip.success(status.label),
+      RequestStatus.onHold => StatusChip.warning(status.label),
+      RequestStatus.cancelled => StatusChip.error(status.label),
     };
   }
 
@@ -368,15 +426,15 @@ class RequestDetailScreen extends ConsumerWidget {
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.label,
-    required this.secondaryLabel,
     required this.icon,
     required this.isPrimary,
+    required this.onTap,
   });
 
   final String label;
-  final String secondaryLabel;
   final IconData icon;
   final bool isPrimary;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -384,7 +442,7 @@ class _ActionButton extends StatelessWidget {
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {},
+          onTap: onTap,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           child: Container(
             padding: const EdgeInsets.symmetric(
@@ -403,7 +461,7 @@ class _ActionButton extends StatelessWidget {
                 const Gap(AppSpacing.sm),
                 Flexible(
                   child: Text(
-                    '$label / $secondaryLabel',
+                    label,
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -422,7 +480,7 @@ class _ActionButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Container(
           padding: const EdgeInsets.symmetric(
@@ -441,7 +499,7 @@ class _ActionButton extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  '$label / $secondaryLabel',
+                  label,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -696,12 +754,18 @@ class _StatCard extends StatelessWidget {
             ],
           ),
           const Gap(AppSpacing.md),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: isWide ? 24 : 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.onSurface,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: isWide ? 24 : 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.onSurface,
+              ),
+              maxLines: 1,
+              softWrap: false,
             ),
           ),
           if (subtitle != null) ...[
@@ -1067,8 +1131,11 @@ class _TimelineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDeployed = request.status == RequestStatus.deployed;
-    final isAvailable = request.status == RequestStatus.available || isDeployed;
+    final isDeployed = request.status == RequestStatus.received;
+    final isAvailable =
+        request.status == RequestStatus.dispatched ||
+        request.status == RequestStatus.partial ||
+        isDeployed;
 
     return LedgerCard(
       child: Column(

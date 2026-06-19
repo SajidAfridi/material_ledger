@@ -1,0 +1,162 @@
+rules_version = '2';
+
+// Yorks GodownPro — Firestore Security Rules (Rev 1.3)
+//
+// Authoritative, server-side enforcement of the role × collection × operation
+// matrix. The Flutter app also enforces these via role guards and capability
+// helpers (lib/shared/models/user_role.dart), but THESE rules are the source of
+// truth — the in-app checks are convenience, not security.
+//
+// Roles are delivered as a custom auth claim (`request.auth.token.role`) set by
+// an admin-only provisioning process (Cloud Function / Admin SDK). There is NO
+// self-signup: account creation and role assignment happen off-device.
+//
+// Three roles: engineer · procurement · admin.
+// Admin is the all-in-one office/owner role: it absorbed the former Accountant
+// (finance/cost/salary/read-all) and the owner signs in via Admin. Procurement
+// runs materials, rentals and the People/HR module (HR was moved to procurement;
+// kept on admin too for now, later procurement-only).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────────────────────── Helpers ─────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function role() {
+      return isSignedIn() ? request.auth.token.role : '';
+    }
+    function isRole(r) {
+      return isSignedIn() && request.auth.token.role == r;
+    }
+    function isAdmin()       { return isRole('admin'); }
+    function isProcurement() { return isRole('procurement'); }
+    function isEngineer()    { return isRole('engineer'); }
+
+    // Active (not deactivated) account — deactivated users are denied entirely.
+    function isActive() {
+      return isSignedIn() &&
+        (!('active' in request.auth.token) || request.auth.token.active == true);
+    }
+
+    // Capability groups (mirror UserRole getters in the app).
+    function canSeeCost()     { return isAdmin() || isProcurement(); }
+    function canSeeSalary()   { return isAdmin(); }
+    function canAccessRentals(){ return isAdmin() || isProcurement(); }
+    function canWriteRentals(){ return isAdmin() || isProcurement(); }
+    function canAccessPeople(){ return isAdmin() || isProcurement(); }
+    function canWritePeople() { return isAdmin() || isProcurement(); }
+    function canReceiveGoods(){ return isAdmin() || isProcurement(); }
+    function isOffice()       { return !isEngineer(); }
+
+    // ───────────────────────── Projects ─────────────────────────
+    // All signed-in roles read; engineers raise plans/requests; office roles
+    // (and admin) manage. Completed projects are read-only.
+    match /projects/{projectId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && (isEngineer() || isOffice());
+      allow delete: if false; // projects are closed out, never deleted
+    }
+
+    // ─── Material plans / requests / returns (engineer-owned) ───
+    match /materialPlans/{planId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && (isEngineer() || isProcurement() || isAdmin());
+      allow delete: if false;
+    }
+    match /materialRequests/{requestId} {
+      allow read: if isActive();
+      allow create, update: if isActive();
+      allow delete: if false;
+    }
+    match /returns/{returnId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && (isEngineer() || isProcurement() || isAdmin());
+      allow delete: if false;
+    }
+
+    // ───────────────────────── Inventory ────────────────────────
+    // Stock levels are readable by all signed-in roles. The unit COST lives in
+    // a protected sibling collection so engineers can never read it (FR-092):
+    // the app must keep cost out of /inventory and only in /inventoryCosts.
+    match /inventory/{itemId} {
+      allow read: if isActive();
+      allow create, update: if isActive() && (isProcurement() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /inventoryCosts/{itemId} {
+      allow read: if isActive() && canSeeCost();
+      allow create, update: if isActive() && canReceiveGoods();
+      allow delete: if false;
+    }
+
+    // ─── Goods receipts (procurement / admin) — carry cost ──────
+    match /goodsReceipts/{grnId} {
+      allow read: if isActive() && canSeeCost();
+      allow create: if isActive() && canReceiveGoods();
+      allow update, delete: if false; // receipts are immutable once posted
+    }
+
+    // ───────────────────────── Rentals ──────────────────────────
+    match /rentalUnits/{unitId} {
+      allow read: if isActive() && canAccessRentals();
+      allow create, update: if isActive() && canWriteRentals();
+      allow delete: if false;
+    }
+    match /rentPayments/{paymentId} {
+      allow read: if isActive() && canAccessRentals();
+      allow create, update: if isActive() && canWriteRentals();
+      allow delete: if false;
+    }
+
+    // ───────────────────────── People / HR ──────────────────────
+    // Employee docs: salary + identity documents are restricted. Field-level
+    // read protection isn't expressible in rules, so those fields live in a
+    // protected sibling collection (/employeePrivate) gated to canSeeSalary.
+    match /employees/{employeeId} {
+      allow read: if isActive() && canAccessPeople();
+      allow create, update: if isActive() && canWritePeople();
+      allow delete: if false;
+    }
+    match /employeePrivate/{employeeId} {
+      allow read: if isActive() && canSeeSalary();
+      allow create, update: if isActive() && canWritePeople();
+      allow delete: if false;
+    }
+    match /attendance/{recordId} {
+      allow read: if isActive() && canAccessPeople();
+      allow create, update: if isActive() && canWritePeople();
+      allow delete: if false;
+    }
+    match /leaveRecords/{recordId} {
+      allow read: if isActive() && canAccessPeople();
+      allow create, update: if isActive() && canWritePeople();
+      allow delete: if false;
+    }
+
+    // ───────────────────────── Users / access control ───────────
+    // Admin-only management (no self-signup). A user may read only their own
+    // record (for their role/claims); the Admin reads and writes all. Accounts
+    // are deactivated, never deleted, to preserve the audit trail.
+    match /users/{uid} {
+      allow read: if isActive() && (isAdmin() || request.auth.uid == uid);
+      allow create, update: if isActive() && isAdmin();
+      allow delete: if false;
+    }
+
+    // ───────────────────────── Audit log ────────────────────────
+    // Non-deletable audit trail. Entries are written ONLY by trusted server
+    // code (Cloud Functions / Admin SDK), never by clients. Admin may read;
+    // nobody may write, update or delete from a client.
+    match /activityLog/{entryId} {
+      allow read: if isActive() && isAdmin();
+      allow write: if false;
+    }
+
+    // ───────────────────────── Default deny ─────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

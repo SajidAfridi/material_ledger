@@ -9,6 +9,7 @@ import '../../shared/models/material_item.dart';
 abstract final class CategoryIcons {
   static IconData icon(MaterialCategory category) {
     return switch (category) {
+      MaterialCategory.airInletOutlet => Icons.grid_on_rounded,
       MaterialCategory.valves => Icons.toll_rounded,
       MaterialCategory.pipes => Icons.plumbing_rounded,
       MaterialCategory.fittings => Icons.hub_rounded,

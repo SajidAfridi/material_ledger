@@ -6,15 +6,24 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
+import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/material_item.dart';
+import '../../../../shared/models/material_plan.dart';
 import '../../../../shared/models/material_request.dart';
 import '../../../../shared/models/project.dart';
+import '../../../../shared/models/user_role.dart';
+import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/sync/sync_indicators.dart';
+import '../widgets/custom_item_sheet.dart';
 
 /// Create Material Requisition screen (redesigned).
 ///
@@ -43,7 +52,8 @@ class _EngineerNewRequestScreenState
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_saving) return; // guard against double-submit
     final selectedProject = ref.read(selectedProjectProvider);
     final lineItems = ref.read(draftLineItemsProvider);
 
@@ -60,7 +70,8 @@ class _EngineerNewRequestScreenState
 
     final priority = ref.read(selectedPriorityProvider);
 
-    ref
+    // Await so the stock reservation completes before we navigate away.
+    final request = await ref
         .read(materialRequestsProvider.notifier)
         .addRequest(
           projectName: selectedProject.name,
@@ -74,7 +85,31 @@ class _EngineerNewRequestScreenState
           siteLocation: selectedProject.siteLocation,
         );
 
-    // Clear draft state
+    // Alert procurement immediately (FR-064), deep-linked to the dispatch
+    // screen for this request so they can act in one tap.
+    final lang = ref.read(languageProvider);
+    await ref.read(notificationsProvider.notifier).add(
+          type: NotificationType.request,
+          title: AppStrings.notifNewRequestTitle.primary,
+          titleSecondary: AppStrings.notifNewRequestTitle.secondary(lang),
+          body:
+              '${selectedProject.name} · ${lineItems.length} item(s)'
+              '${priority == RequestPriority.urgent ? ' · ${AppStrings.urgent.primary}' : ''}',
+          refId: request.id,
+          route: RoutePaths.dispatchPath(request.id),
+          audience: UserRole.procurement.name,
+        );
+
+    await ref.logAudit(
+      action: 'Material request raised',
+      module: AuditModule.materials,
+      refId: selectedProject.id,
+      detail:
+          '${selectedProject.name} · ${lineItems.length} item(s)'
+          '${priority == RequestPriority.urgent ? ' · Urgent' : ''}',
+    );
+
+    // Clear draft state.
     ref.read(draftLineItemsProvider.notifier).clear();
     ref.read(selectedProjectProvider.notifier).state = null;
     ref.read(selectedPriorityProvider.notifier).state = RequestPriority.normal;
@@ -83,17 +118,101 @@ class _EngineerNewRequestScreenState
     if (!mounted) return;
     setState(() => _saving = false);
 
+    showSyncSnack(context, ref, savedLabel: AppStrings.requestSubmitted.primary);
+    context.go(RoutePaths.engineerHome);
+  }
+
+  /// Remove a line item with an Undo affordance (error recovery).
+  void _removeItemWithUndo(RequestLineItem item) {
+    ref.read(draftLineItemsProvider.notifier).removeItem(item.materialId);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${AppStrings.itemRemoved.primary} · ${item.materialName}'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          action: SnackBarAction(
+            label: AppStrings.undo.primary,
+            onPressed: () =>
+                ref.read(draftLineItemsProvider.notifier).addItem(item),
+          ),
+        ),
+      );
+  }
+
+  /// Discard the whole draft (project, items, priority, notes) with confirmation.
+  Future<void> _discardDraft() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+        title: Text(
+          AppStrings.discardDraft.primary,
+          style: AppTypography.titleMedium,
+        ),
+        content: Text(
+          AppStrings.discardDraftBody.primary,
+          style: AppTypography.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              AppStrings.discardDraft.primary,
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    ref.read(draftLineItemsProvider.notifier).clear();
+    ref.read(selectedProjectProvider.notifier).state = null;
+    ref.read(selectedPriorityProvider.notifier).state = RequestPriority.normal;
+    _notesController.clear();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(AppStrings.requestSubmitted.primary),
-        backgroundColor: AppColors.success,
+        content: Text(AppStrings.draftDiscarded.primary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
       ),
     );
-    context.go(RoutePaths.engineerHome);
+  }
+
+  /// Create a custom (non-inventory) item with full spec incl. RAL and add it
+  /// to the draft request (FR-035).
+  Future<void> _addCustomItem() async {
+    final PlanItem? item = await CustomItemSheet.show(context);
+    if (item == null || !mounted) return;
+    ref
+        .read(draftLineItemsProvider.notifier)
+        .addItem(
+          RequestLineItem(
+            materialId: 'custom-${item.id}',
+            materialName: item.description,
+            materialNameSecondary: item.descriptionSecondary,
+            quantity: item.quantity,
+            unitSymbol: item.unitSymbol,
+            spec: [
+              item.size,
+              item.brand,
+              item.ralColour,
+            ].where((s) => s.isNotEmpty).join(' · '),
+          ),
+        );
   }
 
   void _showError(String message) {
@@ -114,11 +233,66 @@ class _EngineerNewRequestScreenState
     final lang = ref.watch(languageProvider);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isWide = screenWidth >= 840;
+    // Fat-finger guard: if a request is being built, an accidental back-swipe
+    // must not silently throw it away. (Tab switches keep it — IndexedStack.)
+    final hasDraft = ref.watch(draftLineItemsProvider).isNotEmpty;
 
-    if (isWide) {
-      return _buildWideLayout(lang, screenWidth);
-    }
-    return _buildMobileLayout(lang);
+    return PopScope(
+      canPop: !hasDraft,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        AppFeedback.warning();
+        final discard = await _confirmDiscard(context);
+        if (!discard) return;
+        ref.read(draftLineItemsProvider.notifier).clear();
+        ref.read(selectedProjectProvider.notifier).state = null;
+        if (context.mounted) context.pop();
+      },
+      child: isWide ? _buildWideLayout(lang, screenWidth) : _buildMobileLayout(lang),
+    );
+  }
+
+  Future<bool> _confirmDiscard(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+        title: Text(
+          AppStrings.discardRequestTitle.primary,
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.onSurface,
+          ),
+        ),
+        content: Text(
+          AppStrings.discardRequestBody.primary,
+          style: AppTypography.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              AppStrings.keepEditing.primary,
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              AppStrings.discard.primary,
+              style: AppTypography.labelLarge.copyWith(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -127,6 +301,8 @@ class _EngineerNewRequestScreenState
 
   Widget _buildMobileLayout(AppLanguage lang) {
     final lineItems = ref.watch(draftLineItemsProvider);
+    final selectedProject = ref.watch(selectedProjectProvider);
+    final hasDraft = selectedProject != null || lineItems.isNotEmpty;
 
     return SafeArea(
       child: CustomScrollView(
@@ -140,33 +316,45 @@ class _EngineerNewRequestScreenState
               0,
             ),
             sliver: SliverToBoxAdapter(
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppStrings.newMaterialRequest.primary,
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.5,
-                      color: AppColors.onSurface,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.newMaterialRequest.primary,
+                          style: GoogleFonts.inter(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                            color: AppColors.onSurface,
+                          ),
+                        ),
+                        const Gap(AppSpacing.xs),
+                        Text(
+                          AppStrings.newMaterialRequest.secondary(lang),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                          textDirection: lang.isRtl
+                              ? TextDirection.rtl
+                              : TextDirection.ltr,
+                        ),
+                      ],
                     ),
                   ),
-                  const Gap(AppSpacing.xs),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      AppStrings.newMaterialRequest.secondary(lang),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.onSurfaceVariant,
-                        height: 1.5,
-                      ),
-                      textDirection: lang.isRtl
-                          ? TextDirection.rtl
-                          : TextDirection.ltr,
+                  if (hasDraft)
+                    IconButton(
+                      onPressed: _discardDraft,
+                      tooltip: AppStrings.discardDraft.primary,
+                      icon: const Icon(Icons.delete_sweep_outlined),
+                      color: AppColors.error.withValues(alpha: 0.8),
+                      visualDensity: VisualDensity.compact,
                     ),
-                  ),
                 ],
               ),
             ),
@@ -180,6 +368,16 @@ class _EngineerNewRequestScreenState
               horizontal: AppSpacing.screenHorizontal,
             ),
             sliver: SliverToBoxAdapter(child: _ProjectSelector(lang: lang)),
+          ),
+
+          const SliverGap(AppSpacing.xl),
+
+          // ─── Priority ──────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(child: _PrioritySelector(lang: lang)),
           ),
 
           const SliverGap(AppSpacing.xxl),
@@ -254,9 +452,7 @@ class _EngineerNewRequestScreenState
                   return _MobileItemCard(
                     item: item,
                     lang: lang,
-                    onRemove: () => ref
-                        .read(draftLineItemsProvider.notifier)
-                        .removeItem(item.materialId),
+                    onRemove: () => _removeItemWithUndo(item),
                     onQuantityChanged: (qty) => ref
                         .read(draftLineItemsProvider.notifier)
                         .updateQuantity(item.materialId, qty),
@@ -305,6 +501,22 @@ class _EngineerNewRequestScreenState
               horizontal: AppSpacing.screenHorizontal,
             ),
             sliver: SliverToBoxAdapter(child: _BrowseAndAddButton(lang: lang)),
+          ),
+
+          const SliverGap(AppSpacing.sm),
+
+          // ─── Add Custom Item ───────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: SecondaryButton(
+                label: AppStrings.addCustomItem.primary,
+                icon: Icons.add_circle_outline_rounded,
+                onPressed: _addCustomItem,
+              ),
+            ),
           ),
 
           const SliverGap(AppSpacing.xxl),
@@ -458,6 +670,50 @@ class _ProjectSelector extends ConsumerWidget {
               ref.read(selectedProjectProvider.notifier).state = project;
             },
           ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MOBILE — Priority selector (Normal / Urgent)
+// ═══════════════════════════════════════════════════════════════════
+
+class _PrioritySelector extends ConsumerWidget {
+  const _PrioritySelector({required this.lang});
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final priority = ref.watch(selectedPriorityProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        BilingualText(
+          english: AppStrings.priority.primary,
+          secondary: AppStrings.priority.secondary(lang),
+          englishStyle: AppTypography.titleSmall.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const Gap(AppSpacing.md),
+        Row(
+          children: [
+            _PriorityChip(
+              label: AppStrings.normal.primary,
+              isSelected: priority == RequestPriority.normal,
+              onTap: () => ref.read(selectedPriorityProvider.notifier).state =
+                  RequestPriority.normal,
+            ),
+            const Gap(AppSpacing.sm),
+            _PriorityChip(
+              label: AppStrings.urgent.primary,
+              isSelected: priority == RequestPriority.urgent,
+              onTap: () => ref.read(selectedPriorityProvider.notifier).state =
+                  RequestPriority.urgent,
+            ),
+          ],
         ),
       ],
     );
@@ -643,7 +899,9 @@ class _BrowseAndAddButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.go(RoutePaths.engineerBrowse),
+        // Push the material picker ON TOP of the request (not the Browse tab),
+        // so adding items returns straight here.
+        onTap: () => context.push(RoutePaths.engineerPickMaterials),
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: CustomPaint(
           painter: _DashedBorderPainter(
@@ -873,7 +1131,7 @@ class _WebCategorySidebar extends ConsumerWidget {
             secondary: AppStrings.selectProject.secondary(lang),
             isActive: false,
             lang: lang,
-            onTap: () {},
+            onTap: () => context.go(RoutePaths.engineerProjects),
           ),
 
           const Gap(AppSpacing.xxl),
@@ -1258,7 +1516,9 @@ class _WebBrowsingPanel extends ConsumerWidget {
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 1.35,
+                          // Fixed card height (not width-dependent) so the card
+                          // never overflows on any window size / resolution.
+                          mainAxisExtent: 180,
                           crossAxisSpacing: AppSpacing.lg,
                           mainAxisSpacing: AppSpacing.lg,
                         ),
@@ -1707,23 +1967,13 @@ class _WebLedgerPanel extends ConsumerWidget {
                         ),
                         const Gap(AppSpacing.sm),
                         _PriorityChip(
-                          label: AppStrings.high.primary,
+                          label: AppStrings.urgent.primary,
                           isSelected: priority == RequestPriority.urgent,
                           onTap: () =>
                               ref
                                       .read(selectedPriorityProvider.notifier)
                                       .state =
                                   RequestPriority.urgent,
-                        ),
-                        const Gap(AppSpacing.sm),
-                        _PriorityChip(
-                          label: AppStrings.urgent.primary,
-                          isSelected: priority == RequestPriority.critical,
-                          onTap: () =>
-                              ref
-                                      .read(selectedPriorityProvider.notifier)
-                                      .state =
-                                  RequestPriority.critical,
                         ),
                       ],
                     ),

@@ -24,6 +24,8 @@ class LedgerTextField extends StatelessWidget {
     this.enabled = true,
     this.autofocus = false,
     this.focusNode,
+    this.readOnly = false,
+    this.onTap,
   });
 
   final TextEditingController? controller;
@@ -41,6 +43,8 @@ class LedgerTextField extends StatelessWidget {
   final bool enabled;
   final bool autofocus;
   final FocusNode? focusNode;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +67,8 @@ class LedgerTextField extends StatelessWidget {
           validator: validator,
           enabled: enabled,
           autofocus: autofocus,
+          readOnly: readOnly,
+          onTap: onTap,
           style: AppTypography.bodyLarge,
           decoration: InputDecoration(
             hintText: urduHint ?? hintText,

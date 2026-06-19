@@ -43,6 +43,116 @@ abstract final class AppStrings {
     hi: 'हालिया अपडेट',
   );
 
+  // ─── Navigation (IA restructure) ──────────────────────────
+  static const home = TranslatableString(
+    en: 'Home',
+    ar: 'الرئيسية',
+    ur: 'ہوم',
+    hi: 'होम',
+  );
+  static const more = TranslatableString(
+    en: 'More',
+    ar: 'المزيد',
+    ur: 'مزید',
+    hi: 'अधिक',
+  );
+  static const materialsSubtitle = TranslatableString(
+    en: 'Stock, procurement & requests',
+    ar: 'المخزون والمشتريات والطلبات',
+    ur: 'اسٹاک، خریداری اور درخواستیں',
+    hi: 'स्टॉक, खरीद और अनुरोध',
+  );
+  static const returnsAndReceipts = TranslatableString(
+    en: 'Returns & receipts',
+    ar: 'المرتجعات والإيصالات',
+    ur: 'واپسی اور رسیدیں',
+    hi: 'वापसी और रसीदें',
+  );
+  static const returnsAndReceiptsHint = TranslatableString(
+    en: 'Stock in & material returns',
+    ar: 'إدخال المخزون ومرتجعات المواد',
+    ur: 'اسٹاک اِن اور مواد کی واپسی',
+    hi: 'स्टॉक इन और सामग्री वापसी',
+  );
+  static const adminSettings = TranslatableString(
+    en: 'Admin · Settings',
+    ar: 'الإدارة · الإعدادات',
+    ur: 'ایڈمن · ترتیبات',
+    hi: 'एडमिन · सेटिंग्स',
+  );
+  static const adminSettingsSubtitle = TranslatableString(
+    en: 'Users, access & system',
+    ar: 'المستخدمون والوصول والنظام',
+    ur: 'صارفین، رسائی اور سسٹم',
+    hi: 'उपयोगकर्ता, एक्सेस और सिस्टम',
+  );
+  static const administration = TranslatableString(
+    en: 'Administration',
+    ar: 'الإدارة',
+    ur: 'انتظامیہ',
+    hi: 'प्रशासन',
+  );
+  static const system = TranslatableString(
+    en: 'System',
+    ar: 'النظام',
+    ur: 'سسٹم',
+    hi: 'सिस्टम',
+  );
+  static const accessRoles = TranslatableString(
+    en: 'Access & Roles',
+    ar: 'الوصول والأدوار',
+    ur: 'رسائی اور کردار',
+    hi: 'एक्सेस और भूमिकाएँ',
+  );
+  static const accessRolesHint = TranslatableString(
+    en: 'Who can see & do what',
+    ar: 'من يمكنه الرؤية والتنفيذ',
+    ur: 'کون کیا دیکھ اور کر سکتا ہے',
+    hi: 'कौन क्या देख और कर सकता है',
+  );
+  static const dataSync = TranslatableString(
+    en: 'Data & Sync',
+    ar: 'البيانات والمزامنة',
+    ur: 'ڈیٹا اور سنک',
+    hi: 'डेटा और सिंक',
+  );
+  static const dataSyncHint = TranslatableString(
+    en: 'Offline queue & status',
+    ar: 'قائمة الانتظار والحالة دون اتصال',
+    ur: 'آف لائن قطار اور حالت',
+    hi: 'ऑफ़लाइन क़तार और स्थिति',
+  );
+  static const allSynced = TranslatableString(
+    en: 'All synced',
+    ar: 'تمت المزامنة',
+    ur: 'سب سنک ہو گیا',
+    hi: 'सब सिंक हो गया',
+  );
+  static const discardRequestTitle = TranslatableString(
+    en: 'Discard request?',
+    ar: 'تجاهل الطلب؟',
+    ur: 'درخواست رد کریں؟',
+    hi: 'अनुरोध छोड़ें?',
+  );
+  static const discardRequestBody = TranslatableString(
+    en: 'The items you added will be removed.',
+    ar: 'سيتم إزالة العناصر التي أضفتها.',
+    ur: 'آپ کے شامل کردہ آئٹمز ہٹا دیے جائیں گے۔',
+    hi: 'आपके जोड़े गए आइटम हटा दिए जाएंगे।',
+  );
+  static const keepEditing = TranslatableString(
+    en: 'Keep editing',
+    ar: 'متابعة التعديل',
+    ur: 'ترمیم جاری رکھیں',
+    hi: 'संपादन जारी रखें',
+  );
+  static const discard = TranslatableString(
+    en: 'Discard',
+    ar: 'تجاهل',
+    ur: 'رد کریں',
+    hi: 'छोड़ें',
+  );
+
   // ─── Dashboard ────────────────────────────────────────────
   static const totalStockValue = TranslatableString(
     en: 'Total Stock Value',
@@ -155,10 +265,10 @@ abstract final class AppStrings {
 
   // ─── Onboarding ───────────────────────────────────────────
   static const welcomeTo = TranslatableString(
-    en: 'Welcome to GodownPro',
-    ar: 'مرحباً بك في GodownPro',
+    en: 'Welcome to Yorks GodownPro',
+    ar: 'مرحباً بك في Yorks GodownPro',
     ur: 'گودام پرو میں خوش آمدید',
-    hi: 'GodownPro में आपका स्वागत है',
+    hi: 'Yorks GodownPro में आपका स्वागत है',
   );
   static const selectLanguage = TranslatableString(
     en: 'SELECT LANGUAGE',
@@ -291,6 +401,932 @@ abstract final class AppStrings {
     ar: 'سعر الوحدة',
     ur: 'فی اکائی قیمت',
     hi: 'इकाई मूल्य',
+  );
+  static const reserved = TranslatableString(
+    en: 'Reserved',
+    ar: 'محجوز',
+    ur: 'مختص',
+    hi: 'आरक्षित',
+  );
+  static const available = TranslatableString(
+    en: 'Available',
+    ar: 'متاح',
+    ur: 'دستیاب',
+    hi: 'उपलब्ध',
+  );
+  static const stockDetails = TranslatableString(
+    en: 'Stock details',
+    ar: 'تفاصيل المخزون',
+    ur: 'اسٹاک تفصیلات',
+    hi: 'स्टॉक विवरण',
+  );
+  static const brandSupplier = TranslatableString(
+    en: 'Brand / Supplier',
+    ar: 'العلامة / المورّد',
+    ur: 'برانڈ / سپلائر',
+    hi: 'ब्रांड / आपूर्तिकर्ता',
+  );
+
+  // ─── Procurement workspace (plan review + dispatch) ───────────
+  static const procurement = TranslatableString(
+    en: 'Procurement',
+    ar: 'المشتريات',
+    ur: 'پروکیورمنٹ',
+    hi: 'खरीद',
+  );
+  static const procurementSubtitle = TranslatableString(
+    en: 'Arrange plans & dispatch site requests',
+    ar: 'ترتيب الخطط وصرف طلبات الموقع',
+    ur: 'پلان ترتیب دیں اور سائٹ کی درخواستیں روانہ کریں',
+    hi: 'योजनाएँ व्यवस्थित करें और साइट अनुरोध भेजें',
+  );
+  static const queueClear = TranslatableString(
+    en: 'Nothing here — all clear',
+    ar: 'لا شيء هنا — كل شيء جاهز',
+    ur: 'یہاں کچھ نہیں — سب صاف',
+    hi: 'यहाँ कुछ नहीं — सब साफ़',
+  );
+  static const needYourAttention = TranslatableString(
+    en: 'need your attention',
+    ar: 'تحتاج إلى انتباهك',
+    ur: 'آپ کی توجہ درکار ہے',
+    hi: 'आपके ध्यान की आवश्यकता',
+  );
+  static const awaitingAction = TranslatableString(
+    en: 'Awaiting you',
+    ar: 'بانتظارك',
+    ur: 'آپ کے منتظر',
+    hi: 'आपकी प्रतीक्षा में',
+  );
+  static const notifNewRequestTitle = TranslatableString(
+    en: 'New material request',
+    ar: 'طلب مواد جديد',
+    ur: 'نئی مٹیریل درخواست',
+    hi: 'नया सामग्री अनुरोध',
+  );
+  static const notifNewPlanTitle = TranslatableString(
+    en: 'New material plan to review',
+    ar: 'خطة مواد جديدة للمراجعة',
+    ur: 'جائزے کے لیے نیا مٹیریل پلان',
+    hi: 'समीक्षा हेतु नई सामग्री योजना',
+  );
+  static const notifPlanApprovedTitle = TranslatableString(
+    en: 'Engineer approved the plan',
+    ar: 'وافق المهندس على الخطة',
+    ur: 'انجینئر نے پلان منظور کر لیا',
+    hi: 'इंजीनियर ने योजना स्वीकृत की',
+  );
+  static const notifPlanChangesTitle = TranslatableString(
+    en: 'Engineer requested plan changes',
+    ar: 'طلب المهندس تعديلات على الخطة',
+    ur: 'انجینئر نے پلان میں تبدیلیاں مانگی ہیں',
+    hi: 'इंजीनियर ने योजना में बदलाव मांगे',
+  );
+  static const notifPlanCommentTitle = TranslatableString(
+    en: 'Procurement commented on your plan',
+    ar: 'علّقت المشتريات على خطتك',
+    ur: 'پروکیورمنٹ نے آپ کے پلان پر تبصرہ کیا',
+    hi: 'खरीद ने आपकी योजना पर टिप्पणी की',
+  );
+  static const notifIdleRequestTitle = TranslatableString(
+    en: 'Request idle for 24h+',
+    ar: 'طلب بدون إجراء لأكثر من ٢٤ ساعة',
+    ur: '24 گھنٹے سے غیر فعال درخواست',
+    hi: 'अनुरोध 24 घंटे+ से निष्क्रिय',
+  );
+  static const plansToReview = TranslatableString(
+    en: 'Plans to review',
+    ar: 'خطط للمراجعة',
+    ur: 'جائزے کے لیے پلان',
+    hi: 'समीक्षा हेतु योजनाएं',
+  );
+  static const requestsToDispatch = TranslatableString(
+    en: 'Requests to dispatch',
+    ar: 'طلبات للصرف',
+    ur: 'روانگی کے لیے درخواستیں',
+    hi: 'भेजने हेतु अनुरोध',
+  );
+  static const noPlansToReview = TranslatableString(
+    en: 'No plans waiting',
+    ar: 'لا توجد خطط منتظرة',
+    ur: 'کوئی پلان زیر التوا نہیں',
+    hi: 'कोई योजना लंबित नहीं',
+  );
+  static const noRequestsToDispatch = TranslatableString(
+    en: 'No requests waiting',
+    ar: 'لا توجد طلبات منتظرة',
+    ur: 'کوئی درخواست زیر التوا نہیں',
+    hi: 'कोई अनुरोध लंबित नहीं',
+  );
+  static const reviewPlan = TranslatableString(
+    en: 'Review Plan',
+    ar: 'مراجعة الخطة',
+    ur: 'پلان کا جائزہ',
+    hi: 'योजना समीक्षा',
+  );
+  static const markArranged = TranslatableString(
+    en: 'Mark arranged',
+    ar: 'وضع علامة مرتب',
+    ur: 'بندوبست نشان زد',
+    hi: 'व्यवस्थित चिह्नित',
+  );
+  static const arranged = TranslatableString(
+    en: 'Arranged',
+    ar: 'تم الترتيب',
+    ur: 'بندوبست شدہ',
+    hi: 'व्यवस्थित',
+  );
+  static const markAllArranged = TranslatableString(
+    en: 'Arrange all',
+    ar: 'ترتيب الكل',
+    ur: 'سب کا بندوبست',
+    hi: 'सभी व्यवस्थित',
+  );
+  static const markDone = TranslatableString(
+    en: 'Mark Done',
+    ar: 'وضع علامة تم',
+    ur: 'مکمل نشان زد',
+    hi: 'पूर्ण चिह्नित',
+  );
+  static const planMarkedDone = TranslatableString(
+    en: 'Plan sent back for approval',
+    ar: 'تم إرسال الخطة للموافقة',
+    ur: 'پلان منظوری کے لیے واپس بھیجا',
+    hi: 'योजना अनुमोदन हेतु भेजी',
+  );
+  static const arrangeAllFirst = TranslatableString(
+    en: 'Arrange every item to finish',
+    ar: 'رتّب كل عنصر للإنهاء',
+    ur: 'مکمل کرنے کے لیے ہر آئٹم کا بندوبست کریں',
+    hi: 'समाप्त करने हेतु हर आइटम व्यवस्थित करें',
+  );
+  static const dispatch = TranslatableString(
+    en: 'Dispatch',
+    ar: 'صرف',
+    ur: 'روانہ کریں',
+    hi: 'भेजें',
+  );
+  static const dispatchRequest = TranslatableString(
+    en: 'Dispatch Request',
+    ar: 'صرف الطلب',
+    ur: 'درخواست روانہ کریں',
+    hi: 'अनुरोध भेजें',
+  );
+  static const requestDispatched = TranslatableString(
+    en: 'Request dispatched',
+    ar: 'تم صرف الطلب',
+    ur: 'درخواست روانہ ہو گئی',
+    hi: 'अनुरोध भेजा गया',
+  );
+  static const notInInventory = TranslatableString(
+    en: 'Not in inventory',
+    ar: 'غير موجود في المخزون',
+    ur: 'انوینٹری میں نہیں',
+    hi: 'इन्वेंटरी में नहीं',
+  );
+  static const receiveIntoInventory = TranslatableString(
+    en: 'Receive into inventory',
+    ar: 'استلام في المخزون',
+    ur: 'انوینٹری میں وصول کریں',
+    hi: 'इन्वेंटरी में प्राप्त करें',
+  );
+  static const quantityToStock = TranslatableString(
+    en: 'Quantity to stock',
+    ar: 'الكمية المراد تخزينها',
+    ur: 'اسٹاک کرنے کی مقدار',
+    hi: 'स्टॉक करने की मात्रा',
+  );
+  static const readyToDispatch = TranslatableString(
+    en: 'Ready to dispatch',
+    ar: 'جاهز للصرف',
+    ur: 'روانگی کے لیے تیار',
+    hi: 'भेजने के लिए तैयार',
+  );
+  static const needsStocking = TranslatableString(
+    en: 'Needs stocking',
+    ar: 'بحاجة إلى تخزين',
+    ur: 'اسٹاک کی ضرورت',
+    hi: 'स्टॉक की आवश्यकता',
+  );
+  static const confirmDispatchTitle = TranslatableString(
+    en: 'Dispatch now?',
+    ar: 'الصرف الآن؟',
+    ur: 'ابھی روانہ کریں؟',
+    hi: 'अभी भेजें?',
+  );
+  static const lineItems = TranslatableString(
+    en: 'Line items',
+    ar: 'البنود',
+    ur: 'آئٹمز',
+    hi: 'मद',
+  );
+  static const unitCost = TranslatableString(
+    en: 'Unit cost',
+    ar: 'تكلفة الوحدة',
+    ur: 'فی یونٹ لاگت',
+    hi: 'इकाई लागत',
+  );
+  static const putOnHold = TranslatableString(
+    en: 'On hold',
+    ar: 'قيد الانتظار',
+    ur: 'روک دیں',
+    hi: 'रोकें',
+  );
+  static const holdNote = TranslatableString(
+    en: 'Reason / note',
+    ar: 'السبب / ملاحظة',
+    ur: 'وجہ / نوٹ',
+    hi: 'कारण / नोट',
+  );
+  static const enterDispatchQty = TranslatableString(
+    en: 'Enter a quantity to dispatch',
+    ar: 'أدخل كمية للصرف',
+    ur: 'روانگی کے لیے مقدار درج کریں',
+    hi: 'भेजने हेतु मात्रा दर्ज करें',
+  );
+  static const requested = TranslatableString(
+    en: 'Requested',
+    ar: 'مطلوب',
+    ur: 'درخواست شدہ',
+    hi: 'अनुरोधित',
+  );
+
+  // ─── Admin panel — user management (§4.7) ─────────────────────
+  static const userManagement = TranslatableString(
+    en: 'User Management',
+    ar: 'إدارة المستخدمين',
+    ur: 'صارف مینجمنٹ',
+    hi: 'उपयोगकर्ता प्रबंधन',
+  );
+  static const addUser = TranslatableString(
+    en: 'Add user',
+    ar: 'إضافة مستخدم',
+    ur: 'صارف شامل کریں',
+    hi: 'उपयोगकर्ता जोड़ें',
+  );
+  static const createUser = TranslatableString(
+    en: 'Create user',
+    ar: 'إنشاء مستخدم',
+    ur: 'صارف بنائیں',
+    hi: 'उपयोगकर्ता बनाएं',
+  );
+  static const userActive = TranslatableString(
+    en: 'Active',
+    ar: 'نشط',
+    ur: 'فعال',
+    hi: 'सक्रिय',
+  );
+  static const userInactive = TranslatableString(
+    en: 'Inactive',
+    ar: 'غير نشط',
+    ur: 'غیر فعال',
+    hi: 'निष्क्रिय',
+  );
+  static const fullName = TranslatableString(
+    en: 'Full name',
+    ar: 'الاسم الكامل',
+    ur: 'پورا نام',
+    hi: 'पूरा नाम',
+  );
+  static const initialPassword = TranslatableString(
+    en: 'Initial password',
+    ar: 'كلمة المرور الأولية',
+    ur: 'ابتدائی پاس ورڈ',
+    hi: 'प्रारंभिक पासवर्ड',
+  );
+  static const passwordTooShort = TranslatableString(
+    en: 'At least 6 characters',
+    ar: '6 أحرف على الأقل',
+    ur: 'کم از کم 6 حروف',
+    hi: 'कम से कम 6 अक्षर',
+  );
+  static const accountActive = TranslatableString(
+    en: 'Account active',
+    ar: 'الحساب نشط',
+    ur: 'اکاؤنٹ فعال',
+    hi: 'खाता सक्रिय',
+  );
+  static const accountActiveHint = TranslatableString(
+    en: 'Turn off to deny access immediately',
+    ar: 'أوقفه لمنع الوصول فورًا',
+    ur: 'رسائی فوراً روکنے کے لیے بند کریں',
+    hi: 'पहुँच तुरंत रोकने हेतु बंद करें',
+  );
+  static const inventoryAccess = TranslatableString(
+    en: 'Inventory access',
+    ar: 'الوصول للمخزون',
+    ur: 'انوینٹری رسائی',
+    hi: 'इन्वेंट्री पहुँच',
+  );
+  static const inventoryAccessHint = TranslatableString(
+    en: 'Allow this engineer to browse stock',
+    ar: 'السماح لهذا المهندس بتصفح المخزون',
+    ur: 'اس انجینئر کو اسٹاک دیکھنے کی اجازت',
+    hi: 'इस इंजीनियर को स्टॉक देखने दें',
+  );
+  static const resetPassword = TranslatableString(
+    en: 'Reset password',
+    ar: 'إعادة تعيين كلمة المرور',
+    ur: 'پاس ورڈ ری سیٹ',
+    hi: 'पासवर्ड रीसेट',
+  );
+  static const passwordResetSent = TranslatableString(
+    en: 'Password reset link sent',
+    ar: 'تم إرسال رابط إعادة التعيين',
+    ur: 'پاس ورڈ ری سیٹ لنک بھیج دیا',
+    hi: 'पासवर्ड रीसेट लिंक भेजा',
+  );
+  static const exportAudit = TranslatableString(
+    en: 'Export CSV',
+    ar: 'تصدير CSV',
+    ur: 'CSV ایکسپورٹ',
+    hi: 'CSV निर्यात',
+  );
+  static const searchAudit = TranslatableString(
+    en: 'Search by user, action or detail',
+    ar: 'البحث بالمستخدم أو الإجراء',
+    ur: 'صارف، عمل یا تفصیل سے تلاش',
+    hi: 'उपयोगकर्ता, क्रिया से खोजें',
+  );
+  static const auditCopied = TranslatableString(
+    en: 'Audit trail copied to clipboard',
+    ar: 'تم نسخ سجل التدقيق',
+    ur: 'آڈٹ ٹریل کلپ بورڈ پر کاپی',
+    hi: 'ऑडिट ट्रेल क्लिपबोर्ड पर कॉपी',
+  );
+
+  // ─── Admin panel hub (§4.7) ───────────────────────────────────
+  static const adminPanel = TranslatableString(
+    en: 'Admin Panel',
+    ar: 'لوحة الإدارة',
+    ur: 'ایڈمن پینل',
+    hi: 'एडमिन पैनल',
+  );
+  static const adminPanelHint = TranslatableString(
+    en: 'Users, projects, oversight & reports',
+    ar: 'المستخدمون والمشاريع والإشراف والتقارير',
+    ur: 'صارفین، پروجیکٹس، نگرانی اور رپورٹس',
+    hi: 'उपयोगकर्ता, परियोजनाएं, निगरानी और रिपोर्ट',
+  );
+  static const overview = TranslatableString(
+    en: 'Overview',
+    ar: 'نظرة عامة',
+    ur: 'جائزہ',
+    hi: 'अवलोकन',
+  );
+  static const management = TranslatableString(
+    en: 'Management',
+    ar: 'الإدارة',
+    ur: 'انتظام',
+    hi: 'प्रबंधन',
+  );
+  static const oversight = TranslatableString(
+    en: 'Oversight',
+    ar: 'الإشراف',
+    ur: 'نگرانی',
+    hi: 'निगरानी',
+  );
+  static const activeUsers = TranslatableString(
+    en: 'Active users',
+    ar: 'المستخدمون النشطون',
+    ur: 'فعال صارفین',
+    hi: 'सक्रिय उपयोगकर्ता',
+  );
+  static const auditTrail = TranslatableString(
+    en: 'Audit Trail',
+    ar: 'سجل التدقيق',
+    ur: 'آڈٹ ٹریل',
+    hi: 'ऑडिट ट्रेल',
+  );
+  static const projectsAdmin = TranslatableString(
+    en: 'Projects',
+    ar: 'المشاريع',
+    ur: 'پروجیکٹس',
+    hi: 'परियोजनाएं',
+  );
+  static const requestsAdmin = TranslatableString(
+    en: 'Requests',
+    ar: 'الطلبات',
+    ur: 'درخواستیں',
+    hi: 'अनुरोध',
+  );
+  static const userManagementHint = TranslatableString(
+    en: 'Create, deactivate & set access',
+    ar: 'إنشاء وتعطيل وضبط الوصول',
+    ur: 'بنائیں، غیر فعال کریں اور رسائی',
+    hi: 'बनाएं, निष्क्रिय करें और पहुँच',
+  );
+  static const projectsAdminHint = TranslatableString(
+    en: 'View & delete any project',
+    ar: 'عرض وحذف أي مشروع',
+    ur: 'کوئی بھی پروجیکٹ دیکھیں اور حذف کریں',
+    hi: 'कोई भी परियोजना देखें और हटाएं',
+  );
+  static const requestsAdminHint = TranslatableString(
+    en: 'Reject or delete any request',
+    ar: 'رفض أو حذف أي طلب',
+    ur: 'کوئی بھی درخواست مسترد یا حذف کریں',
+    hi: 'कोई भी अनुरोध अस्वीकार या हटाएं',
+  );
+  static const procurementHint = TranslatableString(
+    en: 'Plans to review & requests to dispatch',
+    ar: 'خطط للمراجعة وطلبات للصرف',
+    ur: 'جائزے کے پلان اور روانگی کی درخواستیں',
+    hi: 'समीक्षा योजनाएं और भेजने हेतु अनुरोध',
+  );
+  static const inventoryHint = TranslatableString(
+    en: 'Add, edit & adjust stock',
+    ar: 'إضافة وتعديل وضبط المخزون',
+    ur: 'اسٹاک شامل، ترمیم اور ایڈجسٹ',
+    hi: 'स्टॉक जोड़ें, संपादित करें',
+  );
+  static const costReportHint = TranslatableString(
+    en: 'Material value dispatched per project',
+    ar: 'قيمة المواد المصروفة لكل مشروع',
+    ur: 'فی پروجیکٹ روانہ مواد کی قیمت',
+    hi: 'प्रति परियोजना भेजी सामग्री मूल्य',
+  );
+  static const auditTrailHint = TranslatableString(
+    en: 'Every action, filter & export',
+    ar: 'كل إجراء، تصفية وتصدير',
+    ur: 'ہر عمل، فلٹر اور ایکسپورٹ',
+    hi: 'हर क्रिया, फ़िल्टर और निर्यात',
+  );
+  static const peopleHint = TranslatableString(
+    en: 'Employees, attendance & leave',
+    ar: 'الموظفون والحضور والإجازات',
+    ur: 'ملازمین، حاضری اور چھٹی',
+    hi: 'कर्मचारी, उपस्थिति और अवकाश',
+  );
+  static const rentalsHint = TranslatableString(
+    en: 'Units, tenants & rent collection',
+    ar: 'الوحدات والمستأجرون وتحصيل الإيجار',
+    ur: 'یونٹس، کرایہ دار اور کرایہ وصولی',
+    hi: 'इकाइयाँ, किरायेदार और किराया',
+  );
+  static const deleteProject = TranslatableString(
+    en: 'Delete project',
+    ar: 'حذف المشروع',
+    ur: 'پروجیکٹ حذف کریں',
+    hi: 'परियोजना हटाएं',
+  );
+  static const projectDeleted = TranslatableString(
+    en: 'Project deleted',
+    ar: 'تم حذف المشروع',
+    ur: 'پروجیکٹ حذف ہو گیا',
+    hi: 'परियोजना हटा दी',
+  );
+  static const rejectRequest = TranslatableString(
+    en: 'Reject',
+    ar: 'رفض',
+    ur: 'مسترد کریں',
+    hi: 'अस्वीकार',
+  );
+  static const deleteRequest = TranslatableString(
+    en: 'Delete request',
+    ar: 'حذف الطلب',
+    ur: 'درخواست حذف کریں',
+    hi: 'अनुरोध हटाएं',
+  );
+  static const requestDeleted = TranslatableString(
+    en: 'Request deleted',
+    ar: 'تم حذف الطلب',
+    ur: 'درخواست حذف ہو گئی',
+    hi: 'अनुरोध हटाया गया',
+  );
+
+  // ─── Goods receipt (procurement) ──────────────────────────────
+  static const receiveGoods = TranslatableString(
+    en: 'Receive Goods',
+    ar: 'استلام البضائع',
+    ur: 'سامان وصول کریں',
+    hi: 'माल प्राप्त करें',
+  );
+  static const goodsReceipt = TranslatableString(
+    en: 'Goods Receipt',
+    ar: 'إيصال استلام',
+    ur: 'گڈز رسید',
+    hi: 'माल रसीद',
+  );
+  static const grnSelectMaterial = TranslatableString(
+    en: 'Select a material',
+    ar: 'اختر مادة',
+    ur: 'مواد منتخب کریں',
+    hi: 'सामग्री चुनें',
+  );
+  static const grnTapToChoose = TranslatableString(
+    en: 'Tap to choose from inventory',
+    ar: 'اضغط للاختيار من المخزون',
+    ur: 'انوینٹری سے منتخب کرنے کے لیے ٹیپ کریں',
+    hi: 'इन्वेंट्री से चुनने के लिए टैप करें',
+  );
+  static const grnRecord = TranslatableString(
+    en: 'Record receipt',
+    ar: 'تسجيل الاستلام',
+    ur: 'رسید درج کریں',
+    hi: 'रसीद दर्ज करें',
+  );
+  static const grnRecorded = TranslatableString(
+    en: 'Goods received into store',
+    ar: 'تم استلام البضائع في المخزن',
+    ur: 'سامان اسٹور میں وصول ہوا',
+    hi: 'माल स्टोर में प्राप्त हुआ',
+  );
+  static const onHand = TranslatableString(
+    en: 'On hand',
+    ar: 'المتوفر',
+    ur: 'موجود',
+    hi: 'उपलब्ध',
+  );
+  static const supplier = TranslatableString(
+    en: 'Supplier',
+    ar: 'المورّد',
+    ur: 'سپلائر',
+    hi: 'आपूर्तिकर्ता',
+  );
+
+  // ─── Finance / cost roll-up (admin) ───────────────────────────
+  static const finance = TranslatableString(
+    en: 'Finance',
+    ar: 'المالية',
+    ur: 'فنانس',
+    hi: 'वित्त',
+  );
+  static const projectCosts = TranslatableString(
+    en: 'Project Costs',
+    ar: 'تكاليف المشاريع',
+    ur: 'پروجیکٹ اخراجات',
+    hi: 'परियोजना लागत',
+  );
+  static const dispatched = TranslatableString(
+    en: 'Dispatched',
+    ar: 'تم الصرف',
+    ur: 'روانہ',
+    hi: 'भेजा गया',
+  );
+  static const returnedLabel = TranslatableString(
+    en: 'Returned',
+    ar: 'مُرجع',
+    ur: 'واپس',
+    hi: 'वापस',
+  );
+  static const netCost = TranslatableString(
+    en: 'Net cost',
+    ar: 'التكلفة الصافية',
+    ur: 'خالص لاگت',
+    hi: 'शुद्ध लागत',
+  );
+  static const totalNetCost = TranslatableString(
+    en: 'Total net cost',
+    ar: 'إجمالي التكلفة الصافية',
+    ur: 'کل خالص لاگت',
+    hi: 'कुल शुद्ध लागत',
+  );
+  static const exportCsv = TranslatableString(
+    en: 'Export CSV',
+    ar: 'تصدير CSV',
+    ur: 'CSV ایکسپورٹ',
+    hi: 'CSV निर्यात',
+  );
+  static const csvCopied = TranslatableString(
+    en: 'CSV copied to clipboard',
+    ar: 'تم نسخ CSV إلى الحافظة',
+    ur: 'CSV کلپ بورڈ پر کاپی ہو گیا',
+    hi: 'CSV क्लिपबोर्ड पर कॉपी हुआ',
+  );
+  static const markComplete = TranslatableString(
+    en: 'Mark complete',
+    ar: 'وضع علامة مكتمل',
+    ur: 'مکمل نشان زد کریں',
+    hi: 'पूर्ण चिह्नित करें',
+  );
+  static const cannotCompleteOpenRequests = TranslatableString(
+    en: 'Close all open requests first',
+    ar: 'أغلق جميع الطلبات المفتوحة أولاً',
+    ur: 'پہلے تمام کھلی درخواستیں بند کریں',
+    hi: 'पहले सभी खुले अनुरोध बंद करें',
+  );
+  static const projectCompleted = TranslatableString(
+    en: 'Project closed out',
+    ar: 'تم إغلاق المشروع',
+    ur: 'پروجیکٹ مکمل ہو گیا',
+    hi: 'परियोजना पूर्ण हुई',
+  );
+
+  // ─── Rentals module ───────────────────────────────────────────
+  static const rentals = TranslatableString(
+    en: 'Rentals',
+    ar: 'الإيجارات',
+    ur: 'کرایہ جات',
+    hi: 'किराया',
+  );
+  static const rentalShops = TranslatableString(
+    en: 'Rental Shops',
+    ar: 'المحلات المؤجرة',
+    ur: 'کرایہ کی دکانیں',
+    hi: 'किराये की दुकानें',
+  );
+  static const rentalUnits = TranslatableString(
+    en: 'Units',
+    ar: 'الوحدات',
+    ur: 'یونٹس',
+    hi: 'इकाइयाँ',
+  );
+  static const addUnit = TranslatableString(
+    en: 'Add Unit',
+    ar: 'إضافة وحدة',
+    ur: 'یونٹ شامل کریں',
+    hi: 'इकाई जोड़ें',
+  );
+  static const unitName = TranslatableString(
+    en: 'Unit name',
+    ar: 'اسم الوحدة',
+    ur: 'یونٹ کا نام',
+    hi: 'इकाई नाम',
+  );
+  static const unitType = TranslatableString(
+    en: 'Type',
+    ar: 'النوع',
+    ur: 'قسم',
+    hi: 'प्रकार',
+  );
+  static const location = TranslatableString(
+    en: 'Location',
+    ar: 'الموقع',
+    ur: 'مقام',
+    hi: 'स्थान',
+  );
+  static const monthlyRent = TranslatableString(
+    en: 'Monthly rent',
+    ar: 'الإيجار الشهري',
+    ur: 'ماہانہ کرایہ',
+    hi: 'मासिक किराया',
+  );
+  static const tenant = TranslatableString(
+    en: 'Tenant',
+    ar: 'المستأجر',
+    ur: 'کرایہ دار',
+    hi: 'किरायेदार',
+  );
+  static const tenantContact = TranslatableString(
+    en: 'Tenant contact',
+    ar: 'هاتف المستأجر',
+    ur: 'کرایہ دار رابطہ',
+    hi: 'किरायेदार संपर्क',
+  );
+  static const leaseStart = TranslatableString(
+    en: 'Lease start',
+    ar: 'بداية العقد',
+    ur: 'لیز کا آغاز',
+    hi: 'पट्टा प्रारंभ',
+  );
+  static const leaseEnd = TranslatableString(
+    en: 'Lease end',
+    ar: 'نهاية العقد',
+    ur: 'لیز کا اختتام',
+    hi: 'पट्टा समाप्ति',
+  );
+  static const recordPayment = TranslatableString(
+    en: 'Record payment',
+    ar: 'تسجيل دفعة',
+    ur: 'ادائیگی درج کریں',
+    hi: 'भुगतान दर्ज करें',
+  );
+  static const paymentRecorded = TranslatableString(
+    en: 'Payment recorded',
+    ar: 'تم تسجيل الدفعة',
+    ur: 'ادائیگی درج ہو گئی',
+    hi: 'भुगतान दर्ज हुआ',
+  );
+  static const amountPaid = TranslatableString(
+    en: 'Amount paid',
+    ar: 'المبلغ المدفوع',
+    ur: 'ادا کی گئی رقم',
+    hi: 'भुगतान राशि',
+  );
+  static const amountDue = TranslatableString(
+    en: 'Amount due',
+    ar: 'المبلغ المستحق',
+    ur: 'واجب رقم',
+    hi: 'देय राशि',
+  );
+  static const paymentMethod = TranslatableString(
+    en: 'Method',
+    ar: 'الطريقة',
+    ur: 'طریقہ',
+    hi: 'विधि',
+  );
+  static const rentRoll = TranslatableString(
+    en: 'Monthly rent roll',
+    ar: 'إجمالي الإيجار الشهري',
+    ur: 'ماہانہ کرایہ کل',
+    hi: 'मासिक किराया योग',
+  );
+  static const collectedThisMonth = TranslatableString(
+    en: 'Collected this month',
+    ar: 'المحصّل هذا الشهر',
+    ur: 'اس ماہ وصول',
+    hi: 'इस माह वसूल',
+  );
+  static const overdueTotal = TranslatableString(
+    en: 'Overdue',
+    ar: 'متأخر',
+    ur: 'واجب الادا',
+    hi: 'अतिदेय',
+  );
+  static const paymentHistory = TranslatableString(
+    en: 'Payment history',
+    ar: 'سجل الدفعات',
+    ur: 'ادائیگی کی تاریخ',
+    hi: 'भुगतान इतिहास',
+  );
+  static const noPaymentsYet = TranslatableString(
+    en: 'No payments yet',
+    ar: 'لا توجد دفعات بعد',
+    ur: 'ابھی کوئی ادائیگی نہیں',
+    hi: 'अभी कोई भुगतान नहीं',
+  );
+  static const noUnitsYet = TranslatableString(
+    en: 'No units yet',
+    ar: 'لا توجد وحدات بعد',
+    ur: 'ابھی کوئی یونٹ نہیں',
+    hi: 'अभी कोई इकाई नहीं',
+  );
+  static const occupied = TranslatableString(
+    en: 'Occupied',
+    ar: 'مشغول',
+    ur: 'مقبوضہ',
+    hi: 'अधिकृत',
+  );
+  static const vacant = TranslatableString(
+    en: 'Vacant',
+    ar: 'شاغر',
+    ur: 'خالی',
+    hi: 'खाली',
+  );
+  static const saveUnit = TranslatableString(
+    en: 'Save unit',
+    ar: 'حفظ الوحدة',
+    ur: 'یونٹ محفوظ کریں',
+    hi: 'इकाई सहेजें',
+  );
+  static const billingMonth = TranslatableString(
+    en: 'Billing month',
+    ar: 'شهر الفوترة',
+    ur: 'بلنگ مہینہ',
+    hi: 'बिलिंग माह',
+  );
+
+  // ─── People / HR module ───────────────────────────────────────
+  static const people = TranslatableString(
+    en: 'People',
+    ar: 'الموظفون',
+    ur: 'عملہ',
+    hi: 'कर्मचारी',
+  );
+  static const employees = TranslatableString(
+    en: 'Employees',
+    ar: 'الموظفون',
+    ur: 'ملازمین',
+    hi: 'कर्मचारी',
+  );
+  static const presentToday = TranslatableString(
+    en: 'Present',
+    ar: 'حاضر',
+    ur: 'حاضر',
+    hi: 'उपस्थित',
+  );
+  static const onLeaveLabel = TranslatableString(
+    en: 'On leave',
+    ar: 'في إجازة',
+    ur: 'چھٹی پر',
+    hi: 'अवकाश पर',
+  );
+  static const absentLabel = TranslatableString(
+    en: 'Absent',
+    ar: 'غائب',
+    ur: 'غیر حاضر',
+    hi: 'अनुपस्थित',
+  );
+  static const leaveBalanceLabel = TranslatableString(
+    en: 'Leave balance',
+    ar: 'رصيد الإجازة',
+    ur: 'چھٹی بیلنس',
+    hi: 'अवकाश शेष',
+  );
+  static const leaveUsed = TranslatableString(
+    en: 'Leave used',
+    ar: 'الإجازة المستخدمة',
+    ur: 'استعمال شدہ چھٹی',
+    hi: 'प्रयुक्त अवकाश',
+  );
+  static const attendanceLabel = TranslatableString(
+    en: 'Attendance',
+    ar: 'الحضور',
+    ur: 'حاضری',
+    hi: 'उपस्थिति',
+  );
+  static const recordLeave = TranslatableString(
+    en: 'Record leave',
+    ar: 'تسجيل إجازة',
+    ur: 'چھٹی درج کریں',
+    hi: 'अवकाश दर्ज करें',
+  );
+  static const leaveRecorded = TranslatableString(
+    en: 'Leave recorded',
+    ar: 'تم تسجيل الإجازة',
+    ur: 'چھٹی درج ہو گئی',
+    hi: 'अवकाश दर्ज हुआ',
+  );
+  static const markAttendance = TranslatableString(
+    en: 'Mark attendance',
+    ar: 'تسجيل الحضور',
+    ur: 'حاضری لگائیں',
+    hi: 'उपस्थिति दर्ज',
+  );
+  static const salary = TranslatableString(
+    en: 'Salary',
+    ar: 'الراتب',
+    ur: 'تنخواہ',
+    hi: 'वेतन',
+  );
+  static const emiratesId = TranslatableString(
+    en: 'Emirates ID',
+    ar: 'الهوية الإماراتية',
+    ur: 'ایمریٹس آئی ڈی',
+    hi: 'अमीरात आईडी',
+  );
+  static const passportNo = TranslatableString(
+    en: 'Passport',
+    ar: 'جواز السفر',
+    ur: 'پاسپورٹ',
+    hi: 'पासपोर्ट',
+  );
+  static const visaExpiry = TranslatableString(
+    en: 'Visa expiry',
+    ar: 'انتهاء التأشيرة',
+    ur: 'ویزا میعاد',
+    hi: 'वीज़ा समाप्ति',
+  );
+  static const joinDate = TranslatableString(
+    en: 'Joined',
+    ar: 'تاريخ الالتحاق',
+    ur: 'شمولیت',
+    hi: 'शामिल',
+  );
+  static const nationality = TranslatableString(
+    en: 'Nationality',
+    ar: 'الجنسية',
+    ur: 'قومیت',
+    hi: 'राष्ट्रीयता',
+  );
+  static const department = TranslatableString(
+    en: 'Department',
+    ar: 'القسم',
+    ur: 'شعبہ',
+    hi: 'विभाग',
+  );
+  static const documentsLabel = TranslatableString(
+    en: 'Documents',
+    ar: 'المستندات',
+    ur: 'دستاویزات',
+    hi: 'दस्तावेज़',
+  );
+  static const restrictedLabel = TranslatableString(
+    en: 'Restricted',
+    ar: 'مقيد',
+    ur: 'محدود',
+    hi: 'प्रतिबंधित',
+  );
+  static const noEmployeesYet = TranslatableString(
+    en: 'No employees yet',
+    ar: 'لا يوجد موظفون بعد',
+    ur: 'ابھی کوئی ملازم نہیں',
+    hi: 'अभी कोई कर्मचारी नहीं',
+  );
+  static const leaveStart = TranslatableString(
+    en: 'From',
+    ar: 'من',
+    ur: 'سے',
+    hi: 'से',
+  );
+  static const leaveEnd = TranslatableString(
+    en: 'To',
+    ar: 'إلى',
+    ur: 'تک',
+    hi: 'तक',
+  );
+  static const leaveHistory = TranslatableString(
+    en: 'Leave history',
+    ar: 'سجل الإجازات',
+    ur: 'چھٹیوں کی تاریخ',
+    hi: 'अवकाश इतिहास',
+  );
+  static const noLeaveYet = TranslatableString(
+    en: 'No leave records',
+    ar: 'لا توجد سجلات إجازة',
+    ur: 'کوئی چھٹی ریکارڈ نہیں',
+    hi: 'कोई अवकाश रिकॉर्ड नहीं',
   );
   static const minStockLevel = TranslatableString(
     en: 'Min. Stock Level',
@@ -640,6 +1676,12 @@ abstract final class AppStrings {
     ur: 'سب پڑھے ہوئے نشان کریں',
     hi: 'सभी पढ़े हुए चिह्नित करें',
   );
+  static const allCaughtUp = TranslatableString(
+    en: "You're all caught up",
+    ar: 'لا توجد إشعارات جديدة',
+    ur: 'کوئی نئی اطلاع نہیں',
+    hi: 'कोई नई सूचना नहीं',
+  );
   static const searchAlerts = TranslatableString(
     en: 'Search system alerts...',
     ar: 'البحث في التنبيهات...',
@@ -719,6 +1761,36 @@ abstract final class AppStrings {
     ar: 'الأولوية',
     ur: 'ترجیح',
     hi: 'प्राथमिकता',
+  );
+  static const undo = TranslatableString(
+    en: 'Undo',
+    ar: 'تراجع',
+    ur: 'واپس',
+    hi: 'पूर्ववत',
+  );
+  static const itemRemoved = TranslatableString(
+    en: 'Item removed',
+    ar: 'تمت إزالة العنصر',
+    ur: 'آئٹم ہٹا دیا گیا',
+    hi: 'आइटम हटाया गया',
+  );
+  static const discardDraft = TranslatableString(
+    en: 'Discard draft?',
+    ar: 'تجاهل المسودة؟',
+    ur: 'مسودہ ضائع کریں؟',
+    hi: 'ड्राफ्ट हटाएं?',
+  );
+  static const discardDraftBody = TranslatableString(
+    en: 'This clears the selected project, items and notes.',
+    ar: 'سيؤدي هذا إلى مسح المشروع والعناصر والملاحظات المحددة.',
+    ur: 'یہ منتخب پروجیکٹ، آئٹمز اور نوٹس صاف کر دے گا۔',
+    hi: 'यह चयनित परियोजना, आइटम और नोट्स साफ़ कर देगा।',
+  );
+  static const draftDiscarded = TranslatableString(
+    en: 'Draft discarded',
+    ar: 'تم تجاهل المسودة',
+    ur: 'مسودہ ضائع کر دیا گیا',
+    hi: 'ड्राफ्ट हटा दिया गया',
   );
   static const priorityNormal = TranslatableString(
     en: 'Normal',
@@ -813,6 +1885,12 @@ abstract final class AppStrings {
     ar: 'طباعة الطلب',
     ur: 'پرنٹ کریں',
     hi: 'ऑर्डर प्रिंट करें',
+  );
+  static const couldNotOpenReceipt = TranslatableString(
+    en: 'Could not open receipt',
+    ar: 'تعذّر فتح الإيصال',
+    ur: 'رسید نہیں کھل سکی',
+    hi: 'रसीद नहीं खुल सकी',
   );
   static const requestCreated = TranslatableString(
     en: 'Request Created',
@@ -961,6 +2039,24 @@ abstract final class AppStrings {
     ar: 'أضف إلى\nالطلب',
     ur: 'شامل\nکریں',
     hi: 'अनुरोध में\nजोड़ें',
+  );
+  static const addLabel = TranslatableString(
+    en: 'Add',
+    ar: 'أضف',
+    ur: 'شامل',
+    hi: 'जोड़ें',
+  );
+  static const added = TranslatableString(
+    en: 'Added',
+    ar: 'تمت الإضافة',
+    ur: 'شامل ہو گیا',
+    hi: 'जोड़ा गया',
+  );
+  static const done = TranslatableString(
+    en: 'Done',
+    ar: 'تم',
+    ur: 'ہو گیا',
+    hi: 'हो गया',
   );
   static const healthy = TranslatableString(
     en: 'HEALTHY',
@@ -1290,16 +2386,16 @@ abstract final class AppStrings {
 
   // ─── About Screen ───────────────────────────────────────────────
   static const aboutDescription = TranslatableString(
-    en: 'About GodownPro',
-    ar: 'حول GodownPro',
+    en: 'About Yorks GodownPro',
+    ar: 'حول Yorks GodownPro',
     ur: 'گوداؤن پرو کے بارے میں',
-    hi: 'GodownPro के बारे में',
+    hi: 'Yorks GodownPro के बारे में',
   );
   static const aboutBody = TranslatableString(
-    en: 'GodownPro is a construction material warehouse management app built for precision. It helps site engineers, warehouse managers, and office administrators track inventory, manage material requests, and streamline operations across projects.',
-    ar: 'GodownPro هو تطبيق لإدارة مستودعات مواد البناء مصمم للدقة. يساعد مهندسي الموقع ومديري المستودعات والمسؤولين في تتبع المخزون وإدارة طلبات المواد وتبسيط العمليات عبر المشاريع.',
+    en: 'Yorks GodownPro is a construction material warehouse management app built for precision. It helps site engineers, warehouse managers, and office administrators track inventory, manage material requests, and streamline operations across projects.',
+    ar: 'Yorks GodownPro هو تطبيق لإدارة مستودعات مواد البناء مصمم للدقة. يساعد مهندسي الموقع ومديري المستودعات والمسؤولين في تتبع المخزون وإدارة طلبات المواد وتبسيط العمليات عبر المشاريع.',
     ur: 'گوداؤن پرو تعمیراتی مواد کے گودام کی انتظامی ایپ ہے جو درستگی کے لیے بنائی گئی ہے۔ یہ سائٹ انجینئرز، گودام مینیجرز، اور دفتری منتظمین کو انوینٹری ٹریک کرنے، مواد کی درخواستوں کا انتظام کرنے، اور پروجیکٹس کی کارروائیوں کو بہتر بنانے میں مدد کرتی ہے۔',
-    hi: 'GodownPro एक निर्माण सामग्री गोदाम प्रबंधन ऐप है जो सटीकता के लिए बनाया गया है। यह साइट इंजीनियरों, गोदाम प्रबंधकों और कार्यालय प्रशासकों को इन्वेंटरी ट्रैक करने, सामग्री अनुरोध प्रबंधित करने और परियोजनाओं में संचालन सुव्यवस्थित करने में मदद करता है।',
+    hi: 'Yorks GodownPro एक निर्माण सामग्री गोदाम प्रबंधन ऐप है जो सटीकता के लिए बनाया गया है। यह साइट इंजीनियरों, गोदाम प्रबंधकों और कार्यालय प्रशासकों को इन्वेंटरी ट्रैक करने, सामग्री अनुरोध प्रबंधित करने और परियोजनाओं में संचालन सुव्यवस्थित करने में मदद करता है।',
   );
   static const aboutFramework = TranslatableString(
     en: 'Framework',
@@ -1421,6 +2517,72 @@ abstract final class AppStrings {
     ar: 'تم إنشاء المشروع',
     ur: 'پروجیکٹ بن گیا',
     hi: 'परियोजना बनाई गई',
+  );
+  static const buildingName = TranslatableString(
+    en: 'Building Name',
+    ar: 'اسم المبنى',
+    ur: 'عمارت کا نام',
+    hi: 'भवन का नाम',
+  );
+  static const floorNumbers = TranslatableString(
+    en: 'Floor Numbers',
+    ar: 'أرقام الطوابق',
+    ur: 'فلور نمبرز',
+    hi: 'फर्श संख्या',
+  );
+  static const startDate = TranslatableString(
+    en: 'Start Date',
+    ar: 'تاريخ البدء',
+    ur: 'شروع کرنے کی تاریخ',
+    hi: 'प्रारंभ तिथि',
+  );
+  static const expectedEndDate = TranslatableString(
+    en: 'Expected End Date',
+    ar: 'تاريخ الانتهاء المتوقع',
+    ur: 'متوقع ختم ہونے کی تاریخ',
+    hi: 'अपेक्षित समाप्ति तिथि',
+  );
+  static const siteNotes = TranslatableString(
+    en: 'Site Notes',
+    ar: 'ملاحظات الموقع',
+    ur: 'سائٹ نوٹس',
+    hi: 'Site Notes',
+  );
+  static const clientName = TranslatableString(
+    en: 'Client Name',
+    ar: 'اسم العميل',
+    ur: 'کلائنٹ کا نام',
+    hi: 'ग्राहक का नाम',
+  );
+  static const clientNameRequired = TranslatableString(
+    en: 'Client name is required',
+    ar: 'اسم العميل مطلوب',
+    ur: 'کلائنٹ کا نام ضروری ہے',
+    hi: 'ग्राहक का नाम आवश्यक है',
+  );
+  static const locationRequired = TranslatableString(
+    en: 'Location is required',
+    ar: 'الموقع مطلوب',
+    ur: 'مقام ضروری ہے',
+    hi: 'स्थान आवश्यक है',
+  );
+  static const buildingNameRequired = TranslatableString(
+    en: 'Building name is required',
+    ar: 'اسم المبنى مطلوب',
+    ur: 'عمارت کا نام ضروری ہے',
+    hi: 'भवन का नाम आवश्यक है',
+  );
+  static const floorNumbersRequired = TranslatableString(
+    en: 'Floor numbers are required',
+    ar: 'أرقام الطوابق مطلوبة',
+    ur: 'فلور نمبرز ضروری ہیں',
+    hi: 'फर्श संख्या आवश्यक है',
+  );
+  static const startDateRequired = TranslatableString(
+    en: 'Start date is required',
+    ar: 'تاريخ البدء مطلوب',
+    ur: 'شروع کرنے کی تاریخ ضروری ہے',
+    hi: 'प्रारंभ तिथि आवश्यक है',
   );
   static const totalLabel = TranslatableString(
     en: 'total',
@@ -1547,6 +2709,416 @@ abstract final class AppStrings {
     ar: 'الآن',
     ur: 'ابھی',
     hi: 'अभी',
+  );
+
+  // ─── Phase 1 — Material Plan ──────────────────────────────
+  static const planReview = TranslatableString(
+    en: 'Plan review',
+    ar: 'مراجعة الخطة',
+    ur: 'منصوبے کا جائزہ',
+    hi: 'योजना समीक्षा',
+  );
+  static const planReviewSubtitle = TranslatableString(
+    en: 'Procurement arranged your plan. Approve to move the project to Active.',
+    ar: 'قامت المشتريات بترتيب خطتك. وافق لتفعيل المشروع.',
+    ur: 'پروکیورمنٹ نے آپ کا منصوبہ تیار کر دیا۔ پروجیکٹ فعال کرنے کے لیے منظور کریں۔',
+    hi: 'खरीद ने आपकी योजना तैयार कर दी। प्रोजेक्ट सक्रिय करने हेतु अनुमोदित करें।',
+  );
+  static const planItems = TranslatableString(
+    en: 'Plan items',
+    ar: 'بنود الخطة',
+    ur: 'منصوبے کی اشیاء',
+    hi: 'योजना आइटम',
+  );
+  static const requestChanges = TranslatableString(
+    en: 'Request changes',
+    ar: 'طلب تغييرات',
+    ur: 'تبدیلیاں طلب کریں',
+    hi: 'बदलाव का अनुरोध',
+  );
+  static const selectItemsToChange = TranslatableString(
+    en: 'Tap items that need changes, then add a note.',
+    ar: 'اضغط على البنود التي تحتاج تغييراً ثم أضف ملاحظة.',
+    ur: 'جن اشیاء میں تبدیلی درکار ہے انہیں منتخب کریں، پھر نوٹ لکھیں۔',
+    hi: 'जिन आइटम में बदलाव चाहिए उन्हें चुनें, फिर नोट जोड़ें।',
+  );
+  static const planApproved = TranslatableString(
+    en: 'Plan approved — project is now Active',
+    ar: 'تمت الموافقة — المشروع نشط الآن',
+    ur: 'منصوبہ منظور — پروجیکٹ اب فعال ہے',
+    hi: 'योजना अनुमोदित — प्रोजेक्ट अब सक्रिय है',
+  );
+  static const changesSent = TranslatableString(
+    en: 'Changes sent to procurement',
+    ar: 'تم إرسال التغييرات إلى المشتريات',
+    ur: 'تبدیلیاں پروکیورمنٹ کو بھیج دی گئیں',
+    hi: 'बदलाव खरीद को भेजे गए',
+  );
+  static const comments = TranslatableString(
+    en: 'Comments',
+    ar: 'التعليقات',
+    ur: 'تبصرے',
+    hi: 'टिप्पणियाँ',
+  );
+  static const noCommentsYet = TranslatableString(
+    en: 'No comments yet',
+    ar: 'لا توجد تعليقات بعد',
+    ur: 'ابھی تک کوئی تبصرہ نہیں',
+    hi: 'अभी तक कोई टिप्पणी नहीं',
+  );
+  static const addComment = TranslatableString(
+    en: 'Add a comment',
+    ar: 'أضف تعليقاً',
+    ur: 'تبصرہ شامل کریں',
+    hi: 'टिप्पणी जोड़ें',
+  );
+  static const noComments = TranslatableString(
+    en: 'No comments yet',
+    ar: 'لا تعليقات بعد',
+    ur: 'ابھی کوئی تبصرہ نہیں',
+    hi: 'अभी कोई टिप्पणी नहीं',
+  );
+  static const buildPlan = TranslatableString(
+    en: 'Build plan',
+    ar: 'إنشاء الخطة',
+    ur: 'منصوبہ بنائیں',
+    hi: 'योजना बनाएं',
+  );
+  static const materialPlan = TranslatableString(
+    en: 'Material plan',
+    ar: 'خطة المواد',
+    ur: 'مواد کا منصوبہ',
+    hi: 'सामग्री योजना',
+  );
+  static const buildPlanSubtitle = TranslatableString(
+    en: 'List the materials you expect to need. You can edit before submitting.',
+    ar: 'اذكر المواد المتوقعة. يمكنك التعديل قبل الإرسال.',
+    ur: 'متوقع مواد کی فہرست بنائیں۔ بھیجنے سے پہلے ترمیم کر سکتے ہیں۔',
+    hi: 'अपेक्षित सामग्री सूचीबद्ध करें। भेजने से पहले संपादित कर सकते हैं।',
+  );
+  static const addFromInventory = TranslatableString(
+    en: 'Add from inventory',
+    ar: 'أضف من المخزون',
+    ur: 'انوینٹری سے شامل کریں',
+    hi: 'इन्वेंटरी से जोड़ें',
+  );
+  static const addCustomItem = TranslatableString(
+    en: 'Add custom item',
+    ar: 'أضف عنصراً مخصصاً',
+    ur: 'کسٹم آئٹم شامل کریں',
+    hi: 'कस्टम आइटम जोड़ें',
+  );
+  static const submitToProcurement = TranslatableString(
+    en: 'Submit to procurement',
+    ar: 'إرسال إلى المشتريات',
+    ur: 'پروکیورمنٹ کو بھیجیں',
+    hi: 'खरीद को भेजें',
+  );
+  static const planSubmitted = TranslatableString(
+    en: 'Plan submitted to procurement',
+    ar: 'تم إرسال الخطة إلى المشتريات',
+    ur: 'منصوبہ پروکیورمنٹ کو بھیج دیا گیا',
+    hi: 'योजना खरीद को भेजी गई',
+  );
+  static const emptyPlan = TranslatableString(
+    en: 'No items yet',
+    ar: 'لا عناصر بعد',
+    ur: 'ابھی کوئی آئٹم نہیں',
+    hi: 'अभी कोई आइटम नहीं',
+  );
+  static const emptyPlanHint = TranslatableString(
+    en: 'Add materials from inventory or create a custom item.',
+    ar: 'أضف مواد من المخزون أو أنشئ عنصراً مخصصاً.',
+    ur: 'انوینٹری سے مواد شامل کریں یا کسٹم آئٹم بنائیں۔',
+    hi: 'इन्वेंटरी से सामग्री जोड़ें या कस्टम आइटम बनाएं।',
+  );
+  static const customItem = TranslatableString(
+    en: 'Custom item',
+    ar: 'عنصر مخصص',
+    ur: 'کسٹم آئٹم',
+    hi: 'कस्टम आइटम',
+  );
+  static const description = TranslatableString(
+    en: 'Description',
+    ar: 'الوصف',
+    ur: 'تفصیل',
+    hi: 'विवरण',
+  );
+  static const brand = TranslatableString(
+    en: 'Brand',
+    ar: 'العلامة التجارية',
+    ur: 'برانڈ',
+    hi: 'ब्रांड',
+  );
+  static const countryOfOrigin = TranslatableString(
+    en: 'Country of origin',
+    ar: 'بلد المنشأ',
+    ur: 'ملکِ اصل',
+    hi: 'मूल देश',
+  );
+  static const sizeLabel = TranslatableString(
+    en: 'Size',
+    ar: 'الحجم',
+    ur: 'سائز',
+    hi: 'आकार',
+  );
+  static const ralColour = TranslatableString(
+    en: 'RAL colour',
+    ar: 'لون RAL',
+    ur: 'RAL رنگ',
+    hi: 'RAL रंग',
+  );
+  static const ralColourHint = TranslatableString(
+    en: 'Required for grilles, diffusers & dampers',
+    ar: 'مطلوب للشبكات والموزعات والمخمدات',
+    ur: 'گرلز، ڈفیوزرز اور ڈیمپرز کے لیے ضروری',
+    hi: 'ग्रिल, डिफ्यूज़र और डैम्पर हेतु आवश्यक',
+  );
+  static const addToPlan = TranslatableString(
+    en: 'Add to plan',
+    ar: 'أضف إلى الخطة',
+    ur: 'منصوبے میں شامل کریں',
+    hi: 'योजना में जोड़ें',
+  );
+
+  // ─── Phase 2 — Receipt & Returns ──────────────────────────
+  static const confirmReceipt = TranslatableString(
+    en: 'Confirm receipt',
+    ar: 'تأكيد الاستلام',
+    ur: 'وصولی کی تصدیق',
+    hi: 'प्राप्ति की पुष्टि',
+  );
+  static const confirmReceiptSubtitle = TranslatableString(
+    en: 'Confirm exactly what arrived on site. Flag anything short.',
+    ar: 'أكد ما وصل إلى الموقع بالضبط. أبلغ عن أي نقص.',
+    ur: 'سائٹ پر جو پہنچا اس کی تصدیق کریں۔ کسی بھی کمی کو نشان زد کریں۔',
+    hi: 'साइट पर जो पहुंचा उसकी पुष्टि करें। किसी भी कमी को चिह्नित करें।',
+  );
+  static const dispatchedLabel = TranslatableString(
+    en: 'Dispatched',
+    ar: 'المُرسَل',
+    ur: 'روانہ',
+    hi: 'भेजा गया',
+  );
+  static const receivedLabel = TranslatableString(
+    en: 'Received',
+    ar: 'المُستلَم',
+    ur: 'موصول',
+    hi: 'प्राप्त',
+  );
+  static const shortfallFlagged = TranslatableString(
+    en: 'Short — procurement will be notified',
+    ar: 'نقص — سيتم إخطار المشتريات',
+    ur: 'کمی — پروکیورمنٹ کو مطلع کیا جائے گا',
+    hi: 'कमी — खरीद को सूचित किया जाएगा',
+  );
+  static const receiptConfirmed = TranslatableString(
+    en: 'Receipt confirmed',
+    ar: 'تم تأكيد الاستلام',
+    ur: 'وصولی تصدیق شدہ',
+    hi: 'प्राप्ति की पुष्टि हुई',
+  );
+  static const returnToStore = TranslatableString(
+    en: 'Return to store',
+    ar: 'الإرجاع إلى المخزن',
+    ur: 'اسٹور واپسی',
+    hi: 'स्टोर वापसी',
+  );
+  static const returnMaterial = TranslatableString(
+    en: 'Return material',
+    ar: 'إرجاع المواد',
+    ur: 'مواد واپس کریں',
+    hi: 'सामग्री लौटाएं',
+  );
+  static const returnSubtitle = TranslatableString(
+    en: 'Send surplus, wrong, or damaged material back to store.',
+    ar: 'أعد المواد الفائضة أو الخاطئة أو التالفة إلى المخزن.',
+    ur: 'فاضل، غلط یا خراب مواد اسٹور واپس بھیجیں۔',
+    hi: 'अधिशेष, गलत या क्षतिग्रस्त सामग्री स्टोर वापस भेजें।',
+  );
+  static const reason = TranslatableString(
+    en: 'Reason',
+    ar: 'السبب',
+    ur: 'وجہ',
+    hi: 'कारण',
+  );
+  static const submitReturn = TranslatableString(
+    en: 'Submit return',
+    ar: 'إرسال الإرجاع',
+    ur: 'واپسی جمع کریں',
+    hi: 'वापसी सबमिट करें',
+  );
+  static const returnSubmitted = TranslatableString(
+    en: 'Return submitted — procurement will confirm and restock',
+    ar: 'تم إرسال الإرجاع — ستؤكد المشتريات وتعيد التخزين',
+    ur: 'واپسی جمع — پروکیورمنٹ تصدیق کر کے دوبارہ اسٹاک کرے گا',
+    hi: 'वापसी सबमिट — खरीद पुष्टि कर पुनः स्टॉक करेगी',
+  );
+  static const addItemToReturn = TranslatableString(
+    en: 'Add item to return',
+    ar: 'أضف عنصراً للإرجاع',
+    ur: 'واپسی کے لیے آئٹم شامل کریں',
+    hi: 'वापसी हेतु आइटम जोड़ें',
+  );
+
+  // ─── Plan diff / re-approval ──────────────────────────────
+  static const editPlan = TranslatableString(
+    en: 'Edit plan',
+    ar: 'تعديل الخطة',
+    ur: 'منصوبہ ترمیم کریں',
+    hi: 'योजना संपादित करें',
+  );
+  static const viewChanges = TranslatableString(
+    en: 'View changes',
+    ar: 'عرض التغييرات',
+    ur: 'تبدیلیاں دیکھیں',
+    hi: 'बदलाव देखें',
+  );
+  static const whatChanged = TranslatableString(
+    en: 'What changed',
+    ar: 'ما الذي تغيّر',
+    ur: 'کیا تبدیل ہوا',
+    hi: 'क्या बदला',
+  );
+  static const changesAwaitingReview = TranslatableString(
+    en: 'Edited — awaiting procurement re-review',
+    ar: 'معدّل — بانتظار إعادة المراجعة',
+    ur: 'ترمیم شدہ — دوبارہ جائزے کا انتظار',
+    hi: 'संपादित — पुनः समीक्षा प्रतीक्षित',
+  );
+  static const diffAdded = TranslatableString(
+    en: 'Added',
+    ar: 'مضاف',
+    ur: 'شامل',
+    hi: 'जोड़ा',
+  );
+  static const diffRemoved = TranslatableString(
+    en: 'Removed',
+    ar: 'محذوف',
+    ur: 'حذف شدہ',
+    hi: 'हटाया',
+  );
+  static const diffChanged = TranslatableString(
+    en: 'Changed',
+    ar: 'معدّل',
+    ur: 'تبدیل شدہ',
+    hi: 'बदला',
+  );
+  static const noChanges = TranslatableString(
+    en: 'No changes',
+    ar: 'لا تغييرات',
+    ur: 'کوئی تبدیلی نہیں',
+    hi: 'कोई बदलाव नहीं',
+  );
+  static const unchangedUnaffected = TranslatableString(
+    en: 'unchanged items stay approved',
+    ar: 'بنود لم تتغير تبقى معتمدة',
+    ur: 'غیر تبدیل شدہ اشیاء منظور رہیں گی',
+    hi: 'अपरिवर्तित आइटम स्वीकृत रहते हैं',
+  );
+
+  // ─── Attendance / Employee (HR) ───────────────────────────
+  static const myData = TranslatableString(
+    en: 'My data',
+    ar: 'بياناتي',
+    ur: 'میرا ڈیٹا',
+    hi: 'मेरा डेटा',
+  );
+  static const showMore = TranslatableString(
+    en: 'Show more',
+    ar: 'عرض المزيد',
+    ur: 'مزید دیکھیں',
+    hi: 'और देखें',
+  );
+  static const myProfile = TranslatableString(
+    en: 'My profile',
+    ar: 'ملفي الشخصي',
+    ur: 'میرا پروفائل',
+    hi: 'मेरी प्रोफ़ाइल',
+  );
+  static const attendanceSection = TranslatableString(
+    en: 'Attendance',
+    ar: 'الدخول والخروج',
+    ur: 'حاضری',
+    hi: 'उपस्थिति',
+  );
+  static const checkInLabel = TranslatableString(
+    en: 'Check-in',
+    ar: 'حضور',
+    ur: 'حاضری',
+    hi: 'चेक-इन',
+  );
+  static const checkOutLabel = TranslatableString(
+    en: 'Check-out',
+    ar: 'انصراف',
+    ur: 'روانگی',
+    hi: 'चेक-आउट',
+  );
+  static const remainingLabel = TranslatableString(
+    en: 'Remaining',
+    ar: 'المتبقي',
+    ur: 'باقی',
+    hi: 'शेष',
+  );
+  static const hoursUnit = TranslatableString(
+    en: 'hours',
+    ar: 'ساعات',
+    ur: 'گھنٹے',
+    hi: 'घंटे',
+  );
+  static const requestPermission = TranslatableString(
+    en: 'Request permission',
+    ar: 'طلب استئذان',
+    ur: 'اجازت طلب کریں',
+    hi: 'अनुमति मांगें',
+  );
+  static const leavesSection = TranslatableString(
+    en: 'Leaves',
+    ar: 'الاجازات',
+    ur: 'چھٹیاں',
+    hi: 'छुट्टियाँ',
+  );
+  static const requestLeave = TranslatableString(
+    en: 'Request leave',
+    ar: 'طلب اجازة',
+    ur: 'چھٹی کی درخواست',
+    hi: 'छुट्टी का अनुरोध',
+  );
+  static const daysUnit = TranslatableString(
+    en: 'days',
+    ar: 'أيام',
+    ur: 'دن',
+    hi: 'दिन',
+  );
+  static const employmentSection = TranslatableString(
+    en: 'Employment',
+    ar: 'بيانات التوظيف',
+    ur: 'ملازمت کی تفصیلات',
+    hi: 'रोज़गार विवरण',
+  );
+  static const quickLinksSection = TranslatableString(
+    en: 'Quick links',
+    ar: 'روابط سريعة',
+    ur: 'فوری لنکس',
+    hi: 'त्वरित लिंक',
+  );
+  static const roleLabel = TranslatableString(
+    en: 'Role',
+    ar: 'الوظيفة',
+    ur: 'عہدہ',
+    hi: 'भूमिका',
+  );
+  static const employeeIdLabel = TranslatableString(
+    en: 'Employee ID',
+    ar: 'الرقم الوظيفي',
+    ur: 'ملازم آئی ڈی',
+    hi: 'कर्मचारी आईडी',
+  );
+  static const departmentLabel = TranslatableString(
+    en: 'Department',
+    ar: 'الإدارة',
+    ur: 'شعبہ',
+    hi: 'विभाग',
   );
 }
 

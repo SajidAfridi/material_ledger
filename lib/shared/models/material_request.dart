@@ -4,11 +4,14 @@ import 'project.dart';
 
 /// Status of a material request.
 enum RequestStatus {
-  draft('DRAFT', 'مسودہ', 'مسودة', 'ड्राफ्ट'),
-  pending('PENDING', 'زیر التواء', 'معلق', 'लंबित'),
-  available('AVAILABLE', 'دستیاب', 'متاح', 'उपलब्ध'),
-  deployed('DEPLOYED', 'تعینات', 'تم النشر', 'तैनात'),
-  rejected('REJECTED', 'مسترد', 'مرفوض', 'अस्वीकृत');
+  draft('Draft', 'مسودہ', 'مسودة', 'ड्राफ्ट'),
+  pending('Pending', 'زیر التواء', 'معلق', 'लंबित'),
+  sourcing('Sourcing', 'بندوبست', 'توريد', 'सोर्सिंग'),
+  partial('Partial', 'جزوی', 'جزئي', 'आंशिक'),
+  dispatched('Dispatched', 'روانہ', 'تم الإرسال', 'भेजा गया'),
+  received('Received', 'موصول', 'تم الاستلام', 'प्राप्त'),
+  onHold('On Hold', 'روکا ہوا', 'موقوف', 'रोका गया'),
+  cancelled('Cancelled', 'منسوخ', 'ملغى', 'रद्द');
 
   const RequestStatus(
     this.label,
@@ -33,8 +36,7 @@ enum RequestStatus {
 /// Priority level for a material request.
 enum RequestPriority {
   normal('Normal', 'عام', 'عادي', 'सामान्य'),
-  urgent('Urgent', 'فوری', 'عاجل', 'अत्यावश्यक'),
-  critical('Critical', 'انتہائی ضروری', 'حرج', 'गंभीर');
+  urgent('Urgent', 'فوری', 'عاجل', 'अत्यावश्यक');
 
   const RequestPriority(
     this.label,
@@ -70,6 +72,7 @@ class MaterialRequest {
     this.siteLocation,
     this.notes,
     this.engineerId,
+    this.confirmedReceiptAt,
   });
 
   final String id;
@@ -84,12 +87,8 @@ class MaterialRequest {
   final String? notes;
   final String? engineerId;
 
-  /// Total estimated value based on line items (mock unit prices).
-  double get estimatedValue {
-    if (lineItems.isEmpty) return 0;
-    // Rough estimate: quantity * a default unit price per unit type
-    return lineItems.fold<double>(0, (sum, item) => sum + item.quantity * 1200);
-  }
+  /// When the engineer confirmed on-site receipt (FR-088). Null until then.
+  final DateTime? confirmedReceiptAt;
 
   /// Distinct categories represented in line items.
   int get categoryCount {
@@ -107,6 +106,7 @@ class MaterialRequest {
     String? siteLocation,
     String? notes,
     String? engineerId,
+    DateTime? confirmedReceiptAt,
   }) {
     return MaterialRequest(
       id: id,
@@ -120,6 +120,7 @@ class MaterialRequest {
       siteLocation: siteLocation ?? this.siteLocation,
       notes: notes ?? this.notes,
       engineerId: engineerId ?? this.engineerId,
+      confirmedReceiptAt: confirmedReceiptAt ?? this.confirmedReceiptAt,
     );
   }
 
@@ -135,6 +136,7 @@ class MaterialRequest {
     'siteLocation': siteLocation,
     'notes': notes,
     'engineerId': engineerId,
+    'confirmedReceiptAt': confirmedReceiptAt?.toIso8601String(),
   };
 
   factory MaterialRequest.fromJson(Map<String, dynamic> json) {
@@ -157,6 +159,9 @@ class MaterialRequest {
       siteLocation: json['siteLocation'] as String?,
       notes: json['notes'] as String?,
       engineerId: json['engineerId'] as String?,
+      confirmedReceiptAt: json['confirmedReceiptAt'] == null
+          ? null
+          : DateTime.parse(json['confirmedReceiptAt'] as String),
     );
   }
 

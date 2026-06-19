@@ -7,7 +7,9 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/project.dart';
+import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 
 /// Engineer Projects tab — current projects plus a clear project creation CTA.
@@ -191,16 +193,23 @@ class _AddProjectCard extends StatelessWidget {
   }
 }
 
-class _ProjectSummaryCard extends StatelessWidget {
+class _ProjectSummaryCard extends ConsumerWidget {
   const _ProjectSummaryCard({required this.project});
 
   final Project project;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final phase = project.phase;
+    final isActive = phase?.state == ProjectState.active;
+    final canComplete = ref.watch(canCompleteProjectProvider(project.id));
 
     return LedgerCard(
+      onTap: project.awaitingApproval
+          ? () => context.push(RoutePaths.planReviewPath(project.id))
+          : project.phase?.state == ProjectState.planning
+          ? () => context.push(RoutePaths.planBuildPath(project.id))
+          : () => context.push(RoutePaths.requests, extra: project.name),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -247,17 +256,132 @@ class _ProjectSummaryCard extends StatelessWidget {
             const Gap(AppSpacing.lg),
             Text(
               [
-                if (project.clientName != null) project.clientName!,
-                if (project.siteLocation != null) project.siteLocation!,
+                if (project.clientName != null &&
+                    project.clientName!.isNotEmpty)
+                  project.clientName!,
+                if (project.siteLocation != null &&
+                    project.siteLocation!.isNotEmpty)
+                  project.siteLocation!,
               ].join(' · '),
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ],
+          if (project.buildingName != null || project.floorNumbers != null) ...[
+            const Gap(AppSpacing.xs),
+            Text(
+              [
+                if (project.buildingName != null &&
+                    project.buildingName!.isNotEmpty)
+                  'Building: ${project.buildingName}',
+                if (project.floorNumbers != null &&
+                    project.floorNumbers!.isNotEmpty)
+                  'Floors: ${project.floorNumbers}',
+              ].join(' · '),
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if (isActive) ...[
+            const Gap(AppSpacing.lg),
+            _CompleteAction(
+              enabled: canComplete,
+              onComplete: () => _complete(context, ref),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Future<void> _complete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+        title: Text(
+          AppStrings.markComplete.primary,
+          style: AppTypography.titleMedium,
+        ),
+        content: Text(
+          project.name,
+          style: AppTypography.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.markComplete.primary),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final ok = ref.read(projectsProvider.notifier).completeProject(project.id);
+    if (ok) {
+      await ref.logAudit(
+        action: 'Project closed out',
+        module: AuditModule.materials,
+        refId: project.id,
+        detail: project.name,
+      );
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? AppStrings.projectCompleted.primary
+              : AppStrings.cannotCompleteOpenRequests.primary,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Closeout action ─────────────────────────────────────────────
+class _CompleteAction extends StatelessWidget {
+  const _CompleteAction({required this.enabled, required this.onComplete});
+
+  final bool enabled;
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: enabled ? onComplete : null,
+        icon: const Icon(Icons.task_alt_rounded, size: 18),
+        label: Text(
+          enabled
+              ? AppStrings.markComplete.primary
+              : AppStrings.cannotCompleteOpenRequests.primary,
+        ),
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          disabledForegroundColor: AppColors.onSurfaceVariant.withValues(
+            alpha: 0.5,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+        ),
       ),
     );
   }

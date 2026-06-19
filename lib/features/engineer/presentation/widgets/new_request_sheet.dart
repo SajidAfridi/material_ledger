@@ -280,16 +280,12 @@ class _PrioritySelector extends StatelessWidget {
             AppColors.warning,
             Icons.warning_amber_rounded,
           ),
-          RequestPriority.critical => (
-            AppColors.error,
-            Icons.error_outline_rounded,
-          ),
         };
 
         return Expanded(
           child: Padding(
             padding: EdgeInsets.only(
-              right: p != RequestPriority.critical ? AppSpacing.sm : 0,
+              right: p != RequestPriority.values.last ? AppSpacing.sm : 0,
             ),
             child: InkWell(
               onTap: () => onChanged(p),

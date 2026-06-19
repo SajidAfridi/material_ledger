@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,8 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/sync/connectivity_service.dart';
 
 /// Settings — App configuration.
 class SettingsScreen extends ConsumerWidget {
@@ -18,6 +21,8 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
+    final role = ref.watch(currentRoleProvider);
+    final online = ref.watch(isOnlineProvider);
 
     return SafeArea(
       child: CustomScrollView(
@@ -99,24 +104,57 @@ class SettingsScreen extends ConsumerWidget {
                             ref.read(currencyProvider.notifier).setCurrency(c),
                       ),
                     ),
-                    _SettingsTile(
-                      icon: Icons.palette_outlined,
-                      title: AppStrings.appearance.primary,
-                      secondaryTitle: AppStrings.appearance.secondary(lang),
-                      trailing: Text(
-                        AppStrings.light.primary,
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                    if (role.isAdmin)
+                      _SettingsTile(
+                        icon: Icons.manage_accounts_outlined,
+                        title: AppStrings.userManagement.primary,
+                        secondaryTitle: AppStrings.userManagement.secondary(
+                          lang,
                         ),
+                        onTap: () => context.push(RoutePaths.users),
+                        showChevron: true,
                       ),
-                      onTap: () {},
-                    ),
                     _SettingsTile(
-                      icon: Icons.backup_outlined,
-                      title: AppStrings.backupSync.primary,
-                      secondaryTitle: AppStrings.backupSync.secondary(lang),
-                      onTap: () {},
+                      icon: Icons.history_rounded,
+                      title: 'Activity Log',
+                      secondaryTitle: AppStrings.recentActivity.secondary(lang),
+                      onTap: () => context.push(RoutePaths.activityLog),
+                      showChevron: true,
                     ),
+                    // Dev-only role switcher — hidden in release builds; in
+                    // production the role comes from login credentials.
+                    if (kDebugMode)
+                      _SettingsTile(
+                        icon: Icons.badge_outlined,
+                        title: 'Role (dev)',
+                        secondaryTitle: 'Switch role',
+                        trailing: Text(
+                          role.label,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () => RolePickerSheet.show(context),
+                      ),
+                    // Dev-only connectivity simulator — lets you demo the
+                    // offline → queued → synced flow without leaving Wi-Fi.
+                    if (kDebugMode)
+                      _SettingsTile(
+                        icon: online
+                            ? Icons.wifi_rounded
+                            : Icons.wifi_off_rounded,
+                        title: 'Simulate offline (dev)',
+                        secondaryTitle: online
+                            ? 'Online — writes sync immediately'
+                            : 'Offline — writes queue until reconnect',
+                        trailing: Switch(
+                          value: !online,
+                          onChanged: (offline) =>
+                              _setOffline(ref, offline: offline),
+                        ),
+                        onTap: () => _setOffline(ref, offline: online),
+                      ),
                     _SettingsTile(
                       icon: Icons.info_outline_rounded,
                       title: AppStrings.about.primary,
@@ -142,7 +180,7 @@ class SettingsScreen extends ConsumerWidget {
             sliver: SliverToBoxAdapter(
               child: Center(
                 child: Text(
-                  'GodownPro v1.0.0',
+                  'Yorks GodownPro v1.0.0',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
@@ -153,6 +191,13 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Dev helper: flip the simulated connectivity so the sync states are
+  /// demoable. No-op against a real connectivity service in production.
+  void _setOffline(WidgetRef ref, {required bool offline}) {
+    final c = ref.read(connectivityProvider);
+    if (c is DefaultConnectivity) c.setOnline(!offline);
   }
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {

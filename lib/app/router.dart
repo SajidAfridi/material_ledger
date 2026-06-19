@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/constants/constants.dart';
+
+import '../features/admin/presentation/screens/access_roles_screen.dart';
+import '../features/admin/presentation/screens/admin_projects_screen.dart';
+import '../features/admin/presentation/screens/admin_requests_screen.dart';
+import '../features/admin/presentation/screens/data_sync_screen.dart';
+import '../features/admin/presentation/screens/more_hub_screen.dart';
+import '../features/admin/presentation/screens/user_management_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
 import '../features/engineer/presentation/screens/engineer_create_project_screen.dart';
@@ -8,19 +16,39 @@ import '../features/engineer/presentation/screens/engineer_home_screen.dart';
 import '../features/engineer/presentation/screens/engineer_new_request_screen.dart';
 import '../features/engineer/presentation/screens/engineer_projects_screen.dart';
 import '../features/engineer/presentation/screens/engineer_profile_screen.dart';
+import '../features/engineer/presentation/screens/material_picker_screen.dart';
+import '../features/engineer/presentation/screens/confirm_receipt_screen.dart';
+import '../features/engineer/presentation/screens/employee_detail_screen.dart';
+import '../features/engineer/presentation/screens/plan_build_screen.dart';
+import '../features/engineer/presentation/screens/plan_diff_screen.dart';
+import '../features/engineer/presentation/screens/plan_review_screen.dart';
 import '../features/engineer/presentation/screens/request_detail_screen.dart';
+import '../features/engineer/presentation/screens/requests_list_screen.dart';
+import '../features/engineer/presentation/screens/return_screen.dart';
 import '../features/login/presentation/screens/login_screen.dart';
+import '../features/finance/presentation/screens/finance_screen.dart';
+import '../features/inventory/presentation/screens/goods_receipt_screen.dart';
 import '../features/inventory/presentation/screens/inventory_screen.dart';
+import '../features/materials/presentation/screens/materials_hub_screen.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
+import '../features/people/presentation/screens/employee_profile_screen.dart';
+import '../features/people/presentation/screens/people_dashboard_screen.dart';
+import '../features/procurement/presentation/screens/procurement_dispatch_screen.dart';
+import '../features/procurement/presentation/screens/procurement_plan_review_screen.dart';
+import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
+import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
+import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
+import '../shared/models/user_role.dart';
 import '../shared/screens/about_screen.dart';
+import '../shared/screens/activity_log_screen.dart';
 import '../shared/screens/notifications_screen.dart';
 import '../shared/screens/privacy_policy_screen.dart';
 import '../shared/screens/terms_of_service_screen.dart';
+import 'app_shell.dart';
 import 'engineer_shell.dart';
-import 'shell_screen.dart';
 
 /// Route path constants
 abstract final class RoutePaths {
@@ -29,265 +57,533 @@ abstract final class RoutePaths {
   static const String languageSelection = '/language-selection';
   static const String login = '/login';
 
-  // ─── Engineer (default post-login) ─────────────────────────
-  static const String engineerHome = '/';
+  // ─── Tab roots (StatefulShellRoute branches) ───────────────
+  static const String engineerHome = '/'; // Home (role-aware dashboard)
+  static const String materials = '/materials'; // Materials hub
+  static const String rentals = '/rentals'; // Rentals hub
+  static const String people = '/people'; // People hub
+  static const String more = '/more'; // Admin · settings hub
+  /// Office home alias (kept for older call sites; Home is unified at root).
+  static const String dashboard = '/';
+
+  // ─── Materials flows (full-screen, reached from the hub/Home) ─
   static const String engineerBrowse = '/browse';
   static const String engineerProjects = '/projects';
   static const String engineerCreateProject = '/projects/new';
   static const String engineerNewRequest = '/new-request';
+  static const String engineerPickMaterials = '/pick-materials';
   static const String engineerProfile = '/profile';
   static const String requestDetail = '/request/:id';
+  static const String requests = '/requests';
+  static const String employeeDetail = '/me';
+  static const String planReview = '/plan/:id';
+  static const String planBuild = '/plan-build/:id';
+  static const String planDiff = '/plan-diff/:id';
+  static const String confirmReceipt = '/receipt/:id';
+  static const String returnStore = '/return';
 
-  // ─── Admin / Office (legacy — kept for future) ─────────────
-  static const String dashboard = '/admin';
+  static String planReviewPath(String projectId) => '/plan/$projectId';
+  static String planBuildPath(String projectId) => '/plan-build/$projectId';
+  static String planDiffPath(String projectId) => '/plan-diff/$projectId';
+  static String confirmReceiptPath(String requestId) => '/receipt/$requestId';
+  static String requestDetailPath(String requestId) => '/request/$requestId';
+
+  // ─── Office / admin screens (full-screen, reached from hubs) ─
   static const String inventory = '/admin/inventory';
   static const String transactions = '/admin/transactions';
   static const String settings = '/admin/settings';
+  static const String goodsReceipt = '/admin/goods-receipt';
+  static const String finance = '/admin/finance';
+  static const String adminPanel = '/admin/panel'; // legacy → redirects to /more
+  static const String adminProjects = '/admin/projects';
+  static const String adminRequests = '/admin/requests';
+  static const String users = '/admin/users';
+  static const String accessRoles = '/access-roles';
+  static const String dataSync = '/data-sync';
+  static const String procurement = '/admin/procurement';
+  static const String planReviewProcurement = '/admin/plan-review/:id';
+  static const String dispatch = '/admin/dispatch/:id';
+
+  static String planReviewProcurementPath(String projectId) =>
+      '/admin/plan-review/$projectId';
+  static String dispatchPath(String requestId) => '/admin/dispatch/$requestId';
+
+  // ─── Rentals / People details ───────────────────────────────
+  static const String rentalUnit = '/rentals/:id';
+  static String rentalUnitPath(String unitId) => '/rentals/$unitId';
+  static const String employeeProfile = '/people/:id';
+  static String employeeProfilePath(String employeeId) => '/people/$employeeId';
 
   // ─── Shared ─────────────────────────────────────────────────
   static const String about = '/about';
+  static const String activityLog = '/activity';
   static const String notifications = '/notifications';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
 }
 
+// ─── Page transition helpers (keep route definitions terse) ──────────
+Page<void> _fade(LocalKey key, Widget child, {int ms = 300}) =>
+    CustomTransitionPage<void>(
+      key: key,
+      child: child,
+      transitionsBuilder: (context, animation, _, c) =>
+          FadeTransition(opacity: animation, child: c),
+      transitionDuration: Duration(milliseconds: ms),
+    );
+
+Page<void> _slide(LocalKey key, Widget child, {Offset begin = const Offset(1, 0)}) =>
+    CustomTransitionPage<void>(
+      key: key,
+      child: child,
+      transitionsBuilder: (context, animation, _, c) => SlideTransition(
+        position: Tween(begin: begin, end: Offset.zero).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        ),
+        child: c,
+      ),
+      transitionDuration: const Duration(milliseconds: 300),
+    );
+
+/// Slide-in page for screens that were originally office-shell *tabs* and so
+/// have no `Scaffold`/`Material` of their own. When reached as a full-screen
+/// route from a hub we wrap them in a slim Scaffold so they get a Material
+/// ancestor and an automatic back button.
+Page<void> _framed(LocalKey key, Widget child) => _slide(
+      key,
+      Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          toolbarHeight: 48,
+        ),
+        body: child,
+      ),
+    );
+
+/// Routes open to a [UserRole]. The in-app half of role-based access control
+/// (the Firestore Security Rules enforce the same server-side).
+bool _isAllowedForRole(String path, UserRole role) {
+  // Reached from the profile menu / shared across every role.
+  const sharedAll = {
+    RoutePaths.engineerHome,
+    RoutePaths.settings,
+    RoutePaths.about,
+    RoutePaths.notifications,
+    RoutePaths.activityLog,
+    RoutePaths.privacyPolicy,
+    RoutePaths.termsOfService,
+    RoutePaths.employeeDetail,
+    RoutePaths.engineerProfile,
+  };
+  if (sharedAll.contains(path)) return true;
+
+  // Materials hub is an office tab; engineers use their own Browse instead.
+  if (path == RoutePaths.materials) return role.usesAdminPanel;
+
+  // Admin-only: the More hub + administration screens + admin oversight.
+  if (path == RoutePaths.more ||
+      path == RoutePaths.users ||
+      path == RoutePaths.accessRoles ||
+      path == RoutePaths.dataSync ||
+      path == RoutePaths.adminProjects ||
+      path == RoutePaths.adminRequests) {
+    return role.isAdmin;
+  }
+  if (path == RoutePaths.goodsReceipt) return role.canReceiveGoods;
+  if (path == RoutePaths.finance) return role.canViewFinance;
+
+  // Modules with their own tab + detail screens.
+  if (path.startsWith('/rentals')) return role.canAccessRentals;
+  if (path.startsWith('/people')) return role.canAccessPeople;
+
+  // Remaining office screens (inventory, transactions, procurement, dispatch,
+  // plan-review) — non-engineer roles only.
+  if (path == RoutePaths.inventory ||
+      path == RoutePaths.transactions ||
+      path == RoutePaths.procurement ||
+      path.startsWith('/admin/')) {
+    return role.usesAdminPanel;
+  }
+
+  // Engineer materials flows (browse, projects, new-request, request/:id,
+  // requests, receipt/:id, return, plan*) + anything else → all roles.
+  return true;
+}
+
 /// Creates the app [GoRouter].
-/// [isOnboarded] and [isLoggedIn] drive redirect logic.
+/// [isOnboarded], [isLoggedIn] and [role] drive redirect / access logic.
 GoRouter createAppRouter({
   required bool isOnboarded,
   required bool isLoggedIn,
+  required UserRole role,
 }) {
+  // Engineers keep their original mobile shell; office roles use the new hub
+  // shell. The router is rebuilt whenever the role changes.
+  final useEngineerShell = !role.usesAdminPanel;
   return GoRouter(
     initialLocation: RoutePaths.splash,
     redirect: (context, state) {
       final path = state.uri.path;
-      final isSplashRoute = path == RoutePaths.splash;
-      final isLanguageSelectionRoute = path == RoutePaths.languageSelection;
-      final isLoginRoute = path == RoutePaths.login;
 
-      // Always allow the splash screen through.
-      if (isSplashRoute) return null;
+      if (path == RoutePaths.splash) return null;
 
       // Force onboarding first (language selection).
       if (!isOnboarded) {
-        if (isLanguageSelectionRoute) return null;
-        return RoutePaths.splash;
+        return path == RoutePaths.languageSelection
+            ? null
+            : RoutePaths.splash;
       }
 
       // Onboarded but not logged in -> login only.
       if (!isLoggedIn) {
-        if (isLoginRoute) return null;
-        return RoutePaths.login;
+        return path == RoutePaths.login ? null : RoutePaths.login;
       }
 
-      // Logged in users shouldn't visit onboarding/login routes.
-      if (isLanguageSelectionRoute || isLoginRoute) {
+      // Logged-in users shouldn't sit on onboarding/login — land at Home.
+      if (path == RoutePaths.languageSelection || path == RoutePaths.login) {
         return RoutePaths.engineerHome;
       }
+
+      // Retire the old hub locations.
+      if (path == '/admin') return RoutePaths.engineerHome;
+      if (path == RoutePaths.adminPanel) {
+        return role.isAdmin ? RoutePaths.more : RoutePaths.engineerHome;
+      }
+
+      // Role-based access guard for module routes → Home if not allowed.
+      if (!_isAllowedForRole(path, role)) return RoutePaths.engineerHome;
 
       return null;
     },
     routes: [
-      // ─── Onboarding ──────────────────────────────────────
+      // ─── Onboarding & Auth (outside the shell) ────────────
       GoRoute(
         path: RoutePaths.splash,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const SplashScreen(),
-          transitionsBuilder: (context, animation, _, child) =>
-              FadeTransition(opacity: animation, child: child),
-          transitionDuration: const Duration(milliseconds: 400),
-        ),
+        pageBuilder: (context, state) =>
+            _fade(state.pageKey, const SplashScreen(), ms: 400),
       ),
       GoRoute(
         path: RoutePaths.languageSelection,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const LanguageSelectionScreen(),
-          transitionsBuilder: (context, animation, _, child) =>
-              FadeTransition(opacity: animation, child: child),
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
+        pageBuilder: (context, state) =>
+            _fade(state.pageKey, const LanguageSelectionScreen(), ms: 500),
       ),
-
-      // ─── Auth ────────────────────────────────────────────
       GoRoute(
         path: RoutePaths.login,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const LoginScreen(),
-          transitionsBuilder: (context, animation, _, child) =>
-              FadeTransition(opacity: animation, child: child),
-          transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (context, state) =>
+            _fade(state.pageKey, const LoginScreen(), ms: 350),
+      ),
+
+      // ─── Role shell ───────────────────────────────────────
+      // Engineers keep their original 4-tab mobile shell (Home · Browse ·
+      // Projects · Profile + New Request); office roles get the role-aware
+      // hub shell (Home · Materials · Rentals · People · More).
+      if (useEngineerShell)
+        // Engineer: 4 state-preserving branches. Non-tab flows (New Request,
+        // Create Project) are nested so the bottom bar stays visible AND their
+        // typed input survives tab switches (IndexedStack keeps branches alive).
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) =>
+              EngineerShellScreen(navigationShell: navigationShell),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.engineerHome,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: EngineerHomeScreen()),
+                  routes: [
+                    GoRoute(
+                      path: 'new-request', // → /new-request
+                      pageBuilder: (context, state) => _slide(
+                        state.pageKey,
+                        const EngineerNewRequestScreen(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.engineerBrowse,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: EngineerBrowseScreen()),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.engineerProjects,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: EngineerProjectsScreen()),
+                  routes: [
+                    GoRoute(
+                      path: 'new', // → /projects/new
+                      pageBuilder: (context, state) => _slide(
+                        state.pageKey,
+                        const EngineerCreateProjectScreen(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.engineerProfile,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: EngineerProfileScreen()),
+                ),
+              ],
+            ),
+          ],
+        )
+      else
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) =>
+              AppShell(navigationShell: navigationShell),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.engineerHome,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: DashboardScreen()),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.materials,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: MaterialsHubScreen()),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.rentals,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: RentalsDashboardScreen()),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.people,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: PeopleDashboardScreen()),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.more,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: MoreHubScreen()),
+                ),
+              ],
+            ),
+          ],
         ),
-      ),
 
-      // ─── Engineer Shell ────────────────────────────────────
-      ShellRoute(
-        builder: (context, state, child) => EngineerShellScreen(child: child),
-        routes: [
-          GoRoute(
-            path: RoutePaths.engineerHome,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EngineerHomeScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.engineerBrowse,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EngineerBrowseScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.engineerProjects,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EngineerProjectsScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.engineerCreateProject,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EngineerCreateProjectScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.engineerNewRequest,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EngineerNewRequestScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.engineerProfile,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: EngineerProfileScreen()),
-          ),
-        ],
-      ),
+      // Office roles reach the account/settings screen via the Home avatar menu
+      // (engineers have it as their Profile tab). Same screen for consistency.
+      if (!useEngineerShell)
+        GoRoute(
+          path: RoutePaths.engineerProfile,
+          pageBuilder: (context, state) =>
+              _framed(state.pageKey, const EngineerProfileScreen()),
+        ),
 
-      // ─── Request Detail (outside shell — full screen) ─────
+      // ─── Shared detail/workflow screens (full-screen, all roles) ─────
+      // Material picker — pushed ON TOP of the New Request screen so the
+      // engineer adds inventory + custom items, then returns to the request.
+      GoRoute(
+        path: RoutePaths.engineerPickMaterials,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const MaterialPickerScreen()),
+      ),
       GoRoute(
         path: RoutePaths.requestDetail,
-        pageBuilder: (context, state) {
-          final id = state.pathParameters['id'] ?? '';
-          return CustomTransitionPage(
-            key: state.pageKey,
-            child: RequestDetailScreen(requestId: id),
-            transitionsBuilder: (context, animation, _, child) =>
-                SlideTransition(
-                  position: Tween(begin: const Offset(1, 0), end: Offset.zero)
-                      .animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      ),
-                  child: child,
-                ),
-            transitionDuration: const Duration(milliseconds: 300),
-          );
-        },
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          RequestDetailScreen(requestId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.requests,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          RequestsListScreen(projectName: state.extra as String?),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.planReview,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          PlanReviewScreen(projectId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.planBuild,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          PlanBuildScreen(projectId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.planDiff,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          PlanDiffScreen(projectId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.confirmReceipt,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          ConfirmReceiptScreen(requestId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.returnStore,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          ReturnScreen(initialProjectName: state.extra as String?),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.employeeDetail,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const EmployeeDetailScreen()),
       ),
 
-      // ─── About (shared — full screen) ──────────────────────
+      // ─── Office / admin screens (full-screen over the shell) ─
+      GoRoute(
+        path: RoutePaths.inventory,
+        pageBuilder: (context, state) =>
+            _framed(state.pageKey, const InventoryScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.transactions,
+        pageBuilder: (context, state) =>
+            _framed(state.pageKey, const TransactionsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.settings,
+        pageBuilder: (context, state) =>
+            _framed(state.pageKey, const SettingsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.goodsReceipt,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const GoodsReceiptScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.finance,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const FinanceScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.adminProjects,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const AdminProjectsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.adminRequests,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const AdminRequestsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.users,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const UserManagementScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.accessRoles,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const AccessRolesScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.dataSync,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const DataSyncScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.procurement,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const ProcurementWorkspaceScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.planReviewProcurement,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          ProcurementPlanReviewScreen(projectId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.dispatch,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          ProcurementDispatchScreen(requestId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+
+      // ─── Rentals / People details (full-screen) ───────────
+      GoRoute(
+        path: RoutePaths.rentalUnit,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          RentalUnitDetailScreen(unitId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.employeeProfile,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          EmployeeProfileScreen(employeeId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+
+      // ─── Shared (full-screen) ─────────────────────────────
       GoRoute(
         path: RoutePaths.about,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const AboutScreen(),
-          transitionsBuilder: (context, animation, _, child) => SlideTransition(
-            position: Tween(begin: const Offset(1, 0), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-            child: child,
-          ),
-          transitionDuration: const Duration(milliseconds: 300),
-        ),
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const AboutScreen()),
       ),
-
-      // ─── Notifications (shared — full screen) ──────────────
+      GoRoute(
+        path: RoutePaths.activityLog,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const ActivityLogScreen()),
+      ),
       GoRoute(
         path: RoutePaths.notifications,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const NotificationsScreen(),
-          transitionsBuilder: (context, animation, _, child) => SlideTransition(
-            position: Tween(begin: const Offset(0, 1), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-            child: child,
-          ),
-          transitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          const NotificationsScreen(),
+          begin: const Offset(0, 1),
         ),
       ),
-
-      // ─── Privacy Policy (shared — full screen) ─────────────
       GoRoute(
         path: RoutePaths.privacyPolicy,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const PrivacyPolicyScreen(),
-          transitionsBuilder: (context, animation, _, child) => SlideTransition(
-            position: Tween(begin: const Offset(1, 0), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-            child: child,
-          ),
-          transitionDuration: const Duration(milliseconds: 300),
-        ),
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const PrivacyPolicyScreen()),
       ),
-
-      // ─── Terms of Service (shared — full screen) ───────────
       GoRoute(
         path: RoutePaths.termsOfService,
-        pageBuilder: (context, state) => CustomTransitionPage(
-          key: state.pageKey,
-          child: const TermsOfServiceScreen(),
-          transitionsBuilder: (context, animation, _, child) => SlideTransition(
-            position: Tween(begin: const Offset(1, 0), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-            child: child,
-          ),
-          transitionDuration: const Duration(milliseconds: 300),
-        ),
-      ),
-
-      // ─── Admin/Office Shell (future) ───────────────────────
-      ShellRoute(
-        builder: (context, state, child) => ShellScreen(child: child),
-        routes: [
-          GoRoute(
-            path: RoutePaths.dashboard,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: DashboardScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.inventory,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: InventoryScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.transactions,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: TransactionsScreen()),
-          ),
-          GoRoute(
-            path: RoutePaths.settings,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: SettingsScreen()),
-          ),
-        ],
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const TermsOfServiceScreen()),
       ),
     ],
   );

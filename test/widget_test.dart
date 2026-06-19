@@ -28,8 +28,8 @@ void main() {
     // Pump a single frame (not pumpAndSettle, since splash has animations)
     await tester.pump();
 
-    // Verify splash/onboarding is shown (GodownPro branding)
-    expect(find.text('GodownPro'), findsOneWidget);
+    // Verify splash/onboarding is shown (GodownPro branding).
+    expect(find.textContaining('GodownPro'), findsWidgets);
 
     // Advance past all splash timers to avoid pending timer assertion
     await tester.pumpAndSettle(const Duration(seconds: 5));

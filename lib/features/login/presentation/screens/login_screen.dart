@@ -159,7 +159,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(
-            'GodownPro',
+            'Yorks GodownPro',
             style: AppTypography.headlineLarge.copyWith(
               fontWeight: FontWeight.w800,
             ),
@@ -306,7 +306,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(width: AppSpacing.lg),
                       Text(
-                        'GodownPro',
+                        'Yorks GodownPro',
                         style: GoogleFonts.inter(
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
@@ -480,7 +480,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // Version footer
                   Center(
                     child: Text(
-                      'POWERED BY GODOWNPRO SYSTEMS V2.4',
+                      'POWERED BY YORKS GODOWNPRO SYSTEMS V2.4',
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,

@@ -353,7 +353,7 @@ const _sections = [
     title: '1. Information We Collect',
     titleSecondary: '1. ہم کیا معلومات جمع کرتے ہیں',
     paragraphs: [
-      'GodownPro collects only the information necessary to operate the warehouse management system effectively. All data is stored locally on your device using secure storage mechanisms.',
+      'Yorks GodownPro collects only the information necessary to operate the warehouse management system effectively. All data is stored locally on your device using secure storage mechanisms.',
       'We collect: inventory item details (names, quantities, prices, categories), transaction records (incoming and outgoing material logs), material requisition data (project names, line items, status), user preferences (selected language, currency, appearance settings), and authentication session flags.',
       'We do NOT collect: personal identification beyond a username, biometric data, location data, payment card information, or any data that is not directly related to warehouse operations.',
     ],
@@ -363,7 +363,7 @@ const _sections = [
     title: '2. How We Store Your Data',
     titleSecondary: '2. آپ کا ڈیٹا کیسے محفوظ کیا جاتا ہے',
     paragraphs: [
-      'All application data is stored locally on your device using Flutter\'s SharedPreferences mechanism. GodownPro is a local-first application — your warehouse data does not leave your device unless you explicitly use a backup or sync feature.',
+      'All application data is stored locally on your device using Flutter\'s SharedPreferences mechanism. Yorks GodownPro is a local-first application — your warehouse data does not leave your device unless you explicitly use a backup or sync feature.',
       'Data is stored as JSON-encoded strings on the device\'s secure storage partition. No data is transmitted to external servers during normal operation.',
       'The Backup & Sync feature (when enabled in a future update) will require explicit user consent before any data is uploaded to cloud services.',
     ],
@@ -373,7 +373,7 @@ const _sections = [
     title: '3. Data Sharing',
     titleSecondary: '3. ڈیٹا شیئرنگ',
     paragraphs: [
-      'GodownPro does not share your data with any third parties. We do not sell, trade, or rent your warehouse information to anyone.',
+      'Yorks GodownPro does not share your data with any third parties. We do not sell, trade, or rent your warehouse information to anyone.',
       'Data may be shared only in the following circumstances: (a) when you explicitly export a report or PDF, (b) when you use the Print Order feature to send data to a printer, or (c) when required by applicable law.',
       'Any future integration with third-party accounting or ERP systems will require explicit user authorization and will be clearly disclosed in the application.',
     ],
@@ -393,7 +393,7 @@ const _sections = [
     title: '5. Your Rights & Controls',
     titleSecondary: '5. آپ کے حقوق اور اختیارات',
     paragraphs: [
-      'You have full control over your data within GodownPro. You may view all stored data at any time through the application interface.',
+      'You have full control over your data within Yorks GodownPro. You may view all stored data at any time through the application interface.',
       'You may delete any material, transaction record, or material request from within the application. Logging out of the application will clear your authentication session.',
       'A future update will provide a complete "Export My Data" and "Delete All Data" option in the Settings screen.',
     ],

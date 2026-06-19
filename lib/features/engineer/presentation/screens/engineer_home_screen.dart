@@ -14,8 +14,9 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../widgets/attendance_home_card.dart';
 
-/// Engineer dashboard for the GodownPro Phase 1 + Phase 2 workflow.
+/// Engineer dashboard for the Yorks GodownPro Phase 1 + Phase 2 workflow.
 ///
 /// The shell owns the bottom navigation / side navigation and New Request CTA;
 /// this screen only renders dashboard content to avoid duplicate floating CTAs.
@@ -111,6 +112,8 @@ class _MainContent extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const AttendanceHomeCard(),
+        const Gap(AppSpacing.xl),
         if (approvalProject != null) ...[
           _ApprovalBanner(project: approvalProject),
           const Gap(AppSpacing.xl),
@@ -275,6 +278,7 @@ class _ApprovalBanner extends ConsumerWidget {
     return LedgerCard(
       color: AppColors.successContainer.withValues(alpha: 0.22),
       padding: const EdgeInsets.all(AppSpacing.xl),
+      onTap: () => context.push(RoutePaths.planReviewPath(project.id)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -400,13 +404,19 @@ class _StatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           Gap(compact ? AppSpacing.sm : AppSpacing.md),
-          Text(
-            '$value',
-            style:
-                (compact
-                        ? AppTypography.headlineLarge
-                        : AppTypography.displaySmall)
-                    .copyWith(color: accent, fontWeight: FontWeight.w800),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$value',
+              style:
+                  (compact
+                          ? AppTypography.headlineLarge
+                          : AppTypography.displaySmall)
+                      .copyWith(color: accent, fontWeight: FontWeight.w800),
+              maxLines: 1,
+              softWrap: false,
+            ),
           ),
         ],
       ),
@@ -600,6 +610,11 @@ class _ProjectCard extends ConsumerWidget {
         final isNarrow = constraints.maxWidth < 520;
 
         return LedgerCard(
+          onTap: project.awaitingApproval
+              ? () => context.push(RoutePaths.planReviewPath(project.id))
+              : project.phase?.state == ProjectState.planning
+              ? () => context.push(RoutePaths.planBuildPath(project.id))
+              : () => context.push(RoutePaths.requests, extra: project.name),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

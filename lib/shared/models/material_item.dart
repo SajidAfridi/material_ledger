@@ -37,6 +37,7 @@ enum MaterialUnit {
 /// Optimized for HVAC supply companies — valves, pipes, fittings,
 /// fasteners, ducts, insulation, electrical controls, etc.
 enum MaterialCategory {
+  airInletOutlet('Air Inlet & Outlet', 'ہوا کے انلیٹ اور آؤٹ لیٹ'),
   valves('Valves', 'والوز'),
   pipes('Pipes & Tubing', 'پائپ اور ٹیوبنگ'),
   fittings('Fittings & Connectors', 'فٹنگز اور کنیکٹرز'),
@@ -75,12 +76,19 @@ class MaterialItem {
     required this.quantity,
     required this.unitPrice,
     this.minStockLevel = 0,
+    this.reservedQty = 0,
+    this.brand = '',
+    this.countryOfOrigin = '',
+    this.size = '',
+    this.ralColour = '',
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
   final String id;
+
+  /// Material Description (stock-list column A).
   final String name;
   final String urduName;
   final MaterialCategory category;
@@ -88,16 +96,43 @@ class MaterialItem {
   final double quantity;
   final double unitPrice;
   final double minStockLevel;
+
+  // ─── Store stock-list columns (client spec, esp. Air Inlet & Outlet) ──
+  /// Brand / Supplier (column B).
+  final String brand;
+
+  /// Country of Origin (column C).
+  final String countryOfOrigin;
+
+  /// Size (column D), e.g. "600x600mm".
+  final String size;
+
+  /// RAL colour (column F), e.g. "RAL 9010" — for grilles/diffusers/dampers.
+  final String ralColour;
+
+  /// Quantity committed to approved plans but not yet dispatched (FR-094).
+  /// On-hand [quantity] minus this is what's actually free to promise.
+  final double reservedQty;
+
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Cost per unit in AED. Visible to Admin/Procurement only
+  /// (gate on [UserRole.canSeeCost]); engineers never see it (FR-092).
+  double get unitCostAED => unitPrice;
+
+  /// Stock free to promise = on-hand − reserved (never negative).
+  double get availableQty =>
+      (quantity - reservedQty).clamp(0, double.infinity).toDouble();
 
   /// Total value of this item in stock.
   double get totalValue => quantity * unitPrice;
 
-  /// Current stock status.
+  /// Current stock status — derived from what is *available*, not gross on-hand,
+  /// so reserved stock correctly reads as low/out for new requests.
   StockStatus get stockStatus {
-    if (quantity <= 0) return StockStatus.outOfStock;
-    if (minStockLevel > 0 && quantity <= minStockLevel) {
+    if (availableQty <= 0) return StockStatus.outOfStock;
+    if (minStockLevel > 0 && availableQty <= minStockLevel) {
       return StockStatus.lowStock;
     }
     return StockStatus.inStock;
@@ -107,6 +142,14 @@ class MaterialItem {
   String get formattedQuantity =>
       '${quantity.toStringAsFixed(quantity.truncateToDouble() == quantity ? 0 : 2)} ${unit.symbol}';
 
+  /// Compact spec line for cards: "Brand · Size · RAL · Country" (omits blanks).
+  String get specSummary => [
+    brand,
+    size,
+    ralColour,
+    countryOfOrigin,
+  ].where((s) => s.isNotEmpty).join(' · ');
+
   MaterialItem copyWith({
     String? name,
     String? urduName,
@@ -115,6 +158,11 @@ class MaterialItem {
     double? quantity,
     double? unitPrice,
     double? minStockLevel,
+    double? reservedQty,
+    String? brand,
+    String? countryOfOrigin,
+    String? size,
+    String? ralColour,
     DateTime? updatedAt,
   }) {
     return MaterialItem(
@@ -126,6 +174,11 @@ class MaterialItem {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       minStockLevel: minStockLevel ?? this.minStockLevel,
+      reservedQty: reservedQty ?? this.reservedQty,
+      brand: brand ?? this.brand,
+      countryOfOrigin: countryOfOrigin ?? this.countryOfOrigin,
+      size: size ?? this.size,
+      ralColour: ralColour ?? this.ralColour,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
@@ -140,6 +193,11 @@ class MaterialItem {
     'quantity': quantity,
     'unitPrice': unitPrice,
     'minStockLevel': minStockLevel,
+    'reservedQty': reservedQty,
+    'brand': brand,
+    'countryOfOrigin': countryOfOrigin,
+    'size': size,
+    'ralColour': ralColour,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -153,6 +211,11 @@ class MaterialItem {
     quantity: (json['quantity'] as num).toDouble(),
     unitPrice: (json['unitPrice'] as num).toDouble(),
     minStockLevel: (json['minStockLevel'] as num?)?.toDouble() ?? 0,
+    reservedQty: (json['reservedQty'] as num?)?.toDouble() ?? 0,
+    brand: json['brand'] as String? ?? '',
+    countryOfOrigin: json['countryOfOrigin'] as String? ?? '',
+    size: json['size'] as String? ?? '',
+    ralColour: json['ralColour'] as String? ?? '',
     createdAt: DateTime.parse(json['createdAt'] as String),
     updatedAt: DateTime.parse(json['updatedAt'] as String),
   );

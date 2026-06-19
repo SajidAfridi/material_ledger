@@ -3,9 +3,10 @@ import 'package:uuid/uuid.dart';
 
 import '../models/inventory_transaction.dart';
 import '../models/material_item.dart';
-import 'language_provider.dart';
+import '../repositories/collection_store.dart';
+import '../repositories/storage.dart';
 
-const _kMaterialsKey = 'materials_list_v2';
+const _kMaterialsKey = 'materials_list_v3';
 const _kTransactionsKey = 'transactions_list';
 const _uuid = Uuid();
 
@@ -14,24 +15,24 @@ const _uuid = Uuid();
 /// All materials in the inventory.
 final materialsProvider =
     StateNotifierProvider<MaterialsNotifier, List<MaterialItem>>((ref) {
-      final prefs = ref.watch(sharedPreferencesProvider);
-      return MaterialsNotifier(prefs);
+      return MaterialsNotifier(
+        ref.watch(storageProvider).collection<MaterialItem>(
+          _kMaterialsKey,
+          toJson: (m) => m.toJson(),
+          fromJson: MaterialItem.fromJson,
+        ),
+      );
     });
 
 class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
-  MaterialsNotifier(this._prefs) : super(_loadFromPrefs(_prefs));
-
-  final dynamic _prefs; // SharedPreferences
-
-  static List<MaterialItem> _loadFromPrefs(dynamic prefs) {
-    final json = prefs.getString(_kMaterialsKey);
-    if (json == null || json.isEmpty) return _seedMaterials;
-    return MaterialItem.decodeList(json);
+  MaterialsNotifier(this._store)
+    : super(_store.isSeeded ? _store.readAll() : _seedMaterials) {
+    if (!_store.isSeeded) _store.writeAll(state);
   }
 
-  Future<void> _persist() async {
-    await _prefs.setString(_kMaterialsKey, MaterialItem.encodeList(state));
-  }
+  final CollectionStore<MaterialItem> _store;
+
+  Future<void> _persist() => _store.writeAll(state);
 
   Future<String> addMaterial({
     required String name,
@@ -41,6 +42,10 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     required double quantity,
     required double unitPrice,
     double minStockLevel = 0,
+    String brand = '',
+    String countryOfOrigin = '',
+    String size = '',
+    String ralColour = '',
   }) async {
     final id = _uuid.v4();
     final item = MaterialItem(
@@ -52,6 +57,10 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
       quantity: quantity,
       unitPrice: unitPrice,
       minStockLevel: minStockLevel,
+      brand: brand,
+      countryOfOrigin: countryOfOrigin,
+      size: size,
+      ralColour: ralColour,
     );
     state = [...state, item];
     await _persist();
@@ -84,6 +93,110 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     ];
     await _persist();
   }
+
+  // ─── Atomic stock transactions (FR-094 reservation) ──────────────
+  // These map 1:1 onto Firestore transactions when the repository layer is
+  // swapped to Firebase; today they are single-threaded notifier mutations.
+
+  /// Reserve [qty] of an item for an approved plan/request. Reserved stock is
+  /// excluded from `availableQty` so it can't be promised twice.
+  Future<void> reserve(String id, double qty) async {
+    if (qty <= 0) return;
+    state = [
+      for (final item in state)
+        if (item.id == id)
+          item.copyWith(reservedQty: item.reservedQty + qty)
+        else
+          item,
+    ];
+    await _persist();
+  }
+
+  /// Release a prior reservation (e.g. plan rejected, request cancelled).
+  Future<void> release(String id, double qty) async {
+    if (qty <= 0) return;
+    state = [
+      for (final item in state)
+        if (item.id == id)
+          item.copyWith(
+            reservedQty: (item.reservedQty - qty)
+                .clamp(0, double.infinity)
+                .toDouble(),
+          )
+        else
+          item,
+    ];
+    await _persist();
+  }
+
+  /// Dispatch [qty] to site: decrement on-hand and free the matching
+  /// reservation in one step. Returns false if there isn't enough on hand.
+  Future<bool> dispatch(String id, double qty) async {
+    if (qty <= 0) return true;
+    final item = byId(id);
+    if (item == null || item.quantity < qty) return false;
+    state = [
+      for (final i in state)
+        if (i.id == id)
+          i.copyWith(
+            quantity: (i.quantity - qty).clamp(0, double.infinity).toDouble(),
+            reservedQty: (i.reservedQty - qty)
+                .clamp(0, double.infinity)
+                .toDouble(),
+          )
+        else
+          i,
+    ];
+    await _persist();
+    return true;
+  }
+
+  /// Receive goods into the store (goods receipt). Increments on-hand and rolls
+  /// the unit cost into a weighted average when an incoming cost is supplied.
+  Future<void> receiveStock(
+    String id,
+    double qty, {
+    double? unitCostAED,
+  }) async {
+    if (qty <= 0) return;
+    state = [
+      for (final item in state)
+        if (item.id == id)
+          item.copyWith(
+            quantity: item.quantity + qty,
+            unitPrice: unitCostAED == null
+                ? item.unitPrice
+                : _weightedAvg(
+                    item.quantity,
+                    item.unitPrice,
+                    qty,
+                    unitCostAED,
+                  ),
+          )
+        else
+          item,
+    ];
+    await _persist();
+  }
+
+  /// Weighted-average cost after receiving [inQty] @ [inCost].
+  static double _weightedAvg(
+    double onHand,
+    double oldCost,
+    double inQty,
+    double inCost,
+  ) {
+    final total = onHand + inQty;
+    if (total <= 0) return inCost;
+    return (onHand * oldCost + inQty * inCost) / total;
+  }
+
+  MaterialItem? byId(String id) {
+    for (final i in state) {
+      if (i.id == id) return i;
+    }
+    return null;
+  }
 }
 
 // ─── Transactions ────────────────────────────────────────────────
@@ -93,27 +206,21 @@ final transactionsProvider =
     StateNotifierProvider<TransactionsNotifier, List<InventoryTransaction>>((
       ref,
     ) {
-      final prefs = ref.watch(sharedPreferencesProvider);
-      return TransactionsNotifier(prefs);
+      return TransactionsNotifier(
+        ref.watch(storageProvider).collection<InventoryTransaction>(
+          _kTransactionsKey,
+          toJson: (t) => t.toJson(),
+          fromJson: InventoryTransaction.fromJson,
+        ),
+      );
     });
 
 class TransactionsNotifier extends StateNotifier<List<InventoryTransaction>> {
-  TransactionsNotifier(this._prefs) : super(_loadFromPrefs(_prefs));
+  TransactionsNotifier(this._store) : super(_store.readAll());
 
-  final dynamic _prefs;
+  final CollectionStore<InventoryTransaction> _store;
 
-  static List<InventoryTransaction> _loadFromPrefs(dynamic prefs) {
-    final json = prefs.getString(_kTransactionsKey);
-    if (json == null || json.isEmpty) return [];
-    return InventoryTransaction.decodeList(json);
-  }
-
-  Future<void> _persist() async {
-    await _prefs.setString(
-      _kTransactionsKey,
-      InventoryTransaction.encodeList(state),
-    );
-  }
+  Future<void> _persist() => _store.writeAll(state);
 
   Future<void> addTransaction({
     required String materialId,
@@ -207,6 +314,88 @@ final recentTransactionsProvider = Provider<List<InventoryTransaction>>((ref) {
 // ─── HVAC Seed Materials ─────────────────────────────────────────
 
 final _seedMaterials = [
+  // ─── Air Inlet & Outlet (client spec: Brand/Supplier, Country, Size, RAL) ──
+  MaterialItem(
+    id: 'mat-air-01',
+    name: 'Supply Air Grille (double deflection)',
+    urduName: 'سپلائی ایئر گرل',
+    category: MaterialCategory.airInletOutlet,
+    unit: MaterialUnit.pieces,
+    quantity: 60,
+    unitPrice: 42.00,
+    minStockLevel: 15,
+    brand: 'Systemair',
+    countryOfOrigin: 'UAE',
+    size: '600x300mm',
+    ralColour: 'RAL 9010',
+    createdAt: DateTime(2025, 11, 2),
+    updatedAt: DateTime(2025, 12, 28),
+  ),
+  MaterialItem(
+    id: 'mat-air-02',
+    name: 'Return Air Grille (egg-crate)',
+    urduName: 'ریٹرن ایئر گرل',
+    category: MaterialCategory.airInletOutlet,
+    unit: MaterialUnit.pieces,
+    quantity: 48,
+    unitPrice: 38.50,
+    minStockLevel: 12,
+    brand: 'TROX',
+    countryOfOrigin: 'Germany',
+    size: '600x600mm',
+    ralColour: 'RAL 9010',
+    createdAt: DateTime(2025, 11, 2),
+    updatedAt: DateTime(2025, 12, 20),
+  ),
+  MaterialItem(
+    id: 'mat-air-03',
+    name: 'Square Ceiling Diffuser (4-way)',
+    urduName: 'سکوائر سیلنگ ڈفیوزر',
+    category: MaterialCategory.airInletOutlet,
+    unit: MaterialUnit.pieces,
+    quantity: 35,
+    unitPrice: 55.00,
+    minStockLevel: 10,
+    brand: 'Holyaire',
+    countryOfOrigin: 'UAE',
+    size: '595x595mm',
+    ralColour: 'RAL 9016',
+    createdAt: DateTime(2025, 11, 5),
+    updatedAt: DateTime(2025, 12, 22),
+  ),
+  MaterialItem(
+    id: 'mat-air-04',
+    name: 'Linear Slot Diffuser (2-slot)',
+    urduName: 'لینیئر سلاٹ ڈفیوزر',
+    category: MaterialCategory.airInletOutlet,
+    unit: MaterialUnit.meters,
+    quantity: 120,
+    unitPrice: 68.00,
+    minStockLevel: 20,
+    brand: 'Systemair',
+    countryOfOrigin: 'Sweden',
+    size: '1200mm',
+    ralColour: 'RAL 9005',
+    createdAt: DateTime(2025, 11, 6),
+    updatedAt: DateTime(2025, 12, 18),
+  ),
+  MaterialItem(
+    id: 'mat-air-05',
+    name: 'Door Transfer Grille',
+    urduName: 'ڈور ٹرانسفر گرل',
+    category: MaterialCategory.airInletOutlet,
+    unit: MaterialUnit.pieces,
+    quantity: 8,
+    unitPrice: 30.00,
+    minStockLevel: 10,
+    brand: 'Holyaire',
+    countryOfOrigin: 'UAE',
+    size: '400x200mm',
+    ralColour: 'RAL 9010',
+    createdAt: DateTime(2025, 11, 7),
+    updatedAt: DateTime(2025, 12, 15),
+  ),
+
   // ─── Valves ──────────────────────────────────────────────
   MaterialItem(
     id: 'mat-001',

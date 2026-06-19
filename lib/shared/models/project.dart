@@ -60,6 +60,11 @@ class Project {
     required this.nameSecondary,
     this.siteLocation,
     this.clientName,
+    this.buildingName,
+    this.floorNumbers,
+    this.startDate,
+    this.expectedEndDate,
+    this.siteNotes,
     this.phase,
     this.lastUpdated,
     this.awaitingApproval = false,
@@ -72,6 +77,11 @@ class Project {
   final String nameSecondary;
   final String? siteLocation;
   final String? clientName;
+  final String? buildingName;
+  final String? floorNumbers;
+  final DateTime? startDate;
+  final DateTime? expectedEndDate;
+  final String? siteNotes;
   final ProjectPhase? phase;
   final DateTime? lastUpdated;
   final bool awaitingApproval;
@@ -81,12 +91,50 @@ class Project {
   /// True when a project has any work item needing engineer attention.
   bool get needsAction => awaitingApproval || openRequestCount > 0;
 
+  Project copyWith({
+    String? name,
+    String? nameSecondary,
+    String? siteLocation,
+    String? clientName,
+    String? buildingName,
+    String? floorNumbers,
+    DateTime? startDate,
+    DateTime? expectedEndDate,
+    String? siteNotes,
+    ProjectPhase? phase,
+    DateTime? lastUpdated,
+    bool? awaitingApproval,
+    int? openRequestCount,
+    bool? allDispatched,
+  }) => Project(
+    id: id,
+    name: name ?? this.name,
+    nameSecondary: nameSecondary ?? this.nameSecondary,
+    siteLocation: siteLocation ?? this.siteLocation,
+    clientName: clientName ?? this.clientName,
+    buildingName: buildingName ?? this.buildingName,
+    floorNumbers: floorNumbers ?? this.floorNumbers,
+    startDate: startDate ?? this.startDate,
+    expectedEndDate: expectedEndDate ?? this.expectedEndDate,
+    siteNotes: siteNotes ?? this.siteNotes,
+    phase: phase ?? this.phase,
+    lastUpdated: lastUpdated ?? this.lastUpdated,
+    awaitingApproval: awaitingApproval ?? this.awaitingApproval,
+    openRequestCount: openRequestCount ?? this.openRequestCount,
+    allDispatched: allDispatched ?? this.allDispatched,
+  );
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'nameSecondary': nameSecondary,
     'siteLocation': siteLocation,
     'clientName': clientName,
+    'buildingName': buildingName,
+    'floorNumbers': floorNumbers,
+    'startDate': startDate?.toIso8601String(),
+    'expectedEndDate': expectedEndDate?.toIso8601String(),
+    'siteNotes': siteNotes,
     'phase': phase?.toJson(),
     'lastUpdated': lastUpdated?.toIso8601String(),
     'awaitingApproval': awaitingApproval,
@@ -100,6 +148,15 @@ class Project {
     nameSecondary: json['nameSecondary'] as String? ?? '',
     siteLocation: json['siteLocation'] as String?,
     clientName: json['clientName'] as String?,
+    buildingName: json['buildingName'] as String?,
+    floorNumbers: json['floorNumbers'] as String?,
+    startDate: json['startDate'] == null
+        ? null
+        : DateTime.parse(json['startDate'] as String),
+    expectedEndDate: json['expectedEndDate'] == null
+        ? null
+        : DateTime.parse(json['expectedEndDate'] as String),
+    siteNotes: json['siteNotes'] as String?,
     phase: json['phase'] == null
         ? null
         : ProjectPhase.fromJson(json['phase'] as Map<String, dynamic>),
@@ -132,6 +189,8 @@ class RequestLineItem {
     required this.quantity,
     required this.unitSymbol,
     this.spec = '',
+    this.qtyReceived,
+    this.qtyDispatched,
   });
 
   final String materialId;
@@ -143,13 +202,36 @@ class RequestLineItem {
   /// Short spec description, e.g. "OPC-43 Grade", "12mm / Grade 60"
   final String spec;
 
-  RequestLineItem copyWith({double? quantity}) => RequestLineItem(
-    materialId: materialId,
-    materialName: materialName,
+  /// Quantity the engineer confirmed actually arrived on site (FR-088).
+  /// Null until receipt is confirmed.
+  final double? qtyReceived;
+
+  /// Quantity procurement has dispatched to site so far (FR — partial dispatch).
+  /// Null/0 until first dispatch; equals [quantity] when fully dispatched.
+  final double? qtyDispatched;
+
+  /// True when a confirmed receipt is short of the requested quantity (FR-089).
+  bool get hasShortfall => qtyReceived != null && qtyReceived! < quantity;
+
+  /// Quantity still to be dispatched (partial fulfilment remainder).
+  double get qtyOutstanding =>
+      (quantity - (qtyDispatched ?? 0)).clamp(0, double.infinity).toDouble();
+
+  RequestLineItem copyWith({
+    String? materialId,
+    String? materialName,
+    double? quantity,
+    double? qtyReceived,
+    double? qtyDispatched,
+  }) => RequestLineItem(
+    materialId: materialId ?? this.materialId,
+    materialName: materialName ?? this.materialName,
     materialNameSecondary: materialNameSecondary,
     quantity: quantity ?? this.quantity,
     unitSymbol: unitSymbol,
     spec: spec,
+    qtyReceived: qtyReceived ?? this.qtyReceived,
+    qtyDispatched: qtyDispatched ?? this.qtyDispatched,
   );
 
   Map<String, dynamic> toJson() => {
@@ -159,6 +241,8 @@ class RequestLineItem {
     'quantity': quantity,
     'unitSymbol': unitSymbol,
     'spec': spec,
+    'qtyReceived': qtyReceived,
+    'qtyDispatched': qtyDispatched,
   };
 
   factory RequestLineItem.fromJson(Map<String, dynamic> json) =>
@@ -169,5 +253,7 @@ class RequestLineItem {
         quantity: (json['quantity'] as num).toDouble(),
         unitSymbol: json['unitSymbol'] as String,
         spec: json['spec'] as String? ?? '',
+        qtyReceived: (json['qtyReceived'] as num?)?.toDouble(),
+        qtyDispatched: (json['qtyDispatched'] as num?)?.toDouble(),
       );
 }

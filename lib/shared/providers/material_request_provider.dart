@@ -3,7 +3,10 @@ import 'package:uuid/uuid.dart';
 
 import '../models/material_request.dart';
 import '../models/project.dart';
-import 'language_provider.dart';
+import '../repositories/collection_store.dart';
+import '../repositories/storage.dart';
+import '../sync/sync_engine.dart';
+import 'inventory_provider.dart';
 
 const _kRequestsKey = 'material_requests_list_v2';
 
@@ -12,29 +15,76 @@ final materialRequestsProvider =
     StateNotifierProvider<MaterialRequestsNotifier, List<MaterialRequest>>((
       ref,
     ) {
-      final prefs = ref.watch(sharedPreferencesProvider);
-      return MaterialRequestsNotifier(prefs);
+      return MaterialRequestsNotifier(
+        ref,
+        ref.watch(storageProvider).collection<MaterialRequest>(
+          _kRequestsKey,
+          toJson: (r) => r.toJson(),
+          fromJson: MaterialRequest.fromJson,
+        ),
+      );
     });
 
 /// Notifier that manages the list of material requests with persistence.
 class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
-  MaterialRequestsNotifier(this._prefs) : super(_loadFromPrefs(_prefs));
+  MaterialRequestsNotifier(this._ref, this._store)
+    : super(_store.isSeeded ? _store.readAll() : _seedRequests) {
+    if (!_store.isSeeded) _store.writeAll(state);
+  }
 
-  final dynamic _prefs; // SharedPreferences
+  final Ref _ref;
+  final CollectionStore<MaterialRequest> _store;
   static const _uuid = Uuid();
 
-  static List<MaterialRequest> _loadFromPrefs(dynamic prefs) {
-    final json = prefs.getString(_kRequestsKey);
-    if (json == null || json.isEmpty) return _seedRequests;
-    return MaterialRequest.decodeList(json);
+  MaterialsNotifier get _inventory => _ref.read(materialsProvider.notifier);
+
+  /// Reserve stock only for lines that map to a REAL inventory material
+  /// (FR-094). Custom / not-yet-stocked items (no matching [MaterialItem]) hold
+  /// no reservation — they must be received into inventory before they can be
+  /// reserved or dispatched.
+  Future<void> _reserveLines(List<RequestLineItem> lines) async {
+    for (final l in lines) {
+      if (_inventory.byId(l.materialId) == null) continue;
+      await _inventory.reserve(l.materialId, l.quantity);
+    }
   }
 
-  Future<void> _persist() async {
-    await _prefs.setString(_kRequestsKey, MaterialRequest.encodeList(state));
+  /// Release reservations for every line that holds one (cancel / supersede).
+  /// Only the still-reserved outstanding quantity is freed, and only for real
+  /// inventory items — so this never over-releases or touches custom items.
+  Future<void> _releaseLines(List<RequestLineItem> lines) async {
+    for (final l in lines) {
+      if (_inventory.byId(l.materialId) == null) continue;
+      await _inventory.release(l.materialId, l.qtyOutstanding);
+    }
   }
 
-  /// Add a new material request (submitted).
-  Future<void> addRequest({
+  Future<void> _persist() => _store.writeAll(state);
+
+  /// Route a request write through the durable outbox so it survives offline,
+  /// retries until the server confirms, and can never be duplicated on resend
+  /// (idempotent on the client-generated [MaterialRequest.id]). [transactional]
+  /// marks writes that move stock/reservations so the backend applies them in an
+  /// atomic Firestore transaction.
+  Future<void> _sync(
+    MaterialRequest r, {
+    required String kind,
+    required String label,
+    bool transactional = false,
+  }) {
+    return _ref.enqueueSync(
+      collection: 'materialRequests',
+      docId: r.id,
+      kind: kind,
+      label: label,
+      payload: r.toJson(),
+      transactional: transactional,
+    );
+  }
+
+  /// Add a new material request (submitted). Returns the created request so the
+  /// caller can deep-link a notification to it (FR-064).
+  Future<MaterialRequest> addRequest({
     required String projectName,
     required String projectNameSecondary,
     required int itemCount,
@@ -57,6 +107,15 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
     );
     state = [request, ...state];
     await _persist();
+    // Submitting commits the stock — reserve it so it can't be promised twice.
+    await _reserveLines(lineItems);
+    await _sync(
+      request,
+      kind: 'request.create',
+      label: 'Material request',
+      transactional: true, // reserves stock
+    );
+    return request;
   }
 
   /// Save a request as draft.
@@ -83,30 +142,234 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
     );
     state = [request, ...state];
     await _persist();
+    await _sync(request, kind: 'request.draft', label: 'Draft request');
   }
 
-  /// Submit a draft request (change status to pending).
+  /// Statuses that are actively holding a stock reservation.
+  static const _holdingStatuses = {
+    RequestStatus.pending,
+    RequestStatus.sourcing,
+    RequestStatus.partial,
+    RequestStatus.onHold,
+    RequestStatus.dispatched,
+  };
+
+  MaterialRequest? _byId(String id) {
+    for (final r in state) {
+      if (r.id == id) return r;
+    }
+    return null;
+  }
+
+  /// Submit a draft request (change status to pending) and reserve its stock.
   Future<void> submitDraft(String id) async {
+    final req = _byId(id);
     state = [
       for (final r in state)
         if (r.id == id) r.copyWith(status: RequestStatus.pending) else r,
     ];
     await _persist();
+    if (req != null && req.status == RequestStatus.draft) {
+      await _reserveLines(req.lineItems);
+    }
+    final updated = _byId(id);
+    if (updated != null) {
+      await _sync(
+        updated,
+        kind: 'request.submit',
+        label: 'Material request',
+        transactional: true, // reserves stock
+      );
+    }
   }
 
-  /// Remove a request by ID.
+  /// Remove a request by ID, releasing any reservation it still holds.
   Future<void> removeRequest(String id) async {
+    final req = _byId(id);
     state = state.where((r) => r.id != id).toList();
     await _persist();
+    if (req != null && _holdingStatuses.contains(req.status)) {
+      await _releaseLines(req.lineItems);
+    }
   }
 
-  /// Update status of a request.
+  /// Update status of a request. Cancelling releases the held reservation.
   Future<void> updateStatus(String id, RequestStatus newStatus) async {
+    final req = _byId(id);
     state = [
       for (final r in state)
         if (r.id == id) r.copyWith(status: newStatus) else r,
     ];
     await _persist();
+    if (req != null &&
+        newStatus == RequestStatus.cancelled &&
+        _holdingStatuses.contains(req.status)) {
+      await _releaseLines(req.lineItems);
+    }
+    final updated = _byId(id);
+    if (updated != null) {
+      await _sync(
+        updated,
+        kind: 'request.status',
+        label: 'Material request',
+        transactional: newStatus == RequestStatus.cancelled, // releases stock
+      );
+    }
+  }
+
+  /// Procurement dispatches a request to site (FR — full / partial dispatch).
+  /// Stock physically leaves the store here: on-hand decrements and the matching
+  /// reservation is freed for the dispatched quantity. A short dispatch leaves
+  /// the remainder open (status → partial) for procurement to fulfil later.
+  /// [dispatchByIndex] is the quantity to dispatch per line; omit/short to
+  /// default each line to its outstanding quantity.
+  Future<void> dispatch(String id, [List<double>? dispatchByIndex]) async {
+    final req = _byId(id);
+    if (req == null) return;
+
+    final newLines = <RequestLineItem>[];
+    for (var i = 0; i < req.lineItems.length; i++) {
+      final line = req.lineItems[i];
+      final item = _inventory.byId(line.materialId);
+      var d = (dispatchByIndex != null && i < dispatchByIndex.length)
+          ? dispatchByIndex[i]
+          : line.qtyOutstanding;
+      d = d.clamp(0, line.qtyOutstanding).toDouble();
+
+      if (item == null) {
+        // Not in inventory (custom / un-stocked) — cannot be dispatched until it
+        // is received into stock. Leave it outstanding; never fake the movement.
+        d = 0;
+      } else {
+        // Real material: never dispatch more than is physically on hand.
+        d = d.clamp(0, item.quantity).toDouble();
+        if (d > 0) {
+          await _inventory.adjustQuantity(line.materialId, -d); // leave the store
+          await _inventory.release(line.materialId, d); // free that reservation
+        }
+      }
+      newLines.add(
+        line.copyWith(qtyDispatched: (line.qtyDispatched ?? 0) + d),
+      );
+    }
+
+    final fullyDispatched =
+        newLines.every((l) => (l.qtyDispatched ?? 0) >= l.quantity);
+    state = [
+      for (final r in state)
+        if (r.id == id)
+          r.copyWith(
+            status: fullyDispatched
+                ? RequestStatus.dispatched
+                : RequestStatus.partial,
+            lineItems: newLines,
+          )
+        else
+          r,
+    ];
+    await _persist();
+    final updated = _byId(id);
+    if (updated != null) {
+      // Stock physically left the store — atomic (transactional). Coalescing on
+      // docId means repeated partial dispatches sync the latest cumulative state
+      // without duplicating or losing any.
+      await _sync(
+        updated,
+        kind: 'request.dispatch',
+        label: 'Dispatch',
+        transactional: true,
+      );
+    }
+  }
+
+  /// Re-point a request line from a custom/placeholder material id onto a REAL
+  /// inventory material that procurement just created & stocked, then reserve the
+  /// outstanding quantity. After this the line is a normal, dispatchable item.
+  Future<void> relinkLine(
+    String requestId,
+    String oldMaterialId, {
+    required String newMaterialId,
+    required String newName,
+  }) async {
+    final req = _byId(requestId);
+    if (req == null) return;
+    RequestLineItem? relinked;
+    final newLines = <RequestLineItem>[];
+    for (final l in req.lineItems) {
+      if (l.materialId == oldMaterialId) {
+        final nl = l.copyWith(materialId: newMaterialId, materialName: newName);
+        relinked = nl;
+        newLines.add(nl);
+      } else {
+        newLines.add(l);
+      }
+    }
+    if (relinked == null) return;
+    state = [
+      for (final r in state)
+        if (r.id == requestId) r.copyWith(lineItems: newLines) else r,
+    ];
+    await _persist();
+    // Reserve the now-real material for what's still outstanding on this line.
+    await _inventory.reserve(newMaterialId, relinked.qtyOutstanding);
+    final updated = _byId(requestId);
+    if (updated != null) {
+      await _sync(
+        updated,
+        kind: 'request.relink',
+        label: 'Material request',
+        transactional: true,
+      );
+    }
+  }
+
+  /// Procurement puts a request on hold with a note (FR). Reservation stays.
+  Future<void> putOnHold(String id, String note) async {
+    state = [
+      for (final r in state)
+        if (r.id == id)
+          r.copyWith(
+            status: RequestStatus.onHold,
+            notes: note.trim().isEmpty ? r.notes : note.trim(),
+          )
+        else
+          r,
+    ];
+    await _persist();
+    final updated = _byId(id);
+    if (updated != null) {
+      await _sync(updated, kind: 'request.hold', label: 'Material request');
+    }
+  }
+
+  /// Engineer confirms on-site receipt, recording the quantity actually
+  /// received per line and flagging any shortfall (FR-088/FR-089). Stock and
+  /// reservation were already settled at dispatch, so this only records.
+  Future<void> confirmReceipt(String id, List<double> receivedByIndex) async {
+    state = [
+      for (final r in state)
+        if (r.id == id)
+          r.copyWith(
+            status: RequestStatus.received,
+            confirmedReceiptAt: DateTime.now(),
+            lineItems: [
+              for (var i = 0; i < r.lineItems.length; i++)
+                r.lineItems[i].copyWith(
+                  qtyReceived: i < receivedByIndex.length
+                      ? receivedByIndex[i]
+                      : r.lineItems[i].quantity,
+                ),
+            ],
+          )
+        else
+          r,
+    ];
+    await _persist();
+    final updated = _byId(id);
+    if (updated != null) {
+      // Records the on-site receipt only (stock already settled at dispatch).
+      await _sync(updated, kind: 'request.receipt', label: 'Receipt confirmed');
+    }
   }
 }
 
@@ -118,8 +381,29 @@ final openRequestCountProvider = Provider<int>((ref) {
       .where(
         (r) =>
             r.status == RequestStatus.pending ||
-            r.status == RequestStatus.available,
+            r.status == RequestStatus.sourcing ||
+            r.status == RequestStatus.partial ||
+            r.status == RequestStatus.onHold ||
+            r.status == RequestStatus.dispatched,
       )
+      .length;
+});
+
+/// Statuses that put a request in procurement's dispatch queue (the same set
+/// the procurement workspace lists). Single source of truth for the count.
+const dispatchQueueStatuses = {
+  RequestStatus.pending,
+  RequestStatus.sourcing,
+  RequestStatus.partial,
+  RequestStatus.onHold,
+};
+
+/// Requests waiting on procurement to dispatch — drives the Home "Awaiting you"
+/// KPI and the Materials-hub Procurement badge.
+final dispatchQueueCountProvider = Provider<int>((ref) {
+  return ref
+      .watch(materialRequestsProvider)
+      .where((r) => dispatchQueueStatuses.contains(r.status))
       .length;
 });
 
@@ -176,7 +460,7 @@ final _seedRequests = [
     id: 'req-002',
     projectName: 'Marina Bay Mall — Chiller Plant',
     projectNameSecondary: 'مرینا بے مال — چلر پلانٹ',
-    status: RequestStatus.available,
+    status: RequestStatus.dispatched,
     requestDate: DateTime(2025, 10, 22),
     itemCount: 8,
     lineItems: const [
@@ -215,7 +499,7 @@ final _seedRequests = [
     id: 'req-003',
     projectName: 'Green Valley Hospital — AHU Installation',
     projectNameSecondary: 'گرین ویلی ہسپتال — اے ایچ یو',
-    status: RequestStatus.deployed,
+    status: RequestStatus.received,
     requestDate: DateTime(2025, 10, 19),
     itemCount: 6,
     lineItems: const [
@@ -293,7 +577,7 @@ final _seedRequests = [
     id: 'req-005',
     projectName: 'City Centre — Piping & Valves',
     projectNameSecondary: 'سٹی سنٹر — پائپنگ اور والوز',
-    status: RequestStatus.available,
+    status: RequestStatus.dispatched,
     requestDate: DateTime(2025, 10, 20),
     itemCount: 7,
     lineItems: const [
@@ -332,7 +616,7 @@ final _seedRequests = [
     id: 'req-006',
     projectName: 'Industrial Zone — Boiler Room',
     projectNameSecondary: 'صنعتی زون — بوائلر روم',
-    status: RequestStatus.deployed,
+    status: RequestStatus.received,
     requestDate: DateTime(2025, 10, 15),
     itemCount: 9,
     lineItems: const [
@@ -371,7 +655,7 @@ final _seedRequests = [
     id: 'req-007',
     projectName: 'Al-Burj Tower — HVAC Fit-Out',
     projectNameSecondary: 'البرج ٹاور — ایچ وی اے سی',
-    status: RequestStatus.rejected,
+    status: RequestStatus.cancelled,
     requestDate: DateTime(2025, 10, 18),
     itemCount: 3,
     lineItems: const [

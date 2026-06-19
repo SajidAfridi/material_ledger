@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +9,10 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/providers/employee_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/sync/connectivity_service.dart';
 
 /// Profile screen — engineer account & settings.
 class EngineerProfileScreen extends ConsumerWidget {
@@ -18,6 +22,10 @@ class EngineerProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
+    final role = ref.watch(currentRoleProvider);
+    final online = ref.watch(isOnlineProvider);
+    // Same source as the home "My data" card + the /me detail screen.
+    final emp = ref.watch(employeeProvider);
 
     return SafeArea(
       child: CustomScrollView(
@@ -51,6 +59,9 @@ class EngineerProfileScreen extends ConsumerWidget {
             ),
             sliver: SliverToBoxAdapter(
               child: LedgerCard(
+                // Tapping the header opens the same employee-data screen as the
+                // home "My data → Show more" card.
+                onTap: () => context.push(RoutePaths.employeeDetail),
                 child: Row(
                   children: [
                     Container(
@@ -62,11 +73,12 @@ class EngineerProfileScreen extends ConsumerWidget {
                         ),
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.engineering_rounded,
-                          size: 28,
+                      alignment: Alignment.center,
+                      child: Text(
+                        emp.initials,
+                        style: AppTypography.titleMedium.copyWith(
                           color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
@@ -75,18 +87,67 @@ class EngineerProfileScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Site Engineer',
-                            style: AppTypography.titleMedium,
-                          ),
+                          Text(emp.name, style: AppTypography.titleMedium),
                           const Gap(AppSpacing.xxs),
                           Text(
-                            'engineer@godownpro.com',
+                            '${emp.title} · ${emp.employeeId}',
                             style: AppTypography.bodySmall,
                           ),
                         ],
                       ),
                     ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SliverGap(AppSpacing.xl),
+
+          // ─── Workspace ─────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: LedgerCard(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: Column(
+                  children: [
+                    _ProfileTile(
+                      icon: Icons.history_rounded,
+                      title: 'Activity Log',
+                      onTap: () => context.push(RoutePaths.activityLog),
+                    ),
+                    // Dev-only role switcher. In production the role comes from
+                    // the signed-in user's credentials and routing is automatic,
+                    // so this is hidden in release builds.
+                    if (kDebugMode)
+                      _ProfileTile(
+                        icon: Icons.badge_outlined,
+                        title: 'Role (dev)',
+                        subtitle: role.label,
+                        onTap: () => RolePickerSheet.show(context),
+                      ),
+                    // Dev-only connectivity simulator — demo the offline →
+                    // queued → synced flow without leaving Wi-Fi. Release-hidden.
+                    if (kDebugMode)
+                      _ProfileTile(
+                        icon: online
+                            ? Icons.wifi_rounded
+                            : Icons.wifi_off_rounded,
+                        title: 'Simulate offline (dev)',
+                        trailing: Switch(
+                          value: !online,
+                          onChanged: (offline) =>
+                              _setOffline(ref, offline: offline),
+                        ),
+                        onTap: () => _setOffline(ref, offline: online),
+                      ),
                   ],
                 ),
               ),
@@ -155,7 +216,7 @@ class EngineerProfileScreen extends ConsumerWidget {
             sliver: SliverToBoxAdapter(
               child: Center(
                 child: Text(
-                  'GodownPro v1.0.0 — Engineer',
+                  'Yorks GodownPro v1.0.0 — ${role.label}',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),
@@ -166,6 +227,13 @@ class EngineerProfileScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// Dev helper: flip the simulated connectivity so the sync states are
+  /// demoable. No-op against a real connectivity service in production.
+  void _setOffline(WidgetRef ref, {required bool offline}) {
+    final c = ref.read(connectivityProvider);
+    if (c is DefaultConnectivity) c.setOnline(!offline);
   }
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
@@ -224,6 +292,7 @@ class _ProfileTile extends StatelessWidget {
     this.subtitle,
     this.onTap,
     this.isDestructive = false,
+    this.trailing,
   });
 
   final IconData icon;
@@ -231,6 +300,7 @@ class _ProfileTile extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onTap;
   final bool isDestructive;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -264,6 +334,7 @@ class _ProfileTile extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+            ?trailing,
           ],
         ),
       ),

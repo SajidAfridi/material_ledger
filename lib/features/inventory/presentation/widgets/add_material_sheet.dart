@@ -10,9 +10,11 @@ import '../../../../shared/models/material_item.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 
-/// Full-screen modal for adding a new material to inventory.
+/// Full-screen modal for adding or editing a material in inventory.
 class AddMaterialSheet extends ConsumerStatefulWidget {
-  const AddMaterialSheet({super.key});
+  const AddMaterialSheet({super.key, this.material});
+
+  final MaterialItem? material;
 
   @override
   ConsumerState<AddMaterialSheet> createState() => _AddMaterialSheetState();
@@ -20,14 +22,53 @@ class AddMaterialSheet extends ConsumerStatefulWidget {
 
 class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _urduNameController = TextEditingController();
-  final _quantityController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _minStockController = TextEditingController();
-  MaterialCategory _category = MaterialCategory.valves;
-  MaterialUnit _unit = MaterialUnit.pieces;
+  late final TextEditingController _nameController;
+  late final TextEditingController _urduNameController;
+  late final TextEditingController _quantityController;
+  late final TextEditingController _priceController;
+  late final TextEditingController _minStockController;
+  late final TextEditingController _brandController;
+  late final TextEditingController _countryController;
+  late final TextEditingController _sizeController;
+  late final TextEditingController _ralController;
+  late MaterialCategory _category;
+  late MaterialUnit _unit;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.material;
+    _nameController = TextEditingController(text: item?.name);
+    _urduNameController = TextEditingController(text: item?.urduName);
+    _quantityController = TextEditingController(
+      text: item == null
+          ? ''
+          : item.quantity.toStringAsFixed(
+              item.quantity.truncateToDouble() == item.quantity ? 0 : 2,
+            ),
+    );
+    _priceController = TextEditingController(
+      text: item == null
+          ? ''
+          : item.unitPrice == 0
+          ? ''
+          : item.unitPrice.toStringAsFixed(2),
+    );
+    _minStockController = TextEditingController(
+      text: item == null
+          ? ''
+          : item.minStockLevel == 0
+          ? ''
+          : item.minStockLevel.toStringAsFixed(0),
+    );
+    _brandController = TextEditingController(text: item?.brand);
+    _countryController = TextEditingController(text: item?.countryOfOrigin);
+    _sizeController = TextEditingController(text: item?.size);
+    _ralController = TextEditingController(text: item?.ralColour);
+    _category = item?.category ?? MaterialCategory.airInletOutlet;
+    _unit = item?.unit ?? MaterialUnit.pieces;
+  }
 
   @override
   void dispose() {
@@ -36,6 +77,10 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
     _quantityController.dispose();
     _priceController.dispose();
     _minStockController.dispose();
+    _brandController.dispose();
+    _countryController.dispose();
+    _sizeController.dispose();
+    _ralController.dispose();
     super.dispose();
   }
 
@@ -43,21 +88,46 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
 
-    final qty = double.tryParse(_quantityController.text.trim()) ?? 0;
     final price = double.tryParse(_priceController.text.trim()) ?? 0;
     final minStock = double.tryParse(_minStockController.text.trim()) ?? 0;
 
-    await ref
-        .read(materialsProvider.notifier)
-        .addMaterial(
-          name: _nameController.text.trim(),
-          urduName: _urduNameController.text.trim(),
-          category: _category,
-          unit: _unit,
-          quantity: qty,
-          unitPrice: price,
-          minStockLevel: minStock,
-        );
+    final brand = _brandController.text.trim();
+    final country = _countryController.text.trim();
+    final size = _sizeController.text.trim();
+    final ral = _ralController.text.trim();
+
+    if (widget.material != null) {
+      final updated = widget.material!.copyWith(
+        name: _nameController.text.trim(),
+        urduName: _urduNameController.text.trim(),
+        category: _category,
+        unit: _unit,
+        unitPrice: price,
+        minStockLevel: minStock,
+        brand: brand,
+        countryOfOrigin: country,
+        size: size,
+        ralColour: ral,
+      );
+      await ref.read(materialsProvider.notifier).updateMaterial(updated);
+    } else {
+      final qty = double.tryParse(_quantityController.text.trim()) ?? 0;
+      await ref
+          .read(materialsProvider.notifier)
+          .addMaterial(
+            name: _nameController.text.trim(),
+            urduName: _urduNameController.text.trim(),
+            category: _category,
+            unit: _unit,
+            quantity: qty,
+            unitPrice: price,
+            minStockLevel: minStock,
+            brand: brand,
+            countryOfOrigin: country,
+            size: size,
+            ralColour: ral,
+          );
+    }
 
     if (!mounted) return;
     Navigator.pop(context, true);
@@ -106,7 +176,9 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            AppStrings.addNewMaterial.primary,
+                            widget.material != null
+                                ? AppStrings.editMaterial.primary
+                                : AppStrings.addNewMaterial.primary,
                             style: GoogleFonts.inter(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
@@ -115,7 +187,9 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                           ),
                           const Gap(AppSpacing.xxs),
                           Text(
-                            AppStrings.addNewMaterial.secondary(lang),
+                            widget.material != null
+                                ? AppStrings.editMaterial.secondary(lang)
+                                : AppStrings.addNewMaterial.secondary(lang),
                             style: AppTypography.bodySmall,
                             textDirection: lang.isRtl
                                 ? TextDirection.rtl
@@ -187,30 +261,108 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                         ),
                         const Gap(AppSpacing.xl),
 
-                        // Quantity + Price row
+                        // ─── Stock details (Air Inlet & Outlet spec) ──
+                        Text(
+                          AppStrings.stockDetails.primary,
+                          style: AppTypography.titleSmall,
+                        ),
+                        const Gap(AppSpacing.sm),
+                        LedgerTextField(
+                          controller: _brandController,
+                          label: AppStrings.brandSupplier.primary,
+                          hintText: AppStrings.optional.primary,
+                        ),
+                        const Gap(AppSpacing.lg),
                         Row(
                           children: [
                             Expanded(
                               child: LedgerTextField(
-                                controller: _quantityController,
-                                label: AppStrings.quantity.primary,
-                                hintText: '0',
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                validator: (v) {
-                                  if ((v ?? '').trim().isEmpty) {
-                                    return AppStrings.fieldRequired.primary;
-                                  }
-                                  if (double.tryParse(v!.trim()) == null) {
-                                    return AppStrings.enterValidNumber.primary;
-                                  }
-                                  return null;
-                                },
+                                controller: _countryController,
+                                label: AppStrings.countryOfOrigin.primary,
+                                hintText: AppStrings.optional.primary,
                               ),
                             ),
                             const Gap(AppSpacing.lg),
+                            Expanded(
+                              child: LedgerTextField(
+                                controller: _sizeController,
+                                label: AppStrings.sizeLabel.primary,
+                                hintText: AppStrings.optional.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Gap(AppSpacing.lg),
+                        LedgerTextField(
+                          controller: _ralController,
+                          label: AppStrings.ralColour.primary,
+                          hintText: 'RAL 9010',
+                        ),
+                        const Gap(AppSpacing.xl),
+
+                        // Note: quantity not editable here — use Record Transaction
+                        if (widget.material != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusMd,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 16,
+                                  color: AppColors.onSurfaceVariant.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ),
+                                const Gap(AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    'To adjust stock quantity, use Record Transaction.',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Gap(AppSpacing.xl),
+                        ],
+
+                        // Quantity + Price row
+                        Row(
+                          children: [
+                            if (widget.material == null) ...[
+                              Expanded(
+                                child: LedgerTextField(
+                                  controller: _quantityController,
+                                  label: AppStrings.quantity.primary,
+                                  hintText: '0',
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  validator: (v) {
+                                    if ((v ?? '').trim().isEmpty) {
+                                      return AppStrings.fieldRequired.primary;
+                                    }
+                                    final val = double.tryParse(v!.trim());
+                                    if (val == null || val < 0) {
+                                      return AppStrings
+                                          .enterValidNumber
+                                          .primary;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              const Gap(AppSpacing.lg),
+                            ],
                             Expanded(
                               child: LedgerTextField(
                                 controller: _priceController,
@@ -224,7 +376,8 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                                   if ((v ?? '').trim().isEmpty) {
                                     return AppStrings.fieldRequired.primary;
                                   }
-                                  if (double.tryParse(v!.trim()) == null) {
+                                  final val = double.tryParse(v!.trim());
+                                  if (val == null || val < 0) {
                                     return AppStrings.enterValidNumber.primary;
                                   }
                                   return null;
@@ -243,12 +396,23 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
+                          validator: (v) {
+                            if (v != null && v.trim().isNotEmpty) {
+                              final val = double.tryParse(v.trim());
+                              if (val == null || val < 0) {
+                                return AppStrings.enterValidNumber.primary;
+                              }
+                            }
+                            return null;
+                          },
                         ),
                         const Gap(AppSpacing.xxl),
 
                         // Save button
                         PrimaryButton(
-                          label: AppStrings.saveMaterial.primary,
+                          label: widget.material != null
+                              ? AppStrings.saveChanges.primary
+                              : AppStrings.saveMaterial.primary,
                           icon: Icons.check_rounded,
                           isLoading: _saving,
                           onPressed: _saving ? null : _save,

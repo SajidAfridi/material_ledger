@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -122,9 +123,11 @@ class _LanguageSelectionScreenState
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
-              child: SafeArea(
-                bottom: false,
-                child: Column(
+              child: ResponsiveCenter(
+                maxWidth: 560,
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
                   children: [
                     const SizedBox(height: AppSpacing.huge),
 
@@ -196,6 +199,7 @@ class _LanguageSelectionScreenState
                   ],
                 ),
               ),
+              ),
             ),
           ),
 
@@ -247,7 +251,7 @@ class _LanguageSelectionScreenState
 
         // App Name
         Text(
-          'GODOWNPRO',
+          'YORKS GODOWNPRO',
           style: GoogleFonts.inter(
             fontSize: 24,
             fontWeight: FontWeight.w800,
@@ -438,7 +442,7 @@ class _LanguageSelectionScreenState
     return Column(
       children: [
         Text(
-          'GodownPro',
+          'Yorks GodownPro',
           style: GoogleFonts.inter(
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -518,10 +522,12 @@ class _LanguageSelectionScreenState
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _onGetStarted,
+      child: ResponsiveCenter(
+        maxWidth: 560,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _onGetStarted,
           borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
           child: Container(
             height: 56,
@@ -570,6 +576,7 @@ class _LanguageSelectionScreenState
             ),
           ),
         ),
+      ),
       ),
     );
   }

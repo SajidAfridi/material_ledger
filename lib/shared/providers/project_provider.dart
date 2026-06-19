@@ -4,21 +4,129 @@ import '../models/material_item.dart';
 import '../models/material_request.dart';
 import '../models/project.dart';
 import 'inventory_provider.dart';
+import 'material_request_provider.dart';
 
 // ─── Admin-created Projects ──────────────────────────────────────
 
 /// All available projects.
 final projectsProvider = StateNotifierProvider<ProjectsNotifier, List<Project>>(
-  (ref) => ProjectsNotifier(_mockProjects),
+  (ref) => ProjectsNotifier(ref, _mockProjects),
 );
 
+/// Request statuses that count as "open" — a project can't be closed out while
+/// any of these exist against it (FR-095 closeout enforcement).
+const _openRequestStatuses = {
+  RequestStatus.draft,
+  RequestStatus.pending,
+  RequestStatus.sourcing,
+  RequestStatus.partial,
+  RequestStatus.onHold,
+  RequestStatus.dispatched,
+};
+
 class ProjectsNotifier extends StateNotifier<List<Project>> {
-  ProjectsNotifier(super.initialProjects);
+  ProjectsNotifier(this._ref, super.initialProjects);
+
+  final Ref _ref;
 
   void addProject(Project project) {
     state = [project, ...state];
   }
+
+  void updateProject(Project project) {
+    state = [
+      for (final p in state)
+        if (p.id == project.id) project else p,
+    ];
+  }
+
+  /// Admin override — delete any project from the system (FR-317).
+  void deleteProject(String projectId) {
+    state = state.where((p) => p.id != projectId).toList();
+  }
+
+  Project? byId(String id) {
+    for (final p in state) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  /// Number of open requests against a project (matched by name).
+  int openRequestCountFor(String projectName) {
+    return _ref
+        .read(materialRequestsProvider)
+        .where(
+          (r) =>
+              r.projectName == projectName &&
+              _openRequestStatuses.contains(r.status),
+        )
+        .length;
+  }
+
+  /// A project may only be closed out when it is active and has no open
+  /// requests still in flight (FR-095).
+  bool canComplete(String projectId) {
+    final p = byId(projectId);
+    if (p == null) return false;
+    if (p.phase?.state == ProjectState.completed) return false;
+    return openRequestCountFor(p.name) == 0;
+  }
+
+  /// Close out a project. Returns false (no-op) if it still has open requests.
+  bool completeProject(String projectId) {
+    if (!canComplete(projectId)) return false;
+    state = [
+      for (final p in state)
+        if (p.id == projectId)
+          p.copyWith(
+            awaitingApproval: false,
+            openRequestCount: 0,
+            lastUpdated: DateTime.now(),
+            phase: const ProjectPhase(
+              number: 3,
+              name: 'Completed',
+              nameSecondary: 'مکمل',
+              state: ProjectState.completed,
+            ),
+          )
+        else
+          p,
+    ];
+    return true;
+  }
+
+  /// Activate a project after its Phase 1 plan is approved
+  /// (Planning → Active, clears the approval flag).
+  void activateFromPlanApproval(String projectId) {
+    state = [
+      for (final p in state)
+        if (p.id == projectId)
+          p.copyWith(
+            awaitingApproval: false,
+            lastUpdated: DateTime.now(),
+            phase: const ProjectPhase(
+              number: 2,
+              name: 'Active',
+              nameSecondary: 'فعال',
+              state: ProjectState.active,
+            ),
+          )
+        else
+          p,
+    ];
+  }
 }
+
+/// Whether a given project can currently be closed out (drives the UI control).
+final canCompleteProjectProvider = Provider.family<bool, String>((
+  ref,
+  projectId,
+) {
+  // Watch requests so the result recomputes as statuses change.
+  ref.watch(materialRequestsProvider);
+  return ref.read(projectsProvider.notifier).canComplete(projectId);
+});
 
 // ─── Browse Screen Providers ──────────────────────────────────────
 
@@ -63,7 +171,8 @@ final browseMaterialsProvider = Provider<List<MaterialItem>>((ref) {
             (m) =>
                 m.category == MaterialCategory.pipes ||
                 m.category == MaterialCategory.ducts ||
-                m.category == MaterialCategory.insulation,
+                m.category == MaterialCategory.insulation ||
+                m.category == MaterialCategory.airInletOutlet,
           )
           .toList(),
     BrowseCategoryFilter.fasteners =>
@@ -262,6 +371,12 @@ final _mockProjects = <Project>[
     nameSecondary: 'الراحہ بیچ ٹاور سی — ایچ وی اے سی',
     siteLocation: 'Al Raha Beach, Abu Dhabi',
     clientName: 'Aldar Properties',
+    buildingName: 'Tower C',
+    floorNumbers: 'Basement, G, 1-14',
+    startDate: _now.subtract(const Duration(days: 10)),
+    expectedEndDate: _now.add(const Duration(days: 90)),
+    siteNotes:
+        'Requires coordination with the main developer Aldar. Strict safety requirements.',
     phase: const ProjectPhase(
       number: 1,
       name: 'Planning',
@@ -277,6 +392,12 @@ final _mockProjects = <Project>[
     nameSecondary: 'مصفح گودام — چلر انسٹال',
     siteLocation: 'Musaffah, Abu Dhabi',
     clientName: 'Gulf Industrial',
+    buildingName: 'Main Warehouse',
+    floorNumbers: 'Ground Floor only',
+    startDate: _now.subtract(const Duration(days: 30)),
+    expectedEndDate: _now.add(const Duration(days: 15)),
+    siteNotes:
+        'Chiller installation needs heavy crane access. Confirm slab loading capacity.',
     phase: const ProjectPhase(
       number: 2,
       name: 'Active',
@@ -292,6 +413,12 @@ final _mockProjects = <Project>[
     nameSecondary: 'خالدیہ رہائش گاہیں — ڈکٹ ورک',
     siteLocation: 'Al Khalidiyah, Abu Dhabi',
     clientName: 'Bloom Properties',
+    buildingName: 'Block A & B',
+    floorNumbers: 'Floors 1-6',
+    startDate: _now.subtract(const Duration(days: 45)),
+    expectedEndDate: _now.add(const Duration(days: 20)),
+    siteNotes:
+        'Duct work on upper levels to be completed before ceiling contractors start.',
     phase: const ProjectPhase(
       number: 2,
       name: 'Active',
@@ -307,6 +434,11 @@ final _mockProjects = <Project>[
     nameSecondary: 'کارنیش کلینک — ایف سی یو متبادل',
     siteLocation: 'Corniche Road, Abu Dhabi',
     clientName: 'DOH',
+    buildingName: 'East Wing',
+    floorNumbers: 'G, 1, 2',
+    startDate: _now.subtract(const Duration(days: 60)),
+    expectedEndDate: _now.subtract(const Duration(days: 2)),
+    siteNotes: 'FCU replacements in clinical area. Clean room protocol active.',
     phase: const ProjectPhase(
       number: 2,
       name: 'Active',
@@ -322,6 +454,11 @@ final _mockProjects = <Project>[
     nameSecondary: 'سٹی سنٹر — پائپنگ اور والوز',
     siteLocation: 'Commercial District',
     clientName: 'Aldar Commercial',
+    buildingName: 'Retail Hub',
+    floorNumbers: 'Ground & Mezzanine',
+    startDate: _now.subtract(const Duration(days: 5)),
+    expectedEndDate: _now.add(const Duration(days: 60)),
+    siteNotes: 'High quality bronze valves required for pressure testing.',
     phase: const ProjectPhase(
       number: 1,
       name: 'Planning',
@@ -336,6 +473,11 @@ final _mockProjects = <Project>[
     nameSecondary: 'صنعتی زون — بوائلر روم',
     siteLocation: 'Zone F, Industrial Area',
     clientName: 'Mubadala',
+    buildingName: 'Boiler Building 2',
+    floorNumbers: 'Ground, Roof',
+    startDate: _now.subtract(const Duration(days: 90)),
+    expectedEndDate: _now.add(const Duration(days: 40)),
+    siteNotes: 'Currently on hold waiting for boilers delivery from Germany.',
     phase: const ProjectPhase(
       number: 3,
       name: 'On Hold',
