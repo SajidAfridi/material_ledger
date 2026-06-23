@@ -3,6 +3,7 @@ library;
 
 export 'app_buttons.dart';
 export 'bilingual_text.dart';
+export 'brand_logo.dart';
 export 'category_icons.dart';
 export 'currency_picker_sheet.dart';
 export 'language_picker_sheet.dart';

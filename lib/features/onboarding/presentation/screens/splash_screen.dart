@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/widgets/widgets.dart';
 
 /// Splash screen — The Architectural Ledger branding.
 ///
@@ -372,34 +373,7 @@ class _SplashScreenState extends State<SplashScreen>
       builder: (context, child) {
         return Opacity(opacity: _glassOpacity.value, child: child);
       },
-      child: Container(
-        width: 120,
-        height: 120,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.1),
-            width: 1.5,
-          ),
-        ),
-        child: Center(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.asset(
-              'assets/logo.png',
-              width: 80,
-              height: 80,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.inventory_2_rounded,
-                size: 48,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
+      child: const BrandLogo(size: 120),
     );
   }
 }

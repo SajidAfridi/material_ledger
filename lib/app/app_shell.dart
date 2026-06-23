@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants/constants.dart';
 import '../core/feedback/feedback_service.dart';
+import '../core/widgets/widgets.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/models/user_role.dart';
@@ -456,17 +457,7 @@ class _RailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logo = Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Icon(Icons.inventory_2_rounded, size: 20, color: Colors.white),
-      ),
-    );
+    const logo = BrandLogo(size: 40, shadow: false);
     if (!isExtended) return logo;
     return Row(
       mainAxisSize: MainAxisSize.min,

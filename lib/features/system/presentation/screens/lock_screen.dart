@@ -12,11 +12,12 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/session_provider.dart';
 
-/// Full-screen lock overlay. The OS biometric prompt (Face ID on iPhone,
-/// fingerprint on Android) fires automatically as soon as this appears and again
-/// on resume — the user doesn't have to tap anything. Device passcode is the
-/// built-in fallback; if the device has no secure method at all, locking is
-/// meaningless so we let the user through rather than trap them.
+/// Full-screen lock overlay shown on a cold start when App Lock is on. The OS
+/// biometric prompt (Face ID on iPhone, fingerprint on Android) fires
+/// automatically as soon as this appears — the user doesn't have to tap
+/// anything. Device passcode is the built-in fallback; if the device has no
+/// secure method at all, locking is meaningless so we let the user through
+/// rather than trap them.
 class LockScreen extends ConsumerStatefulWidget {
   const LockScreen({super.key});
 
@@ -43,9 +44,6 @@ class _LockScreenState extends ConsumerState<LockScreen> {
       _authing = true;
       _failed = false;
     });
-    // Tell the controller the sheet is up so the lifecycle bounce it causes
-    // doesn't re-lock us after a successful unlock.
-    controller.setAuthenticating(true);
     try {
       final ok = await _auth.authenticate(
         localizedReason: 'Unlock Yorks GodownPro',
@@ -70,7 +68,6 @@ class _LockScreenState extends ConsumerState<LockScreen> {
       }
       setState(() => _failed = true);
     } finally {
-      controller.setAuthenticating(false);
       if (mounted) setState(() => _authing = false);
     }
   }

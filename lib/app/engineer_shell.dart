@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants/constants.dart';
 import '../core/feedback/feedback_service.dart';
+import '../core/widgets/widgets.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/providers/language_provider.dart';
@@ -538,19 +539,7 @@ class _RailHeader extends StatelessWidget {
     return _buildLogo();
   }
 
-  Widget _buildLogo() {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Icon(Icons.inventory_2_rounded, size: 20, color: Colors.white),
-      ),
-    );
-  }
+  Widget _buildLogo() => const BrandLogo(size: 40, shadow: false);
 }
 
 // ─── Rail Standard Item ──────────────────────────────────────────

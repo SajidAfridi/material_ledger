@@ -223,30 +223,7 @@ class _LanguageSelectionScreenState
     return Column(
       children: [
         // App Logo
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: AppColors.primaryFixed.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                'assets/logo.png',
-                width: 48,
-                height: 48,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => Icon(
-                  Icons.inventory_2_rounded,
-                  size: 32,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-          ),
-        ),
+        const BrandLogo(size: 72),
         const SizedBox(height: AppSpacing.xl),
 
         // App Name

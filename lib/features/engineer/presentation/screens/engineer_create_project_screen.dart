@@ -136,8 +136,10 @@ class _EngineerCreateProjectScreenState
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: LayoutBuilder(
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: LayoutBuilder(
         builder: (context, constraints) {
           final isWide = constraints.maxWidth >= 840;
           final horizontalPadding = isWide
@@ -313,6 +315,7 @@ class _EngineerCreateProjectScreenState
             ),
           );
         },
+        ),
       ),
     );
   }

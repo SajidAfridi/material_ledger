@@ -93,9 +93,10 @@ class MaterialLedgerApp extends ConsumerWidget {
   }
 }
 
-/// Wraps the app content with the session-lock overlay + idle-interaction
-/// tracking. Kept as its own ConsumerWidget so it watches lock state in its own
-/// build, independent of the router rebuild.
+/// Overlays the session-lock screen above the app content. Kept as its own
+/// ConsumerWidget so it watches lock state in its own build, independent of the
+/// router rebuild. The lock only ever appears on a cold start (see
+/// [SessionLockController]); it never triggers on resume from background.
 class _AppChrome extends ConsumerWidget {
   const _AppChrome({required this.child});
   final Widget? child;
@@ -107,16 +108,11 @@ class _AppChrome extends ConsumerWidget {
     final loggedIn = ref.watch(isLoggedInProvider);
     final showLock = locked && enabled && loggedIn;
 
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) =>
-          ref.read(sessionLockedProvider.notifier).registerInteraction(),
-      child: Stack(
-        children: [
-          child ?? const SizedBox.shrink(),
-          if (showLock) const Positioned.fill(child: LockScreen()),
-        ],
-      ),
+    return Stack(
+      children: [
+        child ?? const SizedBox.shrink(),
+        if (showLock) const Positioned.fill(child: LockScreen()),
+      ],
     );
   }
 }

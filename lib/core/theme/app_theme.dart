@@ -166,6 +166,21 @@ abstract final class AppTheme {
         color: Colors.transparent,
       ),
 
+      // ─── SnackBar (floating so it never lifts the docked FAB) ──
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.inverseSurface,
+        contentTextStyle: AppTypography.bodyMedium.copyWith(
+          color: AppColors.onInverseSurface,
+        ),
+        actionTextColor: AppColors.primaryFixed,
+        elevation: 3,
+        insetPadding: const EdgeInsets.all(AppSpacing.md),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+      ),
+
       // ─── Dialog ────────────────────────────────────────
       dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surfaceContainerLowest,

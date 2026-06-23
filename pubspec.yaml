@@ -45,6 +45,29 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Icon generation (build-time only)
+  flutter_launcher_icons: ^0.14.4
+  image: ^4.3.0
+
+# App launcher icon: the Yorks "Y" monogram on a brand-blue tile (the full
+# emblem's ring text is illegible at icon sizes). Sources are generated from the
+# emblem by tool/gen_icons.dart, then this turns them into all platform sizes.
+flutter_launcher_icons:
+  image_path: "assets/branding/app_icon.png"
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  # Must equal the foreground's full-bleed blue (sampled from the emblem by
+  # gen_icons.dart) so the adaptive inset shows no two-tone border.
+  adaptive_icon_background: "#0038B8"
+  adaptive_icon_foreground: "assets/branding/app_icon_foreground.png"
+  web:
+    generate: false
+  windows:
+    generate: false
+  macos:
+    generate: false
 
 flutter:
   uses-material-design: true

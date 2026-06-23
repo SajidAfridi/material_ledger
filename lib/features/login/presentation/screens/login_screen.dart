@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/security/session_lock.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
@@ -73,6 +74,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     switch (result) {
       case SignInResult.ok:
       case SignInResult.mustChangePassword:
+        // The user just authenticated with credentials — clear any cold-start
+        // lock so they aren't immediately biometric-prompted on top of login.
+        ref.read(sessionLockedProvider.notifier).unlock();
         // Router redirects to the correct side based on the signed-in role
         // (and to change-password when required).
         context.go(RoutePaths.engineerHome);
@@ -152,26 +156,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Center(
       child: Column(
         children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Image.asset(
-                'assets/logo.png',
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.inventory_2_rounded,
-                  color: Colors.white,
-                  size: 42,
-                ),
-              ),
-            ),
-          ),
+          const BrandLogo(size: 96),
           const SizedBox(height: AppSpacing.xl),
           Text(
             'Yorks GodownPro',
@@ -299,26 +284,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // Logo + brand
                   Row(
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Image.asset(
-                            'assets/logo.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) => const Icon(
-                              Icons.inventory_2_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                        ),
-                      ),
+                      const BrandLogo(size: 44),
                       const SizedBox(width: AppSpacing.lg),
                       Text(
                         'Yorks GodownPro',

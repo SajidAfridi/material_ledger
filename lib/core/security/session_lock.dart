@@ -1,15 +1,12 @@
-import 'dart:async';
-
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../shared/providers/language_provider.dart';
 
 const _kLockEnabledKey = 'app_lock_enabled';
-const _kLockTimeoutKey = 'app_lock_timeout_min';
 
-/// User setting: lock the app after inactivity / on resume. Off by default.
+/// User setting: require a biometric / passcode unlock when the app is launched
+/// fresh (cold start). Off by default. Toggled from the engineer profile.
 final appLockEnabledProvider =
     StateNotifierProvider<_LockEnabledNotifier, bool>((ref) {
       return _LockEnabledNotifier(ref.watch(sharedPreferencesProvider));
@@ -25,82 +22,33 @@ class _LockEnabledNotifier extends StateNotifier<bool> {
   }
 }
 
-/// Idle timeout in minutes before the app auto-locks (default 5).
-final appLockTimeoutProvider =
-    StateNotifierProvider<_LockTimeoutNotifier, int>((ref) {
-      return _LockTimeoutNotifier(ref.watch(sharedPreferencesProvider));
-    });
-
-class _LockTimeoutNotifier extends StateNotifier<int> {
-  _LockTimeoutNotifier(this._prefs)
-    : super(_prefs.getInt(_kLockTimeoutKey) ?? 5);
-  final SharedPreferences _prefs;
-  Future<void> setMinutes(int m) async {
-    await _prefs.setInt(_kLockTimeoutKey, m);
-    state = m;
-  }
-}
-
-/// Whether the app is currently locked (must biometric/PIN-unlock to continue).
-/// Locks on resume-from-background and after the idle timeout, but only while
-/// the lock is enabled AND a user is signed in.
+/// Whether the app is currently locked behind biometric / device passcode.
+///
+/// **Policy: lock only on a cold start** — i.e. when the app process is launched
+/// fresh while App Lock is enabled and a session was restored. We deliberately
+/// do NOT lock on resume from background: switching to another app, or opening
+/// the receipt in the system preview, must never strand the user behind a lock.
+/// A fresh credential login calls [unlock], so the user is not biometric-prompted
+/// right after typing their password.
 final sessionLockedProvider =
     StateNotifierProvider<SessionLockController, bool>((ref) {
       return SessionLockController(ref);
     });
 
-class SessionLockController extends StateNotifier<bool>
-    with WidgetsBindingObserver {
+class SessionLockController extends StateNotifier<bool> {
   SessionLockController(this._ref) : super(false) {
-    WidgetsBinding.instance.addObserver(this);
+    // Cold start: begin locked if App Lock is enabled. The overlay only actually
+    // appears once a (restored) session is present — see `_AppChrome.showLock`.
+    if (_ref.read(appLockEnabledProvider)) state = true;
   }
 
   final Ref _ref;
-  Timer? _idleTimer;
-
-  /// True while the biometric sheet is being shown. The OS sheet briefly
-  /// backgrounds the app; without this guard the resulting lifecycle bounce
-  /// would re-lock immediately after a successful unlock (infinite re-prompt).
-  bool _authenticating = false;
-  void setAuthenticating(bool value) => _authenticating = value;
-
-  bool get _armed =>
-      _ref.read(appLockEnabledProvider) && _ref.read(isLoggedInProvider);
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Lock when the app is actually backgrounded — NOT on resume (a successful
-    // biometric unlock triggers a resume, which must not re-lock), and never
-    // while the biometric sheet itself is up.
-    if (_authenticating) return;
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      if (_armed) lock();
-    }
-  }
-
-  /// Called on user interaction to (re)start the idle countdown.
-  void registerInteraction() {
-    if (state) return; // already locked
-    _idleTimer?.cancel();
-    if (!_armed) return;
-    _idleTimer = Timer(Duration(minutes: _ref.read(appLockTimeoutProvider)), lock);
-  }
 
   void lock() {
-    _idleTimer?.cancel();
     if (!state) state = true;
   }
 
   void unlock() {
-    state = false;
-    registerInteraction();
-  }
-
-  @override
-  void dispose() {
-    _idleTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
+    if (state) state = false;
   }
 }
