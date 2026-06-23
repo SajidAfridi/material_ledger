@@ -11,6 +11,7 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/services/app_config_service.dart';
 import '../../../../shared/sync/connectivity_service.dart';
 
 /// Settings — App configuration.
@@ -180,7 +181,7 @@ class SettingsScreen extends ConsumerWidget {
             sliver: SliverToBoxAdapter(
               child: Center(
                 child: Text(
-                  'Yorks GodownPro v1.0.0',
+                  'Yorks GodownPro ${ref.watch(appVersionProvider).label}',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),

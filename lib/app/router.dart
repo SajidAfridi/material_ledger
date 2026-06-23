@@ -25,7 +25,9 @@ import '../features/engineer/presentation/screens/plan_review_screen.dart';
 import '../features/engineer/presentation/screens/request_detail_screen.dart';
 import '../features/engineer/presentation/screens/requests_list_screen.dart';
 import '../features/engineer/presentation/screens/return_screen.dart';
+import '../features/login/presentation/screens/change_password_screen.dart';
 import '../features/login/presentation/screens/login_screen.dart';
+import '../features/system/presentation/screens/gate_screens.dart';
 import '../features/finance/presentation/screens/finance_screen.dart';
 import '../features/inventory/presentation/screens/goods_receipt_screen.dart';
 import '../features/inventory/presentation/screens/inventory_screen.dart';
@@ -41,6 +43,9 @@ import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart'
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
+import '../shared/models/app_config.dart';
+import '../shared/models/app_user.dart';
+import '../shared/models/effective_permissions.dart';
 import '../shared/models/user_role.dart';
 import '../shared/screens/about_screen.dart';
 import '../shared/screens/activity_log_screen.dart';
@@ -56,6 +61,9 @@ abstract final class RoutePaths {
   static const String splash = '/splash';
   static const String languageSelection = '/language-selection';
   static const String login = '/login';
+  static const String changePassword = '/change-password';
+  static const String updateRequired = '/update-required';
+  static const String maintenance = '/maintenance';
 
   // ─── Tab roots (StatefulShellRoute branches) ───────────────
   static const String engineerHome = '/'; // Home (role-aware dashboard)
@@ -70,6 +78,7 @@ abstract final class RoutePaths {
   static const String engineerBrowse = '/browse';
   static const String engineerProjects = '/projects';
   static const String engineerCreateProject = '/projects/new';
+  static const String engineerProjectsView = '/my-projects';
   static const String engineerNewRequest = '/new-request';
   static const String engineerPickMaterials = '/pick-materials';
   static const String engineerProfile = '/profile';
@@ -165,7 +174,16 @@ Page<void> _framed(LocalKey key, Widget child) => _slide(
 
 /// Routes open to a [UserRole]. The in-app half of role-based access control
 /// (the Firestore Security Rules enforce the same server-side).
-bool _isAllowedForRole(String path, UserRole role) {
+bool _isAllowedForRole(String path, UserRole role, AppUser? user) {
+  // Grantable boundaries honor the signed-in user's per-user overrides
+  // (Admin can revoke finance/rentals/people/goods for an individual), falling
+  // back to the role default before login.
+  final canReceiveGoods = user?.effectiveCanReceiveGoods ?? role.canReceiveGoods;
+  final canViewFinance = user?.effectiveCanViewFinance ?? role.canViewFinance;
+  final canAccessRentals =
+      user?.effectiveCanAccessRentals ?? role.canAccessRentals;
+  final canAccessPeople = user?.effectiveCanAccessPeople ?? role.canAccessPeople;
+
   // Reached from the profile menu / shared across every role.
   const sharedAll = {
     RoutePaths.engineerHome,
@@ -192,12 +210,12 @@ bool _isAllowedForRole(String path, UserRole role) {
       path == RoutePaths.adminRequests) {
     return role.isAdmin;
   }
-  if (path == RoutePaths.goodsReceipt) return role.canReceiveGoods;
-  if (path == RoutePaths.finance) return role.canViewFinance;
+  if (path == RoutePaths.goodsReceipt) return canReceiveGoods;
+  if (path == RoutePaths.finance) return canViewFinance;
 
   // Modules with their own tab + detail screens.
-  if (path.startsWith('/rentals')) return role.canAccessRentals;
-  if (path.startsWith('/people')) return role.canAccessPeople;
+  if (path.startsWith('/rentals')) return canAccessRentals;
+  if (path.startsWith('/people')) return canAccessPeople;
 
   // Remaining office screens (inventory, transactions, procurement, dispatch,
   // plan-review) — non-engineer roles only.
@@ -214,11 +232,13 @@ bool _isAllowedForRole(String path, UserRole role) {
 }
 
 /// Creates the app [GoRouter].
-/// [isOnboarded], [isLoggedIn] and [role] drive redirect / access logic.
+/// [isOnboarded], [isLoggedIn], [role] and [user] drive redirect / access logic.
 GoRouter createAppRouter({
   required bool isOnboarded,
   required bool isLoggedIn,
   required UserRole role,
+  AppUser? user,
+  AppGate gate = AppGate.none,
 }) {
   // Engineers keep their original mobile shell; office roles use the new hub
   // shell. The router is rebuilt whenever the role changes.
@@ -229,6 +249,21 @@ GoRouter createAppRouter({
       final path = state.uri.path;
 
       if (path == RoutePaths.splash) return null;
+
+      // Hard global gates block everything (incl. login) until cleared.
+      if (gate == AppGate.updateRequired) {
+        return path == RoutePaths.updateRequired
+            ? null
+            : RoutePaths.updateRequired;
+      }
+      if (gate == AppGate.maintenance) {
+        return path == RoutePaths.maintenance ? null : RoutePaths.maintenance;
+      }
+      // Gate cleared but still sitting on a gate screen → move on.
+      if (path == RoutePaths.updateRequired ||
+          path == RoutePaths.maintenance) {
+        return RoutePaths.engineerHome;
+      }
 
       // Force onboarding first (language selection).
       if (!isOnboarded) {
@@ -247,6 +282,17 @@ GoRouter createAppRouter({
         return RoutePaths.engineerHome;
       }
 
+      // Force a password change for admin-created / reset accounts before they
+      // can use anything else.
+      if (user != null && user.mustChangePassword) {
+        return path == RoutePaths.changePassword
+            ? null
+            : RoutePaths.changePassword;
+      }
+      if (path == RoutePaths.changePassword) {
+        return RoutePaths.engineerHome; // nothing to change → leave
+      }
+
       // Retire the old hub locations.
       if (path == '/admin') return RoutePaths.engineerHome;
       if (path == RoutePaths.adminPanel) {
@@ -254,7 +300,7 @@ GoRouter createAppRouter({
       }
 
       // Role-based access guard for module routes → Home if not allowed.
-      if (!_isAllowedForRole(path, role)) return RoutePaths.engineerHome;
+      if (!_isAllowedForRole(path, role, user)) return RoutePaths.engineerHome;
 
       return null;
     },
@@ -269,6 +315,21 @@ GoRouter createAppRouter({
         path: RoutePaths.languageSelection,
         pageBuilder: (context, state) =>
             _fade(state.pageKey, const LanguageSelectionScreen(), ms: 500),
+      ),
+      GoRoute(
+        path: RoutePaths.changePassword,
+        pageBuilder: (context, state) =>
+            _fade(state.pageKey, const ChangePasswordScreen(), ms: 300),
+      ),
+      GoRoute(
+        path: RoutePaths.updateRequired,
+        pageBuilder: (context, state) =>
+            _fade(state.pageKey, const UpdateRequiredScreen(), ms: 300),
+      ),
+      GoRoute(
+        path: RoutePaths.maintenance,
+        pageBuilder: (context, state) =>
+            _fade(state.pageKey, const MaintenanceScreen(), ms: 300),
       ),
       GoRoute(
         path: RoutePaths.login,
@@ -294,15 +355,6 @@ GoRouter createAppRouter({
                   path: RoutePaths.engineerHome,
                   pageBuilder: (context, state) =>
                       const NoTransitionPage(child: EngineerHomeScreen()),
-                  routes: [
-                    GoRoute(
-                      path: 'new-request', // → /new-request
-                      pageBuilder: (context, state) => _slide(
-                        state.pageKey,
-                        const EngineerNewRequestScreen(),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -321,15 +373,6 @@ GoRouter createAppRouter({
                   path: RoutePaths.engineerProjects,
                   pageBuilder: (context, state) =>
                       const NoTransitionPage(child: EngineerProjectsScreen()),
-                  routes: [
-                    GoRoute(
-                      path: 'new', // → /projects/new
-                      pageBuilder: (context, state) => _slide(
-                        state.pageKey,
-                        const EngineerCreateProjectScreen(),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -405,6 +448,28 @@ GoRouter createAppRouter({
           pageBuilder: (context, state) =>
               _framed(state.pageKey, const EngineerProfileScreen()),
         ),
+
+      // ─── Engineer create-flows (full-screen over the shell) ─────────
+      // Top-level (not nested in a tab branch) so pushing them never activates
+      // a bottom-nav tab or flickers — they overlay the shell with their own
+      // back, and the IndexedStack branches keep their state underneath.
+      GoRoute(
+        path: RoutePaths.engineerNewRequest,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const EngineerNewRequestScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.engineerCreateProject,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const EngineerCreateProjectScreen()),
+      ),
+      // Standalone projects view (reached from the profile quick links) — the
+      // tab screen has no Scaffold of its own, so frame it for a back button.
+      GoRoute(
+        path: RoutePaths.engineerProjectsView,
+        pageBuilder: (context, state) =>
+            _framed(state.pageKey, const EngineerProjectsScreen()),
+      ),
 
       // ─── Shared detail/workflow screens (full-screen, all roles) ─────
       // Material picker — pushed ON TOP of the New Request screen so the

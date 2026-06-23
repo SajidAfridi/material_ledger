@@ -1,7 +1,7 @@
 package com.example.material_ledger
 
 import android.view.KeyEvent
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -11,8 +11,11 @@ import io.flutter.plugin.common.MethodChannel
  * a programmable side key as KEYCODE_CAMERA or a vendor button code; map the
  * exact code for your fleet here. The Dart side listens on the
  * `material_ledger/hardware` channel (see HardwareActionService).
+ *
+ * Extends FlutterFragmentActivity (not FlutterActivity) because local_auth's
+ * biometric prompt requires a FragmentActivity host.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private var channel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

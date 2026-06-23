@@ -8,8 +8,8 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/rent_payment.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/rentals_provider.dart';
-import '../../../../shared/providers/session_provider.dart';
 import '../widgets/record_payment_sheet.dart';
 
 /// Detail of one rental unit — tenant/lease info plus the full payment history.
@@ -22,7 +22,7 @@ class RentalUnitDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
     final unit = ref.watch(rentalUnitsProvider.notifier).byId(unitId);
-    final canWrite = ref.watch(currentRoleProvider).canWriteRentals;
+    final canWrite = ref.watch(canWriteRentalsProvider);
 
     if (unit == null) {
       return Scaffold(

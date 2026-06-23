@@ -482,7 +482,8 @@ class _QuickLinksSection extends StatelessWidget {
           _QuickLink(
             icon: Icons.folder_open_outlined,
             label: AppStrings.myProjects.primary,
-            onTap: () => context.go(RoutePaths.engineerProjects),
+            // Push the standalone (framed) projects view so back returns here.
+            onTap: () => context.push(RoutePaths.engineerProjectsView),
           ),
           const Gap(AppSpacing.xs),
           _QuickLink(

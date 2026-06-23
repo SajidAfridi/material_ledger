@@ -183,7 +183,7 @@ class RentPaymentsNotifier extends StateNotifier<List<RentPayment>> {
     required String recordedBy,
   }) async {
     final idx = state.indexWhere(
-      (p) => p.unitId == unitId && p.periodMonth == periodMonth,
+      (p) => p.unitId == unitId && p.periodMonth == periodMonth && !p.isVoided,
     );
     late RentPayment result;
     if (idx >= 0) {
@@ -226,6 +226,31 @@ class RentPaymentsNotifier extends StateNotifier<List<RentPayment>> {
       transactional: true,
     );
     return result;
+  }
+
+  /// Void a payment record (a correction). It's kept in history for the audit
+  /// trail but excluded from all balances; recording again for the same period
+  /// then creates a fresh record.
+  Future<void> voidPayment(String id, {required String reason}) async {
+    final now = DateTime.now();
+    RentPayment? voided;
+    state = [
+      for (final p in state)
+        if (p.id == id && !p.isVoided)
+          voided = p.copyWith(voidedAt: now, voidReason: reason.trim())
+        else
+          p,
+    ];
+    if (voided == null) return;
+    await _store.writeAll(state);
+    await _ref.enqueueSync(
+      collection: 'rentPayments',
+      docId: voided.id,
+      kind: 'rentPayment.void',
+      label: 'Rent payment',
+      payload: voided.toJson(),
+      transactional: true,
+    );
   }
 
   static List<RentPayment> _seedPayments() {
@@ -285,12 +310,12 @@ final unitRentStatusProvider = Provider.family<RentStatus, String>((
 
   // Any unpaid past period makes the unit overdue.
   for (final p in payments) {
-    if (p.unitId != unitId) continue;
+    if (p.unitId != unitId || p.isVoided) continue;
     if (p.statusAsOf(now) == RentStatus.overdue) return RentStatus.overdue;
   }
   // Otherwise reflect this month's record.
   for (final p in payments) {
-    if (p.unitId == unitId && p.periodMonth == thisMonth) {
+    if (p.unitId == unitId && p.periodMonth == thisMonth && !p.isVoided) {
       return p.statusAsOf(now);
     }
   }
@@ -330,6 +355,7 @@ final rentalsSummaryProvider = Provider<RentalsSummary>((ref) {
   var collected = 0.0;
   var overdue = 0.0;
   for (final p in payments) {
+    if (p.isVoided) continue;
     if (p.periodMonth == thisMonth) collected += p.amountPaidAED;
     if (p.statusAsOf(now) == RentStatus.overdue) overdue += p.outstandingAED;
   }

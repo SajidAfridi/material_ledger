@@ -23,6 +23,7 @@ import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/sync/sync_indicators.dart';
+import '../../../../shared/widgets/request_comments_section.dart';
 
 /// Procurement dispatches a Phase-2 request — full or partial per line, or puts
 /// it on hold. Only items that are actually in stock can be dispatched (stock is
@@ -60,24 +61,28 @@ class _ProcurementDispatchScreenState
 
   String _fmt(double v) => v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 1);
 
-  /// On-hand stock dispatchable for a line (capped at what's still outstanding).
-  double _dispatchableMax(MaterialItem? item, RequestLineItem line) {
-    if (item == null) return 0;
-    return line.qtyOutstanding.clamp(0, item.quantity).toDouble();
-  }
+  /// A line can ship only when its full outstanding quantity is on hand. Short
+  /// or un-stocked lines are blocked — procurement must arrange stock first (or
+  /// the engineer reduces the request). No partial-of-shortfall sends.
+  bool _fullyAvailable(MaterialItem? item, RequestLineItem line) =>
+      item != null &&
+      line.qtyOutstanding > 0 &&
+      item.quantity >= line.qtyOutstanding;
 
   Future<void> _dispatch(MaterialRequest req, List<MaterialItem?> items) async {
     final qtys = <double>[];
     for (var i = 0; i < req.lineItems.length; i++) {
       final line = req.lineItems[i];
       final item = items[i];
-      if (item == null) {
-        qtys.add(0); // not stocked → can't dispatch
+      if (!_fullyAvailable(item, line)) {
+        qtys.add(0); // blocked — short / un-stocked, can't dispatch
         continue;
       }
-      final max = _dispatchableMax(item, line);
-      final entered = double.tryParse(_controllerFor(line, max).text.trim()) ?? 0;
-      qtys.add(entered.clamp(0, max).toDouble());
+      final entered = double.tryParse(
+            _controllerFor(line, line.qtyOutstanding).text.trim(),
+          ) ??
+          0;
+      qtys.add(entered.clamp(0, line.qtyOutstanding).toDouble());
     }
     final count = qtys.where((q) => q > 0).length;
     if (count == 0) {
@@ -119,15 +124,28 @@ class _ProcurementDispatchScreenState
     context.pop();
   }
 
-  /// Receive a custom / not-yet-stocked line into inventory: create the material,
-  /// stock it via a goods receipt, then re-link the request line to it so it
-  /// becomes dispatchable.
+  /// Arrange stock for a blocked line so it becomes dispatchable. Two cases:
+  ///  • [existing] == null (custom / never stocked): create the material, stock
+  ///    it via a goods receipt, then re-link the request line onto it.
+  ///  • [existing] != null (real item, just short): top it up with a goods
+  ///    receipt — no new material, the line already points at it.
+  /// The dialog defaults to the exact shortfall so one receipt clears the block.
   Future<void> _receiveIntoInventory(
     MaterialRequest req,
     RequestLineItem line,
+    MaterialItem? existing,
   ) async {
-    final qtyController = TextEditingController(text: _fmt(line.qtyOutstanding));
-    final costController = TextEditingController();
+    final shortfall = existing == null
+        ? line.qtyOutstanding
+        : (line.qtyOutstanding - existing.quantity)
+              .clamp(0, double.infinity)
+              .toDouble();
+    final qtyController = TextEditingController(text: _fmt(shortfall));
+    final costController = TextEditingController(
+      text: (existing != null && existing.unitPrice > 0)
+          ? _fmt(existing.unitPrice)
+          : '',
+    );
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -181,32 +199,46 @@ class _ProcurementDispatchScreenState
     costController.dispose();
     if (result != true || qty <= 0 || !mounted) return;
 
-    // 1) Create the material, 2) stock it via a goods receipt, 3) re-link.
-    final newId = await ref.read(materialsProvider.notifier).addMaterial(
-          name: line.materialName,
-          urduName: line.materialNameSecondary,
-          category: MaterialCategory.other,
-          unit: MaterialUnit.fromSymbol(line.unitSymbol),
-          quantity: 0,
-          unitPrice: cost,
-        );
-    await ref.read(goodsReceiptsProvider.notifier).recordReceipt(
-          materialId: newId,
-          materialName: line.materialName,
-          quantity: qty,
-          unitSymbol: line.unitSymbol,
-          unitCostAED: cost,
-          supplier: AppStrings.customItem.primary,
-          receivedBy: ref.read(actorNameProvider),
-        );
-    await ref.read(materialRequestsProvider.notifier).relinkLine(
-          req.id,
-          line.materialId,
-          newMaterialId: newId,
-          newName: line.materialName,
-        );
+    if (existing != null) {
+      // Real item, just short — top up its stock with a goods receipt. The line
+      // already points at it, so no create/relink needed.
+      await ref.read(goodsReceiptsProvider.notifier).recordReceipt(
+            materialId: existing.id,
+            materialName: existing.name,
+            quantity: qty,
+            unitSymbol: line.unitSymbol,
+            unitCostAED: cost,
+            supplier: AppStrings.procurement.primary,
+            receivedBy: ref.read(actorNameProvider),
+          );
+    } else {
+      // Custom / never stocked — create the material, stock it, then re-link.
+      final newId = await ref.read(materialsProvider.notifier).addMaterial(
+            name: line.materialName,
+            urduName: line.materialNameSecondary,
+            category: MaterialCategory.other,
+            unit: MaterialUnit.fromSymbol(line.unitSymbol),
+            quantity: 0,
+            unitPrice: cost,
+          );
+      await ref.read(goodsReceiptsProvider.notifier).recordReceipt(
+            materialId: newId,
+            materialName: line.materialName,
+            quantity: qty,
+            unitSymbol: line.unitSymbol,
+            unitCostAED: cost,
+            supplier: AppStrings.customItem.primary,
+            receivedBy: ref.read(actorNameProvider),
+          );
+      await ref.read(materialRequestsProvider.notifier).relinkLine(
+            req.id,
+            line.materialId,
+            newMaterialId: newId,
+            newName: line.materialName,
+          );
+    }
     await ref.logAudit(
-      action: 'Custom item received into inventory',
+      action: 'Stock arranged for request',
       module: AuditModule.materials,
       refId: req.id,
       detail: '${line.materialName} ×${_fmt(qty)} ${line.unitSymbol}',
@@ -246,6 +278,20 @@ class _ProcurementDispatchScreenState
     controller.dispose();
     if (note == null) return;
     await ref.read(materialRequestsProvider.notifier).putOnHold(req.id, note);
+    // Alert the engineer so they can discuss / edit the request (e.g. when stock
+    // is short), deep-linked to the request detail.
+    final lang = ref.read(languageProvider);
+    await ref.read(notificationsProvider.notifier).add(
+          type: NotificationType.request,
+          title: AppStrings.notifRequestHeldTitle.primary,
+          titleSecondary: AppStrings.notifRequestHeldTitle.secondary(lang),
+          body: note.trim().isEmpty
+              ? req.projectName
+              : '${req.projectName} · $note',
+          refId: req.id,
+          route: RoutePaths.requestDetailPath(req.id),
+          audience: UserRole.engineer.name,
+        );
     await ref.logAudit(
       action: 'Request put on hold',
       module: AuditModule.materials,
@@ -320,10 +366,10 @@ class _ProcurementDispatchScreenState
     for (var i = 0; i < req.lineItems.length; i++) {
       final line = req.lineItems[i];
       if (line.qtyOutstanding <= 0) continue;
-      if (items[i] == null) {
-        needStockCount++;
-      } else if (_dispatchableMax(items[i], line) > 0) {
+      if (_fullyAvailable(items[i], line)) {
         readyCount++;
+      } else {
+        needStockCount++; // short or un-stocked → blocked until arranged
       }
     }
     final anyDispatchable = readyCount > 0;
@@ -369,17 +415,28 @@ class _ProcurementDispatchScreenState
                       _DispatchLine(
                         line: req.lineItems[i],
                         item: items[i],
-                        controller: items[i] == null
-                            ? null
-                            : _controllerFor(
+                        controller: _fullyAvailable(items[i], req.lineItems[i])
+                            ? _controllerFor(
                                 req.lineItems[i],
-                                _dispatchableMax(items[i], req.lineItems[i]),
-                              ),
-                        onReceive: () =>
-                            _receiveIntoInventory(req, req.lineItems[i]),
+                                req.lineItems[i].qtyOutstanding,
+                              )
+                            : null,
+                        onReceive: () => _receiveIntoInventory(
+                          req,
+                          req.lineItems[i],
+                          items[i],
+                        ),
                       ),
                       const Gap(AppSpacing.listItemGap),
                     ],
+                    const Gap(AppSpacing.lg),
+                    // Discuss short stock / changes with the engineer.
+                    RequestCommentsSection(
+                      requestId: req.id,
+                      authorRole: 'Procurement',
+                      notifyAudience: UserRole.engineer.name,
+                      notifyRoute: RoutePaths.requestDetailPath(req.id),
+                    ),
                     const Gap(AppSpacing.xxl),
                   ],
                 ),
@@ -516,7 +573,7 @@ class _DispatchLine extends StatelessWidget {
               else if (onHand <= 0)
                 StatusChip.error(AppStrings.outOfStock.primary)
               else if (onHand < outstanding)
-                StatusChip.warning(AppStrings.lowStock.primary)
+                StatusChip.warning(AppStrings.insufficientStock.primary)
               else
                 StatusChip.success(AppStrings.inStock.primary),
             ],
@@ -539,15 +596,30 @@ class _DispatchLine extends StatelessWidget {
             ),
           ],
           const Gap(AppSpacing.md),
-          if (!stocked)
-            // Custom / un-stocked: must be received into inventory first.
-            SizedBox(
-              width: double.infinity,
-              child: SecondaryButton(
-                label: AppStrings.receiveIntoInventory.primary,
-                icon: Icons.move_to_inbox_outlined,
-                onPressed: onReceive,
-              ),
+          if (!(stocked && onHand >= outstanding))
+            // Blocked — not stocked, out of stock, or short of the full
+            // outstanding qty. No dispatch field; offer the one-tap arrange path.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (stocked)
+                  Text(
+                    '${AppStrings.available.primary}: ${_fmt(onHand)} / ${_fmt(outstanding)} ${line.unitSymbol}',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                const Gap(AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
+                  child: SecondaryButton(
+                    label: AppStrings.receiveIntoInventory.primary,
+                    icon: Icons.move_to_inbox_outlined,
+                    onPressed: onReceive,
+                  ),
+                ),
+              ],
             )
           else
             Row(
@@ -563,7 +635,6 @@ class _DispatchLine extends StatelessWidget {
                   width: 88,
                   child: TextField(
                     controller: controller,
-                    enabled: onHand > 0,
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),

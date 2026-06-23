@@ -11,6 +11,7 @@ import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 
 /// Materials tab hub (IA restructure). A landing page that routes to the
@@ -24,6 +25,9 @@ class MaterialsHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
     final role = ref.watch(currentRoleProvider);
+    final canReceiveGoods = ref.watch(canReceiveGoodsProvider);
+    final canViewFinance = ref.watch(canViewFinanceProvider);
+    final canSeeCost = ref.watch(canSeeCostProvider);
     final currency = ref.watch(currencyProvider);
     final stockValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
@@ -75,7 +79,7 @@ class MaterialsHubScreen extends ConsumerWidget {
           onTap: () => context.push(RoutePaths.engineerNewRequest),
         ),
       // Goods receipt (stock in) — procurement / admin.
-      if (role.canReceiveGoods)
+      if (canReceiveGoods)
         _NavCard(
           icon: Icons.move_to_inbox_outlined,
           title: AppStrings.goodsReceipt.primary,
@@ -95,7 +99,7 @@ class MaterialsHubScreen extends ConsumerWidget {
           subtitle: AppStrings.transactions.secondary(lang),
           onTap: () => context.push(RoutePaths.transactions),
         ),
-      if (role.canViewFinance)
+      if (canViewFinance)
         _NavCard(
           icon: Icons.bar_chart_rounded,
           title: AppStrings.projectCosts.primary,
@@ -134,7 +138,7 @@ class MaterialsHubScreen extends ConsumerWidget {
               Expanded(
                 child: _MiniStat(
                   label: AppStrings.totalStockValue.primary,
-                  value: role.canSeeCost ? currency.format(stockValue) : '— — —',
+                  value: canSeeCost ? currency.format(stockValue) : '— — —',
                   icon: Icons.inventory_2_outlined,
                 ),
               ),

@@ -4,12 +4,15 @@ import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/constants.dart';
+import '../../shared/models/app_user.dart';
 import '../../shared/models/user_role.dart';
+import '../../shared/providers/language_provider.dart';
 import '../../shared/providers/session_provider.dart';
+import '../../shared/providers/users_provider.dart';
 
-/// Dev-only role switcher. Stands in for real auth: pick the role to operate as.
-/// Reachable from both the engineer profile and the office settings so any role
-/// can switch to any other while testing.
+/// Dev-only quick sign-in. Real auth now drives the role from the signed-in
+/// user, so this just signs in as the first active seed account of the chosen
+/// role — a testing shortcut. Shown only in debug builds.
 class RolePickerSheet extends ConsumerWidget {
   const RolePickerSheet({super.key});
 
@@ -44,7 +47,7 @@ class RolePickerSheet extends ConsumerWidget {
                 AppSpacing.md,
               ),
               child: Text(
-                'Switch role (development)',
+                'Sign in as (development)',
                 style: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -55,7 +58,18 @@ class RolePickerSheet extends ConsumerWidget {
             for (final r in UserRole.values)
               InkWell(
                 onTap: () {
-                  ref.read(currentRoleProvider.notifier).setRole(r);
+                  // Dev shortcut: open a session as the first active account
+                  // with this role (bypasses the password screen).
+                  AppUser? target;
+                  for (final u in ref.read(usersProvider)) {
+                    if (u.role == r && u.active) {
+                      target = u;
+                      break;
+                    }
+                  }
+                  if (target != null) {
+                    ref.read(authSessionProvider.notifier).setUser(target.id);
+                  }
                   Navigator.pop(context);
                 },
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),

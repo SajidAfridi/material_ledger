@@ -11,6 +11,7 @@ import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
 import '../shared/models/user_role.dart';
 import '../shared/providers/language_provider.dart';
+import '../shared/providers/permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/sync/sync_status_banner.dart';
 import 'router.dart';
@@ -34,7 +35,11 @@ class AppShell extends ConsumerWidget {
   static const int _people = 3;
   static const int _more = 4;
 
-  List<_Destination> _destinationsFor(UserRole role) => [
+  List<_Destination> _destinationsFor(
+    UserRole role, {
+    required bool canRentals,
+    required bool canPeople,
+  }) => [
     const _Destination(
       branch: _home,
       icon: Icons.home_outlined,
@@ -47,14 +52,14 @@ class AppShell extends ConsumerWidget {
       activeIcon: Icons.inventory_2_rounded,
       label: AppStrings.materials,
     ),
-    if (role.canAccessRentals)
+    if (canRentals)
       const _Destination(
         branch: _rentals,
         icon: Icons.storefront_outlined,
         activeIcon: Icons.storefront_rounded,
         label: AppStrings.rentalShops,
       ),
-    if (role.canAccessPeople)
+    if (canPeople)
       const _Destination(
         branch: _people,
         icon: Icons.groups_outlined,
@@ -83,7 +88,11 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(currentRoleProvider);
     final lang = ref.watch(languageProvider);
-    final destinations = _destinationsFor(role);
+    final destinations = _destinationsFor(
+      role,
+      canRentals: ref.watch(canAccessRentalsProvider),
+      canPeople: ref.watch(canAccessPeopleProvider),
+    );
     final screenWidth = MediaQuery.sizeOf(context).width;
     final useRail = screenWidth >= 840;
 
@@ -133,7 +142,7 @@ class AppShell extends ConsumerWidget {
       ),
       floatingActionButton: showNewRequest
           ? _CenterAddButton(
-              onTap: () => context.go(RoutePaths.engineerNewRequest),
+              onTap: () => context.push(RoutePaths.engineerNewRequest),
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -418,7 +427,7 @@ class _LedgerRail extends StatelessWidget {
                 child: _RailNewRequestButton(
                   isExtended: isExtended,
                   onTap: () =>
-                      GoRouter.of(context).go(RoutePaths.engineerNewRequest),
+                      GoRouter.of(context).push(RoutePaths.engineerNewRequest),
                 ),
               ),
             const Spacer(),

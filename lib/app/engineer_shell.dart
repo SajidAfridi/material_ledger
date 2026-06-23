@@ -97,7 +97,9 @@ class EngineerShellScreen extends ConsumerWidget {
         isActive: onNewRequest,
         onTap: () {
           AppFeedback.primaryAction();
-          context.go(RoutePaths.engineerNewRequest);
+          // Push (not go) over the shell — no tab activates, no flicker, and
+          // the back button returns here.
+          context.push(RoutePaths.engineerNewRequest);
         },
       ),
       // Centre-docked but lowered — a real FAB location (not a Transform), so
@@ -453,7 +455,7 @@ class _LedgerNavRail extends StatelessWidget {
                 lang: lang,
                 onTap: () {
                   AppFeedback.primaryAction();
-                  GoRouter.of(context).go(RoutePaths.engineerNewRequest);
+                  GoRouter.of(context).push(RoutePaths.engineerNewRequest);
                 },
               ),
             ),

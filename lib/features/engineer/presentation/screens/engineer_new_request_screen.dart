@@ -304,8 +304,10 @@ class _EngineerNewRequestScreenState
     final selectedProject = ref.watch(selectedProjectProvider);
     final hasDraft = selectedProject != null || lineItems.isNotEmpty;
 
-    return SafeArea(
-      child: CustomScrollView(
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: CustomScrollView(
         slivers: [
           // ─── Title ─────────────────────────────────────
           SliverPadding(
@@ -572,6 +574,7 @@ class _EngineerNewRequestScreenState
 
           const SliverGap(AppSpacing.colossal),
         ],
+      ),
       ),
     );
   }

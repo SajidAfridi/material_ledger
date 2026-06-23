@@ -9,6 +9,7 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 
 /// Common login screen for Engineer, Office Management, and Admin roles.
 /// Responsive: mobile shows a single-column layout;
@@ -62,25 +63,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    try {
-      await ref.read(authSessionProvider.notifier).login();
-      if (!mounted) return;
-      context.go(RoutePaths.engineerHome);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login failed. Please try again.'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    final result = await ref.read(authControllerProvider).signIn(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    switch (result) {
+      case SignInResult.ok:
+      case SignInResult.mustChangePassword:
+        // Router redirects to the correct side based on the signed-in role
+        // (and to change-password when required).
+        context.go(RoutePaths.engineerHome);
+      case SignInResult.invalidCredentials:
+        _showLoginError('Invalid email or password.');
+      case SignInResult.deactivated:
+        _showLoginError(
+          'This account has been deactivated. Contact your administrator.',
+        );
     }
+  }
+
+  void _showLoginError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+      ),
+    );
   }
 
   @override

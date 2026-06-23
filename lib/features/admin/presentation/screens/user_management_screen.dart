@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -8,10 +10,21 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/app_user.dart';
 import '../../../../shared/models/audit_log.dart';
+import '../../../../shared/models/effective_permissions.dart';
 import '../../../../shared/models/user_role.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/users_provider.dart';
+
+/// The per-user capabilities an Admin can grant/revoke, with display labels.
+const _managedPermissions = <(PermissionKey, String)>[
+  (PermissionKey.cost, 'See unit cost'),
+  (PermissionKey.finance, 'Financial reports'),
+  (PermissionKey.salary, 'Salary & HR documents'),
+  (PermissionKey.rentals, 'Rentals module'),
+  (PermissionKey.people, 'People / HR module'),
+  (PermissionKey.goods, 'Receive goods (stock-in)'),
+];
 
 /// Admin user management & access control (SRS §4.7). Create / edit /
 /// deactivate accounts, assign roles, reset passwords, grant or revoke
@@ -175,9 +188,10 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
           fullName: _nameController.text.trim(),
           email: _emailController.text.trim(),
           role: _role,
+          password: _passwordController.text,
         );
-    // The initial password is set in the auth provider (Firebase Admin SDK);
-    // it is never stored in app data (SRS — passwords hashed in Auth only).
+    // Stored as a salted local hash now (the user must change it on first
+    // sign-in); becomes a Firebase Auth credential when Firebase lands.
     await ref.logAudit(
       action: 'User created',
       module: AuditModule.platform,
@@ -335,6 +349,12 @@ class _ManageUserSheet extends ConsumerWidget {
     }
 
     Future<void> resetPassword() async {
+      // Set a temporary password the admin can share; the user must change it on
+      // first sign-in. (With Firebase this becomes an Auth reset link.)
+      final temp = 'Temp${1000 + Random().nextInt(9000)}';
+      await ref
+          .read(usersProvider.notifier)
+          .setPassword(user.id, temp, temporary: true);
       await ref.logAudit(
         action: 'Password reset',
         module: AuditModule.platform,
@@ -343,9 +363,94 @@ class _ManageUserSheet extends ConsumerWidget {
       );
       if (!context.mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStrings.passwordResetSent.primary)),
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          ),
+          title: const Text('Temporary password'),
+          content: Text(
+            'Share this with ${user.fullName}. They must change it on first '
+            'sign-in:\n\n$temp',
+            style: AppTypography.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(AppStrings.done.primary),
+            ),
+          ],
+        ),
       );
+    }
+
+    Future<void> setRole(UserRole role) async {
+      if (role == user.role) return;
+      await ref.read(usersProvider.notifier).setRole(user.id, role);
+      await ref.logAudit(
+        action: 'User role changed',
+        module: AuditModule.platform,
+        refId: user.id,
+        detail: '${user.fullName} → ${role.label}',
+      );
+    }
+
+    Future<void> setOverride(PermissionKey key, bool value) async {
+      // Toggling back to the role default clears the override entirely.
+      final next = value == user.roleDefaultFor(key) ? null : value;
+      await ref.read(usersProvider.notifier).setPermissionOverride(
+            user.id,
+            key,
+            next,
+          );
+      await ref.logAudit(
+        action: 'Permission updated',
+        module: AuditModule.platform,
+        refId: user.id,
+        detail: '${user.fullName} · $key = ${next ?? 'role default'}',
+      );
+    }
+
+    Future<void> deleteUser() async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          ),
+          title: const Text('Delete user?'),
+          content: Text(
+            'Permanently remove ${user.fullName}. This cannot be undone.',
+            style: AppTypography.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(AppStrings.cancel.primary),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                AppStrings.delete.primary,
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      await ref.read(usersProvider.notifier).deleteUser(user.id);
+      await ref.logAudit(
+        action: 'User deleted',
+        module: AuditModule.platform,
+        refId: user.id,
+        detail: user.fullName,
+      );
+      if (!context.mounted) return;
+      Navigator.pop(context);
     }
 
     return Container(
@@ -357,7 +462,7 @@ class _ManageUserSheet extends ConsumerWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xxl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -406,11 +511,72 @@ class _ManageUserSheet extends ConsumerWidget {
                   ),
                   activeThumbColor: AppColors.primary,
                 ),
-              const Gap(AppSpacing.md),
+
+              // ─── Role ────────────────────────────────────────
+              const Gap(AppSpacing.lg),
+              Text('Role', style: AppTypography.titleSmall),
+              const Gap(AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final r in UserRole.values)
+                    _RoleChip(
+                      label: r.label,
+                      selected: r == user.role,
+                      onTap: () => setRole(r),
+                    ),
+                ],
+              ),
+
+              // ─── Permissions (per-user overrides) ────────────
+              if (user.role != UserRole.admin) ...[
+                const Gap(AppSpacing.lg),
+                Text('Permissions', style: AppTypography.titleSmall),
+                Text(
+                  'Override what this person can access. Matches the role '
+                  'default until you change it.',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                for (final (key, label) in _managedPermissions)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: user.effectiveFor(key),
+                    onChanged: (v) => setOverride(key, v),
+                    title: Text(label, style: AppTypography.bodyLarge),
+                    subtitle: Text(
+                      user.overrideFor(key) == null
+                          ? 'Role default'
+                          : 'Custom for this user',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: user.overrideFor(key) == null
+                            ? AppColors.onSurfaceVariant
+                            : AppColors.primary,
+                      ),
+                    ),
+                    activeThumbColor: AppColors.primary,
+                  ),
+              ],
+
+              const Gap(AppSpacing.lg),
               SecondaryButton(
                 label: AppStrings.resetPassword.primary,
                 icon: Icons.lock_reset_rounded,
                 onPressed: resetPassword,
+              ),
+              const Gap(AppSpacing.sm),
+              TextButton.icon(
+                onPressed: deleteUser,
+                icon: const Icon(Icons.delete_outline_rounded,
+                    color: AppColors.error),
+                label: Text(
+                  'Delete user',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
               ),
               const Gap(AppSpacing.md),
             ],

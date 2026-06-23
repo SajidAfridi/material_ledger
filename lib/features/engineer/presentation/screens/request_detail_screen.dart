@@ -11,9 +11,12 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_request.dart';
 import '../../../../shared/models/project.dart';
+import '../../../../shared/models/user_role.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/services/receipt_pdf.dart';
+import '../../../../shared/widgets/request_comments_section.dart';
+import '../widgets/edit_request_sheet.dart';
 
 /// Request detail screen — shows full info for a single material request.
 ///
@@ -93,9 +96,12 @@ class RequestDetailScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Back button
+                    // Back button — return to wherever we came from (e.g. a
+                    // tapped notification), falling back to Home if it's a root.
                     InkWell(
-                      onTap: () => context.go(RoutePaths.engineerHome),
+                      onTap: () => context.canPop()
+                          ? context.pop()
+                          : context.go(RoutePaths.engineerHome),
                       borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -152,6 +158,20 @@ class RequestDetailScreen extends ConsumerWidget {
                       ],
                     ),
                     const Gap(AppSpacing.xl),
+
+                    // Edit — only while procurement hasn't started dispatching,
+                    // so the engineer can trim to available stock / drop a line.
+                    if (request.status == RequestStatus.pending ||
+                        request.status == RequestStatus.onHold ||
+                        request.status == RequestStatus.sourcing) ...[
+                      SecondaryButton(
+                        label: AppStrings.editRequest.primary,
+                        icon: Icons.edit_outlined,
+                        onPressed: () =>
+                            EditRequestSheet.show(context, request.id),
+                      ),
+                      const Gap(AppSpacing.xl),
+                    ],
 
                     // Receipt / return actions (Phase 2 reverse flows)
                     if (request.status == RequestStatus.dispatched ||
@@ -392,6 +412,24 @@ class RequestDetailScreen extends ConsumerWidget {
                 ),
               ),
             ],
+
+            // ─── Discussion thread (engineer ↔ procurement) ─────
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenHorizontal,
+                AppSpacing.lg,
+                AppSpacing.screenHorizontal,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: RequestCommentsSection(
+                  requestId: request.id,
+                  authorRole: 'Engineer',
+                  notifyAudience: UserRole.procurement.name,
+                  notifyRoute: RoutePaths.dispatchPath(request.id),
+                ),
+              ),
+            ),
 
             const SliverGap(AppSpacing.colossal),
           ],

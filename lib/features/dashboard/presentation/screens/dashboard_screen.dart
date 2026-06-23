@@ -15,6 +15,7 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/rentals_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
@@ -32,7 +33,9 @@ class DashboardScreen extends ConsumerWidget {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
     final role = ref.watch(currentRoleProvider);
-    final canSeeCost = role.canSeeCost;
+    final canSeeCost = ref.watch(canSeeCostProvider);
+    final canAccessRentals = ref.watch(canAccessRentalsProvider);
+    final canAccessPeople = ref.watch(canAccessPeopleProvider);
 
     final totalValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
@@ -58,7 +61,7 @@ class DashboardScreen extends ConsumerWidget {
         color: AppColors.warning,
         onTap: () => context.push(RoutePaths.procurement),
       ),
-      if (role.canAccessRentals)
+      if (canAccessRentals)
         _Kpi(
           label: AppStrings.overdueTotal.primary,
           value: currency.format(rentals.overdueTotal),
@@ -66,7 +69,7 @@ class DashboardScreen extends ConsumerWidget {
           color: AppColors.error,
           onTap: () => context.go(RoutePaths.rentals),
         ),
-      if (role.canAccessPeople)
+      if (canAccessPeople)
         _Kpi(
           label: 'On leave / absent',
           value: '${hr.onLeaveToday + hr.absentToday}',

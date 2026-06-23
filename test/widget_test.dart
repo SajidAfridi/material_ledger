@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/app/app.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/services/app_config_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -20,7 +21,12 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          appVersionProvider.overrideWithValue(
+            const AppVersionInfo(version: '1.0.0', build: 1),
+          ),
+        ],
         child: const MaterialLedgerApp(),
       ),
     );

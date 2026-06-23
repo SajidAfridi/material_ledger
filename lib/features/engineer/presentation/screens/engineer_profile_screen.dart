@@ -7,11 +7,13 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/security/session_lock.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/employee_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/services/app_config_service.dart';
 import '../../../../shared/sync/connectivity_service.dart';
 
 /// Profile screen — engineer account & settings.
@@ -194,6 +196,17 @@ class EngineerProfileScreen extends ConsumerWidget {
                       ),
                     ),
                     _ProfileTile(
+                      icon: Icons.lock_clock_rounded,
+                      title: 'App lock',
+                      trailing: Switch(
+                        value: ref.watch(appLockEnabledProvider),
+                        onChanged: (v) => ref
+                            .read(appLockEnabledProvider.notifier)
+                            .setEnabled(v),
+                        activeThumbColor: AppColors.primary,
+                      ),
+                    ),
+                    _ProfileTile(
                       icon: Icons.info_outline_rounded,
                       title: AppStrings.about.primary,
                       onTap: () => context.push(RoutePaths.about),
@@ -216,7 +229,7 @@ class EngineerProfileScreen extends ConsumerWidget {
             sliver: SliverToBoxAdapter(
               child: Center(
                 child: Text(
-                  'Yorks GodownPro v1.0.0 — ${role.label}',
+                  'Yorks GodownPro ${ref.watch(appVersionProvider).label} — ${role.label}',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),

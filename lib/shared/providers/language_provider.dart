@@ -7,7 +7,7 @@ import '../models/app_language.dart';
 const _kLanguageKey = 'selected_language';
 const _kCurrencyKey = 'selected_currency';
 const _kOnboardingCompleteKey = 'onboarding_complete';
-const _kIsLoggedInKey = 'is_logged_in';
+const _kAuthUserIdKey = 'auth_user_id';
 
 /// Provider for SharedPreferences instance.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
@@ -89,27 +89,33 @@ class CurrencyNotifier extends StateNotifier<AppCurrency> {
 
 // ─── Auth Session ────────────────────────────────────────────────
 
-/// Whether the user is currently authenticated.
-final authSessionProvider = StateNotifierProvider<AuthSessionNotifier, bool>((
+/// The signed-in user's id, or `null` when logged out. Set only after
+/// credentials are verified (see `authControllerProvider` in session_provider).
+/// This is the seam that becomes the Firebase Auth uid.
+final authSessionProvider = StateNotifierProvider<AuthSessionNotifier, String?>((
   ref,
 ) {
   final prefs = ref.watch(sharedPreferencesProvider);
   return AuthSessionNotifier(prefs);
 });
 
-class AuthSessionNotifier extends StateNotifier<bool> {
-  AuthSessionNotifier(this._prefs)
-    : super(_prefs.getBool(_kIsLoggedInKey) ?? false);
+/// Convenience boolean for redirect logic / widgets.
+final isLoggedInProvider = Provider<bool>(
+  (ref) => ref.watch(authSessionProvider) != null,
+);
+
+class AuthSessionNotifier extends StateNotifier<String?> {
+  AuthSessionNotifier(this._prefs) : super(_prefs.getString(_kAuthUserIdKey));
 
   final SharedPreferences _prefs;
 
-  Future<void> login() async {
-    await _prefs.setBool(_kIsLoggedInKey, true);
-    state = true;
+  Future<void> setUser(String userId) async {
+    await _prefs.setString(_kAuthUserIdKey, userId);
+    state = userId;
   }
 
   Future<void> logout() async {
-    await _prefs.setBool(_kIsLoggedInKey, false);
-    state = false;
+    await _prefs.remove(_kAuthUserIdKey);
+    state = null;
   }
 }

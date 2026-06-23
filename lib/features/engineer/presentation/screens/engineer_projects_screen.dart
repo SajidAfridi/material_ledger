@@ -180,7 +180,7 @@ class _AddProjectCard extends StatelessWidget {
           ),
           const Gap(AppSpacing.md),
           IconButton.filled(
-            onPressed: () => context.go(RoutePaths.engineerCreateProject),
+            onPressed: () => context.push(RoutePaths.engineerCreateProject),
             icon: const Icon(Icons.arrow_forward_rounded),
             style: IconButton.styleFrom(
               backgroundColor: AppColors.onPrimary,

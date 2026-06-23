@@ -11,7 +11,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_item.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
-import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../widgets/add_material_sheet.dart';
 import '../../../transactions/presentation/widgets/record_transaction_sheet.dart';
 
@@ -85,7 +85,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final materials = ref.watch(filteredMaterialsProvider);
     final allMaterials = ref.watch(materialsProvider);
     final currency = ref.watch(currencyProvider);
-    final canSeeCost = ref.watch(currentRoleProvider).canSeeCost;
+    final canSeeCost = ref.watch(canSeeCostProvider);
 
     return SafeArea(
       child: CustomScrollView(
@@ -146,7 +146,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                                 : null,
                           ),
                         ),
-                      if (ref.watch(currentRoleProvider).canReceiveGoods) ...[
+                      if (ref.watch(canReceiveGoodsProvider)) ...[
                         const Gap(AppSpacing.xs),
                         IconButton(
                           tooltip: AppStrings.receiveGoods.primary,

@@ -29,7 +29,9 @@ class RentPayment {
     this.note,
     required this.recordedBy,
     required this.recordedAt,
-  });
+    this.voidedAt,
+    this.voidReason = '',
+  }) : assert(amountDueAED >= 0, 'amountDueAED cannot be negative');
 
   final String id;
   final String unitId;
@@ -44,6 +46,13 @@ class RentPayment {
   final String? note;
   final String recordedBy;
   final DateTime recordedAt;
+
+  /// Set when the record is voided (a correction). A voided payment is excluded
+  /// from all balances/summaries but kept in history for the audit trail.
+  final DateTime? voidedAt;
+  final String voidReason;
+
+  bool get isVoided => voidedAt != null;
 
   double get outstandingAED =>
       (amountDueAED - amountPaidAED).clamp(0, double.infinity).toDouble();
@@ -74,6 +83,8 @@ class RentPayment {
     DateTime? paidDate,
     String? method,
     String? note,
+    DateTime? voidedAt,
+    String? voidReason,
   }) => RentPayment(
     id: id,
     unitId: unitId,
@@ -85,6 +96,8 @@ class RentPayment {
     note: note ?? this.note,
     recordedBy: recordedBy,
     recordedAt: recordedAt,
+    voidedAt: voidedAt ?? this.voidedAt,
+    voidReason: voidReason ?? this.voidReason,
   );
 
   Map<String, dynamic> toJson() => {
@@ -98,6 +111,8 @@ class RentPayment {
     'note': note,
     'recordedBy': recordedBy,
     'recordedAt': recordedAt.toIso8601String(),
+    'voidedAt': voidedAt?.toIso8601String(),
+    'voidReason': voidReason,
   };
 
   factory RentPayment.fromJson(Map<String, dynamic> json) => RentPayment(
@@ -113,6 +128,10 @@ class RentPayment {
     note: json['note'] as String?,
     recordedBy: json['recordedBy'] as String? ?? 'system',
     recordedAt: DateTime.parse(json['recordedAt'] as String),
+    voidedAt: json['voidedAt'] == null
+        ? null
+        : DateTime.parse(json['voidedAt'] as String),
+    voidReason: json['voidReason'] as String? ?? '',
   );
 
   static String encodeList(List<RentPayment> items) =>

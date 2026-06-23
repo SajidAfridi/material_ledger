@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Network reachability, abstracted so the sync engine and UI don't depend on a
@@ -51,9 +53,52 @@ class DefaultConnectivity implements ConnectivityService {
   void dispose() => _controller.close();
 }
 
-/// The app's connectivity service (swap to `PlusConnectivity` in production).
+/// Production connectivity backed by `connectivity_plus`. [isOnline] is kept in
+/// sync synchronously from the plugin's change stream (seeded by an initial
+/// check) so the rest of the app stays synchronous.
+class PlusConnectivity implements ConnectivityService {
+  PlusConnectivity() {
+    _conn.checkConnectivity().then(_update);
+    _sub = _conn.onConnectivityChanged.listen(_update);
+  }
+
+  final _conn = Connectivity();
+  final _controller = StreamController<bool>.broadcast();
+  bool _online = true;
+  StreamSubscription<List<ConnectivityResult>>? _sub;
+
+  static bool _isUp(List<ConnectivityResult> r) =>
+      r.any((e) => e != ConnectivityResult.none);
+
+  void _update(List<ConnectivityResult> r) {
+    final up = _isUp(r);
+    if (up == _online) return;
+    _online = up;
+    _controller.add(up);
+  }
+
+  @override
+  bool get isOnline => _online;
+
+  @override
+  Stream<bool> get onChange => _controller.stream;
+
+  void dispose() {
+    _sub?.cancel();
+    _controller.close();
+  }
+}
+
+/// The app's connectivity service. Debug builds keep the manually-toggleable
+/// [DefaultConnectivity] (so the offline-simulator dev tool works); release /
+/// profile use real reachability via [PlusConnectivity].
 final connectivityProvider = Provider<ConnectivityService>((ref) {
-  final c = DefaultConnectivity();
+  if (kDebugMode) {
+    final c = DefaultConnectivity();
+    ref.onDispose(c.dispose);
+    return c;
+  }
+  final c = PlusConnectivity();
   ref.onDispose(c.dispose);
   return c;
 });

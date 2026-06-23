@@ -58,6 +58,35 @@ enum RequestPriority {
   }
 }
 
+/// A single comment in a request's engineer ↔ procurement discussion thread.
+class RequestComment {
+  const RequestComment({
+    required this.authorName,
+    required this.authorRole,
+    required this.text,
+    required this.timestamp,
+  });
+
+  final String authorName;
+  final String authorRole;
+  final String text;
+  final DateTime timestamp;
+
+  Map<String, dynamic> toJson() => {
+    'authorName': authorName,
+    'authorRole': authorRole,
+    'text': text,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory RequestComment.fromJson(Map<String, dynamic> json) => RequestComment(
+    authorName: json['authorName'] as String? ?? '',
+    authorRole: json['authorRole'] as String? ?? '',
+    text: json['text'] as String? ?? '',
+    timestamp: DateTime.parse(json['timestamp'] as String),
+  );
+}
+
 /// A single material request from an engineer to the warehouse.
 class MaterialRequest {
   const MaterialRequest({
@@ -73,6 +102,7 @@ class MaterialRequest {
     this.notes,
     this.engineerId,
     this.confirmedReceiptAt,
+    this.comments = const [],
   });
 
   final String id;
@@ -89,6 +119,9 @@ class MaterialRequest {
 
   /// When the engineer confirmed on-site receipt (FR-088). Null until then.
   final DateTime? confirmedReceiptAt;
+
+  /// Engineer ↔ procurement discussion thread (e.g. resolving short stock).
+  final List<RequestComment> comments;
 
   /// Distinct categories represented in line items.
   int get categoryCount {
@@ -107,6 +140,7 @@ class MaterialRequest {
     String? notes,
     String? engineerId,
     DateTime? confirmedReceiptAt,
+    List<RequestComment>? comments,
   }) {
     return MaterialRequest(
       id: id,
@@ -121,6 +155,7 @@ class MaterialRequest {
       notes: notes ?? this.notes,
       engineerId: engineerId ?? this.engineerId,
       confirmedReceiptAt: confirmedReceiptAt ?? this.confirmedReceiptAt,
+      comments: comments ?? this.comments,
     );
   }
 
@@ -137,6 +172,7 @@ class MaterialRequest {
     'notes': notes,
     'engineerId': engineerId,
     'confirmedReceiptAt': confirmedReceiptAt?.toIso8601String(),
+    'comments': comments.map((e) => e.toJson()).toList(),
   };
 
   factory MaterialRequest.fromJson(Map<String, dynamic> json) {
@@ -162,6 +198,11 @@ class MaterialRequest {
       confirmedReceiptAt: json['confirmedReceiptAt'] == null
           ? null
           : DateTime.parse(json['confirmedReceiptAt'] as String),
+      comments:
+          (json['comments'] as List<dynamic>?)
+              ?.map((e) => RequestComment.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 

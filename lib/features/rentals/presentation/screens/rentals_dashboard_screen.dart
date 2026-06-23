@@ -10,8 +10,8 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/rent_payment.dart';
 import '../../../../shared/models/rental_unit.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/rentals_provider.dart';
-import '../../../../shared/providers/session_provider.dart';
 import '../widgets/add_unit_sheet.dart';
 
 /// Rentals module home: portfolio summary + a list of units with their current
@@ -25,7 +25,7 @@ class RentalsDashboardScreen extends ConsumerWidget {
     final currency = ref.watch(currencyProvider);
     final units = ref.watch(rentalUnitsProvider);
     final summary = ref.watch(rentalsSummaryProvider);
-    final canWrite = ref.watch(currentRoleProvider).canWriteRentals;
+    final canWrite = ref.watch(canWriteRentalsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.surface,

@@ -9,6 +9,7 @@ import '../models/app_strings.dart';
 import '../models/audit_log.dart';
 import '../models/user_role.dart';
 import '../providers/audit_log_provider.dart';
+import '../providers/permissions_provider.dart';
 import '../providers/session_provider.dart';
 
 /// Read-only audit trail. The list is append-only and never editable from the
@@ -31,7 +32,11 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     final role = ref.watch(currentRoleProvider);
     final entries = ref.watch(auditLogProvider);
 
-    final visibleModules = _modulesFor(role);
+    final visibleModules = _modulesFor(
+      role,
+      canRentals: ref.watch(canAccessRentalsProvider),
+      canPeople: ref.watch(canAccessPeopleProvider),
+    );
     final q = _query.trim().toLowerCase();
     final visible = entries
         .where((e) => visibleModules.contains(e.module))
@@ -147,12 +152,16 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     );
   }
 
-  List<AuditModule> _modulesFor(UserRole role) {
+  List<AuditModule> _modulesFor(
+    UserRole role, {
+    required bool canRentals,
+    required bool canPeople,
+  }) {
     if (role.isAdmin) return AuditModule.values.toList();
     return [
       if (role.canAccessMaterials) AuditModule.materials,
-      if (role.canAccessRentals) AuditModule.rentals,
-      if (role.canAccessPeople) AuditModule.people,
+      if (canRentals) AuditModule.rentals,
+      if (canPeople) AuditModule.people,
       AuditModule.platform,
     ];
   }

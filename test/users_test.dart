@@ -35,10 +35,12 @@ void main() {
             fullName: 'New Engineer',
             email: 'new.eng@yorksac.ae',
             role: UserRole.engineer,
+            password: 'temp1234',
           );
       expect(container.read(usersProvider).length, before + 1);
       expect(u.active, true);
       expect(u.role, UserRole.engineer);
+      expect(u.mustChangePassword, true); // admin-set temp password
     });
 
     test('deactivating a user flips active + lowers the active count', () async {

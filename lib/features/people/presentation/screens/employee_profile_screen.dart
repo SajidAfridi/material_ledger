@@ -9,7 +9,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/leave_record.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
-import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../widgets/record_leave_sheet.dart';
 
 /// Full employee profile. Salary and identity documents are restricted to
@@ -22,7 +22,6 @@ class EmployeeProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(currencyProvider);
-    final role = ref.watch(currentRoleProvider);
     final employee = ref.watch(employeesProvider.notifier).byId(employeeId);
 
     if (employee == null) {
@@ -38,8 +37,8 @@ class EmployeeProfileScreen extends ConsumerWidget {
         .where((l) => l.employeeId == employeeId)
         .toList()
       ..sort((a, b) => b.startDate.compareTo(a.startDate));
-    final canSeeSalary = role.canSeeSalary;
-    final canWrite = role.canWritePeople;
+    final canSeeSalary = ref.watch(canSeeSalaryProvider);
+    final canWrite = ref.watch(canWritePeopleProvider);
 
     return Scaffold(
       backgroundColor: AppColors.surface,

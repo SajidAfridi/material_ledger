@@ -488,6 +488,36 @@ abstract final class AppStrings {
     ur: 'پروکیورمنٹ نے آپ کے پلان پر تبصرہ کیا',
     hi: 'खरीद ने आपकी योजना पर टिप्पणी की',
   );
+  static const notifRequestHeldTitle = TranslatableString(
+    en: 'Procurement put your request on hold',
+    ar: 'علّقت المشتريات طلبك',
+    ur: 'پروکیورمنٹ نے آپ کی درخواست روک دی',
+    hi: 'खरीद ने आपका अनुरोध रोक दिया',
+  );
+  static const notifNewRequestComment = TranslatableString(
+    en: 'New comment on a request',
+    ar: 'تعليق جديد على طلب',
+    ur: 'درخواست پر نیا تبصرہ',
+    hi: 'अनुरोध पर नई टिप्पणी',
+  );
+  static const requestEdited = TranslatableString(
+    en: 'Request updated',
+    ar: 'تم تحديث الطلب',
+    ur: 'درخواست اپ ڈیٹ ہو گئی',
+    hi: 'अनुरोध अपडेट किया गया',
+  );
+  static const notifRequestEditedTitle = TranslatableString(
+    en: 'Engineer edited a request',
+    ar: 'عدّل المهندس طلبًا',
+    ur: 'انجینئر نے درخواست میں ترمیم کی',
+    hi: 'इंजीनियर ने अनुरोध संपादित किया',
+  );
+  static const editRequest = TranslatableString(
+    en: 'Edit request',
+    ar: 'تعديل الطلب',
+    ur: 'درخواست میں ترمیم کریں',
+    hi: 'अनुरोध संपादित करें',
+  );
   static const notifIdleRequestTitle = TranslatableString(
     en: 'Request idle for 24h+',
     ar: 'طلب بدون إجراء لأكثر من ٢٤ ساعة',
@@ -1085,6 +1115,90 @@ abstract final class AppStrings {
     ar: 'نهاية العقد',
     ur: 'لیز کا اختتام',
     hi: 'पट्टा समाप्ति',
+  );
+  static const editUnit = TranslatableString(
+    en: 'Edit unit',
+    ar: 'تعديل الوحدة',
+    ur: 'یونٹ میں ترمیم',
+    hi: 'इकाई संपादित करें',
+  );
+  static const occupancy = TranslatableString(
+    en: 'Occupancy',
+    ar: 'الإشغال',
+    ur: 'قبضہ',
+    hi: 'अधिभोग',
+  );
+  static const leaseExpired = TranslatableString(
+    en: 'Lease expired',
+    ar: 'انتهى العقد',
+    ur: 'لیز ختم',
+    hi: 'पट्टा समाप्त',
+  );
+  static const voidPaymentAction = TranslatableString(
+    en: 'Void payment',
+    ar: 'إلغاء الدفعة',
+    ur: 'ادائیگی منسوخ کریں',
+    hi: 'भुगतान रद्द करें',
+  );
+  static const voided = TranslatableString(
+    en: 'Voided',
+    ar: 'ملغاة',
+    ur: 'منسوخ',
+    hi: 'रद्द',
+  );
+  static const voidReasonLabel = TranslatableString(
+    en: 'Reason (optional)',
+    ar: 'السبب (اختياري)',
+    ur: 'وجہ (اختیاری)',
+    hi: 'कारण (वैकल्पिक)',
+  );
+  static const cashReceived = TranslatableString(
+    en: 'Cash received',
+    ar: 'النقد المستلم',
+    ur: 'موصول رقم',
+    hi: 'प्राप्त नकद',
+  );
+  static const goBack = TranslatableString(
+    en: 'Go back',
+    ar: 'رجوع',
+    ur: 'واپس',
+    hi: 'वापस',
+  );
+  static const setDate = TranslatableString(
+    en: 'Set date',
+    ar: 'تحديد التاريخ',
+    ur: 'تاریخ مقرر کریں',
+    hi: 'तारीख़ चुनें',
+  );
+  static const overpaymentTitle = TranslatableString(
+    en: 'Amount exceeds outstanding',
+    ar: 'المبلغ يتجاوز المستحق',
+    ur: 'رقم واجب الادا سے زیادہ ہے',
+    hi: 'राशि बकाया से अधिक है',
+  );
+  static const overpaymentBody = TranslatableString(
+    en: 'This payment is over the outstanding balance by',
+    ar: 'تتجاوز هذه الدفعة الرصيد المستحق بمقدار',
+    ur: 'یہ ادائیگی واجب الادا رقم سے زیادہ ہے بمقدار',
+    hi: 'यह भुगतान बकाया से अधिक है',
+  );
+  static const recordAnyway = TranslatableString(
+    en: 'Record anyway',
+    ar: 'سجّل على أي حال',
+    ur: 'پھر بھی ریکارڈ کریں',
+    hi: 'फिर भी दर्ज करें',
+  );
+  static const monthNotFuture = TranslatableString(
+    en: 'Not in the future',
+    ar: 'ليس في المستقبل',
+    ur: 'مستقبل میں نہیں',
+    hi: 'भविष्य में नहीं',
+  );
+  static const monthTooOld = TranslatableString(
+    en: 'Too far back',
+    ar: 'قديم جدًا',
+    ur: 'بہت پرانا',
+    hi: 'बहुत पुराना',
   );
   static const recordPayment = TranslatableString(
     en: 'Record payment',

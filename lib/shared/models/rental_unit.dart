@@ -64,6 +64,10 @@ class RentalUnit {
 
   bool get isOccupied => status == RentalStatus.active;
 
+  /// True when the lease end date has passed — a cue to renew or mark vacant.
+  bool get leaseExpired =>
+      leaseEnd != null && DateTime.now().isAfter(leaseEnd!);
+
   RentalUnit copyWith({
     String? unitName,
     RentalType? type,

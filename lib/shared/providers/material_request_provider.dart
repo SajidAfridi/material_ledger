@@ -217,41 +217,64 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
     }
   }
 
-  /// Procurement dispatches a request to site (FR — full / partial dispatch).
-  /// Stock physically leaves the store here: on-hand decrements and the matching
-  /// reservation is freed for the dispatched quantity. A short dispatch leaves
-  /// the remainder open (status → partial) for procurement to fulfil later.
-  /// [dispatchByIndex] is the quantity to dispatch per line; omit/short to
-  /// default each line to its outstanding quantity.
+  /// True when a line's full outstanding quantity is physically on hand and so
+  /// can be dispatched. A custom/un-stocked line (no material) or one with less
+  /// stock than outstanding is NOT dispatchable — the shortfall must be arranged
+  /// (restocked) or the engineer must reduce the request first.
+  bool canDispatchLine(RequestLineItem line) {
+    if (line.qtyOutstanding <= 0) return false;
+    final item = _inventory.byId(line.materialId);
+    return item != null && item.quantity >= line.qtyOutstanding;
+  }
+
+  /// Procurement dispatches a request to site. Stock physically leaves the store
+  /// here: on-hand decrements and the matching reservation is freed for the
+  /// dispatched quantity. A request can be fulfilled across several dispatches
+  /// (some lines now, others once arranged), so it lands in `partial` until
+  /// every line is out.
+  ///
+  /// IMPORTANT — a line is all-or-nothing against availability: it ships only
+  /// when the full outstanding quantity is on hand (see [canDispatchLine]). We
+  /// never ship a short quantity for an under-stocked line; that shortfall must
+  /// be arranged or the engineer must edit the request down. [dispatchByIndex]
+  /// is the quantity per line; omit/short to default each line to its
+  /// outstanding quantity.
   Future<void> dispatch(String id, [List<double>? dispatchByIndex]) async {
     final req = _byId(id);
     if (req == null) return;
 
+    var movedAny = false;
     final newLines = <RequestLineItem>[];
     for (var i = 0; i < req.lineItems.length; i++) {
       final line = req.lineItems[i];
       final item = _inventory.byId(line.materialId);
-      var d = (dispatchByIndex != null && i < dispatchByIndex.length)
+      var requested = (dispatchByIndex != null && i < dispatchByIndex.length)
           ? dispatchByIndex[i]
           : line.qtyOutstanding;
-      d = d.clamp(0, line.qtyOutstanding).toDouble();
+      requested = requested.clamp(0, line.qtyOutstanding).toDouble();
 
-      if (item == null) {
-        // Not in inventory (custom / un-stocked) — cannot be dispatched until it
-        // is received into stock. Leave it outstanding; never fake the movement.
+      double d;
+      if (item == null || item.quantity < line.qtyOutstanding) {
+        // Blocked: not stocked, or not enough on hand to cover the full
+        // outstanding qty. Never ship a short line — leave it outstanding.
         d = 0;
       } else {
-        // Real material: never dispatch more than is physically on hand.
-        d = d.clamp(0, item.quantity).toDouble();
-        if (d > 0) {
-          await _inventory.adjustQuantity(line.materialId, -d); // leave the store
-          await _inventory.release(line.materialId, d); // free that reservation
-        }
+        // Fully available — ship what's asked (≤ outstanding ≤ on-hand).
+        d = requested;
+      }
+      if (d > 0) {
+        await _inventory.adjustQuantity(line.materialId, -d); // leave the store
+        await _inventory.release(line.materialId, d); // free that reservation
+        movedAny = true;
       }
       newLines.add(
         line.copyWith(qtyDispatched: (line.qtyDispatched ?? 0) + d),
       );
     }
+
+    // Nothing could be dispatched (every line blocked) → leave the request as
+    // it was so it stays in the queue; don't fake a "partial".
+    if (!movedAny) return;
 
     final fullyDispatched =
         newLines.every((l) => (l.qtyDispatched ?? 0) >= l.quantity);
@@ -319,6 +342,118 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
         kind: 'request.relink',
         label: 'Material request',
         transactional: true,
+      );
+    }
+  }
+
+  /// Append a comment to a request's discussion thread (engineer ↔ procurement).
+  Future<void> addRequestComment(
+    String id, {
+    required String text,
+    required String authorName,
+    required String authorRole,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final comment = RequestComment(
+      authorName: authorName,
+      authorRole: authorRole,
+      text: trimmed,
+      timestamp: DateTime.now(),
+    );
+    state = [
+      for (final r in state)
+        if (r.id == id)
+          r.copyWith(comments: [...r.comments, comment])
+        else
+          r,
+    ];
+    await _persist();
+    final updated = _byId(id);
+    if (updated != null) {
+      await _sync(updated, kind: 'request.comment', label: 'Material request');
+    }
+  }
+
+  /// Engineer edits an outstanding line's quantity (e.g. reduce to what's
+  /// available). Never below what's already been dispatched. The reservation is
+  /// adjusted by the delta so stock promises stay accurate.
+  Future<void> updateRequestLine(
+    String id,
+    String materialId,
+    double newQuantity,
+  ) async {
+    final req = _byId(id);
+    if (req == null) return;
+    final newLines = <RequestLineItem>[];
+    for (final l in req.lineItems) {
+      if (l.materialId == materialId) {
+        final dispatched = l.qtyDispatched ?? 0;
+        final q = newQuantity.clamp(dispatched, double.infinity).toDouble();
+        final delta = l.quantity - q; // > 0 means reduced
+        if (delta != 0 && _inventory.byId(materialId) != null) {
+          if (delta > 0) {
+            await _inventory.release(materialId, delta);
+          } else {
+            await _inventory.reserve(materialId, -delta);
+          }
+        }
+        newLines.add(l.copyWith(quantity: q));
+      } else {
+        newLines.add(l);
+      }
+    }
+    state = [
+      for (final r in state)
+        if (r.id == id) r.copyWith(lineItems: newLines) else r,
+    ];
+    await _persist();
+    final updated = _byId(id);
+    if (updated != null) {
+      await _sync(
+        updated,
+        kind: 'request.edit',
+        label: 'Material request',
+        transactional: true, // adjusts reservation
+      );
+    }
+  }
+
+  /// Engineer drops a line from the request entirely, releasing its remaining
+  /// reservation.
+  Future<void> removeRequestLine(String id, String materialId) async {
+    final req = _byId(id);
+    if (req == null) return;
+    RequestLineItem? target;
+    for (final l in req.lineItems) {
+      if (l.materialId == materialId) {
+        target = l;
+        break;
+      }
+    }
+    if (target == null) return;
+    final newLines = req.lineItems
+        .where((l) => l.materialId != materialId)
+        .toList();
+    state = [
+      for (final r in state)
+        if (r.id == id)
+          r.copyWith(lineItems: newLines, itemCount: newLines.length)
+        else
+          r,
+    ];
+    await _persist();
+    if (_holdingStatuses.contains(req.status) &&
+        _inventory.byId(materialId) != null) {
+      await _inventory.release(materialId, target.qtyOutstanding);
+    }
+    final updated = _byId(id);
+    if (updated != null) {
+      await _sync(
+        updated,
+        kind: 'request.edit',
+        label: 'Material request',
+        transactional: true, // releases reservation
       );
     }
   }

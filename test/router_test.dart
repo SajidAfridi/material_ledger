@@ -5,8 +5,9 @@ import 'package:material_ledger/shared/models/user_role.dart';
 
 /// `GoRouter` validates its whole route tree at construction (duplicate paths,
 /// malformed nested sub-routes, etc. throw immediately). Building it for every
-/// role therefore validates the engineer `StatefulShellRoute` (with its nested
-/// `/new-request` + `/projects/new`) and the office shell without a device.
+/// role therefore validates the engineer `StatefulShellRoute` and the top-level
+/// create-flows (`/new-request`, `/projects/new`, `/my-projects`) that overlay
+/// it — plus the office shell — without a device.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 

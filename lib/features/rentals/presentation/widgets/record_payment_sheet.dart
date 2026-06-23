@@ -53,7 +53,9 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
     // (e.g. after paying half of AED 4,500, this shows AED 2,250).
     RentPayment? existing;
     for (final p in ref.read(rentPaymentsProvider)) {
-      if (p.unitId == widget.unit.id && p.periodMonth == month) {
+      if (p.unitId == widget.unit.id &&
+          p.periodMonth == month &&
+          !p.isVoided) {
         existing = p;
         break;
       }
@@ -73,11 +75,62 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
     super.dispose();
   }
 
+  /// Reject malformed, out-of-range, far-future or far-past billing months —
+  /// they pollute history and the overdue calculation.
+  String? _monthError(String? v) {
+    final t = (v ?? '').trim();
+    final m = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(t);
+    if (m == null) return 'YYYY-MM';
+    final month = int.parse(m.group(2)!);
+    if (month < 1 || month > 12) return '01–12';
+    final now = DateTime.now();
+    final entered = int.parse(m.group(1)!) * 12 + month;
+    final current = now.year * 12 + now.month;
+    if (entered > current + 1) return AppStrings.monthNotFuture.primary;
+    if (entered < current - 24) return AppStrings.monthTooOld.primary;
+    return null;
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() => _busy = true);
     final period = _monthController.text.trim();
+    final due = double.parse(_dueController.text.trim());
     final paid = double.parse(_paidController.text.trim());
+
+    // Guard against fat-finger overpayment — the clamp would otherwise hide it.
+    if (paid > due) {
+      final over = paid - due;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surfaceContainerLowest,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          ),
+          title: Text(
+            AppStrings.overpaymentTitle.primary,
+            style: AppTypography.titleMedium,
+          ),
+          content: Text(
+            '${AppStrings.overpaymentBody.primary} AED ${over.toStringAsFixed(0)}.',
+            style: AppTypography.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(AppStrings.cancel.primary),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(AppStrings.recordAnyway.primary),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+
+    setState(() => _busy = true);
     await ref
         .read(rentPaymentsProvider.notifier)
         .recordPayment(
@@ -169,13 +222,7 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
                               controller: _monthController,
                               label: AppStrings.billingMonth.primary,
                               hintText: 'YYYY-MM',
-                              validator: (v) {
-                                final t = (v ?? '').trim();
-                                if (!RegExp(r'^\d{4}-\d{2}$').hasMatch(t)) {
-                                  return 'YYYY-MM';
-                                }
-                                return null;
-                              },
+                              validator: _monthError,
                             ),
                           ),
                           const Gap(AppSpacing.lg),

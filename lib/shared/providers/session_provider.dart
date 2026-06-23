@@ -1,50 +1,83 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/app_user.dart';
 import '../models/user_role.dart';
+import '../services/password_hasher.dart';
 import 'language_provider.dart';
+import 'users_provider.dart';
 
-const _kRoleKey = 'current_role';
-const _kActorNameKey = 'current_actor_name';
-
-/// The role the app is currently operating as.
-///
-/// There is no real auth yet, so this doubles as the dev role-switcher seam.
-/// When Firebase Auth lands, the role comes from the signed-in user's claims
-/// and `setRole` is removed (the switcher is dev-only).
-final currentRoleProvider = StateNotifierProvider<RoleNotifier, UserRole>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return RoleNotifier(prefs);
+/// The signed-in user's full account record, or `null` when logged out.
+/// Resolved from the auth session id against the users store. This is the single
+/// source of identity, role, and per-user permissions for the rest of the app.
+final currentUserProvider = Provider<AppUser?>((ref) {
+  final uid = ref.watch(authSessionProvider);
+  if (uid == null) return null;
+  for (final u in ref.watch(usersProvider)) {
+    if (u.id == uid) return u;
+  }
+  return null;
 });
 
-class RoleNotifier extends StateNotifier<UserRole> {
-  RoleNotifier(this._prefs)
-    : super(UserRole.fromName(_prefs.getString(_kRoleKey) ?? UserRole.engineer.name));
+/// Debug-only role override used before a real login exists (e.g. widget tests
+/// / first run). Ignored once a user is signed in — the user's role always wins.
+final devRoleOverrideProvider = StateProvider<UserRole?>((ref) => null);
 
-  final SharedPreferences _prefs;
-
-  Future<void> setRole(UserRole role) async {
-    await _prefs.setString(_kRoleKey, role.name);
-    state = role;
+/// The role the app operates as — **derived from the signed-in user**. There is
+/// no manual setter: log in as the right account to get the right side. When
+/// Firebase Auth lands the role comes from the user's custom claim instead.
+final currentRoleProvider = Provider<UserRole>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user != null) return user.role;
+  if (kDebugMode) {
+    final override = ref.watch(devRoleOverrideProvider);
+    if (override != null) return override;
   }
-}
-
-/// Display name of the person acting (used to stamp the audit trail).
-///
-/// Mock for now; becomes the authenticated user's display name with Firebase.
-final actorNameProvider = StateNotifierProvider<ActorNameNotifier, String>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return ActorNameNotifier(prefs);
+  return UserRole.engineer;
 });
 
-class ActorNameNotifier extends StateNotifier<String> {
-  ActorNameNotifier(this._prefs)
-    : super(_prefs.getString(_kActorNameKey) ?? 'Ahmed Khan');
+/// Display name stamped on the audit trail — the signed-in user.
+final actorNameProvider = Provider<String>(
+  (ref) => ref.watch(currentUserProvider)?.fullName ?? 'System',
+);
 
-  final SharedPreferences _prefs;
+/// Outcome of a sign-in attempt.
+enum SignInResult { ok, invalidCredentials, deactivated, mustChangePassword }
 
-  Future<void> setName(String name) async {
-    await _prefs.setString(_kActorNameKey, name);
-    state = name;
+/// Verifies credentials against the local user store and opens a session.
+/// This is the `AuthService` seam — swap the body for Firebase Auth later; the
+/// UI calls the same `signIn`/`signOut`.
+final authControllerProvider = Provider<AuthController>(
+  (ref) => AuthController(ref),
+);
+
+class AuthController {
+  AuthController(this._ref);
+  final Ref _ref;
+
+  Future<SignInResult> signIn({
+    required String email,
+    required String password,
+  }) async {
+    final target = email.trim().toLowerCase();
+    AppUser? user;
+    for (final u in _ref.read(usersProvider)) {
+      if (u.email.trim().toLowerCase() == target) {
+        user = u;
+        break;
+      }
+    }
+    if (user == null) return SignInResult.invalidCredentials;
+    if (!PasswordHasher.verify(password, user.passwordHash, user.passwordSalt)) {
+      return SignInResult.invalidCredentials;
+    }
+    if (!user.active) return SignInResult.deactivated;
+
+    await _ref.read(authSessionProvider.notifier).setUser(user.id);
+    return user.mustChangePassword
+        ? SignInResult.mustChangePassword
+        : SignInResult.ok;
   }
+
+  Future<void> signOut() => _ref.read(authSessionProvider.notifier).logout();
 }

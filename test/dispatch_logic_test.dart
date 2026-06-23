@@ -88,9 +88,9 @@ void main() {
       expect(req.status, RequestStatus.partial);
     });
 
-    test('a real line is capped at on-hand stock, never over-dispatched',
+    test('an insufficient line is blocked, never partially dispatched',
         () async {
-      // A real material with only 5 on hand.
+      // A real material with only 5 on hand, but 10 requested.
       final lowId = await inventory().addMaterial(
         name: 'Scarce Coupling',
         urduName: '',
@@ -116,14 +116,54 @@ void main() {
       );
       final id = container.read(materialRequestsProvider).first.id;
 
-      // Ask to dispatch 10 though only 5 are on hand.
+      // Try to dispatch 10 with only 5 on hand → blocked, nothing moves.
       await requests().dispatch(id, [10]);
 
       final req = reqById(id);
-      // Only the 5 on hand moved; stock can never go negative.
+      expect(mat(lowId)!.quantity, 5); // stock untouched
+      expect(req.lineItems[0].qtyDispatched ?? 0, 0); // not partially sent
+      expect(req.status, RequestStatus.pending); // stays in the queue
+
+      // Arrange the shortfall (restock +5) → now fully available → dispatchable.
+      await inventory().receiveStock(lowId, 5);
+      await requests().dispatch(id, [10]);
+      final after = reqById(id);
       expect(mat(lowId)!.quantity, 0);
-      expect(req.lineItems[0].qtyDispatched, 5);
-      expect(req.lineItems[0].qtyOutstanding, 5);
+      expect(after.lineItems[0].qtyDispatched, 10);
+      expect(after.status, RequestStatus.dispatched);
+    });
+
+    test('a partial of an in-stock line is still allowed (FR-039)', () async {
+      // Plenty in stock (50) for a request of 10 — procurement may send fewer.
+      final id2 = await inventory().addMaterial(
+        name: 'Ample Bolt',
+        urduName: '',
+        category: MaterialCategory.other,
+        unit: MaterialUnit.pieces,
+        quantity: 50,
+        unitPrice: 0,
+      );
+      await requests().addRequest(
+        projectName: 'Test',
+        projectNameSecondary: '',
+        itemCount: 1,
+        lineItems: [
+          RequestLineItem(
+            materialId: id2,
+            materialName: 'Ample Bolt',
+            materialNameSecondary: '',
+            quantity: 10,
+            unitSymbol: 'pcs',
+          ),
+        ],
+      );
+      final id = container.read(materialRequestsProvider).first.id;
+
+      await requests().dispatch(id, [6]); // send 6 of 10 now
+      final req = reqById(id);
+      expect(req.lineItems[0].qtyDispatched, 6);
+      expect(req.lineItems[0].qtyOutstanding, 4);
+      expect(mat(id2)!.quantity, 44);
       expect(req.status, RequestStatus.partial);
     });
 
