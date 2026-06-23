@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../app/engineer_shell.dart';
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/feedback/feedback_service.dart';
@@ -576,6 +577,9 @@ class _EngineerNewRequestScreenState
         ],
       ),
       ),
+      floatingActionButton: EngineerOverlayNav.centerButton(),
+      floatingActionButtonLocation: EngineerOverlayNav.fabLocation,
+      bottomNavigationBar: const EngineerOverlayNav(),
     );
   }
 

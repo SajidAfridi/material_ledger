@@ -159,6 +159,35 @@ class EngineerShellScreen extends ConsumerWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  Overlay nav — for create-flow screens shown over the shell
+// ═══════════════════════════════════════════════════════════════════
+
+/// Bottom navigation for create-flow screens shown over the engineer shell
+/// (e.g. New Request) so the bar stays visible like every other screen.
+/// Tapping a tab leaves the flow and switches to that tab.
+class EngineerOverlayNav extends StatelessWidget {
+  const EngineerOverlayNav({super.key});
+
+  /// Same docked-centre location the shell uses for its New Request button.
+  static const FloatingActionButtonLocation fabLocation =
+      _LoweredCenterDockedFab();
+
+  /// The centre "+" disc, shown active (you are already on the create flow).
+  static Widget centerButton() =>
+      _CenterAddButton(isActive: true, onTap: () {});
+
+  @override
+  Widget build(BuildContext context) {
+    return _LedgerBottomBar(
+      currentIndex: -1,
+      items: EngineerShellScreen._navItems,
+      onItemTap: (index) =>
+          context.go(EngineerShellScreen._navItems[index].path),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  MOBILE — Custom Bottom Navigation Bar
 // ═══════════════════════════════════════════════════════════════════
 

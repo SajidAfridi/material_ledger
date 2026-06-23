@@ -136,5 +136,74 @@ void main() {
       expect(unit.status, RentalStatus.active);
       expect(unit.isOccupied, true);
     });
+
+    test('voiding a payment removes it from collected and frees the period',
+        () async {
+      final notifier = container.read(rentPaymentsProvider.notifier);
+      const unit = 'unit-shop-02';
+      final month = currentRentMonthKey();
+      final p = await notifier.recordPayment(
+        unitId: unit,
+        periodMonth: month,
+        amountDueAED: 4500,
+        amountPaidAED: 4500,
+        recordedBy: 'test',
+      );
+      final before = container.read(rentalsSummaryProvider).collectedThisMonth;
+
+      await notifier.voidPayment(p.id, reason: 'wrong unit');
+      expect(notifier.forUnit(unit).firstWhere((x) => x.id == p.id).isVoided,
+          true);
+      expect(
+        container.read(rentalsSummaryProvider).collectedThisMonth,
+        before - 4500,
+      );
+
+      // Recording again for the same period creates a fresh, non-accumulated
+      // record (it does not top up the voided one).
+      final fresh = await notifier.recordPayment(
+        unitId: unit,
+        periodMonth: month,
+        amountDueAED: 4500,
+        amountPaidAED: 1000,
+        recordedBy: 'test',
+      );
+      expect(fresh.id, isNot(p.id));
+      expect(fresh.amountPaidAED, 1000);
+    });
+
+    test('marking an occupied unit vacant drops it from the rent roll',
+        () async {
+      final notifier = container.read(rentalUnitsProvider.notifier);
+      final before = container.read(rentalsSummaryProvider).monthlyRentRoll;
+      final unit = notifier.byId('unit-shop-01')!; // occupied @ 3800
+      await notifier.updateUnit(unit.copyWith(status: RentalStatus.vacant));
+      expect(
+        container.read(rentalsSummaryProvider).monthlyRentRoll,
+        before - 3800,
+      );
+      expect(notifier.byId('unit-shop-01')!.isOccupied, false);
+    });
+  });
+
+  group('RentalUnit.leaseExpired', () {
+    RentalUnit unit({DateTime? leaseEnd}) => RentalUnit(
+          id: 'x',
+          unitName: 'X',
+          type: RentalType.shop,
+          location: '',
+          monthlyRentAED: 1,
+          leaseEnd: leaseEnd,
+          createdBy: 't',
+          createdAt: DateTime(2020),
+        );
+
+    test('true when lease end is in the past', () {
+      expect(unit(leaseEnd: DateTime(2000)).leaseExpired, true);
+    });
+    test('false when lease end is in the future or unset', () {
+      expect(unit(leaseEnd: DateTime(2999)).leaseExpired, false);
+      expect(unit().leaseExpired, false);
+    });
   });
 }

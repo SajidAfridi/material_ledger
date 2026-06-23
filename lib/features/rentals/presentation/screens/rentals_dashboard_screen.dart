@@ -73,7 +73,7 @@ class RentalsDashboardScreen extends ConsumerWidget {
                   const Gap(AppSpacing.md),
                   Expanded(
                     child: _SummaryCard(
-                      label: AppStrings.collectedThisMonth.primary,
+                      label: AppStrings.cashReceived.primary,
                       value: currency.format(summary.collectedThisMonth),
                       color: AppColors.success,
                     ),
@@ -110,14 +110,27 @@ class RentalsDashboardScreen extends ConsumerWidget {
               const Gap(AppSpacing.md),
 
               if (units.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xl),
-                  child: Center(
-                    child: Text(
-                      AppStrings.noUnitsYet.primary,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
+                LedgerCard(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.storefront_outlined,
+                          size: 32,
+                          color: AppColors.onSurfaceVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                        const Gap(AppSpacing.sm),
+                        Text(
+                          AppStrings.noUnitsYet.primary,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 )
