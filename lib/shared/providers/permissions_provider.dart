@@ -1,57 +1,40 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/app_user.dart';
-import '../models/effective_permissions.dart';
-import '../models/user_role.dart';
+import '../models/role_permissions.dart';
+import 'role_permissions_provider.dart';
 import 'session_provider.dart';
 
 /// Effective-capability providers — the single place UI/guards read access from.
-/// Each resolves the signed-in user's per-user override (if Admin set one) and
-/// falls back to the role default; before login (no user) it uses the role.
-///
-/// Migrating consumers from `role.canX` to these providers is what makes the
-/// Admin's per-user permission toggles actually take effect across the app.
-
-bool _resolve(
-  Ref ref,
-  bool Function(AppUser user) ofUser,
-  bool Function(UserRole role) ofRole,
-) {
+/// Resolution layers (highest wins): per-user override → editable role default
+/// (Access & Roles matrix) → built-in `UserRole` baseline. Watching
+/// [rolePermissionsProvider] is what makes an Admin's matrix edits take effect
+/// across the app instantly.
+bool _cap(Ref ref, RoleCapability cap) {
   final user = ref.watch(currentUserProvider);
-  if (user != null) return ofUser(user);
-  return ofRole(ref.watch(currentRoleProvider));
+  final role = ref.watch(currentRoleProvider);
+  final perms = ref.watch(rolePermissionsProvider);
+  return resolveCapability(user, role, perms, cap);
 }
 
-final canSeeCostProvider = Provider<bool>(
-  (ref) => _resolve(ref, (u) => u.effectiveCanSeeCost, (r) => r.canSeeCost),
-);
-final canViewFinanceProvider = Provider<bool>(
-  (ref) =>
-      _resolve(ref, (u) => u.effectiveCanViewFinance, (r) => r.canViewFinance),
-);
-final canSeeSalaryProvider = Provider<bool>(
-  (ref) => _resolve(ref, (u) => u.effectiveCanSeeSalary, (r) => r.canSeeSalary),
-);
-final canAccessRentalsProvider = Provider<bool>(
-  (ref) => _resolve(
-    ref,
-    (u) => u.effectiveCanAccessRentals,
-    (r) => r.canAccessRentals,
-  ),
-);
-final canAccessPeopleProvider = Provider<bool>(
-  (ref) =>
-      _resolve(ref, (u) => u.effectiveCanAccessPeople, (r) => r.canAccessPeople),
-);
+final canSeeCostProvider = Provider<bool>((ref) => _cap(ref, RoleCapability.cost));
+final canViewFinanceProvider =
+    Provider<bool>((ref) => _cap(ref, RoleCapability.finance));
+final canSeeSalaryProvider =
+    Provider<bool>((ref) => _cap(ref, RoleCapability.salary));
+final canAccessRentalsProvider =
+    Provider<bool>((ref) => _cap(ref, RoleCapability.rentals));
+final canAccessPeopleProvider =
+    Provider<bool>((ref) => _cap(ref, RoleCapability.people));
+final canReceiveGoodsProvider =
+    Provider<bool>((ref) => _cap(ref, RoleCapability.goods));
+
+// Writes require both the (possibly overridden) access AND the role-level write
+// right — revoking access revokes writing too.
 final canWriteRentalsProvider = Provider<bool>(
   (ref) =>
-      _resolve(ref, (u) => u.effectiveCanWriteRentals, (r) => r.canWriteRentals),
+      _cap(ref, RoleCapability.rentals) && _cap(ref, RoleCapability.writeRentals),
 );
 final canWritePeopleProvider = Provider<bool>(
   (ref) =>
-      _resolve(ref, (u) => u.effectiveCanWritePeople, (r) => r.canWritePeople),
-);
-final canReceiveGoodsProvider = Provider<bool>(
-  (ref) =>
-      _resolve(ref, (u) => u.effectiveCanReceiveGoods, (r) => r.canReceiveGoods),
+      _cap(ref, RoleCapability.people) && _cap(ref, RoleCapability.writePeople),
 );

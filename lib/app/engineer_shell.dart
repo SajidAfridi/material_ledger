@@ -51,6 +51,10 @@ class EngineerShellScreen extends ConsumerWidget {
     ),
   ];
 
+  /// New Request is the 5th branch (no visible tab) — reached via the centre
+  /// "+" FAB / rail button. Index follows the 4 tab branches (0–3).
+  static const _newRequestIndex = 4;
+
   /// Switch tabs, preserving each branch's state. A light haptic tick confirms
   /// the change without the worker looking down.
   void _goBranch(int index) {
@@ -81,8 +85,6 @@ class EngineerShellScreen extends ConsumerWidget {
     int currentIndex,
     AppLanguage lang,
   ) {
-    final onNewRequest =
-        GoRouterState.of(context).uri.path == RoutePaths.engineerNewRequest;
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: Column(
@@ -92,14 +94,16 @@ class EngineerShellScreen extends ConsumerWidget {
         ],
       ),
       // The "New Request" CTA lives in the bottom bar — a centred, popped-out
-      // button docked into the navigation.
+      // button docked into the navigation. It activates the New Request branch
+      // (kept mounted in the IndexedStack) so the draft survives tab switches.
       floatingActionButton: _CenterAddButton(
-        isActive: onNewRequest,
+        isActive: currentIndex == _newRequestIndex,
         onTap: () {
           AppFeedback.primaryAction();
-          // Push (not go) over the shell — no tab activates, no flicker, and
-          // the back button returns here.
-          context.push(RoutePaths.engineerNewRequest);
+          navigationShell.goBranch(
+            _newRequestIndex,
+            initialLocation: _newRequestIndex == currentIndex,
+          );
         },
       ),
       // Centre-docked but lowered — a real FAB location (not a Transform), so
@@ -134,6 +138,13 @@ class EngineerShellScreen extends ConsumerWidget {
             isExtended: isExtended,
             lang: lang,
             onItemTap: _goBranch,
+            onNewRequest: () {
+              AppFeedback.primaryAction();
+              navigationShell.goBranch(
+                _newRequestIndex,
+                initialLocation: _newRequestIndex == currentIndex,
+              );
+            },
           ),
 
           // ─── Content ────────────────────────────────
@@ -154,35 +165,6 @@ class EngineerShellScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════
-//  Overlay nav — for create-flow screens shown over the shell
-// ═══════════════════════════════════════════════════════════════════
-
-/// Bottom navigation for create-flow screens shown over the engineer shell
-/// (e.g. New Request) so the bar stays visible like every other screen.
-/// Tapping a tab leaves the flow and switches to that tab.
-class EngineerOverlayNav extends StatelessWidget {
-  const EngineerOverlayNav({super.key});
-
-  /// Same docked-centre location the shell uses for its New Request button.
-  static const FloatingActionButtonLocation fabLocation =
-      _LoweredCenterDockedFab();
-
-  /// The centre "+" disc, shown active (you are already on the create flow).
-  static Widget centerButton() =>
-      _CenterAddButton(isActive: true, onTap: () {});
-
-  @override
-  Widget build(BuildContext context) {
-    return _LedgerBottomBar(
-      currentIndex: -1,
-      items: EngineerShellScreen._navItems,
-      onItemTap: (index) =>
-          context.go(EngineerShellScreen._navItems[index].path),
     );
   }
 }
@@ -232,25 +214,25 @@ class _LedgerBottomBar extends StatelessWidget {
             ),
             child: SizedBox(
               height: 68,
-            child: Row(
-              children: [
-                for (var index = 0; index < items.length; index++) ...[
-                  // Reserve the centre slot for the docked "New Request" button.
-                  if (index == items.length ~/ 2) const SizedBox(width: 76),
-                  Expanded(
-                    child: _BottomBarItem(
-                      item: items[index],
-                      isActive: currentIndex == index,
-                      onTap: () => onItemTap(index),
+              child: Row(
+                children: [
+                  for (var index = 0; index < items.length; index++) ...[
+                    // Reserve the centre slot for the docked "New Request" button.
+                    if (index == items.length ~/ 2) const SizedBox(width: 76),
+                    Expanded(
+                      child: _BottomBarItem(
+                        item: items[index],
+                        isActive: currentIndex == index,
+                        onTap: () => onItemTap(index),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -421,8 +403,7 @@ class _LoweredCenterDockedFab extends StandardFabLocation
   double getOffsetY(
     ScaffoldPrelayoutGeometry scaffoldGeometry,
     double adjustment,
-  ) =>
-      super.getOffsetY(scaffoldGeometry, adjustment) + 30;
+  ) => super.getOffsetY(scaffoldGeometry, adjustment) + 30;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -436,6 +417,7 @@ class _LedgerNavRail extends StatelessWidget {
     required this.isExtended,
     required this.lang,
     required this.onItemTap,
+    required this.onNewRequest,
   });
 
   final int currentIndex;
@@ -443,6 +425,7 @@ class _LedgerNavRail extends StatelessWidget {
   final bool isExtended;
   final AppLanguage lang;
   final ValueChanged<int> onItemTap;
+  final VoidCallback onNewRequest;
 
   @override
   Widget build(BuildContext context) {
@@ -482,10 +465,7 @@ class _LedgerNavRail extends StatelessWidget {
               child: _RailNewRequestButton(
                 isExtended: isExtended,
                 lang: lang,
-                onTap: () {
-                  AppFeedback.primaryAction();
-                  GoRouter.of(context).push(RoutePaths.engineerNewRequest);
-                },
+                onTap: onNewRequest,
               ),
             ),
 

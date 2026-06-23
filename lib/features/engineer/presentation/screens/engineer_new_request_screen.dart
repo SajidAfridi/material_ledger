@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../../app/engineer_shell.dart';
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/feedback/feedback_service.dart';
@@ -238,16 +237,21 @@ class _EngineerNewRequestScreenState
     // must not silently throw it away. (Tab switches keep it — IndexedStack.)
     final hasDraft = ref.watch(draftLineItemsProvider).isNotEmpty;
 
+    // New Request is now a shell branch (not a pushed route), so the bottom bar
+    // stays visible and the draft survives tab switches. Back/discard leaves the
+    // branch for Home (pop() is invalid at a branch root); a draft is guarded.
     return PopScope(
-      canPop: !hasDraft,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        AppFeedback.warning();
-        final discard = await _confirmDiscard(context);
-        if (!discard) return;
-        ref.read(draftLineItemsProvider.notifier).clear();
-        ref.read(selectedProjectProvider.notifier).state = null;
-        if (context.mounted) context.pop();
+        if (hasDraft) {
+          AppFeedback.warning();
+          final discard = await _confirmDiscard(context);
+          if (!discard) return;
+          ref.read(draftLineItemsProvider.notifier).clear();
+          ref.read(selectedProjectProvider.notifier).state = null;
+        }
+        if (context.mounted) context.go(RoutePaths.engineerHome);
       },
       child: isWide ? _buildWideLayout(lang, screenWidth) : _buildMobileLayout(lang),
     );
@@ -305,10 +309,8 @@ class _EngineerNewRequestScreenState
     final selectedProject = ref.watch(selectedProjectProvider);
     final hasDraft = selectedProject != null || lineItems.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: CustomScrollView(
+    return SafeArea(
+      child: CustomScrollView(
         slivers: [
           // ─── Title ─────────────────────────────────────
           SliverPadding(
@@ -576,10 +578,6 @@ class _EngineerNewRequestScreenState
           const SliverGap(AppSpacing.colossal),
         ],
       ),
-      ),
-      floatingActionButton: EngineerOverlayNav.centerButton(),
-      floatingActionButtonLocation: EngineerOverlayNav.fabLocation,
-      bottomNavigationBar: const EngineerOverlayNav(),
     );
   }
 

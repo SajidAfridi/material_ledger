@@ -10,6 +10,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/employee.dart';
 import '../../../../shared/providers/employee_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 
 /// Engineer self-profile — identity, today's attendance, leave balances,
 /// employment details and quick links to their day-to-day work. Opened from the
@@ -55,8 +56,14 @@ class EmployeeDetailScreen extends ConsumerWidget {
             _LeavesSection(emp: emp, lang: lang),
             const Gap(AppSpacing.lg),
             _EmploymentSection(emp: emp, lang: lang),
-            const Gap(AppSpacing.lg),
-            _QuickLinksSection(lang: lang),
+            // Engineer-only shortcuts (New request / My projects / My requests).
+            // The New Request target lives only in the engineer shell, so office
+            // roles (who can reach this screen via the shared profile card) don't
+            // see these links.
+            if (!ref.watch(currentRoleProvider).usesAdminPanel) ...[
+              const Gap(AppSpacing.lg),
+              _QuickLinksSection(lang: lang),
+            ],
           ],
         ),
       ),
@@ -476,7 +483,8 @@ class _QuickLinksSection extends StatelessWidget {
           _QuickLink(
             icon: Icons.add_box_outlined,
             label: AppStrings.newRequest.primary,
-            onTap: () => context.push(RoutePaths.engineerNewRequest),
+            // Activate the New Request shell branch (engineer shell only).
+            onTap: () => context.go(RoutePaths.engineerNewRequest),
           ),
           const Gap(AppSpacing.xs),
           _QuickLink(

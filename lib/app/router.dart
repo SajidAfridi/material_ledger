@@ -45,7 +45,7 @@ import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
 import '../shared/models/app_config.dart';
 import '../shared/models/app_user.dart';
-import '../shared/models/effective_permissions.dart';
+import '../shared/models/role_permissions.dart';
 import '../shared/models/user_role.dart';
 import '../shared/screens/about_screen.dart';
 import '../shared/screens/activity_log_screen.dart';
@@ -174,15 +174,22 @@ Page<void> _framed(LocalKey key, Widget child) => _slide(
 
 /// Routes open to a [UserRole]. The in-app half of role-based access control
 /// (the Firestore Security Rules enforce the same server-side).
-bool _isAllowedForRole(String path, UserRole role, AppUser? user) {
-  // Grantable boundaries honor the signed-in user's per-user overrides
-  // (Admin can revoke finance/rentals/people/goods for an individual), falling
-  // back to the role default before login.
-  final canReceiveGoods = user?.effectiveCanReceiveGoods ?? role.canReceiveGoods;
-  final canViewFinance = user?.effectiveCanViewFinance ?? role.canViewFinance;
+bool _isAllowedForRole(
+  String path,
+  UserRole role,
+  AppUser? user,
+  RolePermissions perms,
+) {
+  // Grantable boundaries resolve through: per-user override → editable role
+  // default (Access & Roles matrix) → built-in baseline.
+  final canReceiveGoods =
+      resolveCapability(user, role, perms, RoleCapability.goods);
+  final canViewFinance =
+      resolveCapability(user, role, perms, RoleCapability.finance);
   final canAccessRentals =
-      user?.effectiveCanAccessRentals ?? role.canAccessRentals;
-  final canAccessPeople = user?.effectiveCanAccessPeople ?? role.canAccessPeople;
+      resolveCapability(user, role, perms, RoleCapability.rentals);
+  final canAccessPeople =
+      resolveCapability(user, role, perms, RoleCapability.people);
 
   // Reached from the profile menu / shared across every role.
   const sharedAll = {
@@ -239,12 +246,18 @@ GoRouter createAppRouter({
   required UserRole role,
   AppUser? user,
   AppGate gate = AppGate.none,
+  // Live editable role-permission defaults. A getter (not a snapshot) + the
+  // [refreshListenable] let route guards re-evaluate the moment an Admin edits
+  // the matrix, WITHOUT rebuilding the router (no nav reset).
+  RolePermissions Function()? rolePermissions,
+  Listenable? refreshListenable,
 }) {
   // Engineers keep their original mobile shell; office roles use the new hub
   // shell. The router is rebuilt whenever the role changes.
   final useEngineerShell = !role.usesAdminPanel;
   return GoRouter(
     initialLocation: RoutePaths.splash,
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
       final path = state.uri.path;
 
@@ -300,7 +313,11 @@ GoRouter createAppRouter({
       }
 
       // Role-based access guard for module routes → Home if not allowed.
-      if (!_isAllowedForRole(path, role, user)) return RoutePaths.engineerHome;
+      final perms =
+          rolePermissions?.call() ?? RolePermissions.fromRoleDefaults();
+      if (!_isAllowedForRole(path, role, user, perms)) {
+        return RoutePaths.engineerHome;
+      }
 
       return null;
     },
@@ -385,6 +402,19 @@ GoRouter createAppRouter({
                 ),
               ],
             ),
+            // 5th branch (no visible tab) — New Request lives INSIDE the shell so
+            // the bottom bar stays visible and the in-progress draft survives tab
+            // switches (IndexedStack keeps it mounted). Reached via the centre
+            // "+" FAB / rail button (goBranch), not a tab.
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: RoutePaths.engineerNewRequest,
+                  pageBuilder: (context, state) =>
+                      const NoTransitionPage(child: EngineerNewRequestScreen()),
+                ),
+              ],
+            ),
           ],
         )
       else
@@ -450,14 +480,8 @@ GoRouter createAppRouter({
         ),
 
       // ─── Engineer create-flows (full-screen over the shell) ─────────
-      // Top-level (not nested in a tab branch) so pushing them never activates
-      // a bottom-nav tab or flickers — they overlay the shell with their own
-      // back, and the IndexedStack branches keep their state underneath.
-      GoRoute(
-        path: RoutePaths.engineerNewRequest,
-        pageBuilder: (context, state) =>
-            _slide(state.pageKey, const EngineerNewRequestScreen()),
-      ),
+      // Create Project overlays the shell with its own back; New Request now
+      // lives INSIDE the shell as a branch (see above), so it's not here.
       GoRoute(
         path: RoutePaths.engineerCreateProject,
         pageBuilder: (context, state) =>

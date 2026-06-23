@@ -76,7 +76,8 @@ class MaterialsHubScreen extends ConsumerWidget {
           icon: Icons.add_circle_outline_rounded,
           title: AppStrings.newRequest.primary,
           subtitle: AppStrings.newRequest.secondary(lang),
-          onTap: () => context.push(RoutePaths.engineerNewRequest),
+          // Activate the New Request shell branch (keeps the bottom bar).
+          onTap: () => context.go(RoutePaths.engineerNewRequest),
         ),
       // Goods receipt (stock in) — procurement / admin.
       if (canReceiveGoods)
