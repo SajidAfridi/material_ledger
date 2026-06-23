@@ -190,8 +190,14 @@ class RentPaymentsNotifier extends StateNotifier<List<RentPayment>> {
       // Top up: accumulate the paid amount but PRESERVE the period's original
       // total due — re-recording must never reset/double the charge. The new
       // [amountDueAED] only matters when creating a fresh period record below.
-      result = state[idx].copyWith(
-        amountPaidAED: state[idx].amountPaidAED + amountPaidAED,
+      // Cap the running total at the period's due so a month's rent can never be
+      // over-collected (overpayment would inflate the cash-received roll).
+      final original = state[idx];
+      final cappedPaid = (original.amountPaidAED + amountPaidAED)
+          .clamp(0, original.amountDueAED)
+          .toDouble();
+      result = original.copyWith(
+        amountPaidAED: cappedPaid,
         paidDate: DateTime.now(),
         method: method,
         note: note,
@@ -206,7 +212,8 @@ class RentPaymentsNotifier extends StateNotifier<List<RentPayment>> {
         unitId: unitId,
         periodMonth: periodMonth,
         amountDueAED: amountDueAED,
-        amountPaidAED: amountPaidAED,
+        // Never record more than the month's due (no over-collection).
+        amountPaidAED: amountPaidAED.clamp(0, amountDueAED).toDouble(),
         paidDate: DateTime.now(),
         method: method,
         note: note,
@@ -356,7 +363,11 @@ final rentalsSummaryProvider = Provider<RentalsSummary>((ref) {
   var overdue = 0.0;
   for (final p in payments) {
     if (p.isVoided) continue;
-    if (p.periodMonth == thisMonth) collected += p.amountPaidAED;
+    // Clamp at the period's due so a legacy over-collected record can't push the
+    // collected figure above the rent roll.
+    if (p.periodMonth == thisMonth) {
+      collected += p.amountPaidAED.clamp(0, p.amountDueAED).toDouble();
+    }
     if (p.statusAsOf(now) == RentStatus.overdue) overdue += p.outstandingAED;
   }
 

@@ -91,44 +91,37 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
     return null;
   }
 
+  /// Outstanding balance for [period] = the unit's rent minus what's already
+  /// been paid for that month (the full rent if there's no record yet). This is
+  /// the authoritative "due" — the field is read-only so it can't be inflated to
+  /// slip an overpayment past the cap.
+  double _outstandingFor(String period) {
+    for (final p in ref.read(rentPaymentsProvider)) {
+      if (p.unitId == widget.unit.id && p.periodMonth == period && !p.isVoided) {
+        return p.outstandingAED;
+      }
+    }
+    return widget.unit.monthlyRentAED;
+  }
+
+  /// Recompute the balance due + default paid amount when the billing month
+  /// changes (e.g. switching to a partially-paid or already-settled month).
+  void _onMonthChanged(String value) {
+    final period = value.trim();
+    if (_monthError(period) != null) return;
+    final outstanding = _outstandingFor(period);
+    setState(() {
+      _dueController.text = outstanding.toStringAsFixed(0);
+      _paidController.text = outstanding.toStringAsFixed(0);
+    });
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final period = _monthController.text.trim();
-    final due = double.parse(_dueController.text.trim());
     final paid = double.parse(_paidController.text.trim());
-
-    // Guard against fat-finger overpayment — the clamp would otherwise hide it.
-    if (paid > due) {
-      final over = paid - due;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.surfaceContainerLowest,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-          ),
-          title: Text(
-            AppStrings.overpaymentTitle.primary,
-            style: AppTypography.titleMedium,
-          ),
-          content: Text(
-            '${AppStrings.overpaymentBody.primary} AED ${over.toStringAsFixed(0)}.',
-            style: AppTypography.bodyMedium,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(AppStrings.cancel.primary),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(AppStrings.recordAnyway.primary),
-            ),
-          ],
-        ),
-      );
-      if (ok != true || !mounted) return;
-    }
+    // Authoritative due for the period — never trust a stale/edited field.
+    final due = _outstandingFor(period);
 
     setState(() => _busy = true);
     await ref
@@ -136,7 +129,7 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
         .recordPayment(
           unitId: widget.unit.id,
           periodMonth: period,
-          amountDueAED: double.parse(_dueController.text.trim()),
+          amountDueAED: due,
           amountPaidAED: paid,
           method: _methodController.text.trim().isEmpty
               ? null
@@ -223,6 +216,7 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
                               label: AppStrings.billingMonth.primary,
                               hintText: 'YYYY-MM',
                               validator: _monthError,
+                              onChanged: _onMonthChanged,
                             ),
                           ),
                           const Gap(AppSpacing.lg),
@@ -230,10 +224,9 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
                             child: LedgerTextField(
                               controller: _dueController,
                               label: AppStrings.amountDue.primary,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
+                              // Derived from the unit's rent — read-only so it
+                              // can't be edited to enable over-collection.
+                              readOnly: true,
                               validator: _positive,
                             ),
                           ),
@@ -247,7 +240,7 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        validator: _positive,
+                        validator: _paidError,
                       ),
                       const Gap(AppSpacing.lg),
                       LedgerTextField(
@@ -278,6 +271,19 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
     if ((v ?? '').trim().isEmpty) return AppStrings.fieldRequired.primary;
     final val = double.tryParse(v!.trim());
     if (val == null || val <= 0) return AppStrings.enterValidNumber.primary;
+    return null;
+  }
+
+  /// Paid must be positive AND not exceed the balance due — rent for a month can
+  /// never be over-collected (that's what inflated the cash-received roll).
+  String? _paidError(String? v) {
+    final base = _positive(v);
+    if (base != null) return base;
+    final paid = double.parse(v!.trim());
+    final due = _outstandingFor(_monthController.text.trim());
+    if (paid > due) {
+      return 'Max AED ${due.toStringAsFixed(0)} — the balance due';
+    }
     return null;
   }
 }

@@ -59,22 +59,31 @@ class RentPayment {
 
   /// Derive the settlement status as of [now] (defaults to the current date).
   RentStatus statusAsOf(DateTime now) {
-    if (amountPaidAED >= amountDueAED && amountDueAED > 0) return RentStatus.paid;
-    if (amountPaidAED > 0) return RentStatus.partial;
-    // Nothing paid yet — overdue once the billing month has fully passed.
-    final parts = periodMonth.split('-');
-    if (parts.length == 2) {
-      final year = int.tryParse(parts[0]);
-      final month = int.tryParse(parts[1]);
-      if (year != null && month != null) {
-        // First day of the month AFTER the billing period.
-        final dueCutoff = month == 12
-            ? DateTime(year + 1, 1, 1)
-            : DateTime(year, month + 1, 1);
-        if (now.isAfter(dueCutoff)) return RentStatus.overdue;
-      }
+    // Fully settled (or nothing was owed).
+    if (amountDueAED <= 0 || amountPaidAED >= amountDueAED) {
+      return RentStatus.paid;
     }
+    // A balance remains. Once the billing month has fully passed it is overdue —
+    // whether nothing OR only part of it has been paid (a partial old balance is
+    // still late money to collect).
+    if (_isPastDue(now)) return RentStatus.overdue;
+    // Still within the billing window: partial if something's in, else due.
+    if (amountPaidAED > 0) return RentStatus.partial;
     return RentStatus.due;
+  }
+
+  /// True once the first day of the month AFTER [periodMonth] has arrived, i.e.
+  /// the whole billing month has elapsed.
+  bool _isPastDue(DateTime now) {
+    final parts = periodMonth.split('-');
+    if (parts.length != 2) return false;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    if (year == null || month == null) return false;
+    final dueCutoff = month == 12
+        ? DateTime(year + 1, 1, 1)
+        : DateTime(year, month + 1, 1);
+    return now.isAfter(dueCutoff);
   }
 
   RentPayment copyWith({

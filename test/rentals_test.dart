@@ -46,6 +46,13 @@ void main() {
       final p = _payment(period: '2026-04', due: 4500, paid: 0);
       expect(p.statusAsOf(now), RentStatus.overdue);
     });
+
+    test('partly paid PAST month → overdue (a late balance is still overdue)',
+        () {
+      final p = _payment(period: '2026-04', due: 4500, paid: 2000);
+      expect(p.statusAsOf(now), RentStatus.overdue);
+      expect(p.outstandingAED, 2500);
+    });
   });
 
   group('Rentals providers', () {
@@ -170,6 +177,65 @@ void main() {
       );
       expect(fresh.id, isNot(p.id));
       expect(fresh.amountPaidAED, 1000);
+    });
+
+    test('recordPayment caps a fresh overpayment at the amount due', () async {
+      final notifier = container.read(rentPaymentsProvider.notifier);
+      final month = currentRentMonthKey();
+      final p = await notifier.recordPayment(
+        unitId: 'unit-ws-01',
+        periodMonth: month,
+        amountDueAED: 9000,
+        amountPaidAED: 12000, // fat-finger overpay
+        recordedBy: 'test',
+      );
+      expect(p.amountPaidAED, 9000); // capped, not 12000
+      expect(p.outstandingAED, 0);
+    });
+
+    test('recordPayment caps a top-up so the period is never over-collected',
+        () async {
+      final notifier = container.read(rentPaymentsProvider.notifier);
+      const unit = 'unit-shop-02'; // seeded this month: due 4500, paid 0
+      final month = currentRentMonthKey();
+      await notifier.recordPayment(
+        unitId: unit,
+        periodMonth: month,
+        amountDueAED: 4500,
+        amountPaidAED: 3000,
+        recordedBy: 'test',
+      );
+      // Another 3000 would total 6000 → capped at the 4500 due.
+      final r = await notifier.recordPayment(
+        unitId: unit,
+        periodMonth: month,
+        amountDueAED: 4500,
+        amountPaidAED: 3000,
+        recordedBy: 'test',
+      );
+      expect(r.amountPaidAED, 4500);
+      expect(r.outstandingAED, 0);
+      // Collected this month never exceeds the rent roll.
+      final summary = container.read(rentalsSummaryProvider);
+      expect(summary.collectedThisMonth, lessThanOrEqualTo(summary.monthlyRentRoll));
+    });
+
+    test('overdue total includes a partial past-due balance', () async {
+      final notifier = container.read(rentPaymentsProvider.notifier);
+      final before = container.read(rentalsSummaryProvider).overdueTotal;
+      final now = DateTime.now();
+      final past = DateTime(now.year, now.month - 3, 1);
+      final pastKey = '${past.year}-${past.month.toString().padLeft(2, '0')}';
+      // shop-01 has no record for that past month → fresh, partial, past due.
+      await notifier.recordPayment(
+        unitId: 'unit-shop-01',
+        periodMonth: pastKey,
+        amountDueAED: 3800,
+        amountPaidAED: 1000,
+        recordedBy: 'test',
+      );
+      final after = container.read(rentalsSummaryProvider).overdueTotal;
+      expect(after, before + 2800); // the 2800 remaining now counts as overdue
     });
 
     test('marking an occupied unit vacant drops it from the rent roll',
