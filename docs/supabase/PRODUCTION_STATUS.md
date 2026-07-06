@@ -152,7 +152,7 @@ Writes on one device now appear on others without a relaunch.
 2. **Change-password → Supabase** — `change_password_screen` updates the local
    hash, not Supabase Auth; wire it to the `admin-users` `setPassword` action (or
    `auth.updateUser` for self-service). (No seeded user forces a change, so
-   unused today.) [Me, next]
+   unused today.) [Me, next] 
 3. **Role-matrix → claims propagation** — per-user overrides re-stamp the JWT
    claim, but an admin editing a *role-level* default (Access & Roles) does not
    yet re-push claims for every user of that role. [Me, next]
