@@ -37,6 +37,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
   final _nationality = TextEditingController();
   final _contact = TextEditingController();
   final _salary = TextEditingController();
+  final _basicWage = TextEditingController();
   bool _busy = false;
 
   @override
@@ -47,6 +48,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
     _nationality.dispose();
     _contact.dispose();
     _salary.dispose();
+    _basicWage.dispose();
     super.dispose();
   }
 
@@ -61,6 +63,7 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
             nationality: _nationality.text.trim(),
             contact: _contact.text.trim().isEmpty ? null : _contact.text.trim(),
             salaryAED: double.tryParse(_salary.text.trim()),
+            basicWageAED: double.tryParse(_basicWage.text.trim()),
           );
       await ref.logAudit(
         action: 'Employee added',
@@ -156,6 +159,21 @@ class _AddEmployeeSheetState extends ConsumerState<AddEmployeeSheet> {
                     LedgerTextField(
                       controller: _salary,
                       label: 'Monthly salary AED (optional)',
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        final t = (v ?? '').trim();
+                        if (t.isEmpty) return null; // optional
+                        final n = double.tryParse(t);
+                        if (n == null || n <= 0) return 'Enter a valid amount';
+                        if (n > 1000000) return 'Amount looks too large';
+                        return null;
+                      },
+                    ),
+                    const Gap(AppSpacing.lg),
+                    LedgerTextField(
+                      controller: _basicWage,
+                      label: 'Basic wage AED (optional — for gratuity)',
+                      hintText: 'Excludes allowances; used for EOSB estimate',
                       keyboardType: TextInputType.number,
                       validator: (v) {
                         final t = (v ?? '').trim();

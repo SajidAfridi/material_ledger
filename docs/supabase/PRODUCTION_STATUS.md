@@ -145,6 +145,73 @@ Writes on one device now appear on others without a relaunch.
   a row for *another* user does **not** — realtime honours RLS. Delivery fails
   without `setAuth` (confirmed), which is why the app sets it explicitly.
 
+## Push notifications — plumbing DONE, needs your credentials to activate
+FCM as pure push TRANSPORT (Supabase stays the backend/auth/db). Structured as
+a swappable seam like every other optional integration in this app (Sentry,
+Supabase): `PushService` interface, `NoopPushService` default,
+`FcmPushService` the real implementation — activates automatically the moment
+Firebase is configured, no further app-code changes needed.
+
+**Foundational fix, done first**: `notifications` was local-only per device (no
+`enqueueSync` call at all) — a notification created on one phone for another
+user's account never reached that user's actual device; it only "worked" when
+testing by switching accounts on the same phone. Now synced (RLS: a personal
+notification is readable only by its target user or admin; a broadcast/
+role-audience one is readable by anyone signed in — the app already filters by
+role client-side).
+
+**What's built and verified:**
+- `notifications` + `device_tokens` tables, RLS, realtime — all live-verified via
+  simulated JWTs (engineer sees their own + broadcasts, not another user's
+  personal one; even admin can't `SELECT` `device_tokens`, only `service_role`
+  can via the Edge Function).
+- `supabase/functions/send-push` — looks up target `app_user_id`s' tokens and
+  calls FCM HTTP v1 using a Google service-account OAuth2 exchange (dependency-
+  free, Deno WebCrypto). Auth-gated (any signed-in user), then config-gated
+  (responds `501` with no `FCM_SERVICE_ACCOUNT_JSON` secret set — never breaks
+  the caller's flow). Verified via curl: 401 unauthenticated, 501 unconfigured.
+- Flutter client (`push_service.dart`): permission request, background handler,
+  foreground local-notification display, tap → deep-link (reusing the existing
+  `route` field, via the same "read the current router from Riverpod" pattern
+  `hardwareActionProvider` already used), device-token registration + refresh.
+  Every step wrapped so a missing Firebase config is a silent no-op, never a
+  crash — **verified live**: relaunched on the iPhone 17 Pro simulator, saw
+  `Firebase.initializeApp()` throw `core/not-initialized` and get caught
+  cleanly, app kept running normally.
+- Wired into the single `notificationsProvider.add()` seam (not touched at each
+  of the ~10 existing call sites): resolves the notification's `audience`/
+  `userId` into concrete `app_user_id`s (`resolvePushTargets`, unit-tested),
+  excludes the acting user, calls `send-push`. Best-effort — a push failure
+  never breaks the in-app/synced notification.
+- iOS: deployment target raised 13.0→15.0 (`firebase_messaging` requires it —
+  found via a real failed build, not guessed), `Runner.entitlements`
+  (`aps-environment: development`) + `UIBackgroundModes: remote-notification`
+  wired into all 3 build configs. Verified: `pod install` + full simulator
+  relaunch succeeded after each change.
+- Android: **deliberately untouched.** The `google-services` Gradle plugin
+  hard-fails the whole build if `google-services.json` is absent — applying it
+  now would break `flutter run`/`build` on Android immediately. Wire it only
+  once the file exists (see below).
+
+**To actually go live, you need to:**
+1. Create a Firebase project (free) — Cloud Messaging only, nothing else.
+2. Download `google-services.json` → `android/app/`, apply the
+   `com.google.gms.google-services` Gradle plugin (only then — see above).
+3. Download `GoogleService-Info.plist` → `ios/Runner/` (add to the Xcode
+   project).
+4. Apple Developer Program membership → generate an APNs auth key (.p8),
+   upload it to the Firebase project's Cloud Messaging settings.
+5. Generate a Firebase service-account key (Project Settings → Service
+   Accounts) → set its JSON as the `FCM_SERVICE_ACCOUNT_JSON` secret on the
+   `send-push` Edge Function.
+6. In Xcode, Signing & Capabilities → confirm "Push Notifications" + "Background
+   Modes → Remote notifications" are checked against your real Team/provisioning
+   (the entitlements file is staged; your Team must actually grant the
+   capability).
+
+Until then: the app behaves exactly as it does today — in-app notifications
+work fully (now correctly synced across devices), push simply stays off.
+
 ## Remaining for full production (owner in brackets)
 1. **UAE data residency** — this project is in Frankfurt. A real go-live needs a
    self-hosted Supabase/Postgres in a UAE region; point the app at it with
@@ -152,10 +219,10 @@ Writes on one device now appear on others without a relaunch.
 2. **Change-password → Supabase** — `change_password_screen` updates the local
    hash, not Supabase Auth; wire it to the `admin-users` `setPassword` action (or
    `auth.updateUser` for self-service). (No seeded user forces a change, so
-   unused today.) [Me, next] 
-3. **Role-matrix → claims propagation** — per-user overrides re-stamp the JWT
-   claim, but an admin editing a *role-level* default (Access & Roles) does not
-   yet re-push claims for every user of that role. [Me, next]
+   unused today.) [Me, next]
+3. ~~Role-matrix → claims propagation~~ — **DONE.** `restampRoleClaims` fires
+   from `role_permissions_provider.dart` on every matrix edit, re-stamping the
+   JWT for every affected user.
 4. **Sync tail cases** — realtime covers online propagation; a delete that
    happens while a device is offline still needs a reconcile-on-reconnect pass
    (tombstones / full re-hydrate diff). [Me, later]
@@ -163,4 +230,11 @@ Writes on one device now appear on others without a relaunch.
    password protection" (HaveIBeenPwned) in Auth settings. [**You**, 2 clicks]
 6. **Secrets** — inject `SUPABASE_URL/KEY` + `SENTRY_DSN` from CI/secret store,
    not source. [**You** + me]
-7. **PDPL/legal, backups/DR, APNs cert (iOS push)**. [**You**]
+7. **PDPL/legal, backups/DR**. [**You**]
+
+## Push notifications — app-side DONE, needs your credentials to go live
+See "Push notifications" section below for the full breakdown. Short version:
+all Dart + Supabase-side plumbing is built, deployed, and verified (device-token
+registration, RLS, the `send-push` Edge Function, FCM client wiring, iOS
+entitlements) — but it stays silently inactive until you provide a Firebase
+project (free) + an Apple Developer Program push key. **[You]**

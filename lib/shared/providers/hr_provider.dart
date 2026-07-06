@@ -3,7 +3,9 @@ import 'package:uuid/uuid.dart';
 
 import '../models/attendance_record.dart';
 import '../models/employee_record.dart';
+import '../models/gratuity.dart';
 import '../models/leave_record.dart';
+import '../models/sick_leave_tiers.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
@@ -56,6 +58,7 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
     required String nationality,
     String? contact,
     double? salaryAED,
+    double? basicWageAED,
   }) async {
     final e = Employee(
       id: 'emp-${_uuid.v4().substring(0, 8)}',
@@ -65,6 +68,7 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
       nationality: nationality,
       contact: contact,
       salaryAED: salaryAED,
+      basicWageAED: basicWageAED,
       joinDate: DateTime.now(),
     );
     state = [e, ...state];
@@ -83,12 +87,15 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
   }
 
   Future<void> _syncEmployee(Employee e, {required String kind}) {
-    // Salary is admin-only (canSeeSalary). The employees table is readable by
-    // anyone with the 'people' cap (procurement included), so salaryAED must
-    // NEVER ride in the shared payload — strip it before it leaves the device.
-    // It stays in the local store for authorised (admin) use; cross-admin salary
-    // sync would need a dedicated salary-capped table (see PRODUCTION_STATUS).
-    final payload = e.toJson()..remove('salaryAED');
+    // Salary/basic-wage are admin-only (canSeeSalary). The employees table is
+    // readable by anyone with the 'people' cap (procurement included), so
+    // compensation figures must NEVER ride in the shared payload — strip them
+    // before they leave the device. They stay in the local store for authorised
+    // (admin) use; cross-admin sync would need a dedicated salary-capped table
+    // (see PRODUCTION_STATUS).
+    final payload = e.toJson()
+      ..remove('salaryAED')
+      ..remove('basicWageAED');
     return _ref.enqueueSync(
       collection: 'employees',
       docId: e.id,
@@ -554,6 +561,71 @@ final leaveBalanceProvider = Provider.family<LeaveBalance, String>((
     entitlement: _annualEntitlement(employee?.joinDate),
     usedAnnual: used,
   );
+});
+
+/// Sick-leave days already taken (any status other than rejected/cancelled;
+/// pending counts so the tier preview reacts before approval) for [employeeId]
+/// in the current calendar year — feeds [sickLeaveTierProvider].
+int _sickDaysUsedThisYear(List<LeaveRecord> records, String employeeId) {
+  final year = DateTime.now().year;
+  var used = 0;
+  for (final l in records) {
+    if (l.employeeId != employeeId || l.type != LeaveType.sick) continue;
+    if (l.status == LeaveRecordStatus.rejected ||
+        l.status == LeaveRecordStatus.cancelled) {
+      continue;
+    }
+    used += _annualDaysInYear(l, year);
+  }
+  return used;
+}
+
+/// How a [days]-day sick-leave request for [employeeId] would split across the
+/// UAE statutory pay tiers (full/half/unpaid), given what they've already used
+/// this year. `(employeeId, days)` as the family key.
+final sickLeaveTierProvider =
+    Provider.family<SickLeaveTierSplit, (String employeeId, int days)>((
+  ref,
+  arg,
+) {
+  final records = ref.watch(leaveRecordsProvider);
+  final used = _sickDaysUsedThisYear(records, arg.$1);
+  return splitSickLeaveTiers(alreadyUsedDays: used, requestedDays: arg.$2);
+});
+
+/// End-of-service gratuity ESTIMATE for [employeeId] as of today — an HR
+/// planning figure, not a certified payout (see gratuity.dart). Null when the
+/// employee has no join date or no basic-wage figure to compute from.
+final gratuityEstimateProvider =
+    Provider.family<GratuityEstimate?, String>((ref, employeeId) {
+  Employee? emp;
+  for (final e in ref.watch(employeesProvider)) {
+    if (e.id == employeeId) {
+      emp = e;
+      break;
+    }
+  }
+  final wage = emp?.effectiveBasicWageAED;
+  final joinDate = emp?.joinDate;
+  if (emp == null || wage == null || wage <= 0 || joinDate == null) return null;
+  return calculateGratuity(
+    joinDate: joinDate,
+    asOf: DateTime.now(),
+    basicWageAED: wage,
+  );
+});
+
+/// Company-wide accrued gratuity liability across the whole active roster —
+/// the roll-up figure management needs for financial planning.
+final totalGratuityLiabilityProvider = Provider<double>((ref) {
+  final employees = ref.watch(employeesProvider);
+  var total = 0.0;
+  for (final e in employees) {
+    if (e.status == EmployeeStatus.inactive) continue;
+    final est = ref.watch(gratuityEstimateProvider(e.id));
+    if (est != null && est.entitled) total += est.amountAED;
+  }
+  return total;
 });
 
 // ─── Derived: leave-request queues + identity link ───────────────

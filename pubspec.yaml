@@ -47,6 +47,13 @@ dependencies:
   # SUPABASE_URL + SUPABASE_ANON_KEY are supplied at build time (--dart-define);
   # otherwise the app uses the local sync backend (unchanged offline behaviour).
   supabase_flutter: ^2.5.0
+  # Push notification TRANSPORT ONLY (Supabase remains the backend/auth/db).
+  # A no-op until google-services.json / GoogleService-Info.plist are added —
+  # Firebase.initializeApp() is wrapped so a missing/misconfigured project
+  # never blocks app boot.
+  firebase_core: ^4.11.0
+  firebase_messaging: ^16.4.1
+  flutter_local_notifications: ^22.0.1
 
 dev_dependencies:
   flutter_test:

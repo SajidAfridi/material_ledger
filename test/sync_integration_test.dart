@@ -94,13 +94,16 @@ void main() {
     expect(backend.applyCount, 0);
     expect(backend.server, isEmpty);
     // request (create+dispatch coalesced) + the materials stock decrement from
-    // dispatch + rent + attendance + leave = 5 ops.
-    expect(outbox.length, 5);
+    // dispatch + the stock-ledger entry for that dispatch + rent + attendance +
+    // leave = 6 ops.
+    expect(outbox.length, 6);
     // The coalesced request op carries the dispatched (latest) state.
     final reqOp = outbox.firstWhere((o) => o.collection == 'materialRequests');
     expect(reqOp.docId, reqId);
-    // Dispatch also queued an inventory write (on-hand now syncs).
+    // Dispatch also queued an inventory write (on-hand now syncs) and a ledger
+    // entry (the append-only stock-movement history).
     expect(outbox.any((o) => o.collection == 'materials'), true);
+    expect(outbox.any((o) => o.collection == 'stockMovements'), true);
 
     // Survives a restart: a fresh outbox over the same storage still has them.
     final reopened = OutboxNotifier(
@@ -110,18 +113,18 @@ void main() {
         fromJson: MutationOp.fromJson,
       ),
     );
-    expect(reopened.ops.length, 5);
+    expect(reopened.ops.length, 6);
 
     // ── Reconnect → engine flushes the queue in order. ──
     conn.setOnline(true);
     await container.read(syncEngineProvider).flush();
 
-    expect(backend.applyCount, 5); // each op applied exactly once
-    expect(backend.server.length, 5); // zero duplicate documents
+    expect(backend.applyCount, 6); // each op applied exactly once
+    expect(backend.server.length, 6); // zero duplicate documents
     expect(container.read(outboxProvider), isEmpty); // zero loss, all confirmed
 
     // A redundant flush must not re-send anything.
     await container.read(syncEngineProvider).flush();
-    expect(backend.applyCount, 5);
+    expect(backend.applyCount, 6);
   });
 }

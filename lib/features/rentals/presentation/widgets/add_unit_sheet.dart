@@ -41,6 +41,8 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
   late final TextEditingController _tenantController;
   late final TextEditingController _contactController;
   late final TextEditingController _notesController;
+  late final TextEditingController _depositController;
+  late final TextEditingController _vatRateController;
   late RentalType _type;
   late RentalStatus _status;
   DateTime? _leaseStart;
@@ -61,6 +63,12 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
     _tenantController = TextEditingController(text: u?.tenantName ?? '');
     _contactController = TextEditingController(text: u?.tenantContact ?? '');
     _notesController = TextEditingController(text: u?.notes ?? '');
+    _depositController = TextEditingController(
+      text: u?.securityDepositAED?.toStringAsFixed(0) ?? '',
+    );
+    _vatRateController = TextEditingController(
+      text: (u?.vatRatePercent ?? 5.0).toStringAsFixed(0),
+    );
     _type = u?.type ?? RentalType.shop;
     _status = u?.status ?? RentalStatus.vacant;
     _leaseStart = u?.leaseStart;
@@ -75,6 +83,8 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
     _tenantController.dispose();
     _contactController.dispose();
     _notesController.dispose();
+    _depositController.dispose();
+    _vatRateController.dispose();
     super.dispose();
   }
 
@@ -87,6 +97,8 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
     final tenant = _tenantController.text.trim();
     final contact = _contactController.text.trim();
     final notes = _notesController.text.trim();
+    final deposit = double.tryParse(_depositController.text.trim());
+    final vatRate = double.tryParse(_vatRateController.text.trim()) ?? 5.0;
 
     if (_isEdit) {
       final updated = RentalUnit(
@@ -101,6 +113,8 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
         leaseEnd: _leaseEnd,
         status: _status,
         notes: notes.isEmpty ? null : notes,
+        securityDepositAED: deposit,
+        vatRatePercent: vatRate,
         createdBy: widget.unit!.createdBy,
         createdAt: widget.unit!.createdAt,
       );
@@ -122,6 +136,8 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
             leaseStart: _leaseStart,
             leaseEnd: _leaseEnd,
             notes: notes.isEmpty ? null : notes,
+            securityDepositAED: deposit,
+            vatRatePercent: vatRate,
             createdBy: ref.read(actorNameProvider),
           );
       await ref.logAudit(
@@ -256,6 +272,50 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
                             decimal: true,
                           ),
                           validator: _positiveAmount,
+                        ),
+                        const Gap(AppSpacing.lg),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LedgerTextField(
+                                controller: _depositController,
+                                label: 'Security deposit AED',
+                                hintText: AppStrings.optional.primary,
+                                keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                validator: (v) {
+                                  final t = (v ?? '').trim();
+                                  if (t.isEmpty) return null;
+                                  final n = double.tryParse(t);
+                                  if (n == null || n < 0) {
+                                    return AppStrings.enterValidNumber.primary;
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const Gap(AppSpacing.md),
+                            Expanded(
+                              child: LedgerTextField(
+                                controller: _vatRateController,
+                                label: 'VAT rate %',
+                                hintText: '5',
+                                keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
+                                validator: (v) {
+                                  final t = (v ?? '').trim();
+                                  if (t.isEmpty) return null;
+                                  final n = double.tryParse(t);
+                                  if (n == null || n < 0 || n > 100) {
+                                    return AppStrings.enterValidNumber.primary;
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                         const Gap(AppSpacing.lg),
                         LedgerTextField(

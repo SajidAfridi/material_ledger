@@ -300,6 +300,28 @@ class _RequestLeaveSheetState extends ConsumerState<RequestLeaveSheet> {
                           style: AppTypography.titleSmall,
                         ),
                       ],
+                      if (_type == LeaveType.sick && _days > 0) ...[
+                        const Gap(AppSpacing.sm),
+                        Builder(
+                          builder: (context) {
+                            final split = ref.watch(
+                              sickLeaveTierProvider((widget.employee.id, _days)),
+                            );
+                            final parts = [
+                              if (split.fullPayDays > 0) '${split.fullPayDays}d full pay',
+                              if (split.halfPayDays > 0) '${split.halfPayDays}d half pay',
+                              if (split.unpaidDays > 0) '${split.unpaidDays}d unpaid',
+                            ];
+                            if (parts.isEmpty) return const SizedBox.shrink();
+                            return Text(
+                              'Pay tiers: ${parts.join(' · ')}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                       if (overBalance) ...[
                         const Gap(AppSpacing.sm),
                         _Warn(AppStrings.overBalanceWarning.primary),

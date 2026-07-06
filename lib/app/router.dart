@@ -33,6 +33,7 @@ import '../features/system/presentation/screens/gate_screens.dart';
 import '../features/finance/presentation/screens/finance_screen.dart';
 import '../features/inventory/presentation/screens/goods_receipt_screen.dart';
 import '../features/inventory/presentation/screens/inventory_screen.dart';
+import '../features/inventory/presentation/screens/stock_history_screen.dart';
 import '../features/materials/presentation/screens/materials_hub_screen.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
@@ -107,6 +108,7 @@ abstract final class RoutePaths {
 
   // ─── Office / admin screens (full-screen, reached from hubs) ─
   static const String inventory = '/admin/inventory';
+  static const String stockHistory = '/admin/inventory/history';
   static const String transactions = '/admin/transactions';
   static const String settings = '/admin/settings';
   static const String goodsReceipt = '/admin/goods-receipt';
@@ -587,6 +589,11 @@ GoRouter createAppRouter({
         path: RoutePaths.inventory,
         pageBuilder: (context, state) =>
             _framed(state.pageKey, const InventoryScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.stockHistory,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const StockHistoryScreen()),
       ),
       GoRoute(
         path: RoutePaths.transactions,

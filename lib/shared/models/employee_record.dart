@@ -30,10 +30,13 @@ class Employee {
     required this.nationality,
     this.contact,
     this.emiratesId,
+    this.emiratesIdExpiry,
     this.passportNo,
+    this.passportExpiry,
     this.visaExpiry,
     this.joinDate,
     this.salaryAED,
+    this.basicWageAED,
     this.documents = const [],
     this.status = EmployeeStatus.active,
   });
@@ -47,10 +50,19 @@ class Employee {
 
   // ── Restricted (Admin only) ──
   final String? emiratesId;
+  final DateTime? emiratesIdExpiry;
   final String? passportNo;
+  final DateTime? passportExpiry;
   final DateTime? visaExpiry;
   final DateTime? joinDate;
   final double? salaryAED;
+
+  /// Monthly BASIC wage (excludes housing/transport/other allowances) — the
+  /// figure UAE end-of-service gratuity is calculated on (Art. 51). Falls back
+  /// to [salaryAED] when not set separately, since many small employers only
+  /// track one figure; set this explicitly for an accurate gratuity estimate.
+  final double? basicWageAED;
+
   final List<String> documents;
 
   final EmployeeStatus status;
@@ -69,6 +81,10 @@ class Employee {
     return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
+  /// Monthly basic wage used for gratuity — falls back to [salaryAED] when
+  /// [basicWageAED] wasn't set separately.
+  double? get effectiveBasicWageAED => basicWageAED ?? salaryAED;
+
   Employee copyWith({
     String? fullName,
     String? jobRole,
@@ -76,10 +92,13 @@ class Employee {
     String? nationality,
     String? contact,
     String? emiratesId,
+    DateTime? emiratesIdExpiry,
     String? passportNo,
+    DateTime? passportExpiry,
     DateTime? visaExpiry,
     DateTime? joinDate,
     double? salaryAED,
+    double? basicWageAED,
     List<String>? documents,
     EmployeeStatus? status,
   }) => Employee(
@@ -90,10 +109,13 @@ class Employee {
     nationality: nationality ?? this.nationality,
     contact: contact ?? this.contact,
     emiratesId: emiratesId ?? this.emiratesId,
+    emiratesIdExpiry: emiratesIdExpiry ?? this.emiratesIdExpiry,
     passportNo: passportNo ?? this.passportNo,
+    passportExpiry: passportExpiry ?? this.passportExpiry,
     visaExpiry: visaExpiry ?? this.visaExpiry,
     joinDate: joinDate ?? this.joinDate,
     salaryAED: salaryAED ?? this.salaryAED,
+    basicWageAED: basicWageAED ?? this.basicWageAED,
     documents: documents ?? this.documents,
     status: status ?? this.status,
   );
@@ -106,30 +128,32 @@ class Employee {
     'nationality': nationality,
     'contact': contact,
     'emiratesId': emiratesId,
+    'emiratesIdExpiry': emiratesIdExpiry?.toIso8601String(),
     'passportNo': passportNo,
+    'passportExpiry': passportExpiry?.toIso8601String(),
     'visaExpiry': visaExpiry?.toIso8601String(),
     'joinDate': joinDate?.toIso8601String(),
     'salaryAED': salaryAED,
+    'basicWageAED': basicWageAED,
     'documents': documents,
     'status': status.name,
   };
 
   factory Employee.fromJson(Map<String, dynamic> json) => Employee(
-    id: json['id'] as String,
-    fullName: json['fullName'] as String,
+    id: json['id'] as String? ?? '',
+    fullName: json['fullName'] as String? ?? '',
     jobRole: json['jobRole'] as String? ?? '',
     department: json['department'] as String? ?? '',
     nationality: json['nationality'] as String? ?? '',
     contact: json['contact'] as String?,
     emiratesId: json['emiratesId'] as String?,
+    emiratesIdExpiry: DateTime.tryParse(json['emiratesIdExpiry'] as String? ?? ''),
     passportNo: json['passportNo'] as String?,
-    visaExpiry: json['visaExpiry'] == null
-        ? null
-        : DateTime.parse(json['visaExpiry'] as String),
-    joinDate: json['joinDate'] == null
-        ? null
-        : DateTime.parse(json['joinDate'] as String),
+    passportExpiry: DateTime.tryParse(json['passportExpiry'] as String? ?? ''),
+    visaExpiry: DateTime.tryParse(json['visaExpiry'] as String? ?? ''),
+    joinDate: DateTime.tryParse(json['joinDate'] as String? ?? ''),
     salaryAED: (json['salaryAED'] as num?)?.toDouble(),
+    basicWageAED: (json['basicWageAED'] as num?)?.toDouble(),
     documents:
         (json['documents'] as List<dynamic>?)?.cast<String>() ?? const [],
     status: EmployeeStatus.fromName(json['status'] as String? ?? 'active'),

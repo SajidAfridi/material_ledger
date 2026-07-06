@@ -109,6 +109,8 @@ class RentalUnitsNotifier extends StateNotifier<List<RentalUnit>> {
     DateTime? leaseStart,
     DateTime? leaseEnd,
     String? notes,
+    double? securityDepositAED,
+    double vatRatePercent = 5.0,
     required String createdBy,
   }) async {
     final occupied = (tenantName ?? '').trim().isNotEmpty;
@@ -124,6 +126,8 @@ class RentalUnitsNotifier extends StateNotifier<List<RentalUnit>> {
       leaseEnd: leaseEnd,
       status: occupied ? RentalStatus.active : RentalStatus.vacant,
       notes: notes,
+      securityDepositAED: securityDepositAED,
+      vatRatePercent: vatRatePercent,
       createdBy: createdBy,
       createdAt: DateTime.now(),
     );
@@ -440,3 +444,11 @@ final rentalsSummaryProvider = Provider<RentalsSummary>((ref) {
 
 /// Current billing month key (`YYYY-MM`) for record-payment defaults.
 String currentRentMonthKey() => _monthKey(DateTime.now());
+
+/// Total security deposits currently held across all units — a liability until
+/// refunded/offset at move-out, kept separate from the rent roll.
+final totalSecurityDepositsHeldProvider = Provider<double>((ref) {
+  return ref
+      .watch(rentalUnitsProvider)
+      .fold(0.0, (s, u) => s + (u.securityDepositAED ?? 0));
+});

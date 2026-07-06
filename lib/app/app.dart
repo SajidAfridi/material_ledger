@@ -13,7 +13,9 @@ import '../shared/providers/session_provider.dart';
 import '../shared/services/app_config_service.dart';
 import '../shared/sync/realtime_sync.dart';
 import '../shared/sync/sync_engine.dart';
+import 'document_expiry_monitor.dart';
 import 'idle_request_monitor.dart';
+import 'push_bridge.dart';
 import 'router.dart';
 
 /// Bridges [rolePermissionsProvider] changes to the router's refreshListenable.
@@ -88,6 +90,10 @@ class MaterialLedgerApp extends ConsumerWidget {
     ref.watch(hardwareActionProvider);
     // Flag any request idle 24h+ to admin (FR-066) — runs once at launch.
     ref.watch(idleRequestMonitorProvider);
+    // Flag any employee visa/Emirates-ID/passport expiring within 30 days.
+    ref.watch(documentExpiryMonitorProvider);
+    // Register this device for push whenever the signed-in user changes.
+    ref.watch(pushBridgeProvider);
 
     return MaterialApp.router(
       title: 'Yorks GodownPro',

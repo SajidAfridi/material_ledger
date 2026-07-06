@@ -162,6 +162,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       ],
                       const Gap(AppSpacing.xs),
                       IconButton(
+                        tooltip: 'Stock history',
+                        onPressed: () => context.push(RoutePaths.stockHistory),
+                        icon: const Icon(Icons.history_rounded),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.surfaceContainerLowest,
+                        ),
+                      ),
+                      const Gap(AppSpacing.xs),
+                      IconButton(
                         onPressed: () => _openAddMaterial(context),
                         icon: const Icon(Icons.add_rounded),
                         style: IconButton.styleFrom(

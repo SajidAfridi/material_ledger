@@ -256,6 +256,31 @@ void main() {
       );
     });
 
+    test('VAT breakdown derives net+VAT from the VAT-inclusive rent (default 5%)',
+        () {
+      final unit = container.read(rentalUnitsProvider.notifier).byId('unit-shop-01')!;
+      expect(unit.vatRatePercent, 5.0);
+      // 3800 gross → net = 3800 / 1.05.
+      expect(unit.netRentAED, closeTo(3800 / 1.05, 0.01));
+      expect(unit.vatAmountAED, closeTo(3800 - 3800 / 1.05, 0.01));
+      // Net + VAT reconstructs the original gross exactly.
+      expect(unit.netRentAED + unit.vatAmountAED, closeTo(3800, 0.001));
+    });
+
+    test('adding a unit with a security deposit tracks it as a liability',
+        () async {
+      final before = container.read(totalSecurityDepositsHeldProvider);
+      await container.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'SHOP-DEP',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 5000,
+            securityDepositAED: 10000,
+            createdBy: 'test',
+          );
+      expect(container.read(totalSecurityDepositsHeldProvider), before + 10000);
+    });
+
     test('marking an occupied unit vacant drops it from the rent roll',
         () async {
       final notifier = container.read(rentalUnitsProvider.notifier);

@@ -61,16 +61,19 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
 
   /// Append one entry to the stock ledger for an on-hand change of [delta],
   /// capturing the resulting balance and who did it. Never edits history.
-  void _recordMovement(
+  /// Callers MUST await this — it enqueues a sync write, and an un-awaited call
+  /// can still be running after the caller (e.g. a test's ProviderContainer)
+  /// tears down, throwing on the now-disposed outbox.
+  Future<void> _recordMovement(
     String id,
     double delta,
     MovementType type, {
     String? refId,
   }) {
-    if (delta == 0) return;
+    if (delta == 0) return Future.value();
     final m = byId(id);
-    if (m == null) return;
-    _ref.read(stockMovementsProvider.notifier).record(
+    if (m == null) return Future.value();
+    return _ref.read(stockMovementsProvider.notifier).record(
           materialId: id,
           materialName: m.name,
           type: type,
@@ -149,7 +152,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     ];
     await _persist();
     await _sync(id, transactional: true);
-    _recordMovement(id, (byId(id)?.quantity ?? 0) - before, type, refId: refId);
+    await _recordMovement(id, (byId(id)?.quantity ?? 0) - before, type, refId: refId);
   }
 
   // ─── Atomic stock transactions (FR-094 reservation) ──────────────
@@ -239,7 +242,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     ];
     await _persist();
     await _sync(id, transactional: true);
-    _recordMovement(id, qty, type, refId: refId);
+    await _recordMovement(id, qty, type, refId: refId);
   }
 
   /// Weighted-average cost after receiving [inQty] @ [inCost].

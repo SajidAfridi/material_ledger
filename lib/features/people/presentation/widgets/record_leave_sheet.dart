@@ -159,6 +159,39 @@ class _RecordLeaveSheetState extends ConsumerState<RecordLeaveSheet> {
                   color: AppColors.onSurfaceVariant,
                 ),
               ),
+              if (_type == LeaveType.sick) ...[
+                const Gap(AppSpacing.sm),
+                Builder(
+                  builder: (context) {
+                    final split = ref.watch(
+                      sickLeaveTierProvider((widget.employee.id, _days)),
+                    );
+                    final parts = [
+                      if (split.fullPayDays > 0) '${split.fullPayDays}d full pay',
+                      if (split.halfPayDays > 0) '${split.halfPayDays}d half pay',
+                      if (split.unpaidDays > 0) '${split.unpaidDays}d unpaid',
+                    ];
+                    if (parts.isEmpty) return const SizedBox.shrink();
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryContainer.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      ),
+                      child: Text(
+                        'UAE sick-leave pay tiers: ${parts.join(' · ')}'
+                        '${split.exceedsAnnualCap ? ' (exceeds 90-day annual cap)' : ''}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
               const Gap(AppSpacing.xl),
               PrimaryButton(
                 label: AppStrings.recordLeave.primary,

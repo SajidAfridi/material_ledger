@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:material_ledger/shared/models/attendance_record.dart';
+import 'package:material_ledger/shared/models/gratuity.dart';
 import 'package:material_ledger/shared/models/leave_record.dart';
 import 'package:material_ledger/shared/providers/hr_provider.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
@@ -62,6 +63,62 @@ void main() {
             status: LeaveRecordStatus.pending,
           );
       expect(container.read(leaveBalanceProvider('emp-002')).usedAnnual, 0);
+    });
+  });
+
+  group('Gratuity estimate provider (UAE Art. 51)', () {
+    test('emp-001 (>3yr service, 6500 salary, no separate basic wage) is entitled',
+        () {
+      final est = container.read(gratuityEstimateProvider('emp-001'));
+      expect(est, isNotNull);
+      expect(est!.entitled, true);
+      // Cross-check against the pure calculator directly (mirrors the seed's
+      // joinDate formula) — this verifies the PROVIDER's wiring (employee
+      // lookup + salaryAED fallback when basicWageAED is unset), while the
+      // exact math itself is covered by gratuity_test.dart.
+      final expected = calculateGratuity(
+        joinDate: DateTime(DateTime.now().year - 3, 2, 1),
+        asOf: DateTime.now(),
+        basicWageAED: 6500,
+      );
+      expect(est.amountAED, closeTo(expected.amountAED, 0.01));
+    });
+
+    test('an unknown employee id has no estimate', () {
+      expect(container.read(gratuityEstimateProvider('nope')), isNull);
+    });
+
+    test('company-wide liability sums every active employee\'s estimate', () {
+      final total = container.read(totalGratuityLiabilityProvider);
+      final sumOfIndividuals = ['emp-001', 'emp-002', 'emp-003', 'emp-004', 'emp-005']
+          .map((id) => container.read(gratuityEstimateProvider(id)))
+          .where((e) => e != null && e.entitled)
+          .fold(0.0, (s, e) => s + e!.amountAED);
+      expect(total, closeTo(sumOfIndividuals, 1));
+      expect(total, greaterThan(0));
+    });
+  });
+
+  group('Sick-leave tier provider (UAE Art. 31)', () {
+    test('a fresh sick request for emp-002 is all full-pay under 15 days', () {
+      final split = container.read(sickLeaveTierProvider(('emp-002', 5)));
+      expect(split.fullPayDays, 5);
+      expect(split.halfPayDays, 0);
+    });
+
+    test('prior approved sick days push a new request into the half-pay tier',
+        () async {
+      // emp-004 has no seeded sick leave; approve 15 full-pay days first.
+      await container.read(leaveRecordsProvider.notifier).addLeave(
+            employeeId: 'emp-004',
+            type: LeaveType.sick,
+            startDate: DateTime(DateTime.now().year, 2, 1),
+            endDate: DateTime(DateTime.now().year, 2, 15), // 15 days
+            status: LeaveRecordStatus.approved,
+          );
+      final split = container.read(sickLeaveTierProvider(('emp-004', 5)));
+      expect(split.fullPayDays, 0);
+      expect(split.halfPayDays, 5);
     });
   });
 

@@ -150,8 +150,27 @@ class RentalUnitDetailScreen extends ConsumerWidget {
                         color: AppColors.primary,
                       ),
                     ),
+                    if (unit.vatRatePercent > 0) ...[
+                      const Gap(AppSpacing.xxs),
+                      Text(
+                        'Net ${currency.format(unit.netRentAED)} + '
+                        'VAT (${unit.vatRatePercent.toStringAsFixed(0)}%) '
+                        '${currency.format(unit.vatAmountAED)}',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                     const Gap(AppSpacing.md),
                     _InfoRow(icon: Icons.place_outlined, text: unit.location),
+                    if (unit.securityDepositAED != null) ...[
+                      const Gap(AppSpacing.sm),
+                      _InfoRow(
+                        icon: Icons.lock_outline_rounded,
+                        text:
+                            'Deposit held: ${currency.format(unit.securityDepositAED!)}',
+                      ),
+                    ],
                     if (unit.tenantName != null) ...[
                       const Gap(AppSpacing.sm),
                       _InfoRow(

@@ -101,6 +101,22 @@ class RentalsDashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+              Builder(
+                builder: (context) {
+                  final deposits = ref.watch(totalSecurityDepositsHeldProvider);
+                  if (deposits <= 0) return const SizedBox.shrink();
+                  return Column(
+                    children: [
+                      const Gap(AppSpacing.md),
+                      _SummaryCard(
+                        label: 'Security deposits held',
+                        value: currency.format(deposits),
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ],
+                  );
+                },
+              ),
               const Gap(AppSpacing.xl),
 
               Text(

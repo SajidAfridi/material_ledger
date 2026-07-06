@@ -27,6 +27,7 @@ class SupabaseBootstrap {
     'materialRequests': 'material_requests_list_v2',
     'materials': 'materials_list_v3',
     'stockMovements': 'stock_movements_v1',
+    'notifications': 'notifications_list_v2',
     'rentalUnits': 'rental_units_v1',
     'rentPayments': 'rent_payments_v1',
     'goodsReceipts': 'goods_receipts_v1',
@@ -60,9 +61,9 @@ class SupabaseBootstrap {
 
   /// Fields that are held back from a collection's shared cloud payload for
   /// privacy and must be preserved from the local record on hydration (they'll
-  /// never be present in the cloud row). Salary is admin-device-local.
+  /// never be present in the cloud row). Salary/basic-wage are admin-device-local.
   static const _preserveLocalKeys = <String, List<String>>{
-    'employees': ['salaryAED'],
+    'employees': ['salaryAED', 'basicWageAED'],
     // reservedQty is derived per-device from open requests — never overwrite it
     // with a cloud row (which doesn't carry it).
     'materials': ['reservedQty'],

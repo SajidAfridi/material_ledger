@@ -189,7 +189,7 @@ do $$ declare t text;
 begin
   foreach t in array array[
     'materialRequests','goodsReceipts','returns','rentalUnits','rentPayments',
-    'employees','attendance','leaveRecords','config'
+    'employees','attendance','leaveRecords','config','notifications'
   ] loop
     execute format('alter table %I enable row level security;', t);
   end loop;
@@ -226,6 +226,22 @@ create policy receipts_write on goodsReceipts for all
   using (app_has_cap('goods')) with check (app_has_cap('goods'));
 create policy returns_write on returns for all
   using (app_has_cap('goods')) with check (app_has_cap('goods'));
+
+-- Notifications: admin sees all; a broadcast/role-audience notification (no
+-- userId) is readable by anyone signed in (the app filters by role
+-- client-side); a personally-targeted one (userId set) is readable only by
+-- that user or admin. IMPORTANT: this MUST be split into separate
+-- insert/update policies, not `for all` — a permissive `for all using(true)`
+-- policy also grants blanket SELECT (Postgres ORs permissive policies
+-- together for the same command), silently defeating this restriction.
+create policy notifications_read on notifications for select using (
+  app_role() = 'admin'
+  or coalesce(data->>'userId', '') = ''
+  or data->>'userId' = app_user_id()
+);
+create policy notifications_insert on notifications for insert with check (true);
+create policy notifications_update on notifications for update
+  using (true) with check (true);
 
 -- Config (editable role-permission matrix etc.): admin only.
 create policy config_admin on config for all

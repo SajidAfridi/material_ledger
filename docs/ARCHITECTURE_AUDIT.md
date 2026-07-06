@@ -49,9 +49,56 @@ Tests: `materials_flow_test.dart` (+3), `leave_balance_test.dart` (+2). **177 pa
 - **16 · P1** Append-only **stock-movement ledger** (depends on 15).
 - **18 · P1** Propagate **Access & Roles matrix edits into JWT caps** and
   re-stamp existing users (Edge Function / trigger).
-- **19 · P1** UAE statutory module: **EOSB gratuity**, 5% commercial-rent **VAT**
-  on receipts, security **deposits**, sick-leave tiers, visa/EID **expiry
-  alerts**, supplier/PO master.
+- ~~**19 · P1** UAE statutory module~~ — **DONE**, see below. (Supplier/PO
+  master deferred — genuinely separate master-data work, not a calculation.)
+
+---
+
+# UAE statutory bundle (rank 19) — DONE
+
+All five sub-items the audit called for, minus supplier/PO master (explicitly
+deferred — it's new master-data entities, not a calculation, exactly as the
+audit itself scoped it). Every money/date figure is clearly labelled an
+**estimate for HR/payroll planning**, not a certified payout — real settlement
+should be confirmed with HR/legal. 25 new tests (212 total).
+
+- **EOSB gratuity** (Art. 51) — `gratuity.dart`: pure calculator (21 days/yr to
+  5yr, 30 days/yr beyond, capped at 2yrs' wage). `Employee.basicWageAED` (falls
+  back to `salaryAED`) drives it; `gratuityEstimateProvider` /
+  `totalGratuityLiabilityProvider` (company-wide roll-up) in `hr_provider.dart`.
+  Shown on the Employee Profile (admin-only). `basicWageAED` gets the same
+  salary-leak treatment (stripped from sync, preserved locally).
+- **Sick-leave pay tiers** (Art. 31) — `sick_leave_tiers.dart`: pure splitter
+  (15 full-pay / 30 half-pay / 45 unpaid, 90-day annual cap, cumulative-aware).
+  `sickLeaveTierProvider` previews the split live in both the engineer's
+  self-service request sheet and the admin's record-leave sheet.
+- **Document-expiry alerts** — `Employee` gained `emiratesIdExpiry` +
+  `passportExpiry` (existing `visaExpiry` already tracked); a launch-time
+  monitor (`document_expiry_monitor.dart`, mirrors `idle_request_monitor.dart`)
+  flags any of the three expiring within 30 days (or already expired) to
+  admin, deduped per-document so it never re-fires. A live banner on the
+  Employee Profile shows the same warning. **New "Edit HR details" sheet**
+  closes a real pre-existing gap — there was previously no UI path at all to
+  set these dates after onboarding (or the wage/EID/passport fields), which
+  would have made the alerts permanently inert.
+- **Security deposits** — `RentalUnit.securityDepositAED`, set in the add/edit
+  unit sheet, shown on the unit detail screen, and rolled up as a "Security
+  deposits held" liability KPI on the Rentals dashboard (hidden when zero).
+  Tracked separately from rent — never counted in the rent roll.
+- **5% VAT breakdown** — `RentalUnit.vatRatePercent` (default 5%) +
+  `netRentAED`/`vatAmountAED` getters, back-calculated from the existing
+  VAT-inclusive `monthlyRentAED`. **Deliberately display-only**: every
+  due/collected/overdue calculation already fixed earlier in this audit
+  continues to use `monthlyRentAED` completely unchanged — this only adds a
+  net/VAT/gross breakdown on the unit detail screen for invoicing
+  transparency, with zero risk to the accrual logic. A full VAT-compliant
+  tax-invoice PDF (with company TRN) would be a further step — no rent-receipt
+  PDF flow exists today to extend.
+
+**Bug fixed while building this**: `ExpiringDocument.isExpired` read the wall
+clock (`DateTime.now()`) instead of the scan's injected `now`, silently
+breaking the class's own documented "pure, testable" contract — caught by a
+new test, fixed to compute `isExpired` from the injected time at scan time.
 
 \* latent until the committed schema is re-deployed (e.g. UAE self-host).
 
@@ -93,3 +140,28 @@ crash**. The real risk was synced data → model decoders.
 
 Minor remaining (low-harm, noted): edit-request per-line qty upper bound,
 record-leave confirm, contract-value validator, void-payment busy guard.
+
+---
+
+# Stock-movement ledger (rank 16) — DONE
+
+Append-only audit trail answering "why is on-hand 84, not 120?".
+
+- `StockMovement` model (`materialId`, `type` receipt/dispatch/returnIn/
+  adjustment/opening, signed `delta`, `resultingBalance`, `refId`, `actor`,
+  `timestamp`) + `stockMovementsProvider` (record-only notifier).
+- Emitted automatically from `MaterialsNotifier.adjustQuantity`/`receiveStock`
+  (the two on-hand mutators) — every dispatch, return, GRN receipt, and manual
+  transaction ledgers itself; callers didn't need to change.
+- New **Stock History** screen (`stock_history_screen.dart`, route
+  `/admin/inventory/history`, icon on the Inventory screen) — newest-first,
+  colour-coded in/out, resulting balance per row.
+- Synced: `stockMovements` table (read = any signed-in user, write = `goods`
+  cap), realtime + launch-hydrate wired. RLS verified live (engineer reads,
+  can't write; procurement writes).
+- Fixed a real bug while wiring this up: `_recordMovement` wasn't awaited by its
+  callers, so its internal sync write could still be in flight after a caller's
+  `ProviderContainer` disposed (surfaced as a test failure — outbox used after
+  dispose). Now properly awaited end-to-end.
+- 4 new tests (`stock_movement_test.dart`) + updated sync-integration count.
+  **187 tests pass.**

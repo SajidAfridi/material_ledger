@@ -11,6 +11,7 @@ import '../providers/inventory_provider.dart';
 import '../providers/language_provider.dart';
 import '../providers/material_request_provider.dart';
 import '../providers/material_return_provider.dart';
+import '../providers/notification_provider.dart';
 import '../providers/rentals_provider.dart';
 import '../providers/stock_movement_provider.dart';
 
@@ -33,11 +34,12 @@ List<_Synced> _synced() => [
   _Synced('materialRequests', 'material_requests_list_v2', materialRequestsProvider),
   _Synced('materials', 'materials_list_v3', materialsProvider, ['reservedQty']),
   _Synced('stockMovements', 'stock_movements_v1', stockMovementsProvider),
+  _Synced('notifications', 'notifications_list_v2', notificationsProvider),
   _Synced('goodsReceipts', 'goods_receipts_v1', goodsReceiptsProvider),
   _Synced('returns', 'material_returns_list_v1', returnsProvider),
   _Synced('rentalUnits', 'rental_units_v1', rentalUnitsProvider),
   _Synced('rentPayments', 'rent_payments_v1', rentPaymentsProvider),
-  _Synced('employees', 'employees_v2', employeesProvider, ['salaryAED']),
+  _Synced('employees', 'employees_v2', employeesProvider, ['salaryAED', 'basicWageAED']),
   _Synced('attendance', 'attendance_v1', attendanceProvider),
   _Synced('leaveRecords', 'leave_records_v1', leaveRecordsProvider),
 ];
