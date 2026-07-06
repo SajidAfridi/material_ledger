@@ -5,6 +5,7 @@ import '../models/user_role.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
+import 'users_provider.dart';
 
 const _kRolePermsKey = 'role_permissions_v1';
 
@@ -50,7 +51,9 @@ class RolePermissionsNotifier extends StateNotifier<RolePermissions> {
     );
   }
 
-  /// Grant/revoke [cap] for [role] (Admin/structural caps are ignored).
+  /// Grant/revoke [cap] for [role] (Admin/structural caps are ignored). After
+  /// persisting, the affected role's users have their JWT caps re-stamped so the
+  /// server enforces exactly what the matrix now shows.
   Future<void> setCapability(
     UserRole role,
     RoleCapability cap,
@@ -60,15 +63,20 @@ class RolePermissionsNotifier extends StateNotifier<RolePermissions> {
     if (identical(next, state)) return; // not editable → no-op
     state = next;
     await _persist();
+    await _ref.read(usersProvider.notifier).restampRoleClaims(role);
   }
 
   Future<void> resetRole(UserRole role) async {
     state = state.resetRole(role);
     await _persist();
+    await _ref.read(usersProvider.notifier).restampRoleClaims(role);
   }
 
   Future<void> resetAll() async {
     state = RolePermissions.fromRoleDefaults();
     await _persist();
+    for (final role in editableRoles) {
+      await _ref.read(usersProvider.notifier).restampRoleClaims(role);
+    }
   }
 }

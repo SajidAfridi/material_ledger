@@ -344,9 +344,15 @@ class _ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spec = [item.brand, item.size, item.ralColour]
-        .where((s) => s.isNotEmpty)
-        .join(' · ');
+    final spec = [
+      item.tagNo,
+      item.brand,
+      item.size,
+      item.ralColour,
+      item.mounting,
+      if (item.airFlowLS != null) '${item.airFlowLS!.toStringAsFixed(0)} L/s' else '',
+      item.submittalRef,
+    ].where((s) => s.isNotEmpty).join(' · ');
     final inStock = item.status == PlanItemStatus.ticked;
     return LedgerCard(
       child: Row(

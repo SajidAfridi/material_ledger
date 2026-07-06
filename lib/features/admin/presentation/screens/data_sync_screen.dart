@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -25,10 +26,26 @@ class DataSyncScreen extends ConsumerWidget {
     final online = ref.watch(isOnlineProvider);
 
     final (statusLabel, statusColor, statusIcon) = switch (state) {
-      SyncState.synced => (AppStrings.allSynced.primary, AppColors.success, Icons.cloud_done_rounded),
-      SyncState.syncing => ('Syncing $pending…', AppColors.primary, Icons.cloud_sync_rounded),
-      SyncState.offlineQueued => ('Offline · $pending queued', AppColors.warning, Icons.cloud_off_rounded),
-      SyncState.error => ('${failed.length} need attention', AppColors.error, Icons.sync_problem_rounded),
+      SyncState.synced => (
+        AppStrings.allSynced.primary,
+        AppColors.success,
+        Icons.cloud_done_rounded,
+      ),
+      SyncState.syncing => (
+        'Syncing $pending…',
+        AppColors.primary,
+        Icons.cloud_sync_rounded,
+      ),
+      SyncState.offlineQueued => (
+        'Offline · $pending queued',
+        AppColors.warning,
+        Icons.cloud_off_rounded,
+      ),
+      SyncState.error => (
+        '${failed.length} need attention',
+        AppColors.error,
+        Icons.sync_problem_rounded,
+      ),
     };
 
     return Scaffold(
@@ -69,7 +86,9 @@ class DataSyncScreen extends ConsumerWidget {
                       height: 48,
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusSm,
+                        ),
                       ),
                       child: Icon(statusIcon, color: statusColor),
                     ),
@@ -160,45 +179,46 @@ class DataSyncScreen extends ConsumerWidget {
                 const Gap(AppSpacing.md),
               ],
 
-              // ─── Dev: simulate offline ───────────────────────
-              LedgerCard(
-                child: Row(
-                  children: [
-                    Icon(
-                      online ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const Gap(AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Simulate offline',
-                            style: AppTypography.titleSmall,
-                          ),
-                          const Gap(AppSpacing.xxs),
-                          Text(
-                            online
-                                ? 'Writes sync immediately'
-                                : 'Writes queue until reconnect',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+              // ─── Dev: simulate offline (debug builds only) ────
+              if (kDebugMode)
+                LedgerCard(
+                  child: Row(
+                    children: [
+                      Icon(
+                        online ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                        color: AppColors.onSurfaceVariant,
                       ),
-                    ),
-                    Switch(
-                      value: !online,
-                      onChanged: (offline) {
-                        final c = ref.read(connectivityProvider);
-                        if (c is DefaultConnectivity) c.setOnline(!offline);
-                      },
-                    ),
-                  ],
+                      const Gap(AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Simulate offline',
+                              style: AppTypography.titleSmall,
+                            ),
+                            const Gap(AppSpacing.xxs),
+                            Text(
+                              online
+                                  ? 'Writes sync immediately'
+                                  : 'Writes queue until reconnect',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: !online,
+                        onChanged: (offline) {
+                          final c = ref.read(connectivityProvider);
+                          if (c is DefaultConnectivity) c.setOnline(!offline);
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),

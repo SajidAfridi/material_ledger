@@ -1,14 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/material_item.dart';
 import '../models/material_request.dart';
 import '../models/project.dart';
+import '../models/stock_movement.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
 import 'inventory_provider.dart';
+import 'session_provider.dart';
 
 const _kRequestsKey = 'material_requests_list_v2';
+
+/// Request statuses that actively hold a stock reservation. Single source of
+/// truth for the notifier's release logic AND the reservation reconciler.
+const kHoldingRequestStatuses = {
+  RequestStatus.pending,
+  RequestStatus.sourcing,
+  RequestStatus.partial,
+  RequestStatus.onHold,
+  RequestStatus.dispatched,
+};
 
 /// All material requests for the engineer.
 final materialRequestsProvider =
@@ -88,6 +101,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
     required String projectName,
     required String projectNameSecondary,
     required int itemCount,
+    String? projectId,
     List<RequestLineItem> lineItems = const [],
     RequestPriority priority = RequestPriority.normal,
     String? siteLocation,
@@ -95,6 +109,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
   }) async {
     final request = MaterialRequest(
       id: 'req-${_uuid.v4().substring(0, 8)}',
+      projectId: projectId,
       projectName: projectName,
       projectNameSecondary: projectNameSecondary,
       status: RequestStatus.pending,
@@ -104,6 +119,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
       priority: priority,
       siteLocation: siteLocation,
       notes: notes,
+      engineerId: _ref.read(currentUserProvider)?.id,
     );
     state = [request, ...state];
     await _persist();
@@ -123,6 +139,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
     required String projectName,
     required String projectNameSecondary,
     required int itemCount,
+    String? projectId,
     List<RequestLineItem> lineItems = const [],
     RequestPriority priority = RequestPriority.normal,
     String? siteLocation,
@@ -130,6 +147,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
   }) async {
     final request = MaterialRequest(
       id: 'req-${_uuid.v4().substring(0, 8)}',
+      projectId: projectId,
       projectName: projectName,
       projectNameSecondary: projectNameSecondary,
       status: RequestStatus.draft,
@@ -139,6 +157,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
       priority: priority,
       siteLocation: siteLocation,
       notes: notes,
+      engineerId: _ref.read(currentUserProvider)?.id,
     );
     state = [request, ...state];
     await _persist();
@@ -146,13 +165,7 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
   }
 
   /// Statuses that are actively holding a stock reservation.
-  static const _holdingStatuses = {
-    RequestStatus.pending,
-    RequestStatus.sourcing,
-    RequestStatus.partial,
-    RequestStatus.onHold,
-    RequestStatus.dispatched,
-  };
+  static const _holdingStatuses = kHoldingRequestStatuses;
 
   MaterialRequest? _byId(String id) {
     for (final r in state) {
@@ -224,7 +237,19 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
   bool canDispatchLine(RequestLineItem line) {
     if (line.qtyOutstanding <= 0) return false;
     final item = _inventory.byId(line.materialId);
-    return item != null && item.quantity >= line.qtyOutstanding;
+    if (item == null) return false;
+    return _freeForLine(item, line) >= line.qtyOutstanding;
+  }
+
+  /// Stock free to dispatch to THIS line = on-hand minus the reservations held
+  /// by OTHER open requests. This line's own reservation is released on
+  /// dispatch, so it doesn't count against itself — but another request's
+  /// reservation must not be consumed here (FR-094).
+  static double _freeForLine(MaterialItem item, RequestLineItem line) {
+    final othersReserved = (item.reservedQty - line.qtyOutstanding)
+        .clamp(0, double.infinity)
+        .toDouble();
+    return item.quantity - othersReserved;
   }
 
   /// Procurement dispatches a request to site. Stock physically leaves the store
@@ -254,17 +279,24 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
       requested = requested.clamp(0, line.qtyOutstanding).toDouble();
 
       double d;
-      if (item == null || item.quantity < line.qtyOutstanding) {
-        // Blocked: not stocked, or not enough on hand to cover the full
-        // outstanding qty. Never ship a short line — leave it outstanding.
+      if (item == null || _freeForLine(item, line) < line.qtyOutstanding) {
+        // Blocked: not stocked, or not enough AVAILABLE — the rest is on hand
+        // but reserved for other open requests. Never ship a short line or eat
+        // another request's reservation; leave it outstanding.
         d = 0;
       } else {
-        // Fully available — ship what's asked (≤ outstanding ≤ on-hand).
+        // Fully available — ship what's asked (≤ outstanding ≤ available).
         d = requested;
       }
       if (d > 0) {
-        await _inventory.adjustQuantity(line.materialId, -d); // leave the store
-        await _inventory.release(line.materialId, d); // free that reservation
+        // Leave the store (ledgered as a dispatch), then free that reservation.
+        await _inventory.adjustQuantity(
+          line.materialId,
+          -d,
+          type: MovementType.dispatch,
+          refId: id,
+        );
+        await _inventory.release(line.materialId, d);
         movedAny = true;
       }
       newLines.add(
@@ -480,21 +512,33 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
   /// Engineer confirms on-site receipt, recording the quantity actually
   /// received per line and flagging any shortfall (FR-088/FR-089). Stock and
   /// reservation were already settled at dispatch, so this only records.
+  ///
+  /// A received quantity can never exceed what was dispatched to site (you can't
+  /// receive valves that never shipped). And a request only closes to `received`
+  /// when every line is fully dispatched — if any line still has an outstanding
+  /// back-order it stays `partial` so it remains in procurement's queue rather
+  /// than being silently closed.
   Future<void> confirmReceipt(String id, List<double> receivedByIndex) async {
+    final req = _byId(id);
+    if (req == null) return;
+    final newLines = <RequestLineItem>[];
+    for (var i = 0; i < req.lineItems.length; i++) {
+      final l = req.lineItems[i];
+      final dispatched = l.qtyDispatched ?? 0;
+      final raw = i < receivedByIndex.length ? receivedByIndex[i] : dispatched;
+      newLines.add(l.copyWith(qtyReceived: raw.clamp(0, dispatched).toDouble()));
+    }
+    // Any line not yet fully dispatched keeps the request live (queue-eligible).
+    final backOrderOpen = newLines.any((l) => l.qtyOutstanding > 0);
     state = [
       for (final r in state)
         if (r.id == id)
           r.copyWith(
-            status: RequestStatus.received,
+            status: backOrderOpen
+                ? RequestStatus.partial
+                : RequestStatus.received,
             confirmedReceiptAt: DateTime.now(),
-            lineItems: [
-              for (var i = 0; i < r.lineItems.length; i++)
-                r.lineItems[i].copyWith(
-                  qtyReceived: i < receivedByIndex.length
-                      ? receivedByIndex[i]
-                      : r.lineItems[i].quantity,
-                ),
-            ],
+            lineItems: newLines,
           )
         else
           r,
@@ -540,6 +584,40 @@ final dispatchQueueCountProvider = Provider<int>((ref) {
       .watch(materialRequestsProvider)
       .where((r) => dispatchQueueStatuses.contains(r.status))
       .length;
+});
+
+/// Sum of still-outstanding (undispatched) quantities per material across all
+/// requests currently holding stock — the authoritative reservation figure.
+Map<String, double> _reservationsFrom(List<MaterialRequest> requests) {
+  final map = <String, double>{};
+  for (final r in requests) {
+    if (!kHoldingRequestStatuses.contains(r.status)) continue;
+    for (final l in r.lineItems) {
+      if (l.qtyOutstanding <= 0) continue;
+      map[l.materialId] = (map[l.materialId] ?? 0) + l.qtyOutstanding;
+    }
+  }
+  return map;
+}
+
+/// Keeps inventory reservations in lock-step with open requests. Watch it once
+/// at the app root: it recomputes and applies reservations whenever the request
+/// list changes — first launch (fixing seed requests that reserved nothing),
+/// every local edit, and every realtime merge from another device. Reservations
+/// are derived, so this is the self-healing source of truth for `reservedQty`.
+final inventoryReconcilerProvider = Provider<void>((ref) {
+  ref.listen<List<MaterialRequest>>(
+    materialRequestsProvider,
+    (_, next) {
+      final reservations = _reservationsFrom(next);
+      // Defer out of the listener frame so we never mutate one provider while
+      // another is building.
+      Future.microtask(
+        () => ref.read(materialsProvider.notifier).applyReservations(reservations),
+      );
+    },
+    fireImmediately: true,
+  );
 });
 
 // ─── Seed Data (used on first launch) ───────────────────────────────

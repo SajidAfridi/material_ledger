@@ -55,10 +55,11 @@ class GoodsReceiptsNotifier extends StateNotifier<List<GoodsReceipt>> {
       receivedAt: DateTime.now(),
       note: note,
     );
-    // Apply to stock first (weighted-average cost), then append the GRN.
+    // Apply to stock first (weighted-average cost, ledgered as a receipt), then
+    // append the GRN.
     await _ref
         .read(materialsProvider.notifier)
-        .receiveStock(materialId, quantity, unitCostAED: unitCostAED);
+        .receiveStock(materialId, quantity, unitCostAED: unitCostAED, refId: grn.id);
     state = [grn, ...state];
     await _store.writeAll(state);
     // Increments on-hand stock → transactional (atomic on the server).

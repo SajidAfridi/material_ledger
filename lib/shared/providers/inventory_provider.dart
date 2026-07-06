@@ -3,8 +3,12 @@ import 'package:uuid/uuid.dart';
 
 import '../models/inventory_transaction.dart';
 import '../models/material_item.dart';
+import '../models/stock_movement.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
+import '../sync/sync_engine.dart';
+import 'session_provider.dart';
+import 'stock_movement_provider.dart';
 
 const _kMaterialsKey = 'materials_list_v3';
 const _kTransactionsKey = 'transactions_list';
@@ -16,6 +20,7 @@ const _uuid = Uuid();
 final materialsProvider =
     StateNotifierProvider<MaterialsNotifier, List<MaterialItem>>((ref) {
       return MaterialsNotifier(
+        ref,
         ref.watch(storageProvider).collection<MaterialItem>(
           _kMaterialsKey,
           toJson: (m) => m.toJson(),
@@ -25,14 +30,56 @@ final materialsProvider =
     });
 
 class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
-  MaterialsNotifier(this._store)
+  MaterialsNotifier(this._ref, this._store)
     : super(_store.isSeeded ? _store.readAll() : _seedMaterials) {
     if (!_store.isSeeded) _store.writeAll(state);
   }
 
+  final Ref _ref;
   final CollectionStore<MaterialItem> _store;
 
   Future<void> _persist() => _store.writeAll(state);
+
+  /// Sync a material's shared state (on-hand + cost + descriptors) through the
+  /// outbox. reservedQty is deliberately stripped — it's DERIVED per-device from
+  /// open requests (see inventoryReconcilerProvider), so it must not be synced or
+  /// devices would clobber each other's reservation view. [transactional] marks
+  /// stock-moving writes. No-op-safe when there's no backend (local/tests).
+  Future<void> _sync(String id, {bool transactional = false}) {
+    final m = byId(id);
+    if (m == null) return Future.value();
+    final payload = m.toJson()..remove('reservedQty');
+    return _ref.enqueueSync(
+      collection: 'materials',
+      docId: id,
+      kind: 'material.upsert',
+      label: 'Material',
+      payload: payload,
+      transactional: transactional,
+    );
+  }
+
+  /// Append one entry to the stock ledger for an on-hand change of [delta],
+  /// capturing the resulting balance and who did it. Never edits history.
+  void _recordMovement(
+    String id,
+    double delta,
+    MovementType type, {
+    String? refId,
+  }) {
+    if (delta == 0) return;
+    final m = byId(id);
+    if (m == null) return;
+    _ref.read(stockMovementsProvider.notifier).record(
+          materialId: id,
+          materialName: m.name,
+          type: type,
+          delta: delta,
+          resultingBalance: m.quantity,
+          refId: refId,
+          actor: _ref.read(actorNameProvider),
+        );
+  }
 
   Future<String> addMaterial({
     required String name,
@@ -64,6 +111,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     );
     state = [...state, item];
     await _persist();
+    await _sync(id, transactional: true);
     return id;
   }
 
@@ -73,6 +121,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
         if (item.id == updated.id) updated else item,
     ];
     await _persist();
+    await _sync(updated.id);
   }
 
   Future<void> deleteMaterial(String id) async {
@@ -80,8 +129,15 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     await _persist();
   }
 
-  /// Adjust quantity (positive for incoming, negative for outgoing).
-  Future<void> adjustQuantity(String id, double delta) async {
+  /// Adjust quantity (positive for incoming, negative for outgoing). The ACTUAL
+  /// applied delta (after the ≥0 clamp) is appended to the stock ledger.
+  Future<void> adjustQuantity(
+    String id,
+    double delta, {
+    MovementType type = MovementType.adjustment,
+    String? refId,
+  }) async {
+    final before = byId(id)?.quantity ?? 0;
     state = [
       for (final item in state)
         if (item.id == id)
@@ -92,6 +148,8 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
           item,
     ];
     await _persist();
+    await _sync(id, transactional: true);
+    _recordMovement(id, (byId(id)?.quantity ?? 0) - before, type, refId: refId);
   }
 
   // ─── Atomic stock transactions (FR-094 reservation) ──────────────
@@ -148,6 +206,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
           i,
     ];
     await _persist();
+    await _sync(id, transactional: true);
     return true;
   }
 
@@ -157,6 +216,8 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     String id,
     double qty, {
     double? unitCostAED,
+    MovementType type = MovementType.receipt,
+    String? refId,
   }) async {
     if (qty <= 0) return;
     state = [
@@ -177,6 +238,8 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
           item,
     ];
     await _persist();
+    await _sync(id, transactional: true);
+    _recordMovement(id, qty, type, refId: refId);
   }
 
   /// Weighted-average cost after receiving [inQty] @ [inCost].
@@ -189,6 +252,31 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     final total = onHand + inQty;
     if (total <= 0) return inCost;
     return (onHand * oldCost + inQty * inCost) / total;
+  }
+
+  /// Reconcile reservations from an authoritative source (the sum of still-
+  /// outstanding quantities across open requests). Reservations are DERIVED, so
+  /// this SETS each item's reservedQty (never adds) — it self-heals drift from a
+  /// missed release(), a cross-device edit merged over realtime, or a seed that
+  /// reserved nothing. Only persists when something actually changed, so it's
+  /// safe to call on every request-list change without churn.
+  Future<void> applyReservations(Map<String, double> reservedByMaterial) async {
+    var changed = false;
+    final next = <MaterialItem>[];
+    for (final item in state) {
+      final want = (reservedByMaterial[item.id] ?? 0)
+          .clamp(0, double.infinity)
+          .toDouble();
+      if ((item.reservedQty - want).abs() > 1e-9) {
+        changed = true;
+        next.add(item.copyWith(reservedQty: want));
+      } else {
+        next.add(item);
+      }
+    }
+    if (!changed) return;
+    state = next;
+    await _persist();
   }
 
   MaterialItem? byId(String id) {

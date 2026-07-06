@@ -86,6 +86,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _showLoginError(
           'This account has been deactivated. Contact your administrator.',
         );
+      case SignInResult.networkError:
+        _showLoginError(
+          "Can't reach the server. Check your connection and try again.",
+        );
     }
   }
 
@@ -159,15 +163,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const BrandLogo(size: 96),
           const SizedBox(height: AppSpacing.xl),
           Text(
-            'Yorks GodownPro',
-            style: AppTypography.headlineLarge.copyWith(
+            'Yorks Air Conditioning & Refrigeration',
+            textAlign: TextAlign.center,
+            style: AppTypography.headlineSmall.copyWith(
               fontWeight: FontWeight.w800,
+              height: 1.2,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.sm),
           Text(
-            'WAREHOUSE MANAGEMENT',
-            style: AppTypography.labelMedium.copyWith(letterSpacing: 2.0),
+            'SINCE 1984',
+            style: AppTypography.labelMedium.copyWith(
+              letterSpacing: 3.0,
+              color: AppColors.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -286,12 +295,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     children: [
                       const BrandLogo(size: 44),
                       const SizedBox(width: AppSpacing.lg),
-                      Text(
-                        'Yorks GodownPro',
-                        style: GoogleFonts.inter(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                      Flexible(
+                        child: Text(
+                          'Yorks Air Conditioning & Refrigeration',
+                          style: GoogleFonts.inter(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1.15,
+                          ),
                         ),
                       ),
                     ],

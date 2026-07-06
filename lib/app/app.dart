@@ -7,9 +7,11 @@ import '../core/security/session_lock.dart';
 import '../core/theme/app_theme.dart';
 import '../features/system/presentation/screens/lock_screen.dart';
 import '../shared/providers/language_provider.dart';
+import '../shared/providers/material_request_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/services/app_config_service.dart';
+import '../shared/sync/realtime_sync.dart';
 import '../shared/sync/sync_engine.dart';
 import 'idle_request_monitor.dart';
 import 'router.dart';
@@ -76,6 +78,12 @@ class MaterialLedgerApp extends ConsumerWidget {
     // Start the sync engine at launch (heartbeat, reconnect-flush, and resume
     // of any operations queued in a previous session).
     ref.watch(syncEngineProvider);
+    // Live sync: subscribe to Postgres changes while signed in (no-op offline /
+    // logged out / in tests) so other devices' writes appear without a relaunch.
+    ref.watch(realtimeSyncProvider);
+    // Keep inventory reservations reconciled with open requests (self-healing:
+    // fixes seed under-reservation, missed releases, and cross-device edits).
+    ref.watch(inventoryReconcilerProvider);
     // Listen for the hardware action button / demo key.
     ref.watch(hardwareActionProvider);
     // Flag any request idle 24h+ to admin (FR-066) — runs once at launch.

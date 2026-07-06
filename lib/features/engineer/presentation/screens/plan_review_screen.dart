@@ -339,10 +339,14 @@ class _PlanItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = [
+      if (item.tagNo.isNotEmpty) item.tagNo,
       if (item.size.isNotEmpty) item.size,
       if (item.brand.isNotEmpty) item.brand,
       if (item.ralColour.isNotEmpty) item.ralColour,
       if (item.countryOfOrigin.isNotEmpty) item.countryOfOrigin,
+      if (item.mounting.isNotEmpty) item.mounting,
+      if (item.airFlowLS != null) '${item.airFlowLS!.toStringAsFixed(0)} L/s',
+      if (item.submittalRef.isNotEmpty) item.submittalRef,
     ].join(' · ');
 
     return LedgerCard(

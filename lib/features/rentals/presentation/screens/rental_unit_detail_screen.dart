@@ -101,7 +101,9 @@ class RentalUnitDetailScreen extends ConsumerWidget {
             ),
         ],
       ),
-      floatingActionButton: canWrite
+      // Only offer "record payment" on an occupied unit — a vacant unit has no
+      // tenant and no rent to collect (matches the this-month status card).
+      floatingActionButton: canWrite && unit.isOccupied
           ? FloatingActionButton.extended(
               onPressed: () => RecordPaymentSheet.show(context, unit),
               backgroundColor: AppColors.primary,

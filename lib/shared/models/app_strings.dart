@@ -3234,6 +3234,116 @@ abstract final class AppStrings {
     ur: 'شعبہ',
     hi: 'विभाग',
   );
+
+  // ─── Leave management ──────────────────────────────────────────
+  static const myLeave = TranslatableString(
+    en: 'My Leave',
+    ar: 'إجازتي',
+    ur: 'میری چھٹیاں',
+    hi: 'मेरी छुट्टी',
+  );
+  static const leaveRequestsTitle = TranslatableString(
+    en: 'Leave Requests',
+    ar: 'طلبات الإجازة',
+    ur: 'چھٹی کی درخواستیں',
+    hi: 'छुट्टी के अनुरोध',
+  );
+  static const leaveRequestsHint = TranslatableString(
+    en: 'Approve or reject leave',
+    ar: 'الموافقة على الإجازة أو رفضها',
+    ur: 'چھٹی منظور یا مسترد کریں',
+    hi: 'छुट्टी स्वीकृत या अस्वीकृत करें',
+  );
+  static const leaveBalance = TranslatableString(
+    en: 'Leave Balance',
+    ar: 'رصيد الإجازات',
+    ur: 'چھٹیوں کا بیلنس',
+    hi: 'छुट्टी शेष',
+  );
+  static const leaveTypeLabel = TranslatableString(
+    en: 'Leave Type',
+    ar: 'نوع الإجازة',
+    ur: 'چھٹی کی قسم',
+    hi: 'छुट्टी का प्रकार',
+  );
+  static const leaveEndDate = TranslatableString(
+    en: 'End Date',
+    ar: 'تاريخ الانتهاء',
+    ur: 'اختتامی تاریخ',
+    hi: 'समाप्ति तिथि',
+  );
+  static const reasonOptional = TranslatableString(
+    en: 'Reason (optional)',
+    ar: 'السبب (اختياري)',
+    ur: 'وجہ (اختیاری)',
+    hi: 'कारण (वैकल्पिक)',
+  );
+  static const approveAction = TranslatableString(
+    en: 'Approve',
+    ar: 'موافقة',
+    ur: 'منظور',
+    hi: 'स्वीकृत',
+  );
+  static const rejectAction = TranslatableString(
+    en: 'Reject',
+    ar: 'رفض',
+    ur: 'مسترد',
+    hi: 'अस्वीकृत',
+  );
+  static const withdrawAction = TranslatableString(
+    en: 'Withdraw',
+    ar: 'سحب',
+    ur: 'واپس لیں',
+    hi: 'वापस लें',
+  );
+  static const overBalanceWarning = TranslatableString(
+    en: 'Exceeds the remaining annual balance',
+    ar: 'يتجاوز الرصيد السنوي المتبقي',
+    ur: 'سالانہ باقی بیلنس سے زیادہ ہے',
+    hi: 'वार्षिक शेष से अधिक है',
+  );
+  static const leaveOverlapWarning = TranslatableString(
+    en: 'Overlaps an existing leave',
+    ar: 'يتداخل مع إجازة قائمة',
+    ur: 'موجودہ چھٹی سے ٹکراؤ ہے',
+    hi: 'मौजूदा छुट्टी से टकराव',
+  );
+  static const notLinkedToEmployee = TranslatableString(
+    en: 'Your account isn\'t linked to an employee record yet — contact your admin.',
+    ar: 'حسابك غير مرتبط بسجل موظف بعد — تواصل مع المسؤول.',
+    ur: 'آپ کا اکاؤنٹ ابھی ملازم ریکارڈ سے منسلک نہیں — ایڈمن سے رابطہ کریں۔',
+    hi: 'आपका खाता अभी कर्मचारी रिकॉर्ड से लिंक नहीं है — एडमिन से संपर्क करें।',
+  );
+  static const leaveSubmitted = TranslatableString(
+    en: 'Leave request submitted',
+    ar: 'تم إرسال طلب الإجازة',
+    ur: 'چھٹی کی درخواست جمع ہو گئی',
+    hi: 'छुट्टी अनुरोध सबमिट हुआ',
+  );
+  static const leaveApprovedMsg = TranslatableString(
+    en: 'Leave approved',
+    ar: 'تمت الموافقة على الإجازة',
+    ur: 'چھٹی منظور ہو گئی',
+    hi: 'छुट्टी स्वीकृत',
+  );
+  static const leaveRejectedMsg = TranslatableString(
+    en: 'Leave rejected',
+    ar: 'تم رفض الإجازة',
+    ur: 'چھٹی مسترد ہو گئی',
+    hi: 'छुट्टी अस्वीकृत',
+  );
+  static const noLeaveRequests = TranslatableString(
+    en: 'No leave requests yet',
+    ar: 'لا توجد طلبات إجازة بعد',
+    ur: 'ابھی کوئی چھٹی کی درخواست نہیں',
+    hi: 'अभी कोई छुट्टी अनुरोध नहीं',
+  );
+  static const noPendingLeave = TranslatableString(
+    en: 'No pending requests',
+    ar: 'لا توجد طلبات معلقة',
+    ur: 'کوئی زیر التواء درخواست نہیں',
+    hi: 'कोई लंबित अनुरोध नहीं',
+  );
 }
 
 /// A translatable string with all supported language variants.

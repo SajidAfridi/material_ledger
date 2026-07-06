@@ -13,8 +13,17 @@ import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/effective_permissions.dart';
 import '../../../../shared/models/user_role.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
+import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/users_provider.dart';
+
+/// Strips the `Exception: ` prefix so remote-provisioning errors read cleanly in
+/// a snackbar.
+String _friendlyErr(Object e) {
+  final s = e.toString();
+  const p = 'Exception: ';
+  return s.startsWith(p) ? s.substring(p.length) : s;
+}
 
 /// The per-user capabilities an Admin can grant/revoke, with display labels.
 const _managedPermissions = <(PermissionKey, String)>[
@@ -182,24 +191,36 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _busy = true);
-    final user = await ref
-        .read(usersProvider.notifier)
-        .createUser(
-          fullName: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          role: _role,
-          password: _passwordController.text,
-        );
-    // Stored as a salted local hash now (the user must change it on first
-    // sign-in); becomes a Firebase Auth credential when Firebase lands.
-    await ref.logAudit(
-      action: 'User created',
-      module: AuditModule.platform,
-      refId: user.id,
-      detail: '${user.fullName} · ${user.role.label}',
-    );
-    if (!mounted) return;
-    Navigator.pop(context);
+    try {
+      // When Supabase is configured this provisions the account in the identity
+      // provider (via the admin-users function) before storing it locally; a
+      // failure (e.g. duplicate email) throws and nothing is written.
+      final user = await ref
+          .read(usersProvider.notifier)
+          .createUser(
+            fullName: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            role: _role,
+            password: _passwordController.text,
+          );
+      await ref.logAudit(
+        action: 'User created',
+        module: AuditModule.platform,
+        refId: user.id,
+        detail: '${user.fullName} · ${user.role.label}',
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyErr(e)),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   @override
@@ -324,14 +345,26 @@ class _ManageUserSheet extends ConsumerWidget {
         .firstOrNull;
     if (user == null) return const SizedBox.shrink();
 
+    void warn(String msg) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+
     Future<void> toggleActive() async {
-      await ref.read(usersProvider.notifier).setActive(user.id, !user.active);
-      await ref.logAudit(
-        action: user.active ? 'User deactivated' : 'User reactivated',
-        module: AuditModule.platform,
-        refId: user.id,
-        detail: user.fullName,
-      );
+      try {
+        final ok = await ref
+            .read(usersProvider.notifier)
+            .setActive(user.id, !user.active);
+        if (!ok) return warn("Can't deactivate the only active admin.");
+        await ref.logAudit(
+          action: user.active ? 'User deactivated' : 'User reactivated',
+          module: AuditModule.platform,
+          refId: user.id,
+          detail: user.fullName,
+        );
+      } catch (e) {
+        warn(_friendlyErr(e));
+      }
     }
 
     Future<void> toggleAccess() async {
@@ -350,11 +383,16 @@ class _ManageUserSheet extends ConsumerWidget {
 
     Future<void> resetPassword() async {
       // Set a temporary password the admin can share; the user must change it on
-      // first sign-in. (With Firebase this becomes an Auth reset link.)
+      // first sign-in. When Supabase is configured this resets the real Auth
+      // credential via the admin-users function.
       final temp = 'Temp${1000 + Random().nextInt(9000)}';
-      await ref
-          .read(usersProvider.notifier)
-          .setPassword(user.id, temp, temporary: true);
+      try {
+        await ref
+            .read(usersProvider.notifier)
+            .setPassword(user.id, temp, temporary: true);
+      } catch (e) {
+        return warn(_friendlyErr(e));
+      }
       await ref.logAudit(
         action: 'Password reset',
         module: AuditModule.platform,
@@ -388,28 +426,102 @@ class _ManageUserSheet extends ConsumerWidget {
 
     Future<void> setRole(UserRole role) async {
       if (role == user.role) return;
-      await ref.read(usersProvider.notifier).setRole(user.id, role);
-      await ref.logAudit(
-        action: 'User role changed',
-        module: AuditModule.platform,
-        refId: user.id,
-        detail: '${user.fullName} → ${role.label}',
-      );
+      try {
+        final ok = await ref.read(usersProvider.notifier).setRole(user.id, role);
+        if (!ok) return warn("Can't change the only active admin's role.");
+        await ref.logAudit(
+          action: 'User role changed',
+          module: AuditModule.platform,
+          refId: user.id,
+          detail: '${user.fullName} → ${role.label}',
+        );
+      } catch (e) {
+        warn(_friendlyErr(e));
+      }
     }
 
     Future<void> setOverride(PermissionKey key, bool value) async {
       // Toggling back to the role default clears the override entirely.
       final next = value == user.roleDefaultFor(key) ? null : value;
-      await ref.read(usersProvider.notifier).setPermissionOverride(
-            user.id,
-            key,
-            next,
-          );
+      try {
+        await ref.read(usersProvider.notifier).setPermissionOverride(
+              user.id,
+              key,
+              next,
+            );
+        await ref.logAudit(
+          action: 'Permission updated',
+          module: AuditModule.platform,
+          refId: user.id,
+          detail: '${user.fullName} · $key = ${next ?? 'role default'}',
+        );
+      } catch (e) {
+        warn(_friendlyErr(e));
+      }
+    }
+
+    Future<void> setEmployee(String? employeeId) async {
+      final ok = await ref
+          .read(usersProvider.notifier)
+          .setEmployeeLink(user.id, employeeId);
+      if (!ok) return warn('That employee is already linked to another user.');
       await ref.logAudit(
-        action: 'Permission updated',
+        action: employeeId == null
+            ? 'Employee link cleared'
+            : 'Linked to employee',
         module: AuditModule.platform,
         refId: user.id,
-        detail: '${user.fullName} · $key = ${next ?? 'role default'}',
+        detail: '${user.fullName} → ${employeeId ?? 'none'}',
+      );
+    }
+
+    Future<void> pickEmployee() async {
+      final employees = ref.read(employeesProvider);
+      await showModalBottomSheet<void>(
+        context: context,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppSpacing.radiusXl),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.link_off_rounded),
+                  title: const Text('Not linked'),
+                  trailing: user.employeeId == null
+                      ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setEmployee(null);
+                  },
+                ),
+                for (final e in employees)
+                  ListTile(
+                    leading: const Icon(Icons.badge_outlined),
+                    title: Text(e.fullName),
+                    subtitle: Text('${e.jobRole} · ${e.id}'),
+                    trailing: user.employeeId == e.id
+                        ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setEmployee(e.id);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -442,7 +554,11 @@ class _ManageUserSheet extends ConsumerWidget {
         ),
       );
       if (ok != true) return;
-      await ref.read(usersProvider.notifier).deleteUser(user.id);
+      try {
+        await ref.read(usersProvider.notifier).deleteUser(user.id);
+      } catch (e) {
+        return warn(_friendlyErr(e));
+      }
       await ref.logAudit(
         action: 'User deleted',
         module: AuditModule.platform,
@@ -527,6 +643,44 @@ class _ManageUserSheet extends ConsumerWidget {
                       onTap: () => setRole(r),
                     ),
                 ],
+              ),
+
+              // ─── HR employee link (drives leave + balance) ───
+              const Gap(AppSpacing.lg),
+              Text('HR employee', style: AppTypography.titleSmall),
+              Builder(
+                builder: (_) {
+                  final linked = ref
+                      .watch(employeesProvider)
+                      .where((e) => e.id == user.employeeId)
+                      .firstOrNull;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      linked == null
+                          ? Icons.link_off_rounded
+                          : Icons.badge_outlined,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                    title: Text(
+                      linked?.fullName ?? 'Not linked',
+                      style: AppTypography.bodyLarge,
+                    ),
+                    subtitle: Text(
+                      linked == null
+                          ? 'Link so this person can request leave (HR + balance)'
+                          : '${linked.jobRole} · ${linked.id}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    trailing: TextButton(
+                      onPressed: pickEmployee,
+                      child: Text(linked == null ? 'Link' : 'Change'),
+                    ),
+                    onTap: pickEmployee,
+                  );
+                },
               ),
 
               // ─── Permissions (per-user overrides) ────────────

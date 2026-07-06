@@ -120,6 +120,15 @@ class EngineerProfileScreen extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: Column(
                   children: [
+                    // Owner/admin approves leave in the office panel — they don't
+                    // request it. Engineers and procurement (linked employees) do.
+                    if (!role.isAdmin)
+                      _ProfileTile(
+                        icon: Icons.event_available_outlined,
+                        title: AppStrings.myLeave.primary,
+                        subtitle: AppStrings.requestLeave.primary,
+                        onTap: () => context.push(RoutePaths.myLeave),
+                      ),
                     _ProfileTile(
                       icon: Icons.history_rounded,
                       title: 'Activity Log',

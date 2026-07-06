@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../services/observability_service.dart';
 import 'connectivity_service.dart';
 import 'mutation_op.dart';
 import 'outbox.dart';
@@ -22,17 +23,20 @@ class SyncEngine {
     required ConnectivityService connectivity,
     DateTime Function()? clock,
     Duration timerInterval = const Duration(seconds: 5),
+    ObservabilityService? observability,
   }) : _backend = backend,
        _outbox = outbox,
        _connectivity = connectivity,
        _clock = clock ?? DateTime.now,
-       _interval = timerInterval;
+       _interval = timerInterval,
+       _observability = observability;
 
   final SyncBackend _backend;
   final OutboxNotifier _outbox;
   final ConnectivityService _connectivity;
   final DateTime Function() _clock;
   final Duration _interval;
+  final ObservabilityService? _observability;
 
   StreamSubscription<bool>? _connSub;
   Timer? _timer;
@@ -96,9 +100,16 @@ class SyncEngine {
         try {
           await _backend.apply(op);
           await _outbox.remove(op.id); // confirmed → leaves the queue
-        } on PermanentSyncException catch (e) {
+        } on PermanentSyncException catch (e, stack) {
           await _outbox.update(
             op.copyWith(status: SyncOpStatus.failed, lastError: e.message),
+          );
+          // A dead-lettered write means data isn't reaching the backend — it's
+          // caught here so it never hits the global hooks. Surface it explicitly.
+          _observability?.recordError(
+            e,
+            stack,
+            reason: 'sync-permanent:${op.collection}/${op.kind}',
           );
         } catch (e) {
           // Transient (TransientSyncException, timeout, anything else): keep the
@@ -158,6 +169,7 @@ final syncEngineProvider = Provider<SyncEngine>((ref) {
     backend: ref.watch(syncBackendProvider),
     outbox: ref.watch(outboxProvider.notifier),
     connectivity: ref.watch(connectivityProvider),
+    observability: ref.watch(observabilityProvider),
   );
   engine.start();
   ref.onDispose(engine.dispose);

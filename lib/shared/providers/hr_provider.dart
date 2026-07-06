@@ -7,8 +7,11 @@ import '../models/leave_record.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
+import 'session_provider.dart';
 
-const _kEmployeesKey = 'employees_v1';
+// Bumped to v2 to re-seed the roster with names aligned to the login accounts
+// (emp-001 Imran Khan, emp-002 Al Asad).
+const _kEmployeesKey = 'employees_v2';
 const _kAttendanceKey = 'attendance_v1';
 const _kLeaveKey = 'leave_records_v1';
 const _uuid = Uuid();
@@ -80,12 +83,18 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
   }
 
   Future<void> _syncEmployee(Employee e, {required String kind}) {
+    // Salary is admin-only (canSeeSalary). The employees table is readable by
+    // anyone with the 'people' cap (procurement included), so salaryAED must
+    // NEVER ride in the shared payload — strip it before it leaves the device.
+    // It stays in the local store for authorised (admin) use; cross-admin salary
+    // sync would need a dedicated salary-capped table (see PRODUCTION_STATUS).
+    final payload = e.toJson()..remove('salaryAED');
     return _ref.enqueueSync(
       collection: 'employees',
       docId: e.id,
       kind: kind,
       label: 'Employee',
-      payload: e.toJson(),
+      payload: payload,
     );
   }
 
@@ -94,7 +103,7 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
     return [
       Employee(
         id: 'emp-001',
-        fullName: 'Ahmed Khan',
+        fullName: 'Imran Khan',
         jobRole: 'Site Engineer',
         department: 'Projects',
         nationality: 'Pakistan',
@@ -108,7 +117,7 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
       ),
       Employee(
         id: 'emp-002',
-        fullName: 'Bilal Hassan',
+        fullName: 'Al Asad',
         jobRole: 'Procurement Officer',
         department: 'Procurement',
         nationality: 'Pakistan',
@@ -309,6 +318,131 @@ class LeaveNotifier extends StateNotifier<List<LeaveRecord>> {
     }
   }
 
+  /// Engineer self-service: file a leave request (status `pending`) for the
+  /// employee linked to their login. An approver then [decide]s it.
+  Future<LeaveRecord> submitRequest({
+    required String employeeId,
+    required String requestedByUserId,
+    required String requestedByName,
+    required LeaveType type,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? reason,
+  }) async {
+    // Hard-block an overlapping request: two overlapping active leaves would each
+    // subtract from the balance and double-count the same days.
+    if (leaveOverlaps(employeeId, startDate, endDate)) {
+      throw StateError('This overlaps an existing leave request for these dates.');
+    }
+    final days = endDate.difference(startDate).inDays + 1;
+    final record = LeaveRecord(
+      id: 'leave-${_uuid.v4().substring(0, 8)}',
+      employeeId: employeeId,
+      type: type,
+      startDate: startDate,
+      endDate: endDate,
+      days: days < 1 ? 1 : days,
+      status: LeaveRecordStatus.pending,
+      reason: reason,
+      requestedByUserId: requestedByUserId,
+      requestedByName: requestedByName,
+      requestedAt: DateTime.now(),
+    );
+    state = [record, ...state];
+    await _store.writeAll(state);
+    await _syncLeave(record, kind: 'leave.request');
+    return record;
+  }
+
+  /// Approver action on a pending request → approved/rejected, stamping the
+  /// decider, time, and (optional) reason. A user can never decide their own
+  /// request. Returns the updated record (or null if it wasn't actionable).
+  Future<LeaveRecord?> decide(
+    String id, {
+    required bool approve,
+    required String decidedBy,
+    String? decidedByUserId,
+    String? decisionNote,
+  }) async {
+    // Guard: don't approve a request that would overlap an already-approved leave
+    // for the same employee (a belt-and-suspenders check for edited/imported
+    // records — submit already blocks new overlaps).
+    if (approve) {
+      LeaveRecord? target;
+      for (final l in state) {
+        if (l.id == id) {
+          target = l;
+          break;
+        }
+      }
+      if (target != null) {
+        for (final l in state) {
+          if (l.id == id || l.employeeId != target.employeeId) continue;
+          if (l.status != LeaveRecordStatus.approved) continue;
+          if (!target.startDate.isAfter(l.endDate) &&
+              !l.startDate.isAfter(target.endDate)) {
+            return null; // would overlap an approved leave → refuse
+          }
+        }
+      }
+    }
+    LeaveRecord? updated;
+    state = [
+      for (final l in state)
+        if (l.id == id &&
+            l.isPending &&
+            l.requestedByUserId != decidedByUserId)
+          updated = l.copyWith(
+            status: approve
+                ? LeaveRecordStatus.approved
+                : LeaveRecordStatus.rejected,
+            approvedBy: decidedBy,
+            decidedAt: DateTime.now(),
+            decisionNote: decisionNote,
+          )
+        else
+          l,
+    ];
+    if (updated == null) return null;
+    await _store.writeAll(state);
+    await _syncLeave(updated, kind: 'leave.decision');
+    return updated;
+  }
+
+  /// Engineer withdraws their own still-pending request.
+  Future<void> withdraw(String id) async {
+    LeaveRecord? updated;
+    state = [
+      for (final l in state)
+        if (l.id == id && l.isPending)
+          updated = l.copyWith(status: LeaveRecordStatus.cancelled)
+        else
+          l,
+    ];
+    if (updated == null) return;
+    await _store.writeAll(state);
+    await _syncLeave(updated, kind: 'leave.withdraw');
+  }
+
+  /// True if [start]–[end] overlaps an existing active (pending/approved) leave
+  /// for the employee — drives the "overlaps another leave" warning.
+  bool leaveOverlaps(
+    String employeeId,
+    DateTime start,
+    DateTime end, {
+    String? excludeId,
+  }) {
+    for (final l in state) {
+      if (l.employeeId != employeeId || l.id == excludeId) continue;
+      if (l.status == LeaveRecordStatus.rejected ||
+          l.status == LeaveRecordStatus.cancelled) {
+        continue;
+      }
+      if (!start.isAfter(l.endDate) && !l.startDate.isAfter(end)) return true;
+    }
+    return false;
+  }
+
   Future<void> _syncLeave(LeaveRecord l, {required String kind}) {
     return _ref.enqueueSync(
       collection: 'leaveRecords',
@@ -365,23 +499,92 @@ class LeaveBalance {
   int get remaining => (entitlement - usedAnnual).clamp(0, entitlement);
 }
 
-/// Annual-leave balance for an employee: 30 − approved annual days taken in the
-/// current calendar year (FR-127).
+/// Days of an [l]eave that fall inside calendar [year] — so a leave spanning a
+/// year boundary (e.g. 28 Dec–6 Jan) charges each year only for its own days
+/// instead of dumping the whole span onto the start year.
+int _annualDaysInYear(LeaveRecord l, int year) {
+  DateTime dateOnly(DateTime x) => DateTime(x.year, x.month, x.day);
+  final yStart = DateTime(year, 1, 1);
+  final yEnd = DateTime(year, 12, 31);
+  final s = dateOnly(l.startDate).isAfter(yStart) ? dateOnly(l.startDate) : yStart;
+  final e = dateOnly(l.endDate).isBefore(yEnd) ? dateOnly(l.endDate) : yEnd;
+  if (e.isBefore(s)) return 0;
+  return e.difference(s).inDays + 1;
+}
+
+/// Annual-leave entitlement by length of service, per UAE Labour Law
+/// (Federal Decree-Law 33/2021, Art. 29): none in the first 6 months, ~2 days a
+/// month while 6–12 months in, then the full 30 days from one year of service.
+/// A null join date (unknown tenure) falls back to the full entitlement.
+int _annualEntitlement(DateTime? joinDate) {
+  if (joinDate == null) return kAnnualLeaveEntitlement;
+  final now = DateTime.now();
+  var months = (now.year - joinDate.year) * 12 + (now.month - joinDate.month);
+  if (now.day < joinDate.day) months -= 1;
+  if (months < 6) return 0;
+  if (months < 12) return (months * 2).clamp(0, kAnnualLeaveEntitlement);
+  return kAnnualLeaveEntitlement;
+}
+
+/// Annual-leave balance for an employee: the tenure-based entitlement minus the
+/// approved annual days taken THIS calendar year (year-boundary-aware). Watches
+/// the employee roster so a change to the person's join date reprices the
+/// entitlement (FR-127).
 final leaveBalanceProvider = Provider.family<LeaveBalance, String>((
   ref,
   employeeId,
 ) {
   final records = ref.watch(leaveRecordsProvider);
+  Employee? employee;
+  for (final e in ref.watch(employeesProvider)) {
+    if (e.id == employeeId) {
+      employee = e;
+      break;
+    }
+  }
   final year = DateTime.now().year;
   var used = 0;
   for (final l in records) {
     if (l.employeeId != employeeId) continue;
     if (l.type != LeaveType.annual) continue;
     if (l.status != LeaveRecordStatus.approved) continue;
-    if (l.startDate.year != year) continue;
-    used += l.days;
+    used += _annualDaysInYear(l, year);
   }
-  return LeaveBalance(entitlement: kAnnualLeaveEntitlement, usedAnnual: used);
+  return LeaveBalance(
+    entitlement: _annualEntitlement(employee?.joinDate),
+    usedAnnual: used,
+  );
+});
+
+// ─── Derived: leave-request queues + identity link ───────────────
+
+/// All pending leave requests — the admin/procurement approvals queue, newest
+/// request first.
+final pendingLeaveRequestsProvider = Provider<List<LeaveRecord>>((ref) {
+  final records = ref.watch(leaveRecordsProvider);
+  return records.where((l) => l.isPending).toList()
+    ..sort(
+      (a, b) =>
+          (b.requestedAt ?? b.startDate).compareTo(a.requestedAt ?? a.startDate),
+    );
+});
+
+/// The HR [Employee] linked to the signed-in login, or null when unlinked.
+final currentUserEmployeeProvider = Provider<Employee?>((ref) {
+  final empId = ref.watch(currentUserProvider)?.employeeId;
+  if (empId == null) return null;
+  for (final e in ref.watch(employeesProvider)) {
+    if (e.id == empId) return e;
+  }
+  return null;
+});
+
+/// The signed-in user's own leave records (newest first); empty when unlinked.
+final myLeaveRecordsProvider = Provider<List<LeaveRecord>>((ref) {
+  final emp = ref.watch(currentUserEmployeeProvider);
+  if (emp == null) return const [];
+  return ref.watch(leaveRecordsProvider).where((l) => l.employeeId == emp.id).toList()
+    ..sort((a, b) => b.startDate.compareTo(a.startDate));
 });
 
 // ─── Derived: HR dashboard summary ───────────────────────────────

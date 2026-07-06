@@ -3,7 +3,9 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  gtk
   printing
+  sentry_flutter
   url_launcher_linux
 )
 

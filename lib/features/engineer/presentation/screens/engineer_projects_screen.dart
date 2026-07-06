@@ -18,7 +18,7 @@ class EngineerProjectsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final projects = ref.watch(projectsProvider);
+    final projects = ref.watch(visibleProjectsProvider);
 
     return SafeArea(
       child: LayoutBuilder(
@@ -269,6 +269,22 @@ class _ProjectSummaryCard extends ConsumerWidget {
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if ((project.jobNumber ?? '').isNotEmpty ||
+              (project.mainContractor ?? '').isNotEmpty) ...[
+            const Gap(AppSpacing.xs),
+            Text(
+              [
+                if ((project.jobNumber ?? '').isNotEmpty)
+                  'Job ${project.jobNumber}',
+                if ((project.mainContractor ?? '').isNotEmpty)
+                  project.mainContractor!,
+              ].join(' · '),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
           if (project.buildingName != null || project.floorNumbers != null) ...[

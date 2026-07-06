@@ -276,6 +276,7 @@ class _LeaveRow extends StatelessWidget {
       LeaveRecordStatus.approved => StatusChip.success(leave.status.label),
       LeaveRecordStatus.pending => StatusChip.warning(leave.status.label),
       LeaveRecordStatus.rejected => StatusChip.error(leave.status.label),
+      LeaveRecordStatus.cancelled => StatusChip.info(leave.status.label),
     };
     return LedgerCard(
       child: Row(

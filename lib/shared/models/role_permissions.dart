@@ -17,10 +17,11 @@ enum RoleCapability {
   writeRentals,
   people,
   writePeople,
-  goods;
+  goods,
+  approveLeave;
 
   /// The matching per-user override key, or null for caps with no per-user
-  /// override (the two writes derive from access + this role-level right).
+  /// override (the writes + approveLeave derive from the role-level right only).
   PermissionKey? get overrideKey => switch (this) {
     RoleCapability.cost => PermissionKey.cost,
     RoleCapability.salary => PermissionKey.salary,
@@ -28,7 +29,9 @@ enum RoleCapability {
     RoleCapability.rentals => PermissionKey.rentals,
     RoleCapability.people => PermissionKey.people,
     RoleCapability.goods => PermissionKey.goods,
-    RoleCapability.writeRentals || RoleCapability.writePeople => null,
+    RoleCapability.writeRentals ||
+    RoleCapability.writePeople ||
+    RoleCapability.approveLeave => null,
   };
 
   /// Built-in baseline for [role] (the `UserRole` getters) — the seed value.
@@ -41,6 +44,7 @@ enum RoleCapability {
     RoleCapability.people => role.canAccessPeople,
     RoleCapability.writePeople => role.canWritePeople,
     RoleCapability.goods => role.canReceiveGoods,
+    RoleCapability.approveLeave => role.canApproveLeave,
   };
 }
 

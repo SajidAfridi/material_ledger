@@ -67,6 +67,11 @@ class PlanItem {
     this.isCustom = false,
     this.status = PlanItemStatus.pending,
     this.note = '',
+    // ─── Equipment-schedule / BOQ columns ───────────────────────────
+    this.tagNo = '',
+    this.mounting = '',
+    this.airFlowLS,
+    this.submittalRef = '',
   });
 
   final String id;
@@ -82,6 +87,28 @@ class PlanItem {
   final PlanItemStatus status;
   final String note;
 
+  // ─── Equipment-schedule / BOQ columns (from the client's schedule) ──
+  /// Equipment tag number, e.g. "MSD-01A", "SAR-01-04".
+  final String tagNo;
+
+  /// Mounting — "Slab" / "Wall".
+  final String mounting;
+
+  /// Design air flow in litres/second (grilles, registers, diffusers).
+  final double? airFlowLS;
+
+  /// Material-submittal reference (the schedule's "MASS" / MTS code).
+  final String submittalRef;
+
+  /// Compact BOQ line for display: "Tag · Size · AirFlow · Submittal" (blanks
+  /// omitted). Complements the existing brand/RAL/country spec.
+  String get boqSummary => [
+    if (tagNo.isNotEmpty) tagNo,
+    if (mounting.isNotEmpty) mounting,
+    if (airFlowLS != null) '${airFlowLS!.toStringAsFixed(0)} L/s',
+    if (submittalRef.isNotEmpty) submittalRef,
+  ].join(' · ');
+
   PlanItem copyWith({
     String? description,
     double? quantity,
@@ -91,6 +118,10 @@ class PlanItem {
     String? brand,
     String? countryOfOrigin,
     String? size,
+    String? tagNo,
+    String? mounting,
+    double? airFlowLS,
+    String? submittalRef,
   }) => PlanItem(
     id: id,
     description: description ?? this.description,
@@ -104,6 +135,10 @@ class PlanItem {
     isCustom: isCustom,
     status: status ?? this.status,
     note: note ?? this.note,
+    tagNo: tagNo ?? this.tagNo,
+    mounting: mounting ?? this.mounting,
+    airFlowLS: airFlowLS ?? this.airFlowLS,
+    submittalRef: submittalRef ?? this.submittalRef,
   );
 
   Map<String, dynamic> toJson() => {
@@ -119,6 +154,10 @@ class PlanItem {
     'isCustom': isCustom,
     'status': status.label,
     'note': note,
+    'tagNo': tagNo,
+    'mounting': mounting,
+    'airFlowLS': airFlowLS,
+    'submittalRef': submittalRef,
   };
 
   factory PlanItem.fromJson(Map<String, dynamic> json) => PlanItem(
@@ -134,6 +173,10 @@ class PlanItem {
     isCustom: json['isCustom'] as bool? ?? false,
     status: PlanItemStatus.fromLabel(json['status'] as String? ?? 'Pending'),
     note: json['note'] as String? ?? '',
+    tagNo: json['tagNo'] as String? ?? '',
+    mounting: json['mounting'] as String? ?? '',
+    airFlowLS: (json['airFlowLS'] as num?)?.toDouble(),
+    submittalRef: json['submittalRef'] as String? ?? '',
   );
 }
 

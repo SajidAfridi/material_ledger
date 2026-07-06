@@ -14,6 +14,61 @@ const _uuid = Uuid();
 String _monthKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
+/// Billing-month keys from [start] to [end] inclusive (month granularity).
+List<String> _monthsBetween(DateTime start, DateTime end) {
+  final out = <String>[];
+  var y = start.year;
+  var m = start.month;
+  while (y < end.year || (y == end.year && m <= end.month)) {
+    out.add('$y-${m.toString().padLeft(2, '0')}');
+    if (++m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
+}
+
+/// Rent arrears for an occupied [unit] as of [now], derived from OCCUPANCY —
+/// not just from entered payment records. Every elapsed month since the lease
+/// began that still has an unpaid balance is overdue; the current month's unpaid
+/// balance is "due". This is what makes rent-roll, collected, and overdue tie
+/// out: an occupied month nobody entered a record for is still money owed.
+/// Bounded to the last 24 months so a very old lease can't blow up the scan.
+({double overdue, double currentDue}) unitRentArrears(
+  RentalUnit unit,
+  List<RentPayment> payments,
+  DateTime now,
+) {
+  if (!unit.isOccupied) return (overdue: 0, currentDue: 0);
+  final leaseStart = unit.leaseStart ?? unit.createdAt;
+  final windowStart = DateTime(now.year - 2, now.month);
+  final start = leaseStart.isAfter(windowStart) ? leaseStart : windowStart;
+  final endCap = (unit.leaseEnd != null && unit.leaseEnd!.isBefore(now))
+      ? unit.leaseEnd!
+      : now;
+  if (endCap.isBefore(start)) return (overdue: 0, currentDue: 0);
+  final thisMonth = _monthKey(now);
+  var overdue = 0.0;
+  var currentDue = 0.0;
+  for (final key in _monthsBetween(start, endCap)) {
+    var paid = 0.0;
+    for (final p in payments) {
+      if (p.unitId != unit.id || p.isVoided || p.periodMonth != key) continue;
+      paid += p.amountPaidAED.clamp(0, unit.monthlyRentAED).toDouble();
+    }
+    final outstanding =
+        (unit.monthlyRentAED - paid).clamp(0, double.infinity).toDouble();
+    if (outstanding <= 0) continue;
+    if (key == thisMonth) {
+      currentDue += outstanding;
+    } else {
+      overdue += outstanding;
+    }
+  }
+  return (overdue: overdue, currentDue: currentDue);
+}
+
 // ─── Rental Units ────────────────────────────────────────────────
 
 final rentalUnitsProvider =
@@ -108,7 +163,7 @@ class RentalUnitsNotifier extends StateNotifier<List<RentalUnit>> {
         monthlyRentAED: 3800,
         tenantName: 'Al Noor Spare Parts',
         tenantContact: '+971 50 123 4567',
-        leaseStart: DateTime(now.year - 1, 3, 1),
+        leaseStart: DateTime(now.year, now.month - 2, 1),
         leaseEnd: DateTime(now.year + 1, 2, 28),
         status: RentalStatus.active,
         createdBy: 'Owner (Admin)',
@@ -122,7 +177,7 @@ class RentalUnitsNotifier extends StateNotifier<List<RentalUnit>> {
         monthlyRentAED: 4500,
         tenantName: 'Gulf Tyres & Service',
         tenantContact: '+971 55 987 6543',
-        leaseStart: DateTime(now.year - 1, 6, 1),
+        leaseStart: DateTime(now.year, now.month - 2, 1),
         leaseEnd: DateTime(now.year + 1, 5, 31),
         status: RentalStatus.active,
         createdBy: 'Owner (Admin)',
@@ -262,71 +317,60 @@ class RentPaymentsNotifier extends StateNotifier<List<RentPayment>> {
 
   static List<RentPayment> _seedPayments() {
     final now = DateTime.now();
-    final thisMonth = _monthKey(now);
-    final prev = now.month == 1
-        ? DateTime(now.year - 1, 12)
-        : DateTime(now.year, now.month - 1);
-    final lastMonth = _monthKey(prev);
+    String monthAgo(int n) => _monthKey(DateTime(now.year, now.month - n, 1));
+    RentPayment paid(String id, String unit, int monthsAgo, double amt) =>
+        RentPayment(
+          id: id,
+          unitId: unit,
+          periodMonth: monthAgo(monthsAgo),
+          amountDueAED: amt,
+          amountPaidAED: amt,
+          paidDate: now.subtract(Duration(days: 30 * monthsAgo + 4)),
+          method: 'Bank transfer',
+          recordedBy: 'Owner (Admin)',
+          recordedAt: now.subtract(Duration(days: 30 * monthsAgo + 4)),
+        );
+    // SHOP-01 is fully paid up (this + the two prior months of its lease).
+    // SHOP-02 paid two months ago; last month + this month are unpaid, so its
+    // arrears are DERIVED from occupancy (no record needed) → overdue + due.
     return [
-      // SHOP-01 paid this month.
-      RentPayment(
-        id: 'rent-seed-01',
-        unitId: 'unit-shop-01',
-        periodMonth: thisMonth,
-        amountDueAED: 3800,
-        amountPaidAED: 3800,
-        paidDate: now.subtract(const Duration(days: 4)),
-        method: 'Bank transfer',
-        recordedBy: 'Owner (Admin)',
-        recordedAt: now.subtract(const Duration(days: 4)),
-      ),
-      // SHOP-02 due this month (nothing paid yet).
-      RentPayment(
-        id: 'rent-seed-02',
-        unitId: 'unit-shop-02',
-        periodMonth: thisMonth,
-        amountDueAED: 4500,
-        amountPaidAED: 0,
-        recordedBy: 'Owner (Admin)',
-        recordedAt: now.subtract(const Duration(days: 2)),
-      ),
-      // SHOP-02 last month unpaid → overdue.
-      RentPayment(
-        id: 'rent-seed-03',
-        unitId: 'unit-shop-02',
-        periodMonth: lastMonth,
-        amountDueAED: 4500,
-        amountPaidAED: 0,
-        recordedBy: 'Owner (Admin)',
-        recordedAt: prev,
-      ),
+      paid('rent-seed-01', 'unit-shop-01', 0, 3800),
+      paid('rent-seed-02', 'unit-shop-01', 1, 3800),
+      paid('rent-seed-03', 'unit-shop-01', 2, 3800),
+      paid('rent-seed-04', 'unit-shop-02', 2, 4500),
     ];
   }
 }
 
 // ─── Derived: per-unit current status ────────────────────────────
 
-/// The current-month rent status for a unit (Paid/Due/Overdue/Partial).
+/// The current rent status for a unit (Paid/Due/Overdue/Partial), derived from
+/// occupancy-based arrears so an unbilled elapsed month still reads as overdue.
 final unitRentStatusProvider = Provider.family<RentStatus, String>((
   ref,
   unitId,
 ) {
+  final units = ref.watch(rentalUnitsProvider);
   final payments = ref.watch(rentPaymentsProvider);
   final now = DateTime.now();
-  final thisMonth = _monthKey(now);
-
-  // Any unpaid past period makes the unit overdue.
-  for (final p in payments) {
-    if (p.unitId != unitId || p.isVoided) continue;
-    if (p.statusAsOf(now) == RentStatus.overdue) return RentStatus.overdue;
-  }
-  // Otherwise reflect this month's record.
-  for (final p in payments) {
-    if (p.unitId == unitId && p.periodMonth == thisMonth && !p.isVoided) {
-      return p.statusAsOf(now);
+  RentalUnit? unit;
+  for (final u in units) {
+    if (u.id == unitId) {
+      unit = u;
+      break;
     }
   }
-  return RentStatus.due;
+  if (unit == null || !unit.isOccupied) return RentStatus.paid; // nothing owed
+
+  final a = unitRentArrears(unit, payments, now);
+  if (a.overdue > 0) return RentStatus.overdue;
+  if (a.currentDue <= 0) return RentStatus.paid;
+  // Current month has a balance: partial if something's in this month, else due.
+  final thisMonth = _monthKey(now);
+  final paidThis = payments
+      .where((p) => p.unitId == unitId && !p.isVoided && p.periodMonth == thisMonth)
+      .fold(0.0, (s, p) => s + p.amountPaidAED);
+  return paidThis > 0 ? RentStatus.partial : RentStatus.due;
 });
 
 // ─── Derived: dashboard summary ──────────────────────────────────
@@ -339,6 +383,7 @@ class RentalsSummary {
     required this.monthlyRentRoll,
     required this.collectedThisMonth,
     required this.overdueTotal,
+    required this.currentMonthDue,
   });
 
   final int totalUnits;
@@ -347,6 +392,11 @@ class RentalsSummary {
   final double monthlyRentRoll;
   final double collectedThisMonth;
   final double overdueTotal;
+
+  /// This month's rent still outstanding on occupied units (derived from
+  /// occupancy, not just entered records). Holds the invariant
+  /// `collectedThisMonth + currentMonthDue == monthlyRentRoll`.
+  final double currentMonthDue;
 }
 
 final rentalsSummaryProvider = Provider<RentalsSummary>((ref) {
@@ -359,16 +409,22 @@ final rentalsSummaryProvider = Provider<RentalsSummary>((ref) {
       .where((u) => u.isOccupied)
       .fold(0.0, (s, u) => s + u.monthlyRentAED);
 
+  // Collected = this month's non-void receipts (clamped so a legacy over-record
+  // can't push it above the roll).
   var collected = 0.0;
-  var overdue = 0.0;
   for (final p in payments) {
-    if (p.isVoided) continue;
-    // Clamp at the period's due so a legacy over-collected record can't push the
-    // collected figure above the rent roll.
-    if (p.periodMonth == thisMonth) {
-      collected += p.amountPaidAED.clamp(0, p.amountDueAED).toDouble();
-    }
-    if (p.statusAsOf(now) == RentStatus.overdue) overdue += p.outstandingAED;
+    if (p.isVoided || p.periodMonth != thisMonth) continue;
+    collected += p.amountPaidAED.clamp(0, p.amountDueAED).toDouble();
+  }
+
+  // Overdue + current-due are derived from OCCUPANCY (accrual), so an occupied
+  // month with no record is no longer invisible.
+  var overdue = 0.0;
+  var currentDue = 0.0;
+  for (final u in units) {
+    final a = unitRentArrears(u, payments, now);
+    overdue += a.overdue;
+    currentDue += a.currentDue;
   }
 
   return RentalsSummary(
@@ -378,6 +434,7 @@ final rentalsSummaryProvider = Provider<RentalsSummary>((ref) {
     monthlyRentRoll: rentRoll,
     collectedThisMonth: collected,
     overdueTotal: overdue,
+    currentMonthDue: currentDue,
   );
 });
 

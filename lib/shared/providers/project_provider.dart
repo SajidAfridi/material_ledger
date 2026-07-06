@@ -4,7 +4,9 @@ import '../models/material_item.dart';
 import '../models/material_request.dart';
 import '../models/project.dart';
 import 'inventory_provider.dart';
+import 'material_plan_provider.dart';
 import 'material_request_provider.dart';
+import 'session_provider.dart';
 
 // ─── Admin-created Projects ──────────────────────────────────────
 
@@ -40,9 +42,19 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     ];
   }
 
-  /// Admin override — delete any project from the system (FR-317).
-  void deleteProject(String projectId) {
-    state = state.where((p) => p.id != projectId).toList();
+  /// Admin deletes a project (FR-317). REFUSED (returns false) while it still
+  /// has open requests in flight — those hold stock reservations that would be
+  /// orphaned with no UI path to release them, permanently distorting the shared
+  /// godown's free-to-promise stock. Close or cancel the requests first. On a
+  /// successful delete the project's Phase-1 plan is removed too, so nothing is
+  /// left dangling.
+  bool deleteProject(String projectId) {
+    final p = byId(projectId);
+    if (p == null) return false;
+    if (openRequestCountFor(p) > 0) return false;
+    state = state.where((x) => x.id != projectId).toList();
+    _ref.read(materialPlansProvider.notifier).removeForProject(projectId);
+    return true;
   }
 
   Project? byId(String id) {
@@ -52,13 +64,19 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     return null;
   }
 
-  /// Number of open requests against a project (matched by name).
-  int openRequestCountFor(String projectName) {
+  /// True when [r] belongs to project [p]. Keys off the stable projectId when
+  /// present (so two same-named jobs don't share requests); falls back to the
+  /// name for legacy requests created before requests carried a projectId.
+  bool _matchesProject(MaterialRequest r, Project p) =>
+      r.projectId != null ? r.projectId == p.id : r.projectName == p.name;
+
+  /// Number of open requests against a project.
+  int openRequestCountFor(Project project) {
     return _ref
         .read(materialRequestsProvider)
         .where(
           (r) =>
-              r.projectName == projectName &&
+              _matchesProject(r, project) &&
               _openRequestStatuses.contains(r.status),
         )
         .length;
@@ -70,7 +88,7 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     final p = byId(projectId);
     if (p == null) return false;
     if (p.phase?.state == ProjectState.completed) return false;
-    return openRequestCountFor(p.name) == 0;
+    return openRequestCountFor(p) == 0;
   }
 
   /// Close out a project. Returns false (no-op) if it still has open requests.
@@ -117,6 +135,20 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     ];
   }
 }
+
+/// Projects visible to the signed-in user. Engineers see only the jobs assigned
+/// to them (plus any not yet assigned to anyone); procurement and admin see the
+/// full job register. Mirrors how the paper "Running Jobs" sheet works — one
+/// engineer per job, management sees all.
+final visibleProjectsProvider = Provider<List<Project>>((ref) {
+  final projects = ref.watch(projectsProvider);
+  final role = ref.watch(currentRoleProvider);
+  if (role.usesAdminPanel) return projects; // procurement + admin → whole register
+  final uid = ref.watch(currentUserProvider)?.id;
+  return projects
+      .where((p) => p.assignedEngineerId == null || p.assignedEngineerId == uid)
+      .toList();
+});
 
 /// Whether a given project can currently be closed out (drives the UI control).
 final canCompleteProjectProvider = Provider.family<bool, String>((
@@ -305,7 +337,7 @@ final engineerProjectFilterProvider = StateProvider<DashboardProjectFilter>(
 /// Projects filtered by the active dashboard filter.
 final engineerFilteredProjectsProvider = Provider<List<Project>>((ref) {
   final filter = ref.watch(engineerProjectFilterProvider);
-  final projects = ref.watch(projectsProvider);
+  final projects = ref.watch(visibleProjectsProvider);
   return switch (filter) {
     DashboardProjectFilter.all => projects,
     DashboardProjectFilter.active =>
@@ -321,7 +353,7 @@ final engineerFilteredProjectsProvider = Provider<List<Project>>((ref) {
 
 /// First project currently awaiting engineer approval (if any).
 final pendingApprovalProjectProvider = Provider<Project?>((ref) {
-  final projects = ref.watch(projectsProvider);
+  final projects = ref.watch(visibleProjectsProvider);
   for (final p in projects) {
     if (p.awaitingApproval) return p;
   }
@@ -332,7 +364,7 @@ final pendingApprovalProjectProvider = Provider<Project?>((ref) {
 /// project, or the first active project, or the first project.
 final currentPhaseProvider = Provider<({Project project, ProjectPhase phase})?>(
   (ref) {
-    final projects = ref.watch(projectsProvider);
+    final projects = ref.watch(visibleProjectsProvider);
     if (projects.isEmpty) return null;
     final candidate = projects.firstWhere(
       (p) => p.awaitingApproval && p.phase != null,
@@ -357,7 +389,7 @@ final activeProjectCountProvider = Provider<int>((ref) {
 
 /// Count of projects requiring engineer attention (approvals).
 final actionsNeededCountProvider = Provider<int>((ref) {
-  return ref.watch(projectsProvider).where((p) => p.awaitingApproval).length;
+  return ref.watch(visibleProjectsProvider).where((p) => p.awaitingApproval).length;
 });
 
 // ─── Mock Data ──────────────────────────────────────────────────
@@ -371,6 +403,12 @@ final _mockProjects = <Project>[
     nameSecondary: 'الراحہ بیچ ٹاور سی — ایچ وی اے سی',
     siteLocation: 'Al Raha Beach, Abu Dhabi',
     clientName: 'Aldar Properties',
+    jobNumber: '301',
+    mainContractor: 'KEC',
+    authorityRef: 'ADWEA-3301',
+    consultant: 'Hyder Consulting',
+    contractValueAED: 4180000,
+    assignedEngineerId: 'usr-eng',
     buildingName: 'Tower C',
     floorNumbers: 'Basement, G, 1-14',
     startDate: _now.subtract(const Duration(days: 10)),
@@ -392,6 +430,11 @@ final _mockProjects = <Project>[
     nameSecondary: 'مصفح گودام — چلر انسٹال',
     siteLocation: 'Musaffah, Abu Dhabi',
     clientName: 'Gulf Industrial',
+    jobNumber: '305',
+    mainContractor: 'ELMEC',
+    authorityRef: 'N-17727',
+    contractValueAED: 1410000,
+    assignedEngineerId: 'usr-eng',
     buildingName: 'Main Warehouse',
     floorNumbers: 'Ground Floor only',
     startDate: _now.subtract(const Duration(days: 30)),
@@ -413,6 +456,12 @@ final _mockProjects = <Project>[
     nameSecondary: 'خالدیہ رہائش گاہیں — ڈکٹ ورک',
     siteLocation: 'Al Khalidiyah, Abu Dhabi',
     clientName: 'Bloom Properties',
+    jobNumber: '312',
+    mainContractor: 'DANWAY',
+    authorityRef: 'ADWEA-1132',
+    consultant: 'AECOM',
+    contractValueAED: 3750000,
+    assignedEngineerId: 'usr-eng',
     buildingName: 'Block A & B',
     floorNumbers: 'Floors 1-6',
     startDate: _now.subtract(const Duration(days: 45)),
@@ -434,6 +483,12 @@ final _mockProjects = <Project>[
     nameSecondary: 'کارنیش کلینک — ایف سی یو متبادل',
     siteLocation: 'Corniche Road, Abu Dhabi',
     clientName: 'DOH',
+    jobNumber: '320',
+    mainContractor: 'REMCON',
+    authorityRef: 'SHMG-2033',
+    consultant: 'Mott MacDonald',
+    contractValueAED: 4716750,
+    assignedEngineerId: 'usr-eng',
     buildingName: 'East Wing',
     floorNumbers: 'G, 1, 2',
     startDate: _now.subtract(const Duration(days: 60)),
@@ -454,6 +509,11 @@ final _mockProjects = <Project>[
     nameSecondary: 'سٹی سنٹر — پائپنگ اور والوز',
     siteLocation: 'Commercial District',
     clientName: 'Aldar Commercial',
+    jobNumber: '315',
+    mainContractor: 'L&T',
+    authorityRef: 'ADWEA-5701',
+    contractValueAED: 5700000,
+    assignedEngineerId: 'usr-eng',
     buildingName: 'Retail Hub',
     floorNumbers: 'Ground & Mezzanine',
     startDate: _now.subtract(const Duration(days: 5)),
@@ -473,6 +533,11 @@ final _mockProjects = <Project>[
     nameSecondary: 'صنعتی زون — بوائلر روم',
     siteLocation: 'Zone F, Industrial Area',
     clientName: 'Mubadala',
+    jobNumber: 'B067',
+    mainContractor: 'AG POWER',
+    authorityRef: 'A-17676',
+    contractValueAED: 1025000,
+    assignedEngineerId: 'usr-eng',
     buildingName: 'Boiler Building 2',
     floorNumbers: 'Ground, Roof',
     startDate: _now.subtract(const Duration(days: 90)),

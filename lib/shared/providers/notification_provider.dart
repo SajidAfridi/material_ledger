@@ -25,7 +25,14 @@ final notificationsProvider =
 /// True when [n] should reach the signed-in [role]. Empty audience broadcasts
 /// to everyone; admin reads all (FR-068); otherwise the audience must match the
 /// role's name exactly ('procurement' / 'engineer').
-bool notificationVisibleTo(AppNotification n, UserRole role) {
+bool notificationVisibleTo(
+  AppNotification n,
+  UserRole role, {
+  String currentUserId = '',
+}) {
+  // User-targeted (e.g. "your leave was approved") → only that user; admin
+  // still reads all (FR-068).
+  if (n.userId.isNotEmpty) return role.isAdmin || n.userId == currentUserId;
   if (n.audience.isEmpty) return true;
   if (role.isAdmin) return true;
   return n.audience == role.name;
@@ -37,9 +44,10 @@ bool notificationVisibleTo(AppNotification n, UserRole role) {
 /// dispatch/plan updates, admin sees everything.
 final visibleNotificationsProvider = Provider<List<AppNotification>>((ref) {
   final role = ref.watch(currentRoleProvider);
+  final userId = ref.watch(currentUserProvider)?.id ?? '';
   return ref
       .watch(notificationsProvider)
-      .where((n) => notificationVisibleTo(n, role))
+      .where((n) => notificationVisibleTo(n, role, currentUserId: userId))
       .toList();
 });
 
@@ -70,6 +78,7 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
     String refId = '',
     String route = '',
     String audience = '',
+    String userId = '',
   }) async {
     final n = AppNotification(
       id: 'notif-${_uuid.v4().substring(0, 8)}',
@@ -81,6 +90,7 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
       refId: refId,
       route: route,
       audience: audience,
+      userId: userId,
     );
     state = [n, ...state];
     await _persist();

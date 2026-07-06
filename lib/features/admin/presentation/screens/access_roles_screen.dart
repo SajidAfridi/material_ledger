@@ -33,6 +33,7 @@ class AccessRolesScreen extends ConsumerWidget {
     const _MatrixRow('People / HR', cap: RoleCapability.people),
     const _MatrixRow('Write people', cap: RoleCapability.writePeople),
     const _MatrixRow('Goods receipt', cap: RoleCapability.goods),
+    const _MatrixRow('Approve leave', cap: RoleCapability.approveLeave),
     const _MatrixRow('Finance / costs', cap: RoleCapability.finance),
     _MatrixRow('Admin (More)', structural: _adminMore),
   ];

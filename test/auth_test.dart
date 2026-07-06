@@ -44,7 +44,7 @@ void main() {
     test('valid seed credentials sign in and set the role from the user',
         () async {
       final result = await auth().signIn(
-        email: 'owner@yorksac.ae',
+        email: 'owner@gmail.com',
         password: kSeedPassword,
       );
       expect(result, SignInResult.ok);
@@ -54,13 +54,13 @@ void main() {
     });
 
     test('engineer creds load the engineer role', () async {
-      await auth().signIn(email: 'ahmed.khan@yorksac.ae', password: kSeedPassword);
+      await auth().signIn(email: 'imrankhan@gmail.com', password: kSeedPassword);
       expect(container.read(currentRoleProvider), UserRole.engineer);
     });
 
     test('wrong password is rejected and no session opens', () async {
       final result = await auth().signIn(
-        email: 'owner@yorksac.ae',
+        email: 'owner@gmail.com',
         password: 'nope',
       );
       expect(result, SignInResult.invalidCredentials);
@@ -109,7 +109,7 @@ void main() {
     });
 
     test('signOut clears the session', () async {
-      await auth().signIn(email: 'owner@yorksac.ae', password: kSeedPassword);
+      await auth().signIn(email: 'owner@gmail.com', password: kSeedPassword);
       expect(container.read(isLoggedInProvider), true);
       await auth().signOut();
       expect(container.read(isLoggedInProvider), false);

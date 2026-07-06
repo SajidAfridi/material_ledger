@@ -38,3 +38,8 @@ final canWritePeopleProvider = Provider<bool>(
   (ref) =>
       _cap(ref, RoleCapability.people) && _cap(ref, RoleCapability.writePeople),
 );
+
+// Approve/reject engineer leave requests (procurement & admin; editable).
+final canApproveLeaveProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.approveLeave),
+);

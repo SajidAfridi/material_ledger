@@ -93,7 +93,7 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
-    final projects = ref.watch(projectsProvider);
+    final projects = ref.watch(visibleProjectsProvider);
     _ensureProject(projects);
 
     return Scaffold(

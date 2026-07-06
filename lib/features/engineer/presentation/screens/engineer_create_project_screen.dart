@@ -10,7 +10,9 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 
 /// Lightweight project creation flow for engineers.
 class EngineerCreateProjectScreen extends ConsumerStatefulWidget {
@@ -31,9 +33,16 @@ class _EngineerCreateProjectScreenState
   final _buildingNameController = TextEditingController();
   final _floorNumbersController = TextEditingController();
   final _siteNotesController = TextEditingController();
+  // Job-register fields (from the client's "Running Jobs" sheet).
+  final _jobNumberController = TextEditingController();
+  final _mainContractorController = TextEditingController();
+  final _authorityRefController = TextEditingController();
+  final _consultantController = TextEditingController();
+  final _contractValueController = TextEditingController();
 
   DateTime? _startDate = DateTime.now();
   DateTime? _expectedEndDate;
+  bool _saving = false; // guards against a double-tap creating two projects
 
   @override
   void dispose() {
@@ -44,6 +53,11 @@ class _EngineerCreateProjectScreenState
     _buildingNameController.dispose();
     _floorNumbersController.dispose();
     _siteNotesController.dispose();
+    _jobNumberController.dispose();
+    _mainContractorController.dispose();
+    _authorityRefController.dispose();
+    _consultantController.dispose();
+    _contractValueController.dispose();
     super.dispose();
   }
 
@@ -87,6 +101,7 @@ class _EngineerCreateProjectScreenState
   }
 
   void _submit() {
+    if (_saving) return; // already creating — ignore repeat taps
     if (!_formKey.currentState!.validate()) return;
     if (_startDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,8 +129,19 @@ class _EngineerCreateProjectScreenState
         state: ProjectState.planning,
       ),
       lastUpdated: now,
+      // Job register.
+      jobNumber: _emptyToNull(_jobNumberController.text),
+      mainContractor: _emptyToNull(_mainContractorController.text),
+      authorityRef: _emptyToNull(_authorityRefController.text),
+      consultant: _emptyToNull(_consultantController.text),
+      contractValueAED: double.tryParse(
+        _contractValueController.text.trim().replaceAll(',', ''),
+      ),
+      // Auto-assign to the creating engineer so it lands on their job list.
+      assignedEngineerId: ref.read(currentUserProvider)?.id,
     );
 
+    _saving = true;
     ref.read(projectsProvider.notifier).addProject(project);
     ref.logAudit(
       action: 'Project created',
@@ -297,6 +323,69 @@ class _EngineerCreateProjectScreenState
                                 urduHint: AppStrings.siteNotes.ur,
                                 maxLines: 3,
                               ),
+                              const Gap(AppSpacing.xl),
+                              // ─── Job register (client's "Running Jobs" sheet)
+                              Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: Text(
+                                  'Job register',
+                                  style: AppTypography.labelLarge.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const Gap(AppSpacing.md),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: LedgerTextField(
+                                      controller: _jobNumberController,
+                                      label: 'Job number',
+                                      hintText: 'e.g. 305 / B067',
+                                    ),
+                                  ),
+                                  const Gap(AppSpacing.md),
+                                  Expanded(
+                                    child: LedgerTextField(
+                                      controller: _mainContractorController,
+                                      label: 'Main contractor',
+                                      hintText: 'e.g. SEPCO, L&T',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Gap(AppSpacing.lg),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: LedgerTextField(
+                                      controller: _authorityRefController,
+                                      label: 'Authority ref',
+                                      hintText: 'ADWEA / DEWA',
+                                    ),
+                                  ),
+                                  const Gap(AppSpacing.md),
+                                  Expanded(
+                                    child: LedgerTextField(
+                                      controller: _consultantController,
+                                      label: 'Consultant',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (ref.watch(canViewFinanceProvider)) ...[
+                                const Gap(AppSpacing.lg),
+                                LedgerTextField(
+                                  controller: _contractValueController,
+                                  label: 'Contract value (AED)',
+                                  hintText: 'Management only',
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                ),
+                              ],
                               const Gap(AppSpacing.xxl),
                               PrimaryButton(
                                 label: AppStrings.createProject.primary,

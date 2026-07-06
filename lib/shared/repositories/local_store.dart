@@ -25,19 +25,30 @@ class LocalCollectionStore<T> implements CollectionStore<T> {
   final Map<String, dynamic> Function(T value) toJson;
   final T Function(Map<String, dynamic> json) fromJson;
 
-  /// Read the whole collection. Returns `[]` when absent or unparseable.
+  /// Read the whole collection. Returns `[]` when absent or the blob is entirely
+  /// unparseable. Decodes ROW BY ROW: a single malformed/partial row (e.g. a
+  /// synced payload missing a field, or written by another app version) is
+  /// SKIPPED rather than throwing and wiping the whole collection to empty —
+  /// one bad record can never take out all of a provider's data.
   @override
   List<T> readAll() {
     final raw = prefs.getString(key);
     if (raw == null || raw.isEmpty) return <T>[];
+    final List<dynamic> list;
     try {
-      final list = jsonDecode(raw) as List<dynamic>;
-      return list
-          .map((e) => fromJson(e as Map<String, dynamic>))
-          .toList(growable: true);
+      list = jsonDecode(raw) as List<dynamic>;
     } catch (_) {
-      return <T>[];
+      return <T>[]; // whole blob corrupt → nothing to recover
     }
+    final out = <T>[];
+    for (final e in list) {
+      try {
+        out.add(fromJson(e as Map<String, dynamic>));
+      } catch (_) {
+        // Drop just this row; keep every other record.
+      }
+    }
+    return out;
   }
 
   /// Replace the whole collection (the only write path — keeps reads/writes

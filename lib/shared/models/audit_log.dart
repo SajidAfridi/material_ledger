@@ -11,6 +11,7 @@ enum AuditModule {
   materials('Materials'),
   rentals('Rentals'),
   people('People'),
+  leave('Leave'),
   platform('Platform');
 
   const AuditModule(this.label);

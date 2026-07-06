@@ -429,7 +429,7 @@ class _ProjectsHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final total = ref.watch(projectsProvider).length;
+    final total = ref.watch(visibleProjectsProvider).length;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

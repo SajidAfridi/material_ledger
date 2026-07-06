@@ -70,6 +70,13 @@ class Project {
     this.awaitingApproval = false,
     this.openRequestCount = 0,
     this.allDispatched = false,
+    // ─── Job register (from the client's "Running Jobs" sheet) ──────
+    this.jobNumber,
+    this.mainContractor,
+    this.authorityRef,
+    this.consultant,
+    this.contractValueAED,
+    this.assignedEngineerId,
   });
 
   final String id;
@@ -87,6 +94,26 @@ class Project {
   final bool awaitingApproval;
   final int openRequestCount;
   final bool allDispatched;
+
+  // ─── Job register fields ──────────────────────────────────────────
+  /// Job/contract number, e.g. "305" or "B066".
+  final String? jobNumber;
+
+  /// Main contractor / EPC on the job, e.g. "SEPCO", "L&T".
+  final String? mainContractor;
+
+  /// Utility-authority reference (ADWEA / DEWA permit or contract ref).
+  final String? authorityRef;
+
+  /// Consultant on the job.
+  final String? consultant;
+
+  /// Contract value in AED. Management figure — gate its visibility on the
+  /// finance capability (engineers don't see it).
+  final double? contractValueAED;
+
+  /// The engineer this job is assigned to (AppUser id). Null = unassigned.
+  final String? assignedEngineerId;
 
   /// True when a project has any work item needing engineer attention.
   bool get needsAction => awaitingApproval || openRequestCount > 0;
@@ -106,6 +133,12 @@ class Project {
     bool? awaitingApproval,
     int? openRequestCount,
     bool? allDispatched,
+    String? jobNumber,
+    String? mainContractor,
+    String? authorityRef,
+    String? consultant,
+    double? contractValueAED,
+    String? assignedEngineerId,
   }) => Project(
     id: id,
     name: name ?? this.name,
@@ -122,6 +155,12 @@ class Project {
     awaitingApproval: awaitingApproval ?? this.awaitingApproval,
     openRequestCount: openRequestCount ?? this.openRequestCount,
     allDispatched: allDispatched ?? this.allDispatched,
+    jobNumber: jobNumber ?? this.jobNumber,
+    mainContractor: mainContractor ?? this.mainContractor,
+    authorityRef: authorityRef ?? this.authorityRef,
+    consultant: consultant ?? this.consultant,
+    contractValueAED: contractValueAED ?? this.contractValueAED,
+    assignedEngineerId: assignedEngineerId ?? this.assignedEngineerId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -140,6 +179,12 @@ class Project {
     'awaitingApproval': awaitingApproval,
     'openRequestCount': openRequestCount,
     'allDispatched': allDispatched,
+    'jobNumber': jobNumber,
+    'mainContractor': mainContractor,
+    'authorityRef': authorityRef,
+    'consultant': consultant,
+    'contractValueAED': contractValueAED,
+    'assignedEngineerId': assignedEngineerId,
   };
 
   factory Project.fromJson(Map<String, dynamic> json) => Project(
@@ -166,6 +211,12 @@ class Project {
     awaitingApproval: json['awaitingApproval'] as bool? ?? false,
     openRequestCount: json['openRequestCount'] as int? ?? 0,
     allDispatched: json['allDispatched'] as bool? ?? false,
+    jobNumber: json['jobNumber'] as String?,
+    mainContractor: json['mainContractor'] as String?,
+    authorityRef: json['authorityRef'] as String?,
+    consultant: json['consultant'] as String?,
+    contractValueAED: (json['contractValueAED'] as num?)?.toDouble(),
+    assignedEngineerId: json['assignedEngineerId'] as String?,
   );
 
   static String encodeList(List<Project> items) =>

@@ -45,6 +45,7 @@ class ReturnItem {
     required this.unitSymbol,
     this.reason = ReturnReason.surplus,
     this.materialId,
+    this.requestId,
   });
 
   final String description;
@@ -58,6 +59,10 @@ class ReturnItem {
   /// Null for free-text/custom returns.
   final String? materialId;
 
+  /// The originating dispatch/request this material came from, for reconciling a
+  /// return against what was actually issued to site. Null for ad-hoc returns.
+  final String? requestId;
+
   ReturnItem copyWith({double? quantity, ReturnReason? reason}) => ReturnItem(
     description: description,
     descriptionSecondary: descriptionSecondary,
@@ -65,6 +70,7 @@ class ReturnItem {
     unitSymbol: unitSymbol,
     reason: reason ?? this.reason,
     materialId: materialId,
+    requestId: requestId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -74,6 +80,7 @@ class ReturnItem {
     'unitSymbol': unitSymbol,
     'reason': reason.label,
     if (materialId != null) 'materialId': materialId,
+    if (requestId != null) 'requestId': requestId,
   };
 
   factory ReturnItem.fromJson(Map<String, dynamic> json) => ReturnItem(
@@ -83,6 +90,7 @@ class ReturnItem {
     unitSymbol: json['unitSymbol'] as String,
     reason: ReturnReason.fromLabel(json['reason'] as String? ?? 'Surplus'),
     materialId: json['materialId'] as String?,
+    requestId: json['requestId'] as String?,
   );
 }
 

@@ -247,9 +247,13 @@ class _RecordTransactionSheetState
                             if ((v ?? '').trim().isEmpty) {
                               return AppStrings.fieldRequired.primary;
                             }
-                            if (double.tryParse(v!.trim()) == null) {
+                            final n = double.tryParse(v!.trim());
+                            // Must be strictly positive — a 0 or negative entry
+                            // would silently corrupt the on-hand stock count.
+                            if (n == null || n <= 0) {
                               return AppStrings.enterValidNumber.primary;
                             }
+                            if (n > 1000000) return 'Quantity looks too large';
                             return null;
                           },
                         ),

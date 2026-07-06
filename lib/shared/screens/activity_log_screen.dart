@@ -268,6 +268,7 @@ class _AuditTile extends StatelessWidget {
     AuditModule.materials => (Icons.inventory_2_outlined, AppColors.primary),
     AuditModule.rentals => (Icons.store_mall_directory_outlined, AppColors.tertiary),
     AuditModule.people => (Icons.groups_outlined, AppColors.success),
+    AuditModule.leave => (Icons.event_busy_outlined, AppColors.warning),
     AuditModule.platform => (Icons.shield_outlined, AppColors.onSurfaceVariant),
   };
 }

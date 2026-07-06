@@ -10,6 +10,9 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/employee_record.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
+import '../widgets/add_employee_sheet.dart';
+import '../widgets/attendance_sheet.dart';
 
 /// People / HR module home: workforce summary + employee roster.
 /// Procurement & Admin read and write (HR was moved to Procurement).
@@ -21,9 +24,19 @@ class PeopleDashboardScreen extends ConsumerWidget {
     final lang = ref.watch(languageProvider);
     final employees = ref.watch(employeesProvider);
     final summary = ref.watch(hrSummaryProvider);
+    final canWrite = ref.watch(canWritePeopleProvider);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
+      floatingActionButton: canWrite
+          ? FloatingActionButton.extended(
+              onPressed: () => AddEmployeeSheet.show(context),
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Add employee'),
+            )
+          : null,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
@@ -88,6 +101,37 @@ class PeopleDashboardScreen extends ConsumerWidget {
               ),
               const Gap(AppSpacing.xl),
 
+              // ─── Mark attendance (gated) ────────────────────
+              if (canWrite) ...[
+                LedgerCard(
+                  onTap: () => AttendanceSheet.show(context),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.how_to_reg_outlined,
+                          color: AppColors.primary),
+                      const Gap(AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          "Mark today's attendance",
+                          style: AppTypography.titleSmall,
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded,
+                          color: AppColors.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+                const Gap(AppSpacing.xl),
+              ],
+
+              // ─── Leave approvals (gated) ────────────────────
+              if (ref.watch(canApproveLeaveProvider)) ...[
+                _LeaveRequestsCard(
+                  pending: ref.watch(pendingLeaveRequestsProvider).length,
+                ),
+                const Gap(AppSpacing.xl),
+              ],
+
               Text(AppStrings.employees.primary, style: AppTypography.titleMedium),
               const Gap(AppSpacing.md),
 
@@ -112,6 +156,62 @@ class PeopleDashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LeaveRequestsCard extends StatelessWidget {
+  const _LeaveRequestsCard({required this.pending});
+  final int pending;
+
+  @override
+  Widget build(BuildContext context) {
+    return LedgerCard(
+      onTap: () => context.push(RoutePaths.leaveRequests),
+      child: Row(
+        children: [
+          Icon(Icons.event_busy_outlined, color: AppColors.primary),
+          const Gap(AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppStrings.leaveRequestsTitle.primary,
+                  style: AppTypography.titleSmall,
+                ),
+                const Gap(2),
+                Text(
+                  AppStrings.leaveRequestsHint.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (pending > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.warning,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              ),
+              child: Text(
+                '$pending',
+                style: AppTypography.labelSmall.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          const Gap(AppSpacing.xs),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.onSurfaceVariant),
+        ],
       ),
     );
   }

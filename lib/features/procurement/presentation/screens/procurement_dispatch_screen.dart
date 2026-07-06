@@ -197,7 +197,17 @@ class _ProcurementDispatchScreenState
     final cost = double.tryParse(costController.text.trim()) ?? 0;
     qtyController.dispose();
     costController.dispose();
-    if (result != true || qty <= 0 || !mounted) return;
+    if (result != true || !mounted) return;
+    if (qty <= 0) {
+      // Confirmed with an empty/invalid quantity — tell the user instead of
+      // silently doing nothing (they'd think the shortfall was resolved).
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a quantity greater than 0 to receive.'),
+        ),
+      );
+      return;
+    }
 
     if (existing != null) {
       // Real item, just short — top up its stock with a goods receipt. The line

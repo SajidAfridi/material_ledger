@@ -29,6 +29,7 @@ class AppNotification {
     this.refId = '',
     this.route = '',
     this.audience = '',
+    this.userId = '',
   });
 
   final String id;
@@ -53,6 +54,11 @@ class AppNotification {
   /// to '' (broadcast), so old persisted notifications keep showing.
   final String audience;
 
+  /// Targets a single user (`AppUser.id`). When set, only that user sees it
+  /// (e.g. "your leave was approved") — admin still sees all. Empty = fall back
+  /// to [audience] role targeting. Decodes to '' for old/Firebase data.
+  final String userId;
+
   /// Human-readable relative time string.
   String get relativeTime {
     final diff = DateTime.now().difference(timestamp);
@@ -74,6 +80,7 @@ class AppNotification {
     refId: refId,
     route: route,
     audience: audience,
+    userId: userId,
   );
 
   Map<String, dynamic> toJson() => {
@@ -87,6 +94,7 @@ class AppNotification {
     'refId': refId,
     'route': route,
     'audience': audience,
+    'userId': userId,
   };
 
   factory AppNotification.fromJson(Map<String, dynamic> json) =>
@@ -101,6 +109,7 @@ class AppNotification {
         refId: json['refId'] as String? ?? '',
         route: json['route'] as String? ?? '',
         audience: json['audience'] as String? ?? '',
+        userId: json['userId'] as String? ?? '',
       );
 
   static String encodeList(List<AppNotification> items) =>

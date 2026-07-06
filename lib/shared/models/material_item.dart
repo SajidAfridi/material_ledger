@@ -37,15 +37,36 @@ enum MaterialUnit {
 /// Optimized for HVAC supply companies — valves, pipes, fittings,
 /// fasteners, ducts, insulation, electrical controls, etc.
 enum MaterialCategory {
+  // Air terminals (grilles, registers, diffusers — from the equipment schedule).
   airInletOutlet('Air Inlet & Outlet', 'ہوا کے انلیٹ اور آؤٹ لیٹ'),
+  supplyGrille('Supply Grilles & Registers', 'سپلائی گرلز'),
+  returnGrille('Return & Exhaust Grilles', 'ریٹرن گرلز'),
+  diffusers('Diffusers', 'ڈفیوزرز'),
+  // Dampers.
+  volumeDamper('Volume Control Dampers', 'وی سی ڈی'),
+  fireSmokeDamper('Fire & Smoke Dampers', 'فائر و سموک ڈیمپر'),
+  ducts('Ducts & Dampers', 'ڈکٹس اور ڈیمپرز'),
+  flexibleDuct('Flexible Ducts', 'فلیکسیبل ڈکٹ'),
+  ductAccessories('Duct Accessories', 'ڈکٹ لوازمات'),
+  sheetMetal('Sheet Metal', 'شیٹ میٹل'),
+  // Equipment.
+  fans('Fans', 'پنکھے'),
+  ductHeaters('Duct Heaters', 'ڈکٹ ہیٹرز'),
+  units('FCU / AHU / Package Units', 'یونٹس'),
+  filters('Filters', 'فلٹرز'),
+  // Piping & mechanical.
   valves('Valves', 'والوز'),
   pipes('Pipes & Tubing', 'پائپ اور ٹیوبنگ'),
   fittings('Fittings & Connectors', 'فٹنگز اور کنیکٹرز'),
-  fasteners('Fasteners', 'نٹ بولٹ'),
-  ducts('Ducts & Dampers', 'ڈکٹس اور ڈیمپرز'),
-  insulation('Insulation', 'انسولیشن'),
-  electrical('Electrical & Controls', 'الیکٹریکل اور کنٹرولز'),
   copper('Copper & Brass', 'تانبا اور پیتل'),
+  refrigerant('Refrigerant & Gas', 'ریفریجرنٹ'),
+  insulation('Insulation', 'انسولیشن'),
+  sealants('Sealants & Adhesives', 'سیلنٹ و چپکنے والے'),
+  supports('Hangers & Supports', 'ہینگرز و سپورٹس'),
+  fasteners('Fasteners', 'نٹ بولٹ'),
+  // Controls & general.
+  electrical('Electrical & Controls', 'الیکٹریکل اور کنٹرولز'),
+  gauges('Gauges & Instruments', 'گیجز و آلات'),
   tools('Tools & Equipment', 'اوزار اور آلات'),
   other('Other', 'دیگر');
 
@@ -81,6 +102,7 @@ class MaterialItem {
     this.countryOfOrigin = '',
     this.size = '',
     this.ralColour = '',
+    this.storeLocation = '',
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : createdAt = createdAt ?? DateTime.now(),
@@ -109,6 +131,9 @@ class MaterialItem {
 
   /// RAL colour (column F), e.g. "RAL 9010" — for grilles/diffusers/dampers.
   final String ralColour;
+
+  /// Store location (column I), e.g. "Rack B-3" — where it sits in the godown.
+  final String storeLocation;
 
   /// Quantity committed to approved plans but not yet dispatched (FR-094).
   /// On-hand [quantity] minus this is what's actually free to promise.
@@ -163,6 +188,7 @@ class MaterialItem {
     String? countryOfOrigin,
     String? size,
     String? ralColour,
+    String? storeLocation,
     DateTime? updatedAt,
   }) {
     return MaterialItem(
@@ -179,6 +205,7 @@ class MaterialItem {
       countryOfOrigin: countryOfOrigin ?? this.countryOfOrigin,
       size: size ?? this.size,
       ralColour: ralColour ?? this.ralColour,
+      storeLocation: storeLocation ?? this.storeLocation,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
@@ -198,6 +225,7 @@ class MaterialItem {
     'countryOfOrigin': countryOfOrigin,
     'size': size,
     'ralColour': ralColour,
+    'storeLocation': storeLocation,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -216,6 +244,7 @@ class MaterialItem {
     countryOfOrigin: json['countryOfOrigin'] as String? ?? '',
     size: json['size'] as String? ?? '',
     ralColour: json['ralColour'] as String? ?? '',
+    storeLocation: json['storeLocation'] as String? ?? '',
     createdAt: DateTime.parse(json['createdAt'] as String),
     updatedAt: DateTime.parse(json['updatedAt'] as String),
   );

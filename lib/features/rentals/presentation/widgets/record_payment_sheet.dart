@@ -53,15 +53,15 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
     // (e.g. after paying half of AED 4,500, this shows AED 2,250).
     RentPayment? existing;
     for (final p in ref.read(rentPaymentsProvider)) {
-      if (p.unitId == widget.unit.id &&
-          p.periodMonth == month &&
-          !p.isVoided) {
+      if (p.unitId == widget.unit.id && p.periodMonth == month && !p.isVoided) {
         existing = p;
         break;
       }
     }
     final outstanding = existing?.outstandingAED ?? widget.unit.monthlyRentAED;
-    _dueController = TextEditingController(text: outstanding.toStringAsFixed(0));
+    _dueController = TextEditingController(
+      text: outstanding.toStringAsFixed(0),
+    );
     // Default the "paid" field to clearing the balance in one tap (editable).
     _paidController.text = outstanding.toStringAsFixed(0);
   }
@@ -97,7 +97,9 @@ class _RecordPaymentSheetState extends ConsumerState<RecordPaymentSheet> {
   /// slip an overpayment past the cap.
   double _outstandingFor(String period) {
     for (final p in ref.read(rentPaymentsProvider)) {
-      if (p.unitId == widget.unit.id && p.periodMonth == period && !p.isVoided) {
+      if (p.unitId == widget.unit.id &&
+          p.periodMonth == period &&
+          !p.isVoided) {
         return p.outstandingAED;
       }
     }

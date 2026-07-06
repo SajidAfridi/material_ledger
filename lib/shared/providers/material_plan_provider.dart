@@ -65,6 +65,14 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     return null;
   }
 
+  /// Delete a project's Phase-1 plan — called when the project itself is
+  /// removed, so no orphaned plan is left behind.
+  Future<void> removeForProject(String projectId) async {
+    if (!state.any((p) => p.projectId == projectId)) return;
+    state = state.where((p) => p.projectId != projectId).toList();
+    await _persist();
+  }
+
   /// Insert or replace a plan (by project).
   Future<void> upsertPlan(MaterialPlan plan) async {
     final exists = state.any((p) => p.projectId == plan.projectId);

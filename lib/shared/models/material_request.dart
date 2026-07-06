@@ -83,7 +83,8 @@ class RequestComment {
     authorName: json['authorName'] as String? ?? '',
     authorRole: json['authorRole'] as String? ?? '',
     text: json['text'] as String? ?? '',
-    timestamp: DateTime.parse(json['timestamp'] as String),
+    timestamp:
+        DateTime.tryParse(json['timestamp'] as String? ?? '') ?? DateTime.now(),
   );
 }
 
@@ -96,6 +97,7 @@ class MaterialRequest {
     required this.status,
     required this.requestDate,
     required this.itemCount,
+    this.projectId,
     this.lineItems = const [],
     this.priority = RequestPriority.normal,
     this.siteLocation,
@@ -106,6 +108,12 @@ class MaterialRequest {
   });
 
   final String id;
+
+  /// Stable id of the [Project] this request belongs to. Null on legacy requests
+  /// created before this field existed (match by [projectName] as a fallback).
+  /// Keying off the id — not the name — stops two same-named jobs sharing state.
+  final String? projectId;
+
   final String projectName;
   final String projectNameSecondary;
   final RequestStatus status;
@@ -129,6 +137,7 @@ class MaterialRequest {
   }
 
   MaterialRequest copyWith({
+    String? projectId,
     String? projectName,
     String? projectNameSecondary,
     RequestStatus? status,
@@ -144,6 +153,7 @@ class MaterialRequest {
   }) {
     return MaterialRequest(
       id: id,
+      projectId: projectId ?? this.projectId,
       projectName: projectName ?? this.projectName,
       projectNameSecondary: projectNameSecondary ?? this.projectNameSecondary,
       status: status ?? this.status,
@@ -161,6 +171,7 @@ class MaterialRequest {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'projectId': projectId,
     'projectName': projectName,
     'projectNameSecondary': projectNameSecondary,
     'status': status.label,
@@ -178,12 +189,17 @@ class MaterialRequest {
   factory MaterialRequest.fromJson(Map<String, dynamic> json) {
     final lineItemsList = json['lineItems'] as List<dynamic>?;
     return MaterialRequest(
-      id: json['id'] as String,
-      projectName: json['projectName'] as String,
+      id: json['id'] as String? ?? '',
+      projectId: json['projectId'] as String?,
+      projectName: json['projectName'] as String? ?? '',
       projectNameSecondary: json['projectNameSecondary'] as String? ?? '',
-      status: RequestStatus.fromLabel(json['status'] as String),
-      requestDate: DateTime.parse(json['requestDate'] as String),
-      itemCount: json['itemCount'] as int,
+      status: RequestStatus.fromLabel(json['status'] as String? ?? ''),
+      requestDate:
+          DateTime.tryParse(json['requestDate'] as String? ?? '') ??
+          DateTime.now(),
+      // JSON has no int/double distinction — a synced `3.0` decodes as double, so
+      // `as num?` then toInt() (never `as int`, which would throw).
+      itemCount: (json['itemCount'] as num?)?.toInt() ?? 0,
       lineItems:
           lineItemsList
               ?.map((e) => RequestLineItem.fromJson(e as Map<String, dynamic>))

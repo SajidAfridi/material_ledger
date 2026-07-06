@@ -6,12 +6,12 @@ import '../models/employee.dart';
 final employeeProvider = Provider<EmployeeProfile>((ref) => _seedEmployee);
 
 const _seedEmployee = EmployeeProfile(
-  name: 'Imran Khalid',
-  nameAr: 'عمران خالد',
+  name: 'Imran Khan',
+  nameAr: 'عمران خان',
   title: 'Site Engineer',
   titleAr: 'مهندس موقع',
   employeeId: 'ENG-10041',
-  email: 'imran.khalid@yorksac.ae',
+  email: 'imrankhan@gmail.com',
   phone: '+971 50 123 4567',
   department: 'HVAC Projects',
   departmentAr: 'مشاريع التكييف',

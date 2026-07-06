@@ -352,11 +352,14 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                                       return AppStrings.fieldRequired.primary;
                                     }
                                     final val = double.tryParse(v!.trim());
+                                    // 0 is allowed (an unstocked item), but guard
+                                    // negatives and fat-finger huge quantities.
                                     if (val == null || val < 0) {
                                       return AppStrings
                                           .enterValidNumber
                                           .primary;
                                     }
+                                    if (val > 1000000) return 'Too large';
                                     return null;
                                   },
                                 ),
@@ -380,6 +383,7 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                                   if (val == null || val < 0) {
                                     return AppStrings.enterValidNumber.primary;
                                   }
+                                  if (val > 1000000) return 'Too large';
                                   return null;
                                 },
                               ),

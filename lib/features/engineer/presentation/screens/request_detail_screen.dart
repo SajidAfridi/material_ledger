@@ -679,7 +679,34 @@ class _DraftActionButtons extends ConsumerWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
+              onTap: () async {
+                // Submitting is irreversible (it leaves procurement's hands) —
+                // confirm before sending a possibly half-finished draft.
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppColors.surfaceContainerLowest,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+                    ),
+                    title: const Text('Submit request?'),
+                    content: const Text(
+                      'This sends the request to procurement and reserves the '
+                      "stock. You can't edit it after submitting.",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(AppStrings.cancel.primary),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Submit'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true || !context.mounted) return;
                 ref
                     .read(materialRequestsProvider.notifier)
                     .submitDraft(requestId);

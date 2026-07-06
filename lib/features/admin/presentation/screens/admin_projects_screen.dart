@@ -104,7 +104,21 @@ class _ProjectRow extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    ref.read(projectsProvider.notifier).deleteProject(project.id);
+    final deleted = ref.read(projectsProvider.notifier).deleteProject(project.id);
+    if (!context.mounted) return;
+    if (!deleted) {
+      // Blocked: open requests still hold stock reservations against it.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Can't delete — this project still has open material requests. "
+            'Close or cancel them first.',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
     await ref.logAudit(
       action: 'Project deleted by admin',
       module: AuditModule.materials,
@@ -146,6 +160,29 @@ class _ProjectRow extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if ([
+                  project.jobNumber,
+                  project.mainContractor,
+                  project.authorityRef,
+                ].any((s) => (s ?? '').isNotEmpty)) ...[
+                  const Gap(AppSpacing.xxs),
+                  Text(
+                    [
+                      if ((project.jobNumber ?? '').isNotEmpty)
+                        'Job ${project.jobNumber}',
+                      if ((project.mainContractor ?? '').isNotEmpty)
+                        project.mainContractor,
+                      if ((project.authorityRef ?? '').isNotEmpty)
+                        project.authorityRef,
+                    ].whereType<String>().join(' · '),
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const Gap(AppSpacing.sm),
                 Wrap(
                   spacing: AppSpacing.xs,
@@ -160,6 +197,16 @@ class _ProjectRow extends ConsumerWidget {
               ],
             ),
           ),
+          if (project.contractValueAED != null) ...[
+            Text(
+              _money(project.contractValueAED!),
+              style: AppTypography.labelMedium.copyWith(
+                fontWeight: FontWeight.w800,
+                color: AppColors.onSurface,
+              ),
+            ),
+            const Gap(AppSpacing.sm),
+          ],
           IconButton(
             tooltip: AppStrings.deleteProject.primary,
             onPressed: () => _delete(context, ref),
@@ -170,6 +217,10 @@ class _ProjectRow extends ConsumerWidget {
       ),
     );
   }
+
+  /// AED with thousands separators — the contract-value column from the sheet.
+  static String _money(double v) =>
+      'AED ${v.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')}';
 
   Widget _stateChip(ProjectState s) => switch (s) {
     ProjectState.active => StatusChip.success(s.label),

@@ -220,22 +220,40 @@ void main() {
       expect(summary.collectedThisMonth, lessThanOrEqualTo(summary.monthlyRentRoll));
     });
 
-    test('overdue total includes a partial past-due balance', () async {
+    test('overdue derives from occupancy — an unbilled past month counts',
+        () async {
+      // shop-02: lease started 2 months ago, only the 2-months-ago month paid,
+      // so LAST month is fully unpaid → 4500 overdue with NO record entered.
+      expect(
+        container.read(rentalsSummaryProvider).overdueTotal,
+        greaterThanOrEqualTo(4500),
+      );
+
+      // A partial payment against that past month reduces the arrears.
       final notifier = container.read(rentPaymentsProvider.notifier);
-      final before = container.read(rentalsSummaryProvider).overdueTotal;
       final now = DateTime.now();
-      final past = DateTime(now.year, now.month - 3, 1);
-      final pastKey = '${past.year}-${past.month.toString().padLeft(2, '0')}';
-      // shop-01 has no record for that past month → fresh, partial, past due.
+      final last = DateTime(now.year, now.month - 1, 1);
+      final lastKey = '${last.year}-${last.month.toString().padLeft(2, '0')}';
+      final before = container.read(rentalsSummaryProvider).overdueTotal;
       await notifier.recordPayment(
-        unitId: 'unit-shop-01',
-        periodMonth: pastKey,
-        amountDueAED: 3800,
+        unitId: 'unit-shop-02',
+        periodMonth: lastKey,
+        amountDueAED: 4500,
         amountPaidAED: 1000,
         recordedBy: 'test',
       );
       final after = container.read(rentalsSummaryProvider).overdueTotal;
-      expect(after, before + 2800); // the 2800 remaining now counts as overdue
+      expect(after, before - 1000); // 1000 collected → 1000 less overdue
+    });
+
+    test('rent KPIs reconcile: collected + currentDue == rent roll', () {
+      final s = container.read(rentalsSummaryProvider);
+      // Every occupied unit's current-month rent is either collected or still
+      // due — nothing falls through the cracks.
+      expect(
+        s.collectedThisMonth + s.currentMonthDue,
+        closeTo(s.monthlyRentRoll, 0.01),
+      );
     });
 
     test('marking an occupied unit vacant drops it from the rent roll',

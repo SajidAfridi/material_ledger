@@ -40,6 +40,13 @@ dependencies:
   connectivity_plus: ^7.1.1
   url_launcher: ^6.3.2
   local_auth: ^3.0.1
+  # Crash & error monitoring — only active when a SENTRY_DSN is supplied at
+  # build time (--dart-define); otherwise the app uses NoopObservability.
+  sentry_flutter: ^9.0.0
+  # Backend (self-hosted Supabase / Postgres in a UAE region). Only active when
+  # SUPABASE_URL + SUPABASE_ANON_KEY are supplied at build time (--dart-define);
+  # otherwise the app uses the local sync backend (unchanged offline behaviour).
+  supabase_flutter: ^2.5.0
 
 dev_dependencies:
   flutter_test:

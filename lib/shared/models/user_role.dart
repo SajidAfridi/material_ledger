@@ -45,6 +45,10 @@ enum UserRole {
   /// Record goods receipts into the store (procurement & admin).
   bool get canReceiveGoods => this == procurement || this == admin;
 
+  /// Approve/reject engineer leave requests (procurement & admin). Engineers
+  /// request their own leave; they never approve.
+  bool get canApproveLeave => this == procurement || this == admin;
+
   /// View the finance / cost roll-up screens (Admin only — absorbed Accountant).
   bool get canViewFinance => this == admin;
 

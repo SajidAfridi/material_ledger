@@ -243,9 +243,13 @@ class _EditableItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = [
+      if (item.tagNo.isNotEmpty) item.tagNo,
       if (item.size.isNotEmpty) item.size,
       if (item.brand.isNotEmpty) item.brand,
       if (item.ralColour.isNotEmpty) item.ralColour,
+      if (item.mounting.isNotEmpty) item.mounting,
+      if (item.airFlowLS != null) '${item.airFlowLS!.toStringAsFixed(0)} L/s',
+      if (item.submittalRef.isNotEmpty) item.submittalRef,
     ].join(' · ');
 
     return LedgerCard(

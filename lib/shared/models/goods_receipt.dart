@@ -46,15 +46,16 @@ class GoodsReceipt {
   };
 
   factory GoodsReceipt.fromJson(Map<String, dynamic> json) => GoodsReceipt(
-    id: json['id'] as String,
-    materialId: json['materialId'] as String,
-    materialName: json['materialName'] as String,
-    quantity: (json['quantity'] as num).toDouble(),
-    unitSymbol: json['unitSymbol'] as String,
-    unitCostAED: (json['unitCostAED'] as num).toDouble(),
-    supplier: json['supplier'] as String,
-    receivedBy: json['receivedBy'] as String,
-    receivedAt: DateTime.parse(json['receivedAt'] as String),
+    id: json['id'] as String? ?? '',
+    materialId: json['materialId'] as String? ?? '',
+    materialName: json['materialName'] as String? ?? '',
+    quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
+    unitSymbol: json['unitSymbol'] as String? ?? '',
+    unitCostAED: (json['unitCostAED'] as num?)?.toDouble() ?? 0,
+    supplier: json['supplier'] as String? ?? '',
+    receivedBy: json['receivedBy'] as String? ?? '',
+    receivedAt:
+        DateTime.tryParse(json['receivedAt'] as String? ?? '') ?? DateTime.now(),
     note: json['note'] as String?,
   );
 

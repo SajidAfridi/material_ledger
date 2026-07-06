@@ -18,6 +18,7 @@ class AppUser {
     this.passwordHash = '',
     this.passwordSalt = '',
     this.mustChangePassword = false,
+    this.employeeId,
     this.canSeeCostOverride,
     this.canViewFinanceOverride,
     this.canSeeSalaryOverride,
@@ -48,6 +49,11 @@ class AppUser {
   /// Set on admin-created/reset accounts so the user must set their own password
   /// on first sign-in.
   final bool mustChangePassword;
+
+  /// Links this login to an HR roster [Employee] (by id), so the person's leave
+  /// requests, balance, and HR profile are one unified record. `null` = not yet
+  /// linked (the user can't self-request leave until an Admin links them).
+  final String? employeeId;
 
   /// Per-user capability overrides set by Admin. `null` = use the role default
   /// (see effective_permissions.dart). These let Admin grant/revoke financial,
@@ -86,6 +92,7 @@ class AppUser {
     String? passwordHash,
     String? passwordSalt,
     bool? mustChangePassword,
+    Object? employeeId = _keep,
     Object? canSeeCostOverride = _keep,
     Object? canViewFinanceOverride = _keep,
     Object? canSeeSalaryOverride = _keep,
@@ -103,6 +110,7 @@ class AppUser {
     passwordHash: passwordHash ?? this.passwordHash,
     passwordSalt: passwordSalt ?? this.passwordSalt,
     mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+    employeeId: employeeId == _keep ? this.employeeId : employeeId as String?,
     canSeeCostOverride: canSeeCostOverride == _keep
         ? this.canSeeCostOverride
         : canSeeCostOverride as bool?,
@@ -134,6 +142,7 @@ class AppUser {
     'passwordHash': passwordHash,
     'passwordSalt': passwordSalt,
     'mustChangePassword': mustChangePassword,
+    'employeeId': employeeId,
     'canSeeCostOverride': canSeeCostOverride,
     'canViewFinanceOverride': canViewFinanceOverride,
     'canSeeSalaryOverride': canSeeSalaryOverride,
@@ -153,6 +162,7 @@ class AppUser {
     passwordHash: json['passwordHash'] as String? ?? '',
     passwordSalt: json['passwordSalt'] as String? ?? '',
     mustChangePassword: json['mustChangePassword'] as bool? ?? false,
+    employeeId: json['employeeId'] as String?,
     canSeeCostOverride: json['canSeeCostOverride'] as bool?,
     canViewFinanceOverride: json['canViewFinanceOverride'] as bool?,
     canSeeSalaryOverride: json['canSeeSalaryOverride'] as bool?,

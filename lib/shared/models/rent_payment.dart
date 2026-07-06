@@ -31,7 +31,8 @@ class RentPayment {
     required this.recordedAt,
     this.voidedAt,
     this.voidReason = '',
-  }) : assert(amountDueAED >= 0, 'amountDueAED cannot be negative');
+  })  : assert(amountDueAED >= 0, 'amountDueAED cannot be negative'),
+        assert(amountPaidAED >= 0, 'amountPaidAED cannot be negative');
 
   final String id;
   final String unitId;
@@ -73,13 +74,15 @@ class RentPayment {
   }
 
   /// True once the first day of the month AFTER [periodMonth] has arrived, i.e.
-  /// the whole billing month has elapsed.
+  /// the whole billing month has elapsed. A malformed period is treated as
+  /// past-due so a real balance SURFACES as overdue rather than being silently
+  /// hidden (a corrupted month string must never bury money owed).
   bool _isPastDue(DateTime now) {
     final parts = periodMonth.split('-');
-    if (parts.length != 2) return false;
+    if (parts.length != 2) return true;
     final year = int.tryParse(parts[0]);
     final month = int.tryParse(parts[1]);
-    if (year == null || month == null) return false;
+    if (year == null || month == null || month < 1 || month > 12) return true;
     final dueCutoff = month == 12
         ? DateTime(year + 1, 1, 1)
         : DateTime(year, month + 1, 1);
@@ -125,21 +128,24 @@ class RentPayment {
   };
 
   factory RentPayment.fromJson(Map<String, dynamic> json) => RentPayment(
-    id: json['id'] as String,
-    unitId: json['unitId'] as String,
-    periodMonth: json['periodMonth'] as String,
-    amountDueAED: (json['amountDueAED'] as num).toDouble(),
-    amountPaidAED: (json['amountPaidAED'] as num?)?.toDouble() ?? 0,
-    paidDate: json['paidDate'] == null
-        ? null
-        : DateTime.parse(json['paidDate'] as String),
+    id: json['id'] as String? ?? '',
+    unitId: json['unitId'] as String? ?? '',
+    periodMonth: json['periodMonth'] as String? ?? '',
+    amountDueAED: (((json['amountDueAED'] as num?)?.toDouble()) ?? 0)
+        .clamp(0, double.infinity)
+        .toDouble(),
+    // Clamp a corrupted/negative synced paid amount so it can't inflate
+    // receivables (a negative "paid" would read as extra outstanding).
+    amountPaidAED: (((json['amountPaidAED'] as num?)?.toDouble()) ?? 0)
+        .clamp(0, double.infinity)
+        .toDouble(),
+    paidDate: DateTime.tryParse(json['paidDate'] as String? ?? ''),
     method: json['method'] as String?,
     note: json['note'] as String?,
     recordedBy: json['recordedBy'] as String? ?? 'system',
-    recordedAt: DateTime.parse(json['recordedAt'] as String),
-    voidedAt: json['voidedAt'] == null
-        ? null
-        : DateTime.parse(json['voidedAt'] as String),
+    recordedAt:
+        DateTime.tryParse(json['recordedAt'] as String? ?? '') ?? DateTime.now(),
+    voidedAt: DateTime.tryParse(json['voidedAt'] as String? ?? ''),
     voidReason: json['voidReason'] as String? ?? '',
   );
 

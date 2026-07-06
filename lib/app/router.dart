@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../core/constants/constants.dart';
 
 import '../features/admin/presentation/screens/access_roles_screen.dart';
+import '../features/leave/presentation/screens/leave_requests_screen.dart';
+import '../features/leave/presentation/screens/my_leave_screen.dart';
 import '../features/admin/presentation/screens/admin_projects_screen.dart';
 import '../features/admin/presentation/screens/admin_requests_screen.dart';
 import '../features/admin/presentation/screens/data_sync_screen.dart';
@@ -90,6 +92,12 @@ abstract final class RoutePaths {
   static const String planDiff = '/plan-diff/:id';
   static const String confirmReceipt = '/receipt/:id';
   static const String returnStore = '/return';
+
+  /// Engineer self-service leave (reached from the Profile tab).
+  static const String myLeave = '/my-leave';
+
+  /// Admin/procurement leave approvals queue (reached from the People hub).
+  static const String leaveRequests = '/people/leave-requests';
 
   static String planReviewPath(String projectId) => '/plan/$projectId';
   static String planBuildPath(String projectId) => '/plan-build/$projectId';
@@ -220,6 +228,12 @@ bool _isAllowedForRole(
   if (path == RoutePaths.goodsReceipt) return canReceiveGoods;
   if (path == RoutePaths.finance) return canViewFinance;
 
+  // Leave approvals — gated by its own (editable) capability, checked before
+  // the generic /people rule since the path lives under /people.
+  if (path == RoutePaths.leaveRequests) {
+    return resolveCapability(user, role, perms, RoleCapability.approveLeave);
+  }
+
   // Modules with their own tab + detail screens.
   if (path.startsWith('/rentals')) return canAccessRentals;
   if (path.startsWith('/people')) return canAccessPeople;
@@ -232,6 +246,10 @@ bool _isAllowedForRole(
       path.startsWith('/admin/')) {
     return role.usesAdminPanel;
   }
+
+  // Leave self-service is for staff who request leave — engineers and
+  // procurement — not the owner/admin, who approves it in the office panel.
+  if (path == RoutePaths.myLeave) return !role.isAdmin;
 
   // Engineer materials flows (browse, projects, new-request, request/:id,
   // requests, receipt/:id, return, plan*) + anything else → all roles.
@@ -290,14 +308,20 @@ GoRouter createAppRouter({
         return path == RoutePaths.login ? null : RoutePaths.login;
       }
 
+      // Evicted mid-session: the account was deactivated, demoted-then-removed,
+      // or a re-seed dropped the id → straight back to login (no stale session).
+      if (user == null || !user.active) {
+        return path == RoutePaths.login ? null : RoutePaths.login;
+      }
+
       // Logged-in users shouldn't sit on onboarding/login — land at Home.
       if (path == RoutePaths.languageSelection || path == RoutePaths.login) {
         return RoutePaths.engineerHome;
       }
 
       // Force a password change for admin-created / reset accounts before they
-      // can use anything else.
-      if (user != null && user.mustChangePassword) {
+      // can use anything else. (user is non-null + active past the guard above.)
+      if (user.mustChangePassword) {
         return path == RoutePaths.changePassword
             ? null
             : RoutePaths.changePassword;
@@ -608,6 +632,17 @@ GoRouter createAppRouter({
         path: RoutePaths.dataSync,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const DataSyncScreen()),
+      ),
+      // ─── Leave management ───────────────────────────────────────
+      GoRoute(
+        path: RoutePaths.myLeave,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const MyLeaveScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.leaveRequests,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const LeaveRequestsScreen()),
       ),
       GoRoute(
         path: RoutePaths.procurement,

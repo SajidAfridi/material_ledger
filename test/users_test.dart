@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:material_ledger/shared/models/app_user.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/users_provider.dart';
@@ -79,6 +80,45 @@ void main() {
             .inventoryAccess,
         true,
       );
+    });
+  });
+
+  group('Self-lockout & integrity guards', () {
+    AppUser admin() =>
+        container.read(usersProvider).firstWhere((u) => u.role == UserRole.admin);
+
+    test('cannot deactivate the only active admin', () async {
+      final ok =
+          await container.read(usersProvider.notifier).setActive(admin().id, false);
+      expect(ok, false);
+      expect(admin().active, true);
+    });
+
+    test('cannot demote the only active admin', () async {
+      final ok = await container
+          .read(usersProvider.notifier)
+          .setRole(admin().id, UserRole.engineer);
+      expect(ok, false);
+      expect(admin().role, UserRole.admin);
+    });
+
+    test('rejects linking an employee already linked to another user', () async {
+      final eng = container
+          .read(usersProvider)
+          .firstWhere((u) => u.role == UserRole.engineer); // seeded → emp-001
+      final proc = container
+          .read(usersProvider)
+          .firstWhere((u) => u.role == UserRole.procurement);
+      final ok = await container
+          .read(usersProvider.notifier)
+          .setEmployeeLink(proc.id, eng.employeeId);
+      expect(ok, false);
+    });
+
+    test('inventory-access flag is ignored for non-engineers', () async {
+      // Admin defaults to inventoryAccess=true; the guard no-ops, leaving it.
+      await container.read(usersProvider.notifier).setInventoryAccess(admin().id, false);
+      expect(admin().inventoryAccess, true);
     });
   });
 }

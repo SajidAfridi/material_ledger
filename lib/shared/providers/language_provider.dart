@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/app_currency.dart';
 import '../models/app_language.dart';
@@ -7,12 +8,20 @@ import '../models/app_language.dart';
 const _kLanguageKey = 'selected_language';
 const _kCurrencyKey = 'selected_currency';
 const _kOnboardingCompleteKey = 'onboarding_complete';
-const _kAuthUserIdKey = 'auth_user_id';
+const kAuthUserIdPrefKey = 'auth_user_id';
 
 /// Provider for SharedPreferences instance.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('Must be overridden in ProviderScope');
 });
+
+/// The Supabase client when the app is pointed at a backend, else `null`.
+/// Overridden in `main()` right after `Supabase.initialize`. When non-null,
+/// auth and privileged user administration run against Supabase (production);
+/// when null (widget tests / pure-offline dev) the app uses the local store.
+/// Lives here (a leaf provider file) so both the auth layer and the users layer
+/// can read it without importing each other.
+final supabaseClientProvider = Provider<SupabaseClient?>((ref) => null);
 
 // ─── Onboarding ──────────────────────────────────────────────────
 
@@ -105,17 +114,17 @@ final isLoggedInProvider = Provider<bool>(
 );
 
 class AuthSessionNotifier extends StateNotifier<String?> {
-  AuthSessionNotifier(this._prefs) : super(_prefs.getString(_kAuthUserIdKey));
+  AuthSessionNotifier(this._prefs) : super(_prefs.getString(kAuthUserIdPrefKey));
 
   final SharedPreferences _prefs;
 
   Future<void> setUser(String userId) async {
-    await _prefs.setString(_kAuthUserIdKey, userId);
+    await _prefs.setString(kAuthUserIdPrefKey, userId);
     state = userId;
   }
 
   Future<void> logout() async {
-    await _prefs.remove(_kAuthUserIdKey);
+    await _prefs.remove(kAuthUserIdPrefKey);
     state = null;
   }
 }

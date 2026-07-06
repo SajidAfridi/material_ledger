@@ -74,6 +74,7 @@ class _EngineerNewRequestScreenState
     final request = await ref
         .read(materialRequestsProvider.notifier)
         .addRequest(
+          projectId: selectedProject.id,
           projectName: selectedProject.name,
           projectNameSecondary: selectedProject.nameSecondary,
           itemCount: lineItems.length,
@@ -622,7 +623,7 @@ class _ProjectSelector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final projects = ref.watch(projectsProvider);
+    final projects = ref.watch(visibleProjectsProvider);
     final selected = ref.watch(selectedProjectProvider);
 
     return Column(
