@@ -70,6 +70,16 @@ class Project {
     this.awaitingApproval = false,
     this.openRequestCount = 0,
     this.allDispatched = false,
+    // A newly-created project needs procurement's acceptance (FR — procurement
+    // acknowledges a new job before Phase-1 work is expected against it).
+    this.acceptedByProcurement = false,
+    this.acceptedAt,
+    this.acceptedBy,
+    // Soft-delete: the sync outbox only ever upserts (never issues a real SQL
+    // DELETE), so a physical local removal would resurrect on the next cloud
+    // hydration. Deleting flips this instead; [ProjectsNotifier] filters
+    // `deleted` rows out of what it exposes, on every device.
+    this.deleted = false,
     // ─── Job register (from the client's "Running Jobs" sheet) ──────
     this.jobNumber,
     this.mainContractor,
@@ -94,6 +104,17 @@ class Project {
   final bool awaitingApproval;
   final int openRequestCount;
   final bool allDispatched;
+
+  /// True once procurement has acknowledged this (new) project. Set on
+  /// creation to `false`; [ProjectsNotifier.acceptProject] flips it.
+  final bool acceptedByProcurement;
+  final DateTime? acceptedAt;
+
+  /// Display name of the procurement/admin user who accepted it.
+  final String? acceptedBy;
+
+  /// Soft-delete flag — see the constructor param doc.
+  final bool deleted;
 
   // ─── Job register fields ──────────────────────────────────────────
   /// Job/contract number, e.g. "305" or "B066".
@@ -133,6 +154,10 @@ class Project {
     bool? awaitingApproval,
     int? openRequestCount,
     bool? allDispatched,
+    bool? acceptedByProcurement,
+    DateTime? acceptedAt,
+    String? acceptedBy,
+    bool? deleted,
     String? jobNumber,
     String? mainContractor,
     String? authorityRef,
@@ -155,6 +180,10 @@ class Project {
     awaitingApproval: awaitingApproval ?? this.awaitingApproval,
     openRequestCount: openRequestCount ?? this.openRequestCount,
     allDispatched: allDispatched ?? this.allDispatched,
+    acceptedByProcurement: acceptedByProcurement ?? this.acceptedByProcurement,
+    acceptedAt: acceptedAt ?? this.acceptedAt,
+    acceptedBy: acceptedBy ?? this.acceptedBy,
+    deleted: deleted ?? this.deleted,
     jobNumber: jobNumber ?? this.jobNumber,
     mainContractor: mainContractor ?? this.mainContractor,
     authorityRef: authorityRef ?? this.authorityRef,
@@ -179,6 +208,10 @@ class Project {
     'awaitingApproval': awaitingApproval,
     'openRequestCount': openRequestCount,
     'allDispatched': allDispatched,
+    'acceptedByProcurement': acceptedByProcurement,
+    'acceptedAt': acceptedAt?.toIso8601String(),
+    'acceptedBy': acceptedBy,
+    'deleted': deleted,
     'jobNumber': jobNumber,
     'mainContractor': mainContractor,
     'authorityRef': authorityRef,
@@ -211,6 +244,17 @@ class Project {
     awaitingApproval: json['awaitingApproval'] as bool? ?? false,
     openRequestCount: json['openRequestCount'] as int? ?? 0,
     allDispatched: json['allDispatched'] as bool? ?? false,
+    // Back-compat: a record written before this field existed predates the
+    // acceptance workflow entirely — grandfather it in as accepted rather than
+    // retroactively dropping every already-in-flight job into the new queue.
+    // (Contrast the constructor's own default of `false`, which is correct for
+    // a project that's genuinely newly created.)
+    acceptedByProcurement: json['acceptedByProcurement'] as bool? ?? true,
+    acceptedAt: json['acceptedAt'] == null
+        ? null
+        : DateTime.parse(json['acceptedAt'] as String),
+    acceptedBy: json['acceptedBy'] as String?,
+    deleted: json['deleted'] as bool? ?? false,
     jobNumber: json['jobNumber'] as String?,
     mainContractor: json['mainContractor'] as String?,
     authorityRef: json['authorityRef'] as String?,

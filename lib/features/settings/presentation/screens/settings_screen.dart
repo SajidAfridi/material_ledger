@@ -223,7 +223,7 @@ class SettingsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Are you sure you want to logout?',
+              AppStrings.logoutConfirmBody.primary,
               style: AppTypography.bodyMedium,
             ),
             const Gap(AppSpacing.xs),

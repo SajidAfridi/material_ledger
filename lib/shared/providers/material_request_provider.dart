@@ -11,7 +11,7 @@ import '../sync/sync_engine.dart';
 import 'inventory_provider.dart';
 import 'session_provider.dart';
 
-const _kRequestsKey = 'material_requests_list_v2';
+const _kRequestsKey = 'material_requests_list_v3';
 
 /// Request statuses that actively hold a stock reservation. Single source of
 /// truth for the notifier's release logic AND the reservation reconciler.
@@ -40,14 +40,18 @@ final materialRequestsProvider =
 
 /// Notifier that manages the list of material requests with persistence.
 class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
-  MaterialRequestsNotifier(this._ref, this._store)
-    : super(_store.isSeeded ? _store.readAll() : _seedRequests) {
+  MaterialRequestsNotifier(this._ref, this._store) : super(_load(_store)) {
     if (!_store.isSeeded) _store.writeAll(state);
   }
 
   final Ref _ref;
   final CollectionStore<MaterialRequest> _store;
   static const _uuid = Uuid();
+
+  static List<MaterialRequest> _load(CollectionStore<MaterialRequest> store) {
+    final all = store.isSeeded ? store.readAll() : _seedRequests;
+    return all.where((r) => !r.deleted).toList();
+  }
 
   MaterialsNotifier get _inventory => _ref.read(materialsProvider.notifier);
 
@@ -196,12 +200,18 @@ class MaterialRequestsNotifier extends StateNotifier<List<MaterialRequest>> {
     }
   }
 
-  /// Remove a request by ID, releasing any reservation it still holds.
+  /// Remove a request by ID, releasing any reservation it still holds. Soft-
+  /// deletes (tombstones) rather than physically dropping the row, since the
+  /// sync outbox only ever upserts — a bare local removal would resurrect the
+  /// request the next time another device's write hydrates back here.
   Future<void> removeRequest(String id) async {
     final req = _byId(id);
+    if (req == null) return;
+    final tombstone = req.copyWith(deleted: true);
     state = state.where((r) => r.id != id).toList();
     await _persist();
-    if (req != null && _holdingStatuses.contains(req.status)) {
+    await _sync(tombstone, kind: 'request.delete', label: 'Material request');
+    if (_holdingStatuses.contains(req.status)) {
       await _releaseLines(req.lineItems);
     }
   }
@@ -622,273 +632,6 @@ final inventoryReconcilerProvider = Provider<void>((ref) {
 
 // ─── Seed Data (used on first launch) ───────────────────────────────
 
-final _seedRequests = [
-  MaterialRequest(
-    id: 'req-001',
-    projectName: 'Al-Burj Tower — HVAC Fit-Out',
-    projectNameSecondary: 'البرج ٹاور — ایچ وی اے سی',
-    status: RequestStatus.pending,
-    requestDate: DateTime(2025, 10, 24),
-    itemCount: 5,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-001',
-        materialName: 'Gate Valve 2" (Brass)',
-        materialNameSecondary: 'گیٹ والو 2 انچ (پیتل)',
-        quantity: 24,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-010',
-        materialName: 'GI Pipe 1" (Schedule 40)',
-        materialNameSecondary: 'جی آئی پائپ 1 انچ',
-        quantity: 600,
-        unitSymbol: 'ft',
-      ),
-      RequestLineItem(
-        materialId: 'mat-020',
-        materialName: 'Elbow 90° 1" (GI)',
-        materialNameSecondary: 'ایلبو 90 ڈگری 1 انچ',
-        quantity: 80,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-030',
-        materialName: 'Hex Bolt M10 x 40mm (SS)',
-        materialNameSecondary: 'ہیکس بولٹ M10 (سٹینلیس)',
-        quantity: 10,
-        unitSymbol: 'boxes',
-      ),
-      RequestLineItem(
-        materialId: 'mat-050',
-        materialName: 'Pipe Insulation 1" (Armaflex)',
-        materialNameSecondary: 'پائپ انسولیشن 1 انچ',
-        quantity: 150,
-        unitSymbol: 'm',
-      ),
-    ],
-    siteLocation: 'Block A, Floors 12-18',
-  ),
-  MaterialRequest(
-    id: 'req-002',
-    projectName: 'Marina Bay Mall — Chiller Plant',
-    projectNameSecondary: 'مرینا بے مال — چلر پلانٹ',
-    status: RequestStatus.dispatched,
-    requestDate: DateTime(2025, 10, 22),
-    itemCount: 8,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-003',
-        materialName: 'Butterfly Valve 4" (Wafer)',
-        materialNameSecondary: 'بٹر فلائی والو 4 انچ',
-        quantity: 12,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-014',
-        materialName: 'Black Steel Pipe 3" (Sch 40)',
-        materialNameSecondary: 'بلیک سٹیل پائپ 3 انچ',
-        quantity: 200,
-        unitSymbol: 'ft',
-      ),
-      RequestLineItem(
-        materialId: 'mat-023',
-        materialName: 'Flange 2" (150# RF)',
-        materialNameSecondary: 'فلینج 2 انچ',
-        quantity: 24,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-034',
-        materialName: 'U-Bolt 2" (GI)',
-        materialNameSecondary: 'یو بولٹ 2 انچ',
-        quantity: 50,
-        unitSymbol: 'pcs',
-      ),
-    ],
-    siteLocation: 'Basement B2, Plant Room',
-  ),
-  MaterialRequest(
-    id: 'req-003',
-    projectName: 'Green Valley Hospital — AHU Installation',
-    projectNameSecondary: 'گرین ویلی ہسپتال — اے ایچ یو',
-    status: RequestStatus.received,
-    requestDate: DateTime(2025, 10, 19),
-    itemCount: 6,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-040',
-        materialName: 'GI Duct Sheet 24G (4x8 ft)',
-        materialNameSecondary: 'جی آئی ڈکٹ شیٹ 24 گیج',
-        quantity: 40,
-        unitSymbol: 'sheets',
-      ),
-      RequestLineItem(
-        materialId: 'mat-042',
-        materialName: 'Volume Damper 12" (Round)',
-        materialNameSecondary: 'والیوم ڈیمپر 12 انچ',
-        quantity: 15,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-044',
-        materialName: 'Supply Grille 24"x6" (Aluminium)',
-        materialNameSecondary: 'سپلائی گرل 24x6 انچ',
-        quantity: 30,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-051',
-        materialName: 'Duct Insulation Board 25mm',
-        materialNameSecondary: 'ڈکٹ انسولیشن بورڈ 25mm',
-        quantity: 60,
-        unitSymbol: 'sheets',
-      ),
-    ],
-    siteLocation: 'Medical Wing, Floors 1-3',
-  ),
-  MaterialRequest(
-    id: 'req-004',
-    projectName: 'Heritage Hotel — Ductwork',
-    projectNameSecondary: 'ہیریٹیج ہوٹل — ڈکٹ ورک',
-    status: RequestStatus.pending,
-    requestDate: DateTime(2025, 10, 25),
-    itemCount: 4,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-041',
-        materialName: 'Flexible Duct 8" (25ft roll)',
-        materialNameSecondary: 'فلیکسبل ڈکٹ 8 انچ',
-        quantity: 12,
-        unitSymbol: 'rolls',
-      ),
-      RequestLineItem(
-        materialId: 'mat-043',
-        materialName: 'Fire Damper 24"x12"',
-        materialNameSecondary: 'فائر ڈیمپر',
-        quantity: 8,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-045',
-        materialName: 'Return Air Diffuser 24"x24"',
-        materialNameSecondary: 'ریٹرن ائیر ڈفیوزر',
-        quantity: 20,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-036',
-        materialName: 'Self-Tapping Screw #10 x 1"',
-        materialNameSecondary: 'سیلف ٹیپنگ سکرو',
-        quantity: 15,
-        unitSymbol: 'boxes',
-      ),
-    ],
-    siteLocation: 'Floors 4-8, Guest Rooms',
-  ),
-  MaterialRequest(
-    id: 'req-005',
-    projectName: 'City Centre — Piping & Valves',
-    projectNameSecondary: 'سٹی سنٹر — پائپنگ اور والوز',
-    status: RequestStatus.dispatched,
-    requestDate: DateTime(2025, 10, 20),
-    itemCount: 7,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-002',
-        materialName: 'Ball Valve 1" (SS 304)',
-        materialNameSecondary: 'بال والو 1 انچ (سٹینلیس)',
-        quantity: 16,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-012',
-        materialName: 'Copper Pipe 3/4" (Type L)',
-        materialNameSecondary: 'تانبے کا پائپ 3/4 انچ',
-        quantity: 300,
-        unitSymbol: 'ft',
-      ),
-      RequestLineItem(
-        materialId: 'mat-070',
-        materialName: 'Copper Elbow 3/4" (90°)',
-        materialNameSecondary: 'تانبے کی ایلبو 3/4 انچ',
-        quantity: 60,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-073',
-        materialName: 'Brazing Rod (Silver, 2mm)',
-        materialNameSecondary: 'بریزنگ راڈ (سلور)',
-        quantity: 5,
-        unitSymbol: 'kg',
-      ),
-    ],
-    siteLocation: 'Central Utility Corridor',
-  ),
-  MaterialRequest(
-    id: 'req-006',
-    projectName: 'Industrial Zone — Boiler Room',
-    projectNameSecondary: 'صنعتی زون — بوائلر روم',
-    status: RequestStatus.received,
-    requestDate: DateTime(2025, 10, 15),
-    itemCount: 9,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-005',
-        materialName: 'Globe Valve 3" (CI)',
-        materialNameSecondary: 'گلوب والو 3 انچ (کاسٹ آئرن)',
-        quantity: 6,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-006',
-        materialName: 'Pressure Relief Valve 2"',
-        materialNameSecondary: 'پریشر ریلیف والو 2 انچ',
-        quantity: 4,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-063',
-        materialName: 'Pressure Gauge 0-100 PSI',
-        materialNameSecondary: 'پریشر گیج',
-        quantity: 8,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-060',
-        materialName: 'Thermostat (Digital, 24V)',
-        materialNameSecondary: 'تھرموسٹیٹ (ڈیجیٹل)',
-        quantity: 4,
-        unitSymbol: 'pcs',
-      ),
-    ],
-    siteLocation: 'Plant Room, Ground Floor',
-  ),
-  MaterialRequest(
-    id: 'req-007',
-    projectName: 'Al-Burj Tower — HVAC Fit-Out',
-    projectNameSecondary: 'البرج ٹاور — ایچ وی اے سی',
-    status: RequestStatus.cancelled,
-    requestDate: DateTime(2025, 10, 18),
-    itemCount: 3,
-    lineItems: const [
-      RequestLineItem(
-        materialId: 'mat-060',
-        materialName: 'Thermostat (Digital, 24V)',
-        materialNameSecondary: 'تھرموسٹیٹ (ڈیجیٹل)',
-        quantity: 50,
-        unitSymbol: 'pcs',
-      ),
-      RequestLineItem(
-        materialId: 'mat-061',
-        materialName: 'Contactor 3-Pole 40A',
-        materialNameSecondary: 'کنٹیکٹر 3 پول 40A',
-        quantity: 25,
-        unitSymbol: 'pcs',
-      ),
-    ],
-    siteLocation: 'Floors 1-25',
-    notes:
-        'Quantities exceed project allocation — resubmit with revised counts',
-  ),
-];
+// No pre-seeded demo requests — engineers raise real requests as they
+// come in during testing/production use.
+final _seedRequests = <MaterialRequest>[];

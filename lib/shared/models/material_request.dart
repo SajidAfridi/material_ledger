@@ -105,6 +105,10 @@ class MaterialRequest {
     this.engineerId,
     this.confirmedReceiptAt,
     this.comments = const [],
+    // Soft-delete: the sync outbox only ever upserts, never issues a real SQL
+    // DELETE — a physical local removal would resurrect on the next cloud
+    // hydration. Deleting flips this instead (mirrors Project.deleted).
+    this.deleted = false,
   });
 
   final String id;
@@ -131,6 +135,9 @@ class MaterialRequest {
   /// Engineer ↔ procurement discussion thread (e.g. resolving short stock).
   final List<RequestComment> comments;
 
+  /// Soft-delete tombstone — see the constructor comment on [deleted].
+  final bool deleted;
+
   /// Distinct categories represented in line items.
   int get categoryCount {
     return lineItems.map((e) => e.unitSymbol).toSet().length.clamp(1, 10);
@@ -150,6 +157,7 @@ class MaterialRequest {
     String? engineerId,
     DateTime? confirmedReceiptAt,
     List<RequestComment>? comments,
+    bool? deleted,
   }) {
     return MaterialRequest(
       id: id,
@@ -166,6 +174,7 @@ class MaterialRequest {
       engineerId: engineerId ?? this.engineerId,
       confirmedReceiptAt: confirmedReceiptAt ?? this.confirmedReceiptAt,
       comments: comments ?? this.comments,
+      deleted: deleted ?? this.deleted,
     );
   }
 
@@ -184,6 +193,7 @@ class MaterialRequest {
     'engineerId': engineerId,
     'confirmedReceiptAt': confirmedReceiptAt?.toIso8601String(),
     'comments': comments.map((e) => e.toJson()).toList(),
+    'deleted': deleted,
   };
 
   factory MaterialRequest.fromJson(Map<String, dynamic> json) {
@@ -219,6 +229,7 @@ class MaterialRequest {
               ?.map((e) => RequestComment.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
+      deleted: json['deleted'] as bool? ?? false,
     );
   }
 

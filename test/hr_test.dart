@@ -21,11 +21,12 @@ void main() {
   });
 
   group('Leave balance (FR-127, 30-day annual entitlement)', () {
-    test('seed: emp-001 has 8 approved annual days → 22 remaining', () {
+    test('a clean-slate employee (>1yr tenure) starts fully entitled, unused',
+        () {
       final bal = container.read(leaveBalanceProvider('emp-001'));
       expect(bal.entitlement, 30);
-      expect(bal.usedAnnual, 8);
-      expect(bal.remaining, 22);
+      expect(bal.usedAnnual, 0);
+      expect(bal.remaining, 30);
     });
 
     test('recording approved annual leave reduces the balance', () async {
@@ -37,8 +38,8 @@ void main() {
             status: LeaveRecordStatus.approved,
           );
       final bal = container.read(leaveBalanceProvider('emp-001'));
-      expect(bal.usedAnnual, 13);
-      expect(bal.remaining, 17);
+      expect(bal.usedAnnual, 5);
+      expect(bal.remaining, 25);
     });
 
     test('sick leave does NOT consume the annual balance', () async {
@@ -50,7 +51,7 @@ void main() {
             status: LeaveRecordStatus.approved,
           );
       final bal = container.read(leaveBalanceProvider('emp-001'));
-      expect(bal.usedAnnual, 8); // unchanged
+      expect(bal.usedAnnual, 0); // unchanged
     });
 
     test('pending annual leave does NOT consume the balance until approved',
@@ -90,7 +91,7 @@ void main() {
 
     test('company-wide liability sums every active employee\'s estimate', () {
       final total = container.read(totalGratuityLiabilityProvider);
-      final sumOfIndividuals = ['emp-001', 'emp-002', 'emp-003', 'emp-004', 'emp-005']
+      final sumOfIndividuals = ['emp-001', 'emp-002']
           .map((id) => container.read(gratuityEstimateProvider(id)))
           .where((e) => e != null && e.entitled)
           .fold(0.0, (s, e) => s + e!.amountAED);
@@ -108,37 +109,57 @@ void main() {
 
     test('prior approved sick days push a new request into the half-pay tier',
         () async {
-      // emp-004 has no seeded sick leave; approve 15 full-pay days first.
+      // emp-002 has no seeded sick leave; approve 15 full-pay days first.
       await container.read(leaveRecordsProvider.notifier).addLeave(
-            employeeId: 'emp-004',
+            employeeId: 'emp-002',
             type: LeaveType.sick,
             startDate: DateTime(DateTime.now().year, 2, 1),
             endDate: DateTime(DateTime.now().year, 2, 15), // 15 days
             status: LeaveRecordStatus.approved,
           );
-      final split = container.read(sickLeaveTierProvider(('emp-004', 5)));
+      final split = container.read(sickLeaveTierProvider(('emp-002', 5)));
       expect(split.fullPayDays, 0);
       expect(split.halfPayDays, 5);
     });
   });
 
   group('HR attendance summary (FR-125)', () {
-    test('seed: 3 present, 1 on leave, 1 absent of 5', () {
+    test('clean slate: 2 employees, none marked yet today', () {
       final s = container.read(hrSummaryProvider);
-      expect(s.total, 5);
-      expect(s.presentToday, 3);
-      expect(s.onLeaveToday, 1);
-      expect(s.absentToday, 1);
+      expect(s.total, 2);
+      expect(s.presentToday, 0);
+      expect(s.onLeaveToday, 0);
+      expect(s.absentToday, 0);
     });
 
-    test('marking an absentee present updates the summary', () async {
+    test('marking an employee present updates the summary', () async {
       await container.read(attendanceProvider.notifier).markToday(
-            employeeId: 'emp-005',
+            employeeId: 'emp-001',
             status: AttendanceStatus.present,
             recordedBy: 'test',
           );
       final s = container.read(hrSummaryProvider);
-      expect(s.presentToday, 4);
+      expect(s.presentToday, 1);
+      expect(s.absentToday, 0);
+    });
+
+    test('marking an employee absent then present transitions the summary',
+        () async {
+      final notifier = container.read(attendanceProvider.notifier);
+      await notifier.markToday(
+        employeeId: 'emp-002',
+        status: AttendanceStatus.absent,
+        recordedBy: 'test',
+      );
+      expect(container.read(hrSummaryProvider).absentToday, 1);
+
+      await notifier.markToday(
+        employeeId: 'emp-002',
+        status: AttendanceStatus.present,
+        recordedBy: 'test',
+      );
+      final s = container.read(hrSummaryProvider);
+      expect(s.presentToday, 1);
       expect(s.absentToday, 0);
     });
   });

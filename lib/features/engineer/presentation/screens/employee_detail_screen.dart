@@ -2,19 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/employee.dart';
 import '../../../../shared/providers/employee_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 
-/// Engineer self-profile — identity, today's attendance, leave balances,
-/// employment details and quick links to their day-to-day work. Opened from the
-/// "My data" attendance card on the home screen.
+/// Engineer self-profile — identity, today's attendance, leave balance,
+/// employment details and quick links to their day-to-day work. Every figure is
+/// live (see [employeeProvider]); an unlinked login shows a "not linked" note in
+/// place of the HR sections. Opened from the "My data" card on the home screen.
 class EmployeeDetailScreen extends ConsumerWidget {
   const EmployeeDetailScreen({super.key});
 
@@ -49,13 +52,16 @@ class EmployeeDetailScreen extends ConsumerWidget {
             AppSpacing.xxl,
           ),
           children: [
-            _ProfileHeader(emp: emp, lang: lang),
+            _ProfileHeader(emp: emp),
             const Gap(AppSpacing.lg),
-            _AttendanceSection(emp: emp, lang: lang),
-            const Gap(AppSpacing.lg),
-            _LeavesSection(emp: emp, lang: lang),
-            const Gap(AppSpacing.lg),
-            _EmploymentSection(emp: emp, lang: lang),
+            if (emp.linked) ...[
+              _AttendanceSection(emp: emp, lang: lang),
+              const Gap(AppSpacing.lg),
+              _LeaveSection(emp: emp, lang: lang),
+              const Gap(AppSpacing.lg),
+              _EmploymentSection(emp: emp, lang: lang),
+            ] else
+              _UnlinkedNote(lang: lang),
             // Engineer-only shortcuts (New request / My projects / My requests).
             // The New Request target lives only in the engineer shell, so office
             // roles (who can reach this screen via the shared profile card) don't
@@ -73,10 +79,9 @@ class EmployeeDetailScreen extends ConsumerWidget {
 
 // ─── Header ─────────────────────────────────────────────────────────
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.emp, required this.lang});
+  const _ProfileHeader({required this.emp});
 
   final EmployeeProfile emp;
-  final dynamic lang;
 
   @override
   Widget build(BuildContext context) {
@@ -120,16 +125,9 @@ class _ProfileHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      emp.nameAr,
-                      style: AppTypography.labelMedium.copyWith(
-                        color: AppColors.onPrimary.withValues(alpha: 0.85),
-                      ),
-                      textDirection: TextDirection.rtl,
-                    ),
                     const Gap(AppSpacing.xs),
                     Text(
-                      '${emp.title} · ${emp.employeeId}',
+                      emp.linked ? '${emp.title} · ${emp.employeeId}' : emp.title,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.onPrimary.withValues(alpha: 0.85),
                       ),
@@ -148,8 +146,10 @@ class _ProfileHeader extends StatelessWidget {
           ),
           const Gap(AppSpacing.md),
           _ContactRow(icon: Icons.mail_outline_rounded, value: emp.email),
-          const Gap(AppSpacing.sm),
-          _ContactRow(icon: Icons.phone_outlined, value: emp.phone),
+          if (emp.phone != '—') ...[
+            const Gap(AppSpacing.sm),
+            _ContactRow(icon: Icons.phone_outlined, value: emp.phone),
+          ],
         ],
       ),
     );
@@ -219,43 +219,78 @@ class _Section extends StatelessWidget {
   }
 }
 
+// ─── Unlinked note ──────────────────────────────────────────────────
+class _UnlinkedNote extends StatelessWidget {
+  const _UnlinkedNote({required this.lang});
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context) {
+    return LedgerCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.link_off_rounded,
+              size: 22, color: AppColors.onSurfaceVariant),
+          const Gap(AppSpacing.md),
+          Expanded(
+            child: Text(
+              AppStrings.notLinkedToEmployee.primary,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Attendance ─────────────────────────────────────────────────────
 class _AttendanceSection extends StatelessWidget {
   const _AttendanceSection({required this.emp, required this.lang});
 
   final EmployeeProfile emp;
-  final dynamic lang;
+  final AppLanguage lang;
 
   @override
   Widget build(BuildContext context) {
-    final a = emp.attendance;
+    final v = _attendanceView(emp.today);
     return _Section(
       title: AppStrings.attendanceSection.primary,
       titleSecondary: AppStrings.attendanceSection.secondary(lang),
       child: Row(
         children: [
-          Expanded(
-            child: _AttStat(
-              icon: Icons.login_rounded,
-              label: AppStrings.checkInLabel.primary,
-              value: a.checkIn,
-              accent: AppColors.success,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: v.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             ),
+            child: Icon(v.icon, size: 22, color: v.color),
           ),
+          const Gap(AppSpacing.md),
           Expanded(
-            child: _AttStat(
-              icon: Icons.logout_rounded,
-              label: AppStrings.checkOutLabel.primary,
-              value: a.checkOut,
-              accent: AppColors.primary,
-            ),
-          ),
-          Expanded(
-            child: _AttStat(
-              icon: Icons.timelapse_rounded,
-              label: AppStrings.remainingLabel.primary,
-              value: '${a.remainingHours} ${AppStrings.hoursUnit.primary}',
-              accent: AppColors.warning,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppStrings.todayLabel.primary,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                const Gap(2),
+                Text(
+                  v.label,
+                  style: AppTypography.titleSmall.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: v.color,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -264,128 +299,74 @@ class _AttendanceSection extends StatelessWidget {
   }
 }
 
-class _AttStat extends StatelessWidget {
-  const _AttStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          ),
-          child: Icon(icon, size: 20, color: accent),
-        ),
-        const Gap(AppSpacing.sm),
-        Text(
-          value,
-          style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w800),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const Gap(2),
-        Text(
-          label,
-          style: AppTypography.labelSmall.copyWith(
-            color: AppColors.onSurfaceVariant,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Leaves ─────────────────────────────────────────────────────────
-class _LeavesSection extends StatelessWidget {
-  const _LeavesSection({required this.emp, required this.lang});
+// ─── Leave balance ──────────────────────────────────────────────────
+class _LeaveSection extends StatelessWidget {
+  const _LeaveSection({required this.emp, required this.lang});
 
   final EmployeeProfile emp;
-  final dynamic lang;
-
-  Color _color(LeaveKind k) => switch (k) {
-    LeaveKind.annual => AppColors.primary,
-    LeaveKind.casual => AppColors.error,
-    LeaveKind.sick => AppColors.success,
-    LeaveKind.overtime => AppColors.warning,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return _Section(
-      title: AppStrings.leavesSection.primary,
-      titleSecondary: AppStrings.leavesSection.secondary(lang),
-      child: Column(
-        children: [
-          for (var i = 0; i < emp.leaves.length; i++) ...[
-            _LeaveRow(leave: emp.leaves[i], color: _color(emp.leaves[i].kind)),
-            if (i != emp.leaves.length - 1) const Gap(AppSpacing.lg),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LeaveRow extends StatelessWidget {
-  const _LeaveRow({required this.leave, required this.color});
-
-  final LeaveBalance leave;
-  final Color color;
+  final AppLanguage lang;
 
   @override
   Widget build(BuildContext context) {
     final unit = AppStrings.daysUnit.primary;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                leave.labelEn,
-                style: AppTypography.titleSmall.copyWith(
+    final fraction = emp.annualEntitlement > 0
+        ? (emp.annualUsed / emp.annualEntitlement).clamp(0.0, 1.0).toDouble()
+        : 0.0;
+    return _Section(
+      title: AppStrings.leavesSection.primary,
+      titleSecondary: AppStrings.leavesSection.secondary(lang),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  AppStrings.annualLeftLabel.primary,
+                  style: AppTypography.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                '${emp.annualRemaining} / ${emp.annualEntitlement} $unit',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.onSurfaceVariant,
                   fontWeight: FontWeight.w700,
                 ),
               ),
+            ],
+          ),
+          const Gap(AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+            child: LinearProgressIndicator(
+              value: fraction,
+              minHeight: 6,
+              backgroundColor: AppColors.surfaceContainerHigh,
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
             ),
-            Text(
-              leave.total > 0
-                  ? '${leave.used} / ${leave.total} $unit'
-                  : '${leave.used} $unit',
-              style: AppTypography.labelMedium.copyWith(
-                color: AppColors.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          if (emp.pendingRequests > 0) ...[
+            const Gap(AppSpacing.md),
+            Row(
+              children: [
+                Icon(Icons.pending_actions_rounded,
+                    size: 16, color: AppColors.warning),
+                const Gap(AppSpacing.sm),
+                Text(
+                  '${emp.pendingRequests} ${AppStrings.pendingLabel.primary.toLowerCase()}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
-        const Gap(AppSpacing.sm),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-          child: LinearProgressIndicator(
-            value: leave.total > 0 ? leave.fraction : 0.12,
-            minHeight: 6,
-            backgroundColor: AppColors.surfaceContainerHigh,
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -395,10 +376,11 @@ class _EmploymentSection extends StatelessWidget {
   const _EmploymentSection({required this.emp, required this.lang});
 
   final EmployeeProfile emp;
-  final dynamic lang;
+  final AppLanguage lang;
 
   @override
   Widget build(BuildContext context) {
+    final tenure = emp.tenureLabel(DateTime.now());
     return _Section(
       title: AppStrings.employmentSection.primary,
       titleSecondary: AppStrings.employmentSection.secondary(lang),
@@ -421,6 +403,28 @@ class _EmploymentSection extends StatelessWidget {
             label: AppStrings.roleLabel.primary,
             value: emp.title,
           ),
+          const Gap(AppSpacing.md),
+          _DetailRow(
+            icon: Icons.public_outlined,
+            label: AppStrings.nationalityLabel.primary,
+            value: emp.nationality,
+          ),
+          if (emp.joinDate != null) ...[
+            const Gap(AppSpacing.md),
+            _DetailRow(
+              icon: Icons.event_outlined,
+              label: AppStrings.joinedLabel.primary,
+              value: DateFormat('d MMM yyyy').format(emp.joinDate!),
+            ),
+          ],
+          if (tenure != null) ...[
+            const Gap(AppSpacing.md),
+            _DetailRow(
+              icon: Icons.hourglass_bottom_outlined,
+              label: AppStrings.tenureLabelText.primary,
+              value: tenure,
+            ),
+          ],
         ],
       ),
     );
@@ -471,7 +475,7 @@ class _DetailRow extends StatelessWidget {
 class _QuickLinksSection extends StatelessWidget {
   const _QuickLinksSection({required this.lang});
 
-  final dynamic lang;
+  final AppLanguage lang;
 
   @override
   Widget build(BuildContext context) {
@@ -539,4 +543,35 @@ class _QuickLink extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Icon / bilingual-ready label / colour for a [SelfAttendance] state.
+({IconData icon, String label, Color color}) _attendanceView(SelfAttendance s) {
+  return switch (s) {
+    SelfAttendance.present => (
+      icon: Icons.check_circle_rounded,
+      label: 'Present',
+      color: AppColors.success,
+    ),
+    SelfAttendance.halfDay => (
+      icon: Icons.timelapse_rounded,
+      label: 'Half day',
+      color: AppColors.warning,
+    ),
+    SelfAttendance.onLeave => (
+      icon: Icons.beach_access_rounded,
+      label: 'On leave',
+      color: AppColors.primary,
+    ),
+    SelfAttendance.absent => (
+      icon: Icons.cancel_rounded,
+      label: 'Absent',
+      color: AppColors.error,
+    ),
+    SelfAttendance.notMarked => (
+      icon: Icons.remove_circle_outline_rounded,
+      label: AppStrings.notMarkedYet.primary,
+      color: AppColors.onSurfaceVariant,
+    ),
+  };
 }

@@ -256,6 +256,36 @@ abstract final class AppStrings {
     ur: 'لاگ آؤٹ',
     hi: 'लॉगआउट',
   );
+  static const logoutConfirmBody = TranslatableString(
+    en: 'Are you sure you want to logout?',
+    ar: 'هل أنت متأكد أنك تريد تسجيل الخروج؟',
+    ur: 'کیا آپ واقعی لاگ آؤٹ کرنا چاہتے ہیں؟',
+    hi: 'क्या आप वाकई लॉगआउट करना चाहते हैं?',
+  );
+  static const enterAtLeast3Chars = TranslatableString(
+    en: 'Enter at least 3 characters',
+    ar: 'أدخل 3 أحرف على الأقل',
+    ur: 'کم از کم 3 حروف درج کریں',
+    hi: 'कम से कम 3 अक्षर दर्ज करें',
+  );
+  static const noProjectsYet = TranslatableString(
+    en: 'No projects yet',
+    ar: 'لا توجد مشاريع بعد',
+    ur: 'ابھی کوئی پروجیکٹ نہیں',
+    hi: 'अभी कोई परियोजना नहीं',
+  );
+  static const addProjectToBegin = TranslatableString(
+    en: 'Add a project to begin tracking requests and dispatches.',
+    ar: 'أضف مشروعاً لبدء تتبع الطلبات والإرساليات.',
+    ur: 'درخواستوں اور ترسیل کو ٹریک کرنے کے لیے ایک پروجیکٹ شامل کریں۔',
+    hi: 'अनुरोध व प्रेषण ट्रैक करना शुरू करने हेतु एक परियोजना जोड़ें।',
+  );
+  static const appLock = TranslatableString(
+    en: 'App lock',
+    ar: 'قفل التطبيق',
+    ur: 'ایپ لاک',
+    hi: 'ऐप लॉक',
+  );
   static const light = TranslatableString(
     en: 'Light',
     ar: 'فاتح',
@@ -470,6 +500,30 @@ abstract final class AppStrings {
     ur: 'جائزے کے لیے نیا مٹیریل پلان',
     hi: 'समीक्षा हेतु नई सामग्री योजना',
   );
+  static const notifNewProjectTitle = TranslatableString(
+    en: 'New project — needs acceptance',
+    ar: 'مشروع جديد — بحاجة للقبول',
+    ur: 'نیا پروجیکٹ — قبولیت درکار',
+    hi: 'नई परियोजना — स्वीकृति आवश्यक',
+  );
+  static const notifProjectAcceptedTitle = TranslatableString(
+    en: 'Procurement accepted your project',
+    ar: 'قبلت المشتريات مشروعك',
+    ur: 'پروکیورمنٹ نے آپ کا پروجیکٹ قبول کر لیا',
+    hi: 'खरीद ने आपकी परियोजना स्वीकार की',
+  );
+  static const notifPlanMarkedDoneTitle = TranslatableString(
+    en: 'Procurement marked your plan as Done',
+    ar: 'أنهت المشتريات خطتك',
+    ur: 'پروکیورمنٹ نے آپ کا پلان مکمل کر دیا',
+    hi: 'खरीद ने आपकी योजना पूर्ण के रूप में चिह्नित की',
+  );
+  static const notifRequestDispatchedTitle = TranslatableString(
+    en: 'Request dispatched to site',
+    ar: 'تم إرسال الطلب إلى الموقع',
+    ur: 'درخواست سائٹ پر روانہ کر دی گئی',
+    hi: 'अनुरोध साइट पर भेजा गया',
+  );
   static const notifPlanApprovedTitle = TranslatableString(
     en: 'Engineer approved the plan',
     ar: 'وافق المهندس على الخطة',
@@ -518,6 +572,18 @@ abstract final class AppStrings {
     ur: 'درخواست میں ترمیم کریں',
     hi: 'अनुरोध संपादित करें',
   );
+  static const editRequestConfirmTitle = TranslatableString(
+    en: 'Apply these changes?',
+    ar: 'تطبيق هذه التغييرات؟',
+    ur: 'یہ تبدیلیاں لاگو کریں؟',
+    hi: 'ये बदलाव लागू करें?',
+  );
+  static const editRequestDropBody = TranslatableString(
+    en: 'item(s) will be dropped from this request and procurement notified. This can\'t be undone.',
+    ar: 'سيتم حذف بند(بنود) من هذا الطلب وإخطار المشتريات. لا يمكن التراجع.',
+    ur: 'اس درخواست سے آئٹم حذف ہو جائیں گے اور پروکیورمنٹ کو مطلع کیا جائے گا۔ یہ واپس نہیں ہو سکتا۔',
+    hi: 'इस अनुरोध से आइटम हटाए जाएँगे और खरीद को सूचित किया जाएगा। यह पूर्ववत नहीं हो सकता।',
+  );
   static const notifIdleRequestTitle = TranslatableString(
     en: 'Request idle for 24h+',
     ar: 'طلب بدون إجراء لأكثر من ٢٤ ساعة',
@@ -547,6 +613,18 @@ abstract final class AppStrings {
     ar: 'لا توجد طلبات منتظرة',
     ur: 'کوئی درخواست زیر التوا نہیں',
     hi: 'कोई अनुरोध लंबित नहीं',
+  );
+  static const newProjectsQueue = TranslatableString(
+    en: 'New projects',
+    ar: 'مشاريع جديدة',
+    ur: 'نئے پروجیکٹس',
+    hi: 'नई परियोजनाएं',
+  );
+  static const noNewProjects = TranslatableString(
+    en: 'No new projects',
+    ar: 'لا مشاريع جديدة',
+    ur: 'کوئی نیا پروجیکٹ نہیں',
+    hi: 'कोई नई परियोजना नहीं',
   );
   static const reviewPlan = TranslatableString(
     en: 'Review Plan',
@@ -729,6 +807,48 @@ abstract final class AppStrings {
     ar: '6 أحرف على الأقل',
     ur: 'کم از کم 6 حروف',
     hi: 'कम से कम 6 अक्षर',
+  );
+  static const setNewPassword = TranslatableString(
+    en: 'Set a new password',
+    ar: 'عيّن كلمة مرور جديدة',
+    ur: 'نیا پاس ورڈ مقرر کریں',
+    hi: 'नया पासवर्ड सेट करें',
+  );
+  static const setNewPasswordBody = TranslatableString(
+    en: 'Choose a password only you know before continuing.',
+    ar: 'اختر كلمة مرور تعرفها أنت وحدك قبل المتابعة.',
+    ur: 'جاری رکھنے سے پہلے صرف اپنا معلوم پاس ورڈ منتخب کریں۔',
+    hi: 'जारी रखने से पहले केवल आपको ज्ञात पासवर्ड चुनें।',
+  );
+  static const newPasswordLabel = TranslatableString(
+    en: 'New password',
+    ar: 'كلمة المرور الجديدة',
+    ur: 'نیا پاس ورڈ',
+    hi: 'नया पासवर्ड',
+  );
+  static const confirmPasswordLabel = TranslatableString(
+    en: 'Confirm password',
+    ar: 'تأكيد كلمة المرور',
+    ur: 'پاس ورڈ کی تصدیق',
+    hi: 'पासवर्ड की पुष्टि',
+  );
+  static const passwordsDoNotMatch = TranslatableString(
+    en: 'Passwords do not match',
+    ar: 'كلمتا المرور غير متطابقتين',
+    ur: 'پاس ورڈ مطابقت نہیں رکھتے',
+    hi: 'पासवर्ड मेल नहीं खाते',
+  );
+  static const saveAndContinue = TranslatableString(
+    en: 'Save & continue',
+    ar: 'حفظ ومتابعة',
+    ur: 'محفوظ کریں اور جاری رکھیں',
+    hi: 'सहेजें और जारी रखें',
+  );
+  static const passwordChangeFailed = TranslatableString(
+    en: 'Couldn\'t change the password. Check your connection and try again.',
+    ar: 'تعذّر تغيير كلمة المرور. تحقق من اتصالك وحاول مرة أخرى.',
+    ur: 'پاس ورڈ تبدیل نہ ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔',
+    hi: 'पासवर्ड नहीं बदल सका। कनेक्शन जांचें और पुनः प्रयास करें।',
   );
   static const accountActive = TranslatableString(
     en: 'Account active',
@@ -1936,6 +2056,42 @@ abstract final class AppStrings {
     ur: 'درخواست کامیابی سے جمع ہو گئی',
     hi: 'अनुरोध सफलतापूर्वक जमा किया गया',
   );
+  static const submitShort = TranslatableString(
+    en: 'Submit',
+    ar: 'إرسال',
+    ur: 'جمع کریں',
+    hi: 'सबमिट',
+  );
+  static const submitRequestQuestion = TranslatableString(
+    en: 'Submit request?',
+    ar: 'إرسال الطلب؟',
+    ur: 'درخواست جمع کریں؟',
+    hi: 'अनुरोध सबमिट करें?',
+  );
+  static const submitRequestBody = TranslatableString(
+    en: 'This sends the request to procurement and reserves the stock. You can\'t edit it after submitting.',
+    ar: 'يرسل هذا الطلب إلى المشتريات ويحجز المخزون. لا يمكنك تعديله بعد الإرسال.',
+    ur: 'یہ درخواست پروکیورمنٹ کو بھیجتا ہے اور اسٹاک محفوظ کر دیتا ہے۔ جمع کرانے کے بعد آپ اسے تبدیل نہیں کر سکتے۔',
+    hi: 'यह अनुरोध खरीद को भेजता है और स्टॉक आरक्षित करता है। सबमिट के बाद आप इसे संपादित नहीं कर सकते।',
+  );
+  static const requestNotFound = TranslatableString(
+    en: 'Request not found',
+    ar: 'الطلب غير موجود',
+    ur: 'درخواست نہیں ملی',
+    hi: 'अनुरोध नहीं मिला',
+  );
+  static const noItemsInRequest = TranslatableString(
+    en: 'No items in this request',
+    ar: 'لا توجد عناصر في هذا الطلب',
+    ur: 'اس درخواست میں کوئی آئٹم نہیں',
+    hi: 'इस अनुरोध में कोई आइटम नहीं',
+  );
+  static const deleteDraftBody = TranslatableString(
+    en: 'This draft will be permanently removed.',
+    ar: 'ستتم إزالة هذه المسودة نهائياً.',
+    ur: 'یہ مسودہ مستقل طور پر حذف ہو جائے گا۔',
+    hi: 'यह ड्राफ्ट स्थायी रूप से हटा दिया जाएगा।',
+  );
   static const enterValidItemCount = TranslatableString(
     en: 'Enter a valid item count',
     ar: 'أدخل عدد عناصر صالح',
@@ -2035,6 +2191,18 @@ abstract final class AppStrings {
     ar: 'مطلوب بواسطة',
     ur: 'درخواست کنندہ',
     hi: 'अनुरोधकर्ता',
+  );
+  static const warehouseParty = TranslatableString(
+    en: 'Warehouse',
+    ar: 'المستودع',
+    ur: 'گودام',
+    hi: 'गोदाम',
+  );
+  static const notIssuedYet = TranslatableString(
+    en: 'Not issued yet',
+    ar: 'لم يصدر بعد',
+    ur: 'ابھی جاری نہیں',
+    hi: 'अभी जारी नहीं',
   );
   static const reqQty = TranslatableString(
     en: 'REQ QTY',
@@ -2219,6 +2387,18 @@ abstract final class AppStrings {
     ar: 'هذا الشهر',
     ur: 'اس ماہ',
     hi: 'इस महीने',
+  );
+  static const needRestockLabel = TranslatableString(
+    en: 'need restock',
+    ar: 'بحاجة لإعادة تخزين',
+    ur: 'ری اسٹاک درکار',
+    hi: 'रीस्टॉक चाहिए',
+  );
+  static const allHealthy = TranslatableString(
+    en: 'Stock healthy',
+    ar: 'المخزون جيد',
+    ur: 'اسٹاک ٹھیک',
+    hi: 'स्टॉक ठीक',
   );
   static const searchInventory = TranslatableString(
     en: 'Search inventory...',
@@ -2862,6 +3042,72 @@ abstract final class AppStrings {
     ur: 'منصوبہ منظور — پروجیکٹ اب فعال ہے',
     hi: 'योजना अनुमोदित — प्रोजेक्ट अब सक्रिय है',
   );
+  static const acceptProject = TranslatableString(
+    en: 'Accept project',
+    ar: 'قبول المشروع',
+    ur: 'پروجیکٹ قبول کریں',
+    hi: 'परियोजना स्वीकार करें',
+  );
+  static const acceptProjectConfirmTitle = TranslatableString(
+    en: 'Accept this project?',
+    ar: 'قبول هذا المشروع؟',
+    ur: 'یہ پروجیکٹ قبول کریں؟',
+    hi: 'यह परियोजना स्वीकार करें?',
+  );
+  static const acceptProjectConfirmBody = TranslatableString(
+    en: 'Confirms procurement is now tracking this job for material supply. The assigned engineer will be notified.',
+    ar: 'يؤكد أن المشتريات تتابع الآن هذا العمل لتوريد المواد. سيتم إخطار المهندس المكلف.',
+    ur: 'اس سے تصدیق ہوتی ہے کہ پروکیورمنٹ اب اس کام کو مواد کی فراہمی کے لیے ٹریک کر رہا ہے۔ متعلقہ انجینئر کو مطلع کیا جائے گا۔',
+    hi: 'यह पुष्टि करता है कि खरीद अब इस काम को सामग्री आपूर्ति हेतु ट्रैक कर रही है। नियुक्त इंजीनियर को सूचित किया जाएगा।',
+  );
+  static const projectAccepted = TranslatableString(
+    en: 'Project accepted',
+    ar: 'تم قبول المشروع',
+    ur: 'پروجیکٹ قبول ہو گیا',
+    hi: 'परियोजना स्वीकृत',
+  );
+  static const awaitingProcurementChip = TranslatableString(
+    en: 'Awaiting procurement',
+    ar: 'بانتظار المشتريات',
+    ur: 'پروکیورمنٹ کے منتظر',
+    hi: 'खरीद की प्रतीक्षा में',
+  );
+  static const markDoneConfirmTitle = TranslatableString(
+    en: 'Mark this plan Done?',
+    ar: 'وضع علامة إنجاز على هذه الخطة؟',
+    ur: 'اس پلان کو مکمل نشان زد کریں؟',
+    hi: 'इस योजना को पूर्ण चिह्नित करें?',
+  );
+  static const markDoneConfirmBody = TranslatableString(
+    en: 'Sends the plan back to the engineer for final approval. Make sure every item is really arranged first.',
+    ar: 'يعيد الخطة إلى المهندس للموافقة النهائية. تأكد أولاً أن كل بند تم ترتيبه فعليًا.',
+    ur: 'پلان کو حتمی منظوری کے لیے انجینئر کو واپس بھیجتا ہے۔ پہلے یقینی بنائیں ہر آئٹم واقعی بندوبست ہو چکا ہے۔',
+    hi: 'योजना अंतिम अनुमोदन हेतु इंजीनियर को वापस भेजता है। पहले सुनिश्चित करें कि हर आइटम वाकई व्यवस्थित है।',
+  );
+  static const enterQuantityToReceive = TranslatableString(
+    en: 'Enter a quantity greater than 0 to receive.',
+    ar: 'أدخل كمية أكبر من 0 للاستلام.',
+    ur: 'وصول کے لیے 0 سے زیادہ مقدار درج کریں۔',
+    hi: 'प्राप्त करने हेतु 0 से अधिक मात्रा दर्ज करें।',
+  );
+  static const requestOnHold = TranslatableString(
+    en: 'Request put on hold',
+    ar: 'تم تعليق الطلب',
+    ur: 'درخواست روک دی گئی',
+    hi: 'अनुरोध रोका गया',
+  );
+  static const approvePlanConfirmTitle = TranslatableString(
+    en: 'Approve plan?',
+    ar: 'الموافقة على الخطة؟',
+    ur: 'منصوبہ منظور کریں؟',
+    hi: 'योजना अनुमोदित करें?',
+  );
+  static const approvePlanConfirmBody = TranslatableString(
+    en: 'This activates the project and tells procurement to proceed. The approval can\'t be undone here.',
+    ar: 'يفعّل هذا المشروع ويُعلم المشتريات بالمتابعة. لا يمكن التراجع عن الموافقة هنا.',
+    ur: 'یہ پروجیکٹ کو فعال کرتا ہے اور پروکیورمنٹ کو آگے بڑھنے کا کہتا ہے۔ منظوری یہاں واپس نہیں ہو سکتی۔',
+    hi: 'यह प्रोजेक्ट सक्रिय करता है और खरीद को आगे बढ़ने को कहता है। अनुमोदन यहाँ पूर्ववत नहीं हो सकता।',
+  );
   static const changesSent = TranslatableString(
     en: 'Changes sent to procurement',
     ar: 'تم إرسال التغييرات إلى المشتريات',
@@ -3032,6 +3278,24 @@ abstract final class AppStrings {
     ur: 'وصولی تصدیق شدہ',
     hi: 'प्राप्ति की पुष्टि हुई',
   );
+  static const confirmReceiptQuestion = TranslatableString(
+    en: 'Confirm receipt?',
+    ar: 'تأكيد الاستلام؟',
+    ur: 'وصولی کی تصدیق؟',
+    hi: 'प्राप्ति की पुष्टि करें?',
+  );
+  static const confirmReceiptAllBody = TranslatableString(
+    en: 'This records that everything dispatched arrived on site. It updates the request and can\'t be undone here.',
+    ar: 'يسجل هذا وصول كل ما تم إرساله إلى الموقع. يحدّث الطلب ولا يمكن التراجع هنا.',
+    ur: 'یہ ریکارڈ کرتا ہے کہ روانہ کیا گیا سب کچھ سائٹ پر پہنچ گیا۔ یہ درخواست کو اپڈیٹ کرتا ہے اور یہاں واپس نہیں ہو سکتا۔',
+    hi: 'यह दर्ज करता है कि भेजा गया सब कुछ साइट पर पहुँचा। यह अनुरोध अपडेट करता है और यहाँ पूर्ववत नहीं हो सकता।',
+  );
+  static const confirmReceiptShortBody = TranslatableString(
+    en: 'line(s) are short of what was dispatched. Procurement will be notified. Confirm exactly what arrived?',
+    ar: 'من البنود ناقصة عمّا تم إرساله. سيتم إخطار المشتريات. تأكيد ما وصل بالضبط؟',
+    ur: 'لائن(یں) روانہ کی گئی مقدار سے کم ہیں۔ پروکیورمنٹ کو مطلع کیا جائے گا۔ جو پہنچا اس کی تصدیق کریں؟',
+    hi: 'लाइन(ें) भेजी गई मात्रा से कम हैं। खरीद को सूचित किया जाएगा। जो पहुँचा उसकी पुष्टि करें?',
+  );
   static const returnToStore = TranslatableString(
     en: 'Return to store',
     ar: 'الإرجاع إلى المخزن',
@@ -3073,6 +3337,36 @@ abstract final class AppStrings {
     ar: 'أضف عنصراً للإرجاع',
     ur: 'واپسی کے لیے آئٹم شامل کریں',
     hi: 'वापसी हेतु आइटम जोड़ें',
+  );
+  static const addAtLeastOneReturnItem = TranslatableString(
+    en: 'Add at least one item to return first',
+    ar: 'أضف عنصراً واحداً على الأقل للإرجاع أولاً',
+    ur: 'پہلے واپسی کے لیے کم از کم ایک آئٹم شامل کریں',
+    hi: 'पहले वापसी हेतु कम से कम एक आइटम जोड़ें',
+  );
+  static const returnSubmitHint = TranslatableString(
+    en: 'Procurement will confirm and restock once you submit.',
+    ar: 'ستؤكد المشتريات وتعيد التخزين بعد الإرسال.',
+    ur: 'جمع کرانے پر پروکیورمنٹ تصدیق کر کے دوبارہ اسٹاک کرے گا۔',
+    hi: 'सबमिट करने पर खरीद पुष्टि कर पुनः स्टॉक करेगी।',
+  );
+  static const submitReturnConfirm = TranslatableString(
+    en: 'Submit return?',
+    ar: 'إرسال الإرجاع؟',
+    ur: 'واپسی جمع کریں؟',
+    hi: 'वापसी सबमिट करें?',
+  );
+  static const submitReturnConfirmBody = TranslatableString(
+    en: 'This sends the return to procurement to confirm and restock. Check the quantities match what you\'re sending back.',
+    ar: 'يرسل هذا الإرجاع إلى المشتريات للتأكيد وإعادة التخزين. تأكد من تطابق الكميات مع ما تعيده.',
+    ur: 'یہ واپسی پروکیورمنٹ کو تصدیق اور دوبارہ اسٹاک کے لیے بھیجتا ہے۔ یقینی بنائیں کہ مقدار آپ کی واپس کی جانے والی چیزوں سے مطابقت رکھتی ہے۔',
+    hi: 'यह वापसी खरीद को पुष्टि व पुनः स्टॉक हेतु भेजता है। जांचें कि मात्रा आपकी लौटाई जा रही वस्तुओं से मेल खाती है।',
+  );
+  static const editQuantity = TranslatableString(
+    en: 'Edit quantity',
+    ar: 'تعديل الكمية',
+    ur: 'مقدار میں ترمیم',
+    hi: 'मात्रा संपादित करें',
   );
 
   // ─── Plan diff / re-approval ──────────────────────────────
@@ -3234,6 +3528,48 @@ abstract final class AppStrings {
     ur: 'شعبہ',
     hi: 'विभाग',
   );
+  static const todayLabel = TranslatableString(
+    en: 'Today',
+    ar: 'اليوم',
+    ur: 'آج',
+    hi: 'आज',
+  );
+  static const notMarkedYet = TranslatableString(
+    en: 'Not marked',
+    ar: 'غير مسجل',
+    ur: 'درج نہیں',
+    hi: 'दर्ज नहीं',
+  );
+  static const annualLeftLabel = TranslatableString(
+    en: 'Annual left',
+    ar: 'المتبقي السنوي',
+    ur: 'سالانہ باقی',
+    hi: 'वार्षिक शेष',
+  );
+  static const pendingLabel = TranslatableString(
+    en: 'Pending',
+    ar: 'قيد الانتظار',
+    ur: 'زیر التوا',
+    hi: 'लंबित',
+  );
+  static const nationalityLabel = TranslatableString(
+    en: 'Nationality',
+    ar: 'الجنسية',
+    ur: 'قومیت',
+    hi: 'राष्ट्रीयता',
+  );
+  static const joinedLabel = TranslatableString(
+    en: 'Joined',
+    ar: 'تاريخ الالتحاق',
+    ur: 'شمولیت',
+    hi: 'शामिल हुए',
+  );
+  static const tenureLabelText = TranslatableString(
+    en: 'Tenure',
+    ar: 'مدة الخدمة',
+    ur: 'مدت ملازمت',
+    hi: 'सेवा अवधि',
+  );
 
   // ─── Leave management ──────────────────────────────────────────
   static const myLeave = TranslatableString(
@@ -3296,6 +3632,18 @@ abstract final class AppStrings {
     ur: 'واپس لیں',
     hi: 'वापस लें',
   );
+  static const withdrawConfirmTitle = TranslatableString(
+    en: 'Withdraw request?',
+    ar: 'سحب الطلب؟',
+    ur: 'درخواست واپس لیں؟',
+    hi: 'अनुरोध वापस लें?',
+  );
+  static const withdrawConfirmBody = TranslatableString(
+    en: 'This cancels your pending leave request. You can file a new one anytime.',
+    ar: 'يلغي هذا طلب إجازتك المعلق. يمكنك تقديم طلب جديد في أي وقت.',
+    ur: 'یہ آپ کی زیر التوا چھٹی کی درخواست منسوخ کر دے گا۔ آپ کبھی بھی نئی درخواست دے سکتے ہیں۔',
+    hi: 'यह आपका लंबित छुट्टी अनुरोध रद्द करता है। आप कभी भी नया दे सकते हैं।',
+  );
   static const overBalanceWarning = TranslatableString(
     en: 'Exceeds the remaining annual balance',
     ar: 'يتجاوز الرصيد السنوي المتبقي',
@@ -3307,6 +3655,18 @@ abstract final class AppStrings {
     ar: 'يتداخل مع إجازة قائمة',
     ur: 'موجودہ چھٹی سے ٹکراؤ ہے',
     hi: 'मौजूदा छुट्टी से टकराव',
+  );
+  static const pickStartEndDate = TranslatableString(
+    en: 'Pick a start and end date',
+    ar: 'اختر تاريخ البدء والانتهاء',
+    ur: 'آغاز اور اختتام کی تاریخ منتخب کریں',
+    hi: 'आरंभ और समाप्ति तिथि चुनें',
+  );
+  static const endAfterStart = TranslatableString(
+    en: 'End date must be on or after the start date',
+    ar: 'يجب أن يكون تاريخ الانتهاء في أو بعد تاريخ البدء',
+    ur: 'اختتامی تاریخ آغاز کی تاریخ پر یا اس کے بعد ہونی چاہیے',
+    hi: 'समाप्ति तिथि आरंभ तिथि पर या बाद में होनी चाहिए',
   );
   static const notLinkedToEmployee = TranslatableString(
     en: 'Your account isn\'t linked to an employee record yet — contact your admin.',

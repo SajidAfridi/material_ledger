@@ -39,10 +39,13 @@ class DashboardScreen extends ConsumerWidget {
 
     final totalValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
-    // Procurement's actual work queue (plans to review + requests to dispatch).
-    final procurementQueue =
-        ref.watch(dispatchQueueCountProvider) +
-        ref.watch(planReviewQueueCountProvider);
+    // Procurement's actual work queue (new projects to accept + plans to
+    // review + requests to dispatch) — must match the workspace screen's own
+    // count exactly, so this KPI and what's listed there never disagree.
+    final int newProjectsCount = ref.watch(projectsAwaitingAcceptanceCountProvider);
+    final int dispatchCount = ref.watch(dispatchQueueCountProvider);
+    final int planReviewCount = ref.watch(planReviewQueueCountProvider);
+    final procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
     final recentTxns = ref.watch(recentTransactionsProvider);
     final unreadNotifs = ref.watch(unreadNotificationCountProvider);
     final rentals = ref.watch(rentalsSummaryProvider);

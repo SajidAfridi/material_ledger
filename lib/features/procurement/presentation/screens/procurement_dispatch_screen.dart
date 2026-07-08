@@ -103,10 +103,11 @@ class _ProcurementDispatchScreenState
     setState(() => _busy = true);
     AppFeedback.confirm();
     await ref.read(materialRequestsProvider.notifier).dispatch(req.id, qtys);
+    final lang = ref.read(languageProvider);
     await ref.read(notificationsProvider.notifier).add(
           type: NotificationType.request,
-          title: 'Request dispatched to site',
-          titleSecondary: 'درخواست سائٹ پر روانہ کر دی گئی',
+          title: AppStrings.notifRequestDispatchedTitle.primary,
+          titleSecondary: AppStrings.notifRequestDispatchedTitle.secondary(lang),
           body: '${req.projectName} · $count line(s).',
           refId: req.id,
           route: RoutePaths.requestDetailPath(req.id),
@@ -201,9 +202,11 @@ class _ProcurementDispatchScreenState
     if (qty <= 0) {
       // Confirmed with an empty/invalid quantity — tell the user instead of
       // silently doing nothing (they'd think the shortfall was resolved).
+      AppFeedback.warning();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a quantity greater than 0 to receive.'),
+        SnackBar(
+          content: Text(AppStrings.enterQuantityToReceive.primary),
+          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -309,6 +312,10 @@ class _ProcurementDispatchScreenState
       detail: '${req.projectName}${note.isEmpty ? '' : ' · $note'}',
     );
     if (!mounted) return;
+    AppFeedback.confirm();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppStrings.requestOnHold.primary)),
+    );
     context.pop();
   }
 
@@ -443,7 +450,10 @@ class _ProcurementDispatchScreenState
                     // Discuss short stock / changes with the engineer.
                     RequestCommentsSection(
                       requestId: req.id,
-                      authorRole: 'Procurement',
+                      // The real signed-in role — this screen is shared by
+                      // Procurement and Admin, so a literal string would
+                      // mislabel an admin's comment.
+                      authorRole: ref.read(currentRoleProvider).label,
                       notifyAudience: UserRole.engineer.name,
                       notifyRoute: RoutePaths.requestDetailPath(req.id),
                     ),

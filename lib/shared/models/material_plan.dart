@@ -221,6 +221,10 @@ class MaterialPlan {
     this.version = 1,
     this.submittedAt,
     this.approvedAt,
+    // Soft-delete: the sync outbox only ever upserts, never issues a real SQL
+    // DELETE — a physical local removal would resurrect on the next cloud
+    // hydration. Deleting flips this instead (mirrors Project.deleted).
+    this.deleted = false,
   });
 
   final String id;
@@ -236,6 +240,9 @@ class MaterialPlan {
   final int version;
   final DateTime? submittedAt;
   final DateTime? approvedAt;
+
+  /// Soft-delete flag — see the constructor param doc.
+  final bool deleted;
 
   int get itemCount => items.length;
 
@@ -259,6 +266,7 @@ class MaterialPlan {
     int? version,
     DateTime? submittedAt,
     DateTime? approvedAt,
+    bool? deleted,
   }) => MaterialPlan(
     id: id,
     projectId: projectId,
@@ -269,6 +277,7 @@ class MaterialPlan {
     version: version ?? this.version,
     submittedAt: submittedAt ?? this.submittedAt,
     approvedAt: approvedAt ?? this.approvedAt,
+    deleted: deleted ?? this.deleted,
   );
 
   Map<String, dynamic> toJson() => {
@@ -281,6 +290,7 @@ class MaterialPlan {
     'version': version,
     'submittedAt': submittedAt?.toIso8601String(),
     'approvedAt': approvedAt?.toIso8601String(),
+    'deleted': deleted,
   };
 
   factory MaterialPlan.fromJson(Map<String, dynamic> json) => MaterialPlan(
@@ -309,6 +319,7 @@ class MaterialPlan {
     approvedAt: json['approvedAt'] == null
         ? null
         : DateTime.parse(json['approvedAt'] as String),
+    deleted: json['deleted'] as bool? ?? false,
   );
 
   static String encodeList(List<MaterialPlan> items) =>

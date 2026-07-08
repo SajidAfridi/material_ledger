@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -140,6 +142,93 @@ void main() {
       final savedJson = prefs.getString('materials_list_v3');
       final decodedList = MaterialItem.decodeList(savedJson!);
       expect(decodedList.firstWhere((i) => i.id == 'mat-001').quantity, 0.0);
+    });
+
+    test('deleteMaterial on an unknown id is a safe no-op', () async {
+      final n = notifier();
+      final initialCount = n.state.length;
+
+      await n.deleteMaterial('does-not-exist');
+
+      expect(n.state.length, initialCount);
+    });
+  });
+
+  group('Soft delete (MaterialItem.deleted)', () {
+    test('defaults to false and round-trips true', () {
+      final fresh = MaterialItem(
+        id: 'mi1',
+        name: 'Fresh',
+        urduName: '',
+        category: MaterialCategory.other,
+        unit: MaterialUnit.pieces,
+        quantity: 1,
+        unitPrice: 1,
+      );
+      expect(fresh.deleted, false);
+
+      final tombstone = fresh.copyWith(deleted: true);
+      final r = MaterialItem.fromJson(tombstone.toJson());
+      expect(r.deleted, true);
+    });
+
+    test('a record predating this field decodes as not-deleted', () {
+      final r = MaterialItem.fromJson({
+        'id': 'mi2',
+        'name': 'Legacy',
+        'urduName': '',
+        'category': 'Other',
+        'unit': 'pcs',
+        'quantity': 1,
+        'unitPrice': 1,
+        'createdAt': DateTime(2025, 1, 1).toIso8601String(),
+        'updatedAt': DateTime(2025, 1, 1).toIso8601String(),
+      });
+      expect(r.deleted, false);
+    });
+
+    test(
+        'a soft-deleted row already in local storage (e.g. re-hydrated from '
+        'the cloud after another device deleted it) never surfaces in state',
+        () async {
+      final now = DateTime(2026, 1, 1).toIso8601String();
+      SharedPreferences.setMockInitialValues({
+        'materials_list_v3': jsonEncode([
+          {
+            'id': 'mi-live',
+            'name': 'Still here',
+            'urduName': '',
+            'category': 'Other',
+            'unit': 'pcs',
+            'quantity': 1,
+            'unitPrice': 1,
+            'deleted': false,
+            'createdAt': now,
+            'updatedAt': now,
+          },
+          {
+            'id': 'mi-tombstone',
+            'name': 'Ghost',
+            'urduName': '',
+            'category': 'Other',
+            'unit': 'pcs',
+            'quantity': 1,
+            'unitPrice': 1,
+            'deleted': true,
+            'createdAt': now,
+            'updatedAt': now,
+          },
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final container = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(container.dispose);
+
+      final materials = container.read(materialsProvider);
+      expect(materials.any((m) => m.id == 'mi-live'), isTrue);
+      expect(materials.any((m) => m.id == 'mi-tombstone'), isFalse);
     });
   });
 }

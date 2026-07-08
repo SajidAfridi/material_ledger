@@ -30,13 +30,17 @@ final materialsProvider =
     });
 
 class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
-  MaterialsNotifier(this._ref, this._store)
-    : super(_store.isSeeded ? _store.readAll() : _seedMaterials) {
+  MaterialsNotifier(this._ref, this._store) : super(_load(_store)) {
     if (!_store.isSeeded) _store.writeAll(state);
   }
 
   final Ref _ref;
   final CollectionStore<MaterialItem> _store;
+
+  static List<MaterialItem> _load(CollectionStore<MaterialItem> store) {
+    final all = store.isSeeded ? store.readAll() : _seedMaterials;
+    return all.where((m) => !m.deleted).toList();
+  }
 
   Future<void> _persist() => _store.writeAll(state);
 
@@ -128,8 +132,19 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
   }
 
   Future<void> deleteMaterial(String id) async {
+    final m = byId(id);
+    if (m == null) return;
+    final tombstone = m.copyWith(deleted: true);
     state = state.where((item) => item.id != id).toList();
     await _persist();
+    final payload = tombstone.toJson()..remove('reservedQty');
+    await _ref.enqueueSync(
+      collection: 'materials',
+      docId: id,
+      kind: 'material.delete',
+      label: 'Material',
+      payload: payload,
+    );
   }
 
   /// Adjust quantity (positive for incoming, negative for outgoing). The ACTUAL

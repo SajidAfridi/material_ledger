@@ -150,15 +150,33 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   Future<void> upsertFromClaims({
     required String id,
     required String email,
-    required String fullName,
     required UserRole role,
+    required String fullName,
+    bool mustChangePassword = false,
   }) async {
-    if (state.any((u) => u.id == id)) return;
+    final existing = _byId(id);
+    if (existing != null) {
+      // The user is already in this device's roster. Reconcile ONLY the
+      // authoritative must-change flag from the claim (leave local overrides /
+      // employee link untouched) so a change made on another device is honoured.
+      if (existing.mustChangePassword != mustChangePassword) {
+        state = [
+          for (final u in state)
+            if (u.id == id)
+              u.copyWith(mustChangePassword: mustChangePassword)
+            else
+              u,
+        ];
+        await _store.writeAll(state);
+      }
+      return;
+    }
     final user = AppUser(
       id: id,
       fullName: fullName.trim().isEmpty ? email : fullName,
       email: email,
       role: role,
+      mustChangePassword: mustChangePassword,
       createdAt: DateTime.now(),
     );
     state = [user, ...state];
@@ -186,6 +204,32 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   bool _isLastActiveAdmin(String id) {
     final admins = state.where((u) => u.role == UserRole.admin && u.active);
     return admins.length == 1 && admins.first.id == id;
+  }
+
+  /// Update ONLY the local roster's password hash + must-change flag, WITHOUT
+  /// calling the privileged admin Edge Function. Used by self-service password
+  /// change ([AuthController.changeOwnPassword]), where the identity provider is
+  /// updated separately via the caller's own GoTrue self-update — so a non-admin
+  /// never has to (and can't) hit the admin-only function. Keeps local + cloud
+  /// in step for the credential fallback / offline sign-in.
+  Future<void> applyLocalPassword(
+    String id,
+    String newPassword, {
+    required bool mustChange,
+  }) async {
+    final pw = PasswordHasher.create(newPassword);
+    state = [
+      for (final u in state)
+        if (u.id == id)
+          u.copyWith(
+            passwordHash: pw.hash,
+            passwordSalt: pw.salt,
+            mustChangePassword: mustChange,
+          )
+        else
+          u,
+    ];
+    await _store.writeAll(state);
   }
 
   /// Set a new password. [temporary] true (admin reset) forces a change on next

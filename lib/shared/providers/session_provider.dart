@@ -109,9 +109,17 @@ class AuthController {
       return SignInResult.invalidCredentials;
     }
 
+    // The "must change password" intent travels in the identity claim
+    // (user_metadata), so a forced change set by an admin on one device is
+    // honoured wherever the user actually signs in — not just on the device that
+    // provisioned them.
+    final mustChange =
+        (authUser.userMetadata?['must_change_password'] as bool?) ?? false;
+
     // A user provisioned on another device won't be in this device's roster —
     // materialise them from the JWT claims so currentUser resolves. Existing
-    // records (the seeds, with their overrides / employee link) are kept as-is.
+    // records (the seeds, with their overrides / employee link) are kept as-is,
+    // but the must-change flag is reconciled from the authoritative claim.
     await _ref.read(usersProvider.notifier).upsertFromClaims(
           id: appUserId,
           email: authUser.email ?? '',
@@ -119,6 +127,7 @@ class AuthController {
           role: UserRole.fromName(
             authUser.appMetadata['role'] as String? ?? 'engineer',
           ),
+          mustChangePassword: mustChange,
         );
 
     // A banned user is already rejected by GoTrue above; this is the roster-side
@@ -133,7 +142,7 @@ class AuthController {
     // Now that the session JWT is attached, pull this user's permitted rows.
     await SupabaseBootstrap(client, _ref.read(sharedPreferencesProvider)).run();
 
-    return (local?.mustChangePassword ?? false)
+    return mustChange
         ? SignInResult.mustChangePassword
         : SignInResult.ok;
   }
@@ -165,6 +174,41 @@ class AuthController {
       if (u.id == id) return u;
     }
     return null;
+  }
+
+  /// Self-service: the SIGNED-IN user changes THEIR OWN password. This uses the
+  /// GoTrue self-update API against the caller's own session — no service-role,
+  /// no admin rights — which is exactly why it works for a first-login engineer
+  /// or procurement user who must change an admin-set temporary password.
+  ///
+  /// (Contrast [UsersNotifier.setPassword], which is an ADMIN resetting SOMEONE
+  /// ELSE's password via the privileged `admin-users` function — that path is
+  /// admin-only by design and would 403 a non-admin trying to change their own.)
+  ///
+  /// Throws on a remote failure so the caller can surface it and keep the user on
+  /// the change-password screen rather than silently proceeding.
+  Future<void> changeOwnPassword(String newPassword) async {
+    final client = _ref.read(supabaseClientProvider);
+    if (client != null) {
+      // Updates the current session's user; the session stays valid afterwards.
+      // Clearing must_change_password in the SAME self-update means a non-admin
+      // resolves their own forced-change flag with no admin round-trip.
+      await client.auth.updateUser(
+        UserAttributes(
+          password: newPassword,
+          data: {'must_change_password': false},
+        ),
+      );
+    }
+    // Mirror into the local roster (clears must-change; keeps the offline /
+    // credential-fallback hash in step). Only reached if the remote call above
+    // succeeded (or there's no backend — tests / offline dev).
+    final user = _ref.read(currentUserProvider);
+    if (user != null) {
+      await _ref
+          .read(usersProvider.notifier)
+          .applyLocalPassword(user.id, newPassword, mustChange: false);
+    }
   }
 
   Future<void> signOut() async {

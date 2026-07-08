@@ -127,7 +127,7 @@ class MoreHubScreen extends ConsumerWidget {
           ),
         ),
         content: Text(
-          'Are you sure you want to logout?',
+          AppStrings.logoutConfirmBody.primary,
           style: AppTypography.bodyMedium,
         ),
         actions: [

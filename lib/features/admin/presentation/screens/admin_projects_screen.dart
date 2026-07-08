@@ -104,7 +104,7 @@ class _ProjectRow extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    final deleted = ref.read(projectsProvider.notifier).deleteProject(project.id);
+    final deleted = await ref.read(projectsProvider.notifier).deleteProject(project.id);
     if (!context.mounted) return;
     if (!deleted) {
       // Blocked: open requests still hold stock reservations against it.
@@ -188,6 +188,11 @@ class _ProjectRow extends ConsumerWidget {
                   spacing: AppSpacing.xs,
                   children: [
                     if (phase != null) _stateChip(phase.state),
+                    if (!project.acceptedByProcurement)
+                      StatusChip.warning(
+                        AppStrings.awaitingProcurementChip.primary,
+                        icon: Icons.hourglass_empty_rounded,
+                      ),
                     if (project.openRequestCount > 0)
                       StatusChip.warning(
                         '${project.openRequestCount} ${AppStrings.openRequests.primary.toLowerCase()}',

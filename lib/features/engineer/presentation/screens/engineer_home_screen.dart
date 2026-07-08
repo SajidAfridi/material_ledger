@@ -648,6 +648,11 @@ class _ProjectCard extends ConsumerWidget {
                   children: [
                     StatusChip.info(phase.label),
                     _StateChip(state: phase.state),
+                    if (!project.acceptedByProcurement)
+                      StatusChip.warning(
+                        AppStrings.awaitingProcurementChip.primary,
+                        icon: Icons.hourglass_empty_rounded,
+                      ),
                   ],
                 ),
               ],

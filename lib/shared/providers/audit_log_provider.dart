@@ -7,7 +7,7 @@ import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import 'session_provider.dart';
 
-const _kAuditKey = 'activity_log_v1';
+const _kAuditKey = 'activity_log_v2';
 const _uuid = Uuid();
 
 /// The append-only activity log (newest first). Mutating notifiers across every
@@ -62,41 +62,8 @@ class AuditLogNotifier extends StateNotifier<List<AuditEntry>> {
       state.where((e) => e.module == module).toList();
 
   /// A small, realistic history so the trail isn't empty on first launch.
-  static List<AuditEntry> _seed() {
-    final base = DateTime.now();
-    return [
-      AuditEntry(
-        id: 'log-seed-03',
-        action: 'Plan submitted for approval',
-        actorName: 'Ahmed Khan',
-        actorRole: UserRole.engineer,
-        module: AuditModule.materials,
-        timestamp: base.subtract(const Duration(hours: 3)),
-        refId: 'proj-001',
-        detail: 'Villa 12 — Al Reem · 14 line items',
-      ),
-      AuditEntry(
-        id: 'log-seed-02',
-        action: 'Goods received into store',
-        actorName: 'Bilal Procurement',
-        actorRole: UserRole.procurement,
-        module: AuditModule.materials,
-        timestamp: base.subtract(const Duration(days: 1, hours: 2)),
-        refId: 'grn-204',
-        detail: 'Copper pipe 1/2" ×120 @ AED 9.50',
-      ),
-      AuditEntry(
-        id: 'log-seed-01',
-        action: 'Rent payment recorded',
-        actorName: 'Owner (Admin)',
-        actorRole: UserRole.admin,
-        module: AuditModule.rentals,
-        timestamp: base.subtract(const Duration(days: 2)),
-        refId: 'unit-shop-02',
-        detail: 'AED 4,500 · SHOP-02 · 2026-06',
-      ),
-    ];
-  }
+  // No canned demo history — the real trail accrues as the app is used.
+  static List<AuditEntry> _seed() => [];
 }
 
 /// One-liner audit logging from any screen. Reads the acting role/name from the

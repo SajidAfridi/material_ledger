@@ -5,13 +5,20 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/material_request.dart';
+import '../../../../shared/models/project.dart';
+import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 
 /// Procurement workspace — the two SRS work queues: Phase-1 plans awaiting
 /// arrangement, and Phase-2 requests awaiting dispatch. Procurement & Admin.
@@ -32,6 +39,9 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
         .where((r) => dispatchQueueStatuses.contains(r.status))
         .toList();
     final projects = ref.watch(projectsProvider);
+    // Newly-created projects nobody's acknowledged yet — the earliest stage in
+    // the pipeline, shown first.
+    final newProjects = ref.watch(projectsAwaitingAcceptanceProvider);
 
     String projectName(String projectId) {
       for (final p in projects) {
@@ -42,7 +52,7 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
 
     final urgentCount =
         requests.where((r) => r.priority == RequestPriority.urgent).length;
-    final totalPending = plans.length + requests.length;
+    final totalPending = newProjects.length + plans.length + requests.length;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -76,6 +86,21 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
                 totalPending: totalPending,
                 urgentCount: urgentCount,
               ),
+              const Gap(AppSpacing.xl),
+
+              // ─── New projects awaiting acceptance ───────────
+              _QueueHeader(
+                label: AppStrings.newProjectsQueue.primary,
+                count: newProjects.length,
+              ),
+              const Gap(AppSpacing.md),
+              if (newProjects.isEmpty)
+                _EmptyState(text: AppStrings.noNewProjects.primary)
+              else
+                for (final p in newProjects) ...[
+                  _NewProjectCard(project: p),
+                  const Gap(AppSpacing.listItemGap),
+                ],
               const Gap(AppSpacing.xl),
 
               // ─── Plans to review ────────────────────────────
@@ -297,6 +322,128 @@ class _QueueCard extends StatelessWidget {
             Icons.chevron_right_rounded,
             size: 20,
             color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A newly-created project awaiting procurement's acknowledgment. Unlike the
+/// Plans/Requests cards (which push to a review screen — there's real per-line
+/// work to do there), acceptance has no sub-screen worth building: it's a
+/// single acknowledgment, so tapping the card OR the explicit button both open
+/// the same confirm dialog directly.
+class _NewProjectCard extends ConsumerWidget {
+  const _NewProjectCard({required this.project});
+
+  final Project project;
+
+  Future<void> _accept(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.acceptProjectConfirmTitle.primary),
+        content: Text(AppStrings.acceptProjectConfirmBody.primary),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.acceptProject.primary),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final updated = await ref
+        .read(projectsProvider.notifier)
+        .acceptProject(project.id, acceptedBy: ref.read(actorNameProvider));
+    if (updated == null) return; // already accepted (e.g. a second tap) — no-op
+
+    final engineerId = updated.assignedEngineerId;
+    if (engineerId != null) {
+      final lang = ref.read(languageProvider);
+      await ref.read(notificationsProvider.notifier).add(
+            type: NotificationType.project,
+            title: AppStrings.notifProjectAcceptedTitle.primary,
+            titleSecondary: AppStrings.notifProjectAcceptedTitle.secondary(lang),
+            body: updated.name,
+            refId: updated.id,
+            route: RoutePaths.engineerProjects,
+            userId: engineerId,
+          );
+    }
+    await ref.logAudit(
+      action: 'Project accepted by procurement',
+      module: AuditModule.materials,
+      refId: updated.id,
+      detail: updated.name,
+    );
+    if (!context.mounted) return;
+    AppFeedback.confirm();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppStrings.projectAccepted.primary)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final subtitle = [
+      if ((project.clientName ?? '').isNotEmpty) project.clientName,
+      if ((project.jobNumber ?? '').isNotEmpty) 'Job ${project.jobNumber}',
+    ].whereType<String>().join(' · ');
+
+    return LedgerCard(
+      onTap: () => _accept(context, ref),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.successContainer.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            ),
+            child: const Icon(
+              Icons.domain_add_outlined,
+              size: 20,
+              color: AppColors.success,
+            ),
+          ),
+          const Gap(AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  project.name,
+                  style: AppTypography.titleSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const Gap(AppSpacing.xxs),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const Gap(AppSpacing.sm),
+          SecondaryButton(
+            label: AppStrings.acceptProject.primary,
+            isExpanded: false,
+            onPressed: () => _accept(context, ref),
           ),
         ],
       ),

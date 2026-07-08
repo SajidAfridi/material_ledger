@@ -103,6 +103,10 @@ class MaterialItem {
     this.size = '',
     this.ralColour = '',
     this.storeLocation = '',
+    // Soft-delete: the sync outbox only ever upserts, never issues a real SQL
+    // DELETE — a physical local removal would resurrect on the next cloud
+    // hydration. Deleting flips this instead (mirrors Project.deleted).
+    this.deleted = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) : createdAt = createdAt ?? DateTime.now(),
@@ -141,6 +145,9 @@ class MaterialItem {
 
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Soft-delete tombstone — see the constructor comment on [deleted].
+  final bool deleted;
 
   /// Cost per unit in AED. Visible to Admin/Procurement only
   /// (gate on [UserRole.canSeeCost]); engineers never see it (FR-092).
@@ -189,6 +196,7 @@ class MaterialItem {
     String? size,
     String? ralColour,
     String? storeLocation,
+    bool? deleted,
     DateTime? updatedAt,
   }) {
     return MaterialItem(
@@ -206,6 +214,7 @@ class MaterialItem {
       size: size ?? this.size,
       ralColour: ralColour ?? this.ralColour,
       storeLocation: storeLocation ?? this.storeLocation,
+      deleted: deleted ?? this.deleted,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
@@ -226,6 +235,7 @@ class MaterialItem {
     'size': size,
     'ralColour': ralColour,
     'storeLocation': storeLocation,
+    'deleted': deleted,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -245,6 +255,7 @@ class MaterialItem {
     size: json['size'] as String? ?? '',
     ralColour: json['ralColour'] as String? ?? '',
     storeLocation: json['storeLocation'] as String? ?? '',
+    deleted: json['deleted'] as bool? ?? false,
     createdAt: DateTime.parse(json['createdAt'] as String),
     updatedAt: DateTime.parse(json['updatedAt'] as String),
   );

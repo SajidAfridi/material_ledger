@@ -33,6 +33,9 @@ class EngineerBrowseScreen extends ConsumerWidget {
     final isWide = screenWidth >= 840;
 
     final activeCategories = allMaterials.map((m) => m.category).toSet().length;
+    final needRestock = allMaterials
+        .where((m) => m.stockStatus != StockStatus.inStock)
+        .length;
 
     return SafeArea(
       child: CustomScrollView(
@@ -49,6 +52,7 @@ class EngineerBrowseScreen extends ConsumerWidget {
               child: _HeroStatsSection(
                 totalItems: allMaterials.length,
                 activeCategories: activeCategories,
+                needRestock: needRestock,
                 isWide: isWide,
                 lang: lang,
               ),
@@ -393,12 +397,14 @@ class _HeroStatsSection extends StatelessWidget {
   const _HeroStatsSection({
     required this.totalItems,
     required this.activeCategories,
+    required this.needRestock,
     required this.isWide,
     required this.lang,
   });
 
   final int totalItems;
   final int activeCategories;
+  final int needRestock;
   final bool isWide;
   final AppLanguage lang;
 
@@ -453,6 +459,8 @@ class _HeroStatsSection extends StatelessWidget {
                       : AppTypography.titleSmall,
                 ),
                 Gap(isWide ? AppSpacing.md : AppSpacing.sm),
+                // Real inventory-health badge (derived from live stock status),
+                // not a fabricated trend: how many catalogue items are low or out.
                 Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: isWide ? AppSpacing.md : AppSpacing.sm,
@@ -465,15 +473,21 @@ class _HeroStatsSection extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.trending_up_rounded,
+                      Icon(
+                        needRestock > 0
+                            ? Icons.warning_amber_rounded
+                            : Icons.check_circle_rounded,
                         size: 14,
-                        color: AppColors.success,
+                        color: needRestock > 0
+                            ? AppColors.warning
+                            : AppColors.success,
                       ),
                       const Gap(AppSpacing.xs),
                       Flexible(
                         child: Text(
-                          '+12% ${AppStrings.thisMonth.primary}',
+                          needRestock > 0
+                              ? '$needRestock ${AppStrings.needRestockLabel.primary}'
+                              : AppStrings.allHealthy.primary,
                           style: AppTypography.labelMedium.copyWith(
                             fontWeight: FontWeight.w600,
                             fontSize: isWide ? 12 : 10,
@@ -723,13 +737,21 @@ class _MaterialTableRow extends StatelessWidget {
         : 2000.0;
     final stockPct = (item.quantity / maxCapacity * 100).clamp(0, 100).toInt();
 
+    // Low-stock (amber, still usable today) is deliberately a different colour
+    // AND icon from out-of-stock (red, unusable) — the two are operationally
+    // different and shouldn't read as the same red pill.
     final statusChip = switch (item.stockStatus) {
-      StockStatus.inStock => StatusChip.success(AppStrings.healthy.primary),
-      StockStatus.lowStock => StatusChip.error(
+      StockStatus.inStock => StatusChip.success(
+        AppStrings.healthy.primary,
+        icon: Icons.check_circle_rounded,
+      ),
+      StockStatus.lowStock => StatusChip.warning(
         AppStrings.lowStock.primary.toUpperCase(),
+        icon: Icons.warning_amber_rounded,
       ),
       StockStatus.outOfStock => StatusChip.error(
         AppStrings.outOfStock.primary.toUpperCase(),
+        icon: Icons.block_rounded,
       ),
     };
 
@@ -913,13 +935,21 @@ class _MaterialCard extends StatelessWidget {
         : 2000.0;
     final stockPct = (item.quantity / maxCapacity * 100).clamp(0, 100).toInt();
 
+    // Low-stock (amber, still usable today) is deliberately a different colour
+    // AND icon from out-of-stock (red, unusable) — the two are operationally
+    // different and shouldn't read as the same red pill.
     final statusChip = switch (item.stockStatus) {
-      StockStatus.inStock => StatusChip.success(AppStrings.healthy.primary),
-      StockStatus.lowStock => StatusChip.error(
+      StockStatus.inStock => StatusChip.success(
+        AppStrings.healthy.primary,
+        icon: Icons.check_circle_rounded,
+      ),
+      StockStatus.lowStock => StatusChip.warning(
         AppStrings.lowStock.primary.toUpperCase(),
+        icon: Icons.warning_amber_rounded,
       ),
       StockStatus.outOfStock => StatusChip.error(
         AppStrings.outOfStock.primary.toUpperCase(),
+        icon: Icons.block_rounded,
       ),
     };
 

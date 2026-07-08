@@ -13,9 +13,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// the outbox → [SupabaseSyncBackend] as usual, so the two stay in step.
 ///
 /// Only the collections whose writes already go through the sync seam are
-/// mapped — reads and writes stay symmetric. (Projects/users/inventory are
-/// deterministic seeds present on every device, so they don't need syncing for
-/// the demo.)
+/// mapped — reads and writes stay symmetric. (Users/inventory-catalog identity
+/// are handled by their own dedicated flows — Supabase Auth + the admin-users
+/// Edge Function, and the materials seed respectively — not this bootstrap.)
 class SupabaseBootstrap {
   SupabaseBootstrap(this._client, this._prefs);
 
@@ -24,17 +24,19 @@ class SupabaseBootstrap {
 
   /// Supabase table name → local SharedPreferences key.
   static const _map = <String, String>{
-    'materialRequests': 'material_requests_list_v2',
+    'projects': 'projects_list_v1',
+    'materialPlans': 'material_plans_list_v2',
+    'materialRequests': 'material_requests_list_v3',
     'materials': 'materials_list_v3',
-    'stockMovements': 'stock_movements_v1',
-    'notifications': 'notifications_list_v2',
-    'rentalUnits': 'rental_units_v1',
-    'rentPayments': 'rent_payments_v1',
-    'goodsReceipts': 'goods_receipts_v1',
-    'returns': 'material_returns_list_v1',
-    'employees': 'employees_v2',
-    'attendance': 'attendance_v1',
-    'leaveRecords': 'leave_records_v1',
+    'stockMovements': 'stock_movements_v2',
+    'notifications': 'notifications_list_v3',
+    'rentalUnits': 'rental_units_v2',
+    'rentPayments': 'rent_payments_v2',
+    'goodsReceipts': 'goods_receipts_v2',
+    'returns': 'material_returns_list_v2',
+    'employees': 'employees_v3',
+    'attendance': 'attendance_v2',
+    'leaveRecords': 'leave_records_v2',
   };
 
   /// Runs all collections in PARALLEL under one short overall cap, so an
@@ -67,6 +69,9 @@ class SupabaseBootstrap {
     // reservedQty is derived per-device from open requests — never overwrite it
     // with a cloud row (which doesn't carry it).
     'materials': ['reservedQty'],
+    // Contract value is finance-gated in the UI; kept off the shared payload
+    // the same way salary is (see ProjectsNotifier._syncProject).
+    'projects': ['contractValueAED'],
   };
 
   Future<void> _syncOneInner(String table, String key) async {

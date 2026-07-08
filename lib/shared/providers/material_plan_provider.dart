@@ -4,14 +4,16 @@ import 'package:uuid/uuid.dart';
 import '../models/material_plan.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
+import '../sync/sync_engine.dart';
 
-const _kPlansKey = 'material_plans_list_v1';
+const _kPlansKey = 'material_plans_list_v2';
 const _uuid = Uuid();
 
 /// All Phase 1 material plans (one per project).
 final materialPlansProvider =
     StateNotifierProvider<MaterialPlansNotifier, List<MaterialPlan>>((ref) {
       return MaterialPlansNotifier(
+        ref,
         ref.watch(storageProvider).collection<MaterialPlan>(
           _kPlansKey,
           toJson: (p) => p.toJson(),
@@ -49,14 +51,31 @@ final planReviewQueueCountProvider = Provider<int>((ref) {
 });
 
 class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
-  MaterialPlansNotifier(this._store)
-    : super(_store.isSeeded ? _store.readAll() : _seedPlans) {
+  MaterialPlansNotifier(this._ref, this._store) : super(_load(_store)) {
     if (!_store.isSeeded) _store.writeAll(state);
   }
 
+  final Ref _ref;
   final CollectionStore<MaterialPlan> _store;
 
+  /// Reads from the store (or the empty seed on first run) and drops any
+  /// soft-deleted row — see [MaterialPlan.deleted].
+  static List<MaterialPlan> _load(CollectionStore<MaterialPlan> store) {
+    final all = store.isSeeded ? store.readAll() : _seedPlans;
+    return all.where((p) => !p.deleted).toList();
+  }
+
   Future<void> _persist() => _store.writeAll(state);
+
+  Future<void> _syncPlan(MaterialPlan p, {required String kind}) {
+    return _ref.enqueueSync(
+      collection: 'materialPlans',
+      docId: p.id,
+      kind: kind,
+      label: 'Material plan',
+      payload: p.toJson(),
+    );
+  }
 
   MaterialPlan? planForProject(String projectId) {
     for (final p in state) {
@@ -67,10 +86,19 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
 
   /// Delete a project's Phase-1 plan — called when the project itself is
   /// removed, so no orphaned plan is left behind.
+  ///
+  /// Soft delete (mirrors [ProjectsNotifier.deleteProject]): the outbox only
+  /// ever upserts, so a physical row removal would resurrect on the next cloud
+  /// hydration. Flip `deleted`, sync that, then drop it locally.
   Future<void> removeForProject(String projectId) async {
-    if (!state.any((p) => p.projectId == projectId)) return;
+    MaterialPlan? tombstone;
+    for (final p in state) {
+      if (p.projectId == projectId) tombstone = p.copyWith(deleted: true);
+    }
+    if (tombstone == null) return;
     state = state.where((p) => p.projectId != projectId).toList();
     await _persist();
+    await _syncPlan(tombstone, kind: 'plan.delete');
   }
 
   /// Insert or replace a plan (by project).
@@ -83,6 +111,7 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           ]
         : [plan, ...state];
     await _persist();
+    await _syncPlan(plan, kind: 'plan.upsert');
   }
 
   /// Create a draft plan for a project if none exists, returning it.
@@ -123,10 +152,11 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
 
   /// Engineer gives final approval (FR-029). Caller activates the project.
   Future<void> approvePlan(String planId) async {
+    MaterialPlan? updated;
     state = [
       for (final p in state)
         if (p.id == planId)
-          p.copyWith(
+          updated = p.copyWith(
             status: MaterialPlanStatus.approved,
             approvedAt: DateTime.now(),
           )
@@ -134,6 +164,7 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           p,
     ];
     await _persist();
+    if (updated != null) await _syncPlan(updated, kind: 'plan.approve');
   }
 
   /// Engineer rejects specific items with a reason (FR-027/FR-028).
@@ -143,10 +174,11 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     required String comment,
     required String authorName,
   }) async {
+    MaterialPlan? updated;
     state = [
       for (final p in state)
         if (p.id == planId)
-          p.copyWith(
+          updated = p.copyWith(
             status: MaterialPlanStatus.rejected,
             items: [
               for (final i in p.items)
@@ -170,6 +202,7 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           p,
     ];
     await _persist();
+    if (updated != null) await _syncPlan(updated, kind: 'plan.requestChanges');
   }
 
   Future<void> addComment({
@@ -179,10 +212,11 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     String authorRole = 'Engineer',
   }) async {
     if (text.trim().isEmpty) return;
+    MaterialPlan? updated;
     state = [
       for (final p in state)
         if (p.id == planId)
-          p.copyWith(
+          updated = p.copyWith(
             comments: [
               ...p.comments,
               PlanComment(
@@ -197,6 +231,7 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           p,
     ];
     await _persist();
+    if (updated != null) await _syncPlan(updated, kind: 'plan.comment');
   }
 
   // ─── Procurement actions (FR plan review) ────────────────────────
@@ -207,10 +242,11 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     String itemId,
     PlanItemStatus status,
   ) async {
+    MaterialPlan? updated;
     state = [
       for (final p in state)
         if (p.id == planId)
-          p.copyWith(
+          updated = p.copyWith(
             status: MaterialPlanStatus.procurementReview,
             items: [
               for (final i in p.items)
@@ -221,14 +257,16 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           p,
     ];
     await _persist();
+    if (updated != null) await _syncPlan(updated, kind: 'plan.itemStatus');
   }
 
   /// Mark every outstanding item as Arranged (convenience).
   Future<void> markAllArranged(String planId) async {
+    MaterialPlan? updated;
     state = [
       for (final p in state)
         if (p.id == planId)
-          p.copyWith(
+          updated = p.copyWith(
             status: MaterialPlanStatus.procurementReview,
             items: [
               for (final i in p.items)
@@ -241,16 +279,18 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           p,
     ];
     await _persist();
+    if (updated != null) await _syncPlan(updated, kind: 'plan.markAllArranged');
   }
 
   /// Procurement clicks "Mark Done" → sends the plan back to the Engineer for
   /// final review (FR). Captures the current items as the baseline so any later
   /// engineer edit shows a diff and requires re-review.
   Future<void> markPlanDone(String planId) async {
+    MaterialPlan? updated;
     state = [
       for (final p in state)
         if (p.id == planId)
-          p.copyWith(
+          updated = p.copyWith(
             status: MaterialPlanStatus.pendingEngineerApproval,
             baselineItems: p.items,
             submittedAt: DateTime.now(),
@@ -259,73 +299,10 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
           p,
     ];
     await _persist();
+    if (updated != null) await _syncPlan(updated, kind: 'plan.markDone');
   }
 }
 
-// ─── Seed: one arranged plan awaiting the engineer's approval ───────
-final _seedPlans = <MaterialPlan>[
-  MaterialPlan(
-    id: 'plan-proj-001',
-    projectId: 'proj-001',
-    status: MaterialPlanStatus.pendingEngineerApproval,
-    submittedAt: DateTime.now().subtract(const Duration(days: 1)),
-    baselineItems: _proj001Items,
-    items: _proj001Items,
-  ),
-];
-
-const _proj001Items = <PlanItem>[
-  PlanItem(
-    id: 'pi-1',
-    description: 'Copper pipe 22mm (Type L)',
-    descriptionSecondary: 'تانبے کا پائپ 22mm',
-    brand: 'Mueller',
-    size: '22mm',
-    quantity: 120,
-    unitSymbol: 'm',
-    status: PlanItemStatus.ticked,
-  ),
-  PlanItem(
-    id: 'pi-2',
-    description: 'GI duct sheet 24G',
-    descriptionSecondary: 'جی آئی ڈکٹ شیٹ',
-    size: '4x8 ft',
-    quantity: 40,
-    unitSymbol: 'sheets',
-    status: PlanItemStatus.ticked,
-  ),
-  PlanItem(
-    id: 'pi-3',
-    description: 'Supply grille (powder-coated)',
-    descriptionSecondary: 'سپلائی گرل',
-    brand: 'Systemair',
-    size: '600x600mm',
-    quantity: 24,
-    unitSymbol: 'nos',
-    ralColour: 'RAL 9010',
-    status: PlanItemStatus.arranged,
-  ),
-  PlanItem(
-    id: 'pi-4',
-    description: 'Fire damper 300mm',
-    descriptionSecondary: 'فائر ڈیمپر',
-    size: '300mm',
-    quantity: 6,
-    unitSymbol: 'nos',
-    ralColour: 'RAL 9006',
-    status: PlanItemStatus.lowStock,
-  ),
-  PlanItem(
-    id: 'pi-5',
-    description: 'Special GI bracket (fabricated)',
-    descriptionSecondary: 'خصوصی جی آئی بریکٹ',
-    brand: 'Local fab',
-    countryOfOrigin: 'UAE',
-    size: '150x80mm',
-    quantity: 50,
-    unitSymbol: 'nos',
-    isCustom: true,
-    status: PlanItemStatus.arranged,
-    note: 'Sourced externally — sample approved on site',
-  ),
-];
+// No pre-seeded demo plan — engineers build real Phase-1 plans as projects
+// come in during testing/production use.
+final _seedPlans = <MaterialPlan>[];

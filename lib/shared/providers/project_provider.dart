@@ -3,16 +3,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/material_item.dart';
 import '../models/material_request.dart';
 import '../models/project.dart';
+import '../repositories/collection_store.dart';
+import '../repositories/storage.dart';
+import '../sync/sync_engine.dart';
 import 'inventory_provider.dart';
 import 'material_plan_provider.dart';
 import 'material_request_provider.dart';
 import 'session_provider.dart';
 
-// ─── Admin-created Projects ──────────────────────────────────────
+// ─── Projects ──────────────────────────────────────────────────────
+
+const _kProjectsKey = 'projects_list_v1';
 
 /// All available projects.
 final projectsProvider = StateNotifierProvider<ProjectsNotifier, List<Project>>(
-  (ref) => ProjectsNotifier(ref, _mockProjects),
+  (ref) => ProjectsNotifier(
+    ref,
+    ref.watch(storageProvider).collection<Project>(
+      _kProjectsKey,
+      toJson: (p) => p.toJson(),
+      fromJson: Project.fromJson,
+    ),
+  ),
 );
 
 /// Request statuses that count as "open" — a project can't be closed out while
@@ -27,19 +39,51 @@ const _openRequestStatuses = {
 };
 
 class ProjectsNotifier extends StateNotifier<List<Project>> {
-  ProjectsNotifier(this._ref, super.initialProjects);
-
-  final Ref _ref;
-
-  void addProject(Project project) {
-    state = [project, ...state];
+  ProjectsNotifier(this._ref, this._store) : super(_load(_store)) {
+    if (!_store.isSeeded) _store.writeAll(state);
   }
 
-  void updateProject(Project project) {
+  final Ref _ref;
+  final CollectionStore<Project> _store;
+
+  /// Reads from the store (or the empty seed on first run) and drops any
+  /// soft-deleted row — see [Project.deleted].
+  static List<Project> _load(CollectionStore<Project> store) {
+    final all = store.isSeeded ? store.readAll() : _mockProjects;
+    return all.where((p) => !p.deleted).toList();
+  }
+
+  Future<void> _persist() => _store.writeAll(state);
+
+  /// Syncs a project, stripping the finance-gated contract value from the
+  /// shared cloud payload — the same treatment employees' salary gets (see
+  /// hr_provider.dart). It stays in this device's local store (so the
+  /// finance-gated UI can still show it here), but never rides in the payload
+  /// every 'goods'-cap role can read.
+  Future<void> _syncProject(Project p, {required String kind}) {
+    final payload = p.toJson()..remove('contractValueAED');
+    return _ref.enqueueSync(
+      collection: 'projects',
+      docId: p.id,
+      kind: kind,
+      label: 'Project',
+      payload: payload,
+    );
+  }
+
+  Future<void> addProject(Project project) async {
+    state = [project, ...state];
+    await _persist();
+    await _syncProject(project, kind: 'project.create');
+  }
+
+  Future<void> updateProject(Project project) async {
     state = [
       for (final p in state)
         if (p.id == project.id) project else p,
     ];
+    await _persist();
+    await _syncProject(project, kind: 'project.update');
   }
 
   /// Admin deletes a project (FR-317). REFUSED (returns false) while it still
@@ -48,12 +92,21 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   /// godown's free-to-promise stock. Close or cancel the requests first. On a
   /// successful delete the project's Phase-1 plan is removed too, so nothing is
   /// left dangling.
-  bool deleteProject(String projectId) {
+  ///
+  /// This is a SOFT delete: the outbox only ever upserts (see
+  /// SupabaseSyncBackend.apply), so a physical row removal would just resurrect
+  /// the next time any device hydrates from the cloud. Flip `deleted`, sync
+  /// that, then drop it from local state — every device's own [_load] filters
+  /// it out from then on, on every future read.
+  Future<bool> deleteProject(String projectId) async {
     final p = byId(projectId);
     if (p == null) return false;
     if (openRequestCountFor(p) > 0) return false;
+    final tombstone = p.copyWith(deleted: true, lastUpdated: DateTime.now());
     state = state.where((x) => x.id != projectId).toList();
-    _ref.read(materialPlansProvider.notifier).removeForProject(projectId);
+    await _persist();
+    await _syncProject(tombstone, kind: 'project.delete');
+    await _ref.read(materialPlansProvider.notifier).removeForProject(projectId);
     return true;
   }
 
@@ -92,12 +145,13 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   }
 
   /// Close out a project. Returns false (no-op) if it still has open requests.
-  bool completeProject(String projectId) {
+  Future<bool> completeProject(String projectId) async {
     if (!canComplete(projectId)) return false;
+    Project? updated;
     state = [
       for (final p in state)
         if (p.id == projectId)
-          p.copyWith(
+          updated = p.copyWith(
             awaitingApproval: false,
             openRequestCount: 0,
             lastUpdated: DateTime.now(),
@@ -111,16 +165,43 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
         else
           p,
     ];
+    await _persist();
+    if (updated != null) await _syncProject(updated, kind: 'project.complete');
     return true;
+  }
+
+  /// Procurement acknowledges a newly-created project. No-op (returns null) if
+  /// the project doesn't exist or was already accepted — callers use the
+  /// non-null return to know whether to notify/toast.
+  Future<Project?> acceptProject(
+    String projectId, {
+    required String acceptedBy,
+  }) async {
+    final p = byId(projectId);
+    if (p == null || p.acceptedByProcurement) return null;
+    final updated = p.copyWith(
+      acceptedByProcurement: true,
+      acceptedAt: DateTime.now(),
+      acceptedBy: acceptedBy,
+      lastUpdated: DateTime.now(),
+    );
+    state = [
+      for (final x in state)
+        if (x.id == projectId) updated else x,
+    ];
+    await _persist();
+    await _syncProject(updated, kind: 'project.accept');
+    return updated;
   }
 
   /// Activate a project after its Phase 1 plan is approved
   /// (Planning → Active, clears the approval flag).
-  void activateFromPlanApproval(String projectId) {
+  Future<void> activateFromPlanApproval(String projectId) async {
+    Project? updated;
     state = [
       for (final p in state)
         if (p.id == projectId)
-          p.copyWith(
+          updated = p.copyWith(
             awaitingApproval: false,
             lastUpdated: DateTime.now(),
             phase: const ProjectPhase(
@@ -133,6 +214,8 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
         else
           p,
     ];
+    await _persist();
+    if (updated != null) await _syncProject(updated, kind: 'project.activate');
   }
 }
 
@@ -158,6 +241,19 @@ final canCompleteProjectProvider = Provider.family<bool, String>((
   // Watch requests so the result recomputes as statuses change.
   ref.watch(materialRequestsProvider);
   return ref.read(projectsProvider.notifier).canComplete(projectId);
+});
+
+/// Projects an engineer has created that procurement hasn't yet acknowledged —
+/// drives the Procurement workspace's "New projects" queue and every badge that
+/// surfaces it (Home KPI, Materials hub). Uses the full register (not
+/// [visibleProjectsProvider]) since acceptance is a procurement/admin action
+/// regardless of which engineer a job is assigned to.
+final projectsAwaitingAcceptanceProvider = Provider<List<Project>>((ref) {
+  return ref.watch(projectsProvider).where((p) => !p.acceptedByProcurement).toList();
+});
+
+final projectsAwaitingAcceptanceCountProvider = Provider<int>((ref) {
+  return ref.watch(projectsAwaitingAcceptanceProvider).length;
 });
 
 // ─── Browse Screen Providers ──────────────────────────────────────
@@ -249,14 +345,30 @@ final browseTotalPagesProvider = Provider<int>((ref) {
 
 // ─── New Request — Draft Line Items ──────────────────────────────
 
+const _kDraftItemsKey = 'new_request_draft_items_v1';
+
 /// Manages the draft line items for the "New Request" form.
+///
+/// The draft is persisted to local storage on every change, so a multi-item,
+/// multi-minute request-in-progress survives the OS killing the app on a
+/// low-memory field device — the items are restored automatically the next time
+/// the New Request screen opens. Submitting or discarding clears it.
 final draftLineItemsProvider =
     StateNotifierProvider<DraftLineItemsNotifier, List<RequestLineItem>>(
-      (ref) => DraftLineItemsNotifier(),
+      (ref) => DraftLineItemsNotifier(
+        ref.watch(storageProvider).collection<RequestLineItem>(
+          _kDraftItemsKey,
+          toJson: (i) => i.toJson(),
+          fromJson: RequestLineItem.fromJson,
+        ),
+      ),
     );
 
 class DraftLineItemsNotifier extends StateNotifier<List<RequestLineItem>> {
-  DraftLineItemsNotifier() : super([]);
+  DraftLineItemsNotifier(this._store)
+      : super(_store.isSeeded ? _store.readAll() : []);
+
+  final CollectionStore<RequestLineItem> _store;
 
   void addItem(RequestLineItem item) {
     // If same material already in the list, increase quantity
@@ -272,10 +384,12 @@ class DraftLineItemsNotifier extends StateNotifier<List<RequestLineItem>> {
     } else {
       state = [...state, item];
     }
+    _persist();
   }
 
   void removeItem(String materialId) {
     state = state.where((e) => e.materialId != materialId).toList();
+    _persist();
   }
 
   void updateQuantity(String materialId, double quantity) {
@@ -286,9 +400,15 @@ class DraftLineItemsNotifier extends StateNotifier<List<RequestLineItem>> {
         else
           item,
     ];
+    _persist();
   }
 
-  void clear() => state = [];
+  void clear() {
+    state = [];
+    _persist();
+  }
+
+  void _persist() => _store.writeAll(state);
 }
 
 // ─── Selected project for new request ────────────────────────────
@@ -394,161 +514,6 @@ final actionsNeededCountProvider = Provider<int>((ref) {
 
 // ─── Mock Data ──────────────────────────────────────────────────
 
-final _now = DateTime.now();
-
-final _mockProjects = <Project>[
-  Project(
-    id: 'proj-001',
-    name: 'Al Raha Beach Tower C — HVAC',
-    nameSecondary: 'الراحہ بیچ ٹاور سی — ایچ وی اے سی',
-    siteLocation: 'Al Raha Beach, Abu Dhabi',
-    clientName: 'Aldar Properties',
-    jobNumber: '301',
-    mainContractor: 'KEC',
-    authorityRef: 'ADWEA-3301',
-    consultant: 'Hyder Consulting',
-    contractValueAED: 4180000,
-    assignedEngineerId: 'usr-eng',
-    buildingName: 'Tower C',
-    floorNumbers: 'Basement, G, 1-14',
-    startDate: _now.subtract(const Duration(days: 10)),
-    expectedEndDate: _now.add(const Duration(days: 90)),
-    siteNotes:
-        'Requires coordination with the main developer Aldar. Strict safety requirements.',
-    phase: const ProjectPhase(
-      number: 1,
-      name: 'Planning',
-      nameSecondary: 'پلاننگ',
-      state: ProjectState.planning,
-    ),
-    lastUpdated: _now.subtract(const Duration(hours: 1)),
-    awaitingApproval: true,
-  ),
-  Project(
-    id: 'proj-002',
-    name: 'Musaffah Warehouse — Chiller Install',
-    nameSecondary: 'مصفح گودام — چلر انسٹال',
-    siteLocation: 'Musaffah, Abu Dhabi',
-    clientName: 'Gulf Industrial',
-    jobNumber: '305',
-    mainContractor: 'ELMEC',
-    authorityRef: 'N-17727',
-    contractValueAED: 1410000,
-    assignedEngineerId: 'usr-eng',
-    buildingName: 'Main Warehouse',
-    floorNumbers: 'Ground Floor only',
-    startDate: _now.subtract(const Duration(days: 30)),
-    expectedEndDate: _now.add(const Duration(days: 15)),
-    siteNotes:
-        'Chiller installation needs heavy crane access. Confirm slab loading capacity.',
-    phase: const ProjectPhase(
-      number: 2,
-      name: 'Active',
-      nameSecondary: 'فعال',
-      state: ProjectState.active,
-    ),
-    lastUpdated: _now.subtract(const Duration(hours: 3)),
-    openRequestCount: 3,
-  ),
-  Project(
-    id: 'proj-003',
-    name: 'Khalidiyah Residences — Duct Work',
-    nameSecondary: 'خالدیہ رہائش گاہیں — ڈکٹ ورک',
-    siteLocation: 'Al Khalidiyah, Abu Dhabi',
-    clientName: 'Bloom Properties',
-    jobNumber: '312',
-    mainContractor: 'DANWAY',
-    authorityRef: 'ADWEA-1132',
-    consultant: 'AECOM',
-    contractValueAED: 3750000,
-    assignedEngineerId: 'usr-eng',
-    buildingName: 'Block A & B',
-    floorNumbers: 'Floors 1-6',
-    startDate: _now.subtract(const Duration(days: 45)),
-    expectedEndDate: _now.add(const Duration(days: 20)),
-    siteNotes:
-        'Duct work on upper levels to be completed before ceiling contractors start.',
-    phase: const ProjectPhase(
-      number: 2,
-      name: 'Active',
-      nameSecondary: 'فعال',
-      state: ProjectState.active,
-    ),
-    lastUpdated: _now.subtract(const Duration(hours: 6)),
-    openRequestCount: 2,
-  ),
-  Project(
-    id: 'proj-004',
-    name: 'Corniche Clinic — FCU Replacement',
-    nameSecondary: 'کارنیش کلینک — ایف سی یو متبادل',
-    siteLocation: 'Corniche Road, Abu Dhabi',
-    clientName: 'DOH',
-    jobNumber: '320',
-    mainContractor: 'REMCON',
-    authorityRef: 'SHMG-2033',
-    consultant: 'Mott MacDonald',
-    contractValueAED: 4716750,
-    assignedEngineerId: 'usr-eng',
-    buildingName: 'East Wing',
-    floorNumbers: 'G, 1, 2',
-    startDate: _now.subtract(const Duration(days: 60)),
-    expectedEndDate: _now.subtract(const Duration(days: 2)),
-    siteNotes: 'FCU replacements in clinical area. Clean room protocol active.',
-    phase: const ProjectPhase(
-      number: 2,
-      name: 'Active',
-      nameSecondary: 'فعال',
-      state: ProjectState.active,
-    ),
-    lastUpdated: _now.subtract(const Duration(days: 1)),
-    allDispatched: true,
-  ),
-  Project(
-    id: 'proj-005',
-    name: 'City Centre — Piping & Valves',
-    nameSecondary: 'سٹی سنٹر — پائپنگ اور والوز',
-    siteLocation: 'Commercial District',
-    clientName: 'Aldar Commercial',
-    jobNumber: '315',
-    mainContractor: 'L&T',
-    authorityRef: 'ADWEA-5701',
-    contractValueAED: 5700000,
-    assignedEngineerId: 'usr-eng',
-    buildingName: 'Retail Hub',
-    floorNumbers: 'Ground & Mezzanine',
-    startDate: _now.subtract(const Duration(days: 5)),
-    expectedEndDate: _now.add(const Duration(days: 60)),
-    siteNotes: 'High quality bronze valves required for pressure testing.',
-    phase: const ProjectPhase(
-      number: 1,
-      name: 'Planning',
-      nameSecondary: 'پلاننگ',
-      state: ProjectState.planning,
-    ),
-    lastUpdated: _now.subtract(const Duration(days: 2)),
-  ),
-  Project(
-    id: 'proj-006',
-    name: 'Industrial Zone — Boiler Room',
-    nameSecondary: 'صنعتی زون — بوائلر روم',
-    siteLocation: 'Zone F, Industrial Area',
-    clientName: 'Mubadala',
-    jobNumber: 'B067',
-    mainContractor: 'AG POWER',
-    authorityRef: 'A-17676',
-    contractValueAED: 1025000,
-    assignedEngineerId: 'usr-eng',
-    buildingName: 'Boiler Building 2',
-    floorNumbers: 'Ground, Roof',
-    startDate: _now.subtract(const Duration(days: 90)),
-    expectedEndDate: _now.add(const Duration(days: 40)),
-    siteNotes: 'Currently on hold waiting for boilers delivery from Germany.',
-    phase: const ProjectPhase(
-      number: 3,
-      name: 'On Hold',
-      nameSecondary: 'رکا ہوا',
-      state: ProjectState.onHold,
-    ),
-    lastUpdated: _now.subtract(const Duration(days: 4)),
-  ),
-];
+// No pre-seeded demo projects — the office creates real projects as they
+// come in during testing/production use.
+final _mockProjects = <Project>[];

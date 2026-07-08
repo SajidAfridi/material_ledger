@@ -7,6 +7,7 @@ enum NotificationType {
   plan('plan'),
   request('request'),
   stock('stock'),
+  project('project'),
   info('info');
 
   const NotificationType(this.key);

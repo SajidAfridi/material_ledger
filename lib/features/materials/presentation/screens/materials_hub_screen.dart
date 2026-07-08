@@ -12,6 +12,7 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
+import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 
 /// Materials tab hub (IA restructure). A landing page that routes to the
@@ -32,10 +33,12 @@ class MaterialsHubScreen extends ConsumerWidget {
     final stockValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
     final openRequests = ref.watch(openRequestCountProvider);
-    // Plans to review + requests to dispatch — badged on the Procurement card.
-    final int procurementQueue =
-        ref.watch(dispatchQueueCountProvider) +
-        ref.watch(planReviewQueueCountProvider);
+    // New projects to accept + plans to review + requests to dispatch —
+    // badged on the Procurement card (must agree with the workspace + Home KPI).
+    final int newProjectsCount = ref.watch(projectsAwaitingAcceptanceCountProvider);
+    final int dispatchCount = ref.watch(dispatchQueueCountProvider);
+    final int planReviewCount = ref.watch(planReviewQueueCountProvider);
+    final int procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
 
     final cards = <Widget>[
       // Office stock control.

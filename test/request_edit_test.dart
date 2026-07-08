@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,6 +121,67 @@ void main() {
       expect(req.lineItems, isEmpty);
       expect(req.itemCount, 0);
       expect(mat(matId).reservedQty, 0); // fully released
+    });
+  });
+
+  group('Request soft delete (removeRequest)', () {
+    test('removes the request and releases its reservation', () async {
+      final (matId, reqId) = await seedReq(100, 40);
+      expect(mat(matId).reservedQty, 40);
+
+      await requests().removeRequest(reqId);
+
+      expect(
+        container.read(materialRequestsProvider).any((r) => r.id == reqId),
+        isFalse,
+      );
+      expect(mat(matId).reservedQty, 0); // released, not left dangling
+    });
+
+    test('removeRequest on an unknown id is a safe no-op', () async {
+      final initialCount = container.read(materialRequestsProvider).length;
+
+      await requests().removeRequest('does-not-exist');
+
+      expect(container.read(materialRequestsProvider).length, initialCount);
+    });
+
+    test(
+        'a soft-deleted request already in local storage (e.g. re-hydrated '
+        'from the cloud after another device deleted it) never surfaces',
+        () async {
+      final now = DateTime(2026, 1, 1).toIso8601String();
+      SharedPreferences.setMockInitialValues({
+        'material_requests_list_v3': jsonEncode([
+          {
+            'id': 'req-live',
+            'projectName': 'P',
+            'projectNameSecondary': '',
+            'status': 'Pending',
+            'requestDate': now,
+            'itemCount': 0,
+            'deleted': false,
+          },
+          {
+            'id': 'req-tombstone',
+            'projectName': 'P',
+            'projectNameSecondary': '',
+            'status': 'Pending',
+            'requestDate': now,
+            'itemCount': 0,
+            'deleted': true,
+          },
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final freshContainer = ProviderContainer(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      );
+      addTearDown(freshContainer.dispose);
+
+      final reqs = freshContainer.read(materialRequestsProvider);
+      expect(reqs.any((r) => r.id == 'req-live'), isTrue);
+      expect(reqs.any((r) => r.id == 'req-tombstone'), isFalse);
     });
   });
 }
