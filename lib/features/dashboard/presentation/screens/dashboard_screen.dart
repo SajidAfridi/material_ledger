@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/inventory_transaction.dart';
 import '../../../../shared/providers/hr_provider.dart';
@@ -14,12 +15,12 @@ import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
-import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/rentals_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/users_provider.dart';
+import '../../../../shared/widgets/notification_bell.dart';
 import '../../../../shared/widgets/profile_menu_button.dart';
 
 /// Home dashboard for office roles (procurement / admin). The single overview —
@@ -39,16 +40,32 @@ class DashboardScreen extends ConsumerWidget {
 
     final totalValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
-    // Procurement's actual work queue (plans to review + requests to dispatch).
-    final procurementQueue =
-        ref.watch(dispatchQueueCountProvider) +
-        ref.watch(planReviewQueueCountProvider);
+    // Procurement's actual work queue (new projects to accept + plans to
+    // review + requests to dispatch) — must match the workspace screen's own
+    // count exactly, so this KPI and what's listed there never disagree.
+    final int newProjectsCount = ref.watch(projectsAwaitingAcceptanceCountProvider);
+    final int dispatchCount = ref.watch(dispatchQueueCountProvider);
+    final int planReviewCount = ref.watch(planReviewQueueCountProvider);
+    final procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
     final recentTxns = ref.watch(recentTransactionsProvider);
-    final unreadNotifs = ref.watch(unreadNotificationCountProvider);
     final rentals = ref.watch(rentalsSummaryProvider);
     final hr = ref.watch(hrSummaryProvider);
     final activeUsers = ref.watch(activeUserCountProvider);
     final activeProjects = ref.watch(activeProjectCountProvider);
+
+    // Weekly request pulse — an honest, computed trend (from live request dates,
+    // not a fabricated delta): this rolling 7 days vs the 7 before it.
+    final requests = ref.watch(materialRequestsProvider);
+    final now = DateTime.now();
+    final weekAgo = now.subtract(const Duration(days: 7));
+    final twoWeeksAgo = now.subtract(const Duration(days: 14));
+    final reqThisWeek =
+        requests.where((r) => r.requestDate.isAfter(weekAgo)).length;
+    final reqLastWeek = requests
+        .where((r) =>
+            r.requestDate.isAfter(twoWeeksAgo) &&
+            !r.requestDate.isAfter(weekAgo))
+        .length;
 
     // Deep-linking KPI cards (filtered by capability).
     final kpis = <_Kpi>[
@@ -129,7 +146,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  _NotificationButton(unread: unreadNotifs),
+                  const NotificationBell(),
                   const Gap(AppSpacing.xs),
                   const ProfileMenuButton(),
                 ],
@@ -176,6 +193,22 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
 
+          const SliverGap(AppSpacing.md),
+
+          // ─── Weekly pulse (honest WoW trend) ─────────────
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.screenHorizontal,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _WeeklyPulseCard(
+                thisWeek: reqThisWeek,
+                lastWeek: reqLastWeek,
+                lang: lang,
+              ),
+            ),
+          ),
+
           const SliverGap(AppSpacing.lg),
 
           // ─── KPI grid (deep-links) ───────────────────────
@@ -204,14 +237,27 @@ class DashboardScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Gap(AppSpacing.lg),
-                  BilingualText(
-                    english: AppStrings.recentActivity.primary,
-                    secondary: AppStrings.recentActivity.secondary(lang),
-                    englishStyle: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.onSurface,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: BilingualText(
+                          english: AppStrings.recentActivity.primary,
+                          secondary: AppStrings.recentActivity.secondary(lang),
+                          englishStyle: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.onSurface,
+                          ),
+                        ),
+                      ),
+                      if (recentTxns.isNotEmpty)
+                        TextButton(
+                          onPressed: () =>
+                              context.push(RoutePaths.transactions),
+                          child: Text(AppStrings.viewAll.primary),
+                        ),
+                    ],
                   ),
                   const Gap(AppSpacing.lg),
                 ],
@@ -274,40 +320,6 @@ class DashboardScreen extends ConsumerWidget {
           const SliverGap(AppSpacing.xxl),
         ],
       ),
-    );
-  }
-}
-
-// ─── Notification bell ───────────────────────────────────────────
-class _NotificationButton extends StatelessWidget {
-  const _NotificationButton({required this.unread});
-
-  final int unread;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          onPressed: () => context.push(RoutePaths.notifications),
-          icon: const Icon(Icons.notifications_outlined),
-          style: IconButton.styleFrom(foregroundColor: AppColors.primary),
-        ),
-        if (unread > 0)
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: AppColors.error,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
@@ -389,6 +401,7 @@ class _RecentActivityCard extends StatelessWidget {
     final dateFormat = DateFormat('MMM d, h:mm a');
 
     return LedgerCard(
+      onTap: () => context.push(RoutePaths.transactions),
       child: Row(
         children: [
           Container(
@@ -428,6 +441,96 @@ class _RecentActivityCard extends StatelessWidget {
               color: isIncoming ? AppColors.success : AppColors.error,
               fontWeight: FontWeight.w700,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Weekly pulse (honest week-over-week request trend) ──────────
+class _WeeklyPulseCard extends StatelessWidget {
+  const _WeeklyPulseCard({
+    required this.thisWeek,
+    required this.lastWeek,
+    required this.lang,
+  });
+
+  final int thisWeek;
+  final int lastWeek;
+  final AppLanguage lang;
+
+  @override
+  Widget build(BuildContext context) {
+    final delta = thisWeek - lastWeek;
+    final (IconData icon, Color color) = delta > 0
+        ? (Icons.trending_up_rounded, AppColors.success)
+        : delta < 0
+            ? (Icons.trending_down_rounded, AppColors.error)
+            : (Icons.trending_flat_rounded, AppColors.onSurfaceVariant);
+    final String pct = lastWeek == 0
+        ? (thisWeek == 0 ? '—' : '+$thisWeek')
+        : '${delta >= 0 ? '+' : ''}${((delta / lastWeek) * 100).round()}%';
+
+    return LedgerCard(
+      color: AppColors.surfaceContainerLowest,
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 20, color: color),
+          ),
+          const Gap(AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$thisWeek',
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                BilingualText(
+                  english: AppStrings.requestsThisWeek.primary,
+                  secondary: AppStrings.requestsThisWeek.secondary(lang),
+                  englishStyle: AppTypography.labelSmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 14, color: color),
+                  const Gap(AppSpacing.xxs),
+                  Text(
+                    pct,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const Gap(AppSpacing.xxs),
+              Text(
+                '${AppStrings.vsLastWeek.primary} ($lastWeek)',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ],
       ),

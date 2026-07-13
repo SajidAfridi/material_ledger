@@ -92,7 +92,9 @@ class EngineerProfileScreen extends ConsumerWidget {
                           Text(emp.name, style: AppTypography.titleMedium),
                           const Gap(AppSpacing.xxs),
                           Text(
-                            '${emp.title} · ${emp.employeeId}',
+                            emp.linked
+                                ? '${emp.title} · ${emp.employeeId}'
+                                : emp.title,
                             style: AppTypography.bodySmall,
                           ),
                         ],
@@ -134,16 +136,6 @@ class EngineerProfileScreen extends ConsumerWidget {
                       title: 'Activity Log',
                       onTap: () => context.push(RoutePaths.activityLog),
                     ),
-                    // Dev-only role switcher. In production the role comes from
-                    // the signed-in user's credentials and routing is automatic,
-                    // so this is hidden in release builds.
-                    if (kDebugMode)
-                      _ProfileTile(
-                        icon: Icons.badge_outlined,
-                        title: 'Role (dev)',
-                        subtitle: role.label,
-                        onTap: () => RolePickerSheet.show(context),
-                      ),
                     // Dev-only connectivity simulator — demo the offline →
                     // queued → synced flow without leaving Wi-Fi. Release-hidden.
                     if (kDebugMode)
@@ -206,7 +198,12 @@ class EngineerProfileScreen extends ConsumerWidget {
                     ),
                     _ProfileTile(
                       icon: Icons.lock_clock_rounded,
-                      title: 'App lock',
+                      title: AppStrings.appLock.primary,
+                      // Full-row tap toggles the lock too — not just the small
+                      // switch — so a gloved, imprecise tap still lands.
+                      onTap: () => ref
+                          .read(appLockEnabledProvider.notifier)
+                          .setEnabled(!ref.read(appLockEnabledProvider)),
                       trailing: Switch(
                         value: ref.watch(appLockEnabledProvider),
                         onChanged: (v) => ref
@@ -275,7 +272,7 @@ class EngineerProfileScreen extends ConsumerWidget {
           ),
         ),
         content: Text(
-          'Are you sure you want to logout?',
+          AppStrings.logoutConfirmBody.primary,
           style: AppTypography.bodyMedium,
         ),
         actions: [

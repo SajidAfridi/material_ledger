@@ -33,10 +33,13 @@ Helper functions read the JWT: `app_role()`, `app_user_id()`, `app_has_cap()`
 - **goodsReceipts / returns** — `goods`
 - **config** — admin only
 
-All other tables (`users, projects, materials, materialPlans, notifications,
-auditLogs`) are **deny-all** (RLS on, no policy) — intentional: the app never
-reads/writes them over the API (they're local, deterministic seeds). The
+`users` and `auditLogs` are **deny-all** (RLS on, no policy) — intentional:
+the app never reads/writes them over the API (local-only by design). The
 `rls_enabled_no_policy` advisor INFO on those is expected.
+
+`materials`, `notifications`, `projects`, and `materialPlans` are now
+write-synced too (this section undersold that when first written — see
+"Projects + material plans sync" below for the two most recently added).
 
 ### 3. Boundary verification (headless, via simulated + real JWTs)
 | persona | requests | rentals | employees | leave | receipts |
@@ -129,8 +132,9 @@ the service_role key, so all identity-provider writes go through the
 ## Realtime sync — LIVE (`lib/shared/sync/realtime_sync.dart`)
 Writes on one device now appear on others without a relaunch.
 
-- The 8 write-synced tables are in the `supabase_realtime` publication (with
-  `replica identity full`). `RealtimeSync` subscribes to Postgres changes per
+- Every write-synced table (13, as of the projects/materialPlans addition
+  below) is in the `supabase_realtime` publication (with `replica identity
+  full`). `RealtimeSync` subscribes to Postgres changes per
   table while signed in (`realtimeSyncProvider`, watched at the app root; no-op
   offline / logged-out / in tests), merges each change into the local store, and
   refreshes that collection's provider.
@@ -144,6 +148,44 @@ Writes on one device now appear on others without a relaunch.
   receives their own insert; an admin-inserted row for the engineer arrives while
   a row for *another* user does **not** — realtime honours RLS. Delivery fails
   without `setAuth` (confirmed), which is why the app sets it explicitly.
+
+## Projects + material plans sync — LIVE
+Both were local/in-memory-only until now — `projects` had **zero** persistence
+of any kind (not even `SharedPreferences`; every project vanished on app
+restart), and `materialPlans` persisted locally but never synced. Procurement's
+whole "accept a new project" and "review a Phase-1 plan" workflows depend on
+these, so they're now on the same footing as every other collection:
+
+- `ProjectsNotifier`/`MaterialPlansNotifier` are `CollectionStore`-backed and
+  call `enqueueSync` on every write (create/update/delete/accept/activate/
+  complete for projects; upsert/approve/reject/comment/item-status/mark-done
+  for plans).
+- **Soft delete**: the outbox only ever upserts (no SQL `DELETE` path exists
+  anywhere in the sync engine), so a physical local removal would resurrect
+  the row on the next hydration. Both models gained a `deleted` bool instead —
+  deleting flips it, syncs that, then drops it from local state; every
+  device's own load path filters `deleted` rows out, so the row still
+  physically exists as a tombstone in the cloud table but never surfaces
+  anywhere in the app.
+- **RLS**: `projects` — an engineer reads/writes their own (`assignedEngineerId`)
+  + reads (not writes) any unassigned job; `goods` cap reads/writes all.
+  `materialPlans` has no owner field of its own (one per project), so its
+  policy is the same rule via a correlated `EXISTS` against `projects`.
+- **A real bug was caught by the verification step, not assumed away**: the
+  first version of the "unassigned project" read clause (`assignedEngineerId
+  IS NULL`) checked only the row, never the caller — so a fully anonymous,
+  unauthenticated request also matched it. Fixed by requiring `app_user_id()
+  <> ''` before that branch applies; re-verified anon → 0 rows, engineer →
+  own + unassigned only, procurement/admin → all, writes to another's project
+  → 0 rows affected (not an error), reassigning your own project away from
+  yourself → rejected (`42501`).
+- Contract value (`contractValueAED`) gets the same treatment as employee
+  salary: stripped from the synced payload, preserved from the local record on
+  hydration/realtime-merge — it never rides in a payload every `goods`-cap
+  role (procurement included) can read.
+- **One-time consequence, not a bug**: since projects/plans had no persistence
+  before this, anything created purely in-session prior to this deploy was
+  never actually saved anywhere and won't appear after the first restart.
 
 ## Push notifications — plumbing DONE, needs your credentials to activate
 FCM as pure push TRANSPORT (Supabase stays the backend/auth/db). Structured as
@@ -216,21 +258,88 @@ work fully (now correctly synced across devices), push simply stays off.
 1. **UAE data residency** — this project is in Frankfurt. A real go-live needs a
    self-hosted Supabase/Postgres in a UAE region; point the app at it with
    `--dart-define=SUPABASE_URL/KEY`. [**You**]
-2. **Change-password → Supabase** — `change_password_screen` updates the local
-   hash, not Supabase Auth; wire it to the `admin-users` `setPassword` action (or
-   `auth.updateUser` for self-service). (No seeded user forces a change, so
-   unused today.) [Me, next]
+2. ~~Change-password → Supabase~~ — **DONE.** `AuthController.changeOwnPassword`
+   calls `client.auth.updateUser(...)` directly (verified in
+   `session_provider.dart`) — self-service password changes hit Supabase Auth,
+   not a local hash. The cross-device forced-password-change gap noted earlier
+   is also fixed (see git history for that session's work).
 3. ~~Role-matrix → claims propagation~~ — **DONE.** `restampRoleClaims` fires
    from `role_permissions_provider.dart` on every matrix edit, re-stamping the
    JWT for every affected user.
-4. **Sync tail cases** — realtime covers online propagation; a delete that
-   happens while a device is offline still needs a reconcile-on-reconnect pass
-   (tombstones / full re-hydrate diff). [Me, later]
-5. **Auth dashboard toggles** — turn OFF "Allow new signups" and turn ON "Leaked
-   password protection" (HaveIBeenPwned) in Auth settings. [**You**, 2 clicks]
+4. ~~Sync tail cases~~ — **DONE.** Every collection that supports deletion now
+   uses the soft-delete/tombstone pattern (flip `deleted:true`, sync the flip as
+   an upsert, drop it from local `state`, filter `!deleted` at load time) —
+   `projects`, `materialPlans`, `materials`, `materialRequests`. This closes the
+   exact gap this item described: a delete that happens offline queues in the
+   outbox like any other write and flushes on reconnect (already covered by the
+   existing offline-queue tests), and the tombstone reaches every other device
+   via realtime or the next bootstrap re-hydration diff — no separate
+   reconcile-on-reconnect pass needed since deletes are just upserts now. A full
+   sweep of every `state.where(...)`/`removeWhere(...)` mutation across
+   `lib/shared/providers/` (not just these 4 collections) confirmed no other
+   collection has a live physical-removal-without-sync bug — the remaining hits
+   are either pure read-filters, intentionally local-only (notification
+   `dismiss`), or already backed by an external source of truth that's updated
+   first (`UsersNotifier.deleteUser` via the service-role Edge Function, before
+   the local cache follows). See [[materials-and-requests-soft-delete]].
+5. **Auth dashboard toggles** — confirmed via `get_advisors` (not just
+   assumed): "Leaked password protection" is currently **OFF**
+   (`auth_leaked_password_protection` WARN). No tool available to me — Supabase
+   MCP or otherwise — can read or write Auth platform config (signups toggle,
+   password policy); this is genuinely dashboard-only. Turn it on at
+   **Authentication → Policies → Password** (or **Auth settings**, depending on
+   dashboard version) for project `czykuksmlwswjsgotrpo`, and confirm "Allow new
+   signups" is off in the same area (the app has no signup UI regardless, so
+   this is defense-in-depth, not a functional gap today). [**You**, 2 clicks]
 6. **Secrets** — inject `SUPABASE_URL/KEY` + `SENTRY_DSN` from CI/secret store,
-   not source. [**You** + me]
-7. **PDPL/legal, backups/DR**. [**You**]
+   not source. Current state is already sound as an interim measure: `main.dart`
+   reads them via `String.fromEnvironment` (dart-define) with a hardcoded
+   fallback that's the Frankfurt demo project's anon/publishable key (safe by
+   design — protected by RLS, not secrecy) and is gated to `!kReleaseMode`, so it
+   can never ship in a release build. There is **no CI configuration in this
+   repo yet** (confirmed — no `.github/workflows`, no `codemagic.yaml`, nothing)
+   — pick a CI provider before this item is actionable; "inject from CI" has
+   nowhere to live until then. [**You** + me]
+7. **PDPL/legal** — no tooling can assess legal/regulatory compliance; needs a
+   human/counsel review. [**You**]
+8. **Backups/DR** — confirmed via `get_organization`: this project is on the
+   **Free** plan. Per current Supabase docs, Free-tier projects get **zero**
+   automatic backups of any kind (daily backups start at Pro; PITR is a further
+   paid add-on on top of Pro/Team) — right now, a lost/corrupted database has
+   **no managed recovery path at all**. Supabase's own recommendation for Free
+   tier: run `supabase db dump` on a schedule and store the dump somewhere safe
+   (e.g. a private bucket) until upgrading. Upgrading to Pro ($25/mo at time of
+   writing) turns on 7 days of automatic daily backups; PITR is an additional
+   paid add-on on top of that if point-in-time recovery (not just daily
+   snapshots) is required. This is a billing decision only you can make.
+   [**You**]
+
+### Found + fixed during this pass (not on the original list)
+- **`notifications` RLS was more permissive than intended.** The read policy
+  only checked whether `userId` was empty, never checking `audience` — so a
+  role-scoped notification (e.g. `audience: 'procurement'`) was readable by
+  *any* signed-in user of *any* role, not just procurement/admin. Verified
+  empirically with a simulated engineer JWT before fixing (it could read a
+  procurement-only row), then re-verified the full persona matrix after
+  (engineer/procurement/target-user/admin/anon all scoped correctly). The
+  insert/update policies were also `using(true) with check(true)` — any
+  authenticated user could rewrite or mark-read *any* notification, including
+  ones addressed to someone else. Fixed live via the `tighten_notifications_rls`
+  migration (new `notification_visible_to_caller()` helper mirrors
+  `notificationVisibleTo()` in `notification_provider.dart` exactly) and
+  backported into `schema.sql` so a from-scratch deploy doesn't reintroduce it.
+  Residual, accepted limitation: INSERT has no sender-identity field to check
+  ownership against (any role can legitimately notify any other role/user in
+  this app's design), so it only requires a genuinely provisioned app identity
+  (`app_user_id() <> ''`) rather than fully closing "user A can forge a
+  notification claiming to target user B" — closing that fully would need a
+  schema change (a tracked sender field) that wasn't part of this fix.
+- Ran a full security + performance advisor pass (`get_advisors`). Beyond the
+  notifications fix above, everything else is either already-intentional
+  (`users`/`auditLogs` deny-all) or pre-existing/cosmetic performance notes
+  (2 unused indexes, several "multiple permissive policies" pairs from writing
+  separate read+write policies on a handful of tables — harmless, not worth
+  restructuring at this scale) — not blocking, left as-is.
 
 ## Push notifications — app-side DONE, needs your credentials to go live
 See "Push notifications" section below for the full breakdown. Short version:

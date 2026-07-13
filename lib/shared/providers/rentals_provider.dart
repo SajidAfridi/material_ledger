@@ -7,8 +7,8 @@ import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
 
-const _kRentalUnitsKey = 'rental_units_v1';
-const _kRentPaymentsKey = 'rent_payments_v1';
+const _kRentalUnitsKey = 'rental_units_v2';
+const _kRentPaymentsKey = 'rent_payments_v2';
 const _uuid = Uuid();
 
 String _monthKey(DateTime d) =>
@@ -156,50 +156,9 @@ class RentalUnitsNotifier extends StateNotifier<List<RentalUnit>> {
     );
   }
 
-  static List<RentalUnit> _seedUnits() {
-    final now = DateTime.now();
-    return [
-      RentalUnit(
-        id: 'unit-shop-01',
-        unitName: 'SHOP-01',
-        type: RentalType.shop,
-        location: 'Mussafah M-9, Shop 1',
-        monthlyRentAED: 3800,
-        tenantName: 'Al Noor Spare Parts',
-        tenantContact: '+971 50 123 4567',
-        leaseStart: DateTime(now.year, now.month - 2, 1),
-        leaseEnd: DateTime(now.year + 1, 2, 28),
-        status: RentalStatus.active,
-        createdBy: 'Owner (Admin)',
-        createdAt: DateTime(now.year - 1, 2, 20),
-      ),
-      RentalUnit(
-        id: 'unit-shop-02',
-        unitName: 'SHOP-02',
-        type: RentalType.shop,
-        location: 'Mussafah M-9, Shop 2',
-        monthlyRentAED: 4500,
-        tenantName: 'Gulf Tyres & Service',
-        tenantContact: '+971 55 987 6543',
-        leaseStart: DateTime(now.year, now.month - 2, 1),
-        leaseEnd: DateTime(now.year + 1, 5, 31),
-        status: RentalStatus.active,
-        createdBy: 'Owner (Admin)',
-        createdAt: DateTime(now.year - 1, 5, 25),
-      ),
-      RentalUnit(
-        id: 'unit-ws-01',
-        unitName: 'WORKSHOP-A',
-        type: RentalType.workshop,
-        location: 'Mussafah M-11, Workshop A',
-        monthlyRentAED: 9000,
-        status: RentalStatus.vacant,
-        createdBy: 'Owner (Admin)',
-        createdAt: DateTime(now.year - 1, 1, 10),
-        notes: 'Available — last tenant lease ended.',
-      ),
-    ];
-  }
+  // No pre-seeded demo units — the office adds real rental units as
+  // testing/production use begins.
+  static List<RentalUnit> _seedUnits() => [];
 }
 
 // ─── Rent Payments ───────────────────────────────────────────────
@@ -319,31 +278,8 @@ class RentPaymentsNotifier extends StateNotifier<List<RentPayment>> {
     );
   }
 
-  static List<RentPayment> _seedPayments() {
-    final now = DateTime.now();
-    String monthAgo(int n) => _monthKey(DateTime(now.year, now.month - n, 1));
-    RentPayment paid(String id, String unit, int monthsAgo, double amt) =>
-        RentPayment(
-          id: id,
-          unitId: unit,
-          periodMonth: monthAgo(monthsAgo),
-          amountDueAED: amt,
-          amountPaidAED: amt,
-          paidDate: now.subtract(Duration(days: 30 * monthsAgo + 4)),
-          method: 'Bank transfer',
-          recordedBy: 'Owner (Admin)',
-          recordedAt: now.subtract(Duration(days: 30 * monthsAgo + 4)),
-        );
-    // SHOP-01 is fully paid up (this + the two prior months of its lease).
-    // SHOP-02 paid two months ago; last month + this month are unpaid, so its
-    // arrears are DERIVED from occupancy (no record needed) → overdue + due.
-    return [
-      paid('rent-seed-01', 'unit-shop-01', 0, 3800),
-      paid('rent-seed-02', 'unit-shop-01', 1, 3800),
-      paid('rent-seed-03', 'unit-shop-01', 2, 3800),
-      paid('rent-seed-04', 'unit-shop-02', 2, 4500),
-    ];
-  }
+  // No pre-seeded demo payments — recorded fresh as testing/production use begins.
+  static List<RentPayment> _seedPayments() => [];
 }
 
 // ─── Derived: per-unit current status ────────────────────────────

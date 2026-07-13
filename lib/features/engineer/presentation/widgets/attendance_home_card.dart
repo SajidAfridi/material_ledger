@@ -7,18 +7,21 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/employee.dart';
 import '../../../../shared/providers/employee_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 
-/// Compact "My data" attendance card for the home dashboard. Tapping it (or
-/// "Show more") opens the full employee detail screen.
+/// Compact "My data" card for the home dashboard, showing the signed-in
+/// engineer's live HR snapshot — today's attendance, annual leave left, and any
+/// pending leave requests. Tapping it (or "Show more") opens the full detail.
 class AttendanceHomeCard extends ConsumerWidget {
   const AttendanceHomeCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
-    final a = ref.watch(employeeProvider).attendance;
+    final emp = ref.watch(employeeProvider);
+    final status = _statusView(emp.today);
 
     return LedgerCard(
       onTap: () => context.push(RoutePaths.employeeDetail),
@@ -77,28 +80,32 @@ class AttendanceHomeCard extends ConsumerWidget {
             children: [
               Expanded(
                 child: _MiniStat(
-                  icon: Icons.login_rounded,
-                  label: AppStrings.checkInLabel.primary,
-                  value: a.checkIn,
-                  accent: AppColors.success,
+                  icon: status.icon,
+                  label: AppStrings.todayLabel.primary,
+                  value: status.label,
+                  accent: status.color,
                 ),
               ),
               _divider(),
               Expanded(
                 child: _MiniStat(
-                  icon: Icons.logout_rounded,
-                  label: AppStrings.checkOutLabel.primary,
-                  value: a.checkOut,
+                  icon: Icons.event_available_rounded,
+                  label: AppStrings.annualLeftLabel.primary,
+                  value: emp.linked
+                      ? '${emp.annualRemaining}/${emp.annualEntitlement}'
+                      : '—',
                   accent: AppColors.primary,
                 ),
               ),
               _divider(),
               Expanded(
                 child: _MiniStat(
-                  icon: Icons.timelapse_rounded,
-                  label: AppStrings.remainingLabel.primary,
-                  value: '${a.remainingHours} ${AppStrings.hoursUnit.primary}',
-                  accent: AppColors.warning,
+                  icon: Icons.pending_actions_rounded,
+                  label: AppStrings.pendingLabel.primary,
+                  value: emp.linked ? '${emp.pendingRequests}' : '—',
+                  accent: emp.pendingRequests > 0
+                      ? AppColors.warning
+                      : AppColors.onSurfaceVariant,
                 ),
               ),
             ],
@@ -114,6 +121,39 @@ class AttendanceHomeCard extends ConsumerWidget {
     color: AppColors.surfaceContainerHigh,
     margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
   );
+}
+
+/// Icon / label / colour for a [SelfAttendance] state (English label — the
+/// mini-stat values on this card are single-line and English, matching the
+/// rest of the card's compact stat treatment).
+({IconData icon, String label, Color color}) _statusView(SelfAttendance s) {
+  return switch (s) {
+    SelfAttendance.present => (
+      icon: Icons.check_circle_rounded,
+      label: 'Present',
+      color: AppColors.success,
+    ),
+    SelfAttendance.halfDay => (
+      icon: Icons.timelapse_rounded,
+      label: 'Half day',
+      color: AppColors.warning,
+    ),
+    SelfAttendance.onLeave => (
+      icon: Icons.beach_access_rounded,
+      label: 'On leave',
+      color: AppColors.primary,
+    ),
+    SelfAttendance.absent => (
+      icon: Icons.cancel_rounded,
+      label: 'Absent',
+      color: AppColors.error,
+    ),
+    SelfAttendance.notMarked => (
+      icon: Icons.remove_circle_outline_rounded,
+      label: AppStrings.notMarkedYet.primary,
+      color: AppColors.onSurfaceVariant,
+    ),
+  };
 }
 
 class _MiniStat extends StatelessWidget {

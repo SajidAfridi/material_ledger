@@ -87,15 +87,24 @@ class _RequestCard extends StatelessWidget {
   final MaterialRequest request;
   final dynamic lang;
 
+  // A distinct icon per status so the four amber states (pending / sourcing /
+  // partial / on-hold) are told apart at a glance, not only by reading the label.
   StatusChip _statusChip(RequestStatus s) => switch (s) {
-    RequestStatus.draft => StatusChip.info(s.label),
-    RequestStatus.pending => StatusChip.warning(s.label),
-    RequestStatus.sourcing => StatusChip.warning(s.label),
-    RequestStatus.partial => StatusChip.warning(s.label),
-    RequestStatus.dispatched => StatusChip.info(s.label),
-    RequestStatus.received => StatusChip.success(s.label),
-    RequestStatus.onHold => StatusChip.warning(s.label),
-    RequestStatus.cancelled => StatusChip.error(s.label),
+    RequestStatus.draft => StatusChip.info(s.label, icon: Icons.edit_note_rounded),
+    RequestStatus.pending =>
+      StatusChip.warning(s.label, icon: Icons.schedule_rounded),
+    RequestStatus.sourcing =>
+      StatusChip.warning(s.label, icon: Icons.shopping_cart_rounded),
+    RequestStatus.partial =>
+      StatusChip.warning(s.label, icon: Icons.incomplete_circle_rounded),
+    RequestStatus.dispatched =>
+      StatusChip.info(s.label, icon: Icons.local_shipping_rounded),
+    RequestStatus.received =>
+      StatusChip.success(s.label, icon: Icons.check_circle_rounded),
+    RequestStatus.onHold =>
+      StatusChip.warning(s.label, icon: Icons.pause_circle_rounded),
+    RequestStatus.cancelled =>
+      StatusChip.error(s.label, icon: Icons.cancel_rounded),
   };
 
   @override

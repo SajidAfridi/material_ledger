@@ -100,7 +100,11 @@ Deno.serve(async (req) => {
           email,
           password,
           email_confirm: true,
-          user_metadata: { full_name: fullName ?? '' },
+          // must_change_password lives in user_metadata (NOT app_metadata) so the
+          // user can clear it themselves via the GoTrue self-update when they set
+          // their own password — no admin/service-role round-trip needed. Follows
+          // the user across devices (unlike the old device-local roster flag).
+          user_metadata: { full_name: fullName ?? '', must_change_password: true },
           app_metadata: { role, app_user_id: appUserId, caps },
         })
         if (error) return json({ error: error.message }, 400)
@@ -120,11 +124,23 @@ Deno.serve(async (req) => {
       }
 
       case 'setPassword': {
+        // This action is only ever an ADMIN resetting SOMEONE ELSE's password
+        // (self-service change goes through GoTrue self-update, not this fn), so
+        // it always forces a change on the user's next sign-in. Merge the flag
+        // into existing user_metadata so full_name etc. survive.
         const { appUserId, password } = body as { appUserId: string; password: string }
         if (!password) return json({ error: 'password required' }, 400)
         const uid = await uidForAppUser(appUserId)
         if (!uid) return json({ error: 'user not found' }, 404)
-        const { error } = await admin.auth.admin.updateUserById(uid, { password })
+        const { data: cur } = await admin.auth.admin.getUserById(uid)
+        const meta = {
+          ...((cur?.user?.user_metadata as Record<string, unknown>) ?? {}),
+          must_change_password: true,
+        }
+        const { error } = await admin.auth.admin.updateUserById(uid, {
+          password,
+          user_metadata: meta,
+        })
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true })
       }

@@ -11,20 +11,45 @@ import '../../../../shared/models/employee_record.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
+import '../../../../shared/widgets/notification_bell.dart';
 import '../widgets/add_employee_sheet.dart';
 import '../widgets/attendance_sheet.dart';
 
 /// People / HR module home: workforce summary + employee roster.
 /// Procurement & Admin read and write (HR was moved to Procurement).
-class PeopleDashboardScreen extends ConsumerWidget {
+class PeopleDashboardScreen extends ConsumerStatefulWidget {
   const PeopleDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PeopleDashboardScreen> createState() =>
+      _PeopleDashboardScreenState();
+}
+
+class _PeopleDashboardScreenState extends ConsumerState<PeopleDashboardScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matches(Employee e) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return e.fullName.toLowerCase().contains(q) ||
+        e.jobRole.toLowerCase().contains(q) ||
+        e.nationality.toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
     final employees = ref.watch(employeesProvider);
     final summary = ref.watch(hrSummaryProvider);
     final canWrite = ref.watch(canWritePeopleProvider);
+    final roster = employees.where(_matches).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -52,6 +77,7 @@ class PeopleDashboardScreen extends ConsumerWidget {
             color: AppColors.onSurfaceVariant,
           ),
         ),
+        actions: const [NotificationBell()],
       ),
       body: SafeArea(
         top: false,
@@ -147,11 +173,51 @@ class PeopleDashboardScreen extends ConsumerWidget {
                     ),
                   ),
                 )
-              else
-                for (final e in employees) ...[
-                  _EmployeeCard(employee: e),
-                  const Gap(AppSpacing.listItemGap),
-                ],
+              else ...[
+                TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  style: AppTypography.bodyMedium,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerHighest,
+                    hintText: 'Search name, role, nationality',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const Gap(AppSpacing.md),
+                if (roster.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.lg),
+                    child: Center(
+                      child: Text(
+                        'No matching employees',
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  for (final e in roster) ...[
+                    _EmployeeCard(employee: e),
+                    const Gap(AppSpacing.listItemGap),
+                  ],
+              ],
               const Gap(AppSpacing.huge),
             ],
           ),

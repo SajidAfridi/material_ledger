@@ -4,6 +4,7 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -29,6 +30,90 @@ class ConfirmReceiptScreen extends ConsumerStatefulWidget {
 class _ConfirmReceiptScreenState extends ConsumerState<ConfirmReceiptScreen> {
   List<double>? _received;
   bool _busy = false;
+
+  Future<void> _editReceived(int i, double max) async {
+    final received = _received!;
+    final controller = TextEditingController(
+      text: received[i].toStringAsFixed(received[i] % 1 == 0 ? 0 : 1),
+    );
+    final value = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.receivedLabel.primary),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onSubmitted: (v) => Navigator.pop(ctx, double.tryParse(v)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(ctx, double.tryParse(controller.text)),
+            child: Text(AppStrings.done.primary),
+          ),
+        ],
+      ),
+    );
+    if (value == null) return;
+    // Can never record more than what was dispatched (matches the server clamp).
+    setState(() => received[i] = value.clamp(0, max).toDouble());
+  }
+
+  Future<void> _submit(
+    MaterialRequest request,
+    List<double> received,
+    List<RequestLineItem> items,
+  ) async {
+    var shortCount = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (received[i] < items[i].quantity) shortCount++;
+    }
+    final body = shortCount == 0
+        ? AppStrings.confirmReceiptAllBody.primary
+        : '$shortCount ${AppStrings.confirmReceiptShortBody.primary}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.confirmReceiptQuestion.primary),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.confirmReceipt.primary),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    await ref
+        .read(materialRequestsProvider.notifier)
+        .confirmReceipt(widget.requestId, received);
+    await ref.logAudit(
+      action: 'Site receipt confirmed',
+      module: AuditModule.materials,
+      refId: widget.requestId,
+      detail: '${received.length} line(s) received',
+    );
+    if (!mounted) return;
+    AppFeedback.confirm();
+    showSyncSnack(
+      context,
+      ref,
+      savedLabel: AppStrings.receiptConfirmed.primary,
+    );
+    context.pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,14 +193,22 @@ class _ConfirmReceiptScreenState extends ConsumerState<ConfirmReceiptScreen> {
                         item: items[i],
                         received: received[i],
                         lang: lang,
-                        onInc: () =>
-                            setState(() => received[i] = received[i] + 1),
+                        // Never allow more than what was dispatched — the UI now
+                        // matches the server-side clamp instead of letting the
+                        // number drift past the dispatched quantity silently.
+                        onInc: () => setState(
+                          () => received[i] = (received[i] + 1).clamp(
+                            0,
+                            items[i].quantity,
+                          ),
+                        ),
                         onDec: () => setState(
                           () => received[i] = (received[i] - 1).clamp(
                             0,
                             items[i].quantity,
                           ),
                         ),
+                        onEdit: () => _editReceived(i, items[i].quantity),
                         onAllArrived: () =>
                             setState(() => received[i] = items[i].quantity),
                       ),
@@ -138,25 +231,7 @@ class _ConfirmReceiptScreenState extends ConsumerState<ConfirmReceiptScreen> {
                   isLoading: _busy,
                   onPressed: _busy
                       ? null
-                      : () async {
-                          setState(() => _busy = true);
-                          await ref
-                              .read(materialRequestsProvider.notifier)
-                              .confirmReceipt(widget.requestId, received);
-                          await ref.logAudit(
-                            action: 'Site receipt confirmed',
-                            module: AuditModule.materials,
-                            refId: widget.requestId,
-                            detail: '${received.length} line(s) received',
-                          );
-                          if (!context.mounted) return;
-                          showSyncSnack(
-                            context,
-                            ref,
-                            savedLabel: AppStrings.receiptConfirmed.primary,
-                          );
-                          context.pop();
-                        },
+                      : () => _submit(request!, received, items),
                 ),
               ),
             ],
@@ -174,6 +249,7 @@ class _ReceiptItemCard extends StatelessWidget {
     required this.lang,
     required this.onInc,
     required this.onDec,
+    required this.onEdit,
     required this.onAllArrived,
   });
 
@@ -182,6 +258,7 @@ class _ReceiptItemCard extends StatelessWidget {
   final dynamic lang;
   final VoidCallback onInc;
   final VoidCallback onDec;
+  final VoidCallback onEdit;
   final VoidCallback onAllArrived;
 
   String _fmt(double v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
@@ -251,6 +328,7 @@ class _ReceiptItemCard extends StatelessWidget {
                 unit: item.unitSymbol,
                 onInc: onInc,
                 onDec: onDec,
+                onEdit: onEdit,
               ),
             ],
           ),
@@ -286,12 +364,14 @@ class _Stepper extends StatelessWidget {
     required this.unit,
     required this.onInc,
     required this.onDec,
+    required this.onEdit,
   });
 
   final double value;
   final String unit;
   final VoidCallback onInc;
   final VoidCallback onDec;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -305,12 +385,20 @@ class _Stepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _Btn(icon: Icons.remove_rounded, onTap: onDec),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            child: Text(
-              '${value.toStringAsFixed(value % 1 == 0 ? 0 : 1)} $unit',
-              style: AppTypography.labelLarge.copyWith(
-                fontWeight: FontWeight.w700,
+          // Tap the number to type a quantity directly (fast for big shortfalls).
+          InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              child: Text(
+                '${value.toStringAsFixed(value % 1 == 0 ? 0 : 1)} $unit',
+                style: AppTypography.labelLarge.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),

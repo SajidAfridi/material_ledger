@@ -1,11 +1,13 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/app_user.dart';
@@ -38,13 +40,37 @@ const _managedPermissions = <(PermissionKey, String)>[
 /// Admin user management & access control (SRS §4.7). Create / edit /
 /// deactivate accounts, assign roles, reset passwords, grant or revoke
 /// per-engineer inventory access. No self-signup — Admin creates every account.
-class UserManagementScreen extends ConsumerWidget {
+class UserManagementScreen extends ConsumerStatefulWidget {
   const UserManagementScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UserManagementScreen> createState() =>
+      _UserManagementScreenState();
+}
+
+class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matches(AppUser u) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return u.fullName.toLowerCase().contains(q) ||
+        u.email.toLowerCase().contains(q) ||
+        u.role.label.toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
-    final users = ref.watch(usersProvider);
+    final all = ref.watch(usersProvider);
+    final users = all.where(_matches).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -77,16 +103,65 @@ class UserManagementScreen extends ConsumerWidget {
       body: SafeArea(
         top: false,
         child: ResponsiveCenter(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.screenHorizontal,
-              AppSpacing.md,
-              AppSpacing.screenHorizontal,
-              AppSpacing.huge,
-            ),
-            itemCount: users.length,
-            separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
-            itemBuilder: (context, i) => _UserCard(user: users[i]),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenHorizontal,
+                  AppSpacing.md,
+                  AppSpacing.screenHorizontal,
+                  AppSpacing.sm,
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  style: AppTypography.bodyMedium,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerHighest,
+                    hintText: 'Search name, email, role',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: users.isEmpty
+                    ? Center(
+                        child: Text(
+                          all.isEmpty ? 'No users yet' : 'No matching users',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenHorizontal,
+                          AppSpacing.sm,
+                          AppSpacing.screenHorizontal,
+                          AppSpacing.huge,
+                        ),
+                        itemCount: users.length,
+                        separatorBuilder: (_, _) =>
+                            const Gap(AppSpacing.listItemGap),
+                        itemBuilder: (context, i) => _UserCard(user: users[i]),
+                      ),
+              ),
+            ],
           ),
         ),
       ),
@@ -210,10 +285,18 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
         detail: '${user.fullName} · ${user.role.label}',
       );
       if (!mounted) return;
+      // The app-level messenger outlives this sheet, so the success toast still
+      // shows after we pop.
+      final messenger = ScaffoldMessenger.of(context);
+      AppFeedback.confirm();
       Navigator.pop(context);
+      messenger.showSnackBar(
+        SnackBar(content: Text('${user.fullName} added')),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      AppFeedback.warning();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_friendlyErr(e)),
@@ -324,7 +407,7 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
 }
 
 // ─── Manage user ─────────────────────────────────────────────────
-class _ManageUserSheet extends ConsumerWidget {
+class _ManageUserSheet extends ConsumerStatefulWidget {
   const _ManageUserSheet({required this.userId});
   final String userId;
 
@@ -338,50 +421,94 @@ class _ManageUserSheet extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ManageUserSheet> createState() => _ManageUserSheetState();
+}
+
+class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
+  /// True while a remote (Edge-Function-backed) action is in flight. Disables
+  /// the sheet's controls and shows a progress line so the admin gets clear
+  /// system-status feedback and can't fire a second action mid-flight.
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref
         .watch(usersProvider)
-        .where((u) => u.id == userId)
+        .where((u) => u.id == widget.userId)
         .firstOrNull;
     if (user == null) return const SizedBox.shrink();
 
+    // The app-level messenger outlives this sheet, so success toasts shown after
+    // Navigator.pop still appear.
+    final messenger = ScaffoldMessenger.of(context);
+
     void warn(String msg) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      AppFeedback.warning();
+      messenger.showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+      );
     }
 
-    Future<void> toggleActive() async {
+    void success(String msg) {
+      AppFeedback.confirm();
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    }
+
+    /// Runs [body] under the busy guard: disables controls + shows the progress
+    /// line while the remote call is in flight, and blocks concurrent actions.
+    Future<void> run(Future<void> Function() body) async {
+      if (_busy) return;
+      setState(() => _busy = true);
       try {
-        final ok = await ref
+        await body();
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    }
+
+    Future<void> toggleActive() => run(() async {
+      final willActivate = !user.active;
+      try {
+        final allowed = await ref
             .read(usersProvider.notifier)
-            .setActive(user.id, !user.active);
-        if (!ok) return warn("Can't deactivate the only active admin.");
+            .setActive(user.id, willActivate);
+        if (!allowed) return warn("Can't deactivate the only active admin.");
         await ref.logAudit(
-          action: user.active ? 'User deactivated' : 'User reactivated',
+          action: willActivate ? 'User reactivated' : 'User deactivated',
           module: AuditModule.platform,
           refId: user.id,
           detail: user.fullName,
         );
+        success(willActivate ? 'Account reactivated' : 'Account deactivated');
       } catch (e) {
         warn(_friendlyErr(e));
       }
-    }
+    });
 
-    Future<void> toggleAccess() async {
-      await ref
-          .read(usersProvider.notifier)
-          .setInventoryAccess(user.id, !user.inventoryAccess);
-      await ref.logAudit(
-        action: user.inventoryAccess
-            ? 'Inventory access revoked'
-            : 'Inventory access granted',
-        module: AuditModule.platform,
-        refId: user.id,
-        detail: user.fullName,
-      );
-    }
+    Future<void> toggleAccess() => run(() async {
+      final grant = !user.inventoryAccess;
+      try {
+        await ref
+            .read(usersProvider.notifier)
+            .setInventoryAccess(user.id, grant);
+        await ref.logAudit(
+          action:
+              grant ? 'Inventory access granted' : 'Inventory access revoked',
+          module: AuditModule.platform,
+          refId: user.id,
+          detail: user.fullName,
+        );
+        success(grant ? 'Inventory access granted' : 'Inventory access revoked');
+      } catch (e) {
+        warn(_friendlyErr(e));
+      }
+    });
 
-    Future<void> resetPassword() async {
+    Future<void> resetPassword() => run(() async {
+      // Capture the navigator up-front (before any await) — the sheet's own
+      // context is about to be popped, so we drive the result dialog off the
+      // (stable) navigator's context instead.
+      final navigator = Navigator.of(context);
       // Set a temporary password the admin can share; the user must change it on
       // first sign-in. When Supabase is configured this resets the real Auth
       // credential via the admin-users function.
@@ -399,20 +526,62 @@ class _ManageUserSheet extends ConsumerWidget {
         refId: user.id,
         detail: user.fullName,
       );
-      if (!context.mounted) return;
-      Navigator.pop(context);
+      if (!mounted) return;
+      navigator.pop();
       showDialog<void>(
-        context: context,
+        context: navigator.context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surfaceContainerLowest,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
           ),
           title: const Text('Temporary password'),
-          content: Text(
-            'Share this with ${user.fullName}. They must change it on first '
-            'sign-in:\n\n$temp',
-            style: AppTypography.bodyMedium,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Share this with ${user.fullName}. They must change it on first '
+                'sign-in:',
+                style: AppTypography.bodyMedium,
+              ),
+              const Gap(AppSpacing.md),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        temp,
+                        style: AppTypography.titleMedium.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Copy',
+                      icon: const Icon(Icons.copy_rounded, size: 20),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: temp));
+                        AppFeedback.confirm();
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Password copied')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -422,25 +591,27 @@ class _ManageUserSheet extends ConsumerWidget {
           ],
         ),
       );
-    }
+    });
 
-    Future<void> setRole(UserRole role) async {
+    Future<void> setRole(UserRole role) => run(() async {
       if (role == user.role) return;
       try {
-        final ok = await ref.read(usersProvider.notifier).setRole(user.id, role);
-        if (!ok) return warn("Can't change the only active admin's role.");
+        final allowed =
+            await ref.read(usersProvider.notifier).setRole(user.id, role);
+        if (!allowed) return warn("Can't change the only active admin's role.");
         await ref.logAudit(
           action: 'User role changed',
           module: AuditModule.platform,
           refId: user.id,
           detail: '${user.fullName} → ${role.label}',
         );
+        success('Role changed to ${role.label}');
       } catch (e) {
         warn(_friendlyErr(e));
       }
-    }
+    });
 
-    Future<void> setOverride(PermissionKey key, bool value) async {
+    Future<void> setOverride(PermissionKey key, bool value) => run(() async {
       // Toggling back to the role default clears the override entirely.
       final next = value == user.roleDefaultFor(key) ? null : value;
       try {
@@ -455,16 +626,19 @@ class _ManageUserSheet extends ConsumerWidget {
           refId: user.id,
           detail: '${user.fullName} · $key = ${next ?? 'role default'}',
         );
+        success('Permission updated');
       } catch (e) {
         warn(_friendlyErr(e));
       }
-    }
+    });
 
-    Future<void> setEmployee(String? employeeId) async {
-      final ok = await ref
+    Future<void> setEmployee(String? employeeId) => run(() async {
+      final allowed = await ref
           .read(usersProvider.notifier)
           .setEmployeeLink(user.id, employeeId);
-      if (!ok) return warn('That employee is already linked to another user.');
+      if (!allowed) {
+        return warn('That employee is already linked to another user.');
+      }
       await ref.logAudit(
         action: employeeId == null
             ? 'Employee link cleared'
@@ -473,9 +647,11 @@ class _ManageUserSheet extends ConsumerWidget {
         refId: user.id,
         detail: '${user.fullName} → ${employeeId ?? 'none'}',
       );
-    }
+      success(employeeId == null ? 'Employee link cleared' : 'Linked to employee');
+    });
 
     Future<void> pickEmployee() async {
+      if (_busy) return;
       final employees = ref.read(employeesProvider);
       await showModalBottomSheet<void>(
         context: context,
@@ -526,7 +702,8 @@ class _ManageUserSheet extends ConsumerWidget {
     }
 
     Future<void> deleteUser() async {
-      final ok = await showDialog<bool>(
+      if (_busy) return;
+      final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surfaceContainerLowest,
@@ -553,20 +730,30 @@ class _ManageUserSheet extends ConsumerWidget {
           ],
         ),
       );
-      if (ok != true) return;
-      try {
-        await ref.read(usersProvider.notifier).deleteUser(user.id);
-      } catch (e) {
-        return warn(_friendlyErr(e));
-      }
-      await ref.logAudit(
-        action: 'User deleted',
-        module: AuditModule.platform,
-        refId: user.id,
-        detail: user.fullName,
-      );
-      if (!context.mounted) return;
-      Navigator.pop(context);
+      if (confirmed != true) return;
+      await run(() async {
+        final navigator = Navigator.of(context); // capture before await
+        final bool deleted;
+        try {
+          deleted = await ref.read(usersProvider.notifier).deleteUser(user.id);
+        } catch (e) {
+          return warn(_friendlyErr(e));
+        }
+        if (!deleted) {
+          return warn(
+            "Can't delete the only active admin — assign another admin first.",
+          );
+        }
+        await ref.logAudit(
+          action: 'User deleted',
+          module: AuditModule.platform,
+          refId: user.id,
+          detail: user.fullName,
+        );
+        if (!mounted) return;
+        navigator.pop();
+        success('${user.fullName} deleted');
+      });
     }
 
     return Container(
@@ -597,11 +784,20 @@ class _ManageUserSheet extends ConsumerWidget {
                   color: AppColors.onSurfaceVariant,
                 ),
               ),
-              const Gap(AppSpacing.lg),
+              // Busy line — clear "working…" signal during a remote call.
+              SizedBox(
+                height: AppSpacing.lg,
+                child: _busy
+                    ? const Align(
+                        alignment: Alignment.bottomCenter,
+                        child: LinearProgressIndicator(minHeight: 2),
+                      )
+                    : null,
+              ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: user.active,
-                onChanged: (_) => toggleActive(),
+                onChanged: _busy ? null : (_) => toggleActive(),
                 title: Text(
                   AppStrings.accountActive.primary,
                   style: AppTypography.bodyLarge,
@@ -616,7 +812,7 @@ class _ManageUserSheet extends ConsumerWidget {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: user.inventoryAccess,
-                  onChanged: (_) => toggleAccess(),
+                  onChanged: _busy ? null : (_) => toggleAccess(),
                   title: Text(
                     AppStrings.inventoryAccess.primary,
                     style: AppTypography.bodyLarge,
@@ -640,7 +836,7 @@ class _ManageUserSheet extends ConsumerWidget {
                     _RoleChip(
                       label: r.label,
                       selected: r == user.role,
-                      onTap: () => setRole(r),
+                      onTap: _busy ? null : () => setRole(r),
                     ),
                 ],
               ),
@@ -656,6 +852,7 @@ class _ManageUserSheet extends ConsumerWidget {
                       .firstOrNull;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
+                    enabled: !_busy,
                     leading: Icon(
                       linked == null
                           ? Icons.link_off_rounded
@@ -675,10 +872,10 @@ class _ManageUserSheet extends ConsumerWidget {
                       ),
                     ),
                     trailing: TextButton(
-                      onPressed: pickEmployee,
+                      onPressed: _busy ? null : pickEmployee,
                       child: Text(linked == null ? 'Link' : 'Change'),
                     ),
-                    onTap: pickEmployee,
+                    onTap: _busy ? null : pickEmployee,
                   );
                 },
               ),
@@ -698,7 +895,7 @@ class _ManageUserSheet extends ConsumerWidget {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: user.effectiveFor(key),
-                    onChanged: (v) => setOverride(key, v),
+                    onChanged: _busy ? null : (v) => setOverride(key, v),
                     title: Text(label, style: AppTypography.bodyLarge),
                     subtitle: Text(
                       user.overrideFor(key) == null
@@ -718,11 +915,11 @@ class _ManageUserSheet extends ConsumerWidget {
               SecondaryButton(
                 label: AppStrings.resetPassword.primary,
                 icon: Icons.lock_reset_rounded,
-                onPressed: resetPassword,
+                onPressed: _busy ? null : resetPassword,
               ),
               const Gap(AppSpacing.sm),
               TextButton.icon(
-                onPressed: deleteUser,
+                onPressed: _busy ? null : deleteUser,
                 icon: const Icon(Icons.delete_outline_rounded,
                     color: AppColors.error),
                 label: Text(
@@ -751,30 +948,35 @@ class _RoleChip extends StatelessWidget {
 
   final String label;
   final bool selected;
-  final VoidCallback onTap;
+
+  /// Null → disabled (e.g. while a remote action is in flight).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primary
-              : AppColors.primaryContainer.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.labelLarge.copyWith(
-            color: selected ? AppColors.onPrimary : AppColors.primary,
-            fontWeight: FontWeight.w600,
+    return Opacity(
+      opacity: onTap == null && !selected ? 0.5 : 1,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary
+                : AppColors.primaryContainer.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.labelLarge.copyWith(
+              color: selected ? AppColors.onPrimary : AppColors.primary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),

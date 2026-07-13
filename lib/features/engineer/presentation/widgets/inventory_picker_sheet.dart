@@ -175,9 +175,18 @@ class _StockBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (status) {
-      StockStatus.inStock => StatusChip.success(AppStrings.inStock.primary),
-      StockStatus.lowStock => StatusChip.warning(AppStrings.lowStock.primary),
-      StockStatus.outOfStock => StatusChip.error(AppStrings.outOfStock.primary),
+      StockStatus.inStock => StatusChip.success(
+        AppStrings.inStock.primary,
+        icon: Icons.check_circle_rounded,
+      ),
+      StockStatus.lowStock => StatusChip.warning(
+        AppStrings.lowStock.primary,
+        icon: Icons.warning_amber_rounded,
+      ),
+      StockStatus.outOfStock => StatusChip.error(
+        AppStrings.outOfStock.primary,
+        icon: Icons.block_rounded,
+      ),
     };
   }
 }

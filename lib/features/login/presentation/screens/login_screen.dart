@@ -64,7 +64,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final result = await ref.read(authControllerProvider).signIn(
+    final result = await ref
+        .read(authControllerProvider)
+        .signIn(
           email: _emailController.text,
           password: _passwordController.text,
         );
@@ -257,7 +259,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Warehouse image overlay
+          // Warehouse image overlay (Currently disabled: missing asset)
+          /*
           Positioned.fill(
             child: Image.asset(
               'assets/images/warehouse_bg.jpg',
@@ -265,6 +268,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           ),
+          */
           // Dark overlay for text legibility
           Positioned.fill(
             child: DecoratedBox(

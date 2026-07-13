@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
@@ -85,6 +86,7 @@ class _PlanBuildScreenState extends ConsumerState<PlanBuildScreen> {
 
   Future<void> _submit() async {
     if (_items.isEmpty) {
+      AppFeedback.warning();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(AppStrings.emptyPlan.primary)));
@@ -117,6 +119,7 @@ class _PlanBuildScreenState extends ConsumerState<PlanBuildScreen> {
       detail: '${_items.length} line items',
     );
     if (!mounted) return;
+    AppFeedback.confirm();
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(AppStrings.planSubmitted.primary)));

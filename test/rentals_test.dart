@@ -67,30 +67,55 @@ void main() {
       addTearDown(container.dispose);
     });
 
-    test('seeds units and computes a rent roll from occupied units', () {
+    test('no rental units are pre-seeded — a clean slate for real use', () {
       final summary = container.read(rentalsSummaryProvider);
-      expect(summary.totalUnits, greaterThan(0));
-      // Two occupied seed shops (3800 + 4500) drive the rent roll.
-      expect(summary.monthlyRentRoll, greaterThanOrEqualTo(8300));
-      expect(summary.occupied, greaterThanOrEqualTo(2));
+      expect(summary.totalUnits, 0);
+      expect(summary.monthlyRentRoll, 0);
+      expect(summary.occupied, 0);
     });
 
-    test('recordPayment marks the current month paid and lifts collected total',
-        () async {
+    test('adding occupied units contributes to the rent roll', () async {
+      final notifier = container.read(rentalUnitsProvider.notifier);
+      await notifier.addUnit(
+        unitName: 'SHOP-A',
+        type: RentalType.shop,
+        location: 'Test',
+        monthlyRentAED: 3800,
+        tenantName: 'Tenant A',
+        createdBy: 'test',
+      );
+      await notifier.addUnit(
+        unitName: 'SHOP-B',
+        type: RentalType.shop,
+        location: 'Test',
+        monthlyRentAED: 4500,
+        tenantName: 'Tenant B',
+        createdBy: 'test',
+      );
+      final summary = container.read(rentalsSummaryProvider);
+      expect(summary.totalUnits, 2);
+      expect(summary.occupied, 2);
+      expect(summary.monthlyRentRoll, 8300);
+    });
+
+    test('recordPayment marks the current month paid', () async {
+      final unit = await container.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'SHOP-TEST',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 4500,
+            tenantName: 'Tenant',
+            createdBy: 'test',
+          );
       final month = currentRentMonthKey();
       await container.read(rentPaymentsProvider.notifier).recordPayment(
-            unitId: 'unit-shop-02',
+            unitId: unit.id,
             periodMonth: month,
             amountDueAED: 4500,
             amountPaidAED: 4500,
             recordedBy: 'test',
           );
-      final status = container.read(unitRentStatusProvider('unit-shop-02'));
-      // Past unpaid seed (last month) still makes the unit overall overdue…
-      expect(
-        status == RentStatus.overdue || status == RentStatus.paid,
-        true,
-      );
+      expect(container.read(unitRentStatusProvider(unit.id)), RentStatus.paid);
       final collected =
           container.read(rentalsSummaryProvider).collectedThisMonth;
       expect(collected, greaterThanOrEqualTo(4500));
@@ -99,7 +124,10 @@ void main() {
     test('topping up a partial payment preserves the total and reduces outstanding',
         () async {
       final notifier = container.read(rentPaymentsProvider.notifier);
-      const unit = 'unit-shop-02'; // seeded this month: due 4500, paid 0
+      // A bare unit id string is enough here — this test exercises the
+      // payment-ledger accumulate/cap logic in isolation, independent of
+      // whether a RentalUnit with this id actually exists.
+      const unit = 'unit-topup-test';
       final month = currentRentMonthKey();
 
       // Pay half. The Record-Payment sheet should now prefill "Due" = 2250.
@@ -147,7 +175,8 @@ void main() {
     test('voiding a payment removes it from collected and frees the period',
         () async {
       final notifier = container.read(rentPaymentsProvider.notifier);
-      const unit = 'unit-shop-02';
+      // A bare unit id is enough — voiding only touches the payment ledger.
+      const unit = 'unit-void-test';
       final month = currentRentMonthKey();
       final p = await notifier.recordPayment(
         unitId: unit,
@@ -183,7 +212,7 @@ void main() {
       final notifier = container.read(rentPaymentsProvider.notifier);
       final month = currentRentMonthKey();
       final p = await notifier.recordPayment(
-        unitId: 'unit-ws-01',
+        unitId: 'unit-overpay-test',
         periodMonth: month,
         amountDueAED: 9000,
         amountPaidAED: 12000, // fat-finger overpay
@@ -195,11 +224,18 @@ void main() {
 
     test('recordPayment caps a top-up so the period is never over-collected',
         () async {
+      final unit = await container.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'SHOP-CAP',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 4500,
+            tenantName: 'Tenant',
+            createdBy: 'test',
+          );
       final notifier = container.read(rentPaymentsProvider.notifier);
-      const unit = 'unit-shop-02'; // seeded this month: due 4500, paid 0
       final month = currentRentMonthKey();
       await notifier.recordPayment(
-        unitId: unit,
+        unitId: unit.id,
         periodMonth: month,
         amountDueAED: 4500,
         amountPaidAED: 3000,
@@ -207,7 +243,7 @@ void main() {
       );
       // Another 3000 would total 6000 → capped at the 4500 due.
       final r = await notifier.recordPayment(
-        unitId: unit,
+        unitId: unit.id,
         periodMonth: month,
         amountDueAED: 4500,
         amountPaidAED: 3000,
@@ -222,8 +258,18 @@ void main() {
 
     test('overdue derives from occupancy — an unbilled past month counts',
         () async {
-      // shop-02: lease started 2 months ago, only the 2-months-ago month paid,
-      // so LAST month is fully unpaid → 4500 overdue with NO record entered.
+      final now = DateTime.now();
+      // Lease started 2 months ago; no payment records entered at all, so LAST
+      // month is fully unpaid → 4500 overdue with no record ever entered for it.
+      final unit = await container.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'SHOP-OD',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 4500,
+            tenantName: 'Tenant',
+            leaseStart: DateTime(now.year, now.month - 2, 1),
+            createdBy: 'test',
+          );
       expect(
         container.read(rentalsSummaryProvider).overdueTotal,
         greaterThanOrEqualTo(4500),
@@ -231,12 +277,11 @@ void main() {
 
       // A partial payment against that past month reduces the arrears.
       final notifier = container.read(rentPaymentsProvider.notifier);
-      final now = DateTime.now();
       final last = DateTime(now.year, now.month - 1, 1);
       final lastKey = '${last.year}-${last.month.toString().padLeft(2, '0')}';
       final before = container.read(rentalsSummaryProvider).overdueTotal;
       await notifier.recordPayment(
-        unitId: 'unit-shop-02',
+        unitId: unit.id,
         periodMonth: lastKey,
         amountDueAED: 4500,
         amountPaidAED: 1000,
@@ -246,7 +291,22 @@ void main() {
       expect(after, before - 1000); // 1000 collected → 1000 less overdue
     });
 
-    test('rent KPIs reconcile: collected + currentDue == rent roll', () {
+    test('rent KPIs reconcile: collected + currentDue == rent roll', () async {
+      final unit = await container.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'SHOP-KPI',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 4500,
+            tenantName: 'Tenant',
+            createdBy: 'test',
+          );
+      await container.read(rentPaymentsProvider.notifier).recordPayment(
+            unitId: unit.id,
+            periodMonth: currentRentMonthKey(),
+            amountDueAED: 4500,
+            amountPaidAED: 2000,
+            recordedBy: 'test',
+          );
       final s = container.read(rentalsSummaryProvider);
       // Every occupied unit's current-month rent is either collected or still
       // due — nothing falls through the cracks.
@@ -257,8 +317,15 @@ void main() {
     });
 
     test('VAT breakdown derives net+VAT from the VAT-inclusive rent (default 5%)',
-        () {
-      final unit = container.read(rentalUnitsProvider.notifier).byId('unit-shop-01')!;
+        () async {
+      final unit = await container.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'SHOP-VAT',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 3800,
+            tenantName: 'Tenant',
+            createdBy: 'test',
+          );
       expect(unit.vatRatePercent, 5.0);
       // 3800 gross → net = 3800 / 1.05.
       expect(unit.netRentAED, closeTo(3800 / 1.05, 0.01));
@@ -284,14 +351,21 @@ void main() {
     test('marking an occupied unit vacant drops it from the rent roll',
         () async {
       final notifier = container.read(rentalUnitsProvider.notifier);
+      final unit = await notifier.addUnit(
+        unitName: 'SHOP-VACATE',
+        type: RentalType.shop,
+        location: 'Test',
+        monthlyRentAED: 3800,
+        tenantName: 'Tenant',
+        createdBy: 'test',
+      );
       final before = container.read(rentalsSummaryProvider).monthlyRentRoll;
-      final unit = notifier.byId('unit-shop-01')!; // occupied @ 3800
       await notifier.updateUnit(unit.copyWith(status: RentalStatus.vacant));
       expect(
         container.read(rentalsSummaryProvider).monthlyRentRoll,
         before - 3800,
       );
-      expect(notifier.byId('unit-shop-01')!.isOccupied, false);
+      expect(notifier.byId(unit.id)!.isOccupied, false);
     });
   });
 

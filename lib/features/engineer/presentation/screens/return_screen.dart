@@ -4,6 +4,7 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -64,13 +65,77 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
     });
   }
 
+  Future<void> _editQty(int i) async {
+    final controller = TextEditingController(
+      text: _items[i].quantity.toStringAsFixed(
+        _items[i].quantity % 1 == 0 ? 0 : 1,
+      ),
+    );
+    final value = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.editQuantity.primary),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(suffixText: _items[i].unitSymbol),
+          onSubmitted: (v) => Navigator.pop(ctx, double.tryParse(v)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(ctx, double.tryParse(controller.text)),
+            child: Text(AppStrings.done.primary),
+          ),
+        ],
+      ),
+    );
+    if (value == null || value <= 0) return;
+    setState(() => _items[i] = _items[i].copyWith(quantity: value));
+  }
+
   Future<void> _submit() async {
-    if (_project == null || _items.isEmpty) {
+    // Distinct, actionable validation per problem (not one catch-all message).
+    if (_project == null) {
+      AppFeedback.warning();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppStrings.addItemToReturn.primary)),
+        SnackBar(content: Text(AppStrings.selectProjectRequired.primary)),
       );
       return;
     }
+    if (_items.isEmpty) {
+      AppFeedback.warning();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.addAtLeastOneReturnItem.primary)),
+      );
+      return;
+    }
+    // Confirm before committing — a return moves stock and is acted on by
+    // procurement, so it gets a lightweight are-you-sure step.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.submitReturnConfirm.primary),
+        content: Text(AppStrings.submitReturnConfirmBody.primary),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.submitReturn.primary),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     setState(() => _busy = true);
     await ref
         .read(returnsProvider.notifier)
@@ -86,6 +151,7 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
       detail: '${_project!.name} · ${_items.length} item(s)',
     );
     if (!mounted) return;
+    AppFeedback.confirm();
     showSyncSnack(context, ref, savedLabel: AppStrings.returnSubmitted.primary);
     context.pop();
   }
@@ -209,6 +275,7 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
                           onReason: (r) => setState(
                             () => _items[i] = _items[i].copyWith(reason: r),
                           ),
+                          onEdit: () => _editQty(i),
                           onRemove: () => setState(() => _items.removeAt(i)),
                         ),
                         const Gap(AppSpacing.listItemGap),
@@ -241,7 +308,7 @@ class _ReturnScreenState extends ConsumerState<ReturnScreen> {
                     ),
                     const Gap(AppSpacing.xs),
                     Text(
-                      AppStrings.returnSubmitted.primary,
+                      AppStrings.returnSubmitHint.primary,
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -265,6 +332,7 @@ class _ReturnItemCard extends StatelessWidget {
     required this.onInc,
     required this.onDec,
     required this.onReason,
+    required this.onEdit,
     required this.onRemove,
   });
 
@@ -273,6 +341,7 @@ class _ReturnItemCard extends StatelessWidget {
   final VoidCallback onInc;
   final VoidCallback onDec;
   final ValueChanged<ReturnReason> onReason;
+  final VoidCallback onEdit;
   final VoidCallback onRemove;
 
   @override
@@ -335,14 +404,21 @@ class _ReturnItemCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _Btn(icon: Icons.remove_rounded, onTap: onDec),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                    ),
-                    child: Text(
-                      '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} ${item.unitSymbol}',
-                      style: AppTypography.labelLarge.copyWith(
-                        fontWeight: FontWeight.w700,
+                  // Tap the number to type a quantity directly — far faster than
+                  // stepping one-by-one for a large return (e.g. 40 pipes).
+                  InkWell(
+                    onTap: onEdit,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: Text(
+                        '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} ${item.unitSymbol}',
+                        style: AppTypography.labelLarge.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),

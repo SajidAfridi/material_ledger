@@ -108,6 +108,34 @@ void main() {
       expect(after, SignInResult.ok);
     });
 
+    test(
+        'self-service changeOwnPassword clears the must-change flag and sets the new password',
+        () async {
+      final u = await container.read(usersProvider.notifier).createUser(
+            fullName: 'Temp User 2',
+            email: 'temp2@yorksac.ae',
+            role: UserRole.engineer,
+            password: 'temp1234',
+          );
+      // First sign-in is forced to change (admin-set temporary password).
+      expect(
+        await auth().signIn(email: u.email, password: 'temp1234'),
+        SignInResult.mustChangePassword,
+      );
+
+      // The change-password screen's actual path — self-service, not the
+      // admin-only reset. Must clear the flag so the router gate stops looping.
+      await auth().changeOwnPassword('mine5678');
+      expect(container.read(currentUserProvider)?.mustChangePassword, false);
+
+      // Re-login with the new password is a clean OK (no second forced change).
+      await auth().signOut();
+      expect(
+        await auth().signIn(email: u.email, password: 'mine5678'),
+        SignInResult.ok,
+      );
+    });
+
     test('signOut clears the session', () async {
       await auth().signIn(email: 'owner@gmail.com', password: kSeedPassword);
       expect(container.read(isLoggedInProvider), true);

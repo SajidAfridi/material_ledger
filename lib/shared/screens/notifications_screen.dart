@@ -213,6 +213,10 @@ class _NotificationCard extends StatelessWidget {
       Icons.warning_amber_rounded,
       AppColors.warning,
     ),
+    NotificationType.project => (
+      Icons.domain_add_outlined,
+      AppColors.success,
+    ),
     NotificationType.info => (
       Icons.info_outline_rounded,
       AppColors.onSurfaceVariant,

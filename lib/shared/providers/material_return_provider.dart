@@ -9,7 +9,7 @@ import '../sync/sync_engine.dart';
 import 'inventory_provider.dart';
 import 'material_request_provider.dart';
 
-const _kReturnsKey = 'material_returns_list_v1';
+const _kReturnsKey = 'material_returns_list_v2';
 const _uuid = Uuid();
 
 /// All material returns raised by the engineer (FR-083).

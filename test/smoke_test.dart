@@ -5,9 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/core/widgets/widgets.dart';
+import 'package:material_ledger/shared/models/project.dart';
+import 'package:material_ledger/shared/models/rental_unit.dart';
 import 'package:material_ledger/shared/models/role_permissions.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/project_provider.dart';
 import 'package:material_ledger/shared/providers/rentals_provider.dart';
 import 'package:material_ledger/shared/providers/role_permissions_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
@@ -24,11 +27,13 @@ import 'package:material_ledger/features/engineer/presentation/screens/engineer_
 import 'package:material_ledger/features/admin/presentation/screens/access_roles_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/user_management_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/admin_projects_screen.dart';
+import 'package:material_ledger/features/admin/presentation/screens/admin_requests_screen.dart';
 import 'package:material_ledger/features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import 'package:material_ledger/features/rentals/presentation/widgets/record_payment_sheet.dart';
 import 'package:material_ledger/features/leave/presentation/screens/my_leave_screen.dart';
 import 'package:material_ledger/features/leave/presentation/screens/leave_requests_screen.dart';
 import 'package:material_ledger/features/people/presentation/screens/people_dashboard_screen.dart';
+import 'package:material_ledger/features/procurement/presentation/screens/procurement_workspace_screen.dart';
 
 Future<ProviderContainer> _container({String? email}) async {
   SharedPreferences.setMockInitialValues({});
@@ -111,6 +116,11 @@ void main() {
     testWidgets('Admin projects (job register + value)', (t) async {
       await _smoke(t, const AdminProjectsScreen(), email: _owner);
     });
+    testWidgets('Admin requests (search + status filter)', (t) async {
+      await _smoke(t, const AdminRequestsScreen(), email: _owner);
+      // Status filter chips render.
+      expect(find.text('On hold'), findsOneWidget);
+    });
     testWidgets('Rentals dashboard', (t) async {
       await _smoke(t, const RentalsDashboardScreen(), email: _owner);
     });
@@ -120,14 +130,63 @@ void main() {
     testWidgets('People / HR dashboard', (t) async {
       await _smoke(t, const PeopleDashboardScreen(), email: _proc);
     });
+    testWidgets('Procurement workspace', (t) async {
+      await _smoke(t, const ProcurementWorkspaceScreen(), email: _proc);
+      expect(find.text('New projects'), findsOneWidget);
+    });
+  });
+
+  group('Procurement — project acceptance', () {
+    testWidgets('accepting a new project removes it from the queue', (t) async {
+      final c = await _container(email: _proc);
+      c.read(projectsProvider.notifier).addProject(
+            const Project(
+              id: 'proj-smoke-accept',
+              name: 'Smoke Test Tower',
+              nameSecondary: '',
+            ),
+          );
+      await _pump(t, c, const ProcurementWorkspaceScreen());
+
+      expect(find.text('Smoke Test Tower'), findsOneWidget);
+      expect(
+        c.read(projectsProvider.notifier).byId('proj-smoke-accept')!
+            .acceptedByProcurement,
+        false,
+      );
+
+      await t.tap(find.text('Accept project'));
+      await t.pumpAndSettle();
+      // Confirm dialog — its own button carries the same "Accept project" label
+      // as the trailing card button, so target it via the dialog role.
+      await t.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Accept project'),
+      ));
+      await t.pump(const Duration(milliseconds: 300));
+
+      expect(
+        c.read(projectsProvider.notifier).byId('proj-smoke-accept')!
+            .acceptedByProcurement,
+        true,
+      );
+      expect(find.text('Smoke Test Tower'), findsNothing);
+    });
   });
 
   group('Record-payment sheet', () {
     testWidgets('renders + blocks overpayment via the UI validator', (t) async {
       final c = await _container(email: _owner);
-      // A unit with an outstanding balance this month (seed: due 4500, paid 0).
-      final unit =
-          c.read(rentalUnitsProvider).firstWhere((u) => u.id == 'unit-shop-02');
+      // No rental units are pre-seeded — create a fresh occupied unit fixture,
+      // which naturally has an outstanding balance this month (due 4500, paid 0).
+      final unit = await c.read(rentalUnitsProvider.notifier).addUnit(
+            unitName: 'TEST-UNIT',
+            type: RentalType.shop,
+            location: 'Test',
+            monthlyRentAED: 4500,
+            tenantName: 'Test Tenant',
+            createdBy: 'test',
+          );
       await _pump(t, c, RecordPaymentSheet(unit: unit));
       expect(t.takeException(), isNull);
 

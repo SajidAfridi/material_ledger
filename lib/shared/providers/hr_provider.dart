@@ -13,9 +13,9 @@ import 'session_provider.dart';
 
 // Bumped to v2 to re-seed the roster with names aligned to the login accounts
 // (emp-001 Imran Khan, emp-002 Al Asad).
-const _kEmployeesKey = 'employees_v2';
-const _kAttendanceKey = 'attendance_v1';
-const _kLeaveKey = 'leave_records_v1';
+const _kEmployeesKey = 'employees_v3';
+const _kAttendanceKey = 'attendance_v2';
+const _kLeaveKey = 'leave_records_v2';
 const _uuid = Uuid();
 
 String _dayKey(DateTime d) =>
@@ -105,6 +105,8 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
     );
   }
 
+  // Trimmed to just the two logins that link to an employee record
+  // (owner/admin has none by design). Real hires are added via addEmployee().
   static List<Employee> _seed() {
     final now = DateTime.now();
     return [
@@ -132,39 +134,6 @@ class EmployeesNotifier extends StateNotifier<List<Employee>> {
         emiratesId: '784-1988-7654321-2',
         joinDate: DateTime(now.year - 2, 7, 10),
         salaryAED: 7200,
-        status: EmployeeStatus.active,
-      ),
-      Employee(
-        id: 'emp-003',
-        fullName: 'Rajesh Kumar',
-        jobRole: 'HVAC Technician',
-        department: 'Operations',
-        nationality: 'India',
-        contact: '+971 52 555 6666',
-        joinDate: DateTime(now.year - 1, 11, 5),
-        salaryAED: 4200,
-        status: EmployeeStatus.onLeave,
-      ),
-      Employee(
-        id: 'emp-004',
-        fullName: 'Maria Santos',
-        jobRole: 'Accountant',
-        department: 'Finance',
-        nationality: 'Philippines',
-        contact: '+971 56 777 8888',
-        joinDate: DateTime(now.year - 4, 1, 20),
-        salaryAED: 8000,
-        status: EmployeeStatus.active,
-      ),
-      Employee(
-        id: 'emp-005',
-        fullName: 'Omar Farouk',
-        jobRole: 'Duct Fabricator',
-        department: 'Operations',
-        nationality: 'Egypt',
-        contact: '+971 50 999 0000',
-        joinDate: DateTime(now.year - 1, 3, 12),
-        salaryAED: 3800,
         status: EmployeeStatus.active,
       ),
     ];
@@ -234,23 +203,8 @@ class AttendanceNotifier extends StateNotifier<List<AttendanceRecord>> {
     return null;
   }
 
-  static List<AttendanceRecord> _seed() {
-    final now = DateTime.now();
-    AttendanceRecord rec(String emp, AttendanceStatus s) => AttendanceRecord(
-      id: 'att-seed-$emp',
-      employeeId: emp,
-      date: now,
-      status: s,
-      recordedBy: 'Owner (Admin)',
-    );
-    return [
-      rec('emp-001', AttendanceStatus.present),
-      rec('emp-002', AttendanceStatus.present),
-      rec('emp-003', AttendanceStatus.onLeave),
-      rec('emp-004', AttendanceStatus.present),
-      rec('emp-005', AttendanceStatus.absent),
-    ];
-  }
+  // No pre-seeded demo attendance — marked fresh via the attendance sheet.
+  static List<AttendanceRecord> _seed() => [];
 }
 
 // ─── Leave records ───────────────────────────────────────────────
@@ -460,41 +414,8 @@ class LeaveNotifier extends StateNotifier<List<LeaveRecord>> {
     );
   }
 
-  static List<LeaveRecord> _seed() {
-    final now = DateTime.now();
-    return [
-      LeaveRecord(
-        id: 'leave-seed-01',
-        employeeId: 'emp-001',
-        type: LeaveType.annual,
-        startDate: DateTime(now.year, 2, 10),
-        endDate: DateTime(now.year, 2, 17),
-        days: 8,
-        status: LeaveRecordStatus.approved,
-        approvedBy: 'Owner (Admin)',
-      ),
-      LeaveRecord(
-        id: 'leave-seed-02',
-        employeeId: 'emp-003',
-        type: LeaveType.annual,
-        startDate: now.subtract(const Duration(days: 1)),
-        endDate: now.add(const Duration(days: 5)),
-        days: 7,
-        status: LeaveRecordStatus.approved,
-        approvedBy: 'Owner (Admin)',
-      ),
-      LeaveRecord(
-        id: 'leave-seed-03',
-        employeeId: 'emp-002',
-        type: LeaveType.sick,
-        startDate: DateTime(now.year, 1, 8),
-        endDate: DateTime(now.year, 1, 9),
-        days: 2,
-        status: LeaveRecordStatus.approved,
-        approvedBy: 'Owner (Admin)',
-      ),
-    ];
-  }
+  // No pre-seeded demo leave — requested/recorded fresh during testing.
+  static List<LeaveRecord> _seed() => [];
 }
 
 // ─── Derived: leave balance ──────────────────────────────────────

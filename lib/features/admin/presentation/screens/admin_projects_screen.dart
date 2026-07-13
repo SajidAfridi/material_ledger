@@ -4,6 +4,7 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -13,13 +14,42 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 
 /// Admin project oversight (FR-123/317) — view every project and delete any.
-class AdminProjectsScreen extends ConsumerWidget {
+/// Searchable so it stays usable as the register grows.
+class AdminProjectsScreen extends ConsumerStatefulWidget {
   const AdminProjectsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminProjectsScreen> createState() =>
+      _AdminProjectsScreenState();
+}
+
+class _AdminProjectsScreenState extends ConsumerState<AdminProjectsScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matches(Project p) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return [
+      p.name,
+      p.clientName ?? '',
+      p.siteLocation ?? '',
+      p.jobNumber ?? '',
+      p.mainContractor ?? '',
+    ].any((s) => s.toLowerCase().contains(q));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
-    final projects = ref.watch(projectsProvider);
+    final all = ref.watch(projectsProvider);
+    final visible = all.where(_matches).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -45,26 +75,77 @@ class AdminProjectsScreen extends ConsumerWidget {
       body: SafeArea(
         top: false,
         child: ResponsiveCenter(
-          child: projects.isEmpty
-              ? Center(
-                  child: Text(
-                    AppStrings.noDataYet.primary,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.onSurfaceVariant,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.screenHorizontal,
+                  AppSpacing.md,
+                  AppSpacing.screenHorizontal,
+                  AppSpacing.sm,
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  style: AppTypography.bodyMedium,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerHighest,
+                    hintText: 'Search name, client, job #',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenHorizontal,
-                    AppSpacing.md,
-                    AppSpacing.screenHorizontal,
-                    AppSpacing.huge,
-                  ),
-                  itemCount: projects.length,
-                  separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
-                  itemBuilder: (context, i) => _ProjectRow(project: projects[i]),
                 ),
+              ),
+              Expanded(
+                child: all.isEmpty
+                    ? Center(
+                        child: Text(
+                          AppStrings.noDataYet.primary,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : visible.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No matching projects',
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.screenHorizontal,
+                              AppSpacing.sm,
+                              AppSpacing.screenHorizontal,
+                              AppSpacing.huge,
+                            ),
+                            itemCount: visible.length,
+                            separatorBuilder: (_, _) =>
+                                const Gap(AppSpacing.listItemGap),
+                            itemBuilder: (context, i) =>
+                                _ProjectRow(project: visible[i]),
+                          ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -76,6 +157,7 @@ class _ProjectRow extends ConsumerWidget {
   final Project project;
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -104,11 +186,11 @@ class _ProjectRow extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    final deleted = ref.read(projectsProvider.notifier).deleteProject(project.id);
-    if (!context.mounted) return;
+    final deleted = await ref.read(projectsProvider.notifier).deleteProject(project.id);
     if (!deleted) {
       // Blocked: open requests still hold stock reservations against it.
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppFeedback.warning();
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             "Can't delete — this project still has open material requests. "
@@ -125,8 +207,8 @@ class _ProjectRow extends ConsumerWidget {
       refId: project.id,
       detail: project.name,
     );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppFeedback.confirm();
+    messenger.showSnackBar(
       SnackBar(content: Text(AppStrings.projectDeleted.primary)),
     );
   }
@@ -188,6 +270,11 @@ class _ProjectRow extends ConsumerWidget {
                   spacing: AppSpacing.xs,
                   children: [
                     if (phase != null) _stateChip(phase.state),
+                    if (!project.acceptedByProcurement)
+                      StatusChip.warning(
+                        AppStrings.awaitingProcurementChip.primary,
+                        icon: Icons.hourglass_empty_rounded,
+                      ),
                     if (project.openRequestCount > 0)
                       StatusChip.warning(
                         '${project.openRequestCount} ${AppStrings.openRequests.primary.toLowerCase()}',

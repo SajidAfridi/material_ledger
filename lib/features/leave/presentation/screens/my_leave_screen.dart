@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -184,6 +185,24 @@ class _LeaveCard extends ConsumerWidget {
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(AppStrings.withdrawConfirmTitle.primary),
+                      content: Text(AppStrings.withdrawConfirmBody.primary),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text(AppStrings.cancel.primary),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: Text(AppStrings.withdrawAction.primary),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
                   await ref.read(leaveRecordsProvider.notifier).withdraw(record.id);
                   await ref.logAudit(
                     action: 'Leave withdrawn',
@@ -191,6 +210,7 @@ class _LeaveCard extends ConsumerWidget {
                     refId: record.id,
                     detail: '${record.type.label} · ${record.days}d',
                   );
+                  AppFeedback.confirm();
                 },
                 icon: const Icon(Icons.undo_rounded, size: 18),
                 label: Text(AppStrings.withdrawAction.primary),

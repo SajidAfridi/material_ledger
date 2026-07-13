@@ -6,10 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/project.dart';
+import '../../../../shared/models/user_role.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
+import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
@@ -143,6 +147,19 @@ class _EngineerCreateProjectScreenState
 
     _saving = true;
     ref.read(projectsProvider.notifier).addProject(project);
+    // Procurement can't act on a job it doesn't know exists — alert them so the
+    // new "New projects" queue isn't the only way to discover it (FR — project
+    // acceptance).
+    final lang = ref.read(languageProvider);
+    ref.read(notificationsProvider.notifier).add(
+          type: NotificationType.project,
+          title: AppStrings.notifNewProjectTitle.primary,
+          titleSecondary: AppStrings.notifNewProjectTitle.secondary(lang),
+          body: project.name,
+          refId: project.id,
+          route: RoutePaths.procurement,
+          audience: UserRole.procurement.name,
+        );
     ref.logAudit(
       action: 'Project created',
       module: AuditModule.materials,
@@ -209,7 +226,7 @@ class _EngineerCreateProjectScreenState
                                     return AppStrings.fieldRequired.primary;
                                   }
                                   if (value.trim().length < 3) {
-                                    return 'Enter at least 3 characters';
+                                    return AppStrings.enterAtLeast3Chars.primary;
                                   }
                                   return null;
                                 },

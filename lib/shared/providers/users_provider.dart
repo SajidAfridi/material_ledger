@@ -63,10 +63,16 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
 
   /// Re-stamp JWT caps for every (non-admin) user of [role] after the role
   /// matrix changed, so server-side RLS immediately tracks the admin's edit
-  /// rather than diverging from the shown access. Best-effort per user; a no-op
-  /// when Supabase isn't configured (tests / offline).
-  Future<void> restampRoleClaims(UserRole role) async {
-    if (_client == null || role == UserRole.admin) return;
+  /// rather than diverging from the shown access. A no-op (returns 0) when
+  /// Supabase isn't configured (tests / offline).
+  ///
+  /// Returns the number of users whose re-stamp FAILED. One user's failure
+  /// doesn't block the rest, but the count is surfaced to the admin rather than
+  /// swallowed — a partial failure means those users' server-side access lags
+  /// the matrix until they next sign in (which re-issues a fresh claim).
+  Future<int> restampRoleClaims(UserRole role) async {
+    if (_client == null || role == UserRole.admin) return 0;
+    var failures = 0;
     for (final u in state) {
       if (u.role != role) continue;
       try {
@@ -77,9 +83,10 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
           'caps': _claimCaps(u),
         });
       } catch (_) {
-        // One user's failure shouldn't block the rest.
+        failures++;
       }
     }
+    return failures;
   }
 
   /// Calls the privileged `admin-users` function. A no-op (returns null) when no
@@ -150,15 +157,33 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   Future<void> upsertFromClaims({
     required String id,
     required String email,
-    required String fullName,
     required UserRole role,
+    required String fullName,
+    bool mustChangePassword = false,
   }) async {
-    if (state.any((u) => u.id == id)) return;
+    final existing = _byId(id);
+    if (existing != null) {
+      // The user is already in this device's roster. Reconcile ONLY the
+      // authoritative must-change flag from the claim (leave local overrides /
+      // employee link untouched) so a change made on another device is honoured.
+      if (existing.mustChangePassword != mustChangePassword) {
+        state = [
+          for (final u in state)
+            if (u.id == id)
+              u.copyWith(mustChangePassword: mustChangePassword)
+            else
+              u,
+        ];
+        await _store.writeAll(state);
+      }
+      return;
+    }
     final user = AppUser(
       id: id,
       fullName: fullName.trim().isEmpty ? email : fullName,
       email: email,
       role: role,
+      mustChangePassword: mustChangePassword,
       createdAt: DateTime.now(),
     );
     state = [user, ...state];
@@ -186,6 +211,32 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   bool _isLastActiveAdmin(String id) {
     final admins = state.where((u) => u.role == UserRole.admin && u.active);
     return admins.length == 1 && admins.first.id == id;
+  }
+
+  /// Update ONLY the local roster's password hash + must-change flag, WITHOUT
+  /// calling the privileged admin Edge Function. Used by self-service password
+  /// change ([AuthController.changeOwnPassword]), where the identity provider is
+  /// updated separately via the caller's own GoTrue self-update — so a non-admin
+  /// never has to (and can't) hit the admin-only function. Keeps local + cloud
+  /// in step for the credential fallback / offline sign-in.
+  Future<void> applyLocalPassword(
+    String id,
+    String newPassword, {
+    required bool mustChange,
+  }) async {
+    final pw = PasswordHasher.create(newPassword);
+    state = [
+      for (final u in state)
+        if (u.id == id)
+          u.copyWith(
+            passwordHash: pw.hash,
+            passwordSalt: pw.salt,
+            mustChangePassword: mustChange,
+          )
+        else
+          u,
+    ];
+    await _store.writeAll(state);
   }
 
   /// Set a new password. [temporary] true (admin reset) forces a change on next
@@ -299,10 +350,15 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     return true;
   }
 
-  Future<void> deleteUser(String id) async {
+  /// Permanently delete an account. Refuses to delete the last active admin —
+  /// that would leave the system with no way back into the admin panel (there is
+  /// no self-signup). Returns false if blocked, mirroring [setActive]/[setRole].
+  Future<bool> deleteUser(String id) async {
+    if (_isLastActiveAdmin(id)) return false;
     await _adminFn({'action': 'delete', 'appUserId': id});
     state = state.where((u) => u.id != id).toList();
     await _store.writeAll(state);
+    return true;
   }
 
   /// Link (or unlink, with `null`) this login to an HR roster [Employee] — so

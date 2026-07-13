@@ -248,6 +248,11 @@ class _ProjectSummaryCard extends ConsumerWidget {
             children: [
               if (phase != null) StatusChip.info(phase.label),
               if (phase != null) _StateChip(state: phase.state),
+              if (!project.acceptedByProcurement)
+                StatusChip.warning(
+                  AppStrings.awaitingProcurementChip.primary,
+                  icon: Icons.hourglass_empty_rounded,
+                ),
               if (project.openRequestCount > 0)
                 StatusChip.warning('${project.openRequestCount} requests'),
             ],
@@ -347,7 +352,7 @@ class _ProjectSummaryCard extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    final ok = ref.read(projectsProvider.notifier).completeProject(project.id);
+    final ok = await ref.read(projectsProvider.notifier).completeProject(project.id);
     if (ok) {
       await ref.logAudit(
         action: 'Project closed out',
@@ -435,14 +440,14 @@ class _EmptyProjectsState extends StatelessWidget {
           ),
           const Gap(AppSpacing.xl),
           Text(
-            'No projects yet',
+            AppStrings.noProjectsYet.primary,
             style: AppTypography.titleMedium.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
           ),
           const Gap(AppSpacing.sm),
           Text(
-            'Add a project to begin tracking requests and dispatches.',
+            AppStrings.addProjectToBegin.primary,
             style: AppTypography.bodySmall,
             textAlign: TextAlign.center,
           ),

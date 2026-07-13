@@ -364,12 +364,20 @@ void main() {
   group('Closeout enforcement (FR-095)', () {
     test('cannot complete a project with open requests; can once cleared',
         () async {
-      // Seed mock project proj-002 is Active with seeded open requests? Use a
-      // fresh request against a known project name and a matching project.
-      final projects = container.read(projectsProvider);
-      final active = projects.firstWhere(
-        (p) => p.phase?.state == ProjectState.active,
+      // No projects are pre-seeded (a clean slate for real use) — create a
+      // fresh active project fixture directly rather than relying on seed data.
+      final active = Project(
+        id: 'proj-test-closeout',
+        name: 'Closeout Test Project',
+        nameSecondary: '',
+        phase: const ProjectPhase(
+          number: 2,
+          name: 'Active',
+          nameSecondary: 'فعال',
+          state: ProjectState.active,
+        ),
       );
+      await container.read(projectsProvider.notifier).addProject(active);
       final notifier = container.read(materialRequestsProvider.notifier);
       await notifier.addRequest(
         projectName: active.name,
@@ -388,13 +396,13 @@ void main() {
 
       final projNotifier = container.read(projectsProvider.notifier);
       expect(projNotifier.canComplete(active.id), false);
-      expect(projNotifier.completeProject(active.id), false);
+      expect(await projNotifier.completeProject(active.id), false);
 
       // Clear the open request (cancel it), then closeout succeeds.
       final reqId = container.read(materialRequestsProvider).first.id;
       await notifier.updateStatus(reqId, RequestStatus.cancelled);
       expect(projNotifier.canComplete(active.id), true);
-      expect(projNotifier.completeProject(active.id), true);
+      expect(await projNotifier.completeProject(active.id), true);
       expect(
         projNotifier.byId(active.id)!.phase!.state,
         ProjectState.completed,

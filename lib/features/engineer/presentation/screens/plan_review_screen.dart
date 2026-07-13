@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
@@ -41,9 +42,29 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
   }
 
   Future<void> _approve(MaterialPlan plan) async {
+    // Approving activates the whole project and directs procurement — a
+    // consequential, non-undoable step, so confirm it first.
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.approvePlanConfirmTitle.primary),
+        content: Text(AppStrings.approvePlanConfirmBody.primary),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.approvePlan.primary),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     setState(() => _busy = true);
     await ref.read(materialPlansProvider.notifier).approvePlan(plan.id);
-    ref
+    await ref
         .read(projectsProvider.notifier)
         .activateFromPlanApproval(widget.projectId);
     await _notifyProcurement(
@@ -57,6 +78,7 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
       detail: '${plan.items.length} line items',
     );
     if (!mounted) return;
+    AppFeedback.confirm();
     _toast(AppStrings.planApproved.primary);
     context.pop();
   }
@@ -84,6 +106,7 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
 
   Future<void> _sendChanges(MaterialPlan plan) async {
     if (_selected.isEmpty && _commentController.text.trim().isEmpty) {
+      AppFeedback.warning();
       _toast(AppStrings.selectItemsToChange.primary);
       return;
     }
@@ -107,6 +130,7 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
       detail: '${_selected.length} item(s) flagged',
     );
     if (!mounted) return;
+    AppFeedback.confirm();
     _toast(AppStrings.changesSent.primary);
     context.pop();
   }

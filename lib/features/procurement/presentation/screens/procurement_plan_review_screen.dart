@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -62,7 +63,9 @@ class _ProcurementPlanReviewScreenState
           planId: plan.id,
           text: text,
           authorName: ref.read(actorNameProvider),
-          authorRole: 'Procurement',
+          // The real signed-in role (Procurement or Admin) — this screen is
+          // shared by both, so a literal 'Procurement' would mislabel an admin.
+          authorRole: ref.read(currentRoleProvider).label,
         );
     // Notify the engineer immediately (FR-059), deep-linked to their plan.
     final lang = ref.read(languageProvider);
@@ -84,12 +87,34 @@ class _ProcurementPlanReviewScreenState
   }
 
   Future<void> _markDone(MaterialPlan plan, String projectName) async {
+    // Hands the plan back to the engineer for final approval — an irreversible
+    // handoff, so confirm first (mirrors the engineer-side "Approve plan" gate).
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppStrings.markDoneConfirmTitle.primary),
+        content: Text(AppStrings.markDoneConfirmBody.primary),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppStrings.markDone.primary),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     setState(() => _busy = true);
     await ref.read(materialPlansProvider.notifier).markPlanDone(plan.id);
+    final lang = ref.read(languageProvider);
     await ref.read(notificationsProvider.notifier).add(
           type: NotificationType.plan,
-          title: 'Procurement marked your plan as Done',
-          titleSecondary: 'پروکیورمنٹ نے آپ کا پلان مکمل کر دیا',
+          title: AppStrings.notifPlanMarkedDoneTitle.primary,
+          titleSecondary: AppStrings.notifPlanMarkedDoneTitle.secondary(lang),
           body: '$projectName · ready for your final review.',
           refId: widget.projectId,
           route: RoutePaths.planReviewPath(widget.projectId),
@@ -103,6 +128,7 @@ class _ProcurementPlanReviewScreenState
     );
     if (!mounted) return;
     setState(() => _busy = false);
+    AppFeedback.confirm();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(AppStrings.planMarkedDone.primary)),
     );

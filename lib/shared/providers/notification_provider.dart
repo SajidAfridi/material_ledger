@@ -11,7 +11,7 @@ import 'language_provider.dart' show supabaseClientProvider;
 import 'session_provider.dart';
 import 'users_provider.dart';
 
-const _kNotificationsKey = 'notifications_list_v2';
+const _kNotificationsKey = 'notifications_list_v3';
 const _uuid = Uuid();
 
 /// All in-app notifications (newest first).
@@ -204,52 +204,6 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
     await _persist();
   }
 
-  // ─── Seed: realistic lifecycle events (SRS §4.6) ────────────────
-  static List<AppNotification> _seed() {
-    final now = DateTime.now();
-    return [
-      AppNotification(
-        id: 'notif-001',
-        type: NotificationType.plan,
-        title: 'Procurement marked your plan as Done',
-        titleSecondary: 'پروکیورمنٹ نے آپ کا پلان مکمل کر دیا',
-        body: 'Villa 12 — Al Reem · ready for your final review.',
-        timestamp: now.subtract(const Duration(minutes: 12)),
-      ),
-      AppNotification(
-        id: 'notif-002',
-        type: NotificationType.request,
-        title: 'Request dispatched to site',
-        titleSecondary: 'درخواست سائٹ پر روانہ کر دی گئی',
-        body: 'Marina Bay Mall — Chiller Plant · 8 items on the way.',
-        timestamp: now.subtract(const Duration(hours: 3)),
-      ),
-      AppNotification(
-        id: 'notif-003',
-        type: NotificationType.stock,
-        title: 'Low stock: Copper Pipe 3/4"',
-        titleSecondary: 'کم اسٹاک: تانبے کا پائپ 3/4"',
-        body: '120 ft left, below the 200 ft threshold.',
-        timestamp: now.subtract(const Duration(hours: 6)),
-      ),
-      AppNotification(
-        id: 'notif-004',
-        type: NotificationType.plan,
-        title: 'Procurement commented on an item',
-        titleSecondary: 'پروکیورمنٹ نے ایک آئٹم پر تبصرہ کیا',
-        body: 'Fire damper 300mm — "Sourcing externally, 2-day lead time."',
-        timestamp: now.subtract(const Duration(hours: 9)),
-        isRead: true,
-      ),
-      AppNotification(
-        id: 'notif-005',
-        type: NotificationType.request,
-        title: 'Request received & confirmed on site',
-        titleSecondary: 'درخواست موصول اور تصدیق ہو گئی',
-        body: 'Green Valley Hospital — AHU Installation.',
-        timestamp: now.subtract(const Duration(days: 1)),
-        isRead: true,
-      ),
-    ];
-  }
+  // No canned demo notifications — real alerts accrue as the app is used.
+  static List<AppNotification> _seed() => [];
 }

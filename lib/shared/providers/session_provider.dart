@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,22 +20,13 @@ final currentUserProvider = Provider<AppUser?>((ref) {
   return null;
 });
 
-/// Debug-only role override used before a real login exists (e.g. widget tests
-/// / first run). Ignored once a user is signed in — the user's role always wins.
-final devRoleOverrideProvider = StateProvider<UserRole?>((ref) => null);
-
 /// The role the app operates as — **derived from the signed-in user**. There is
 /// no manual setter: log in as the right account to get the right side. With
 /// Supabase Auth the same role is also carried in the JWT `app_metadata.role`
 /// claim, which is what the server-side RLS enforces.
 final currentRoleProvider = Provider<UserRole>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user != null) return user.role;
-  if (kDebugMode) {
-    final override = ref.watch(devRoleOverrideProvider);
-    if (override != null) return override;
-  }
-  return UserRole.engineer;
+  return user?.role ?? UserRole.engineer;
 });
 
 /// Display name stamped on the audit trail — the signed-in user.
@@ -101,24 +91,38 @@ class AuthController {
     // The stable AppUser.id is carried in the JWT `app_metadata.app_user_id`
     // claim; the RLS owner-checks key off the same value.
     final authUser = res.user;
-    final appUserId = authUser?.appMetadata['app_user_id'] as String?;
+    // Fallback to Supabase UID if the custom app_user_id metadata is missing
+    final appUserId =
+        (authUser?.appMetadata['app_user_id'] as String?) ?? authUser?.id;
+
     if (authUser == null || appUserId == null) {
-      // Auth user is missing its role/identity claim → misconfigured. Refuse
-      // rather than sign in with no resolvable identity.
       await client.auth.signOut();
       return SignInResult.invalidCredentials;
     }
 
+    // The "must change password" intent travels in the identity claim
+    // (user_metadata), so a forced change set by an admin on one device is
+    // honoured wherever the user actually signs in — not just on the device that
+    // provisioned them.
+    final mustChange =
+        (authUser.userMetadata?['must_change_password'] as bool?) ?? false;
+
     // A user provisioned on another device won't be in this device's roster —
-    // materialise them from the JWT claims so currentUser resolves. Existing
-    // records (the seeds, with their overrides / employee link) are kept as-is.
-    await _ref.read(usersProvider.notifier).upsertFromClaims(
+    // materialise them from the JWT claims so currentUser resolves.
+    // We fallback to 'admin' for the owner email if no role is found in metadata.
+    final rawRole = authUser.appMetadata['role'] as String?;
+    final resolvedRole = UserRole.fromName(
+      rawRole ?? (email == 'owner@gmail.com' ? 'admin' : 'engineer'),
+    );
+
+    await _ref
+        .read(usersProvider.notifier)
+        .upsertFromClaims(
           id: appUserId,
           email: authUser.email ?? '',
           fullName: (authUser.userMetadata?['full_name'] as String?) ?? '',
-          role: UserRole.fromName(
-            authUser.appMetadata['role'] as String? ?? 'engineer',
-          ),
+          role: resolvedRole,
+          mustChangePassword: mustChange,
         );
 
     // A banned user is already rejected by GoTrue above; this is the roster-side
@@ -133,9 +137,7 @@ class AuthController {
     // Now that the session JWT is attached, pull this user's permitted rows.
     await SupabaseBootstrap(client, _ref.read(sharedPreferencesProvider)).run();
 
-    return (local?.mustChangePassword ?? false)
-        ? SignInResult.mustChangePassword
-        : SignInResult.ok;
+    return mustChange ? SignInResult.mustChangePassword : SignInResult.ok;
   }
 
   /// Local path — used only when Supabase is not configured (widget tests and
@@ -149,7 +151,11 @@ class AuthController {
       }
     }
     if (user == null) return SignInResult.invalidCredentials;
-    if (!PasswordHasher.verify(password, user.passwordHash, user.passwordSalt)) {
+    if (!PasswordHasher.verify(
+      password,
+      user.passwordHash,
+      user.passwordSalt,
+    )) {
       return SignInResult.invalidCredentials;
     }
     if (!user.active) return SignInResult.deactivated;
@@ -165,6 +171,41 @@ class AuthController {
       if (u.id == id) return u;
     }
     return null;
+  }
+
+  /// Self-service: the SIGNED-IN user changes THEIR OWN password. This uses the
+  /// GoTrue self-update API against the caller's own session — no service-role,
+  /// no admin rights — which is exactly why it works for a first-login engineer
+  /// or procurement user who must change an admin-set temporary password.
+  ///
+  /// (Contrast [UsersNotifier.setPassword], which is an ADMIN resetting SOMEONE
+  /// ELSE's password via the privileged `admin-users` function — that path is
+  /// admin-only by design and would 403 a non-admin trying to change their own.)
+  ///
+  /// Throws on a remote failure so the caller can surface it and keep the user on
+  /// the change-password screen rather than silently proceeding.
+  Future<void> changeOwnPassword(String newPassword) async {
+    final client = _ref.read(supabaseClientProvider);
+    if (client != null) {
+      // Updates the current session's user; the session stays valid afterwards.
+      // Clearing must_change_password in the SAME self-update means a non-admin
+      // resolves their own forced-change flag with no admin round-trip.
+      await client.auth.updateUser(
+        UserAttributes(
+          password: newPassword,
+          data: {'must_change_password': false},
+        ),
+      );
+    }
+    // Mirror into the local roster (clears must-change; keeps the offline /
+    // credential-fallback hash in step). Only reached if the remote call above
+    // succeeded (or there's no backend — tests / offline dev).
+    final user = _ref.read(currentUserProvider);
+    if (user != null) {
+      await _ref
+          .read(usersProvider.notifier)
+          .applyLocalPassword(user.id, newPassword, mustChange: false);
+    }
   }
 
   Future<void> signOut() async {

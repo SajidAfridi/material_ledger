@@ -12,7 +12,9 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
+import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/widgets/notification_bell.dart';
 
 /// Materials tab hub (IA restructure). A landing page that routes to the
 /// existing materials screens — Inventory, Procurement, Requests, Goods receipt,
@@ -32,10 +34,12 @@ class MaterialsHubScreen extends ConsumerWidget {
     final stockValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
     final openRequests = ref.watch(openRequestCountProvider);
-    // Plans to review + requests to dispatch — badged on the Procurement card.
-    final int procurementQueue =
-        ref.watch(dispatchQueueCountProvider) +
-        ref.watch(planReviewQueueCountProvider);
+    // New projects to accept + plans to review + requests to dispatch —
+    // badged on the Procurement card (must agree with the workspace + Home KPI).
+    final int newProjectsCount = ref.watch(projectsAwaitingAcceptanceCountProvider);
+    final int dispatchCount = ref.watch(dispatchQueueCountProvider);
+    final int planReviewCount = ref.watch(planReviewQueueCountProvider);
+    final int procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
 
     final cards = <Widget>[
       // Office stock control.
@@ -118,18 +122,25 @@ class MaterialsHubScreen extends ConsumerWidget {
           AppSpacing.xxl,
         ),
         children: [
-          BilingualText(
-            english: AppStrings.materials.primary,
-            secondary: AppStrings.materialsSubtitle.primary,
-            englishStyle: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.28,
-              color: AppColors.onSurface,
-            ),
-            secondaryStyle: AppTypography.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: BilingualText(
+                  english: AppStrings.materials.primary,
+                  secondary: AppStrings.materialsSubtitle.primary,
+                  englishStyle: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.28,
+                    color: AppColors.onSurface,
+                  ),
+                  secondaryStyle: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const NotificationBell(),
+            ],
           ),
           const Gap(AppSpacing.lg),
 

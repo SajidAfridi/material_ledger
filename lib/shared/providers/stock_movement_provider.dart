@@ -6,7 +6,7 @@ import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
 
-const _kStockMovementsKey = 'stock_movements_v1';
+const _kStockMovementsKey = 'stock_movements_v2';
 const _uuid = Uuid();
 
 /// The append-only stock ledger. Records accrue from stock actions and are never

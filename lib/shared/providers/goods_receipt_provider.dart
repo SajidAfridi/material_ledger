@@ -7,7 +7,7 @@ import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
 import 'inventory_provider.dart';
 
-const _kGoodsReceiptsKey = 'goods_receipts_v1';
+const _kGoodsReceiptsKey = 'goods_receipts_v2';
 const _uuid = Uuid();
 
 /// All goods-receipt notes (newest first). Recording a receipt increments

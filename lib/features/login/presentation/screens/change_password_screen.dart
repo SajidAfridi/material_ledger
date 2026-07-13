@@ -5,10 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/session_provider.dart';
-import '../../../../shared/providers/users_provider.dart';
 
 /// Forced on first sign-in for admin-created / password-reset accounts — the
 /// user must set their own password before using the app (see the router gate).
@@ -38,11 +38,27 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
     setState(() => _busy = true);
-    await ref
-        .read(usersProvider.notifier)
-        .setPassword(user.id, _newController.text, temporary: false);
+    try {
+      // Self-service update against the user's OWN session — works for a
+      // non-admin changing an admin-set temporary password (the admin-only
+      // provisioning function would 403 here).
+      await ref
+          .read(authControllerProvider)
+          .changeOwnPassword(_newController.text);
+    } catch (_) {
+      // Surface the failure and let them retry — never strand them on a spinner
+      // with the password silently unchanged.
+      if (!mounted) return;
+      setState(() => _busy = false);
+      AppFeedback.warning();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.passwordChangeFailed.primary)),
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() => _busy = false);
+    AppFeedback.confirm();
     context.go(RoutePaths.engineerHome);
   }
 
@@ -70,15 +86,16 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                     ),
                     const Gap(AppSpacing.lg),
                     Text(
-                      'Set a new password',
+                      AppStrings.setNewPassword.primary,
                       style: AppTypography.headlineSmall.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const Gap(AppSpacing.xs),
                     Text(
-                      'Welcome${user != null ? ', ${user.fullName}' : ''}. '
-                      'Choose a password only you know before continuing.',
+                      user != null
+                          ? '${user.fullName} — ${AppStrings.setNewPasswordBody.primary}'
+                          : AppStrings.setNewPasswordBody.primary,
                       style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
@@ -86,24 +103,25 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                     const Gap(AppSpacing.xxl),
                     LedgerTextField(
                       controller: _newController,
-                      label: 'New password',
+                      label: AppStrings.newPasswordLabel.primary,
                       obscureText: true,
                       validator: (v) => (v ?? '').length < 6
-                          ? 'Use at least 6 characters'
+                          ? AppStrings.passwordTooShort.primary
                           : null,
                     ),
                     const Gap(AppSpacing.lg),
                     LedgerTextField(
                       controller: _confirmController,
-                      label: 'Confirm password',
+                      label: AppStrings.confirmPasswordLabel.primary,
                       obscureText: true,
-                      validator: (v) =>
-                          v != _newController.text ? 'Passwords do not match' : null,
+                      validator: (v) => v != _newController.text
+                          ? AppStrings.passwordsDoNotMatch.primary
+                          : null,
                       onSubmitted: (_) => _save(),
                     ),
                     const Gap(AppSpacing.xxl),
                     PrimaryButton(
-                      label: 'Save & continue',
+                      label: AppStrings.saveAndContinue.primary,
                       icon: Icons.check_rounded,
                       isLoading: _busy,
                       onPressed: _busy ? null : _save,

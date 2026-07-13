@@ -227,21 +227,54 @@ create policy receipts_write on goodsReceipts for all
 create policy returns_write on returns for all
   using (app_has_cap('goods')) with check (app_has_cap('goods'));
 
--- Notifications: admin sees all; a broadcast/role-audience notification (no
--- userId) is readable by anyone signed in (the app filters by role
--- client-side); a personally-targeted one (userId set) is readable only by
--- that user or admin. IMPORTANT: this MUST be split into separate
--- insert/update policies, not `for all` — a permissive `for all using(true)`
--- policy also grants blanket SELECT (Postgres ORs permissive policies
--- together for the same command), silently defeating this restriction.
-create policy notifications_read on notifications for select using (
-  app_role() = 'admin'
-  or coalesce(data->>'userId', '') = ''
-  or data->>'userId' = app_user_id()
-);
-create policy notifications_insert on notifications for insert with check (true);
+-- Notifications: admin sees all; a personally-targeted notification (userId
+-- set) is visible only to that user or admin; a role-audience one (userId
+-- empty, audience set) is visible to admin or that role only; a pure
+-- broadcast (both empty) is visible to anyone signed in. Mirrors
+-- notificationVisibleTo() in notification_provider.dart exactly. IMPORTANT:
+-- this MUST be split into separate insert/update policies, not `for all` — a
+-- permissive `for all using(true)` policy also grants blanket SELECT
+-- (Postgres ORs permissive policies together for the same command), silently
+-- defeating this restriction.
+--
+-- (Earlier version of this policy only checked whether userId was empty and
+-- never checked audience, so a role-audience notification was readable by
+-- ANY signed-in user regardless of role — verified and fixed live via the
+-- `tighten_notifications_rls` migration; this file reflects that fix.)
+create or replace function notification_visible_to_caller(p_data jsonb)
+returns boolean language sql stable set search_path to '' as $$
+  select
+    public.app_role() = 'admin'
+    or (
+      coalesce(p_data->>'userId', '') <> ''
+      and p_data->>'userId' = public.app_user_id()
+    )
+    or (
+      coalesce(p_data->>'userId', '') = ''
+      and (
+        coalesce(p_data->>'audience', '') = ''
+        or p_data->>'audience' = public.app_role()
+      )
+    );
+$$;
+
+create policy notifications_read on notifications for select
+  using (notification_visible_to_caller(data));
+-- INSERT/UPDATE have no sender-identity field to check ownership against (any
+-- role legitimately notifies any other role/user, and the upsert-only sync
+-- re-applies a sender's write of a row it cannot itself see), so these only
+-- require a genuinely provisioned app identity. Writes deliberately do NOT use
+-- notification_visible_to_caller — that rejected a sender re-applying a
+-- notification addressed to someone else ("new row violates RLS"; fixed live
+-- via the `fix_notifications_update_sender_writes` migration). Read visibility
+-- is what matters and is gated above. Residual, accepted: a provisioned user
+-- could tamper with another user's notification row — low severity, inherent to
+-- upsert-only sync with no tracked sender field.
+create policy notifications_insert on notifications for insert
+  with check (app_user_id() <> '');
 create policy notifications_update on notifications for update
-  using (true) with check (true);
+  using (app_user_id() <> '')
+  with check (app_user_id() <> '');
 
 -- Config (editable role-permission matrix etc.): admin only.
 create policy config_admin on config for all

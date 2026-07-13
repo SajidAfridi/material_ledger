@@ -58,10 +58,12 @@ class _EngineerNewRequestScreenState
     final lineItems = ref.read(draftLineItemsProvider);
 
     if (selectedProject == null) {
+      AppFeedback.warning();
       _showError(AppStrings.selectProjectRequired.primary);
       return;
     }
     if (lineItems.isEmpty) {
+      AppFeedback.warning();
       _showError(AppStrings.addAtLeastOneItem.primary);
       return;
     }
@@ -119,6 +121,9 @@ class _EngineerNewRequestScreenState
     if (!mounted) return;
     setState(() => _saving = false);
 
+    // Distinct confirm buzz for the app's most important commit — a gloved user
+    // feels the request landed even amid site noise, without watching the toast.
+    AppFeedback.confirm();
     showSyncSnack(context, ref, savedLabel: AppStrings.requestSubmitted.primary);
     context.go(RoutePaths.engineerHome);
   }
@@ -1998,7 +2003,7 @@ class _WebLedgerPanel extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 PrimaryButton(
-                  label: AppStrings.submitRequisition.primary,
+                  label: AppStrings.submitRequest.primary,
                   isLoading: saving,
                   isExpanded: true,
                   onPressed: onSubmit,
@@ -2006,7 +2011,7 @@ class _WebLedgerPanel extends ConsumerWidget {
                 const Gap(AppSpacing.xs),
                 Center(
                   child: Text(
-                    AppStrings.submitRequisition.secondary(lang),
+                    AppStrings.submitRequest.secondary(lang),
                     style: TextStyle(
                       fontSize: 11,
                       color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),

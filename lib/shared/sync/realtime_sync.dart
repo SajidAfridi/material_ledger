@@ -9,9 +9,11 @@ import '../providers/goods_receipt_provider.dart';
 import '../providers/hr_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/language_provider.dart';
+import '../providers/material_plan_provider.dart';
 import '../providers/material_request_provider.dart';
 import '../providers/material_return_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/project_provider.dart';
 import '../providers/rentals_provider.dart';
 import '../providers/stock_movement_provider.dart';
 
@@ -31,17 +33,19 @@ class _Synced {
 
 /// The collections mirrored live. Table ↔ store-key must match SupabaseBootstrap.
 List<_Synced> _synced() => [
-  _Synced('materialRequests', 'material_requests_list_v2', materialRequestsProvider),
+  _Synced('projects', 'projects_list_v1', projectsProvider, ['contractValueAED']),
+  _Synced('materialPlans', 'material_plans_list_v2', materialPlansProvider),
+  _Synced('materialRequests', 'material_requests_list_v3', materialRequestsProvider),
   _Synced('materials', 'materials_list_v3', materialsProvider, ['reservedQty']),
-  _Synced('stockMovements', 'stock_movements_v1', stockMovementsProvider),
-  _Synced('notifications', 'notifications_list_v2', notificationsProvider),
-  _Synced('goodsReceipts', 'goods_receipts_v1', goodsReceiptsProvider),
-  _Synced('returns', 'material_returns_list_v1', returnsProvider),
-  _Synced('rentalUnits', 'rental_units_v1', rentalUnitsProvider),
-  _Synced('rentPayments', 'rent_payments_v1', rentPaymentsProvider),
-  _Synced('employees', 'employees_v2', employeesProvider, ['salaryAED', 'basicWageAED']),
-  _Synced('attendance', 'attendance_v1', attendanceProvider),
-  _Synced('leaveRecords', 'leave_records_v1', leaveRecordsProvider),
+  _Synced('stockMovements', 'stock_movements_v2', stockMovementsProvider),
+  _Synced('notifications', 'notifications_list_v3', notificationsProvider),
+  _Synced('goodsReceipts', 'goods_receipts_v2', goodsReceiptsProvider),
+  _Synced('returns', 'material_returns_list_v2', returnsProvider),
+  _Synced('rentalUnits', 'rental_units_v2', rentalUnitsProvider),
+  _Synced('rentPayments', 'rent_payments_v2', rentPaymentsProvider),
+  _Synced('employees', 'employees_v3', employeesProvider, ['salaryAED', 'basicWageAED']),
+  _Synced('attendance', 'attendance_v2', attendanceProvider),
+  _Synced('leaveRecords', 'leave_records_v2', leaveRecordsProvider),
 ];
 
 /// Live sync: subscribes to Postgres changes on each synced table and applies

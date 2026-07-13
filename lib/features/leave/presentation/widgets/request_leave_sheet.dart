@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
@@ -95,11 +96,13 @@ class _RequestLeaveSheetState extends ConsumerState<RequestLeaveSheet> {
 
   Future<void> _submit() async {
     if (_startDate == null || _endDate == null) {
-      setState(() => _error = 'Pick a start and end date');
+      AppFeedback.warning();
+      setState(() => _error = AppStrings.pickStartEndDate.primary);
       return;
     }
     if (_endDate!.isBefore(_startDate!)) {
-      setState(() => _error = 'End date must be on or after the start date');
+      AppFeedback.warning();
+      setState(() => _error = AppStrings.endAfterStart.primary);
       return;
     }
     final emp = widget.employee;
@@ -108,6 +111,7 @@ class _RequestLeaveSheetState extends ConsumerState<RequestLeaveSheet> {
     if (ref
         .read(leaveRecordsProvider.notifier)
         .leaveOverlaps(emp.id, _startDate!, _endDate!)) {
+      AppFeedback.warning();
       setState(() => _error = AppStrings.leaveOverlapWarning.primary);
       return;
     }
@@ -153,6 +157,7 @@ class _RequestLeaveSheetState extends ConsumerState<RequestLeaveSheet> {
       );
 
       if (!mounted) return;
+      AppFeedback.confirm();
       showSyncSnack(context, ref, savedLabel: AppStrings.leaveSubmitted.primary);
       Navigator.pop(context);
     } catch (e) {

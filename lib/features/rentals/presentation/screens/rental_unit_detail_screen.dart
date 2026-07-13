@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -261,6 +262,7 @@ class RentalUnitDetailScreen extends ConsumerWidget {
     RentPayment payment,
     String unitName,
   ) async {
+    final messenger = ScaffoldMessenger.of(context);
     final reasonController = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -320,6 +322,10 @@ class RentalUnitDetailScreen extends ConsumerWidget {
       refId: payment.unitId,
       detail:
           '$unitName · ${payment.periodMonth}${reason.isEmpty ? '' : ' · $reason'}',
+    );
+    AppFeedback.confirm();
+    messenger.showSnackBar(
+      SnackBar(content: Text('Payment voided · ${payment.periodMonth}')),
     );
   }
 

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_request.dart';
@@ -14,6 +15,7 @@ import '../../../../shared/models/project.dart';
 import '../../../../shared/models/user_role.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/providers/users_provider.dart';
 import '../../../../shared/services/receipt_pdf.dart';
 import '../../../../shared/widgets/request_comments_section.dart';
 import '../widgets/edit_request_sheet.dart';
@@ -42,7 +44,10 @@ class RequestDetailScreen extends ConsumerWidget {
       return Scaffold(
         backgroundColor: AppColors.surface,
         body: Center(
-          child: Text('Request not found', style: AppTypography.titleMedium),
+          child: Text(
+            AppStrings.requestNotFound.primary,
+            style: AppTypography.titleMedium,
+          ),
         ),
       );
     }
@@ -375,7 +380,7 @@ class RequestDetailScreen extends ConsumerWidget {
                           children: [
                             _TimelineCard(request: request, lang: lang),
                             const Gap(AppSpacing.listItemGap),
-                            _VerificationCard(lang: lang),
+                            _VerificationCard(request: request, lang: lang),
                           ],
                         ),
                       ),
@@ -408,7 +413,7 @@ class RequestDetailScreen extends ConsumerWidget {
                   horizontal: AppSpacing.screenHorizontal,
                 ),
                 sliver: SliverToBoxAdapter(
-                  child: _VerificationCard(lang: lang),
+                  child: _VerificationCard(request: request, lang: lang),
                 ),
               ),
             ],
@@ -439,15 +444,25 @@ class RequestDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildStatusChip(RequestStatus status) {
+    // Distinct icon per status so the amber states are distinguishable at a
+    // glance (mirrors the requests list).
     return switch (status) {
-      RequestStatus.draft => StatusChip.info(status.label),
-      RequestStatus.pending => StatusChip.warning(status.label),
-      RequestStatus.sourcing => StatusChip.warning(status.label),
-      RequestStatus.partial => StatusChip.warning(status.label),
-      RequestStatus.dispatched => StatusChip.info(status.label),
-      RequestStatus.received => StatusChip.success(status.label),
-      RequestStatus.onHold => StatusChip.warning(status.label),
-      RequestStatus.cancelled => StatusChip.error(status.label),
+      RequestStatus.draft =>
+        StatusChip.info(status.label, icon: Icons.edit_note_rounded),
+      RequestStatus.pending =>
+        StatusChip.warning(status.label, icon: Icons.schedule_rounded),
+      RequestStatus.sourcing =>
+        StatusChip.warning(status.label, icon: Icons.shopping_cart_rounded),
+      RequestStatus.partial =>
+        StatusChip.warning(status.label, icon: Icons.incomplete_circle_rounded),
+      RequestStatus.dispatched =>
+        StatusChip.info(status.label, icon: Icons.local_shipping_rounded),
+      RequestStatus.received =>
+        StatusChip.success(status.label, icon: Icons.check_circle_rounded),
+      RequestStatus.onHold =>
+        StatusChip.warning(status.label, icon: Icons.pause_circle_rounded),
+      RequestStatus.cancelled =>
+        StatusChip.error(status.label, icon: Icons.cancel_rounded),
     };
   }
 
@@ -592,7 +607,7 @@ class _DraftActionButtons extends ConsumerWidget {
                       ),
                     ),
                     content: Text(
-                      'This draft will be permanently removed.',
+                      AppStrings.deleteDraftBody.primary,
                       style: AppTypography.bodyMedium,
                     ),
                     actions: [
@@ -622,6 +637,7 @@ class _DraftActionButtons extends ConsumerWidget {
                     .read(materialRequestsProvider.notifier)
                     .removeRequest(requestId);
                 if (!context.mounted) return;
+                AppFeedback.warning();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(AppStrings.requestDeletedSuccess.primary),
@@ -689,11 +705,8 @@ class _DraftActionButtons extends ConsumerWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
                     ),
-                    title: const Text('Submit request?'),
-                    content: const Text(
-                      'This sends the request to procurement and reserves the '
-                      "stock. You can't edit it after submitting.",
-                    ),
+                    title: Text(AppStrings.submitRequestQuestion.primary),
+                    content: Text(AppStrings.submitRequestBody.primary),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -701,7 +714,7 @@ class _DraftActionButtons extends ConsumerWidget {
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Submit'),
+                        child: Text(AppStrings.submitShort.primary),
                       ),
                     ],
                   ),
@@ -711,6 +724,7 @@ class _DraftActionButtons extends ConsumerWidget {
                     .read(materialRequestsProvider.notifier)
                     .submitDraft(requestId);
                 if (!context.mounted) return;
+                AppFeedback.confirm();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(AppStrings.requestSubmitted.primary),
@@ -916,7 +930,7 @@ class _MaterialBreakdownCard extends StatelessWidget {
                     ),
                     const Gap(AppSpacing.md),
                     Text(
-                      'No items in this request',
+                      AppStrings.noItemsInRequest.primary,
                       style: AppTypography.bodySmall,
                     ),
                   ],
@@ -1349,13 +1363,37 @@ class _TimelineEvent extends StatelessWidget {
 }
 
 // ─── Verification Card ──────────────────────────────────────────────
-class _VerificationCard extends StatelessWidget {
-  const _VerificationCard({required this.lang});
+class _VerificationCard extends ConsumerWidget {
+  const _VerificationCard({required this.request, required this.lang});
 
+  final MaterialRequest request;
   final dynamic lang;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Requester = the login that actually created this request (real attribution
+    // via engineerId; the roster resolves the display name and role). No name is
+    // invented — an unresolvable id shows an honest placeholder.
+    var requesterName = '—';
+    var requesterTitle = UserRole.engineer.label;
+    final engId = request.engineerId;
+    if (engId != null) {
+      for (final u in ref.watch(usersProvider)) {
+        if (u.id == engId) {
+          requesterName = u.fullName;
+          requesterTitle = u.role.label;
+          break;
+        }
+      }
+    }
+
+    // Issuer = the warehouse, shown only once the request has actually been
+    // issued (dispatched / partially dispatched / received). We don't record the
+    // individual dispatcher, so this is an org-level label, never a fake person.
+    final issued = request.status == RequestStatus.dispatched ||
+        request.status == RequestStatus.partial ||
+        request.status == RequestStatus.received;
+
     return LedgerCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1371,19 +1409,21 @@ class _VerificationCard extends StatelessWidget {
           ),
           const Gap(AppSpacing.xxl),
 
-          // Issued By
+          // Requested By (real)
           _PersonRow(
-            roleLabel: AppStrings.issuedBy.primary,
-            name: 'Arshad Khan',
-            title: 'Store Supervisor',
+            roleLabel: AppStrings.requestedBy.primary,
+            name: requesterName,
+            title: requesterTitle,
           ),
           const Gap(AppSpacing.xl),
 
-          // Requested By
+          // Issued By — org-level, only after it's actually been issued.
           _PersonRow(
-            roleLabel: AppStrings.requestedBy.primary,
-            name: 'Engr. Salman Ahmed',
-            title: 'Project Lead',
+            roleLabel: AppStrings.issuedBy.primary,
+            name: issued ? AppStrings.warehouseParty.primary : '—',
+            title: issued
+                ? AppStrings.warehouseParty.secondary(lang)
+                : AppStrings.notIssuedYet.primary,
           ),
         ],
       ),

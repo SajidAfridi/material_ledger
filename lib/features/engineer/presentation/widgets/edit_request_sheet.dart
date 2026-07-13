@@ -4,6 +4,7 @@ import 'package:gap/gap.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
+import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
@@ -62,6 +63,30 @@ class _EditRequestSheetState extends ConsumerState<EditRequestSheet> {
 
   Future<void> _save(MaterialRequest req) async {
     if (_saving) return;
+    // Dropping whole lines is irreversible and reaches procurement immediately —
+    // confirm that specifically. A pure quantity tweak saves without a prompt.
+    if (_removed.isNotEmpty) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(AppStrings.editRequestConfirmTitle.primary),
+          content: Text(
+            '${_removed.length} ${AppStrings.editRequestDropBody.primary}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(AppStrings.cancel.primary),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(AppStrings.saveChanges.primary),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
     setState(() => _saving = true);
     final notifier = ref.read(materialRequestsProvider.notifier);
     for (final line in req.lineItems) {
@@ -87,6 +112,7 @@ class _EditRequestSheetState extends ConsumerState<EditRequestSheet> {
         );
     if (!mounted) return;
     setState(() => _saving = false);
+    AppFeedback.confirm();
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(AppStrings.requestEdited.primary)),
