@@ -102,6 +102,51 @@ void main() {
       expect(admin().role, UserRole.admin);
     });
 
+    test('cannot delete the only active admin', () async {
+      final adminId = admin().id;
+      final ok =
+          await container.read(usersProvider.notifier).deleteUser(adminId);
+      expect(ok, false);
+      // The account is still there — no in-app recovery if this slipped through.
+      expect(
+        container.read(usersProvider).any((u) => u.id == adminId),
+        true,
+      );
+    });
+
+    test('can delete an admin once another active admin exists', () async {
+      final firstAdminId = admin().id;
+      // Promote a second account to admin so the first is no longer the only one.
+      final second = await container.read(usersProvider.notifier).createUser(
+            fullName: 'Second Admin',
+            email: 'second.admin@yorksac.ae',
+            role: UserRole.admin,
+            password: 'temp1234',
+          );
+      expect(second.role, UserRole.admin);
+
+      final ok =
+          await container.read(usersProvider.notifier).deleteUser(firstAdminId);
+      expect(ok, true);
+      expect(
+        container.read(usersProvider).any((u) => u.id == firstAdminId),
+        false,
+      );
+    });
+
+    test('deletes a non-admin user and returns true', () async {
+      final eng = container
+          .read(usersProvider)
+          .firstWhere((u) => u.role == UserRole.engineer);
+      final ok =
+          await container.read(usersProvider.notifier).deleteUser(eng.id);
+      expect(ok, true);
+      expect(
+        container.read(usersProvider).any((u) => u.id == eng.id),
+        false,
+      );
+    });
+
     test('rejects linking an employee already linked to another user', () async {
       final eng = container
           .read(usersProvider)

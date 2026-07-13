@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,6 +22,8 @@ import 'shared/sync/sync_backend.dart';
 /// Empty (the default) → crash reporting is OFF and the app uses the no-op
 /// reporter, so local/dev builds and anyone without a DSN run unchanged.
 const _sentryDsn = String.fromEnvironment('SENTRY_DSN');
+const _appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
+const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 
 /// Backend connection. Production builds MUST be pointed at the real (UAE
 /// self-hosted) instance explicitly:
@@ -97,10 +98,9 @@ void _bootstrap(ObservabilityService observability) {
       final prefs = await SharedPreferences.getInstance();
 
       // Installed version/build — drives the force-update gate + version footers.
-      final pkg = await PackageInfo.fromPlatform();
       final versionInfo = AppVersionInfo(
-        version: pkg.version,
-        build: int.tryParse(pkg.buildNumber) ?? 1,
+        version: _appVersion,
+        build: int.tryParse(_appBuild) ?? 1,
       );
 
       // Set system UI style to match the light, open aesthetic

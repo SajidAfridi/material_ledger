@@ -136,16 +136,6 @@ class EngineerProfileScreen extends ConsumerWidget {
                       title: 'Activity Log',
                       onTap: () => context.push(RoutePaths.activityLog),
                     ),
-                    // Dev-only role switcher. In production the role comes from
-                    // the signed-in user's credentials and routing is automatic,
-                    // so this is hidden in release builds.
-                    if (kDebugMode)
-                      _ProfileTile(
-                        icon: Icons.badge_outlined,
-                        title: 'Role (dev)',
-                        subtitle: role.label,
-                        onTap: () => RolePickerSheet.show(context),
-                      ),
                     // Dev-only connectivity simulator — demo the offline →
                     // queued → synced flow without leaving Wi-Fi. Release-hidden.
                     if (kDebugMode)

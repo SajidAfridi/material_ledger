@@ -12,20 +12,46 @@ import '../../../../shared/models/rental_unit.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/rentals_provider.dart';
+import '../../../../shared/widgets/notification_bell.dart';
 import '../widgets/add_unit_sheet.dart';
 
 /// Rentals module home: portfolio summary + a list of units with their current
 /// rent status. Read & write (add unit, record payment) for procurement/admin.
-class RentalsDashboardScreen extends ConsumerWidget {
+class RentalsDashboardScreen extends ConsumerStatefulWidget {
   const RentalsDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RentalsDashboardScreen> createState() =>
+      _RentalsDashboardScreenState();
+}
+
+class _RentalsDashboardScreenState
+    extends ConsumerState<RentalsDashboardScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matches(RentalUnit u) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return u.unitName.toLowerCase().contains(q) ||
+        (u.tenantName ?? '').toLowerCase().contains(q) ||
+        u.location.toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
     final units = ref.watch(rentalUnitsProvider);
     final summary = ref.watch(rentalsSummaryProvider);
     final canWrite = ref.watch(canWriteRentalsProvider);
+    final visibleUnits = units.where(_matches).toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -44,6 +70,7 @@ class RentalsDashboardScreen extends ConsumerWidget {
             color: AppColors.onSurfaceVariant,
           ),
         ),
+        actions: const [NotificationBell()],
       ),
       floatingActionButton: canWrite
           ? FloatingActionButton.extended(
@@ -150,11 +177,51 @@ class RentalsDashboardScreen extends ConsumerWidget {
                     ),
                   ),
                 )
-              else
-                for (final unit in units) ...[
-                  _UnitCard(unit: unit, currency: currency),
-                  const Gap(AppSpacing.listItemGap),
-                ],
+              else ...[
+                TextField(
+                  controller: _searchController,
+                  onChanged: (v) => setState(() => _query = v),
+                  style: AppTypography.bodyMedium,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerHighest,
+                    hintText: 'Search unit, tenant, location',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const Gap(AppSpacing.md),
+                if (visibleUnits.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.lg),
+                    child: Center(
+                      child: Text(
+                        'No matching units',
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  for (final unit in visibleUnits) ...[
+                    _UnitCard(unit: unit, currency: currency),
+                    const Gap(AppSpacing.listItemGap),
+                  ],
+              ],
               const Gap(AppSpacing.huge),
             ],
           ),

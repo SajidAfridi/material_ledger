@@ -178,6 +178,24 @@ abstract final class AppStrings {
     ur: 'کوئی حالیہ سرگرمی نہیں',
     hi: 'कोई हालिया गतिविधि नहीं',
   );
+  static const viewAll = TranslatableString(
+    en: 'View all',
+    ar: 'عرض الكل',
+    ur: 'سب دیکھیں',
+    hi: 'सभी देखें',
+  );
+  static const requestsThisWeek = TranslatableString(
+    en: 'Requests this week',
+    ar: 'الطلبات هذا الأسبوع',
+    ur: 'اس ہفتے کی درخواستیں',
+    hi: 'इस सप्ताह के अनुरोध',
+  );
+  static const vsLastWeek = TranslatableString(
+    en: 'vs last week',
+    ar: 'مقارنة بالأسبوع الماضي',
+    ur: 'پچھلے ہفتے کے مقابلے',
+    hi: 'पिछले सप्ताह की तुलना में',
+  );
   static const noDataYet = TranslatableString(
     en: 'No data yet',
     ar: 'لا توجد بيانات بعد',

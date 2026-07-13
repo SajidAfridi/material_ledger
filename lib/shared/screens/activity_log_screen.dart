@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../app/router.dart';
 import '../../core/constants/constants.dart';
 import '../../core/widgets/widgets.dart';
 import '../models/app_strings.dart';
@@ -191,10 +193,22 @@ class _AuditTile extends StatelessWidget {
 
   final AuditEntry entry;
 
+  /// A material-request entry can drill into that request's detail screen —
+  /// request ids are the only audited refIds with a dedicated detail route, so
+  /// only those tiles are tappable (no dead taps on entries with nowhere to go).
+  String? get _requestId {
+    final ref = entry.refId;
+    return (ref != null && ref.startsWith('req-')) ? ref : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final (icon, color) = _moduleStyle(entry.module);
+    final requestId = _requestId;
     return LedgerCard(
+      onTap: requestId == null
+          ? null
+          : () => context.push(RoutePaths.requestDetailPath(requestId)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -259,6 +273,14 @@ class _AuditTile extends StatelessWidget {
               ],
             ),
           ),
+          if (requestId != null) ...[
+            const Gap(AppSpacing.xs),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppColors.onSurfaceVariant,
+            ),
+          ],
         ],
       ),
     );

@@ -114,9 +114,16 @@ class FcmPushService implements PushService {
     if (_ready) return;
     try {
       await Firebase.initializeApp();
-    } catch (e, st) {
-      _observe(e, st);
-      return; // No Firebase config present yet — push stays off.
+    } catch (_) {
+      // No Firebase config present yet (no google-services.json /
+      // GoogleService-Info.plist + Firebase.initializeApp options). Push stays
+      // inactive BY DESIGN until credentials are added — this is an expected,
+      // benign state, so it must NOT be reported as an error (doing so logged a
+      // full stack trace on every launch). Sentry/Supabase degrade the same way.
+      if (kDebugMode) {
+        debugPrint('[push] Firebase not configured — push notifications off.');
+      }
+      return;
     }
     _ready = true;
 

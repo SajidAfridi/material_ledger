@@ -53,30 +53,34 @@ class RolePermissionsNotifier extends StateNotifier<RolePermissions> {
 
   /// Grant/revoke [cap] for [role] (Admin/structural caps are ignored). After
   /// persisting, the affected role's users have their JWT caps re-stamped so the
-  /// server enforces exactly what the matrix now shows.
-  Future<void> setCapability(
+  /// server enforces exactly what the matrix now shows. Returns the number of
+  /// users whose re-stamp failed (0 = fully applied), so the UI can tell the
+  /// admin if some users' server-side access lags the matrix.
+  Future<int> setCapability(
     UserRole role,
     RoleCapability cap,
     bool value,
   ) async {
     final next = state.setCapability(role, cap, value);
-    if (identical(next, state)) return; // not editable → no-op
+    if (identical(next, state)) return 0; // not editable → no-op
     state = next;
     await _persist();
-    await _ref.read(usersProvider.notifier).restampRoleClaims(role);
+    return _ref.read(usersProvider.notifier).restampRoleClaims(role);
   }
 
-  Future<void> resetRole(UserRole role) async {
+  Future<int> resetRole(UserRole role) async {
     state = state.resetRole(role);
     await _persist();
-    await _ref.read(usersProvider.notifier).restampRoleClaims(role);
+    return _ref.read(usersProvider.notifier).restampRoleClaims(role);
   }
 
-  Future<void> resetAll() async {
+  Future<int> resetAll() async {
     state = RolePermissions.fromRoleDefaults();
     await _persist();
+    var failures = 0;
     for (final role in editableRoles) {
-      await _ref.read(usersProvider.notifier).restampRoleClaims(role);
+      failures += await _ref.read(usersProvider.notifier).restampRoleClaims(role);
     }
+    return failures;
   }
 }

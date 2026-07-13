@@ -10,6 +10,7 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/sync/sync_engine.dart';
+import '../../../../shared/widgets/notification_bell.dart';
 
 /// "More" tab — administration ONLY (admin role). The operational modules that
 /// used to live in the old Admin Panel (procurement, inventory, requests,
@@ -34,18 +35,25 @@ class MoreHubScreen extends ConsumerWidget {
             AppSpacing.xxl,
           ),
           children: [
-            BilingualText(
-              english: AppStrings.adminSettings.primary,
-              secondary: AppStrings.adminSettingsSubtitle.primary,
-              englishStyle: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.28,
-                color: AppColors.onSurface,
-              ),
-              secondaryStyle: AppTypography.bodySmall.copyWith(
-                color: AppColors.onSurfaceVariant,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: BilingualText(
+                    english: AppStrings.adminSettings.primary,
+                    secondary: AppStrings.adminSettingsSubtitle.primary,
+                    englishStyle: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.28,
+                      color: AppColors.onSurface,
+                    ),
+                    secondaryStyle: AppTypography.bodySmall.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const NotificationBell(),
+              ],
             ),
             const Gap(AppSpacing.xl),
 

@@ -44,7 +44,6 @@ import '../features/procurement/presentation/screens/procurement_plan_review_scr
 import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
-import '../features/settings/presentation/screens/settings_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
 import '../shared/models/app_config.dart';
 import '../shared/models/app_user.dart';
@@ -110,7 +109,6 @@ abstract final class RoutePaths {
   static const String inventory = '/admin/inventory';
   static const String stockHistory = '/admin/inventory/history';
   static const String transactions = '/admin/transactions';
-  static const String settings = '/admin/settings';
   static const String goodsReceipt = '/admin/goods-receipt';
   static const String finance = '/admin/finance';
   static const String adminPanel = '/admin/panel'; // legacy → redirects to /more
@@ -204,7 +202,6 @@ bool _isAllowedForRole(
   // Reached from the profile menu / shared across every role.
   const sharedAll = {
     RoutePaths.engineerHome,
-    RoutePaths.settings,
     RoutePaths.about,
     RoutePaths.notifications,
     RoutePaths.activityLog,
@@ -599,11 +596,6 @@ GoRouter createAppRouter({
         path: RoutePaths.transactions,
         pageBuilder: (context, state) =>
             _framed(state.pageKey, const TransactionsScreen()),
-      ),
-      GoRoute(
-        path: RoutePaths.settings,
-        pageBuilder: (context, state) =>
-            _framed(state.pageKey, const SettingsScreen()),
       ),
       GoRoute(
         path: RoutePaths.goodsReceipt,

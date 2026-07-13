@@ -27,6 +27,7 @@ import 'package:material_ledger/features/engineer/presentation/screens/engineer_
 import 'package:material_ledger/features/admin/presentation/screens/access_roles_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/user_management_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/admin_projects_screen.dart';
+import 'package:material_ledger/features/admin/presentation/screens/admin_requests_screen.dart';
 import 'package:material_ledger/features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import 'package:material_ledger/features/rentals/presentation/widgets/record_payment_sheet.dart';
 import 'package:material_ledger/features/leave/presentation/screens/my_leave_screen.dart';
@@ -114,6 +115,11 @@ void main() {
     });
     testWidgets('Admin projects (job register + value)', (t) async {
       await _smoke(t, const AdminProjectsScreen(), email: _owner);
+    });
+    testWidgets('Admin requests (search + status filter)', (t) async {
+      await _smoke(t, const AdminRequestsScreen(), email: _owner);
+      // Status filter chips render.
+      expect(find.text('On hold'), findsOneWidget);
     });
     testWidgets('Rentals dashboard', (t) async {
       await _smoke(t, const RentalsDashboardScreen(), email: _owner);

@@ -14,6 +14,7 @@ import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/widgets/notification_bell.dart';
 
 /// Materials tab hub (IA restructure). A landing page that routes to the
 /// existing materials screens — Inventory, Procurement, Requests, Goods receipt,
@@ -121,18 +122,25 @@ class MaterialsHubScreen extends ConsumerWidget {
           AppSpacing.xxl,
         ),
         children: [
-          BilingualText(
-            english: AppStrings.materials.primary,
-            secondary: AppStrings.materialsSubtitle.primary,
-            englishStyle: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.28,
-              color: AppColors.onSurface,
-            ),
-            secondaryStyle: AppTypography.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: BilingualText(
+                  english: AppStrings.materials.primary,
+                  secondary: AppStrings.materialsSubtitle.primary,
+                  englishStyle: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.28,
+                    color: AppColors.onSurface,
+                  ),
+                  secondaryStyle: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const NotificationBell(),
+            ],
           ),
           const Gap(AppSpacing.lg),
 

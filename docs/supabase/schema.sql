@@ -260,14 +260,21 @@ $$;
 
 create policy notifications_read on notifications for select
   using (notification_visible_to_caller(data));
--- INSERT has no sender-identity field to check ownership against (any role
--- can legitimately notify any other role/user), so this only requires a
--- genuinely provisioned app identity rather than a bare/unclaimed session.
+-- INSERT/UPDATE have no sender-identity field to check ownership against (any
+-- role legitimately notifies any other role/user, and the upsert-only sync
+-- re-applies a sender's write of a row it cannot itself see), so these only
+-- require a genuinely provisioned app identity. Writes deliberately do NOT use
+-- notification_visible_to_caller — that rejected a sender re-applying a
+-- notification addressed to someone else ("new row violates RLS"; fixed live
+-- via the `fix_notifications_update_sender_writes` migration). Read visibility
+-- is what matters and is gated above. Residual, accepted: a provisioned user
+-- could tamper with another user's notification row — low severity, inherent to
+-- upsert-only sync with no tracked sender field.
 create policy notifications_insert on notifications for insert
   with check (app_user_id() <> '');
 create policy notifications_update on notifications for update
-  using (notification_visible_to_caller(data))
-  with check (notification_visible_to_caller(data));
+  using (app_user_id() <> '')
+  with check (app_user_id() <> '');
 
 -- Config (editable role-permission matrix etc.): admin only.
 create policy config_admin on config for all

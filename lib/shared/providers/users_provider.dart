@@ -63,10 +63,16 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
 
   /// Re-stamp JWT caps for every (non-admin) user of [role] after the role
   /// matrix changed, so server-side RLS immediately tracks the admin's edit
-  /// rather than diverging from the shown access. Best-effort per user; a no-op
-  /// when Supabase isn't configured (tests / offline).
-  Future<void> restampRoleClaims(UserRole role) async {
-    if (_client == null || role == UserRole.admin) return;
+  /// rather than diverging from the shown access. A no-op (returns 0) when
+  /// Supabase isn't configured (tests / offline).
+  ///
+  /// Returns the number of users whose re-stamp FAILED. One user's failure
+  /// doesn't block the rest, but the count is surfaced to the admin rather than
+  /// swallowed — a partial failure means those users' server-side access lags
+  /// the matrix until they next sign in (which re-issues a fresh claim).
+  Future<int> restampRoleClaims(UserRole role) async {
+    if (_client == null || role == UserRole.admin) return 0;
+    var failures = 0;
     for (final u in state) {
       if (u.role != role) continue;
       try {
@@ -77,9 +83,10 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
           'caps': _claimCaps(u),
         });
       } catch (_) {
-        // One user's failure shouldn't block the rest.
+        failures++;
       }
     }
+    return failures;
   }
 
   /// Calls the privileged `admin-users` function. A no-op (returns null) when no
@@ -343,10 +350,15 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     return true;
   }
 
-  Future<void> deleteUser(String id) async {
+  /// Permanently delete an account. Refuses to delete the last active admin —
+  /// that would leave the system with no way back into the admin panel (there is
+  /// no self-signup). Returns false if blocked, mirroring [setActive]/[setRole].
+  Future<bool> deleteUser(String id) async {
+    if (_isLastActiveAdmin(id)) return false;
     await _adminFn({'action': 'delete', 'appUserId': id});
     state = state.where((u) => u.id != id).toList();
     await _store.writeAll(state);
+    return true;
   }
 
   /// Link (or unlink, with `null`) this login to an HR roster [Employee] — so
