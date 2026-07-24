@@ -24,6 +24,7 @@ dependencies:
   # UI Utilities
   gap:
   flutter_svg: ^2.0.17
+  cupertino_icons: ^1.0.8
 
   # Utilities
   intl:
@@ -45,7 +46,8 @@ dependencies:
   sentry_flutter: ^9.0.0
   # Backend (self-hosted Supabase / Postgres in a UAE region). Only active when
   # SUPABASE_URL + SUPABASE_ANON_KEY are supplied at build time (--dart-define);
-  # otherwise the app uses the local sync backend (unchanged offline behaviour).
+  # release startup fails closed. Local mode requires explicit development
+  # defines and is never a production fallback.
   supabase_flutter: ^2.5.0
   # Push notification TRANSPORT ONLY (Supabase remains the backend/auth/db).
   # A no-op until google-services.json / GoogleService-Info.plist are added —

@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
+import 'shared/models/backend_configuration.dart';
+import 'shared/models/backend_failure_copy.dart';
 import 'shared/providers/language_provider.dart';
 import 'shared/services/app_config_service.dart';
 import 'shared/services/observability_service.dart';
@@ -22,7 +24,10 @@ import 'shared/sync/sync_backend.dart';
 /// Empty (the default) → crash reporting is OFF and the app uses the no-op
 /// reporter, so local/dev builds and anyone without a DSN run unchanged.
 const _sentryDsn = String.fromEnvironment('SENTRY_DSN');
-const _appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
+const _appVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '1.0.0',
+);
 const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 
 /// Backend connection. Production builds MUST be pointed at the real (UAE
@@ -31,20 +36,8 @@ const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 ///   --dart-define=SUPABASE_ANON_KEY=…
 const _envSupabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const _envSupabaseKey = String.fromEnvironment('SUPABASE_ANON_KEY');
-
-/// Debug-only convenience: the shared Frankfurt DEMO project (permissive RLS,
-/// not UAE-resident). A RELEASE build NEVER falls back to this — so production
-/// credentials, RLS, and data-residency can never silently be the demo's. Point
-/// a release build at the real backend with the --dart-defines above.
-const _demoSupabaseUrl = 'https://czykuksmlwswjsgotrpo.supabase.co';
-const _demoSupabaseKey = 'sb_publishable_10ZCSxRXuNhS6x-hYOudpg_hMK3VtY6';
-
-final _supabaseUrl = _envSupabaseUrl.isNotEmpty
-    ? _envSupabaseUrl
-    : (kReleaseMode ? '' : _demoSupabaseUrl);
-final _supabaseAnonKey = _envSupabaseKey.isNotEmpty
-    ? _envSupabaseKey
-    : (kReleaseMode ? '' : _demoSupabaseKey);
+const _allowLocalDevelopment = bool.fromEnvironment('ALLOW_LOCAL_DEVELOPMENT');
+const _localDemoPassword = String.fromEnvironment('LOCAL_DEMO_PASSWORD');
 
 void main() {
   // No DSN configured → boot with the no-op reporter (unchanged behaviour).
@@ -53,23 +46,20 @@ void main() {
     return;
   }
   // DSN present → initialise Sentry, then boot with the Sentry-backed reporter.
-  SentryFlutter.init(
-    (options) {
-      options.dsn = _sentryDsn;
-      options.environment = const String.fromEnvironment(
-        'SENTRY_ENV',
-        defaultValue: 'production',
-      );
-      // Privacy first — this app holds salaries, financials and HR data.
-      options.sendDefaultPii = false; // no IP, device name, etc.
-      options.beforeBreadcrumb = SentryObservability.scrubBreadcrumb;
-      options.beforeSend = SentryObservability.scrubEvent;
-      options.attachStacktrace = true;
-      // Internal tool, tiny user base → skip performance-tracing overhead.
-      options.tracesSampleRate = 0.0;
-    },
-    appRunner: () => _bootstrap(const SentryObservability()),
-  );
+  SentryFlutter.init((options) {
+    options.dsn = _sentryDsn;
+    options.environment = const String.fromEnvironment(
+      'SENTRY_ENV',
+      defaultValue: 'production',
+    );
+    // Privacy first — this app holds salaries, financials and HR data.
+    options.sendDefaultPii = false; // no IP, device name, etc.
+    options.beforeBreadcrumb = SentryObservability.scrubBreadcrumb;
+    options.beforeSend = SentryObservability.scrubEvent;
+    options.attachStacktrace = true;
+    // Internal tool, tiny user base → skip performance-tracing overhead.
+    options.tracesSampleRate = 0.0;
+  }, appRunner: () => _bootstrap(const SentryObservability()));
 }
 
 /// Boots the app with [observability] wired into every error path. Identical
@@ -83,7 +73,11 @@ void _bootstrap(ObservabilityService observability) {
       // Framework + platform errors → crash reporting.
       FlutterError.onError = (details) {
         FlutterError.presentError(details);
-        observability.recordError(details.exception, details.stack, fatal: true);
+        observability.recordError(
+          details.exception,
+          details.stack,
+          fatal: true,
+        );
       };
       binding.platformDispatcher.onError = (error, stack) {
         observability.recordError(error, stack, fatal: true);
@@ -96,6 +90,17 @@ void _bootstrap(ObservabilityService observability) {
       ErrorWidget.builder = (details) => _CrashFallback(details: details);
 
       final prefs = await SharedPreferences.getInstance();
+      final backend = BackendConfiguration.resolve(
+        supabaseUrl: _envSupabaseUrl,
+        supabaseAnonKey: _envSupabaseKey,
+        isRelease: kReleaseMode,
+        allowLocalDevelopment: _allowLocalDevelopment,
+        localDemoPassword: _localDemoPassword,
+      );
+      if (backend.mode == BackendStartupMode.blocked) {
+        runApp(_BackendConfigurationFailure(reason: backend.failureReason));
+        return;
+      }
 
       // Installed version/build — drives the force-update gate + version footers.
       final versionInfo = AppVersionInfo(
@@ -119,14 +124,14 @@ void _bootstrap(ObservabilityService observability) {
         observabilityProvider.overrideWithValue(observability),
       ];
 
-      // Point the sync seam at Supabase when configured; otherwise the local
-      // backend keeps the app fully offline-capable.
-      if (_supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty) {
+      // Local storage is available only through explicit non-release
+      // ALLOW_LOCAL_DEVELOPMENT. Production is fail-closed above.
+      if (backend.usesSupabase) {
         await Supabase.initialize(
-          url: _supabaseUrl,
+          url: backend.supabaseUrl,
           // Public client key (anon-equivalent). A self-hosted instance supplies
           // its own here.
-          publishableKey: _supabaseAnonKey,
+          publishableKey: backend.supabaseAnonKey,
         );
         final client = Supabase.instance.client;
         // Expose the client so the auth layer signs in against Supabase Auth,
@@ -151,15 +156,75 @@ void _bootstrap(ObservabilityService observability) {
       }
 
       runApp(
-        ProviderScope(
-          overrides: overrides,
-          child: const MaterialLedgerApp(),
-        ),
+        ProviderScope(overrides: overrides, child: const MaterialLedgerApp()),
       );
     },
     // Uncaught async errors.
     (error, stack) => observability.recordError(error, stack, fatal: true),
   );
+}
+
+/// Operationally closed startup state. No repositories, routes or local data
+/// are exposed when backend configuration fails validation.
+class _BackendConfigurationFailure extends StatelessWidget {
+  const _BackendConfigurationFailure({required this.reason});
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFFF7F9FB),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 42,
+                    color: Color(0xFF5F6368),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    BackendFailureCopy.title.primary,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF191C1E),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    BackendFailureCopy.body.primary,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Color(0xFF5F6368)),
+                  ),
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      reason,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9B1C1C),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Calm replacement for Flutter's red/grey error box. Fully self-contained (no

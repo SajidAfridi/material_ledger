@@ -240,6 +240,13 @@ class MaterialItem {
     'updatedAt': updatedAt.toIso8601String(),
   };
 
+  /// Shared catalog/stock payload. Commercial cost and device-derived
+  /// reservation state are intentionally excluded from the broadly readable
+  /// materials row; V7 will store protected cost in its normalized server model.
+  Map<String, dynamic> toSharedJson() => toJson()
+    ..remove('unitPrice')
+    ..remove('reservedQty');
+
   factory MaterialItem.fromJson(Map<String, dynamic> json) => MaterialItem(
     id: json['id'] as String,
     name: json['name'] as String,
@@ -247,7 +254,7 @@ class MaterialItem {
     category: MaterialCategory.fromLabel(json['category'] as String),
     unit: MaterialUnit.fromSymbol(json['unit'] as String),
     quantity: (json['quantity'] as num).toDouble(),
-    unitPrice: (json['unitPrice'] as num).toDouble(),
+    unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
     minStockLevel: (json['minStockLevel'] as num?)?.toDouble() ?? 0,
     reservedQty: (json['reservedQty'] as num?)?.toDouble() ?? 0,
     brand: json['brand'] as String? ?? '',

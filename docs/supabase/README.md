@@ -1,5 +1,10 @@
 # Backend setup — self-hosted Supabase (UAE region)
 
+> **Legacy implementation note.** The current Nexus V7 authority is
+> [`../nexus-v7/README.md`](../nexus-v7/README.md) and ADR-001. This document
+> describes the generic JSONB sync generation and must not be treated as the
+> normalized V7 schema or rollout plan.
+
 Because data must reside on **UAE soil**, the backend is **self-hosted Supabase /
 Postgres** in a UAE region (AWS `me-central-1` Dubai, or Azure UAE North). Managed
 Supabase Cloud has no UAE region, and Firebase can't self-host — so this is the path.

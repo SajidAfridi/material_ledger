@@ -66,9 +66,9 @@ class SupabaseBootstrap {
   /// never be present in the cloud row). Salary/basic-wage are admin-device-local.
   static const _preserveLocalKeys = <String, List<String>>{
     'employees': ['salaryAED', 'basicWageAED'],
-    // reservedQty is derived per-device from open requests — never overwrite it
-    // with a cloud row (which doesn't carry it).
-    'materials': ['reservedQty'],
+    // Cost is commercially protected and reservedQty is derived per-device;
+    // neither belongs in the broadly readable shared materials row.
+    'materials': ['unitPrice', 'reservedQty'],
     // Contract value is finance-gated in the UI; kept off the shared payload
     // the same way salary is (see ProjectsNotifier._syncProject).
     'projects': ['contractValueAED'],
@@ -80,9 +80,19 @@ class SupabaseBootstrap {
       // Merge cloud into local rather than overwrite: cloud wins on a shared id,
       // but a local-only row (e.g. an offline create not yet pushed) is kept, so
       // launch / re-login hydration can never drop unsynced local data.
+      final safeRows = [
+        for (final rawRow in rows)
+          {
+            ...rawRow,
+            'data': sanitizeForCloud(
+              table,
+              Map<String, dynamic>.from(rawRow['data'] as Map),
+            ),
+          },
+      ];
       final merged = mergeRows(
         _prefs.getString(key),
-        rows,
+        safeRows,
         preserveLocalKeys: _preserveLocalKeys[table] ?? const [],
       );
       await _prefs.setString(key, jsonEncode(merged));
@@ -95,9 +105,24 @@ class SupabaseBootstrap {
     if (list.isEmpty) return;
     final now = DateTime.now().toUtc().toIso8601String();
     final payload = [
-      for (final m in list) {'id': m['id'], 'data': m, 'updated_at': now},
+      for (final m in list)
+        {'id': m['id'], 'data': sanitizeForCloud(table, m), 'updated_at': now},
     ];
     await _client.from(table).upsert(payload, onConflict: 'id');
+  }
+
+  /// Removes local-only or commercially restricted fields before any
+  /// first-device seed is uploaded. This closes the path that bypassed normal
+  /// provider-level payload sanitization when a cloud table was empty.
+  static Map<String, dynamic> sanitizeForCloud(
+    String table,
+    Map<String, dynamic> data,
+  ) {
+    final sanitized = Map<String, dynamic>.from(data);
+    for (final key in _preserveLocalKeys[table] ?? const <String>[]) {
+      sanitized.remove(key);
+    }
+    return sanitized;
   }
 
   /// Pure union-merge of cloud rows into the local store (extracted for testing).

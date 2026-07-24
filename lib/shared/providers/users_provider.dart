@@ -13,13 +13,21 @@ import 'language_provider.dart';
 import 'role_permissions_provider.dart';
 
 // Bumped to v3 to re-seed the simplified one-account-per-role set (owner /
-// alasad / imrankhan, password test@123) over any previously-seeded users.
+// alasad / imrankhan) over any previously-seeded users.
 const _kUsersKey = 'app_users_v3';
 const _uuid = Uuid();
+const _seedUserIds = {'usr-admin', 'usr-proc', 'usr-eng'};
 
-/// Default password for the seeded demo accounts (internal first-run only).
-/// Real accounts are created by Admin with their own password.
-const kSeedPassword = 'test@123';
+const _configuredLocalDemoPassword = String.fromEnvironment(
+  'LOCAL_DEMO_PASSWORD',
+);
+
+/// Explicit credential gate for non-production local development. Empty by
+/// default, which makes seeded local accounts non-authenticating. Tests override
+/// this provider without placing a reusable credential in application source.
+final localDemoPasswordProvider = Provider<String>(
+  (ref) => _configuredLocalDemoPassword,
+);
 
 /// All system user accounts. Admin-managed only (no self-signup).
 ///
@@ -28,21 +36,56 @@ const kSeedPassword = 'test@123';
 /// delete) is executed by the `admin-users` Edge Function using the service_role
 /// key — the client never holds that key. The local list is the admin-facing
 /// roster/cache; the JWT is the source of truth for identity, role and caps.
-final usersProvider = StateNotifierProvider<UsersNotifier, List<AppUser>>((ref) {
+final usersProvider = StateNotifierProvider<UsersNotifier, List<AppUser>>((
+  ref,
+) {
   return UsersNotifier(
     ref,
-    ref.watch(storageProvider).collection<AppUser>(
-      _kUsersKey,
-      toJson: (u) => u.toJson(),
-      fromJson: AppUser.fromJson,
-    ),
+    ref
+        .watch(storageProvider)
+        .collection<AppUser>(
+          _kUsersKey,
+          toJson: (u) => u.toJson(),
+          fromJson: AppUser.fromJson,
+        ),
+    seedPassword: ref.watch(localDemoPasswordProvider),
   );
 });
 
 class UsersNotifier extends StateNotifier<List<AppUser>> {
-  UsersNotifier(this._ref, this._store) : super([]) {
-    state = _store.isSeeded ? _store.readAll() : _seed();
+  UsersNotifier(this._ref, this._store, {required String seedPassword})
+    : super([]) {
+    state = _store.isSeeded ? _store.readAll() : _seed(seedPassword);
+    // A connected app never retains legacy/local password material. Supabase
+    // Auth is authoritative and local fallback is prohibited in this mode.
+    if (_client != null) {
+      state = [
+        for (final user in state)
+          if (user.passwordHash.isNotEmpty || user.passwordSalt.isNotEmpty)
+            user.copyWith(passwordHash: '', passwordSalt: '')
+          else
+            user,
+      ];
+    } else if (seedPassword.isNotEmpty) {
+      // Rotate only the built-in local-development identities to the explicit
+      // current value. This replaces hashes left by older prototype versions
+      // without changing passwords for locally created test users.
+      state = [
+        for (final user in state)
+          if (_seedUserIds.contains(user.id))
+            () {
+              final digest = PasswordHasher.create(seedPassword);
+              return user.copyWith(
+                passwordHash: digest.hash,
+                passwordSalt: digest.salt,
+              );
+            }()
+          else
+            user,
+      ];
+    }
     if (!_store.isSeeded) _store.writeAll(state);
+    if (_client != null || seedPassword.isNotEmpty) _store.writeAll(state);
   }
 
   final Ref _ref;
@@ -139,7 +182,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       'appUserId': id,
       'caps': _claimCaps(draft),
     });
-    final pw = PasswordHasher.create(password);
+    final pw = _client == null
+        ? PasswordHasher.create(password)
+        : (hash: '', salt: '');
     final user = draft.copyWith(
       passwordHash: pw.hash,
       passwordSalt: pw.salt,
@@ -224,7 +269,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     String newPassword, {
     required bool mustChange,
   }) async {
-    final pw = PasswordHasher.create(newPassword);
+    final pw = _client == null
+        ? PasswordHasher.create(newPassword)
+        : (hash: '', salt: '');
     state = [
       for (final u in state)
         if (u.id == id)
@@ -251,7 +298,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       'appUserId': id,
       'password': newPassword,
     });
-    final pw = PasswordHasher.create(newPassword);
+    final pw = _client == null
+        ? PasswordHasher.create(newPassword)
+        : (hash: '', salt: '');
     state = [
       for (final u in state)
         if (u.id == id)
@@ -379,7 +428,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     return true;
   }
 
-  static List<AppUser> _seed() {
+  static List<AppUser> _seed(String seedPassword) {
     final now = DateTime.now();
     AppUser seed({
       required String id,
@@ -389,7 +438,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       required DateTime createdAt,
       String? employeeId,
     }) {
-      final pw = PasswordHasher.create(kSeedPassword);
+      final pw = seedPassword.isEmpty
+          ? (hash: '', salt: '')
+          : PasswordHasher.create(seedPassword);
       return AppUser(
         id: id,
         fullName: fullName,

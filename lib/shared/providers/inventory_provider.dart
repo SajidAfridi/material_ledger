@@ -21,11 +21,13 @@ final materialsProvider =
     StateNotifierProvider<MaterialsNotifier, List<MaterialItem>>((ref) {
       return MaterialsNotifier(
         ref,
-        ref.watch(storageProvider).collection<MaterialItem>(
-          _kMaterialsKey,
-          toJson: (m) => m.toJson(),
-          fromJson: MaterialItem.fromJson,
-        ),
+        ref
+            .watch(storageProvider)
+            .collection<MaterialItem>(
+              _kMaterialsKey,
+              toJson: (m) => m.toJson(),
+              fromJson: MaterialItem.fromJson,
+            ),
       );
     });
 
@@ -44,15 +46,14 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
 
   Future<void> _persist() => _store.writeAll(state);
 
-  /// Sync a material's shared state (on-hand + cost + descriptors) through the
-  /// outbox. reservedQty is deliberately stripped — it's DERIVED per-device from
-  /// open requests (see inventoryReconcilerProvider), so it must not be synced or
-  /// devices would clobber each other's reservation view. [transactional] marks
-  /// stock-moving writes. No-op-safe when there's no backend (local/tests).
+  /// Sync a material's shared state (on-hand + descriptors) through the outbox.
+  /// Commercial cost and derived reservations are excluded by
+  /// [MaterialItem.toSharedJson]. [transactional] marks stock-moving writes.
+  /// No-op-safe when there's no backend (local/tests).
   Future<void> _sync(String id, {bool transactional = false}) {
     final m = byId(id);
     if (m == null) return Future.value();
-    final payload = m.toJson()..remove('reservedQty');
+    final payload = m.toSharedJson();
     return _ref.enqueueSync(
       collection: 'materials',
       docId: id,
@@ -77,7 +78,9 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     if (delta == 0) return Future.value();
     final m = byId(id);
     if (m == null) return Future.value();
-    return _ref.read(stockMovementsProvider.notifier).record(
+    return _ref
+        .read(stockMovementsProvider.notifier)
+        .record(
           materialId: id,
           materialName: m.name,
           type: type,
@@ -137,7 +140,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     final tombstone = m.copyWith(deleted: true);
     state = state.where((item) => item.id != id).toList();
     await _persist();
-    final payload = tombstone.toJson()..remove('reservedQty');
+    final payload = tombstone.toSharedJson();
     await _ref.enqueueSync(
       collection: 'materials',
       docId: id,
@@ -167,7 +170,12 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     ];
     await _persist();
     await _sync(id, transactional: true);
-    await _recordMovement(id, (byId(id)?.quantity ?? 0) - before, type, refId: refId);
+    await _recordMovement(
+      id,
+      (byId(id)?.quantity ?? 0) - before,
+      type,
+      refId: refId,
+    );
   }
 
   // ─── Atomic stock transactions (FR-094 reservation) ──────────────
@@ -245,12 +253,7 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
             quantity: item.quantity + qty,
             unitPrice: unitCostAED == null
                 ? item.unitPrice
-                : _weightedAvg(
-                    item.quantity,
-                    item.unitPrice,
-                    qty,
-                    unitCostAED,
-                  ),
+                : _weightedAvg(item.quantity, item.unitPrice, qty, unitCostAED),
           )
         else
           item,
@@ -313,11 +316,13 @@ final transactionsProvider =
       ref,
     ) {
       return TransactionsNotifier(
-        ref.watch(storageProvider).collection<InventoryTransaction>(
-          _kTransactionsKey,
-          toJson: (t) => t.toJson(),
-          fromJson: InventoryTransaction.fromJson,
-        ),
+        ref
+            .watch(storageProvider)
+            .collection<InventoryTransaction>(
+              _kTransactionsKey,
+              toJson: (t) => t.toJson(),
+              fromJson: InventoryTransaction.fromJson,
+            ),
       );
     });
 

@@ -8,13 +8,14 @@ Data residency is NOT yet UAE — see "Remaining" below._
 ### 1. Real authentication (Supabase Auth)
 Three admin-provisioned accounts exist in **Supabase Auth** (email + password,
 email confirmed). There is **no self-signup** — the app has no signup UI, and
-these were created server-side.
+these were created server-side. Passwords are intentionally excluded from this
+repository. Retrieve or rotate credentials through the approved secure channel.
 
-| Email | Password | Role | `app_user_id` |
-|-------|----------|------|---------------|
-| owner@gmail.com | test@123 | admin | usr-admin |
-| alasad@gmail.com | test@123 | procurement | usr-proc |
-| imrankhan@gmail.com | test@123 | engineer | usr-eng |
+| Email | Role | `app_user_id` |
+|-------|------|---------------|
+| owner@gmail.com | admin | usr-admin |
+| alasad@gmail.com | procurement | usr-proc |
+| imrankhan@gmail.com | engineer | usr-eng |
 
 Each user's `raw_app_meta_data` carries `role`, `caps[]`, and `app_user_id`.
 Supabase embeds `app_metadata` into every JWT automatically, so **no custom
@@ -77,9 +78,9 @@ Writes: engineer can write their own request; **denied** when forging another's
   right `app_metadata` → the same claims RLS was proven against.
 
 Still worth an eyeball when convenient (not yet watched live, to avoid disrupting
-the active owner session): sign in as **imrankhan@gmail.com / test@123** and
-confirm the engineer sees only their own requests; **alasad@gmail.com** sees
-rentals + people + leave.
+the active owner session): use securely supplied credentials to sign in as the
+engineer and confirm they see only their own requests; the procurement account
+should see rentals + people + leave.
 
 ## EMERGENCY ROLLBACK (restore the permissive demo, if needed)
 ```sql

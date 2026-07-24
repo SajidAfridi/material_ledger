@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'user_role.dart';
 
 /// A system user account (auth + access control). Created only by the Admin —
-/// there is no self-signup (SRS §3 / §4.1). Passwords are never stored here;
-/// with Firebase they live as hashed Auth credentials. The model carries just
-/// the access-control facts the Admin Panel manages.
+/// there is no self-signup (SRS §3 / §4.1). Supabase owns connected-environment
+/// credentials. The hash fields below exist only for explicit local
+/// development.
 class AppUser {
   const AppUser({
     required this.id,
@@ -41,8 +41,8 @@ class AppUser {
 
   final DateTime createdAt;
 
-  /// Local auth stand-in only — salted SHA-256 (see PasswordHasher). Firebase
-  /// Auth replaces this and these fields drop from any Firestore mapping.
+  /// Local auth stand-in only — salted SHA-256 (see PasswordHasher). Supabase
+  /// Auth replaces this and connected mode clears these fields.
   final String passwordHash;
   final String passwordSalt;
 
@@ -176,6 +176,8 @@ class AppUser {
 
   static List<AppUser> decodeList(String jsonStr) {
     final list = jsonDecode(jsonStr) as List;
-    return list.map((e) => AppUser.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

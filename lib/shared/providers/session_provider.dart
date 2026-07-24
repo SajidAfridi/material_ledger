@@ -43,6 +43,17 @@ enum SignInResult {
   networkError,
 }
 
+/// Parses the only role source trusted by both the client and RLS. Unknown or
+/// missing values are rejected instead of being downgraded or inferred.
+UserRole? userRoleFromAppMetadata(Map<String, dynamic> appMetadata) {
+  final raw = appMetadata['role'];
+  if (raw is! String) return null;
+  for (final role in UserRole.values) {
+    if (role.name == raw) return role;
+  }
+  return null;
+}
+
 /// Verifies credentials and opens a session. When Supabase is configured this
 /// authenticates against **Supabase Auth** (the server issues the JWT that the
 /// RLS policies enforce); otherwise it verifies against the local user store.
@@ -108,12 +119,13 @@ class AuthController {
         (authUser.userMetadata?['must_change_password'] as bool?) ?? false;
 
     // A user provisioned on another device won't be in this device's roster —
-    // materialise them from the JWT claims so currentUser resolves.
-    // We fallback to 'admin' for the owner email if no role is found in metadata.
-    final rawRole = authUser.appMetadata['role'] as String?;
-    final resolvedRole = UserRole.fromName(
-      rawRole ?? (email == 'owner@gmail.com' ? 'admin' : 'engineer'),
-    );
+    // materialise them from the trusted JWT app_metadata so currentUser
+    // resolves. Never infer authorization from email or user_metadata.
+    final resolvedRole = userRoleFromAppMetadata(authUser.appMetadata);
+    if (resolvedRole == null) {
+      await client.auth.signOut();
+      return SignInResult.invalidCredentials;
+    }
 
     await _ref
         .read(usersProvider.notifier)
@@ -140,9 +152,12 @@ class AuthController {
     return mustChange ? SignInResult.mustChangePassword : SignInResult.ok;
   }
 
-  /// Local path — used only when Supabase is not configured (widget tests and
-  /// pure-offline development). Unchanged legacy behaviour.
+  /// Local path — used only when Supabase is not configured and local
+  /// development was explicitly enabled at startup.
   Future<SignInResult> _signInLocal(String email, String password) async {
+    if (_ref.read(localDemoPasswordProvider).isEmpty) {
+      return SignInResult.invalidCredentials;
+    }
     AppUser? user;
     for (final u in _ref.read(usersProvider)) {
       if (u.email.trim().toLowerCase() == email) {
@@ -197,9 +212,9 @@ class AuthController {
         ),
       );
     }
-    // Mirror into the local roster (clears must-change; keeps the offline /
-    // credential-fallback hash in step). Only reached if the remote call above
-    // succeeded (or there's no backend — tests / offline dev).
+    // Mirror the workflow flag into the local roster. Connected mode clears
+    // local password material; explicit local development stores its test hash.
+    // Only reached if the remote call above succeeded.
     final user = _ref.read(currentUserProvider);
     if (user != null) {
       await _ref
