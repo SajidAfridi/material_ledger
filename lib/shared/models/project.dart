@@ -1,5 +1,15 @@
 import 'dart:convert';
 
+import 'project_building.dart';
+import 'project_attachment.dart';
+import 'project_party.dart';
+import 'project_progress_stage.dart';
+
+export 'project_building.dart';
+export 'project_attachment.dart';
+export 'project_party.dart';
+export 'project_progress_stage.dart';
+
 /// Lifecycle state of a project.
 enum ProjectState {
   planning('Planning', 'پلاننگ', 'تخطيط', 'योजना'),
@@ -52,12 +62,63 @@ class ProjectPhase {
   );
 }
 
-/// An admin-created project that engineers can select and track.
+/// The stable V7 lifecycle. Legacy [ProjectState] remains available for the
+/// current UI until its screens are migrated in a later batch.
+enum ProjectLifecycleStatus {
+  draft,
+  planning,
+  active,
+  archived;
+
+  static ProjectLifecycleStatus fromJson(Object? value) {
+    if (value is String) {
+      return ProjectLifecycleStatus.values.firstWhere(
+        (status) => status.name == value.toLowerCase(),
+        orElse: () => ProjectLifecycleStatus.planning,
+      );
+    }
+    return ProjectLifecycleStatus.planning;
+  }
+}
+
+/// Provenance retained when a legacy flat project is upgraded in memory.
+class ProjectMigrationMetadata {
+  const ProjectMigrationMetadata({
+    required this.sourceDataVersion,
+    this.legacyAuthorityRef,
+    this.legacyBuildingName,
+    this.legacyFloorNumbers,
+  });
+
+  final int sourceDataVersion;
+  final String? legacyAuthorityRef;
+  final String? legacyBuildingName;
+  final String? legacyFloorNumbers;
+
+  Map<String, dynamic> toJson() => {
+    'sourceDataVersion': sourceDataVersion,
+    'legacyAuthorityRef': legacyAuthorityRef,
+    'legacyBuildingName': legacyBuildingName,
+    'legacyFloorNumbers': legacyFloorNumbers,
+  };
+
+  factory ProjectMigrationMetadata.fromJson(Map<String, dynamic> json) =>
+      ProjectMigrationMetadata(
+        sourceDataVersion: (json['sourceDataVersion'] as num?)?.toInt() ?? 1,
+        legacyAuthorityRef: json['legacyAuthorityRef'] as String?,
+        legacyBuildingName: json['legacyBuildingName'] as String?,
+        legacyFloorNumbers: json['legacyFloorNumbers'] as String?,
+      );
+}
+
+/// A backward-compatible V7 project aggregate.
 class Project {
   const Project({
     required this.id,
     required this.name,
-    required this.nameSecondary,
+    String? nameSecondary,
+    String? secondaryName,
+    this.yorksReference,
     this.siteLocation,
     this.clientName,
     this.buildingName,
@@ -66,82 +127,113 @@ class Project {
     this.expectedEndDate,
     this.siteNotes,
     this.phase,
-    this.lastUpdated,
+    DateTime? lastUpdated,
+    DateTime? updatedAt,
     this.awaitingApproval = false,
     this.openRequestCount = 0,
     this.allDispatched = false,
-    // A newly-created project needs procurement's acceptance (FR — procurement
-    // acknowledges a new job before Phase-1 work is expected against it).
     this.acceptedByProcurement = false,
     this.acceptedAt,
     this.acceptedBy,
-    // Soft-delete: the sync outbox only ever upserts (never issues a real SQL
-    // DELETE), so a physical local removal would resurrect on the next cloud
-    // hydration. Deleting flips this instead; [ProjectsNotifier] filters
-    // `deleted` rows out of what it exposes, on every device.
     this.deleted = false,
-    // ─── Job register (from the client's "Running Jobs" sheet) ──────
-    this.jobNumber,
+    String? jobNumber,
+    String? contractOrJobNumber,
     this.mainContractor,
     this.authorityRef,
     this.consultant,
     this.contractValueAED,
     this.assignedEngineerId,
-  });
+    this.subContractors = const [],
+    this.otherContractors = const [],
+    this.projectManagerUserId,
+    this.designEngineerUserIds = const [],
+    this.buildings = const [],
+    this.attachments = const [],
+    this.progressStages = const [],
+    this.lifecycleStatus = ProjectLifecycleStatus.planning,
+    this.createdAt,
+    this.createdByUserId,
+    this.createdByRole,
+    this.updatedByUserId,
+    this.updatedByRole,
+    this.migrationMetadata,
+    this.dataVersion = currentDataVersion,
+  }) : secondaryName = secondaryName ?? nameSecondary,
+       contractOrJobNumber = contractOrJobNumber ?? jobNumber,
+       updatedAt = updatedAt ?? lastUpdated;
 
+  static const int currentDataVersion = 4;
+  static const Object _keep = Object();
+
+  final int dataVersion;
   final String id;
+  final String? yorksReference;
   final String name;
-  final String nameSecondary;
+  final String? secondaryName;
   final String? siteLocation;
   final String? clientName;
+
+  /// Legacy flat location fields. Kept until all current screens migrate.
   final String? buildingName;
   final String? floorNumbers;
+
   final DateTime? startDate;
   final DateTime? expectedEndDate;
   final String? siteNotes;
   final ProjectPhase? phase;
-  final DateTime? lastUpdated;
+  final DateTime? updatedAt;
   final bool awaitingApproval;
   final int openRequestCount;
   final bool allDispatched;
-
-  /// True once procurement has acknowledged this (new) project. Set on
-  /// creation to `false`; [ProjectsNotifier.acceptProject] flips it.
   final bool acceptedByProcurement;
   final DateTime? acceptedAt;
-
-  /// Display name of the procurement/admin user who accepted it.
   final String? acceptedBy;
-
-  /// Soft-delete flag — see the constructor param doc.
   final bool deleted;
-
-  // ─── Job register fields ──────────────────────────────────────────
-  /// Job/contract number, e.g. "305" or "B066".
-  final String? jobNumber;
-
-  /// Main contractor / EPC on the job, e.g. "SEPCO", "L&T".
+  final String? contractOrJobNumber;
   final String? mainContractor;
-
-  /// Utility-authority reference (ADWEA / DEWA permit or contract ref).
   final String? authorityRef;
-
-  /// Consultant on the job.
   final String? consultant;
-
-  /// Contract value in AED. Management figure — gate its visibility on the
-  /// finance capability (engineers don't see it).
   final double? contractValueAED;
 
-  /// The engineer this job is assigned to (AppUser id). Null = unassigned.
+  /// Legacy single-engineer assignment. Multi-engineer access uses
+  /// [designEngineerUserIds], while this remains readable by current screens.
   final String? assignedEngineerId;
 
-  /// True when a project has any work item needing engineer attention.
+  final List<ProjectParty> subContractors;
+  final List<ProjectParty> otherContractors;
+  final String? projectManagerUserId;
+  final List<String> designEngineerUserIds;
+  final List<ProjectBuilding> buildings;
+  final List<ProjectAttachment> attachments;
+  final List<ProjectProgressStage> progressStages;
+  final ProjectLifecycleStatus lifecycleStatus;
+  final DateTime? createdAt;
+  final String? createdByUserId;
+  final String? createdByRole;
+  final String? updatedByUserId;
+  final String? updatedByRole;
+  final ProjectMigrationMetadata? migrationMetadata;
+
+  /// Legacy aliases used by existing screens.
+  String get nameSecondary => secondaryName ?? '';
+  String? get jobNumber => contractOrJobNumber;
+  DateTime? get lastUpdated => updatedAt;
+
+  /// Projects created before configurable progress use the approved Yorks
+  /// defaults until an Admin saves a project-specific stage set.
+  List<ProjectProgressStage> get effectiveProgressStages =>
+      progressStages.isEmpty ? standardProjectProgressStages : progressStages;
+
+  double get weightedProgressPercent =>
+      effectiveProgressStages.weightedProgress;
+
   bool get needsAction => awaitingApproval || openRequestCount > 0;
 
   Project copyWith({
     String? name,
     String? nameSecondary,
+    String? secondaryName,
+    String? yorksReference,
     String? siteLocation,
     String? clientName,
     String? buildingName,
@@ -151,6 +243,7 @@ class Project {
     String? siteNotes,
     ProjectPhase? phase,
     DateTime? lastUpdated,
+    DateTime? updatedAt,
     bool? awaitingApproval,
     int? openRequestCount,
     bool? allDispatched,
@@ -159,15 +252,31 @@ class Project {
     String? acceptedBy,
     bool? deleted,
     String? jobNumber,
+    String? contractOrJobNumber,
     String? mainContractor,
     String? authorityRef,
     String? consultant,
-    double? contractValueAED,
+    Object? contractValueAED = _keep,
     String? assignedEngineerId,
+    List<ProjectParty>? subContractors,
+    List<ProjectParty>? otherContractors,
+    String? projectManagerUserId,
+    List<String>? designEngineerUserIds,
+    List<ProjectBuilding>? buildings,
+    List<ProjectAttachment>? attachments,
+    List<ProjectProgressStage>? progressStages,
+    ProjectLifecycleStatus? lifecycleStatus,
+    DateTime? createdAt,
+    String? createdByUserId,
+    String? createdByRole,
+    String? updatedByUserId,
+    String? updatedByRole,
+    ProjectMigrationMetadata? migrationMetadata,
   }) => Project(
     id: id,
     name: name ?? this.name,
-    nameSecondary: nameSecondary ?? this.nameSecondary,
+    secondaryName: secondaryName ?? nameSecondary ?? this.secondaryName,
+    yorksReference: yorksReference ?? this.yorksReference,
     siteLocation: siteLocation ?? this.siteLocation,
     clientName: clientName ?? this.clientName,
     buildingName: buildingName ?? this.buildingName,
@@ -176,7 +285,7 @@ class Project {
     expectedEndDate: expectedEndDate ?? this.expectedEndDate,
     siteNotes: siteNotes ?? this.siteNotes,
     phase: phase ?? this.phase,
-    lastUpdated: lastUpdated ?? this.lastUpdated,
+    updatedAt: updatedAt ?? lastUpdated ?? this.updatedAt,
     awaitingApproval: awaitingApproval ?? this.awaitingApproval,
     openRequestCount: openRequestCount ?? this.openRequestCount,
     allDispatched: allDispatched ?? this.allDispatched,
@@ -184,17 +293,37 @@ class Project {
     acceptedAt: acceptedAt ?? this.acceptedAt,
     acceptedBy: acceptedBy ?? this.acceptedBy,
     deleted: deleted ?? this.deleted,
-    jobNumber: jobNumber ?? this.jobNumber,
+    contractOrJobNumber:
+        contractOrJobNumber ?? jobNumber ?? this.contractOrJobNumber,
     mainContractor: mainContractor ?? this.mainContractor,
     authorityRef: authorityRef ?? this.authorityRef,
     consultant: consultant ?? this.consultant,
-    contractValueAED: contractValueAED ?? this.contractValueAED,
+    contractValueAED: identical(contractValueAED, _keep)
+        ? this.contractValueAED
+        : contractValueAED as double?,
     assignedEngineerId: assignedEngineerId ?? this.assignedEngineerId,
+    subContractors: subContractors ?? this.subContractors,
+    otherContractors: otherContractors ?? this.otherContractors,
+    projectManagerUserId: projectManagerUserId ?? this.projectManagerUserId,
+    designEngineerUserIds: designEngineerUserIds ?? this.designEngineerUserIds,
+    buildings: buildings ?? this.buildings,
+    attachments: attachments ?? this.attachments,
+    progressStages: progressStages ?? this.progressStages,
+    lifecycleStatus: lifecycleStatus ?? this.lifecycleStatus,
+    createdAt: createdAt ?? this.createdAt,
+    createdByUserId: createdByUserId ?? this.createdByUserId,
+    createdByRole: createdByRole ?? this.createdByRole,
+    updatedByUserId: updatedByUserId ?? this.updatedByUserId,
+    updatedByRole: updatedByRole ?? this.updatedByRole,
+    migrationMetadata: migrationMetadata ?? this.migrationMetadata,
   );
 
   Map<String, dynamic> toJson() => {
+    'dataVersion': currentDataVersion,
     'id': id,
+    'yorksReference': yorksReference,
     'name': name,
+    'secondaryName': secondaryName,
     'nameSecondary': nameSecondary,
     'siteLocation': siteLocation,
     'clientName': clientName,
@@ -204,6 +333,7 @@ class Project {
     'expectedEndDate': expectedEndDate?.toIso8601String(),
     'siteNotes': siteNotes,
     'phase': phase?.toJson(),
+    'updatedAt': updatedAt?.toIso8601String(),
     'lastUpdated': lastUpdated?.toIso8601String(),
     'awaitingApproval': awaitingApproval,
     'openRequestCount': openRequestCount,
@@ -212,56 +342,135 @@ class Project {
     'acceptedAt': acceptedAt?.toIso8601String(),
     'acceptedBy': acceptedBy,
     'deleted': deleted,
+    'contractOrJobNumber': contractOrJobNumber,
     'jobNumber': jobNumber,
     'mainContractor': mainContractor,
     'authorityRef': authorityRef,
     'consultant': consultant,
     'contractValueAED': contractValueAED,
     'assignedEngineerId': assignedEngineerId,
+    'subContractors': subContractors.map((party) => party.toJson()).toList(),
+    'otherContractors': otherContractors
+        .map((party) => party.toJson())
+        .toList(),
+    'projectManagerUserId': projectManagerUserId,
+    'designEngineerUserIds': designEngineerUserIds,
+    'buildings': buildings.map((building) => building.toJson()).toList(),
+    'attachments': attachments
+        .map((attachment) => attachment.toJson())
+        .toList(),
+    'progressStages': progressStages.map((stage) => stage.toJson()).toList(),
+    'lifecycleStatus': lifecycleStatus.name,
+    'createdAt': createdAt?.toIso8601String(),
+    'createdByUserId': createdByUserId,
+    'createdByRole': createdByRole,
+    'updatedByUserId': updatedByUserId,
+    'updatedByRole': updatedByRole,
+    'migrationMetadata': migrationMetadata?.toJson(),
   };
 
-  factory Project.fromJson(Map<String, dynamic> json) => Project(
-    id: json['id'] as String,
-    name: json['name'] as String,
-    nameSecondary: json['nameSecondary'] as String? ?? '',
-    siteLocation: json['siteLocation'] as String?,
-    clientName: json['clientName'] as String?,
-    buildingName: json['buildingName'] as String?,
-    floorNumbers: json['floorNumbers'] as String?,
-    startDate: json['startDate'] == null
+  Map<String, dynamic> toOperationalJson() =>
+      toJson()..remove('contractValueAED');
+
+  Project withoutCommercials() => copyWith(contractValueAED: null);
+
+  Project withCommercialTotal(double value) =>
+      copyWith(contractValueAED: value);
+
+  factory Project.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    final sourceVersion = (json['dataVersion'] as num?)?.toInt() ?? 1;
+    final assignedEngineerId = json['assignedEngineerId'] as String?;
+    final designEngineerIds = _decodeStringList(json['designEngineerUserIds']);
+    if (assignedEngineerId != null &&
+        assignedEngineerId.isNotEmpty &&
+        !designEngineerIds.contains(assignedEngineerId)) {
+      designEngineerIds.add(assignedEngineerId);
+    }
+
+    final buildings = json['buildings'] is List
+        ? _decodeBuildings(json['buildings'])
+        : _migrateLegacyBuilding(
+            projectId: id,
+            buildingName: json['buildingName'] as String?,
+            floorNumbers: json['floorNumbers'] as String?,
+          );
+
+    final phase = json['phase'] == null
         ? null
-        : DateTime.parse(json['startDate'] as String),
-    expectedEndDate: json['expectedEndDate'] == null
-        ? null
-        : DateTime.parse(json['expectedEndDate'] as String),
-    siteNotes: json['siteNotes'] as String?,
-    phase: json['phase'] == null
-        ? null
-        : ProjectPhase.fromJson(json['phase'] as Map<String, dynamic>),
-    lastUpdated: json['lastUpdated'] == null
-        ? null
-        : DateTime.parse(json['lastUpdated'] as String),
-    awaitingApproval: json['awaitingApproval'] as bool? ?? false,
-    openRequestCount: json['openRequestCount'] as int? ?? 0,
-    allDispatched: json['allDispatched'] as bool? ?? false,
-    // Back-compat: a record written before this field existed predates the
-    // acceptance workflow entirely — grandfather it in as accepted rather than
-    // retroactively dropping every already-in-flight job into the new queue.
-    // (Contrast the constructor's own default of `false`, which is correct for
-    // a project that's genuinely newly created.)
-    acceptedByProcurement: json['acceptedByProcurement'] as bool? ?? true,
-    acceptedAt: json['acceptedAt'] == null
-        ? null
-        : DateTime.parse(json['acceptedAt'] as String),
-    acceptedBy: json['acceptedBy'] as String?,
-    deleted: json['deleted'] as bool? ?? false,
-    jobNumber: json['jobNumber'] as String?,
-    mainContractor: json['mainContractor'] as String?,
-    authorityRef: json['authorityRef'] as String?,
-    consultant: json['consultant'] as String?,
-    contractValueAED: (json['contractValueAED'] as num?)?.toDouble(),
-    assignedEngineerId: json['assignedEngineerId'] as String?,
-  );
+        : ProjectPhase.fromJson(
+            Map<String, dynamic>.from(json['phase'] as Map),
+          );
+
+    return Project(
+      id: id,
+      yorksReference: json['yorksReference'] as String?,
+      name: json['name'] as String,
+      secondaryName:
+          json['secondaryName'] as String? ?? json['nameSecondary'] as String?,
+      siteLocation: json['siteLocation'] as String?,
+      clientName: json['clientName'] as String?,
+      buildingName: json['buildingName'] as String?,
+      floorNumbers: json['floorNumbers'] as String?,
+      startDate: _decodeDate(json['startDate']),
+      expectedEndDate: _decodeDate(json['expectedEndDate']),
+      siteNotes: json['siteNotes'] as String?,
+      phase: phase,
+      updatedAt: _decodeDate(json['updatedAt'] ?? json['lastUpdated']),
+      awaitingApproval: json['awaitingApproval'] as bool? ?? false,
+      openRequestCount: (json['openRequestCount'] as num?)?.toInt() ?? 0,
+      allDispatched: json['allDispatched'] as bool? ?? false,
+      // Records written before this field existed predate acceptance and are
+      // grandfathered in instead of being retroactively queued.
+      acceptedByProcurement: json['acceptedByProcurement'] as bool? ?? true,
+      acceptedAt: _decodeDate(json['acceptedAt']),
+      acceptedBy: json['acceptedBy'] as String?,
+      deleted: json['deleted'] as bool? ?? false,
+      contractOrJobNumber:
+          json['contractOrJobNumber'] as String? ??
+          json['jobNumber'] as String?,
+      mainContractor: json['mainContractor'] as String?,
+      authorityRef: json['authorityRef'] as String?,
+      consultant: json['consultant'] as String?,
+      contractValueAED: (json['contractValueAED'] as num?)?.toDouble(),
+      assignedEngineerId: assignedEngineerId,
+      subContractors: _decodeParties(
+        json['subContractors'],
+        projectId: id,
+        roleKey: 'subcontractor',
+      ),
+      otherContractors: _decodeParties(
+        json['otherContractors'],
+        projectId: id,
+        roleKey: 'other-contractor',
+      ),
+      projectManagerUserId: json['projectManagerUserId'] as String?,
+      designEngineerUserIds: designEngineerIds,
+      buildings: buildings,
+      attachments: _decodeAttachments(json['attachments']),
+      progressStages: _decodeProgressStages(json['progressStages']),
+      lifecycleStatus: json.containsKey('lifecycleStatus')
+          ? ProjectLifecycleStatus.fromJson(json['lifecycleStatus'])
+          : _lifecycleFromLegacy(phase?.state, json['deleted'] as bool?),
+      createdAt: _decodeDate(json['createdAt']),
+      createdByUserId: json['createdByUserId'] as String?,
+      createdByRole: json['createdByRole'] as String?,
+      updatedByUserId: json['updatedByUserId'] as String?,
+      updatedByRole: json['updatedByRole'] as String?,
+      migrationMetadata: json['migrationMetadata'] is Map
+          ? ProjectMigrationMetadata.fromJson(
+              Map<String, dynamic>.from(json['migrationMetadata'] as Map),
+            )
+          : sourceVersion < 2
+          ? ProjectMigrationMetadata(
+              sourceDataVersion: sourceVersion,
+              legacyAuthorityRef: json['authorityRef'] as String?,
+              legacyBuildingName: json['buildingName'] as String?,
+              legacyFloorNumbers: json['floorNumbers'] as String?,
+            )
+          : null,
+    );
+  }
 
   static String encodeList(List<Project> items) =>
       jsonEncode(items.map((e) => e.toJson()).toList());
@@ -272,6 +481,104 @@ class Project {
         .map((e) => Project.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+}
+
+DateTime? _decodeDate(Object? value) {
+  if (value is! String || value.isEmpty) return null;
+  return DateTime.parse(value);
+}
+
+List<String> _decodeStringList(Object? value) {
+  if (value is! List) return <String>[];
+  return value
+      .whereType<Object>()
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: true);
+}
+
+List<ProjectParty> _decodeParties(
+  Object? value, {
+  required String projectId,
+  required String roleKey,
+}) {
+  if (value is! List) return const [];
+  final parties = <ProjectParty>[];
+  for (var index = 0; index < value.length; index++) {
+    final party = ProjectParty.decode(
+      value[index],
+      fallbackId: '$projectId-$roleKey-${index + 1}',
+    );
+    if (party != null) parties.add(party);
+  }
+  return parties;
+}
+
+List<ProjectBuilding> _decodeBuildings(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map(
+        (building) =>
+            ProjectBuilding.fromJson(Map<String, dynamic>.from(building)),
+      )
+      .toList(growable: false);
+}
+
+List<ProjectAttachment> _decodeAttachments(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map(
+        (attachment) =>
+            ProjectAttachment.fromJson(Map<String, dynamic>.from(attachment)),
+      )
+      .toList(growable: false);
+}
+
+List<ProjectProgressStage> _decodeProgressStages(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<Map>()
+      .map(
+        (stage) =>
+            ProjectProgressStage.fromJson(Map<String, dynamic>.from(stage)),
+      )
+      .where((stage) => stage.id.isNotEmpty && stage.label.trim().isNotEmpty)
+      .toList(growable: false);
+}
+
+List<ProjectBuilding> _migrateLegacyBuilding({
+  required String projectId,
+  required String? buildingName,
+  required String? floorNumbers,
+}) {
+  final name = buildingName?.trim() ?? '';
+  final floors = ProjectBuilding.floorsFromLegacy(floorNumbers);
+  if (name.isEmpty && floors.isEmpty) return const [];
+
+  return [
+    ProjectBuilding(
+      id: '$projectId-building-legacy',
+      code: '',
+      name: name,
+      floorsOrLevels: floors,
+    ),
+  ];
+}
+
+ProjectLifecycleStatus _lifecycleFromLegacy(
+  ProjectState? state,
+  bool? deleted,
+) {
+  if (deleted ?? false) return ProjectLifecycleStatus.archived;
+  return switch (state) {
+    ProjectState.active => ProjectLifecycleStatus.active,
+    ProjectState.completed => ProjectLifecycleStatus.archived,
+    ProjectState.planning ||
+    ProjectState.onHold ||
+    null => ProjectLifecycleStatus.planning,
+  };
 }
 
 /// An item within a material requisition request.

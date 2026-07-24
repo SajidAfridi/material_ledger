@@ -50,6 +50,8 @@ Run the complete required command set and report results.
 
 ## Task 2 — Project model v2
 
+Status: completed and verified on 24 July 2026.
+
 ```text
 Implement PR-01A only: project-domain migration.
 
@@ -78,6 +80,8 @@ Run format, analyze and all tests.
 
 ## Task 3 — Secure commercial data
 
+Status: completed and verified on 24 July 2026.
+
 ```text
 Implement PR-02 only.
 
@@ -97,7 +101,28 @@ visibility must follow Admin configuration.
 Add RLS tests for positive and negative cases. Do not rely on hiding widgets.
 ```
 
-## Task 4 — Project wizard
+## Task 4 — V7 visual foundation
+
+Status: completed and verified on 24 July 2026.
+
+```text
+Implement PR-03 only.
+
+Align AppColors, AppSpacing, AppTypography and AppTheme to the approved V7
+client design. Add shared responsive page/header, section, status,
+current-action owner and audit components.
+
+Desktop supports a fixed inspector rail. Tablet/mobile stack it after the
+primary work area. Touch actions remain at least 44 px. Preserve public widget
+APIs where practical, use bundled fonts and add readable desktop/mobile golden
+baselines.
+
+Do not add routes, change workflows or enable a V7 feature flag.
+```
+
+## Task 5 — Project wizard
+
+Status: completed and verified on 24 July 2026.
 
 ```text
 Implement PR-04 only.
@@ -127,7 +152,54 @@ Requirements:
 Add widget and provider tests plus screenshots.
 ```
 
-## Task 5 — Material line grid spike
+## Task 6 — Project workspace and readiness
+
+Status: completed and verified on 24 July 2026.
+
+```text
+Implement PR-05 only.
+
+Add a feature-flagged shared /projects/:id workspace with:
+- Overview,
+- Material Plan,
+- Requests,
+- Procurement,
+- Documents,
+- Activity.
+
+Derive current action, current owner, concrete blockers and an unweighted
+readiness checklist from existing connected records. Enforce Engineer project
+visibility at the provider boundary. Keep workflow mutations in their existing
+controlled screens. Do not create RFQ, quotation, PO, receipt or binary
+Documents models in this slice.
+
+Provide desktop tabs/inspector, a separate mobile selector, role-safe project
+register navigation, provider/widget/route tests and inspected goldens.
+```
+
+## Task 7 — Dynamic masters and Browse Materials
+
+Status: completed and verified on 24 July 2026.
+
+```text
+Implement PR-06 only.
+
+Add Admin-managed material categories and units, then transform Browse
+Materials into the complete HVAC catalogue:
+- all approved categories,
+- search and category filters,
+- role-safe stock and commercial display,
+- catalogue and custom material/unit paths,
+- CSV export using the protected commercial boundary.
+
+Keep current legacy records readable and provide deterministic migration for
+master identifiers. Do not integrate Phase 1 planning or the material-line grid
+yet. Add model/provider/UI/RLS tests and responsive browser/mobile coverage.
+```
+
+## Task 8 — Material line grid spike
+
+Status: completed and verified on 24 July 2026.
 
 ```text
 Create an isolated implementation spike for the reusable MaterialLineGrid.
@@ -144,7 +216,9 @@ Mobile must use compact row cards with a focused editor. Do not treat a
 horizontally squeezed desktop grid as the mobile implementation.
 ```
 
-## Task 6 — Phase 1 workflow
+## Task 9 — Phase 1 workflow
+
+Status: completed and verified on 24 July 2026.
 
 ```text
 Implement the V7 Phase 1 material-plan vertical slice using the approved
@@ -171,7 +245,7 @@ actor/timestamp/current action owner. Add end-to-end provider and widget tests.
 Phase 1 review must not reserve warehouse stock.
 ```
 
-## Task 7 — Simplified Material Request
+## Task 10 — Simplified Material Request
 
 ```text
 Implement the V7 execution-stage New Material Request.
@@ -191,7 +265,7 @@ Add tests for draft recovery, validation, mixed categories, hidden prices and
 notification creation.
 ```
 
-## Task 8 — Procurement documents
+## Task 11 — Procurement documents
 
 ```text
 Implement the connected procurement vertical slice:

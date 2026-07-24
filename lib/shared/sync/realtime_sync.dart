@@ -10,6 +10,7 @@ import '../providers/hr_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/language_provider.dart';
 import '../providers/material_plan_provider.dart';
+import '../providers/material_master_provider.dart';
 import '../providers/material_request_provider.dart';
 import '../providers/material_return_provider.dart';
 import '../providers/notification_provider.dart';
@@ -38,19 +39,20 @@ class _Synced {
 
 /// The collections mirrored live. Table ↔ store-key must match SupabaseBootstrap.
 List<_Synced> _synced() => [
-  _Synced('projects', 'projects_list_v1', projectsProvider, [
-    'contractValueAED',
-  ]),
+  _Synced('projects', 'projects_list_v1', projectsProvider),
   _Synced('materialPlans', 'material_plans_list_v2', materialPlansProvider),
   _Synced(
     'materialRequests',
     'material_requests_list_v3',
     materialRequestsProvider,
   ),
-  _Synced('materials', 'materials_list_v3', materialsProvider, [
-    'unitPrice',
-    'reservedQty',
-  ]),
+  _Synced('materials', 'materials_list_v3', materialsProvider, ['reservedQty']),
+  _Synced(
+    'materialCategories',
+    'material_categories_v1',
+    materialCategoriesProvider,
+  ),
+  _Synced('materialUnits', 'material_units_v1', materialUnitsProvider),
   _Synced('stockMovements', 'stock_movements_v2', stockMovementsProvider),
   _Synced('notifications', 'notifications_list_v3', notificationsProvider),
   _Synced('goodsReceipts', 'goods_receipts_v2', goodsReceiptsProvider),

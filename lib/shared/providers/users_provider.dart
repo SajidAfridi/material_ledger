@@ -369,7 +369,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
 
   AppUser _applyOverride(AppUser u, PermissionKey key, bool? value) =>
       switch (key) {
-        PermissionKey.cost => u.copyWith(canSeeCostOverride: value),
+        PermissionKey.viewCommercials => u.copyWith(canSeeCostOverride: value),
         PermissionKey.finance => u.copyWith(canViewFinanceOverride: value),
         PermissionKey.salary => u.copyWith(canSeeSalaryOverride: value),
         PermissionKey.rentals => u.copyWith(canAccessRentalsOverride: value),

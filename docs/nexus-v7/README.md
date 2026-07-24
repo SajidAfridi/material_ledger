@@ -26,9 +26,9 @@ The existing SRS and legacy module behaviour remain compatibility constraints.
 They do not override a frozen V7 decision. Every known conflict is recorded in
 `SRS_V7_ALIGNMENT.md`; implementation must stop if a new conflict is found.
 
-## Foundation status — 24 July 2026
+## Controlled implementation status — 24 July 2026
 
-Batch 0A and Batch 0B are complete:
+Batch 0A, 0B, 1, 2, 3, 4, 5, 6, 7 and 8 are complete:
 
 - approved implementation pack copied into this folder;
 - approved HTML prototype, source files and desktop/mobile previews copied into
@@ -41,10 +41,38 @@ Batch 0A and Batch 0B are complete:
 - V7 flags added with all modules off by default;
 - production backend startup, trusted role resolution, local credentials and
   legacy sensitive-payload paths fail closed.
+- Project v2 supports stable parties, multiple buildings and backward-compatible
+  legacy migration.
+- commercial records are separated and protected through Flutter payload
+  boundaries plus live Supabase RLS/triggers.
+- a live Procurement identity now has canonical role/capability claims.
+- the approved V7 tokens, responsive page shell and reusable
+  status/action/audit components are implemented with desktop/mobile goldens.
+- the shared three-stage Project creation flow now provides per-user draft
+  recovery, explicit responsibility, multiple physical buildings, a common
+  project scope, optional document metadata and role-aware creation behind its
+  default-off flag.
+- the feature-flagged Project workspace now connects Overview, Material Plan,
+  Requests, Procurement readiness, document metadata and Activity while showing
+  current owner, concrete blockers and unweighted readiness.
+- the feature-flagged HVAC catalogue now uses Admin-managed categories and
+  approved units, deterministic legacy master IDs, role-safe stock/cost
+  visibility, responsive Finder-style browsing, custom-unit review and CSV
+  download.
+- the isolated reusable MaterialLineGrid now enforces the exact column
+  contract, protected commercial payload, smart rows, keyboard/Excel paste,
+  structured HVAC sizes, role-safe CSV, 500-row virtualization and a separate
+  mobile editor behind a debug-only diagnostic route.
+- the Phase 1 vertical slice now connects Engineer planning, Procurement
+  advisory source review, comments, immutable versions, Engineering
+  approval/changes and atomic project activation through normalized,
+  project-scoped Supabase tables.
+- project-specific physical progress stages can now be configured and audited
+  without changing operational readiness or workflow state.
 
-No V7 domain schema or user-visible workflow has started. See
-`IMPLEMENTATION_STATUS.md` for verification evidence and production operations
-that require controlled infrastructure work.
+No transformed V7 workflow is enabled by default. See
+`IMPLEMENTATION_STATUS.md` for verification evidence, rollout controls and
+production operations that require controlled infrastructure work.
 
 Legacy architecture notes outside this folder may still describe Firebase or
 Firestore. They are historical records, not implementation authority. Supabase

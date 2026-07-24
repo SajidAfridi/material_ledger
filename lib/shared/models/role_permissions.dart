@@ -10,7 +10,7 @@ import 'user_role.dart';
 /// admin identity / which shell loads) are intentionally NOT here — they define
 /// the app a role gets, not a grantable boundary.
 enum RoleCapability {
-  cost,
+  viewCommercials,
   salary,
   finance,
   rentals,
@@ -23,7 +23,7 @@ enum RoleCapability {
   /// The matching per-user override key, or null for caps with no per-user
   /// override (the writes + approveLeave derive from the role-level right only).
   PermissionKey? get overrideKey => switch (this) {
-    RoleCapability.cost => PermissionKey.cost,
+    RoleCapability.viewCommercials => PermissionKey.viewCommercials,
     RoleCapability.salary => PermissionKey.salary,
     RoleCapability.finance => PermissionKey.finance,
     RoleCapability.rentals => PermissionKey.rentals,
@@ -36,7 +36,7 @@ enum RoleCapability {
 
   /// Built-in baseline for [role] (the `UserRole` getters) — the seed value.
   bool defaultFor(UserRole role) => switch (this) {
-    RoleCapability.cost => role.canSeeCost,
+    RoleCapability.viewCommercials => role.canViewCommercials,
     RoleCapability.salary => role.canSeeSalary,
     RoleCapability.finance => role.canViewFinance,
     RoleCapability.rentals => role.canAccessRentals,
@@ -108,7 +108,10 @@ class RolePermissions {
             null => _seedFor(r),
             final List<dynamic> raw => {
               for (final c in RoleCapability.values)
-                if (raw.contains(c.name)) c,
+                if (raw.contains(c.name) ||
+                    (c == RoleCapability.viewCommercials &&
+                        raw.contains('cost')))
+                  c,
             },
             _ => _seedFor(r),
           },

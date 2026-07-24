@@ -1,4 +1,9 @@
 -- =====================================================================
+
+-- V7 note: after this baseline, apply every tracked file in
+-- `supabase/migrations/` in timestamp order. Batch 8's normalized Phase 1
+-- tables and workflow/activation triggers intentionally live in migrations,
+-- not in this legacy generic-collection baseline.
 -- Yorks GodownPro — Supabase / Postgres schema (self-hosted, UAE region)
 -- Phase 1 backend behind the existing sync seam.
 --
@@ -58,6 +63,8 @@ end $$;
 -- Core synced collections (matches MutationOp.collection values in the app).
 select app_make_collection(c) from (values
   ('materialRequests'),
+  ('materialCategories'),
+  ('materialUnits'),
   ('goodsReceipts'),
   ('returns'),
   ('rentalUnits'),
@@ -175,21 +182,39 @@ $$;
 
 -- capability check: admin has everything; others check their caps[] claim.
 -- Valid caps (must match RoleCapability enum names in the app exactly):
---   cost, salary, finance, rentals, writeRentals, people, writePeople, goods,
---   approveLeave. (cost/salary/finance are field-level visibility — enforced in
---   the app, not by these table policies; see README.)
+--   viewCommercials, salary, finance, rentals, writeRentals, people,
+--   writePeople, goods, approveLeave. The legacy `cost` claim remains a
+--   temporary read alias. Commercial values are also enforced by the
+--   `commercial_records` RLS boundary in the tracked Batch 2 migrations.
 create or replace function app_has_cap(p_cap text)
-returns boolean language sql stable as $$
-  select app_role() = 'admin'
-      or (auth.jwt() -> 'app_metadata' -> 'caps') ? p_cap;
+returns boolean language sql stable set search_path to '' as $$
+  select public.app_role() = 'admin'
+      or coalesce(
+        (auth.jwt() -> 'app_metadata' -> 'caps') ? p_cap,
+        false
+      )
+      or (
+        p_cap = 'viewCommercials'
+        and coalesce(
+          (auth.jwt() -> 'app_metadata' -> 'caps') ? 'cost',
+          false
+        )
+      );
 $$;
+
+-- The canonical commercial table, migration and recursive operational-payload
+-- triggers are tracked in:
+--   supabase/migrations/20260724015401_secure_commercial_boundary.sql
+--   supabase/migrations/20260724015517_fix_cost_free_trigger_execution.sql
+--   supabase/migrations/20260724015856_drop_unused_commercial_updated_at_index.sql
 
 -- Turn RLS on for every collection.
 do $$ declare t text;
 begin
   foreach t in array array[
     'materialRequests','goodsReceipts','returns','rentalUnits','rentPayments',
-    'employees','attendance','leaveRecords','config','notifications'
+    'employees','attendance','leaveRecords','config','notifications',
+    'materialCategories','materialUnits'
   ] loop
     execute format('alter table %I enable row level security;', t);
   end loop;

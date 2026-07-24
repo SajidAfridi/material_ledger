@@ -11,6 +11,13 @@ import 'package:material_ledger/shared/models/user_role.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('project workspace path uses the stable project identifier', () {
+    expect(
+      RoutePaths.projectWorkspacePath('project-41'),
+      '/projects/project-41',
+    );
+  });
+
   group('createAppRouter builds a valid tree for every role', () {
     for (final role in UserRole.values) {
       test('role: ${role.name}', () {

@@ -16,23 +16,36 @@ bool _cap(Ref ref, RoleCapability cap) {
   return resolveCapability(user, role, perms, cap);
 }
 
-final canSeeCostProvider = Provider<bool>((ref) => _cap(ref, RoleCapability.cost));
-final canViewFinanceProvider =
-    Provider<bool>((ref) => _cap(ref, RoleCapability.finance));
-final canSeeSalaryProvider =
-    Provider<bool>((ref) => _cap(ref, RoleCapability.salary));
-final canAccessRentalsProvider =
-    Provider<bool>((ref) => _cap(ref, RoleCapability.rentals));
-final canAccessPeopleProvider =
-    Provider<bool>((ref) => _cap(ref, RoleCapability.people));
-final canReceiveGoodsProvider =
-    Provider<bool>((ref) => _cap(ref, RoleCapability.goods));
+final canViewCommercialsProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.viewCommercials),
+);
+
+/// Transitional alias for existing cost-aware widgets.
+final canSeeCostProvider = Provider<bool>(
+  (ref) => ref.watch(canViewCommercialsProvider),
+);
+final canViewFinanceProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.finance),
+);
+final canSeeSalaryProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.salary),
+);
+final canAccessRentalsProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.rentals),
+);
+final canAccessPeopleProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.people),
+);
+final canReceiveGoodsProvider = Provider<bool>(
+  (ref) => _cap(ref, RoleCapability.goods),
+);
 
 // Writes require both the (possibly overridden) access AND the role-level write
 // right — revoking access revokes writing too.
 final canWriteRentalsProvider = Provider<bool>(
   (ref) =>
-      _cap(ref, RoleCapability.rentals) && _cap(ref, RoleCapability.writeRentals),
+      _cap(ref, RoleCapability.rentals) &&
+      _cap(ref, RoleCapability.writeRentals),
 );
 final canWritePeopleProvider = Provider<bool>(
   (ref) =>

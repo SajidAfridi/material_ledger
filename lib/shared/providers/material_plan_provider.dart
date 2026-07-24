@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/material_plan.dart';
+import '../models/user_role.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
+import 'session_provider.dart';
 
 const _kPlansKey = 'material_plans_list_v2';
 const _uuid = Uuid();
@@ -14,11 +16,13 @@ final materialPlansProvider =
     StateNotifierProvider<MaterialPlansNotifier, List<MaterialPlan>>((ref) {
       return MaterialPlansNotifier(
         ref,
-        ref.watch(storageProvider).collection<MaterialPlan>(
-          _kPlansKey,
-          toJson: (p) => p.toJson(),
-          fromJson: MaterialPlan.fromJson,
-        ),
+        ref
+            .watch(storageProvider)
+            .collection<MaterialPlan>(
+              _kPlansKey,
+              toJson: (p) => p.toJson(),
+              fromJson: MaterialPlan.fromJson,
+            ),
       );
     });
 
@@ -57,6 +61,36 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
 
   final Ref _ref;
   final CollectionStore<MaterialPlan> _store;
+
+  bool _canActAs(UserRole role) {
+    final actorRole = _ref.read(currentUserProvider)?.role;
+    return actorRole == UserRole.admin || actorRole == role;
+  }
+
+  ({String? userId, String name, String role}) _actor({
+    UserRole? fallbackRole,
+  }) {
+    final user = _ref.read(currentUserProvider);
+    return (
+      userId: user?.id,
+      name: user?.fullName ?? 'System',
+      role: user?.role.label ?? fallbackRole?.label ?? 'System',
+    );
+  }
+
+  MaterialPlanActivity _event(
+    String action, {
+    required ({String? userId, String name, String role}) actor,
+    String detail = '',
+    DateTime? at,
+  }) => MaterialPlanActivity(
+    action: action,
+    actorName: actor.name,
+    actorRole: actor.role,
+    actorUserId: actor.userId,
+    timestamp: at ?? DateTime.now().toUtc(),
+    detail: detail,
+  );
 
   /// Reads from the store (or the empty seed on first run) and drops any
   /// soft-deleted row — see [MaterialPlan.deleted].
@@ -118,9 +152,14 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
   MaterialPlan ensurePlan(String projectId) {
     final existing = planForProject(projectId);
     if (existing != null) return existing;
+    if (!_canActAs(UserRole.engineer)) {
+      throw StateError('Only Engineering can create a Phase 1 plan.');
+    }
     final plan = MaterialPlan(
       id: 'plan-${_uuid.v4().substring(0, 8)}',
       projectId: projectId,
+      version: 0,
+      currentOwnerRole: UserRole.engineer.name,
     );
     upsertPlan(plan);
     return plan;
@@ -130,35 +169,140 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
   /// already been arranged (has a baseline) this is an edit-after-arrangement,
   /// so it returns to procurement re-review and the diff is preserved
   /// (FR-030/031); otherwise it is a first submission.
-  Future<void> submitPlan(String projectId, List<PlanItem> items) async {
+  Future<void> saveDraft(String projectId, List<PlanItem> items) async {
+    if (!_canActAs(UserRole.engineer)) return;
     final existing = planForProject(projectId);
-    final wasArranged = existing != null && existing.baselineItems.isNotEmpty;
+    if (existing != null &&
+        !{
+          MaterialPlanStatus.draft,
+          MaterialPlanStatus.rejected,
+        }.contains(existing.status)) {
+      return;
+    }
+    final actor = _actor(fallbackRole: UserRole.engineer);
+    final now = DateTime.now().toUtc();
     final plan =
         (existing ??
                 MaterialPlan(
                   id: 'plan-${_uuid.v4().substring(0, 8)}',
                   projectId: projectId,
+                  version: 0,
                 ))
             .copyWith(
               items: items,
+              status: existing?.status ?? MaterialPlanStatus.draft,
+              currentOwnerRole: UserRole.engineer.name,
+              updatedAt: now,
+              updatedByUserId: actor.userId,
+            );
+    final exists = state.any((row) => row.projectId == projectId);
+    state = exists
+        ? [
+            for (final row in state)
+              if (row.projectId == projectId) plan else row,
+          ]
+        : [plan, ...state];
+    await _persist();
+  }
+
+  Future<void> submitPlan(String projectId, List<PlanItem> items) async {
+    if (!_canActAs(UserRole.engineer)) return;
+    final existing = planForProject(projectId);
+    if (items.isEmpty ||
+        (existing != null &&
+            !{
+              MaterialPlanStatus.draft,
+              MaterialPlanStatus.rejected,
+            }.contains(existing.status))) {
+      return;
+    }
+    final wasArranged = existing != null && existing.baselineItems.isNotEmpty;
+    final actor = _actor(fallbackRole: UserRole.engineer);
+    final now = DateTime.now().toUtc();
+    final nextVersion =
+        existing == null ||
+            (existing.status == MaterialPlanStatus.draft &&
+                existing.versions.isEmpty)
+        ? 1
+        : existing.version + 1;
+    final submittedItems = [
+      for (final item in items)
+        item.copyWith(
+          status: PlanItemStatus.pending,
+          proposedSource: PlanProposedSource.notReviewed,
+          onHandQtySnapshot: null,
+          availableQtySnapshot: null,
+          procurementNote: '',
+        ),
+    ];
+    final plan =
+        (existing ??
+                MaterialPlan(
+                  id: 'plan-${_uuid.v4().substring(0, 8)}',
+                  projectId: projectId,
+                  version: 0,
+                ))
+            .copyWith(
+              items: submittedItems,
               status: wasArranged
                   ? MaterialPlanStatus.procurementReview
                   : MaterialPlanStatus.submitted,
-              submittedAt: DateTime.now(),
-              version: (existing?.version ?? 0) + 1,
+              submittedAt: now,
+              reviewedAt: null,
+              approvedAt: null,
+              version: nextVersion,
+              versions: [
+                ...?existing?.versions,
+                MaterialPlanVersion(
+                  version: nextVersion,
+                  items: submittedItems,
+                  createdAt: now,
+                  createdByUserId: actor.userId,
+                  createdByName: actor.name,
+                  createdByRole: actor.role,
+                ),
+              ],
+              activity: [
+                ...?existing?.activity,
+                _event(
+                  'Plan submitted',
+                  actor: actor,
+                  detail: 'Version $nextVersion · ${items.length} lines',
+                  at: now,
+                ),
+              ],
+              currentOwnerRole: UserRole.procurement.name,
+              updatedAt: now,
+              updatedByUserId: actor.userId,
             );
     await upsertPlan(plan);
   }
 
   /// Engineer gives final approval (FR-029). Caller activates the project.
   Future<void> approvePlan(String planId) async {
+    if (!_canActAs(UserRole.engineer)) return;
+    final actor = _actor(fallbackRole: UserRole.engineer);
+    final now = DateTime.now().toUtc();
     MaterialPlan? updated;
     state = [
       for (final p in state)
-        if (p.id == planId)
+        if (p.id == planId &&
+            p.status == MaterialPlanStatus.pendingEngineerApproval)
           updated = p.copyWith(
             status: MaterialPlanStatus.approved,
-            approvedAt: DateTime.now(),
+            approvedAt: now,
+            currentOwnerRole: 'none',
+            updatedAt: now,
+            updatedByUserId: actor.userId,
+            activity: [
+              ...p.activity,
+              _event(
+                'Plan approved',
+                actor: actor,
+                detail: 'Version ${p.version} approved',
+                at: now,
+              ),
+            ],
           )
         else
           p,
@@ -174,10 +318,15 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     required String comment,
     required String authorName,
   }) async {
+    if (!_canActAs(UserRole.engineer)) return;
+    if (rejectedItemIds.isEmpty || comment.trim().isEmpty) return;
+    final actor = _actor(fallbackRole: UserRole.engineer);
+    final now = DateTime.now().toUtc();
     MaterialPlan? updated;
     state = [
       for (final p in state)
-        if (p.id == planId)
+        if (p.id == planId &&
+            p.status == MaterialPlanStatus.pendingEngineerApproval)
           updated = p.copyWith(
             status: MaterialPlanStatus.rejected,
             items: [
@@ -191,11 +340,25 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
               ...p.comments,
               if (comment.trim().isNotEmpty)
                 PlanComment(
+                  id: _uuid.v4(),
+                  authorUserId: actor.userId,
                   authorName: authorName,
-                  authorRole: 'Engineer',
+                  authorRole: actor.role,
                   text: comment.trim(),
-                  timestamp: DateTime.now(),
+                  timestamp: now,
                 ),
+            ],
+            currentOwnerRole: UserRole.engineer.name,
+            updatedAt: now,
+            updatedByUserId: actor.userId,
+            activity: [
+              ...p.activity,
+              _event(
+                'Changes requested',
+                actor: actor,
+                detail: '${rejectedItemIds.length} lines selected',
+                at: now,
+              ),
             ],
           )
         else
@@ -210,20 +373,44 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     required String text,
     required String authorName,
     String authorRole = 'Engineer',
+    String? lineItemId,
   }) async {
+    if (!_canActAs(UserRole.procurement)) return;
     if (text.trim().isEmpty) return;
+    final actor = _actor();
+    final now = DateTime.now().toUtc();
     MaterialPlan? updated;
     state = [
       for (final p in state)
-        if (p.id == planId)
+        if (p.id == planId &&
+            {
+              MaterialPlanStatus.submitted,
+              MaterialPlanStatus.procurementReview,
+            }.contains(p.status))
           updated = p.copyWith(
             comments: [
               ...p.comments,
               PlanComment(
+                id: _uuid.v4(),
+                authorUserId: actor.userId,
                 authorName: authorName,
                 authorRole: authorRole,
                 text: text.trim(),
-                timestamp: DateTime.now(),
+                timestamp: now,
+                lineItemId: lineItemId,
+              ),
+            ],
+            updatedAt: now,
+            updatedByUserId: actor.userId,
+            activity: [
+              ...p.activity,
+              _event(
+                lineItemId == null
+                    ? 'Plan comment added'
+                    : 'Line comment added',
+                actor: actor,
+                detail: lineItemId ?? '',
+                at: now,
               ),
             ],
           )
@@ -242,26 +429,80 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
     String itemId,
     PlanItemStatus status,
   ) async {
+    final source = switch (status) {
+      PlanItemStatus.ticked => PlanProposedSource.warehouse,
+      PlanItemStatus.arranged => PlanProposedSource.externalSupplier,
+      _ => PlanProposedSource.notReviewed,
+    };
+    return setProposedSource(planId: planId, itemId: itemId, source: source);
+  }
+
+  /// Procurement records an advisory source and current availability snapshot.
+  /// This never allocates or reserves warehouse stock.
+  Future<void> setProposedSource({
+    required String planId,
+    required String itemId,
+    required PlanProposedSource source,
+    double? onHandQty,
+    double? availableQty,
+    String procurementNote = '',
+  }) async {
+    if (!_canActAs(UserRole.procurement)) return;
+    final actor = _actor(fallbackRole: UserRole.procurement);
+    final now = DateTime.now().toUtc();
     MaterialPlan? updated;
     state = [
       for (final p in state)
-        if (p.id == planId)
+        if (p.id == planId &&
+            {
+              MaterialPlanStatus.submitted,
+              MaterialPlanStatus.procurementReview,
+            }.contains(p.status))
           updated = p.copyWith(
             status: MaterialPlanStatus.procurementReview,
             items: [
               for (final i in p.items)
-                if (i.id == itemId) i.copyWith(status: status) else i,
+                if (i.id == itemId)
+                  i.copyWith(
+                    status: switch (source) {
+                      PlanProposedSource.warehouse => PlanItemStatus.ticked,
+                      PlanProposedSource.externalSupplier ||
+                      PlanProposedSource.mixed => PlanItemStatus.arranged,
+                      PlanProposedSource.notReviewed => PlanItemStatus.pending,
+                    },
+                    proposedSource: source,
+                    onHandQtySnapshot: onHandQty,
+                    availableQtySnapshot: availableQty,
+                    procurementNote: procurementNote.trim(),
+                  )
+                else
+                  i,
+            ],
+            currentOwnerRole: UserRole.procurement.name,
+            updatedAt: now,
+            updatedByUserId: actor.userId,
+            activity: [
+              ...p.activity,
+              _event(
+                'Proposed source updated',
+                actor: actor,
+                detail: '$itemId · ${source.label}',
+                at: now,
+              ),
             ],
           )
         else
           p,
     ];
     await _persist();
-    if (updated != null) await _syncPlan(updated, kind: 'plan.itemStatus');
+    if (updated != null) await _syncPlan(updated, kind: 'plan.sourceReview');
   }
 
   /// Mark every outstanding item as Arranged (convenience).
   Future<void> markAllArranged(String planId) async {
+    if (!_canActAs(UserRole.procurement)) return;
+    final actor = _actor(fallbackRole: UserRole.procurement);
+    final now = DateTime.now().toUtc();
     MaterialPlan? updated;
     state = [
       for (final p in state)
@@ -272,7 +513,21 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
               for (final i in p.items)
                 i.status == PlanItemStatus.ticked
                     ? i
-                    : i.copyWith(status: PlanItemStatus.arranged),
+                    : i.copyWith(
+                        status: PlanItemStatus.arranged,
+                        proposedSource: PlanProposedSource.externalSupplier,
+                      ),
+            ],
+            currentOwnerRole: UserRole.procurement.name,
+            updatedAt: now,
+            updatedByUserId: actor.userId,
+            activity: [
+              ...p.activity,
+              _event(
+                'All unreviewed lines proposed for external sourcing',
+                actor: actor,
+                at: now,
+              ),
             ],
           )
         else
@@ -285,21 +540,42 @@ class MaterialPlansNotifier extends StateNotifier<List<MaterialPlan>> {
   /// Procurement clicks "Mark Done" → sends the plan back to the Engineer for
   /// final review (FR). Captures the current items as the baseline so any later
   /// engineer edit shows a diff and requires re-review.
-  Future<void> markPlanDone(String planId) async {
+  Future<void> markPlanDone(String planId) => sendReadyForApproval(planId);
+
+  Future<void> sendReadyForApproval(String planId) async {
+    if (!_canActAs(UserRole.procurement)) return;
+    final actor = _actor(fallbackRole: UserRole.procurement);
+    final now = DateTime.now().toUtc();
     MaterialPlan? updated;
     state = [
       for (final p in state)
-        if (p.id == planId)
+        if (p.id == planId &&
+            p.status == MaterialPlanStatus.procurementReview &&
+            p.allSourcesReviewed)
           updated = p.copyWith(
             status: MaterialPlanStatus.pendingEngineerApproval,
-            baselineItems: p.items,
-            submittedAt: DateTime.now(),
+            baselineItems: p.baselineItems.isEmpty ? p.items : p.baselineItems,
+            reviewedAt: now,
+            currentOwnerRole: UserRole.engineer.name,
+            updatedAt: now,
+            updatedByUserId: actor.userId,
+            activity: [
+              ...p.activity,
+              _event(
+                'Ready for approval',
+                actor: actor,
+                detail: 'Version ${p.version} · ${p.items.length} lines',
+                at: now,
+              ),
+            ],
           )
         else
           p,
     ];
     await _persist();
-    if (updated != null) await _syncPlan(updated, kind: 'plan.markDone');
+    if (updated != null) {
+      await _syncPlan(updated, kind: 'plan.readyForApproval');
+    }
   }
 }
 

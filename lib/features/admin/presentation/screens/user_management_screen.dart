@@ -29,7 +29,7 @@ String _friendlyErr(Object e) {
 
 /// The per-user capabilities an Admin can grant/revoke, with display labels.
 const _managedPermissions = <(PermissionKey, String)>[
-  (PermissionKey.cost, 'See unit cost'),
+  (PermissionKey.viewCommercials, 'View commercials'),
   (PermissionKey.finance, 'Financial reports'),
   (PermissionKey.salary, 'Salary & HR documents'),
   (PermissionKey.rentals, 'Rentals module'),
@@ -132,7 +132,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                             },
                           ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusFull,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -290,9 +292,7 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
       final messenger = ScaffoldMessenger.of(context);
       AppFeedback.confirm();
       Navigator.pop(context);
-      messenger.showSnackBar(
-        SnackBar(content: Text('${user.fullName} added')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('${user.fullName} added')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -360,12 +360,17 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
                     validator: (v) {
                       final t = (v ?? '').trim();
                       if (t.isEmpty) return AppStrings.fieldRequired.primary;
-                      if (!t.contains('@')) return AppStrings.emailAddress.primary;
+                      if (!t.contains('@')) {
+                        return AppStrings.emailAddress.primary;
+                      }
                       return null;
                     },
                   ),
                   const Gap(AppSpacing.lg),
-                  Text(AppStrings.roleLabel.primary, style: AppTypography.titleSmall),
+                  Text(
+                    AppStrings.roleLabel.primary,
+                    style: AppTypography.titleSmall,
+                  ),
                   const Gap(AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.sm,
@@ -492,13 +497,16 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
             .read(usersProvider.notifier)
             .setInventoryAccess(user.id, grant);
         await ref.logAudit(
-          action:
-              grant ? 'Inventory access granted' : 'Inventory access revoked',
+          action: grant
+              ? 'Inventory access granted'
+              : 'Inventory access revoked',
           module: AuditModule.platform,
           refId: user.id,
           detail: user.fullName,
         );
-        success(grant ? 'Inventory access granted' : 'Inventory access revoked');
+        success(
+          grant ? 'Inventory access granted' : 'Inventory access revoked',
+        );
       } catch (e) {
         warn(_friendlyErr(e));
       }
@@ -596,8 +604,9 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
     Future<void> setRole(UserRole role) => run(() async {
       if (role == user.role) return;
       try {
-        final allowed =
-            await ref.read(usersProvider.notifier).setRole(user.id, role);
+        final allowed = await ref
+            .read(usersProvider.notifier)
+            .setRole(user.id, role);
         if (!allowed) return warn("Can't change the only active admin's role.");
         await ref.logAudit(
           action: 'User role changed',
@@ -615,11 +624,9 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       // Toggling back to the role default clears the override entirely.
       final next = value == user.roleDefaultFor(key) ? null : value;
       try {
-        await ref.read(usersProvider.notifier).setPermissionOverride(
-              user.id,
-              key,
-              next,
-            );
+        await ref
+            .read(usersProvider.notifier)
+            .setPermissionOverride(user.id, key, next);
         await ref.logAudit(
           action: 'Permission updated',
           module: AuditModule.platform,
@@ -647,7 +654,9 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
         refId: user.id,
         detail: '${user.fullName} → ${employeeId ?? 'none'}',
       );
-      success(employeeId == null ? 'Employee link cleared' : 'Linked to employee');
+      success(
+        employeeId == null ? 'Employee link cleared' : 'Linked to employee',
+      );
     });
 
     Future<void> pickEmployee() async {
@@ -674,7 +683,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                   leading: const Icon(Icons.link_off_rounded),
                   title: const Text('Not linked'),
                   trailing: user.employeeId == null
-                      ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                        )
                       : null,
                   onTap: () {
                     Navigator.pop(ctx);
@@ -687,7 +699,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                     title: Text(e.fullName),
                     subtitle: Text('${e.jobRole} · ${e.id}'),
                     trailing: user.employeeId == e.id
-                        ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                        ? const Icon(
+                            Icons.check_rounded,
+                            color: AppColors.primary,
+                          )
                         : null,
                     onTap: () {
                       Navigator.pop(ctx);
@@ -920,8 +935,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               const Gap(AppSpacing.sm),
               TextButton.icon(
                 onPressed: _busy ? null : deleteUser,
-                icon: const Icon(Icons.delete_outline_rounded,
-                    color: AppColors.error),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.error,
+                ),
                 label: Text(
                   'Delete user',
                   style: AppTypography.labelLarge.copyWith(

@@ -16,7 +16,9 @@ import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 
 /// Phase 1 — Engineer reviews the arranged plan and either approves it
 /// (project → Active) or requests changes on specific items (FR-024–FR-029).
@@ -42,6 +44,7 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
   }
 
   Future<void> _approve(MaterialPlan plan) async {
+    if (!plan.isReadyForApproval) return;
     // Approving activates the whole project and directs procurement — a
     // consequential, non-undoable step, so confirm it first.
     final ok = await showDialog<bool>(
@@ -93,7 +96,9 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
     required String detail,
   }) async {
     final lang = ref.read(languageProvider);
-    await ref.read(notificationsProvider.notifier).add(
+    await ref
+        .read(notificationsProvider.notifier)
+        .add(
           type: NotificationType.plan,
           title: title.primary,
           titleSecondary: title.secondary(lang),
@@ -105,6 +110,7 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
   }
 
   Future<void> _sendChanges(MaterialPlan plan) async {
+    if (!plan.isReadyForApproval) return;
     if (_selected.isEmpty && _commentController.text.trim().isEmpty) {
       AppFeedback.warning();
       _toast(AppStrings.selectItemsToChange.primary);
@@ -117,7 +123,7 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
           planId: plan.id,
           rejectedItemIds: _selected,
           comment: _commentController.text,
-          authorName: 'Site Engineer',
+          authorName: ref.read(actorNameProvider),
         );
     await _notifyProcurement(
       title: AppStrings.notifPlanChangesTitle,
@@ -140,16 +146,31 @@ class _PlanReviewScreenState extends ConsumerState<PlanReviewScreen> {
   }
 
   bool _differs(MaterialPlan plan) {
-    final baseQty = {for (final i in plan.baselineItems) i.id: i.quantity};
+    final baseline = {for (final item in plan.baselineItems) item.id: item};
     final currIds = plan.items.map((e) => e.id).toSet();
     return plan.items.any(
-          (i) => !baseQty.containsKey(i.id) || baseQty[i.id] != i.quantity,
+          (item) =>
+              !baseline.containsKey(item.id) ||
+              !_sameOperationalLine(baseline[item.id]!, item),
         ) ||
         plan.baselineItems.any((i) => !currIds.contains(i.id));
   }
 
+  bool _sameOperationalLine(PlanItem a, PlanItem b) =>
+      a.description == b.description &&
+      a.size == b.size &&
+      a.modelSerial == b.modelSerial &&
+      a.makeOrigin == b.makeOrigin &&
+      a.quantity == b.quantity &&
+      a.unitSymbol == b.unitSymbol &&
+      a.note == b.note &&
+      a.buildingId == b.buildingId;
+
   @override
   Widget build(BuildContext context) {
+    if (!ref.watch(nexusFeatureFlagsProvider).phase1Planning) {
+      return const NexusFeatureUnavailableScreen(title: 'Material plan review');
+    }
     final lang = ref.watch(languageProvider);
     final project = ref.watch(projectsProvider.notifier).byId(widget.projectId);
     final plan = ref.watch(planForProjectProvider(widget.projectId));
@@ -573,6 +594,10 @@ class _ActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canApprove = plan.isReadyForApproval;
+    final canEdit = {
+      MaterialPlanStatus.draft,
+      MaterialPlanStatus.rejected,
+    }.contains(plan.status);
 
     return Container(
       decoration: const BoxDecoration(color: AppColors.surfaceContainerLowest),
@@ -618,17 +643,19 @@ class _ActionBar extends StatelessWidget {
                       child: SecondaryButton(
                         label: AppStrings.requestChanges.primary,
                         icon: Icons.rule_rounded,
-                        onPressed: busy ? null : onStartChanges,
+                        onPressed: busy || !canApprove ? null : onStartChanges,
                       ),
                     ),
-                    const Gap(AppSpacing.md),
-                    Expanded(
-                      child: SecondaryButton(
-                        label: AppStrings.editPlan.primary,
-                        icon: Icons.edit_outlined,
-                        onPressed: busy ? null : onEditPlan,
+                    if (canEdit) ...[
+                      const Gap(AppSpacing.md),
+                      Expanded(
+                        child: SecondaryButton(
+                          label: AppStrings.editPlan.primary,
+                          icon: Icons.edit_outlined,
+                          onPressed: busy ? null : onEditPlan,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ],

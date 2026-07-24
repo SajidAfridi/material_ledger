@@ -68,7 +68,8 @@ not a codebase to copy into Flutter.
 - Browser project creation uses Essentials & Responsibility → Buildings →
   Review & Create. Attachments are optional and inline.
 - Project workspace readiness is based on current action, blockers and connected
-  records. The MVP does not implement arbitrary weighted completeness.
+  records. A separately labelled, project-configurable weighted physical
+  progress report may be shown, but it never drives readiness or workflow.
 
 ## Exact approved material columns
 

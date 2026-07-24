@@ -23,8 +23,11 @@ enum UserRole {
   );
 
   // ─── Capabilities (mirror Security-Rules matrix, Appendix F/I) ───
-  /// Inventory unit cost is visible to Admin/Procurement only.
-  bool get canSeeCost => this == admin || this == procurement;
+  /// Commercial records are visible to Admin/Procurement by default.
+  bool get canViewCommercials => this == admin || this == procurement;
+
+  /// Transitional alias for existing presentation code.
+  bool get canSeeCost => canViewCommercials;
 
   /// Employee salary & documents are visible to Admin only. (Procurement runs
   /// HR operations but not compensation — widen here if that changes.)

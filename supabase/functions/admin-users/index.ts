@@ -22,9 +22,9 @@ const cors = {
 // Role → default capabilities. Mirrors RoleCapability.defaultFor in the app; a
 // fallback only — the app normally passes an explicit `caps` array.
 const DEFAULT_CAPS: Record<string, string[]> = {
-  admin: ['cost', 'salary', 'finance', 'rentals', 'writeRentals', 'people',
+  admin: ['viewCommercials', 'salary', 'finance', 'rentals', 'writeRentals', 'people',
           'writePeople', 'goods', 'approveLeave'],
-  procurement: ['cost', 'rentals', 'writeRentals', 'people', 'writePeople',
+  procurement: ['viewCommercials', 'rentals', 'writeRentals', 'people', 'writePeople',
                 'goods', 'approveLeave'],
   engineer: [],
 }

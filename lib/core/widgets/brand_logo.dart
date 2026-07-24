@@ -14,33 +14,40 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white,
-        boxShadow: shadow
-            ? [
-                BoxShadow(
-                  color: AppColors.scrim.withValues(alpha: 0.18),
-                  blurRadius: size * 0.16,
-                  offset: Offset(0, size * 0.06),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          boxShadow: shadow
+              ? [
+                  BoxShadow(
+                    color: AppColors.scrim.withValues(alpha: 0.18),
+                    blurRadius: size * 0.16,
+                    offset: Offset(0, size * 0.06),
+                  ),
+                ]
+              : null,
+        ),
+        child: ClipOval(
+          clipBehavior: Clip.antiAlias,
+          child: Image.asset(
+            'assets/logo.png',
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => ColoredBox(
+              color: AppColors.primary,
+              child: Center(
+                child: Icon(
+                  Icons.ac_unit_rounded,
+                  size: size * 0.5,
+                  color: Colors.white,
                 ),
-              ]
-            : null,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Image.asset(
-        'assets/logo.png',
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(
-          color: AppColors.primary,
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.ac_unit_rounded,
-            size: size * 0.5,
-            color: Colors.white,
+              ),
+            ),
           ),
         ),
       ),

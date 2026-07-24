@@ -38,8 +38,13 @@ project-wide/common building scope is used for material lines that genuinely do
 not belong to one physical building.
 
 The workspace shows readiness, current action, blockers and connected records.
-The MVP does not calculate arbitrary weighted project-completeness percentages
-or track installation, commissioning, energizing or handover progress.
+It may also show a separate project-specific physical/technical progress report.
+The standard Yorks template is Cooling Load Design, Material Supply, Progress
+Installation, Commissioning & Handover and Energizing Substation. Admin may
+change stage names and weights per project; Engineer may update percentages;
+Procurement is read-only. Weights must total 100 and every change records actor
+and time. This report never changes readiness, lifecycle, approval, inventory or
+procurement status.
 
 ## 3. Canonical status language
 
@@ -199,5 +204,5 @@ server-generated and append-only.
 - advanced analytics or report builders
 - full return/RMA management
 - arbitrary saved layouts
-- installation/commissioning progress tracking
+- detailed programmes, Gantt scheduling or task-level progress management
 - full offline approval, allocation, PO or receipt commitment

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'material_master.dart';
+
 /// Units of measurement for materials.
 enum MaterialUnit {
   kg('kg', 'Kilograms', 'کلوگرام'),
@@ -94,6 +96,8 @@ class MaterialItem {
     required this.urduName,
     required this.category,
     required this.unit,
+    String? categoryMasterId,
+    String? unitMasterId,
     required this.quantity,
     required this.unitPrice,
     this.minStockLevel = 0,
@@ -109,7 +113,10 @@ class MaterialItem {
     this.deleted = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : createdAt = createdAt ?? DateTime.now(),
+  }) : categoryMasterId =
+           categoryMasterId ?? categoryMasterIdForLegacyLabel(category.label),
+       unitMasterId = unitMasterId ?? unitMasterIdForLegacySymbol(unit.symbol),
+       createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
   final String id;
@@ -119,6 +126,8 @@ class MaterialItem {
   final String urduName;
   final MaterialCategory category;
   final MaterialUnit unit;
+  final String categoryMasterId;
+  final String unitMasterId;
   final double quantity;
   final double unitPrice;
   final double minStockLevel;
@@ -187,6 +196,8 @@ class MaterialItem {
     String? urduName,
     MaterialCategory? category,
     MaterialUnit? unit,
+    String? categoryMasterId,
+    String? unitMasterId,
     double? quantity,
     double? unitPrice,
     double? minStockLevel,
@@ -205,6 +216,8 @@ class MaterialItem {
       urduName: urduName ?? this.urduName,
       category: category ?? this.category,
       unit: unit ?? this.unit,
+      categoryMasterId: categoryMasterId ?? this.categoryMasterId,
+      unitMasterId: unitMasterId ?? this.unitMasterId,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       minStockLevel: minStockLevel ?? this.minStockLevel,
@@ -226,6 +239,8 @@ class MaterialItem {
     'urduName': urduName,
     'category': category.label,
     'unit': unit.symbol,
+    'categoryMasterId': categoryMasterId,
+    'unitMasterId': unitMasterId,
     'quantity': quantity,
     'unitPrice': unitPrice,
     'minStockLevel': minStockLevel,
@@ -247,12 +262,30 @@ class MaterialItem {
     ..remove('unitPrice')
     ..remove('reservedQty');
 
+  Map<String, dynamic> toOperationalJson() => toJson()..remove('unitPrice');
+
+  MaterialItem withoutCommercials() {
+    if (unitPrice == 0) return this;
+    return copyWith(unitPrice: 0, updatedAt: updatedAt);
+  }
+
+  /// Adds an authorised session's in-memory cost for presentation/calculation.
+  /// This object must never be written through the shared materials store.
+  MaterialItem withCommercialUnitCost(double value) =>
+      copyWith(unitPrice: value, updatedAt: updatedAt);
+
   factory MaterialItem.fromJson(Map<String, dynamic> json) => MaterialItem(
     id: json['id'] as String,
     name: json['name'] as String,
     urduName: json['urduName'] as String? ?? '',
     category: MaterialCategory.fromLabel(json['category'] as String),
     unit: MaterialUnit.fromSymbol(json['unit'] as String),
+    categoryMasterId:
+        json['categoryMasterId'] as String? ??
+        categoryMasterIdForLegacyLabel(json['category'] as String),
+    unitMasterId:
+        json['unitMasterId'] as String? ??
+        unitMasterIdForLegacySymbol(json['unit'] as String),
     quantity: (json['quantity'] as num).toDouble(),
     unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
     minStockLevel: (json['minStockLevel'] as num?)?.toDouble() ?? 0,

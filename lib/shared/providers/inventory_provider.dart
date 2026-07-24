@@ -1,12 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/commercial_record.dart';
 import '../models/inventory_transaction.dart';
 import '../models/material_item.dart';
 import '../models/stock_movement.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
+import 'commercial_records_provider.dart';
 import 'session_provider.dart';
 import 'stock_movement_provider.dart';
 
@@ -25,23 +27,48 @@ final materialsProvider =
             .watch(storageProvider)
             .collection<MaterialItem>(
               _kMaterialsKey,
-              toJson: (m) => m.toJson(),
+              toJson: (m) => m.toOperationalJson(),
               fromJson: MaterialItem.fromJson,
             ),
+        ref.watch(commercialRecordsProvider.notifier),
       );
     });
 
 class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
-  MaterialsNotifier(this._ref, this._store) : super(_load(_store)) {
-    if (!_store.isSeeded) _store.writeAll(state);
+  MaterialsNotifier(this._ref, this._store, this._commercial)
+    : super(_load(_store)) {
+    final completeSource = _store.isSeeded ? _store.readAll() : _seedMaterials;
+    // Seed values remain a local-development migration source even if a denied
+    // session previously rewrote the operational cache without commercials.
+    // Existing stored records win because the commercial importer is
+    // insert-only.
+    final legacyCommercialSource = [...completeSource, ..._seedMaterials];
+    _commercialReady = _commercial.importLegacyForLocalDevelopment([
+      for (final material in legacyCommercialSource)
+        CommercialRecord(
+          subjectType: CommercialSubjectType.material,
+          subjectId: material.id,
+          unitCostAED: material.unitPrice,
+          updatedAt: material.updatedAt.toUtc(),
+        ),
+    ]);
+    // Operational material storage is always cost-free, including tombstones.
+    _store.writeAll([
+      for (final material in completeSource) material.withoutCommercials(),
+    ]);
   }
 
   final Ref _ref;
   final CollectionStore<MaterialItem> _store;
+  final CommercialRecordsNotifier _commercial;
+  late final Future<void> _commercialReady;
 
   static List<MaterialItem> _load(CollectionStore<MaterialItem> store) {
     final all = store.isSeeded ? store.readAll() : _seedMaterials;
-    return all.where((m) => !m.deleted).toList();
+    return [
+      for (final material in all)
+        if (!material.deleted) material.withoutCommercials(),
+    ];
   }
 
   Future<void> _persist() => _store.writeAll(state);
@@ -96,6 +123,8 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     required String urduName,
     required MaterialCategory category,
     required MaterialUnit unit,
+    String? categoryMasterId,
+    String? unitMasterId,
     required double quantity,
     required double unitPrice,
     double minStockLevel = 0,
@@ -103,21 +132,29 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     String countryOfOrigin = '',
     String size = '',
     String ralColour = '',
+    String storeLocation = '',
   }) async {
     final id = _uuid.v4();
+    if (unitPrice > 0) {
+      await _commercialReady;
+      await _commercial.setMaterialUnitCost(id, unitPrice);
+    }
     final item = MaterialItem(
       id: id,
       name: name,
       urduName: urduName,
       category: category,
       unit: unit,
+      categoryMasterId: categoryMasterId,
+      unitMasterId: unitMasterId,
       quantity: quantity,
-      unitPrice: unitPrice,
+      unitPrice: 0,
       minStockLevel: minStockLevel,
       brand: brand,
       countryOfOrigin: countryOfOrigin,
       size: size,
       ralColour: ralColour,
+      storeLocation: storeLocation,
     );
     state = [...state, item];
     await _persist();
@@ -125,13 +162,21 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     return id;
   }
 
-  Future<void> updateMaterial(MaterialItem updated) async {
+  Future<void> updateMaterial(
+    MaterialItem updated, {
+    double? unitCostAED,
+  }) async {
+    if (unitCostAED != null) {
+      await _commercialReady;
+      await _commercial.setMaterialUnitCost(updated.id, unitCostAED);
+    }
+    final shared = updated.withoutCommercials();
     state = [
       for (final item in state)
-        if (item.id == updated.id) updated else item,
+        if (item.id == shared.id) shared else item,
     ];
     await _persist();
-    await _sync(updated.id);
+    await _sync(shared.id);
   }
 
   Future<void> deleteMaterial(String id) async {
@@ -246,15 +291,22 @@ class MaterialsNotifier extends StateNotifier<List<MaterialItem>> {
     String? refId,
   }) async {
     if (qty <= 0) return;
+    final current = byId(id);
+    if (current == null) return;
+    if (unitCostAED != null) {
+      await _commercialReady;
+      final weighted = _weightedAvg(
+        current.quantity,
+        _commercial.materialUnitCost(id),
+        qty,
+        unitCostAED,
+      );
+      await _commercial.setMaterialUnitCost(id, weighted);
+    }
     state = [
       for (final item in state)
         if (item.id == id)
-          item.copyWith(
-            quantity: item.quantity + qty,
-            unitPrice: unitCostAED == null
-                ? item.unitPrice
-                : _weightedAvg(item.quantity, item.unitPrice, qty, unitCostAED),
-          )
+          item.copyWith(quantity: item.quantity + qty)
         else
           item,
     ];
@@ -386,7 +438,7 @@ final filteredTransactionsProvider = Provider<List<InventoryTransaction>>((
 /// Filtered materials based on search query.
 final filteredMaterialsProvider = Provider<List<MaterialItem>>((ref) {
   final query = ref.watch(inventorySearchQueryProvider).toLowerCase().trim();
-  final materials = ref.watch(materialsProvider);
+  final materials = ref.watch(materialsWithCommercialsProvider);
   if (query.isEmpty) return materials;
   return materials
       .where(
@@ -402,8 +454,32 @@ final filteredMaterialsProvider = Provider<List<MaterialItem>>((ref) {
 
 /// Total stock value across all materials.
 final totalStockValueProvider = Provider<double>((ref) {
-  final materials = ref.watch(materialsProvider);
+  final materials = ref.watch(materialsWithCommercialsProvider);
   return materials.fold(0.0, (sum, item) => sum + item.totalValue);
+});
+
+/// Operational materials enriched only in memory for an authorised session.
+final materialsWithCommercialsProvider = Provider<List<MaterialItem>>((ref) {
+  final materials = ref.watch(materialsProvider);
+  final commercials = ref.watch(commercialRecordsProvider);
+  return [
+    for (final material in materials)
+      material.withCommercialUnitCost(
+        commercials['${CommercialSubjectType.material.databaseValue}:${material.id}']
+                ?.unitCostAED ??
+            0,
+      ),
+  ];
+});
+
+final materialUnitCostProvider = Provider.family<double, String>((
+  ref,
+  materialId,
+) {
+  final records = ref.watch(commercialRecordsProvider);
+  return records['${CommercialSubjectType.material.databaseValue}:$materialId']
+          ?.unitCostAED ??
+      0;
 });
 
 /// Count of unique materials.

@@ -17,6 +17,7 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 
@@ -50,8 +51,9 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
       return projectId;
     }
 
-    final urgentCount =
-        requests.where((r) => r.priority == RequestPriority.urgent).length;
+    final urgentCount = requests
+        .where((r) => r.priority == RequestPriority.urgent)
+        .length;
     final totalPending = newProjects.length + plans.length + requests.length;
 
     return Scaffold(
@@ -74,6 +76,14 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
             color: AppColors.onSurfaceVariant,
           ),
         ),
+        actions: [
+          if (ref.watch(nexusFeatureFlagsProvider).projects)
+            IconButton(
+              tooltip: AppStrings.createProject.primary,
+              onPressed: () => context.push(RoutePaths.engineerCreateProject),
+              icon: const Icon(Icons.add_rounded),
+            ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -82,10 +92,7 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(AppSpacing.screenHorizontal),
             children: [
               // ─── Hero summary ───────────────────────────────
-              _Hero(
-                totalPending: totalPending,
-                urgentCount: urgentCount,
-              ),
+              _Hero(totalPending: totalPending, urgentCount: urgentCount),
               const Gap(AppSpacing.xl),
 
               // ─── New projects awaiting acceptance ───────────
@@ -116,7 +123,8 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
                   _QueueCard(
                     icon: Icons.fact_check_outlined,
                     title: projectName(p.projectId),
-                    subtitle: '${p.items.length} ${AppStrings.items.primary} · ${p.status.label}',
+                    subtitle:
+                        '${p.items.length} ${AppStrings.items.primary} · ${p.status.label}',
                     statusChip: StatusChip.info(p.status.label),
                     onTap: () => context.push(
                       RoutePaths.planReviewProcurementPath(p.projectId),
@@ -140,7 +148,8 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
                   _QueueCard(
                     icon: Icons.local_shipping_outlined,
                     title: r.projectName,
-                    subtitle: '${r.itemCount} ${AppStrings.items.primary} · ${r.status.label}',
+                    subtitle:
+                        '${r.itemCount} ${AppStrings.items.primary} · ${r.status.label}',
                     statusChip: r.priority == RequestPriority.urgent
                         ? StatusChip.error(AppStrings.urgent.primary)
                         : StatusChip.info(r.status.label),
@@ -159,10 +168,7 @@ class ProcurementWorkspaceScreen extends ConsumerWidget {
 
 /// Landing summary — frames the two queues with a single "what needs me" line.
 class _Hero extends StatelessWidget {
-  const _Hero({
-    required this.totalPending,
-    required this.urgentCount,
-  });
+  const _Hero({required this.totalPending, required this.urgentCount});
 
   final int totalPending;
   final int urgentCount;
@@ -213,9 +219,7 @@ class _Hero extends StatelessWidget {
                 ),
                 if (urgentCount > 0) ...[
                   const Gap(AppSpacing.sm),
-                  StatusChip.error(
-                    '$urgentCount ${AppStrings.urgent.primary}',
-                  ),
+                  StatusChip.error('$urgentCount ${AppStrings.urgent.primary}'),
                 ],
               ],
             ),
@@ -237,7 +241,9 @@ class _QueueHeader extends StatelessWidget {
       children: [
         Text(
           label,
-          style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w800),
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const Gap(AppSpacing.sm),
         Container(
@@ -252,7 +258,9 @@ class _QueueHeader extends StatelessWidget {
           child: Text(
             '$count',
             style: AppTypography.labelMedium.copyWith(
-              color: count > 0 ? AppColors.onPrimary : AppColors.onSurfaceVariant,
+              color: count > 0
+                  ? AppColors.onPrimary
+                  : AppColors.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -367,10 +375,14 @@ class _NewProjectCard extends ConsumerWidget {
     final engineerId = updated.assignedEngineerId;
     if (engineerId != null) {
       final lang = ref.read(languageProvider);
-      await ref.read(notificationsProvider.notifier).add(
+      await ref
+          .read(notificationsProvider.notifier)
+          .add(
             type: NotificationType.project,
             title: AppStrings.notifProjectAcceptedTitle.primary,
-            titleSecondary: AppStrings.notifProjectAcceptedTitle.secondary(lang),
+            titleSecondary: AppStrings.notifProjectAcceptedTitle.secondary(
+              lang,
+            ),
             body: updated.name,
             refId: updated.id,
             route: RoutePaths.engineerProjects,
@@ -385,9 +397,9 @@ class _NewProjectCard extends ConsumerWidget {
     );
     if (!context.mounted) return;
     AppFeedback.confirm();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.projectAccepted.primary)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(AppStrings.projectAccepted.primary)));
   }
 
   @override
@@ -398,7 +410,9 @@ class _NewProjectCard extends ConsumerWidget {
     ].whereType<String>().join(' · ');
 
     return LedgerCard(
-      onTap: () => _accept(context, ref),
+      onTap: ref.watch(nexusFeatureFlagsProvider).projects
+          ? () => context.push(RoutePaths.projectWorkspacePath(project.id))
+          : () => _accept(context, ref),
       child: Row(
         children: [
           Container(

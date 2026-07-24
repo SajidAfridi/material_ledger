@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
@@ -11,7 +12,9 @@ import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 
 /// Admin project oversight (FR-123/317) — view every project and delete any.
 /// Searchable so it stays usable as the register grows.
@@ -48,7 +51,7 @@ class _AdminProjectsScreenState extends ConsumerState<AdminProjectsScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
-    final all = ref.watch(projectsProvider);
+    final all = ref.watch(projectsWithCommercialsProvider);
     final visible = all.where(_matches).toList();
 
     return Scaffold(
@@ -71,6 +74,14 @@ class _AdminProjectsScreenState extends ConsumerState<AdminProjectsScreen> {
             color: AppColors.onSurfaceVariant,
           ),
         ),
+        actions: [
+          if (ref.watch(nexusFeatureFlagsProvider).projects)
+            IconButton(
+              tooltip: AppStrings.createProject.primary,
+              onPressed: () => context.push(RoutePaths.engineerCreateProject),
+              icon: const Icon(Icons.add_rounded),
+            ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -105,7 +116,9 @@ class _AdminProjectsScreenState extends ConsumerState<AdminProjectsScreen> {
                             },
                           ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusFull,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -122,27 +135,27 @@ class _AdminProjectsScreenState extends ConsumerState<AdminProjectsScreen> {
                         ),
                       )
                     : visible.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No matching projects',
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: AppColors.onSurfaceVariant,
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.screenHorizontal,
-                              AppSpacing.sm,
-                              AppSpacing.screenHorizontal,
-                              AppSpacing.huge,
-                            ),
-                            itemCount: visible.length,
-                            separatorBuilder: (_, _) =>
-                                const Gap(AppSpacing.listItemGap),
-                            itemBuilder: (context, i) =>
-                                _ProjectRow(project: visible[i]),
+                    ? Center(
+                        child: Text(
+                          'No matching projects',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.onSurfaceVariant,
                           ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenHorizontal,
+                          AppSpacing.sm,
+                          AppSpacing.screenHorizontal,
+                          AppSpacing.huge,
+                        ),
+                        itemCount: visible.length,
+                        separatorBuilder: (_, _) =>
+                            const Gap(AppSpacing.listItemGap),
+                        itemBuilder: (context, i) =>
+                            _ProjectRow(project: visible[i]),
+                      ),
               ),
             ],
           ),
@@ -186,7 +199,9 @@ class _ProjectRow extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    final deleted = await ref.read(projectsProvider.notifier).deleteProject(project.id);
+    final deleted = await ref
+        .read(projectsProvider.notifier)
+        .deleteProject(project.id);
     if (!deleted) {
       // Blocked: open requests still hold stock reservations against it.
       AppFeedback.warning();
@@ -216,7 +231,12 @@ class _ProjectRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final phase = project.phase;
+    final useWorkspace = ref.watch(nexusFeatureFlagsProvider).projects;
+    final canDelete = ref.watch(currentRoleProvider).isAdmin;
     return LedgerCard(
+      onTap: useWorkspace
+          ? () => context.push(RoutePaths.projectWorkspacePath(project.id))
+          : null,
       child: Row(
         children: [
           Expanded(
@@ -232,7 +252,8 @@ class _ProjectRow extends ConsumerWidget {
                 const Gap(AppSpacing.xxs),
                 Text(
                   [
-                    if ((project.clientName ?? '').isNotEmpty) project.clientName,
+                    if ((project.clientName ?? '').isNotEmpty)
+                      project.clientName,
                     if ((project.siteLocation ?? '').isNotEmpty)
                       project.siteLocation,
                   ].whereType<String>().join(' · '),
@@ -294,12 +315,13 @@ class _ProjectRow extends ConsumerWidget {
             ),
             const Gap(AppSpacing.sm),
           ],
-          IconButton(
-            tooltip: AppStrings.deleteProject.primary,
-            onPressed: () => _delete(context, ref),
-            icon: const Icon(Icons.delete_outline_rounded),
-            color: AppColors.error.withValues(alpha: 0.8),
-          ),
+          if (canDelete)
+            IconButton(
+              tooltip: AppStrings.deleteProject.primary,
+              onPressed: () => _delete(context, ref),
+              icon: const Icon(Icons.delete_outline_rounded),
+              color: AppColors.error.withValues(alpha: 0.8),
+            ),
         ],
       ),
     );

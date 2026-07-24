@@ -59,6 +59,10 @@ class AppUser {
   /// (see effective_permissions.dart). These let Admin grant/revoke financial,
   /// salary, and module access per person without changing their role.
   final bool? canSeeCostOverride;
+
+  /// Canonical V7 name. The stored legacy field remains readable during the
+  /// transition so existing user records do not lose their override.
+  bool? get canViewCommercialsOverride => canSeeCostOverride;
   final bool? canViewFinanceOverride;
   final bool? canSeeSalaryOverride;
   final bool? canAccessRentalsOverride;

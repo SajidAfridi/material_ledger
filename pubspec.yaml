@@ -40,6 +40,7 @@ dependencies:
   package_info_plus: ^10.1.0
   connectivity_plus: ^7.1.1
   url_launcher: ^6.3.2
+  web: ^1.1.1
   local_auth: ^3.0.1
   # Crash & error monitoring — only active when a SENTRY_DSN is supplied at
   # build time (--dart-define); otherwise the app uses NoopObservability.
@@ -93,3 +94,13 @@ flutter:
     - assets/icons/
     - assets/images/
     - assets/fonts/
+
+  fonts:
+    - family: NexusSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+    - family: NotoSansArabic
+      fonts:
+        - asset: assets/fonts/NotoSansArabic-Regular.ttf

@@ -11,7 +11,10 @@ import '../../../../shared/models/material_item.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
+import '../../../materials/presentation/screens/browse_materials_screen.dart';
 
 /// Browse Materials screen — full material catalog.
 ///
@@ -22,6 +25,12 @@ class EngineerBrowseScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(nexusFeatureFlagsProvider).browseMaterials) {
+      return const BrowseMaterialsScreen();
+    }
+    if (ref.watch(currentRoleProvider).usesAdminPanel) {
+      return const Center(child: Text('Browse Materials is not enabled.'));
+    }
     final lang = ref.watch(languageProvider);
     final allMaterials = ref.watch(materialsProvider);
     final filteredMaterials = ref.watch(browseMaterialsProvider);

@@ -64,22 +64,25 @@ class BilingualText extends ConsumerWidget {
 
   /// Build the secondary text style based on the selected language.
   static TextStyle _secondaryStyleFor(AppLanguage lang, double enFontSize) {
-    if (lang == AppLanguage.hindi ||
-        lang == AppLanguage.english ||
-        lang == AppLanguage.arabic) {
+    // English mode deliberately falls back to Arabic as its secondary layer.
+    // Arabic and Urdu must use the bundled Arabic-script font explicitly;
+    // inheriting NexusSans renders missing-glyph boxes in deterministic web
+    // and golden-test environments.
+    if (lang == AppLanguage.english ||
+        lang == AppLanguage.arabic ||
+        lang == AppLanguage.urdu) {
       return TextStyle(
+        fontFamily: 'NotoSansArabic',
         fontSize: (enFontSize - 5).clamp(8, 24).toDouble(),
         fontWeight: FontWeight.w400,
-        height: 1.15,
+        height: 1.35,
         color: AppColors.onSurfaceVariant.withValues(alpha: 0.9),
       );
     }
-    // Urdu keeps Nastaliq but uses a smaller scale to reduce visual dominance.
-    return AppTypography.urduStyle(
-      englishFontSize: (enFontSize - 2).clamp(10, 28).toDouble(),
-    ).copyWith(
+    return TextStyle(
       fontSize: (enFontSize - 5).clamp(8, 20).toDouble(),
-      height: 1.35,
+      fontWeight: FontWeight.w400,
+      height: 1.2,
       color: AppColors.onSurfaceVariant.withValues(alpha: 0.9),
     );
   }

@@ -10,6 +10,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 
 /// Engineer Projects tab — current projects plus a clear project creation CTA.
@@ -203,9 +204,12 @@ class _ProjectSummaryCard extends ConsumerWidget {
     final phase = project.phase;
     final isActive = phase?.state == ProjectState.active;
     final canComplete = ref.watch(canCompleteProjectProvider(project.id));
+    final useWorkspace = ref.watch(nexusFeatureFlagsProvider).projects;
 
     return LedgerCard(
-      onTap: project.awaitingApproval
+      onTap: useWorkspace
+          ? () => context.push(RoutePaths.projectWorkspacePath(project.id))
+          : project.awaitingApproval
           ? () => context.push(RoutePaths.planReviewPath(project.id))
           : project.phase?.state == ProjectState.planning
           ? () => context.push(RoutePaths.planBuildPath(project.id))
@@ -334,10 +338,7 @@ class _ProjectSummaryCard extends ConsumerWidget {
           AppStrings.markComplete.primary,
           style: AppTypography.titleMedium,
         ),
-        content: Text(
-          project.name,
-          style: AppTypography.bodyMedium,
-        ),
+        content: Text(project.name, style: AppTypography.bodyMedium),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -352,7 +353,9 @@ class _ProjectSummaryCard extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    final ok = await ref.read(projectsProvider.notifier).completeProject(project.id);
+    final ok = await ref
+        .read(projectsProvider.notifier)
+        .completeProject(project.id);
     if (ok) {
       await ref.logAudit(
         action: 'Project closed out',

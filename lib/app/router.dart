@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,6 +11,7 @@ import '../features/admin/presentation/screens/admin_projects_screen.dart';
 import '../features/admin/presentation/screens/admin_requests_screen.dart';
 import '../features/admin/presentation/screens/data_sync_screen.dart';
 import '../features/admin/presentation/screens/more_hub_screen.dart';
+import '../features/admin/presentation/screens/material_masters_screen.dart';
 import '../features/admin/presentation/screens/user_management_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
@@ -35,6 +37,7 @@ import '../features/inventory/presentation/screens/goods_receipt_screen.dart';
 import '../features/inventory/presentation/screens/inventory_screen.dart';
 import '../features/inventory/presentation/screens/stock_history_screen.dart';
 import '../features/materials/presentation/screens/materials_hub_screen.dart';
+import '../features/materials/presentation/screens/material_line_grid_demo_screen.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
 import '../features/people/presentation/screens/employee_profile_screen.dart';
@@ -42,6 +45,7 @@ import '../features/people/presentation/screens/people_dashboard_screen.dart';
 import '../features/procurement/presentation/screens/procurement_dispatch_screen.dart';
 import '../features/procurement/presentation/screens/procurement_plan_review_screen.dart';
 import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
+import '../features/projects/presentation/screens/project_workspace_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
@@ -80,6 +84,7 @@ abstract final class RoutePaths {
   static const String engineerBrowse = '/browse';
   static const String engineerProjects = '/projects';
   static const String engineerCreateProject = '/projects/new';
+  static const String projectWorkspace = '/projects/:id';
   static const String engineerProjectsView = '/my-projects';
   static const String engineerNewRequest = '/new-request';
   static const String engineerPickMaterials = '/pick-materials';
@@ -100,6 +105,8 @@ abstract final class RoutePaths {
   static const String leaveRequests = '/people/leave-requests';
 
   static String planReviewPath(String projectId) => '/plan/$projectId';
+  static String projectWorkspacePath(String projectId) =>
+      '/projects/$projectId';
   static String planBuildPath(String projectId) => '/plan-build/$projectId';
   static String planDiffPath(String projectId) => '/plan-diff/$projectId';
   static String confirmReceiptPath(String requestId) => '/receipt/$requestId';
@@ -107,11 +114,14 @@ abstract final class RoutePaths {
 
   // ─── Office / admin screens (full-screen, reached from hubs) ─
   static const String inventory = '/admin/inventory';
+  static const String materialMasters = '/admin/material-masters';
+  static const String materialLineGridDemo = '/debug/material-line-grid';
   static const String stockHistory = '/admin/inventory/history';
   static const String transactions = '/admin/transactions';
   static const String goodsReceipt = '/admin/goods-receipt';
   static const String finance = '/admin/finance';
-  static const String adminPanel = '/admin/panel'; // legacy → redirects to /more
+  static const String adminPanel =
+      '/admin/panel'; // legacy → redirects to /more
   static const String adminProjects = '/admin/projects';
   static const String adminRequests = '/admin/requests';
   static const String users = '/admin/users';
@@ -149,36 +159,40 @@ Page<void> _fade(LocalKey key, Widget child, {int ms = 300}) =>
       transitionDuration: Duration(milliseconds: ms),
     );
 
-Page<void> _slide(LocalKey key, Widget child, {Offset begin = const Offset(1, 0)}) =>
-    CustomTransitionPage<void>(
-      key: key,
-      child: child,
-      transitionsBuilder: (context, animation, _, c) => SlideTransition(
-        position: Tween(begin: begin, end: Offset.zero).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        ),
-        child: c,
-      ),
-      transitionDuration: const Duration(milliseconds: 300),
-    );
+Page<void> _slide(
+  LocalKey key,
+  Widget child, {
+  Offset begin = const Offset(1, 0),
+}) => CustomTransitionPage<void>(
+  key: key,
+  child: child,
+  transitionsBuilder: (context, animation, _, c) => SlideTransition(
+    position: Tween(
+      begin: begin,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+    child: c,
+  ),
+  transitionDuration: const Duration(milliseconds: 300),
+);
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so
 /// have no `Scaffold`/`Material` of their own. When reached as a full-screen
 /// route from a hub we wrap them in a slim Scaffold so they get a Material
 /// ancestor and an automatic back button.
 Page<void> _framed(LocalKey key, Widget child) => _slide(
-      key,
-      Scaffold(
-        backgroundColor: AppColors.surface,
-        appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          toolbarHeight: 48,
-        ),
-        body: child,
-      ),
-    );
+  key,
+  Scaffold(
+    backgroundColor: AppColors.surface,
+    appBar: AppBar(
+      backgroundColor: AppColors.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      toolbarHeight: 48,
+    ),
+    body: child,
+  ),
+);
 
 /// Routes open to a [UserRole]. The in-app half of role-based access control
 /// (the Firestore Security Rules enforce the same server-side).
@@ -190,14 +204,36 @@ bool _isAllowedForRole(
 ) {
   // Grantable boundaries resolve through: per-user override → editable role
   // default (Access & Roles matrix) → built-in baseline.
-  final canReceiveGoods =
-      resolveCapability(user, role, perms, RoleCapability.goods);
-  final canViewFinance =
-      resolveCapability(user, role, perms, RoleCapability.finance);
-  final canAccessRentals =
-      resolveCapability(user, role, perms, RoleCapability.rentals);
-  final canAccessPeople =
-      resolveCapability(user, role, perms, RoleCapability.people);
+  final canReceiveGoods = resolveCapability(
+    user,
+    role,
+    perms,
+    RoleCapability.goods,
+  );
+  final canViewFinance = resolveCapability(
+    user,
+    role,
+    perms,
+    RoleCapability.finance,
+  );
+  final canViewCommercials = resolveCapability(
+    user,
+    role,
+    perms,
+    RoleCapability.viewCommercials,
+  );
+  final canAccessRentals = resolveCapability(
+    user,
+    role,
+    perms,
+    RoleCapability.rentals,
+  );
+  final canAccessPeople = resolveCapability(
+    user,
+    role,
+    perms,
+    RoleCapability.people,
+  );
 
   // Reached from the profile menu / shared across every role.
   const sharedAll = {
@@ -216,16 +252,21 @@ bool _isAllowedForRole(
   if (path == RoutePaths.materials) return role.usesAdminPanel;
 
   // Admin-only: the More hub + administration screens + admin oversight.
+  // The connected project register is shared by office roles; destructive
+  // controls remain Admin-only inside the screen.
+  if (path == RoutePaths.adminProjects) return role.usesAdminPanel;
   if (path == RoutePaths.more ||
       path == RoutePaths.users ||
       path == RoutePaths.accessRoles ||
       path == RoutePaths.dataSync ||
-      path == RoutePaths.adminProjects ||
+      path == RoutePaths.materialMasters ||
       path == RoutePaths.adminRequests) {
     return role.isAdmin;
   }
   if (path == RoutePaths.goodsReceipt) return canReceiveGoods;
-  if (path == RoutePaths.finance) return canViewFinance;
+  if (path == RoutePaths.finance) {
+    return canViewFinance && canViewCommercials;
+  }
 
   // Leave approvals — gated by its own (editable) capability, checked before
   // the generic /people rule since the path lives under /people.
@@ -290,16 +331,13 @@ GoRouter createAppRouter({
         return path == RoutePaths.maintenance ? null : RoutePaths.maintenance;
       }
       // Gate cleared but still sitting on a gate screen → move on.
-      if (path == RoutePaths.updateRequired ||
-          path == RoutePaths.maintenance) {
+      if (path == RoutePaths.updateRequired || path == RoutePaths.maintenance) {
         return RoutePaths.engineerHome;
       }
 
       // Force onboarding first (language selection).
       if (!isOnboarded) {
-        return path == RoutePaths.languageSelection
-            ? null
-            : RoutePaths.splash;
+        return path == RoutePaths.languageSelection ? null : RoutePaths.splash;
       }
 
       // Onboarded but not logged in -> login only.
@@ -501,6 +539,12 @@ GoRouter createAppRouter({
           pageBuilder: (context, state) =>
               _framed(state.pageKey, const EngineerProfileScreen()),
         ),
+      if (!useEngineerShell)
+        GoRoute(
+          path: RoutePaths.engineerBrowse,
+          pageBuilder: (context, state) =>
+              _framed(state.pageKey, const EngineerBrowseScreen()),
+        ),
 
       // ─── Engineer create-flows (full-screen over the shell) ─────────
       // Create Project overlays the shell with its own back; New Request now
@@ -509,6 +553,13 @@ GoRouter createAppRouter({
         path: RoutePaths.engineerCreateProject,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const EngineerCreateProjectScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.projectWorkspace,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          ProjectWorkspaceScreen(projectId: state.pathParameters['id'] ?? ''),
+        ),
       ),
       // Standalone projects view (reached from the profile quick links) — the
       // tab screen has no Scaffold of its own, so frame it for a back button.
@@ -588,6 +639,11 @@ GoRouter createAppRouter({
             _framed(state.pageKey, const InventoryScreen()),
       ),
       GoRoute(
+        path: RoutePaths.materialMasters,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const MaterialMastersScreen()),
+      ),
+      GoRoute(
         path: RoutePaths.stockHistory,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const StockHistoryScreen()),
@@ -652,14 +708,18 @@ GoRouter createAppRouter({
         path: RoutePaths.planReviewProcurement,
         pageBuilder: (context, state) => _slide(
           state.pageKey,
-          ProcurementPlanReviewScreen(projectId: state.pathParameters['id'] ?? ''),
+          ProcurementPlanReviewScreen(
+            projectId: state.pathParameters['id'] ?? '',
+          ),
         ),
       ),
       GoRoute(
         path: RoutePaths.dispatch,
         pageBuilder: (context, state) => _slide(
           state.pageKey,
-          ProcurementDispatchScreen(requestId: state.pathParameters['id'] ?? ''),
+          ProcurementDispatchScreen(
+            requestId: state.pathParameters['id'] ?? '',
+          ),
         ),
       ),
 
@@ -708,6 +768,12 @@ GoRouter createAppRouter({
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const TermsOfServiceScreen()),
       ),
+      if (kDebugMode)
+        GoRoute(
+          path: RoutePaths.materialLineGridDemo,
+          pageBuilder: (context, state) =>
+              _slide(state.pageKey, const MaterialLineGridDemoScreen()),
+        ),
     ],
   );
 }

@@ -29,8 +29,12 @@ change the URL.
 ## Deploy steps
 
 1. **Provision** a self-hosted Supabase stack in a UAE region (Docker compose / your IaC).
-2. **Run the schema**: apply [`schema.sql`](schema.sql) once (tables, generated columns,
-   reporting views, RLS, helper functions).
+2. **Run the schema and migrations**: apply [`schema.sql`](schema.sql) once
+   (tables, generated columns, reporting views and helper functions), then
+   apply tracked `supabase/migrations/*.sql` in timestamp order. Batch 6's
+   self-contained migrations add, secure and seed the material masters. Batch
+   8 adds the normalized Phase 1 plan/version/line/comment/activity projection,
+   workflow guards and atomic project activation.
 3. **Seed** existing data once, server-side with the `service_role` key (see the import
    block at the bottom of `schema.sql`). Never put `service_role` in the app.
 4. **Point the app at it** (only after Phase 2 below — see the warning):

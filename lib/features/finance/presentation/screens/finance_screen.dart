@@ -10,7 +10,9 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_cost_provider.dart';
+import '../../../../shared/services/commercial_csv_export.dart';
 
 /// Admin read-only cost roll-up: per-project dispatched value, returned value
 /// and net consumed cost, with a CSV export (FR-091). (Finance was the former
@@ -115,18 +117,11 @@ class FinanceScreen extends ConsumerWidget {
     WidgetRef ref,
     List<ProjectCostRow> rows,
   ) async {
-    final buffer = StringBuffer(
-      'Project,Dispatched (AED),Returned (AED),Net (AED)\n',
+    final csv = CommercialCsvExport.projectCosts(
+      rows,
+      canViewCommercials: ref.read(canViewCommercialsProvider),
     );
-    for (final r in rows) {
-      final name = r.projectName.replaceAll(',', ' ');
-      buffer.writeln(
-        '$name,${r.cost.dispatchedAED.toStringAsFixed(2)},'
-        '${r.cost.returnedAED.toStringAsFixed(2)},'
-        '${r.cost.netAED.toStringAsFixed(2)}',
-      );
-    }
-    await Clipboard.setData(ClipboardData(text: buffer.toString()));
+    await Clipboard.setData(ClipboardData(text: csv));
     await ref.logAudit(
       action: 'Project cost report exported (CSV)',
       module: AuditModule.materials,
@@ -152,10 +147,7 @@ class _CostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            row.projectName,
-            style: AppTypography.titleSmall,
-          ),
+          Text(row.projectName, style: AppTypography.titleSmall),
           const Gap(AppSpacing.md),
           Row(
             children: [
@@ -188,11 +180,7 @@ class _CostCard extends StatelessWidget {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _Metric({required this.label, required this.value, this.valueColor});
 
   final String label;
   final String value;
