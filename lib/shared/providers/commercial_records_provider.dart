@@ -6,9 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/commercial_record.dart';
+import '../models/yorks_v1_commercial_capability.dart';
 import 'language_provider.dart';
 import 'permissions_provider.dart';
 import 'session_provider.dart';
+import 'yorks_v1_current_commercial_capability_provider.dart';
+import 'yorks_v1_feature_flags_provider.dart';
+import 'yorks_v1_identity_provider.dart';
 
 const commercialLocalDevelopmentCacheKey =
     'commercial_records_local_development_v1';
@@ -26,13 +30,44 @@ final commercialRecordsProvider =
       Map<String, CommercialRecord>
     >((ref) {
       final user = ref.watch(currentUserProvider);
-      return CommercialRecordsNotifier(
-        client: ref.watch(supabaseClientProvider),
+      final client = ref.watch(supabaseClientProvider);
+      final allowed = user != null && ref.watch(canViewCommercialsProvider);
+      final notifier = CommercialRecordsNotifier(
+        client: client,
         preferences: ref.watch(sharedPreferencesProvider),
-        allowed: user != null && ref.watch(canViewCommercialsProvider),
-        canWrite: user != null && ref.watch(canReceiveGoodsProvider),
+        allowed: allowed,
+        canWrite:
+            user != null &&
+            ref.watch(canReceiveGoodsProvider) &&
+            ref.watch(canManageCommercialsProvider),
         actorAppUserId: user?.id,
       );
+
+      final usesV1CommercialAuthority =
+          ref.watch(yorksV1FeatureFlagsProvider).foundation &&
+          client != null &&
+          ref.watch(yorksV1CurrentRoleProvider) != null;
+      if (usesV1CommercialAuthority) {
+        // Rebuilding this provider is not enough: long-lived legacy providers
+        // may retain this notifier reference. Purge this exact object as soon
+        // as a capability/profile signal makes the current session denied or
+        // unknown, before an authorized refresh could expose stale costs.
+        ref.listen<AsyncValue<YorksV1CommercialCapabilities?>>(
+          yorksV1CurrentCommercialCapabilitiesProvider,
+          (_, next) {
+            final stillAllowed =
+                next
+                    .valueOrNull?[YorksV1CommercialCapability.viewCommercials]
+                    .effective ??
+                false;
+            if (!stillAllowed) {
+              unawaited(notifier.purgeProtectedState());
+            }
+          },
+          fireImmediately: true,
+        );
+      }
+      return notifier;
     });
 
 class CommercialRecordsNotifier
@@ -115,6 +150,15 @@ class CommercialRecordsNotifier
     } catch (_) {
       state = const {};
     }
+  }
+
+  /// Removes every protected projection held by this notifier and the
+  /// local-development cache. This is intentionally callable by the V1
+  /// current-session capability listener even when another provider retained a
+  /// reference to this notifier before a server-side revocation.
+  Future<void> purgeProtectedState() async {
+    if (mounted) state = const {};
+    await _preferences.remove(commercialLocalDevelopmentCacheKey);
   }
 
   CommercialRecord? record(

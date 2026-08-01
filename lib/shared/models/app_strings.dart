@@ -313,10 +313,10 @@ abstract final class AppStrings {
 
   // ─── Onboarding ───────────────────────────────────────────
   static const welcomeTo = TranslatableString(
-    en: 'Welcome to Yorks GodownPro',
-    ar: 'مرحباً بك في Yorks GodownPro',
-    ur: 'گودام پرو میں خوش آمدید',
-    hi: 'Yorks GodownPro में आपका स्वागत है',
+    en: 'Welcome to Yorks AC. & Ref.',
+    ar: 'مرحباً بك في Yorks AC. & Ref.',
+    ur: 'Yorks AC. & Ref. میں خوش آمدید',
+    hi: 'Yorks AC. & Ref. में आपका स्वागत है',
   );
   static const selectLanguage = TranslatableString(
     en: 'SELECT LANGUAGE',
@@ -795,6 +795,36 @@ abstract final class AppStrings {
     ar: 'إنشاء مستخدم',
     ur: 'صارف بنائیں',
     hi: 'उपयोगकर्ता बनाएं',
+  );
+  static const projectEngineerRole = TranslatableString(
+    en: 'Project Engineer',
+    ar: 'مهندس المشروع',
+    ur: 'پراجیکٹ انجینئر',
+    hi: 'परियोजना इंजीनियर',
+  );
+  static const siteEngineerRole = TranslatableString(
+    en: 'Site Engineer',
+    ar: 'مهندس الموقع',
+    ur: 'سائٹ انجینئر',
+    hi: 'साइट इंजीनियर',
+  );
+  static const procurementRole = TranslatableString(
+    en: 'Procurement',
+    ar: 'المشتريات',
+    ur: 'پروکیورمنٹ',
+    hi: 'खरीद',
+  );
+  static const adminRole = TranslatableString(
+    en: 'Admin',
+    ar: 'المسؤول',
+    ur: 'ایڈمن',
+    hi: 'एडमिन',
+  );
+  static const yorksV1RoleMappingRequired = TranslatableString(
+    en: 'Role mapping required',
+    ar: 'تعيين الدور مطلوب',
+    ur: 'کردار کی تعیین ضروری ہے',
+    hi: 'भूमिका मैपिंग आवश्यक है',
   );
   static const userActive = TranslatableString(
     en: 'Active',
@@ -2698,16 +2728,16 @@ abstract final class AppStrings {
 
   // ─── About Screen ───────────────────────────────────────────────
   static const aboutDescription = TranslatableString(
-    en: 'About Yorks GodownPro',
-    ar: 'حول Yorks GodownPro',
-    ur: 'گوداؤن پرو کے بارے میں',
-    hi: 'Yorks GodownPro के बारे में',
+    en: 'About Yorks AC. & Ref.',
+    ar: 'حول Yorks AC. & Ref.',
+    ur: 'Yorks AC. & Ref. کے بارے میں',
+    hi: 'Yorks AC. & Ref. के बारे में',
   );
   static const aboutBody = TranslatableString(
-    en: 'Yorks GodownPro is a construction material warehouse management app built for precision. It helps site engineers, warehouse managers, and office administrators track inventory, manage material requests, and streamline operations across projects.',
-    ar: 'Yorks GodownPro هو تطبيق لإدارة مستودعات مواد البناء مصمم للدقة. يساعد مهندسي الموقع ومديري المستودعات والمسؤولين في تتبع المخزون وإدارة طلبات المواد وتبسيط العمليات عبر المشاريع.',
-    ur: 'گوداؤن پرو تعمیراتی مواد کے گودام کی انتظامی ایپ ہے جو درستگی کے لیے بنائی گئی ہے۔ یہ سائٹ انجینئرز، گودام مینیجرز، اور دفتری منتظمین کو انوینٹری ٹریک کرنے، مواد کی درخواستوں کا انتظام کرنے، اور پروجیکٹس کی کارروائیوں کو بہتر بنانے میں مدد کرتی ہے۔',
-    hi: 'Yorks GodownPro एक निर्माण सामग्री गोदाम प्रबंधन ऐप है जो सटीकता के लिए बनाया गया है। यह साइट इंजीनियरों, गोदाम प्रबंधकों और कार्यालय प्रशासकों को इन्वेंटरी ट्रैक करने, सामग्री अनुरोध प्रबंधित करने और परियोजनाओं में संचालन सुव्यवस्थित करने में मदद करता है।',
+    en: 'Yorks AC. & Ref. is the controlled workspace for projects, materials, procurement and documents. It helps engineers, procurement and management coordinate traceable work across projects.',
+    ar: 'Yorks AC. & Ref. هي مساحة العمل المنضبطة للمشاريع والمواد والمشتريات والمستندات. وهي تساعد المهندسين والمشتريات والإدارة على تنسيق العمل القابل للتتبع عبر المشاريع.',
+    ur: 'Yorks AC. & Ref. منصوبوں، مواد، خریداری اور دستاویزات کے لیے منظم ورک اسپیس ہے۔ یہ انجینئرز، پروکیورمنٹ اور انتظامیہ کو منصوبوں میں قابلِ سراغ کام ہم آہنگ کرنے میں مدد دیتی ہے۔',
+    hi: 'Yorks AC. & Ref. परियोजनाओं, सामग्री, खरीद और दस्तावेज़ों के लिए नियंत्रित कार्यक्षेत्र है। यह इंजीनियरिंग, खरीद और प्रबंधन को परियोजनाओं में पता लगाने योग्य काम समन्वित करने में मदद करता है।',
   );
   static const aboutFramework = TranslatableString(
     en: 'Framework',

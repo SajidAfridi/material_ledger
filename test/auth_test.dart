@@ -180,6 +180,17 @@ void main() {
         userRoleFromAppMetadata({'role': 'procurement'}),
         UserRole.procurement,
       );
+      // Exact Yorks V1 claims are only a compatibility-shell mapping here.
+      // V1 command authority stays in yorksV1CurrentRoleProvider and never
+      // infers Project Engineer access from this legacy UserRole value.
+      expect(
+        userRoleFromAppMetadata({'role': 'project_engineer'}),
+        UserRole.engineer,
+      );
+      expect(
+        userRoleFromAppMetadata({'role': 'site_engineer'}),
+        UserRole.engineer,
+      );
       expect(userRoleFromAppMetadata({'role': 'owner'}), isNull);
       expect(userRoleFromAppMetadata({'role': 'Admin'}), isNull);
       expect(userRoleFromAppMetadata({'role': 1}), isNull);

@@ -5,10 +5,10 @@ import 'app_strings.dart';
 /// backend configuration; translations remain defined for the shared catalog.
 abstract final class BackendFailureCopy {
   static const title = TranslatableString(
-    en: 'Nexus could not start securely.',
-    ar: 'تعذر بدء تشغيل Nexus بأمان.',
-    ur: 'Nexus محفوظ طریقے سے شروع نہیں ہو سکا۔',
-    hi: 'Nexus सुरक्षित रूप से शुरू नहीं हो सका।',
+    en: 'Yorks could not start securely.',
+    ar: 'تعذر بدء تشغيل Yorks بأمان.',
+    ur: 'Yorks محفوظ طریقے سے شروع نہیں ہو سکا۔',
+    hi: 'Yorks सुरक्षित रूप से शुरू नहीं हो सका।',
   );
 
   static const body = TranslatableString(

@@ -35,12 +35,15 @@ jobs:
           else
             base="${{ github.event.before }}"
           fi
-          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            exit 0
+          if git cat-file -e "$base^{commit}" 2>/dev/null; then
+            mapfile -t files < <(
+              git diff --name-only --diff-filter=ACM "$base"...HEAD -- '*.dart'
+            )
+          else
+            # A first push can have an all-zero `before` SHA. Format every
+            # tracked Dart file rather than silently skipping the gate.
+            mapfile -t files < <(git ls-files -- '*.dart')
           fi
-          mapfile -t files < <(
-            git diff --name-only --diff-filter=ACM "$base"...HEAD -- '*.dart'
-          )
           if (( ${#files[@]} > 0 )); then
             dart format --output=none --set-exit-if-changed "${files[@]}"
           fi
@@ -56,3 +59,70 @@ jobs:
           flutter build web --release
           --dart-define=SUPABASE_URL=https://ci.invalid
           --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
+
+  database:
+    name: Supabase database
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The local CLI stack is deliberately isolated from any linked or
+      # production project. `db reset --local` proves that every tracked
+      # migration and the non-secret development seed are self-contained.
+      - uses: supabase/setup-cli@v2
+        with:
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Reset local database from tracked migrations and seed
+        run: supabase db reset --local
+
+      - name: Run pgTAP database tests
+        run: supabase test db --local
+
+  android-release:
+    name: Android release assembly
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        # Gradle generates an isolated non-debug key only when this explicit
+        # CI-only flag and GitHub's CI=true are both present. Production
+        # certificates stay outside the repository and this job.
+        env:
+          YORKS_CI_EPHEMERAL_SIGNING: 'true'
+        run: >-
+          flutter build apk --release
+          --dart-define=SUPABASE_URL=https://ci.invalid
+          --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
+
+      - name: Verify release APK uses the CI certificate
+        shell: bash
+        run: |
+          apk_path="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$apk_path"
+          apksigner_path="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$apksigner_path"
+          "$apksigner_path" verify --verbose --print-certs "$apk_path"
+          "$apksigner_path" verify --print-certs "$apk_path" | grep -F 'CN=Yorks CI Ephemeral'

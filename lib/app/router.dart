@@ -38,6 +38,10 @@ import '../features/inventory/presentation/screens/inventory_screen.dart';
 import '../features/inventory/presentation/screens/stock_history_screen.dart';
 import '../features/materials/presentation/screens/materials_hub_screen.dart';
 import '../features/materials/presentation/screens/material_line_grid_demo_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
 import '../features/people/presentation/screens/employee_profile_screen.dart';
@@ -46,6 +50,7 @@ import '../features/procurement/presentation/screens/procurement_dispatch_screen
 import '../features/procurement/presentation/screens/procurement_plan_review_screen.dart';
 import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
 import '../features/projects/presentation/screens/project_workspace_screen.dart';
+import '../features/projects/presentation/screens/yorks_v1_boq_screens.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
@@ -53,6 +58,7 @@ import '../shared/models/app_config.dart';
 import '../shared/models/app_user.dart';
 import '../shared/models/role_permissions.dart';
 import '../shared/models/user_role.dart';
+import '../shared/models/yorks_v1_role.dart';
 import '../shared/screens/about_screen.dart';
 import '../shared/screens/activity_log_screen.dart';
 import '../shared/screens/notifications_screen.dart';
@@ -85,6 +91,19 @@ abstract final class RoutePaths {
   static const String engineerProjects = '/projects';
   static const String engineerCreateProject = '/projects/new';
   static const String projectWorkspace = '/projects/:id';
+  static const String yorksV1BoqGroups = '/yorks/projects/:projectId/boq';
+  static const String yorksV1BoqWorksheet =
+      '/yorks/projects/:projectId/boq/:groupId';
+  static const String yorksV1MaterialRequests = '/yorks/material-requests';
+  static const String yorksV1MaterialRequestDraft =
+      '/yorks/material-requests/draft/:draftId';
+  static const String yorksV1MaterialRequest =
+      '/yorks/material-requests/:requestId';
+  static const String yorksV1MaterialRequestArrangement =
+      '/yorks/material-requests/:requestId/arrangement';
+  static const String yorksV1MaterialRequestLogistics =
+      '/yorks/material-requests/:requestId/logistics';
+  static const String yorksV1Inventory = '/yorks/inventory';
   static const String engineerProjectsView = '/my-projects';
   static const String engineerNewRequest = '/new-request';
   static const String engineerPickMaterials = '/pick-materials';
@@ -107,6 +126,18 @@ abstract final class RoutePaths {
   static String planReviewPath(String projectId) => '/plan/$projectId';
   static String projectWorkspacePath(String projectId) =>
       '/projects/$projectId';
+  static String yorksV1BoqGroupsPath(String projectId) =>
+      '/yorks/projects/$projectId/boq';
+  static String yorksV1BoqWorksheetPath(String projectId, String groupId) =>
+      '/yorks/projects/$projectId/boq/$groupId';
+  static String yorksV1MaterialRequestDraftPath(String draftId) =>
+      '/yorks/material-requests/draft/$draftId';
+  static String yorksV1MaterialRequestPath(String requestId) =>
+      '/yorks/material-requests/$requestId';
+  static String yorksV1MaterialRequestArrangementPath(String requestId) =>
+      '/yorks/material-requests/$requestId/arrangement';
+  static String yorksV1MaterialRequestLogisticsPath(String requestId) =>
+      '/yorks/material-requests/$requestId/logistics';
   static String planBuildPath(String projectId) => '/plan-build/$projectId';
   static String planDiffPath(String projectId) => '/plan-diff/$projectId';
   static String confirmReceiptPath(String requestId) => '/receipt/$requestId';
@@ -304,6 +335,16 @@ GoRouter createAppRouter({
   required UserRole role,
   AppUser? user,
   AppGate gate = AppGate.none,
+
+  /// Exact V1 authority is deliberately supplied separately from [role]. The
+  /// legacy shell role is a compatibility presentation value only and must not
+  /// turn a legacy Engineer into a Project Engineer.
+  bool yorksV1ProjectsEnabled = false,
+  bool yorksV1BoqEnabled = false,
+  bool yorksV1RequestsEnabled = false,
+  bool yorksV1ArrangementEnabled = false,
+  bool yorksV1LogisticsEnabled = false,
+  YorksV1Role? yorksV1Role,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
   // [refreshListenable] let route guards re-evaluate the moment an Admin edits
   // the matrix, WITHOUT rebuilding the router (no nav reset).
@@ -365,6 +406,48 @@ GoRouter createAppRouter({
       }
       if (path == RoutePaths.changePassword) {
         return RoutePaths.engineerHome; // nothing to change → leave
+      }
+
+      // This is an experience-level guard only; the normalized V1 RPC/RLS
+      // remains authoritative. It ensures a Procurement deep-link never
+      // builds the project-creation form once the Rev 2.0/R35 route is on.
+      if (yorksV1ProjectsEnabled &&
+          path == RoutePaths.engineerCreateProject &&
+          (yorksV1Role == null || !yorksV1Role.canCreateProject)) {
+        return _yorksV1ProjectFallbackPath();
+      }
+
+      if (path.startsWith('/yorks/projects/') && !yorksV1BoqEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+
+      if (path.startsWith('/yorks/material-requests') &&
+          !yorksV1RequestsEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (path.startsWith('/yorks/material-requests/') &&
+          path.endsWith('/arrangement') &&
+          !yorksV1ArrangementEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if ((path == RoutePaths.yorksV1Inventory ||
+              (path.startsWith('/yorks/material-requests/') &&
+                  path.endsWith('/logistics'))) &&
+          !yorksV1LogisticsEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (path.startsWith('/yorks/material-requests/draft/') &&
+          (yorksV1Role == null || !yorksV1Role.canCreateMaterialRequest)) {
+        return _yorksV1ProjectFallbackPath();
+      }
+
+      // Batch 2 has the normalized creation flow but not the V1 portfolio,
+      // workspace, BOQ/plan or request projection. Once V1 Projects is
+      // enabled, no role may reach the retained generic Project/Request store
+      // through an old route. This prevents V1 records from being handled by
+      // a parallel legacy authority.
+      if (yorksV1ProjectsEnabled && _isLegacyProjectOrRequestRoute(path)) {
+        return _yorksV1ProjectFallbackPath();
       }
 
       // Retire the old hub locations.
@@ -559,6 +642,71 @@ GoRouter createAppRouter({
         pageBuilder: (context, state) => _slide(
           state.pageKey,
           ProjectWorkspaceScreen(projectId: state.pathParameters['id'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1BoqGroups,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1BoqGroupsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1BoqWorksheet,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1BoqWorksheetScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            groupId: state.pathParameters['groupId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialRequests,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const YorksV1MaterialRequestsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialRequestDraft,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1MaterialRequestDraftScreen(
+            draftId: state.pathParameters['draftId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialRequestArrangement,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1ArrangementScreen(
+            requestId: state.pathParameters['requestId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialRequestLogistics,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1LogisticsScreen(
+            requestId: state.pathParameters['requestId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1Inventory,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const YorksV1InventoryScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialRequest,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1MaterialRequestDetailScreen(
+            requestId: state.pathParameters['requestId'] ?? '',
+          ),
         ),
       ),
       // Standalone projects view (reached from the profile quick links) — the
@@ -776,4 +924,38 @@ GoRouter createAppRouter({
         ),
     ],
   );
+}
+
+/// The only Batch 2 V1 project landing that is registered for the current
+/// shell. A normalized office portfolio arrives with the later workspace/read
+/// slice; returning Home now is safer than invoking an incompatible legacy
+/// project route or producing an unmatched GoRouter location.
+String _yorksV1ProjectFallbackPath() => RoutePaths.engineerHome;
+
+/// Legacy project/plan/request routes that have no normalized V1 projection
+/// in Batch 2. `/projects/new` is deliberately excluded because it resolves
+/// to the new five-stage creation flow before this predicate is reached.
+bool _isLegacyProjectOrRequestRoute(String path) {
+  if (path == RoutePaths.engineerCreateProject) return false;
+
+  if (path == RoutePaths.engineerProjects ||
+      path == RoutePaths.engineerProjectsView ||
+      path == RoutePaths.adminProjects ||
+      path == RoutePaths.procurement ||
+      path == RoutePaths.engineerNewRequest ||
+      path == RoutePaths.engineerPickMaterials ||
+      path == RoutePaths.requests ||
+      path == RoutePaths.adminRequests ||
+      path == RoutePaths.returnStore) {
+    return true;
+  }
+
+  return path.startsWith('${RoutePaths.engineerProjects}/') ||
+      path.startsWith('/plan/') ||
+      path.startsWith('/plan-build/') ||
+      path.startsWith('/plan-diff/') ||
+      path.startsWith('/admin/plan-review/') ||
+      path.startsWith('/request/') ||
+      path.startsWith('/receipt/') ||
+      path.startsWith('/admin/dispatch/');
 }

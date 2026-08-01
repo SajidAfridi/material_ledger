@@ -332,7 +332,7 @@ class _ContactBox extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
             ),
             child: Text(
-              'support@godownpro.com',
+              'yorks_sk@yorks.ae',
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -353,7 +353,7 @@ const _sections = [
     title: '1. Information We Collect',
     titleSecondary: '1. ہم کیا معلومات جمع کرتے ہیں',
     paragraphs: [
-      'Yorks GodownPro collects only the information necessary to operate the warehouse management system effectively. All data is stored locally on your device using secure storage mechanisms.',
+      'Yorks AC. & Ref. collects only the information necessary to operate the controlled project workspace effectively. Data is protected through the configured application security controls.',
       'We collect: inventory item details (names, quantities, prices, categories), transaction records (incoming and outgoing material logs), material requisition data (project names, line items, status), user preferences (selected language, currency, appearance settings), and authentication session flags.',
       'We do NOT collect: personal identification beyond a username, biometric data, location data, payment card information, or any data that is not directly related to warehouse operations.',
     ],
@@ -363,7 +363,7 @@ const _sections = [
     title: '2. How We Store Your Data',
     titleSecondary: '2. آپ کا ڈیٹا کیسے محفوظ کیا جاتا ہے',
     paragraphs: [
-      'All application data is stored locally on your device using Flutter\'s SharedPreferences mechanism. Yorks GodownPro is a local-first application — your warehouse data does not leave your device unless you explicitly use a backup or sync feature.',
+      'Yorks AC. & Ref. uses the configured protected backend for authoritative records and may retain limited device state for supported workflows. Do not rely on a device copy as the system of record.',
       'Data is stored as JSON-encoded strings on the device\'s secure storage partition. No data is transmitted to external servers during normal operation.',
       'The Backup & Sync feature (when enabled in a future update) will require explicit user consent before any data is uploaded to cloud services.',
     ],
@@ -373,7 +373,7 @@ const _sections = [
     title: '3. Data Sharing',
     titleSecondary: '3. ڈیٹا شیئرنگ',
     paragraphs: [
-      'Yorks GodownPro does not share your data with any third parties. We do not sell, trade, or rent your warehouse information to anyone.',
+      'Yorks AC. & Ref. does not sell, trade or rent your operational information.',
       'Data may be shared only in the following circumstances: (a) when you explicitly export a report or PDF, (b) when you use the Print Order feature to send data to a printer, or (c) when required by applicable law.',
       'Any future integration with third-party accounting or ERP systems will require explicit user authorization and will be clearly disclosed in the application.',
     ],
@@ -385,7 +385,7 @@ const _sections = [
     paragraphs: [
       'We implement appropriate security measures to protect your warehouse data. The application uses platform-provided secure storage, and session authentication prevents unauthorized access.',
       'You are responsible for maintaining the security of your device and login credentials. We recommend using a strong password and enabling device-level security (PIN, biometric, etc.).',
-      'In the event of a security concern, please contact us immediately at support@godownpro.com.',
+      'In the event of a security concern, please contact us immediately at yorks_sk@yorks.ae.',
     ],
   ),
   _PolicySectionData(
@@ -393,7 +393,7 @@ const _sections = [
     title: '5. Your Rights & Controls',
     titleSecondary: '5. آپ کے حقوق اور اختیارات',
     paragraphs: [
-      'You have full control over your data within Yorks GodownPro. You may view all stored data at any time through the application interface.',
+      'You have access to the Yorks AC. & Ref. records permitted for your role through the application interface.',
       'You may delete any material, transaction record, or material request from within the application. Logging out of the application will clear your authentication session.',
       'A future update will provide a complete "Export My Data" and "Delete All Data" option in the Settings screen.',
     ],

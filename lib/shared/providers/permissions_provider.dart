@@ -1,8 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/role_permissions.dart';
+import '../models/yorks_v1_commercial_capability.dart';
 import 'role_permissions_provider.dart';
 import 'session_provider.dart';
+import 'language_provider.dart' show supabaseClientProvider;
+import 'yorks_v1_current_commercial_capability_provider.dart';
+import 'yorks_v1_feature_flags_provider.dart';
+import 'yorks_v1_identity_provider.dart';
 
 /// Effective-capability providers — the single place UI/guards read access from.
 /// Resolution layers (highest wins): per-user override → editable role default
@@ -16,9 +21,40 @@ bool _cap(Ref ref, RoleCapability cap) {
   return resolveCapability(user, role, perms, cap);
 }
 
-final canViewCommercialsProvider = Provider<bool>(
-  (ref) => _cap(ref, RoleCapability.viewCommercials),
-);
+/// The retained capability matrix remains the authority for the flag-off
+/// legacy shell. An exact connected V1 identity instead waits for the protected
+/// current-session snapshot. Loading/failure is deny-by-default, which lets a
+/// revocation signal purge cost projections before any later reload.
+bool _usesProtectedYorksV1CommercialAuthority(Ref ref) {
+  final flags = ref.watch(yorksV1FeatureFlagsProvider);
+  return flags.foundation &&
+      ref.watch(supabaseClientProvider) != null &&
+      ref.watch(yorksV1CurrentRoleProvider) != null;
+}
+
+final canViewCommercialsProvider = Provider<bool>((ref) {
+  if (!_usesProtectedYorksV1CommercialAuthority(ref)) {
+    return _cap(ref, RoleCapability.viewCommercials);
+  }
+  final snapshot = ref.watch(yorksV1CurrentCommercialCapabilitiesProvider);
+  final capabilities = snapshot.valueOrNull;
+  return capabilities?[YorksV1CommercialCapability.viewCommercials].effective ??
+      false;
+});
+
+/// V1 commercial writes require the separate protected `manage_commercials`
+/// capability. Legacy deployments retain their historical view/write policy
+/// until their account is explicitly moved to an exact V1 identity.
+final canManageCommercialsProvider = Provider<bool>((ref) {
+  if (!_usesProtectedYorksV1CommercialAuthority(ref)) {
+    return _cap(ref, RoleCapability.viewCommercials);
+  }
+  final snapshot = ref.watch(yorksV1CurrentCommercialCapabilitiesProvider);
+  final capabilities = snapshot.valueOrNull;
+  return capabilities?[YorksV1CommercialCapability.manageCommercials]
+          .effective ??
+      false;
+});
 
 /// Transitional alias for existing cost-aware widgets.
 final canSeeCostProvider = Provider<bool>(

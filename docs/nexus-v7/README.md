@@ -1,6 +1,13 @@
 # Yorks Nexus V7 — Implementation Source of Truth
 
-This folder is the working contract for the Yorks Nexus transformation. The
+> **Historical as of 1 August 2026.** Yorks V1 Rev 2.0 supersedes this folder
+> for overlapping Projects, BOQ, Material Requests, Procurement, Inventory,
+> Dispatch, Receipt, Returns, Documents and retained Admin behavior. Start at
+> [`../yorks-v1/README.md`](../yorks-v1/README.md). This folder remains
+> implementation evidence and a source of non-conflicting security, migration,
+> localization and regression safeguards; it is not current product authority.
+
+This folder was the working contract for the Yorks Nexus transformation. The
 approved V7 design is the experience target; the existing Flutter application,
 Riverpod state, GoRouter navigation, local outbox and Supabase/Postgres seam are
 the implementation boundary.

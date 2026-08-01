@@ -46,7 +46,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     });
     try {
       final ok = await _auth.authenticate(
-        localizedReason: 'Unlock Yorks GodownPro',
+        localizedReason: 'Unlock Yorks AC. & Ref.',
         biometricOnly: false, // allow device passcode fallback
         persistAcrossBackgrounding: true,
       );
@@ -105,9 +105,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                 ),
                 const Gap(AppSpacing.sm),
                 Text(
-                  _failed
-                      ? 'Authentication needed to continue.'
-                      : 'Verifying…',
+                  _failed ? 'Authentication needed to continue.' : 'Verifying…',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.onSurfaceVariant,

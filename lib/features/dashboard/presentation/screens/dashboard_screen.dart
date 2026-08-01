@@ -10,6 +10,7 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/inventory_transaction.dart';
+import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -20,6 +21,8 @@ import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/rentals_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/users_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/widgets/notification_bell.dart';
 import '../../../../shared/widgets/profile_menu_button.dart';
 
@@ -34,24 +37,38 @@ class DashboardScreen extends ConsumerWidget {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
     final role = ref.watch(currentRoleProvider);
+    final yorksV1ProjectsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .projects;
+    final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
     final canSeeCost = ref.watch(canSeeCostProvider);
     final canAccessRentals = ref.watch(canAccessRentalsProvider);
     final canAccessPeople = ref.watch(canAccessPeopleProvider);
 
     final totalValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
-    // Procurement's actual work queue (new projects to accept + plans to
-    // review + requests to dispatch) — must match the workspace screen's own
-    // count exactly, so this KPI and what's listed there never disagree.
-    final int newProjectsCount = ref.watch(projectsAwaitingAcceptanceCountProvider);
-    final int dispatchCount = ref.watch(dispatchQueueCountProvider);
-    final int planReviewCount = ref.watch(planReviewQueueCountProvider);
-    final procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
+    // The retained procurement workspace combines generic project/plan state
+    // with requests. It is intentionally absent while V1 Projects is on, so
+    // an office user cannot act on the old project authority beside the new
+    // normalized creation flow.
+    final int procurementQueue;
+    if (yorksV1ProjectsEnabled) {
+      procurementQueue = 0;
+    } else {
+      final newProjectsCount = ref.watch(
+        projectsAwaitingAcceptanceCountProvider,
+      );
+      final dispatchCount = ref.watch(dispatchQueueCountProvider);
+      final planReviewCount = ref.watch(planReviewQueueCountProvider);
+      procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
+    }
     final recentTxns = ref.watch(recentTransactionsProvider);
     final rentals = ref.watch(rentalsSummaryProvider);
     final hr = ref.watch(hrSummaryProvider);
     final activeUsers = ref.watch(activeUserCountProvider);
-    final activeProjects = ref.watch(activeProjectCountProvider);
+    final activeProjects = yorksV1ProjectsEnabled
+        ? 0
+        : ref.watch(activeProjectCountProvider);
 
     // Weekly request pulse — an honest, computed trend (from live request dates,
     // not a fabricated delta): this rolling 7 days vs the 7 before it.
@@ -59,25 +76,29 @@ class DashboardScreen extends ConsumerWidget {
     final now = DateTime.now();
     final weekAgo = now.subtract(const Duration(days: 7));
     final twoWeeksAgo = now.subtract(const Duration(days: 14));
-    final reqThisWeek =
-        requests.where((r) => r.requestDate.isAfter(weekAgo)).length;
+    final reqThisWeek = requests
+        .where((r) => r.requestDate.isAfter(weekAgo))
+        .length;
     final reqLastWeek = requests
-        .where((r) =>
-            r.requestDate.isAfter(twoWeeksAgo) &&
-            !r.requestDate.isAfter(weekAgo))
+        .where(
+          (r) =>
+              r.requestDate.isAfter(twoWeeksAgo) &&
+              !r.requestDate.isAfter(weekAgo),
+        )
         .length;
 
     // Deep-linking KPI cards (filtered by capability).
     final kpis = <_Kpi>[
-      // Procurement's primary job, surfaced front-and-centre and deep-linked
-      // straight to the workspace (plans to review + requests to dispatch).
-      _Kpi(
-        label: AppStrings.awaitingAction.primary,
-        value: '$procurementQueue',
-        icon: Icons.assignment_turned_in_outlined,
-        color: AppColors.warning,
-        onTap: () => context.push(RoutePaths.procurement),
-      ),
+      // Procurement's retained project/plan workspace is unavailable during
+      // the V1 project foundation. It returns with the normalized projection.
+      if (!yorksV1ProjectsEnabled)
+        _Kpi(
+          label: AppStrings.awaitingAction.primary,
+          value: '$procurementQueue',
+          icon: Icons.assignment_turned_in_outlined,
+          color: AppColors.warning,
+          onTap: () => context.push(RoutePaths.procurement),
+        ),
       if (canAccessRentals)
         _Kpi(
           label: AppStrings.overdueTotal.primary,
@@ -109,13 +130,21 @@ class DashboardScreen extends ConsumerWidget {
           color: AppColors.primary,
           onTap: () => context.push(RoutePaths.users),
         ),
-      if (role.isAdmin)
+      if (role.isAdmin && !yorksV1ProjectsEnabled)
         _Kpi(
           label: AppStrings.activeProjects.primary,
           value: '$activeProjects',
           icon: Icons.folder_open_outlined,
           color: AppColors.tertiary,
           onTap: () => context.push(RoutePaths.adminProjects),
+        ),
+      if (yorksV1ProjectsEnabled && yorksV1Role?.canCreateProject == true)
+        _Kpi(
+          label: YorksV1ProjectStrings.createProject.primary,
+          value: YorksV1ProjectStrings.projects.primary,
+          icon: Icons.add_business_outlined,
+          color: AppColors.tertiary,
+          onTap: () => context.push(RoutePaths.engineerCreateProject),
         ),
     ];
 
@@ -466,8 +495,8 @@ class _WeeklyPulseCard extends StatelessWidget {
     final (IconData icon, Color color) = delta > 0
         ? (Icons.trending_up_rounded, AppColors.success)
         : delta < 0
-            ? (Icons.trending_down_rounded, AppColors.error)
-            : (Icons.trending_flat_rounded, AppColors.onSurfaceVariant);
+        ? (Icons.trending_down_rounded, AppColors.error)
+        : (Icons.trending_flat_rounded, AppColors.onSurfaceVariant);
     final String pct = lastWeek == 0
         ? (thisWeek == 0 ? '—' : '+$thisWeek')
         : '${delta >= 0 ? '+' : ''}${((delta / lastWeek) * 100).round()}%';

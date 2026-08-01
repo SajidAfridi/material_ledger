@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required by every installed build for Supabase, document transfer,
+         Realtime refresh and other network-backed application services. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="Yorks GodownPro"
+        android:label="Yorks AC. &amp; Ref."
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

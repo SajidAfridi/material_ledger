@@ -477,7 +477,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // Version footer
                   Center(
                     child: Text(
-                      'POWERED BY YORKS GODOWNPRO SYSTEMS V2.4',
+                      'YORKS AC. & REF. — CONTROLLED PROJECT WORKSPACE',
                       style: GoogleFonts.inter(
                         fontSize: 10,
                         fontWeight: FontWeight.w500,

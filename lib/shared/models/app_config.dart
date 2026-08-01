@@ -7,7 +7,7 @@ class AppConfig {
     this.minSupportedBuild = 1,
     this.latestBuild = 1,
     this.storeUrl =
-        'https://play.google.com/store/apps/details?id=com.yorks.godownpro',
+        'https://play.google.com/store/apps/details?id=com.yorks.app',
     this.maintenanceMode = false,
     this.maintenanceMessage = '',
   });

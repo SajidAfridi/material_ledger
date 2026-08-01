@@ -235,7 +235,7 @@ class EngineerProfileScreen extends ConsumerWidget {
             sliver: SliverToBoxAdapter(
               child: Center(
                 child: Text(
-                  'Yorks GodownPro ${ref.watch(appVersionProvider).label} — ${role.label}',
+                  'Yorks AC. & Ref. ${ref.watch(appVersionProvider).label} — ${role.label}',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
                   ),

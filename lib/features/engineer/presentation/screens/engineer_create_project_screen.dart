@@ -18,7 +18,9 @@ import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../projects/presentation/screens/project_create_flow_screen.dart';
+import '../../../projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 
 /// Stable route entry point. The V7 flow remains fail-closed behind its module
 /// flag while the legacy form stays available for production rollback.
@@ -27,6 +29,12 @@ class EngineerCreateProjectScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Rev 2.0/R35 takes precedence when its independently gated rollout is
+    // enabled. The V1 screen owns its exact-claim UX guard; it does not reuse
+    // this legacy shell role as project authority.
+    if (ref.watch(yorksV1FeatureFlagsProvider).projects) {
+      return const YorksV1ProjectCreateFlowScreen();
+    }
     if (ref.watch(nexusFeatureFlagsProvider).projects) {
       return const ProjectCreateFlowScreen();
     }

@@ -1,5 +1,11 @@
 # Yorks Nexus V7 — Frozen Product and Transaction Decisions
 
+> **Historical as of 1 August 2026.** These decisions are superseded for the
+> overlapping Yorks V1 Rev 2.0 scope. Use
+> [`../yorks-v1/PRODUCT_DECISIONS.md`](../yorks-v1/PRODUCT_DECISIONS.md).
+> Non-conflicting security, data-preservation and unrelated-module safeguards
+> survive through the new V1 contract.
+
 Status: approved implementation contract for Batch 1 onward.
 
 This document resolves the open product and data questions identified during the

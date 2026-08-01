@@ -42,6 +42,11 @@ dependencies:
   url_launcher: ^6.3.2
   web: ^1.1.1
   local_auth: ^3.0.1
+  # Licensed pure-Dart OOXML/XLSX parsing and generation for BOQ round-trips.
+  archive: ^4.0.7
+  xml: ^7.0.1
+  # Flutter-maintained native and browser XLSX selection/save dialogs.
+  file_selector: ^1.1.0
   # Crash & error monitoring — only active when a SENTRY_DSN is supplied at
   # build time (--dart-define); otherwise the app uses NoopObservability.
   sentry_flutter: ^9.0.0

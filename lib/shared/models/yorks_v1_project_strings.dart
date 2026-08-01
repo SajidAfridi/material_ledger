@@ -1,0 +1,626 @@
+import 'app_strings.dart';
+import 'yorks_v1_domain_error.dart';
+
+/// Centralized, bilingual-capable copy for the Yorks V1 R35 Projects slice.
+///
+/// The workflow/domain layers intentionally expose stable codes only. Widgets
+/// resolve their visible copy through this catalogue so the effective R35 UI
+/// never turns repository errors or prototype text into user-facing strings.
+abstract final class YorksV1ProjectStrings {
+  static const projects = TranslatableString(
+    en: 'Projects',
+    ar: 'المشاريع',
+    ur: 'پراجیکٹس',
+    hi: 'परियोजनाएँ',
+  );
+  static const projectCreationEyebrow = TranslatableString(
+    en: 'Projects',
+    ar: 'المشاريع',
+    ur: 'پراجیکٹس',
+    hi: 'परियोजनाएँ',
+  );
+  static const createProject = TranslatableString(
+    en: 'Create project',
+    ar: 'إنشاء مشروع',
+    ur: 'پراجیکٹ بنائیں',
+    hi: 'परियोजना बनाएँ',
+  );
+  static const createProjectDescription = TranslatableString(
+    en: 'Set up the project, access, buildings and review the connected record before creating it.',
+    ar: 'قم بإعداد المشروع والوصول والمباني، ثم راجع السجل المتصل قبل إنشائه.',
+    ur: 'پراجیکٹ، رسائی اور عمارتیں ترتیب دیں، پھر بنانے سے پہلے منسلک ریکارڈ کا جائزہ لیں۔',
+    hi: 'परियोजना, पहुँच और भवन तैयार करें, फिर बनाने से पहले जुड़े रिकॉर्ड की समीक्षा करें।',
+  );
+  static const draftSaved = TranslatableString(
+    en: 'Draft saved on this device',
+    ar: 'تم حفظ المسودة على هذا الجهاز',
+    ur: 'ڈرافٹ اس ڈیوائس پر محفوظ ہو گیا',
+    hi: 'ड्राफ़्ट इस डिवाइस पर सहेजा गया',
+  );
+  static const connectedCreation = TranslatableString(
+    en: 'Connected creation',
+    ar: 'إنشاء متصل',
+    ur: 'منسلک تخلیق',
+    hi: 'कनेक्टेड निर्माण',
+  );
+  static const connectedCreationDescription = TranslatableString(
+    en: 'Creating a project needs a connection. The server creates its Common scope, team history and BOQ groups together.',
+    ar: 'يتطلب إنشاء المشروع اتصالاً. ينشئ الخادم نطاقه المشترك وسجل الفريق ومجموعات جدول الكميات معاً.',
+    ur: 'پراجیکٹ بنانے کے لیے کنکشن ضروری ہے۔ سرور اس کا مشترک دائرہ، ٹیم ہسٹری اور BOQ گروپس ایک ساتھ بناتا ہے۔',
+    hi: 'परियोजना बनाने के लिए कनेक्शन चाहिए। सर्वर उसका साझा दायरा, टीम इतिहास और BOQ समूह एक साथ बनाता है।',
+  );
+  static const reviewBeforeCreate = TranslatableString(
+    en: 'Review before creating',
+    ar: 'راجع قبل الإنشاء',
+    ur: 'بنانے سے پہلے جائزہ لیں',
+    hi: 'बनाने से पहले समीक्षा करें',
+  );
+  static const projectCreated = TranslatableString(
+    en: 'Project created',
+    ar: 'تم إنشاء المشروع',
+    ur: 'پراجیکٹ بن گیا',
+    hi: 'परियोजना बन गई',
+  );
+  static const projectCreatedDescription = TranslatableString(
+    en: 'The server created the project, its Common scope, buildings, team history and default BOQ groups.',
+    ar: 'أنشأ الخادم المشروع ونطاقه المشترك والمباني وسجل الفريق ومجموعات جدول الكميات الافتراضية.',
+    ur: 'سرور نے پراجیکٹ، اس کا مشترک دائرہ، عمارتیں، ٹیم ہسٹری اور ڈیفالٹ BOQ گروپس بنائے۔',
+    hi: 'सर्वर ने परियोजना, उसका साझा दायरा, भवन, टीम इतिहास और डिफ़ॉल्ट BOQ समूह बनाए।',
+  );
+  static const creationFailed = TranslatableString(
+    en: 'Project could not be created',
+    ar: 'تعذر إنشاء المشروع',
+    ur: 'پراجیکٹ نہیں بنایا جا سکا',
+    hi: 'परियोजना नहीं बनाई जा सकी',
+  );
+  static const createAndView = TranslatableString(
+    en: 'Create project',
+    ar: 'إنشاء المشروع',
+    ur: 'پراجیکٹ بنائیں',
+    hi: 'परियोजना बनाएँ',
+  );
+  static const next = TranslatableString(
+    en: 'Continue',
+    ar: 'متابعة',
+    ur: 'جاری رکھیں',
+    hi: 'जारी रखें',
+  );
+  static const back = TranslatableString(
+    en: 'Back',
+    ar: 'رجوع',
+    ur: 'واپس',
+    hi: 'वापस',
+  );
+  static const skipForNow = TranslatableString(
+    en: 'Skip for now',
+    ar: 'تخطي الآن',
+    ur: 'ابھی چھوڑ دیں',
+    hi: 'अभी छोड़ें',
+  );
+  static const add = TranslatableString(
+    en: 'Add',
+    ar: 'إضافة',
+    ur: 'شامل کریں',
+    hi: 'जोड़ें',
+  );
+  static const remove = TranslatableString(
+    en: 'Remove',
+    ar: 'إزالة',
+    ur: 'ہٹائیں',
+    hi: 'हटाएँ',
+  );
+  static const edit = TranslatableString(
+    en: 'Edit',
+    ar: 'تعديل',
+    ur: 'ترمیم کریں',
+    hi: 'संपादित करें',
+  );
+  static const retry = TranslatableString(
+    en: 'Retry',
+    ar: 'إعادة المحاولة',
+    ur: 'دوبارہ کوشش کریں',
+    hi: 'पुनः प्रयास करें',
+  );
+  static const cancel = TranslatableString(
+    en: 'Cancel',
+    ar: 'إلغاء',
+    ur: 'منسوخ کریں',
+    hi: 'रद्द करें',
+  );
+
+  static const projectDetails = TranslatableString(
+    en: 'Project details',
+    ar: 'تفاصيل المشروع',
+    ur: 'پراجیکٹ کی تفصیلات',
+    hi: 'परियोजना विवरण',
+  );
+  static const partiesAndAccess = TranslatableString(
+    en: 'Parties & access',
+    ar: 'الأطراف والوصول',
+    ur: 'فریقین اور رسائی',
+    hi: 'पक्ष और पहुँच',
+  );
+  static const buildings = TranslatableString(
+    en: 'Buildings',
+    ar: 'المباني',
+    ur: 'عمارتیں',
+    hi: 'भवन',
+  );
+  static const attachments = TranslatableString(
+    en: 'Attachments',
+    ar: 'المرفقات',
+    ur: 'منسلکات',
+    hi: 'संलग्नक',
+  );
+  static const reviewAndCreate = TranslatableString(
+    en: 'Review & create',
+    ar: 'مراجعة وإنشاء',
+    ur: 'جائزہ اور تخلیق',
+    hi: 'समीक्षा और निर्माण',
+  );
+  static const step = TranslatableString(
+    en: 'Step',
+    ar: 'الخطوة',
+    ur: 'مرحلہ',
+    hi: 'चरण',
+  );
+
+  static const yorksReference = TranslatableString(
+    en: 'Yorks reference',
+    ar: 'مرجع يوركس',
+    ur: 'یارکس حوالہ',
+    hi: 'यॉर्क्स संदर्भ',
+  );
+  static const projectName = TranslatableString(
+    en: 'Project name',
+    ar: 'اسم المشروع',
+    ur: 'پراجیکٹ کا نام',
+    hi: 'परियोजना का नाम',
+  );
+  static const client = TranslatableString(
+    en: 'Client',
+    ar: 'العميل',
+    ur: 'کلائنٹ',
+    hi: 'ग्राहक',
+  );
+  static const jobOrContractReference = TranslatableString(
+    en: 'Job / contract reference',
+    ar: 'مرجع العمل / العقد',
+    ur: 'جاب / کنٹریکٹ حوالہ',
+    hi: 'कार्य / अनुबंध संदर्भ',
+  );
+  static const siteLocation = TranslatableString(
+    en: 'Site location',
+    ar: 'موقع المشروع',
+    ur: 'سائٹ کا مقام',
+    hi: 'साइट स्थान',
+  );
+  static const startDate = TranslatableString(
+    en: 'Start date',
+    ar: 'تاريخ البدء',
+    ur: 'آغاز کی تاریخ',
+    hi: 'आरंभ तिथि',
+  );
+  static const endDate = TranslatableString(
+    en: 'End date',
+    ar: 'تاريخ الانتهاء',
+    ur: 'اختتامی تاریخ',
+    hi: 'समाप्ति तिथि',
+  );
+  static const notes = TranslatableString(
+    en: 'Notes',
+    ar: 'ملاحظات',
+    ur: 'نوٹس',
+    hi: 'टिप्पणियाँ',
+  );
+  static const optional = TranslatableString(
+    en: 'Optional',
+    ar: 'اختياري',
+    ur: 'اختیاری',
+    hi: 'वैकल्पिक',
+  );
+  static const selectDate = TranslatableString(
+    en: 'Select date',
+    ar: 'اختر التاريخ',
+    ur: 'تاریخ منتخب کریں',
+    hi: 'तारीख चुनें',
+  );
+
+  static const consultant = TranslatableString(
+    en: 'Consultant',
+    ar: 'الاستشاري',
+    ur: 'کنسلٹنٹ',
+    hi: 'परामर्शदाता',
+  );
+  static const mainContractor = TranslatableString(
+    en: 'Main contractor',
+    ar: 'المقاول الرئيسي',
+    ur: 'مرکزی کنٹریکٹر',
+    hi: 'मुख्य ठेकेदार',
+  );
+  static const subcontractors = TranslatableString(
+    en: 'Subcontractors',
+    ar: 'المقاولون من الباطن',
+    ur: 'ذیلی کنٹریکٹرز',
+    hi: 'उप-ठेकेदार',
+  );
+  static const otherContractors = TranslatableString(
+    en: 'Other contractors',
+    ar: 'مقاولون آخرون',
+    ur: 'دیگر کنٹریکٹرز',
+    hi: 'अन्य ठेकेदार',
+  );
+  static const projectEngineers = TranslatableString(
+    en: 'Project Engineers',
+    ar: 'مهندسو المشروع',
+    ur: 'پراجیکٹ انجینئرز',
+    hi: 'प्रोजेक्ट इंजीनियर',
+  );
+  static const projectTeam = TranslatableString(
+    en: 'Project team',
+    ar: 'فريق المشروع',
+    ur: 'پراجیکٹ ٹیم',
+    hi: 'परियोजना टीम',
+  );
+  static const siteEngineers = TranslatableString(
+    en: 'Site Engineers',
+    ar: 'مهندسو الموقع',
+    ur: 'سائٹ انجینئرز',
+    hi: 'साइट इंजीनियर',
+  );
+  static const selectProjectEngineer = TranslatableString(
+    en: 'Select a Project Engineer',
+    ar: 'اختر مهندس مشروع',
+    ur: 'پراجیکٹ انجینئر منتخب کریں',
+    hi: 'प्रोजेक्ट इंजीनियर चुनें',
+  );
+  static const selectSiteEngineer = TranslatableString(
+    en: 'Select a Site Engineer',
+    ar: 'اختر مهندس موقع',
+    ur: 'سائٹ انجینئر منتخب کریں',
+    hi: 'साइट इंजीनियर चुनें',
+  );
+  static const loadingTeamDirectory = TranslatableString(
+    en: 'Loading authorised team members…',
+    ar: 'جارٍ تحميل أعضاء الفريق المخوّلين…',
+    ur: 'مجاز ٹیم ممبران لوڈ ہو رہے ہیں…',
+    hi: 'अधिकृत टीम सदस्य लोड हो रहे हैं…',
+  );
+  static const teamDirectoryUnavailable = TranslatableString(
+    en: 'Authorised team members are unavailable right now. Try again while connected.',
+    ar: 'أعضاء الفريق المخوّلون غير متاحين حالياً. حاول مرة أخرى أثناء الاتصال.',
+    ur: 'مجاز ٹیم ممبران فی الحال دستیاب نہیں ہیں۔ کنکشن کے ساتھ دوبارہ کوشش کریں۔',
+    hi: 'अधिकृत टीम सदस्य अभी उपलब्ध नहीं हैं। कनेक्ट रहते हुए फिर प्रयास करें।',
+  );
+  static const noEligibleTeamMembers = TranslatableString(
+    en: 'No additional authorised team members are available.',
+    ar: 'لا يتوفر أعضاء فريق مخوّلون إضافيون.',
+    ur: 'مزید مجاز ٹیم ممبران دستیاب نہیں ہیں۔',
+    hi: 'कोई अतिरिक्त अधिकृत टीम सदस्य उपलब्ध नहीं है।',
+  );
+  static const teamMemberNoLongerAvailable = TranslatableString(
+    en: 'An added team member is no longer active. Remove them before creating the project.',
+    ar: 'لم يعد عضو فريق مُضاف نشطاً. أزله قبل إنشاء المشروع.',
+    ur: 'شامل کردہ ٹیم ممبر اب فعال نہیں ہے۔ پراجیکٹ بنانے سے پہلے اسے ہٹا دیں۔',
+    hi: 'जोड़ा गया टीम सदस्य अब सक्रिय नहीं है। परियोजना बनाने से पहले उसे हटाएँ।',
+  );
+  static const profileId = TranslatableString(
+    en: 'Authorised team member',
+    ar: 'عضو فريق مخوّل',
+    ur: 'مجاز ٹیم ممبر',
+    hi: 'अधिकृत टीम सदस्य',
+  );
+
+  // ─── Foundation access administration ──────────────────────────
+  static const commercialAccess = TranslatableString(
+    en: 'Commercial access',
+    ar: 'الوصول التجاري',
+    ur: 'تجارتی رسائی',
+    hi: 'वाणिज्यिक पहुँच',
+  );
+  static const commercialAccessDescription = TranslatableString(
+    en: 'These protected controls affect only commercial visibility and management. The server records the reason for every change.',
+    ar: 'تؤثر عناصر التحكم المحمية هذه في عرض البيانات التجارية وإدارتها فقط. يسجل الخادم سبب كل تغيير.',
+    ur: 'یہ محفوظ کنٹرولز صرف تجارتی منظر اور انتظام پر اثر انداز ہوتے ہیں۔ سرور ہر تبدیلی کی وجہ ریکارڈ کرتا ہے۔',
+    hi: 'ये सुरक्षित नियंत्रण केवल वाणिज्यिक दृश्यता और प्रबंधन को प्रभावित करते हैं। सर्वर हर बदलाव का कारण दर्ज करता है।',
+  );
+  static const viewCommercials = TranslatableString(
+    en: 'View commercials',
+    ar: 'عرض البيانات التجارية',
+    ur: 'تجارتی معلومات دیکھیں',
+    hi: 'वाणिज्यिक जानकारी देखें',
+  );
+  static const manageCommercials = TranslatableString(
+    en: 'Manage commercials',
+    ar: 'إدارة البيانات التجارية',
+    ur: 'تجارتی معلومات کا انتظام کریں',
+    hi: 'वाणिज्यिक जानकारी प्रबंधित करें',
+  );
+  static const roleDefault = TranslatableString(
+    en: 'Role default',
+    ar: 'الإعداد الافتراضي للدور',
+    ur: 'رول کی طے شدہ رسائی',
+    hi: 'भूमिका का डिफ़ॉल्ट',
+  );
+  static const customForUser = TranslatableString(
+    en: 'Custom for this user',
+    ar: 'مخصص لهذا المستخدم',
+    ur: 'اس صارف کے لیے مخصوص',
+    hi: 'इस उपयोगकर्ता के लिए कस्टम',
+  );
+  static const commercialAccessUnavailable = TranslatableString(
+    en: 'Commercial access is unavailable right now. Try again while connected.',
+    ar: 'الوصول التجاري غير متاح حالياً. حاول مرة أخرى أثناء الاتصال.',
+    ur: 'تجارتی رسائی اس وقت دستیاب نہیں۔ کنکشن کے ساتھ دوبارہ کوشش کریں۔',
+    hi: 'वाणिज्यिक पहुँच अभी उपलब्ध नहीं है। कनेक्ट रहते हुए फिर कोशिश करें।',
+  );
+  static const commercialAccessChangeReason = TranslatableString(
+    en: 'Reason for access change',
+    ar: 'سبب تغيير الوصول',
+    ur: 'رسائی تبدیلی کی وجہ',
+    hi: 'पहुंच परिवर्तन का कारण',
+  );
+  static const commercialAccessReasonHint = TranslatableString(
+    en: 'Record why this access is needed or removed',
+    ar: 'سجل سبب الحاجة إلى هذا الوصول أو إزالته',
+    ur: 'یہ رسائی کیوں درکار یا ختم کی گئی ہے، ریکارڈ کریں',
+    hi: 'यह पहुँच क्यों चाहिए या हटाई गई है, दर्ज करें',
+  );
+  static const saveAccessChange = TranslatableString(
+    en: 'Save access change',
+    ar: 'حفظ تغيير الوصول',
+    ur: 'رسائی تبدیلی محفوظ کریں',
+    hi: 'पहुंच परिवर्तन सहेजें',
+  );
+  static const accessUpdated = TranslatableString(
+    en: 'Commercial access updated',
+    ar: 'تم تحديث الوصول التجاري',
+    ur: 'تجارتی رسائی اپ ڈیٹ ہو گئی',
+    hi: 'वाणिज्यिक पहुँच अपडेट की गई',
+  );
+  static const addProjectEngineer = TranslatableString(
+    en: 'Add Project Engineer',
+    ar: 'إضافة مهندس مشروع',
+    ur: 'پراجیکٹ انجینئر شامل کریں',
+    hi: 'प्रोजेक्ट इंजीनियर जोड़ें',
+  );
+  static const addSiteEngineer = TranslatableString(
+    en: 'Add Site Engineer',
+    ar: 'إضافة مهندس موقع',
+    ur: 'سائٹ انجینئر شامل کریں',
+    hi: 'साइट इंजीनियर जोड़ें',
+  );
+  static const accessDescription = TranslatableString(
+    en: 'Choose active, authorised team members. Team changes after creation are server-audited.',
+    ar: 'اختر أعضاء فريق نشطين ومخوّلين. تُدقَّق تغييرات الفريق بعد الإنشاء على الخادم.',
+    ur: 'فعال، مجاز ٹیم ممبران منتخب کریں۔ تخلیق کے بعد ٹیم کی تبدیلیاں سرور پر آڈٹ ہوتی ہیں۔',
+    hi: 'सक्रिय, अधिकृत टीम सदस्य चुनें। निर्माण के बाद टीम परिवर्तन सर्वर पर ऑडिट होते हैं।',
+  );
+  static const initialProjectEngineerHint = TranslatableString(
+    en: 'A Site Engineer may nominate an initial Project Engineer here. Activation still requires an active Project Engineer.',
+    ar: 'يمكن لمهندس الموقع ترشيح مهندس مشروع أولي هنا. يظل التفعيل يتطلب مهندس مشروع نشطاً.',
+    ur: 'سائٹ انجینئر یہاں ابتدائی پراجیکٹ انجینئر نامزد کر سکتا ہے۔ ایکٹیویشن کے لیے پھر بھی فعال پراجیکٹ انجینئر ضروری ہے۔',
+    hi: 'साइट इंजीनियर यहाँ प्रारंभिक प्रोजेक्ट इंजीनियर नामित कर सकता है। सक्रिय करने के लिए फिर भी सक्रिय प्रोजेक्ट इंजीनियर जरूरी है।',
+  );
+
+  static const buildingCode = TranslatableString(
+    en: 'Building code',
+    ar: 'رمز المبنى',
+    ur: 'عمارت کوڈ',
+    hi: 'भवन कोड',
+  );
+  static const buildingName = TranslatableString(
+    en: 'Building name',
+    ar: 'اسم المبنى',
+    ur: 'عمارت کا نام',
+    hi: 'भवन का नाम',
+  );
+  static const floorsOrLevels = TranslatableString(
+    en: 'Floors / levels',
+    ar: 'الطوابق / المستويات',
+    ur: 'فلورز / لیولز',
+    hi: 'मंज़िलें / स्तर',
+  );
+  static const buildingNotes = TranslatableString(
+    en: 'Building notes',
+    ar: 'ملاحظات المبنى',
+    ur: 'عمارت نوٹس',
+    hi: 'भवन टिप्पणियाँ',
+  );
+  static const deliveryAddress = TranslatableString(
+    en: 'Delivery address',
+    ar: 'عنوان التسليم',
+    ur: 'ڈیلیوری ایڈریس',
+    hi: 'डिलीवरी पता',
+  );
+  static const hasFrpRoom = TranslatableString(
+    en: 'Has FRP room',
+    ar: 'به غرفة FRP',
+    ur: 'FRP روم موجود ہے',
+    hi: 'FRP कक्ष है',
+  );
+  static const addBuilding = TranslatableString(
+    en: 'Add building',
+    ar: 'إضافة مبنى',
+    ur: 'عمارت شامل کریں',
+    hi: 'भवन जोड़ें',
+  );
+  static const commonScope = TranslatableString(
+    en: 'Common / All Buildings',
+    ar: 'مشترك / جميع المباني',
+    ur: 'مشترکہ / تمام عمارتیں',
+    hi: 'साझा / सभी भवन',
+  );
+  static const commonScopeDescription = TranslatableString(
+    en: 'The Common scope is created by the server and cannot be edited as a building.',
+    ar: 'ينشئ الخادم النطاق المشترك ولا يمكن تعديله كمبنى.',
+    ur: 'مشترکہ دائرہ سرور بناتا ہے اور اسے عمارت کے طور پر ترمیم نہیں کیا جا سکتا۔',
+    hi: 'साझा दायरा सर्वर बनाता है और इसे भवन के रूप में संपादित नहीं किया जा सकता।',
+  );
+  static const noBuildingsAdded = TranslatableString(
+    en: 'No buildings added yet',
+    ar: 'لم تتم إضافة مبانٍ بعد',
+    ur: 'ابھی کوئی عمارت شامل نہیں ہوئی',
+    hi: 'अभी कोई भवन नहीं जोड़ा गया',
+  );
+
+  static const attachmentsOptionalTitle = TranslatableString(
+    en: 'Attachments are optional',
+    ar: 'المرفقات اختيارية',
+    ur: 'منسلکات اختیاری ہیں',
+    hi: 'संलग्नक वैकल्पिक हैं',
+  );
+  static const attachmentsOptionalDescription = TranslatableString(
+    en: 'You can record draft attachment metadata now. Secure file upload and document versions are delivered in the Documents slice.',
+    ar: 'يمكنك تسجيل بيانات وصفية لمسودة المرفق الآن. يتم تسليم رفع الملفات الآمن وإصدارات المستندات في جزء المستندات.',
+    ur: 'آپ ابھی ڈرافٹ منسلکات کا میٹا ڈیٹا درج کر سکتے ہیں۔ محفوظ فائل اپ لوڈ اور دستاویز ورژنز Documents سلائس میں فراہم ہوں گے۔',
+    hi: 'आप अभी ड्राफ़्ट संलग्नक मेटाडेटा दर्ज कर सकते हैं। सुरक्षित फ़ाइल अपलोड और दस्तावेज़ संस्करण Documents स्लाइस में दिए जाएँगे।',
+  );
+  static const attachmentFileName = TranslatableString(
+    en: 'File name',
+    ar: 'اسم الملف',
+    ur: 'فائل نام',
+    hi: 'फ़ाइल नाम',
+  );
+  static const attachmentType = TranslatableString(
+    en: 'Document type',
+    ar: 'نوع المستند',
+    ur: 'دستاویز کی قسم',
+    hi: 'दस्तावेज़ प्रकार',
+  );
+  static const attachmentSize = TranslatableString(
+    en: 'File size (bytes)',
+    ar: 'حجم الملف (بايت)',
+    ur: 'فائل سائز (بائٹس)',
+    hi: 'फ़ाइल आकार (बाइट)',
+  );
+  static const attachmentReference = TranslatableString(
+    en: 'Document reference',
+    ar: 'مرجع المستند',
+    ur: 'دستاویز حوالہ',
+    hi: 'दस्तावेज़ संदर्भ',
+  );
+  static const addAttachment = TranslatableString(
+    en: 'Add attachment record',
+    ar: 'إضافة سجل مرفق',
+    ur: 'منسلکہ ریکارڈ شامل کریں',
+    hi: 'संलग्नक रिकॉर्ड जोड़ें',
+  );
+  static const noAttachmentsAdded = TranslatableString(
+    en: 'No attachment records added',
+    ar: 'لم تتم إضافة سجلات مرفقات',
+    ur: 'کوئی منسلکہ ریکارڈ شامل نہیں',
+    hi: 'कोई संलग्नक रिकॉर्ड नहीं जोड़ा गया',
+  );
+
+  static const requiredField = TranslatableString(
+    en: 'This field is required.',
+    ar: 'هذا الحقل مطلوب.',
+    ur: 'یہ فیلڈ ضروری ہے۔',
+    hi: 'यह फ़ील्ड आवश्यक है।',
+  );
+  static const endDateAfterStart = TranslatableString(
+    en: 'End date must be on or after the start date.',
+    ar: 'يجب أن يكون تاريخ الانتهاء في أو بعد تاريخ البدء.',
+    ur: 'اختتامی تاریخ آغاز کی تاریخ کے برابر یا بعد ہونی چاہیے۔',
+    hi: 'समाप्ति तिथि आरंभ तिथि के बराबर या उसके बाद होनी चाहिए।',
+  );
+  static const atLeastOneBuilding = TranslatableString(
+    en: 'Add at least one physical building.',
+    ar: 'أضف مبنى فعلياً واحداً على الأقل.',
+    ur: 'کم از کم ایک جسمانی عمارت شامل کریں۔',
+    hi: 'कम से कम एक भौतिक भवन जोड़ें।',
+  );
+  static const duplicateBuildingCode = TranslatableString(
+    en: 'Each building code must be unique.',
+    ar: 'يجب أن يكون كل رمز مبنى فريداً.',
+    ur: 'ہر عمارت کوڈ منفرد ہونا چاہیے۔',
+    hi: 'हर भवन कोड अद्वितीय होना चाहिए।',
+  );
+  static const duplicateMember = TranslatableString(
+    en: 'A team member can be added once only.',
+    ar: 'يمكن إضافة عضو الفريق مرة واحدة فقط.',
+    ur: 'ٹیم ممبر صرف ایک بار شامل ہو سکتا ہے۔',
+    hi: 'टीम सदस्य केवल एक बार जोड़ा जा सकता है।',
+  );
+  static const stageNeedsAttention = TranslatableString(
+    en: 'Complete the required fields before continuing.',
+    ar: 'أكمل الحقول المطلوبة قبل المتابعة.',
+    ur: 'جاری رکھنے سے پہلے ضروری فیلڈز مکمل کریں۔',
+    hi: 'जारी रखने से पहले आवश्यक फ़ील्ड भरें।',
+  );
+  static const noPermission = TranslatableString(
+    en: 'You do not have permission to create a project.',
+    ar: 'ليس لديك صلاحية لإنشاء مشروع.',
+    ur: 'آپ کو پراجیکٹ بنانے کی اجازت نہیں ہے۔',
+    hi: 'आपको परियोजना बनाने की अनुमति नहीं है।',
+  );
+  static const noPermissionDescription = TranslatableString(
+    en: 'Procurement can view authorized projects but cannot create or edit them.',
+    ar: 'يمكن للمشتريات عرض المشاريع المصرح بها ولكن لا يمكنها إنشاؤها أو تعديلها.',
+    ur: 'پروکیورمنٹ مجاز پراجیکٹس دیکھ سکتی ہے مگر بنا یا ترمیم نہیں کر سکتی۔',
+    hi: 'प्रोक्योरमेंट अधिकृत परियोजनाएँ देख सकती है, लेकिन उन्हें बना या संपादित नहीं कर सकती।',
+  );
+  static const loadingAccess = TranslatableString(
+    en: 'Checking project access…',
+    ar: 'جارٍ التحقق من الوصول إلى المشروع…',
+    ur: 'پراجیکٹ رسائی چیک ہو رہی ہے…',
+    hi: 'परियोजना पहुँच जाँची जा रही है…',
+  );
+  static const signInRequired = TranslatableString(
+    en: 'Sign in again to create a project.',
+    ar: 'سجّل الدخول مرة أخرى لإنشاء مشروع.',
+    ur: 'پراجیکٹ بنانے کے لیے دوبارہ سائن اِن کریں۔',
+    hi: 'परियोजना बनाने के लिए फिर से साइन इन करें।',
+  );
+
+  static TranslatableString errorFor(YorksV1DomainErrorCode code) {
+    return switch (code) {
+      YorksV1DomainErrorCode.featureDisabled => const TranslatableString(
+        en: 'Projects are not enabled for this rollout.',
+        ar: 'المشاريع غير مفعلة لهذا الطرح.',
+        ur: 'اس رول آؤٹ کے لیے پراجیکٹس فعال نہیں ہیں۔',
+        hi: 'इस रोलआउट के लिए परियोजनाएँ सक्षम नहीं हैं।',
+      ),
+      YorksV1DomainErrorCode.offline => const TranslatableString(
+        en: 'Connect to the internet before creating this project. Your draft is kept on this device.',
+        ar: 'اتصل بالإنترنت قبل إنشاء هذا المشروع. يتم الاحتفاظ بمسودتك على هذا الجهاز.',
+        ur: 'اس پراجیکٹ کو بنانے سے پہلے انٹرنیٹ سے جڑیں۔ آپ کا ڈرافٹ اس ڈیوائس پر محفوظ ہے۔',
+        hi: 'इस परियोजना को बनाने से पहले इंटरनेट से कनेक्ट करें। आपका ड्राफ़्ट इस डिवाइस पर रखा गया है।',
+      ),
+      YorksV1DomainErrorCode.backendUnavailable => const TranslatableString(
+        en: 'The project service is unavailable. Try again without changing the draft.',
+        ar: 'خدمة المشروع غير متاحة. أعد المحاولة دون تغيير المسودة.',
+        ur: 'پراجیکٹ سروس دستیاب نہیں۔ ڈرافٹ تبدیل کیے بغیر دوبارہ کوشش کریں۔',
+        hi: 'परियोजना सेवा उपलब्ध नहीं है। ड्राफ़्ट बदले बिना फिर प्रयास करें।',
+      ),
+      YorksV1DomainErrorCode.unauthenticated => signInRequired,
+      YorksV1DomainErrorCode.unauthorized => noPermission,
+      YorksV1DomainErrorCode.invalidInput => stageNeedsAttention,
+      YorksV1DomainErrorCode.invalidTransition => const TranslatableString(
+        en: 'This project action is no longer available in its current state.',
+        ar: 'إجراء المشروع هذا لم يعد متاحاً في حالته الحالية.',
+        ur: 'یہ پراجیکٹ کارروائی موجودہ حالت میں اب دستیاب نہیں ہے۔',
+        hi: 'यह परियोजना कार्रवाई अपनी वर्तमान स्थिति में अब उपलब्ध नहीं है।',
+      ),
+      YorksV1DomainErrorCode.conflict => const TranslatableString(
+        en: 'This record changed elsewhere. Refresh and review the latest version.',
+        ar: 'تم تغيير هذا السجل في مكان آخر. حدّث وراجع أحدث إصدار.',
+        ur: 'یہ ریکارڈ کہیں اور تبدیل ہوا ہے۔ ریفریش کریں اور تازہ ورژن کا جائزہ لیں۔',
+        hi: 'यह रिकॉर्ड कहीं और बदला है। ताज़ा करें और नवीनतम संस्करण की समीक्षा करें।',
+      ),
+      YorksV1DomainErrorCode.serverRejected => const TranslatableString(
+        en: 'The server rejected this project. Review the details and try again.',
+        ar: 'رفض الخادم هذا المشروع. راجع التفاصيل وحاول مرة أخرى.',
+        ur: 'سرور نے اس پراجیکٹ کو مسترد کر دیا۔ تفصیلات کا جائزہ لیں اور دوبارہ کوشش کریں۔',
+        hi: 'सर्वर ने इस परियोजना को अस्वीकार कर दिया। विवरण की समीक्षा करें और पुनः प्रयास करें।',
+      ),
+      YorksV1DomainErrorCode.unexpectedResponse => const TranslatableString(
+        en: 'The project service returned an unexpected response. Your draft remains available.',
+        ar: 'أعادت خدمة المشروع استجابة غير متوقعة. تبقى المسودة متاحة.',
+        ur: 'پراجیکٹ سروس نے غیر متوقع جواب دیا۔ آپ کا ڈرافٹ دستیاب رہتا ہے۔',
+        hi: 'परियोजना सेवा ने अनपेक्षित प्रतिक्रिया दी। आपका ड्राफ़्ट उपलब्ध रहता है।',
+      ),
+    };
+  }
+}

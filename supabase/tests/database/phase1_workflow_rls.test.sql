@@ -167,6 +167,7 @@ select throws_ok(
     set data = jsonb_set(data, '{items,0,reservedQty}', '12')
     where id = '__batch8_plan__'$$,
   '22023',
+  null,
   'Phase 1 review cannot reserve stock'
 );
 
@@ -216,6 +217,7 @@ select throws_ok(
     set data = jsonb_set(data, '{status}', '"Approved"')
     where id = '__batch8_plan__'$$,
   '42501',
+  null,
   'Procurement cannot approve the plan'
 );
 
@@ -273,6 +275,7 @@ select throws_ok(
     set data = jsonb_set(data, '{items,0,quantity}', '15')
     where id = '__batch8_plan__'$$,
   '42501',
+  null,
   'An approved plan cannot be overwritten'
 );
 
@@ -302,6 +305,7 @@ select throws_ok(
     )
     where id = '__batch8_project__'$$,
   '42501',
+  null,
   'Engineer cannot change progress stage definitions'
 );
 
@@ -316,6 +320,7 @@ select throws_ok(
     set data = jsonb_set(data, '{progressStages,0,progressPercent}', '90')
     where id = '__batch8_project__'$$,
   '42501',
+  null,
   'Procurement has read-only project progress access'
 );
 
@@ -341,6 +346,7 @@ select throws_ok(
     set data = jsonb_set(data, '{progressStages,0,weightPercent}', '20')
     where id = '__batch8_project__'$$,
   '22023',
+  null,
   'Project progress weights must remain reconciled to 100'
 );
 
@@ -355,6 +361,7 @@ select throws_ok(
     set data = jsonb_set(data, '{lifecycleStatus}', '"active"')
     where id = '__batch8_without_plan__'$$,
   '55000',
+  null,
   'A project cannot activate without an approved Phase 1 plan'
 );
 

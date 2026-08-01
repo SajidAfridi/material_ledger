@@ -1,9 +1,12 @@
 # Backend setup — self-hosted Supabase (UAE region)
 
-> **Legacy implementation note.** The current Nexus V7 authority is
-> [`../nexus-v7/README.md`](../nexus-v7/README.md) and ADR-001. This document
-> describes the generic JSONB sync generation and must not be treated as the
-> normalized V7 schema or rollout plan.
+> **Historical generic-sync note.** Yorks V1 authority is now
+> [`../yorks-v1/README.md`](../yorks-v1/README.md). This document and its
+> `schema.sql` preserve the pre-V1 JSONB generation as migration evidence;
+> they are not the source of truth for Yorks V1 behavior, security or rollout.
+> For a new local environment use tracked `supabase/config.toml`, the ordered
+> `supabase/migrations/` chain and `supabase/seed.sql`. Do not manually apply
+> this historical schema file.
 
 Because data must reside on **UAE soil**, the backend is **self-hosted Supabase /
 Postgres** in a UAE region (AWS `me-central-1` Dubai, or Azure UAE North). Managed

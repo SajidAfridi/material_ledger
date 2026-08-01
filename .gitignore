@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Controlled Android signing material is never committed. CI creates a
+# one-run certificate outside the repository; production signing uses the
+# protected key.properties path managed outside source control.
+/android/key.properties
+/android/*.jks
+/android/*.keystore
+
+# Supabase CLI runtime data is machine-local. The tracked config, migrations,
+# tests and non-secret seed remain the reproducible source of truth.
+/supabase/.temp/
+/supabase/.branches/
