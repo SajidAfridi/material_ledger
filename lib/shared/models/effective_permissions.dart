@@ -3,7 +3,7 @@ import 'app_user.dart';
 /// The capabilities an Admin can grant/revoke per user (each maps to an
 /// override field on [AppUser]). Drives both the provider setters and the
 /// admin permissions UI.
-enum PermissionKey { cost, finance, salary, rentals, people, goods }
+enum PermissionKey { viewCommercials, finance, salary, rentals, people, goods }
 
 /// Resolves a user's **effective** capabilities = per-user override (if the
 /// Admin set one) else the role default. This is the single place the rest of
@@ -11,6 +11,10 @@ enum PermissionKey { cost, finance, salary, rentals, people, goods }
 /// the baseline. Structural traits (isAdmin, usesAdminPanel, canAccessMaterials)
 /// stay role-derived — they define which shell loads, not a grantable boundary.
 extension EffectivePermissions on AppUser {
+  bool get effectiveCanViewCommercials =>
+      canViewCommercialsOverride ?? role.canViewCommercials;
+
+  /// Transitional alias for existing screens.
   bool get effectiveCanSeeCost => canSeeCostOverride ?? role.canSeeCost;
   bool get effectiveCanViewFinance =>
       canViewFinanceOverride ?? role.canViewFinance;
@@ -31,7 +35,7 @@ extension EffectivePermissions on AppUser {
 
   /// The Admin-set override for [key], or `null` if it follows the role default.
   bool? overrideFor(PermissionKey key) => switch (key) {
-    PermissionKey.cost => canSeeCostOverride,
+    PermissionKey.viewCommercials => canViewCommercialsOverride,
     PermissionKey.finance => canViewFinanceOverride,
     PermissionKey.salary => canSeeSalaryOverride,
     PermissionKey.rentals => canAccessRentalsOverride,
@@ -41,7 +45,7 @@ extension EffectivePermissions on AppUser {
 
   /// The role's baseline value for [key] (ignoring any override).
   bool roleDefaultFor(PermissionKey key) => switch (key) {
-    PermissionKey.cost => role.canSeeCost,
+    PermissionKey.viewCommercials => role.canViewCommercials,
     PermissionKey.finance => role.canViewFinance,
     PermissionKey.salary => role.canSeeSalary,
     PermissionKey.rentals => role.canAccessRentals,

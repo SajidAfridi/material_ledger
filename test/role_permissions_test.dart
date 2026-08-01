@@ -43,30 +43,46 @@ void main() {
       // Engineer has no rentals by default.
       expect(perms.has(UserRole.engineer, RoleCapability.rentals), isFalse);
 
-      perms = perms.setCapability(UserRole.engineer, RoleCapability.rentals, true);
+      perms = perms.setCapability(
+        UserRole.engineer,
+        RoleCapability.rentals,
+        true,
+      );
       expect(perms.has(UserRole.engineer, RoleCapability.rentals), isTrue);
 
-      perms =
-          perms.setCapability(UserRole.engineer, RoleCapability.rentals, false);
+      perms = perms.setCapability(
+        UserRole.engineer,
+        RoleCapability.rentals,
+        false,
+      );
       expect(perms.has(UserRole.engineer, RoleCapability.rentals), isFalse);
     });
 
     test('editing one role does not change another', () {
-      final perms = RolePermissions.fromRoleDefaults()
-          .setCapability(UserRole.engineer, RoleCapability.cost, true);
-      expect(perms.has(UserRole.engineer, RoleCapability.cost), isTrue);
+      final perms = RolePermissions.fromRoleDefaults().setCapability(
+        UserRole.engineer,
+        RoleCapability.viewCommercials,
+        true,
+      );
       expect(
-        perms.has(UserRole.procurement, RoleCapability.cost),
-        RoleCapability.cost.defaultFor(UserRole.procurement),
+        perms.has(UserRole.engineer, RoleCapability.viewCommercials),
+        isTrue,
+      );
+      expect(
+        perms.has(UserRole.procurement, RoleCapability.viewCommercials),
+        RoleCapability.viewCommercials.defaultFor(UserRole.procurement),
       );
     });
 
     test('editing Admin is a no-op (returns identical instance)', () {
       final perms = RolePermissions.fromRoleDefaults();
-      final next =
-          perms.setCapability(UserRole.admin, RoleCapability.cost, false);
+      final next = perms.setCapability(
+        UserRole.admin,
+        RoleCapability.viewCommercials,
+        false,
+      );
       expect(identical(perms, next), isTrue);
-      expect(next.has(UserRole.admin, RoleCapability.cost), isTrue);
+      expect(next.has(UserRole.admin, RoleCapability.viewCommercials), isTrue);
     });
   });
 
@@ -74,7 +90,11 @@ void main() {
     test('restores a role to its built-in defaults', () {
       var perms = RolePermissions.fromRoleDefaults()
           .setCapability(UserRole.procurement, RoleCapability.rentals, false)
-          .setCapability(UserRole.procurement, RoleCapability.cost, false);
+          .setCapability(
+            UserRole.procurement,
+            RoleCapability.viewCommercials,
+            false,
+          );
 
       perms = perms.resetRole(UserRole.procurement);
       for (final cap in RoleCapability.values) {
@@ -90,11 +110,18 @@ void main() {
     test('toJson/fromJson preserves edited grants', () {
       final perms = RolePermissions.fromRoleDefaults()
           .setCapability(UserRole.engineer, RoleCapability.rentals, true)
-          .setCapability(UserRole.procurement, RoleCapability.cost, false);
+          .setCapability(
+            UserRole.procurement,
+            RoleCapability.viewCommercials,
+            false,
+          );
 
       final restored = RolePermissions.fromJson(perms.toJson());
       expect(restored.has(UserRole.engineer, RoleCapability.rentals), isTrue);
-      expect(restored.has(UserRole.procurement, RoleCapability.cost), isFalse);
+      expect(
+        restored.has(UserRole.procurement, RoleCapability.viewCommercials),
+        isFalse,
+      );
     });
 
     test('missing role in JSON seeds from defaults', () {
@@ -112,7 +139,10 @@ void main() {
       }
       // Engineer present → only the listed cap is granted.
       expect(perms.has(UserRole.engineer, RoleCapability.rentals), isTrue);
-      expect(perms.has(UserRole.engineer, RoleCapability.cost), isFalse);
+      expect(
+        perms.has(UserRole.engineer, RoleCapability.viewCommercials),
+        isFalse,
+      );
     });
 
     test('unknown capability names in JSON are ignored', () {
@@ -123,21 +153,35 @@ void main() {
       final perms = RolePermissions.fromJson(json);
       expect(perms.has(UserRole.engineer, RoleCapability.rentals), isTrue);
       // Procurement explicitly empty → nothing granted.
-      expect(perms.has(UserRole.procurement, RoleCapability.cost), isFalse);
+      expect(
+        perms.has(UserRole.procurement, RoleCapability.viewCommercials),
+        isFalse,
+      );
     });
   });
 
   group('resolveCapability layering', () {
     test('per-user override beats the (edited) role default', () {
       // Edit procurement cost OFF at the role level...
-      final perms = RolePermissions.fromRoleDefaults()
-          .setCapability(UserRole.procurement, RoleCapability.cost, false);
-      expect(perms.has(UserRole.procurement, RoleCapability.cost), isFalse);
+      final perms = RolePermissions.fromRoleDefaults().setCapability(
+        UserRole.procurement,
+        RoleCapability.viewCommercials,
+        false,
+      );
+      expect(
+        perms.has(UserRole.procurement, RoleCapability.viewCommercials),
+        isFalse,
+      );
 
       // ...but a per-user override of TRUE still wins.
       final user = _user(UserRole.procurement, costOverride: true);
       expect(
-        resolveCapability(user, UserRole.procurement, perms, RoleCapability.cost),
+        resolveCapability(
+          user,
+          UserRole.procurement,
+          perms,
+          RoleCapability.viewCommercials,
+        ),
         isTrue,
       );
     });
@@ -145,14 +189,21 @@ void main() {
     test('override of false hides a granted role default', () {
       final perms = RolePermissions.fromRoleDefaults();
       // Engineer rentals granted at role level for this case.
-      final granted =
-          perms.setCapability(UserRole.engineer, RoleCapability.rentals, true);
+      final granted = perms.setCapability(
+        UserRole.engineer,
+        RoleCapability.rentals,
+        true,
+      );
       expect(granted.has(UserRole.engineer, RoleCapability.rentals), isTrue);
 
       final user = _user(UserRole.engineer, rentalsOverride: false);
       expect(
         resolveCapability(
-            user, UserRole.engineer, granted, RoleCapability.rentals),
+          user,
+          UserRole.engineer,
+          granted,
+          RoleCapability.rentals,
+        ),
         isFalse,
       );
     });
@@ -161,19 +212,31 @@ void main() {
       final perms = RolePermissions.fromRoleDefaults();
       final user = _user(UserRole.procurement);
       expect(
-        resolveCapability(user, UserRole.procurement, perms, RoleCapability.cost),
-        perms.has(UserRole.procurement, RoleCapability.cost),
+        resolveCapability(
+          user,
+          UserRole.procurement,
+          perms,
+          RoleCapability.viewCommercials,
+        ),
+        perms.has(UserRole.procurement, RoleCapability.viewCommercials),
       );
     });
 
     test('writes have no override key — resolve straight from role default', () {
-      final perms = RolePermissions.fromRoleDefaults()
-          .setCapability(UserRole.procurement, RoleCapability.writeRentals, false);
+      final perms = RolePermissions.fromRoleDefaults().setCapability(
+        UserRole.procurement,
+        RoleCapability.writeRentals,
+        false,
+      );
       // Even with an unrelated user override set, writeRentals follows the role.
       final user = _user(UserRole.procurement, costOverride: true);
       expect(
         resolveCapability(
-            user, UserRole.procurement, perms, RoleCapability.writeRentals),
+          user,
+          UserRole.procurement,
+          perms,
+          RoleCapability.writeRentals,
+        ),
         isFalse,
       );
     });

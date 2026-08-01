@@ -10,6 +10,8 @@ import '../shared/providers/language_provider.dart';
 import '../shared/providers/material_request_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/services/app_config_service.dart';
 import '../shared/sync/realtime_sync.dart';
 import '../shared/sync/sync_engine.dart';
@@ -31,6 +33,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final role = ref.watch(currentRoleProvider);
   final user = ref.watch(currentUserProvider);
   final gate = ref.watch(appGateProvider);
+  final yorksV1ProjectsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .projects;
+  final yorksV1BoqEnabled = ref.watch(yorksV1FeatureFlagsProvider).boq;
+  final yorksV1RequestsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .requests;
+  final yorksV1ArrangementEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .arrangement;
+  final yorksV1LogisticsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .logistics;
+  final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
 
   // Re-run route guards when an Admin edits role permissions — WITHOUT
   // rebuilding the router (which would reset navigation). We bridge the provider
@@ -45,6 +61,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     role: role,
     user: user,
     gate: gate,
+    yorksV1ProjectsEnabled: yorksV1ProjectsEnabled,
+    yorksV1BoqEnabled: yorksV1BoqEnabled,
+    yorksV1RequestsEnabled: yorksV1RequestsEnabled,
+    yorksV1ArrangementEnabled: yorksV1ArrangementEnabled,
+    yorksV1LogisticsEnabled: yorksV1LogisticsEnabled,
+    yorksV1Role: yorksV1Role,
     rolePermissions: () => ref.read(rolePermissionsProvider),
     refreshListenable: refresh,
   );
@@ -96,7 +118,7 @@ class MaterialLedgerApp extends ConsumerWidget {
     ref.watch(pushBridgeProvider);
 
     return MaterialApp.router(
-      title: 'Yorks GodownPro',
+      title: 'Yorks AC. & Ref.',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: router,

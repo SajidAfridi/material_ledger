@@ -1,16 +1,19 @@
-# GodownPro — The Architectural Ledger
+# Yorks AC. & Ref. — Controlled Project Workspace
 
 > Precision-engineered inventory management for the modern construction site.
 
 <p align="center">
-  <img src="assets/logo.png" width="120" alt="GodownPro Logo" />
+  <img src="assets/logo.png" width="120" alt="Yorks logo" />
 </p>
 
 ---
 
 ## Overview
 
-GodownPro is a Flutter-based construction material warehouse management app. It helps site engineers, warehouse managers, and office admins track materials, record transactions, and monitor stock values — all through a premium bilingual interface.
+Yorks AC. & Ref. is a Flutter-based controlled workspace for projects,
+materials, procurement and documents. It helps engineers, procurement and
+management coordinate traceable work across projects through a bilingual,
+responsive interface.
 
 ## Features
 
@@ -47,7 +50,7 @@ flutter run
 
 ### Requirements
 - Flutter SDK ^3.10.4
-- iOS 12+ / Android API 21+
+- iOS 12+ / Android API 23+
 
 ## Design Philosophy
 

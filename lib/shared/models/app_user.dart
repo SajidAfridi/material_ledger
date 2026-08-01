@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'user_role.dart';
+import 'yorks_v1_role.dart';
 
 /// A system user account (auth + access control). Created only by the Admin —
-/// there is no self-signup (SRS §3 / §4.1). Passwords are never stored here;
-/// with Firebase they live as hashed Auth credentials. The model carries just
-/// the access-control facts the Admin Panel manages.
+/// there is no self-signup (SRS §3 / §4.1). Supabase owns connected-environment
+/// credentials. The hash fields below exist only for explicit local
+/// development.
 class AppUser {
   const AppUser({
     required this.id,
@@ -25,12 +26,24 @@ class AppUser {
     this.canAccessRentalsOverride,
     this.canAccessPeopleOverride,
     this.canReceiveGoodsOverride,
+    this.yorksV1RoleCache,
   });
 
   final String id;
   final String fullName;
   final String email;
   final UserRole role;
+
+  /// A non-authoritative local display projection of an exact Yorks V1 role
+  /// claim. It is populated only after a successful provisioning command or
+  /// from the signed-in user's server-issued JWT. V1 authorization must always
+  /// read the current Auth claim through [YorksV1Role.fromServerClaim], never
+  /// this persisted roster cache.
+  ///
+  /// `null` is deliberate: a legacy `engineer` account has not been mapped to
+  /// either V1 engineering role and must remain unmapped until an Admin makes
+  /// that explicit server-side change.
+  final YorksV1Role? yorksV1RoleCache;
 
   /// A deactivated user is denied access on their next request (FR-095).
   final bool active;
@@ -41,8 +54,8 @@ class AppUser {
 
   final DateTime createdAt;
 
-  /// Local auth stand-in only — salted SHA-256 (see PasswordHasher). Firebase
-  /// Auth replaces this and these fields drop from any Firestore mapping.
+  /// Local auth stand-in only — salted SHA-256 (see PasswordHasher). Supabase
+  /// Auth replaces this and connected mode clears these fields.
   final String passwordHash;
   final String passwordSalt;
 
@@ -59,6 +72,10 @@ class AppUser {
   /// (see effective_permissions.dart). These let Admin grant/revoke financial,
   /// salary, and module access per person without changing their role.
   final bool? canSeeCostOverride;
+
+  /// Canonical V7 name. The stored legacy field remains readable during the
+  /// transition so existing user records do not lose their override.
+  bool? get canViewCommercialsOverride => canSeeCostOverride;
   final bool? canViewFinanceOverride;
   final bool? canSeeSalaryOverride;
   final bool? canAccessRentalsOverride;
@@ -99,6 +116,7 @@ class AppUser {
     Object? canAccessRentalsOverride = _keep,
     Object? canAccessPeopleOverride = _keep,
     Object? canReceiveGoodsOverride = _keep,
+    Object? yorksV1RoleCache = _keep,
   }) => AppUser(
     id: id,
     fullName: fullName ?? this.fullName,
@@ -129,6 +147,9 @@ class AppUser {
     canReceiveGoodsOverride: canReceiveGoodsOverride == _keep
         ? this.canReceiveGoodsOverride
         : canReceiveGoodsOverride as bool?,
+    yorksV1RoleCache: yorksV1RoleCache == _keep
+        ? this.yorksV1RoleCache
+        : yorksV1RoleCache as YorksV1Role?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -149,6 +170,7 @@ class AppUser {
     'canAccessRentalsOverride': canAccessRentalsOverride,
     'canAccessPeopleOverride': canAccessPeopleOverride,
     'canReceiveGoodsOverride': canReceiveGoodsOverride,
+    'yorksV1RoleCache': yorksV1RoleCache?.claimValue,
   };
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -169,6 +191,7 @@ class AppUser {
     canAccessRentalsOverride: json['canAccessRentalsOverride'] as bool?,
     canAccessPeopleOverride: json['canAccessPeopleOverride'] as bool?,
     canReceiveGoodsOverride: json['canReceiveGoodsOverride'] as bool?,
+    yorksV1RoleCache: YorksV1Role.fromServerClaim(json['yorksV1RoleCache']),
   );
 
   static String encodeList(List<AppUser> items) =>
@@ -176,6 +199,8 @@ class AppUser {
 
   static List<AppUser> decodeList(String jsonStr) {
     final list = jsonDecode(jsonStr) as List;
-    return list.map((e) => AppUser.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

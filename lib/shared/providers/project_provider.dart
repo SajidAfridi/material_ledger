@@ -1,12 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/material_item.dart';
+import '../models/material_plan.dart';
 import '../models/material_request.dart';
+import '../models/commercial_record.dart';
 import '../models/project.dart';
+import '../models/user_role.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../sync/sync_engine.dart';
 import 'inventory_provider.dart';
+import 'commercial_records_provider.dart';
 import 'material_plan_provider.dart';
 import 'material_request_provider.dart';
 import 'session_provider.dart';
@@ -19,11 +23,14 @@ const _kProjectsKey = 'projects_list_v1';
 final projectsProvider = StateNotifierProvider<ProjectsNotifier, List<Project>>(
   (ref) => ProjectsNotifier(
     ref,
-    ref.watch(storageProvider).collection<Project>(
-      _kProjectsKey,
-      toJson: (p) => p.toJson(),
-      fromJson: Project.fromJson,
-    ),
+    ref
+        .watch(storageProvider)
+        .collection<Project>(
+          _kProjectsKey,
+          toJson: (p) => p.toOperationalJson(),
+          fromJson: Project.fromJson,
+        ),
+    ref.watch(commercialRecordsProvider.notifier),
   ),
 );
 
@@ -39,27 +46,47 @@ const _openRequestStatuses = {
 };
 
 class ProjectsNotifier extends StateNotifier<List<Project>> {
-  ProjectsNotifier(this._ref, this._store) : super(_load(_store)) {
-    if (!_store.isSeeded) _store.writeAll(state);
+  ProjectsNotifier(this._ref, this._store, this._commercial)
+    : super(_load(_store)) {
+    final completeSource = _store.isSeeded ? _store.readAll() : _mockProjects;
+    _commercialReady = _commercial.importLegacyForLocalDevelopment([
+      for (final project in completeSource)
+        CommercialRecord(
+          subjectType: CommercialSubjectType.project,
+          subjectId: project.id,
+          totalCostAED: project.contractValueAED,
+          updatedAt:
+              project.updatedAt?.toUtc() ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        ),
+    ]);
+    // Persist the v2 migration and remove commercial values from every local
+    // operational row, including tombstones.
+    _store.writeAll([
+      for (final project in completeSource) project.withoutCommercials(),
+    ]);
   }
 
   final Ref _ref;
   final CollectionStore<Project> _store;
+  final CommercialRecordsNotifier _commercial;
+  late final Future<void> _commercialReady;
 
   /// Reads from the store (or the empty seed on first run) and drops any
   /// soft-deleted row — see [Project.deleted].
   static List<Project> _load(CollectionStore<Project> store) {
     final all = store.isSeeded ? store.readAll() : _mockProjects;
-    return all.where((p) => !p.deleted).toList();
+    return [
+      for (final project in all)
+        if (!project.deleted) project.withoutCommercials(),
+    ];
   }
 
   Future<void> _persist() => _store.writeAll(state);
 
-  /// Syncs a project, stripping the finance-gated contract value from the
-  /// shared cloud payload — the same treatment employees' salary gets (see
-  /// hr_provider.dart). It stays in this device's local store (so the
-  /// finance-gated UI can still show it here), but never rides in the payload
-  /// every 'goods'-cap role can read.
+  /// Syncs a project without the protected contract value. Commercial values
+  /// live only in [CommercialRecordsNotifier], never in this operational cache
+  /// or the generic project payload.
   Future<void> _syncProject(Project p, {required String kind}) {
     final payload = p.toJson()..remove('contractValueAED');
     return _ref.enqueueSync(
@@ -71,19 +98,130 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     );
   }
 
-  Future<void> addProject(Project project) async {
-    state = [project, ...state];
-    await _persist();
-    await _syncProject(project, kind: 'project.create');
+  /// Yorks references are unique once whitespace and case are normalized.
+  /// Empty references remain valid for legacy records until the V7 wizard
+  /// makes the field mandatory.
+  bool isYorksReferenceAvailable(
+    String? reference, {
+    String? excludingProjectId,
+  }) {
+    final normalized = _normalizeYorksReference(reference);
+    if (normalized == null) return true;
+    return state.every(
+      (project) =>
+          project.id == excludingProjectId ||
+          _normalizeYorksReference(project.yorksReference) != normalized,
+    );
   }
 
-  Future<void> updateProject(Project project) async {
+  Project _withAudit(Project project, {bool creation = false}) {
+    final actor = _ref.read(currentUserProvider);
+    final now = DateTime.now().toUtc();
+    return project.copyWith(
+      createdAt: creation ? project.createdAt ?? now : project.createdAt,
+      createdByUserId: creation
+          ? project.createdByUserId ?? actor?.id
+          : project.createdByUserId,
+      createdByRole: creation
+          ? project.createdByRole ?? actor?.role.name
+          : project.createdByRole,
+      updatedAt: now,
+      updatedByUserId: actor?.id ?? project.updatedByUserId,
+      updatedByRole: actor?.role.name ?? project.updatedByRole,
+    );
+  }
+
+  Future<bool> addProject(Project project) async {
+    if (!isYorksReferenceAvailable(project.yorksReference)) return false;
+    if (project.contractValueAED != null) {
+      await _commercialReady;
+      await _commercial.setProjectTotalCost(
+        project.id,
+        project.contractValueAED!,
+      );
+    }
+    final audited = _withAudit(project.withoutCommercials(), creation: true);
+    state = [audited, ...state];
+    await _persist();
+    await _syncProject(audited, kind: 'project.create');
+    return true;
+  }
+
+  Future<bool> updateProject(Project project) async {
+    if (byId(project.id) == null ||
+        !isYorksReferenceAvailable(
+          project.yorksReference,
+          excludingProjectId: project.id,
+        )) {
+      return false;
+    }
+    if (project.contractValueAED != null) {
+      await _commercialReady;
+      await _commercial.setProjectTotalCost(
+        project.id,
+        project.contractValueAED!,
+      );
+    }
+    final audited = _withAudit(project.withoutCommercials());
     state = [
       for (final p in state)
-        if (p.id == project.id) project else p,
+        if (p.id == project.id) audited else p,
     ];
     await _persist();
-    await _syncProject(project, kind: 'project.update');
+    await _syncProject(audited, kind: 'project.update');
+    return true;
+  }
+
+  /// Saves the project-specific physical/technical progress stages.
+  ///
+  /// This is reporting metadata only. It never changes lifecycle status,
+  /// readiness, approvals, stock or procurement transactions.
+  Future<bool> updateProgressStages(
+    String projectId,
+    List<ProjectProgressStage> stages,
+  ) async {
+    final project = byId(projectId);
+    if (project == null || stages.isEmpty) return false;
+    final ids = <String>{};
+    for (final stage in stages) {
+      if (stage.id.trim().isEmpty ||
+          stage.label.trim().isEmpty ||
+          !ids.add(stage.id) ||
+          !stage.weightPercent.isFinite ||
+          stage.weightPercent <= 0 ||
+          !stage.progressPercent.isFinite ||
+          stage.progressPercent < 0 ||
+          stage.progressPercent > 100) {
+        return false;
+      }
+    }
+    if ((stages.totalWeight - 100).abs() > 0.01) return false;
+
+    final actor = _ref.read(currentUserProvider);
+    if (actor?.role == UserRole.procurement) return false;
+    if (actor?.role == UserRole.engineer &&
+        !_sameProgressDefinitions(project.effectiveProgressStages, stages)) {
+      return false;
+    }
+    final now = DateTime.now().toUtc();
+    final previous = {
+      for (final stage in project.effectiveProgressStages) stage.id: stage,
+    };
+    final auditedStages = [
+      for (final stage in stages)
+        if (_sameProgressStage(previous[stage.id], stage))
+          stage
+        else
+          stage.copyWith(updatedAt: now, updatedByUserId: actor?.id),
+    ];
+    final updated = _withAudit(project.copyWith(progressStages: auditedStages));
+    state = [
+      for (final row in state)
+        if (row.id == projectId) updated else row,
+    ];
+    await _persist();
+    await _syncProject(updated, kind: 'project.progress.update');
+    return true;
   }
 
   /// Admin deletes a project (FR-317). REFUSED (returns false) while it still
@@ -102,7 +240,12 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     final p = byId(projectId);
     if (p == null) return false;
     if (openRequestCountFor(p) > 0) return false;
-    final tombstone = p.copyWith(deleted: true, lastUpdated: DateTime.now());
+    final tombstone = _withAudit(
+      p.copyWith(
+        deleted: true,
+        lifecycleStatus: ProjectLifecycleStatus.archived,
+      ),
+    );
     state = state.where((x) => x.id != projectId).toList();
     await _persist();
     await _syncProject(tombstone, kind: 'project.delete');
@@ -151,15 +294,17 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
     state = [
       for (final p in state)
         if (p.id == projectId)
-          updated = p.copyWith(
-            awaitingApproval: false,
-            openRequestCount: 0,
-            lastUpdated: DateTime.now(),
-            phase: const ProjectPhase(
-              number: 3,
-              name: 'Completed',
-              nameSecondary: 'مکمل',
-              state: ProjectState.completed,
+          updated = _withAudit(
+            p.copyWith(
+              awaitingApproval: false,
+              openRequestCount: 0,
+              lifecycleStatus: ProjectLifecycleStatus.archived,
+              phase: const ProjectPhase(
+                number: 3,
+                name: 'Completed',
+                nameSecondary: 'مکمل',
+                state: ProjectState.completed,
+              ),
             ),
           )
         else
@@ -179,11 +324,12 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   }) async {
     final p = byId(projectId);
     if (p == null || p.acceptedByProcurement) return null;
-    final updated = p.copyWith(
-      acceptedByProcurement: true,
-      acceptedAt: DateTime.now(),
-      acceptedBy: acceptedBy,
-      lastUpdated: DateTime.now(),
+    final updated = _withAudit(
+      p.copyWith(
+        acceptedByProcurement: true,
+        acceptedAt: DateTime.now(),
+        acceptedBy: acceptedBy,
+      ),
     );
     state = [
       for (final x in state)
@@ -197,18 +343,22 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   /// Activate a project after its Phase 1 plan is approved
   /// (Planning → Active, clears the approval flag).
   Future<void> activateFromPlanApproval(String projectId) async {
+    final plan = _ref.read(planForProjectProvider(projectId));
+    if (plan?.status != MaterialPlanStatus.approved) return;
     Project? updated;
     state = [
       for (final p in state)
         if (p.id == projectId)
-          updated = p.copyWith(
-            awaitingApproval: false,
-            lastUpdated: DateTime.now(),
-            phase: const ProjectPhase(
-              number: 2,
-              name: 'Active',
-              nameSecondary: 'فعال',
-              state: ProjectState.active,
+          updated = _withAudit(
+            p.copyWith(
+              awaitingApproval: false,
+              lifecycleStatus: ProjectLifecycleStatus.active,
+              phase: const ProjectPhase(
+                number: 2,
+                name: 'Active',
+                nameSecondary: 'فعال',
+                state: ProjectState.active,
+              ),
             ),
           )
         else
@@ -219,18 +369,69 @@ class ProjectsNotifier extends StateNotifier<List<Project>> {
   }
 }
 
-/// Projects visible to the signed-in user. Engineers see only the jobs assigned
-/// to them (plus any not yet assigned to anyone); procurement and admin see the
-/// full job register. Mirrors how the paper "Running Jobs" sheet works — one
-/// engineer per job, management sees all.
+bool _sameProgressStage(
+  ProjectProgressStage? previous,
+  ProjectProgressStage next,
+) =>
+    previous != null &&
+    previous.label == next.label &&
+    previous.weightPercent == next.weightPercent &&
+    previous.progressPercent == next.progressPercent;
+
+bool _sameProgressDefinitions(
+  List<ProjectProgressStage> previous,
+  List<ProjectProgressStage> next,
+) {
+  if (previous.length != next.length) return false;
+  for (var index = 0; index < previous.length; index++) {
+    final before = previous[index];
+    final after = next[index];
+    if (before.id != after.id ||
+        before.label != after.label ||
+        before.weightPercent != after.weightPercent) {
+      return false;
+    }
+  }
+  return true;
+}
+
+String? _normalizeYorksReference(String? value) {
+  final normalized = value?.trim().toUpperCase();
+  return normalized == null || normalized.isEmpty ? null : normalized;
+}
+
+/// Projects visible to the signed-in user. Engineers see jobs assigned through
+/// either the V7 design-engineer list or the legacy single-engineer field, plus
+/// unassigned jobs. Procurement and admin see the full register.
 final visibleProjectsProvider = Provider<List<Project>>((ref) {
   final projects = ref.watch(projectsProvider);
   final role = ref.watch(currentRoleProvider);
-  if (role.usesAdminPanel) return projects; // procurement + admin → whole register
+  if (role.usesAdminPanel) {
+    return projects; // procurement + admin → whole register
+  }
   final uid = ref.watch(currentUserProvider)?.id;
-  return projects
-      .where((p) => p.assignedEngineerId == null || p.assignedEngineerId == uid)
-      .toList();
+  return projects.where((project) {
+    final isUnassigned =
+        project.assignedEngineerId == null &&
+        project.designEngineerUserIds.isEmpty;
+    return isUnassigned ||
+        project.assignedEngineerId == uid ||
+        project.designEngineerUserIds.contains(uid);
+  }).toList();
+});
+
+/// Project rows enriched only in memory for sessions permitted to see
+/// commercially protected contract totals.
+final projectsWithCommercialsProvider = Provider<List<Project>>((ref) {
+  final projects = ref.watch(projectsProvider);
+  final commercials = ref.watch(commercialRecordsProvider);
+  return [
+    for (final project in projects)
+      switch (commercials['project:${project.id}']?.totalCostAED) {
+        final value? => project.withCommercialTotal(value),
+        null => project,
+      },
+  ];
 });
 
 /// Whether a given project can currently be closed out (drives the UI control).
@@ -249,7 +450,10 @@ final canCompleteProjectProvider = Provider.family<bool, String>((
 /// [visibleProjectsProvider]) since acceptance is a procurement/admin action
 /// regardless of which engineer a job is assigned to.
 final projectsAwaitingAcceptanceProvider = Provider<List<Project>>((ref) {
-  return ref.watch(projectsProvider).where((p) => !p.acceptedByProcurement).toList();
+  return ref
+      .watch(projectsProvider)
+      .where((p) => !p.acceptedByProcurement)
+      .toList();
 });
 
 final projectsAwaitingAcceptanceCountProvider = Provider<int>((ref) {
@@ -356,17 +560,19 @@ const _kDraftItemsKey = 'new_request_draft_items_v1';
 final draftLineItemsProvider =
     StateNotifierProvider<DraftLineItemsNotifier, List<RequestLineItem>>(
       (ref) => DraftLineItemsNotifier(
-        ref.watch(storageProvider).collection<RequestLineItem>(
-          _kDraftItemsKey,
-          toJson: (i) => i.toJson(),
-          fromJson: RequestLineItem.fromJson,
-        ),
+        ref
+            .watch(storageProvider)
+            .collection<RequestLineItem>(
+              _kDraftItemsKey,
+              toJson: (i) => i.toJson(),
+              fromJson: RequestLineItem.fromJson,
+            ),
       ),
     );
 
 class DraftLineItemsNotifier extends StateNotifier<List<RequestLineItem>> {
   DraftLineItemsNotifier(this._store)
-      : super(_store.isSeeded ? _store.readAll() : []);
+    : super(_store.isSeeded ? _store.readAll() : []);
 
   final CollectionStore<RequestLineItem> _store;
 
@@ -509,7 +715,10 @@ final activeProjectCountProvider = Provider<int>((ref) {
 
 /// Count of projects requiring engineer attention (approvals).
 final actionsNeededCountProvider = Provider<int>((ref) {
-  return ref.watch(visibleProjectsProvider).where((p) => p.awaitingApproval).length;
+  return ref
+      .watch(visibleProjectsProvider)
+      .where((p) => p.awaitingApproval)
+      .length;
 });
 
 // ─── Mock Data ──────────────────────────────────────────────────

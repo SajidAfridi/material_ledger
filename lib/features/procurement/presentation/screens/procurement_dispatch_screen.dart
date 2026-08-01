@@ -12,6 +12,7 @@ import '../../../../shared/models/app_notification.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/material_item.dart';
+import '../../../../shared/models/material_master.dart';
 import '../../../../shared/models/material_request.dart';
 import '../../../../shared/models/project.dart';
 import '../../../../shared/models/user_role.dart';
@@ -20,7 +21,9 @@ import '../../../../shared/providers/goods_receipt_provider.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/providers/material_master_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/sync/sync_indicators.dart';
 import '../../../../shared/widgets/request_comments_section.dart';
@@ -78,7 +81,8 @@ class _ProcurementDispatchScreenState
         qtys.add(0); // blocked — short / un-stocked, can't dispatch
         continue;
       }
-      final entered = double.tryParse(
+      final entered =
+          double.tryParse(
             _controllerFor(line, line.qtyOutstanding).text.trim(),
           ) ??
           0;
@@ -104,10 +108,14 @@ class _ProcurementDispatchScreenState
     AppFeedback.confirm();
     await ref.read(materialRequestsProvider.notifier).dispatch(req.id, qtys);
     final lang = ref.read(languageProvider);
-    await ref.read(notificationsProvider.notifier).add(
+    await ref
+        .read(notificationsProvider.notifier)
+        .add(
           type: NotificationType.request,
           title: AppStrings.notifRequestDispatchedTitle.primary,
-          titleSecondary: AppStrings.notifRequestDispatchedTitle.secondary(lang),
+          titleSecondary: AppStrings.notifRequestDispatchedTitle.secondary(
+            lang,
+          ),
           body: '${req.projectName} · $count line(s).',
           refId: req.id,
           route: RoutePaths.requestDetailPath(req.id),
@@ -121,7 +129,11 @@ class _ProcurementDispatchScreenState
     );
     if (!mounted) return;
     setState(() => _busy = false);
-    showSyncSnack(context, ref, savedLabel: AppStrings.requestDispatched.primary);
+    showSyncSnack(
+      context,
+      ref,
+      savedLabel: AppStrings.requestDispatched.primary,
+    );
     context.pop();
   }
 
@@ -142,10 +154,12 @@ class _ProcurementDispatchScreenState
               .clamp(0, double.infinity)
               .toDouble();
     final qtyController = TextEditingController(text: _fmt(shortfall));
+    final canViewCommercials = ref.read(canViewCommercialsProvider);
+    final existingCost = !canViewCommercials || existing == null
+        ? 0.0
+        : ref.read(materialUnitCostProvider(existing.id));
     final costController = TextEditingController(
-      text: (existing != null && existing.unitPrice > 0)
-          ? _fmt(existing.unitPrice)
-          : '',
+      text: existingCost > 0 ? _fmt(existingCost) : '',
     );
     final result = await showDialog<bool>(
       context: context,
@@ -170,16 +184,23 @@ class _ProcurementDispatchScreenState
             const Gap(AppSpacing.lg),
             LedgerTextField(
               controller: qtyController,
-              label: '${AppStrings.quantityToStock.primary} (${line.unitSymbol})',
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              label:
+                  '${AppStrings.quantityToStock.primary} (${line.unitSymbol})',
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
-            const Gap(AppSpacing.md),
-            LedgerTextField(
-              controller: costController,
-              label: '${AppStrings.unitCost.primary} (AED)',
-              hintText: AppStrings.optional.primary,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
+            if (canViewCommercials) ...[
+              const Gap(AppSpacing.md),
+              LedgerTextField(
+                controller: costController,
+                label: '${AppStrings.unitCost.primary} (AED)',
+                hintText: AppStrings.optional.primary,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -195,7 +216,9 @@ class _ProcurementDispatchScreenState
       ),
     );
     final qty = double.tryParse(qtyController.text.trim()) ?? 0;
-    final cost = double.tryParse(costController.text.trim()) ?? 0;
+    final cost = canViewCommercials
+        ? double.tryParse(costController.text.trim())
+        : null;
     qtyController.dispose();
     costController.dispose();
     if (result != true || !mounted) return;
@@ -215,7 +238,9 @@ class _ProcurementDispatchScreenState
     if (existing != null) {
       // Real item, just short — top up its stock with a goods receipt. The line
       // already points at it, so no create/relink needed.
-      await ref.read(goodsReceiptsProvider.notifier).recordReceipt(
+      await ref
+          .read(goodsReceiptsProvider.notifier)
+          .recordReceipt(
             materialId: existing.id,
             materialName: existing.name,
             quantity: qty,
@@ -226,15 +251,31 @@ class _ProcurementDispatchScreenState
           );
     } else {
       // Custom / never stocked — create the material, stock it, then re-link.
-      final newId = await ref.read(materialsProvider.notifier).addMaterial(
+      var unitMasterId = unitMasterIdForLegacySymbol(line.unitSymbol);
+      final knownUnit = ref
+          .read(materialUnitsProvider)
+          .where((value) => value.id == unitMasterId)
+          .firstOrNull;
+      if (knownUnit == null) {
+        unitMasterId = await ref
+            .read(materialUnitsProvider.notifier)
+            .add(name: line.unitSymbol, symbol: line.unitSymbol);
+      }
+      final newId = await ref
+          .read(materialsProvider.notifier)
+          .addMaterial(
             name: line.materialName,
             urduName: line.materialNameSecondary,
             category: MaterialCategory.other,
             unit: MaterialUnit.fromSymbol(line.unitSymbol),
+            categoryMasterId: 'cat-general-custom',
+            unitMasterId: unitMasterId,
             quantity: 0,
-            unitPrice: cost,
+            unitPrice: cost ?? 0,
           );
-      await ref.read(goodsReceiptsProvider.notifier).recordReceipt(
+      await ref
+          .read(goodsReceiptsProvider.notifier)
+          .recordReceipt(
             materialId: newId,
             materialName: line.materialName,
             quantity: qty,
@@ -243,7 +284,9 @@ class _ProcurementDispatchScreenState
             supplier: AppStrings.customItem.primary,
             receivedBy: ref.read(actorNameProvider),
           );
-      await ref.read(materialRequestsProvider.notifier).relinkLine(
+      await ref
+          .read(materialRequestsProvider.notifier)
+          .relinkLine(
             req.id,
             line.materialId,
             newMaterialId: newId,
@@ -270,7 +313,10 @@ class _ProcurementDispatchScreenState
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
         ),
-        title: Text(AppStrings.putOnHold.primary, style: AppTypography.titleMedium),
+        title: Text(
+          AppStrings.putOnHold.primary,
+          style: AppTypography.titleMedium,
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -294,7 +340,9 @@ class _ProcurementDispatchScreenState
     // Alert the engineer so they can discuss / edit the request (e.g. when stock
     // is short), deep-linked to the request detail.
     final lang = ref.read(languageProvider);
-    await ref.read(notificationsProvider.notifier).add(
+    await ref
+        .read(notificationsProvider.notifier)
+        .add(
           type: NotificationType.request,
           title: AppStrings.notifRequestHeldTitle.primary,
           titleSecondary: AppStrings.notifRequestHeldTitle.secondary(lang),
@@ -313,9 +361,9 @@ class _ProcurementDispatchScreenState
     );
     if (!mounted) return;
     AppFeedback.confirm();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.requestOnHold.primary)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(AppStrings.requestOnHold.primary)));
     context.pop();
   }
 
@@ -671,7 +719,9 @@ class _DispatchLine extends StatelessWidget {
                         horizontal: AppSpacing.sm,
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusSm,
+                        ),
                         borderSide: BorderSide.none,
                       ),
                     ),

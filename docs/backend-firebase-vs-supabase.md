@@ -1,5 +1,10 @@
 # Backend decision — Firebase vs Supabase (Yorks GodownPro)
 
+> **Superseded decision record.** Do not use this memo to choose or implement
+> the Nexus V7 backend. The approved decision is Supabase Auth/Postgres, recorded
+> in [`nexus-v7/ADR-001-SUPABASE-POSTGRES-SOURCE-OF-TRUTH.md`](nexus-v7/ADR-001-SUPABASE-POSTGRES-SOURCE-OF-TRUTH.md).
+> Firebase remains only the push-notification transport through FCM.
+
 _Internal ops app for Yorks Air Conditioning & Refrigeration LLC (Abu Dhabi). Flutter +
 Riverpod, offline-first with a custom sync seam already built. Audience: ~tens of staff
 (engineers / procurement / admin). Holds HR (salaries, leave), financial (rentals, costs),

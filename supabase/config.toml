@@ -1,0 +1,56 @@
+project_id = "material_ledger"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Supabase CLI's current default. Before linking or deploying, confirm this
+# matches the target with `show server_version;`.
+major_version = 15
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "http://localhost:3000",
+  "http://127.0.0.1:8080",
+  "http://localhost:8080",
+]
+jwt_expiry = 3600
+enable_signup = false
+enable_anonymous_sign_ins = false
+
+[auth.email]
+# Enables local email/password sign-in for the deterministic seed personas.
+# Global [auth].enable_signup remains false, so public account creation stays
+# disabled even in the local stack.
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[functions.admin-users]
+verify_jwt = true
+
+[functions.send-push]
+verify_jwt = true

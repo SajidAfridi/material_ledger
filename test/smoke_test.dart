@@ -14,6 +14,7 @@ import 'package:material_ledger/shared/providers/project_provider.dart';
 import 'package:material_ledger/shared/providers/rentals_provider.dart';
 import 'package:material_ledger/shared/providers/role_permissions_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
+import 'package:material_ledger/shared/providers/users_provider.dart';
 import 'package:material_ledger/shared/services/observability_service.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:material_ledger/shared/sync/outbox.dart';
@@ -35,12 +36,15 @@ import 'package:material_ledger/features/leave/presentation/screens/leave_reques
 import 'package:material_ledger/features/people/presentation/screens/people_dashboard_screen.dart';
 import 'package:material_ledger/features/procurement/presentation/screens/procurement_workspace_screen.dart';
 
+const _testLocalPassword = 'test-only-local-password';
+
 Future<ProviderContainer> _container({String? email}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   final c = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
+      localDemoPasswordProvider.overrideWithValue(_testLocalPassword),
       observabilityProvider.overrideWithValue(const NoopObservability()),
       // Construct the sync engine WITHOUT start() so no periodic timer leaks
       // into the widget test when a screen triggers a write (enqueueSync).
@@ -57,16 +61,25 @@ Future<ProviderContainer> _container({String? email}) async {
   );
   addTearDown(c.dispose);
   if (email != null) {
-    await c.read(authControllerProvider).signIn(email: email, password: 'test@123');
+    await c
+        .read(authControllerProvider)
+        .signIn(email: email, password: _testLocalPassword);
   }
   return c;
 }
 
-Future<void> _pump(WidgetTester tester, ProviderContainer c, Widget screen) async {
+Future<void> _pump(
+  WidgetTester tester,
+  ProviderContainer c,
+  Widget screen,
+) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: c,
-      child: MaterialApp(theme: AppTheme.light, home: Scaffold(body: screen)),
+      child: MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: screen),
+      ),
     ),
   );
   await tester.pump(const Duration(milliseconds: 50));
@@ -139,7 +152,9 @@ void main() {
   group('Procurement — project acceptance', () {
     testWidgets('accepting a new project removes it from the queue', (t) async {
       final c = await _container(email: _proc);
-      c.read(projectsProvider.notifier).addProject(
+      c
+          .read(projectsProvider.notifier)
+          .addProject(
             const Project(
               id: 'proj-smoke-accept',
               name: 'Smoke Test Tower',
@@ -150,7 +165,9 @@ void main() {
 
       expect(find.text('Smoke Test Tower'), findsOneWidget);
       expect(
-        c.read(projectsProvider.notifier).byId('proj-smoke-accept')!
+        c
+            .read(projectsProvider.notifier)
+            .byId('proj-smoke-accept')!
             .acceptedByProcurement,
         false,
       );
@@ -159,14 +176,18 @@ void main() {
       await t.pumpAndSettle();
       // Confirm dialog — its own button carries the same "Accept project" label
       // as the trailing card button, so target it via the dialog role.
-      await t.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('Accept project'),
-      ));
+      await t.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Accept project'),
+        ),
+      );
       await t.pump(const Duration(milliseconds: 300));
 
       expect(
-        c.read(projectsProvider.notifier).byId('proj-smoke-accept')!
+        c
+            .read(projectsProvider.notifier)
+            .byId('proj-smoke-accept')!
             .acceptedByProcurement,
         true,
       );
@@ -179,7 +200,9 @@ void main() {
       final c = await _container(email: _owner);
       // No rental units are pre-seeded — create a fresh occupied unit fixture,
       // which naturally has an outstanding balance this month (due 4500, paid 0).
-      final unit = await c.read(rentalUnitsProvider.notifier).addUnit(
+      final unit = await c
+          .read(rentalUnitsProvider.notifier)
+          .addUnit(
             unitName: 'TEST-UNIT',
             type: RentalType.shop,
             location: 'Test',
@@ -211,12 +234,16 @@ void main() {
   });
 
   group('Critical flow — wiring', () {
-    testWidgets('tapping an Access & Roles cell grants the capability', (t) async {
+    testWidgets('tapping an Access & Roles cell grants the capability', (
+      t,
+    ) async {
       final c = await _container(email: _owner);
       await _pump(t, c, const AccessRolesScreen());
       int engineerCaps() => RoleCapability.values
-          .where((cap) =>
-              c.read(rolePermissionsProvider).has(UserRole.engineer, cap))
+          .where(
+            (cap) =>
+                c.read(rolePermissionsProvider).has(UserRole.engineer, cap),
+          )
           .length;
       final before = engineerCaps();
       // An unchecked (off) editable cell — tapping it should grant that cap.

@@ -1,11 +1,14 @@
 rules_version = '2';
 
+// LEGACY / NOT DEPLOYMENT AUTHORITY.
+// Nexus V7 uses Supabase Auth, Postgres and RLS. Firebase is retained only for
+// FCM transport. See docs/nexus-v7/README.md and ADR-001.
+//
 // Yorks GodownPro — Firestore Security Rules (Rev 1.3)
 //
 // Authoritative, server-side enforcement of the role × collection × operation
-// matrix. The Flutter app also enforces these via role guards and capability
-// helpers (lib/shared/models/user_role.dart), but THESE rules are the source of
-// truth — the in-app checks are convenience, not security.
+// matrix for the retired Firestore design. These rules are retained as history
+// and must not be deployed for Nexus V7.
 //
 // Roles are delivered as a custom auth claim (`request.auth.token.role`) set by
 // an admin-only provisioning process (Cloud Function / Admin SDK). There is NO

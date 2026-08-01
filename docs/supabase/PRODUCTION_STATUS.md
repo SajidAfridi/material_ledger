@@ -8,19 +8,25 @@ Data residency is NOT yet UAE — see "Remaining" below._
 ### 1. Real authentication (Supabase Auth)
 Three admin-provisioned accounts exist in **Supabase Auth** (email + password,
 email confirmed). There is **no self-signup** — the app has no signup UI, and
-these were created server-side.
+these were created server-side. Passwords are intentionally excluded from this
+repository. Retrieve or rotate credentials through the approved secure channel.
 
-| Email | Password | Role | `app_user_id` |
-|-------|----------|------|---------------|
-| owner@gmail.com | test@123 | admin | usr-admin |
-| alasad@gmail.com | test@123 | procurement | usr-proc |
-| imrankhan@gmail.com | test@123 | engineer | usr-eng |
+| Email | Role | `app_user_id` |
+|-------|------|---------------|
+| owner@gmail.com | admin | usr-admin |
+| engineer@gmail.com | engineer | usr-842c4097 |
+| procurement@gmail.com | procurement | usr-a5a3776a |
 
 Each user's `raw_app_meta_data` carries `role`, `caps[]`, and `app_user_id`.
 Supabase embeds `app_metadata` into every JWT automatically, so **no custom
-access-token hook is required**. Verified by a live password-grant call — the
-engineer token returns
-`app_metadata = {app_user_id: usr-eng, caps: [], role: engineer}`.
+access-token hook is required**.
+
+> Current-claim note (24 July 2026): Admin corrected the existing
+> `procurement@gmail.com` identity from Engineer to Procurement. Its stable
+> `app_user_id` remains `usr-a5a3776a`; the canonical Procurement capability
+> set includes `viewCommercials` and `goods`. The user must sign in again (or
+> otherwise refresh the Auth session) before persona testing so the client JWT
+> contains the updated claims.
 
 ### 2. Strict, claim-based RLS (replaced the permissive demo policies)
 Helper functions read the JWT: `app_role()`, `app_user_id()`, `app_has_cap()`
@@ -40,6 +46,46 @@ the app never reads/writes them over the API (local-only by design). The
 `materials`, `notifications`, `projects`, and `materialPlans` are now
 write-synced too (this section undersold that when first written — see
 "Projects + material plans sync" below for the two most recently added).
+
+### 2A. Protected commercial values — live
+
+Batch 2 moved material unit cost, goods-receipt cost and project contract value
+out of shared operational JSON into `commercial_records`. RLS requires
+`viewCommercials` to read and additionally Admin/`goods` to write. Recursive
+database triggers strip commercial keys from all Materials/Projects planning
+and request payloads even if a client bypasses the Flutter serializers.
+
+The live migration moved 56 material costs, left zero commercial keys in the
+five guarded operational tables and passed the positive/negative RLS matrix in
+rolled-back transactions. `admin-users` active version 2 emits
+`viewCommercials`; the legacy `cost` claim is accepted during migration.
+Implementation, verification and rollback details are in
+`docs/nexus-v7/PR-02_SECURE_COMMERCIAL_DATA.md`.
+
+### 2B. Material category and unit masters — live
+
+Batch 6 added `materialCategories` and `materialUnits` as synced JSONB
+collections with explicit PostgREST grants, realtime identity and RLS.
+Provisioned app users may read the masters. Category writes are Admin-only.
+Admin may create/approve/archive units; Procurement may create or replay only a
+custom `pendingReview` unit and cannot approve it.
+
+The live migration and follow-up single-policy optimization are:
+
+- `20260724090000_batch6_material_masters`
+- `20260724091000_batch6_combine_unit_update_policy`
+- `20260724092000_batch6_seed_master_defaults`
+
+Live simulated-JWT checks verified Admin creation, Engineer read plus denied
+write, Procurement pending-unit creation/replay plus denied self-approval, and
+cleanup of all test rows. The security advisor reported no new Batch 6 issue;
+the performance advisor reports the two new GIN indexes as unused immediately
+after creation, which is expected until production queries accrue. Full details
+are in `docs/nexus-v7/PR-06_DYNAMIC_MASTERS_BROWSE.md`.
+
+The insert-only defaults migration left the live project with 8 categories and
+18 units: 8 approved Yorks defaults plus 10 distinct pending legacy units.
+Commercial-key scan result: zero rows.
 
 ### 3. Boundary verification (headless, via simulated + real JWTs)
 | persona | requests | rentals | employees | leave | receipts |
@@ -77,9 +123,9 @@ Writes: engineer can write their own request; **denied** when forging another's
   right `app_metadata` → the same claims RLS was proven against.
 
 Still worth an eyeball when convenient (not yet watched live, to avoid disrupting
-the active owner session): sign in as **imrankhan@gmail.com / test@123** and
-confirm the engineer sees only their own requests; **alasad@gmail.com** sees
-rentals + people + leave.
+the active owner session): use securely supplied credentials to sign in as the
+engineer and confirm they see only their own requests; the procurement account
+should see rentals + people + leave.
 
 ## EMERGENCY ROLLBACK (restore the permissive demo, if needed)
 ```sql
@@ -186,6 +232,19 @@ these, so they're now on the same footing as every other collection:
 - **One-time consequence, not a bug**: since projects/plans had no persistence
   before this, anything created purely in-session prior to this deploy was
   never actually saved anywhere and won't appear after the first restart.
+
+## Batch 8 normalized Phase 1 workflow — LIVE
+
+The generic `materialPlans` outbox remains backward compatible, but every
+accepted snapshot is now transition-validated and projected into normalized
+plan, immutable version, line, comment and activity tables. Reads use explicit
+grants plus project-scoped RLS. Phase 1 payloads containing stock allocation or
+reservation fields are rejected.
+
+Engineer, Procurement and Admin transition rules were verified with simulated
+JWT claims. Final Engineering approval activates the linked project inside the
+same transaction; direct project activation without an approved Phase 1 plan is
+rejected. Both Batch 8 migrations are recorded in Supabase migration history.
 
 ## Push notifications — plumbing DONE, needs your credentials to activate
 FCM as pure push TRANSPORT (Supabase stays the backend/auth/db). Structured as

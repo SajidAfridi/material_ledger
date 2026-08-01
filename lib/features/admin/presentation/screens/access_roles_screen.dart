@@ -28,28 +28,61 @@ class AccessRolesScreen extends ConsumerWidget {
   // Each row pairs a short label with a plain-language description so a
   // non-technical admin can tell read from write without guessing.
   static final _rows = <_MatrixRow>[
-    const _MatrixRow('See cost prices',
-        desc: 'View unit costs & stock value', cap: RoleCapability.cost),
-    const _MatrixRow('See salaries',
-        desc: 'View pay & HR documents', cap: RoleCapability.salary),
-    _MatrixRow('Materials', desc: 'Always on for office roles',
-        structural: _materials),
-    const _MatrixRow('Rentals',
-        desc: 'Open the Rentals module', cap: RoleCapability.rentals),
-    const _MatrixRow('Write rentals',
-        desc: 'Add units & record payments', cap: RoleCapability.writeRentals),
-    const _MatrixRow('People / HR',
-        desc: 'Open the People module', cap: RoleCapability.people),
-    const _MatrixRow('Write people',
-        desc: 'Add & edit employee records', cap: RoleCapability.writePeople),
-    const _MatrixRow('Goods receipt',
-        desc: 'Receive stock into the store', cap: RoleCapability.goods),
-    const _MatrixRow('Approve leave',
-        desc: 'Approve or reject leave', cap: RoleCapability.approveLeave),
-    const _MatrixRow('Finance / costs',
-        desc: 'Open project cost reports', cap: RoleCapability.finance),
-    _MatrixRow('Admin (More)', desc: 'Superuser — always on',
-        structural: _adminMore),
+    const _MatrixRow(
+      'View commercials',
+      desc: 'View unit costs, totals & stock value',
+      cap: RoleCapability.viewCommercials,
+    ),
+    const _MatrixRow(
+      'See salaries',
+      desc: 'View pay & HR documents',
+      cap: RoleCapability.salary,
+    ),
+    _MatrixRow(
+      'Materials',
+      desc: 'Always on for office roles',
+      structural: _materials,
+    ),
+    const _MatrixRow(
+      'Rentals',
+      desc: 'Open the Rentals module',
+      cap: RoleCapability.rentals,
+    ),
+    const _MatrixRow(
+      'Write rentals',
+      desc: 'Add units & record payments',
+      cap: RoleCapability.writeRentals,
+    ),
+    const _MatrixRow(
+      'People / HR',
+      desc: 'Open the People module',
+      cap: RoleCapability.people,
+    ),
+    const _MatrixRow(
+      'Write people',
+      desc: 'Add & edit employee records',
+      cap: RoleCapability.writePeople,
+    ),
+    const _MatrixRow(
+      'Goods receipt',
+      desc: 'Receive stock into the store',
+      cap: RoleCapability.goods,
+    ),
+    const _MatrixRow(
+      'Approve leave',
+      desc: 'Approve or reject leave',
+      cap: RoleCapability.approveLeave,
+    ),
+    const _MatrixRow(
+      'Finance / costs',
+      desc: 'Open project cost reports',
+      cap: RoleCapability.finance,
+    ),
+    _MatrixRow(
+      'Admin (More)',
+      desc: 'Superuser — always on',
+      structural: _adminMore,
+    ),
   ];
 
   @override
@@ -151,10 +184,12 @@ class AccessRolesScreen extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(row.label,
-                                    style: AppTypography.bodySmall.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    )),
+                                Text(
+                                  row.label,
+                                  style: AppTypography.bodySmall.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                                 Text(
                                   row.desc,
                                   style: AppTypography.labelSmall.copyWith(
@@ -168,8 +203,14 @@ class AccessRolesScreen extends ConsumerWidget {
                             Expanded(
                               flex: 2,
                               child: Center(
-                                child: _cell(context, ref, perms, r, row,
-                                    roleCount(r)),
+                                child: _cell(
+                                  context,
+                                  ref,
+                                  perms,
+                                  r,
+                                  row,
+                                  roleCount(r),
+                                ),
                               ),
                             ),
                         ],
@@ -276,8 +317,10 @@ class AccessRolesScreen extends ConsumerWidget {
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Revoke',
-                  style: TextStyle(color: AppColors.error)),
+              child: const Text(
+                'Revoke',
+                style: TextStyle(color: AppColors.error),
+              ),
             ),
           ],
         ),
@@ -295,7 +338,8 @@ class AccessRolesScreen extends ConsumerWidget {
       action: 'Role permission changed',
       module: AuditModule.platform,
       refId: role.name,
-      detail: '${role.label} · ${cap.name} → ${granting ? 'granted' : 'revoked'}',
+      detail:
+          '${role.label} · ${cap.name} → ${granting ? 'granted' : 'revoked'}',
     );
     if (!context.mounted) return;
     if (failures > 0) {
@@ -339,7 +383,9 @@ class AccessRolesScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
-    final failures = await ref.read(rolePermissionsProvider.notifier).resetAll();
+    final failures = await ref
+        .read(rolePermissionsProvider.notifier)
+        .resetAll();
     await ref.logAudit(
       action: 'Role permissions reset to defaults',
       module: AuditModule.platform,

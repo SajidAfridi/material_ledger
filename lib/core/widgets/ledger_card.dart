@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/constants.dart';
 
-/// A card following "The Architectural Ledger" design spec.
-///
-/// Uses [surfaceContainerLowest] background on a [surfaceContainerLow]
-/// parent to create soft, natural lift. No borders, no shadows.
+/// Shared V7 bordered work surface.
 class LedgerCard extends StatelessWidget {
   const LedgerCard({
     super.key,
@@ -33,6 +30,14 @@ class LedgerCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.surfaceContainerLowest,
         borderRadius: radius,
+        border: Border.all(color: AppColors.line),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: AppSpacing.ambientBlur,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
         padding: padding ?? const EdgeInsets.all(AppSpacing.cardPadding),

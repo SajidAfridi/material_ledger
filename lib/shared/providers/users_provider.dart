@@ -6,95 +6,40 @@ import '../models/app_user.dart';
 import '../models/effective_permissions.dart';
 import '../models/role_permissions.dart';
 import '../models/user_role.dart';
+import '../models/yorks_v1_role.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/storage.dart';
 import '../services/password_hasher.dart';
 import 'language_provider.dart';
 import 'role_permissions_provider.dart';
+import 'yorks_v1_feature_flags_provider.dart';
 
 // Bumped to v3 to re-seed the simplified one-account-per-role set (owner /
-// alasad / imrankhan, password test@123) over any previously-seeded users.
+// alasad / imrankhan) over any previously-seeded users.
 const _kUsersKey = 'app_users_v3';
 const _uuid = Uuid();
+const _seedUserIds = {'usr-admin', 'usr-proc', 'usr-eng'};
 
-/// Default password for the seeded demo accounts (internal first-run only).
-/// Real accounts are created by Admin with their own password.
-const kSeedPassword = 'test@123';
+const _configuredLocalDemoPassword = String.fromEnvironment(
+  'LOCAL_DEMO_PASSWORD',
+);
 
-/// All system user accounts. Admin-managed only (no self-signup).
-///
-/// When Supabase is configured, every account operation that must reach the
-/// identity provider (create, change role/claims, reset password, deactivate,
-/// delete) is executed by the `admin-users` Edge Function using the service_role
-/// key — the client never holds that key. The local list is the admin-facing
-/// roster/cache; the JWT is the source of truth for identity, role and caps.
-final usersProvider = StateNotifierProvider<UsersNotifier, List<AppUser>>((ref) {
-  return UsersNotifier(
-    ref,
-    ref.watch(storageProvider).collection<AppUser>(
-      _kUsersKey,
-      toJson: (u) => u.toJson(),
-      fromJson: AppUser.fromJson,
-    ),
-  );
-});
+/// Explicit credential gate for non-production local development. Empty by
+/// default, which makes seeded local accounts non-authenticating. Tests override
+/// this provider without placing a reusable credential in application source.
+final localDemoPasswordProvider = Provider<String>(
+  (ref) => _configuredLocalDemoPassword,
+);
 
-class UsersNotifier extends StateNotifier<List<AppUser>> {
-  UsersNotifier(this._ref, this._store) : super([]) {
-    state = _store.isSeeded ? _store.readAll() : _seed();
-    if (!_store.isSeeded) _store.writeAll(state);
-  }
+/// The only client-side gateway to the privileged `admin-users` function.
+/// Widgets work through [UsersNotifier], never this gateway. The provider also
+/// gives focused tests a safe fake without a real backend or service credential.
+typedef AdminUsersInvocation =
+    Future<Map<String, dynamic>?> Function(Map<String, dynamic> body);
 
-  final Ref _ref;
-  final CollectionStore<AppUser> _store;
-
-  SupabaseClient? get _client => _ref.read(supabaseClientProvider);
-
-  /// The capabilities to stamp into a user's JWT claim, so server-side RLS
-  /// matches the app exactly: per-user overrides on top of the LIVE Access &
-  /// Roles matrix (not just the built-in role baseline).
-  List<String> _claimCaps(AppUser user) {
-    final perms = _ref.read(rolePermissionsProvider);
-    return [
-      for (final cap in RoleCapability.values)
-        if (resolveCapability(user, user.role, perms, cap)) cap.name,
-    ];
-  }
-
-  /// Re-stamp JWT caps for every (non-admin) user of [role] after the role
-  /// matrix changed, so server-side RLS immediately tracks the admin's edit
-  /// rather than diverging from the shown access. A no-op (returns 0) when
-  /// Supabase isn't configured (tests / offline).
-  ///
-  /// Returns the number of users whose re-stamp FAILED. One user's failure
-  /// doesn't block the rest, but the count is surfaced to the admin rather than
-  /// swallowed — a partial failure means those users' server-side access lags
-  /// the matrix until they next sign in (which re-issues a fresh claim).
-  Future<int> restampRoleClaims(UserRole role) async {
-    if (_client == null || role == UserRole.admin) return 0;
-    var failures = 0;
-    for (final u in state) {
-      if (u.role != role) continue;
-      try {
-        await _adminFn({
-          'action': 'updateClaims',
-          'appUserId': u.id,
-          'role': u.role.name,
-          'caps': _claimCaps(u),
-        });
-      } catch (_) {
-        failures++;
-      }
-    }
-    return failures;
-  }
-
-  /// Calls the privileged `admin-users` function. A no-op (returns null) when no
-  /// Supabase backend is configured — widget tests and pure-offline dev keep the
-  /// legacy local-only behaviour. Throws on a remote failure so the caller can
-  /// surface it and NOT apply the local change (keeps the two in step).
-  Future<Map<String, dynamic>?> _adminFn(Map<String, dynamic> body) async {
-    final client = _client;
+final adminUsersInvocationProvider = Provider<AdminUsersInvocation>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return (body) async {
     if (client == null) return null;
     try {
       final res = await client.functions.invoke('admin-users', body: body);
@@ -112,6 +57,192 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
           : (e.reasonPhrase ?? 'request failed');
       throw Exception('User service error: $msg');
     }
+  };
+});
+
+/// True only for the connected Yorks V1 provisioning experience. Exact V1
+/// claims stay behind the rollout flag; a flag-off or offline shell keeps its
+/// retained legacy roster flow during migration.
+final yorksV1UserProvisioningEnabledProvider = Provider<bool>((ref) {
+  return ref.watch(yorksV1FeatureFlagsProvider).foundation &&
+      ref.watch(supabaseClientProvider) != null;
+});
+
+/// All system user accounts. Admin-managed only (no self-signup).
+///
+/// When Supabase is configured, every account operation that must reach the
+/// identity provider (create, change role/claims, reset password, deactivate,
+/// delete) is executed by the `admin-users` Edge Function using the service_role
+/// key — the client never holds that key. The local list is the admin-facing
+/// roster/cache; the JWT is the source of truth for identity, role and caps.
+final usersProvider = StateNotifierProvider<UsersNotifier, List<AppUser>>((
+  ref,
+) {
+  return UsersNotifier(
+    ref,
+    ref
+        .watch(storageProvider)
+        .collection<AppUser>(
+          _kUsersKey,
+          toJson: (u) => u.toJson(),
+          fromJson: AppUser.fromJson,
+        ),
+    seedPassword: ref.watch(localDemoPasswordProvider),
+  );
+});
+
+class UsersNotifier extends StateNotifier<List<AppUser>> {
+  UsersNotifier(this._ref, this._store, {required String seedPassword})
+    : super([]) {
+    state = _store.isSeeded ? _store.readAll() : _seed(seedPassword);
+    // A connected app never retains legacy/local password material. Supabase
+    // Auth is authoritative and local fallback is prohibited in this mode.
+    if (_client != null) {
+      state = [
+        for (final user in state)
+          if (user.passwordHash.isNotEmpty || user.passwordSalt.isNotEmpty)
+            user.copyWith(passwordHash: '', passwordSalt: '')
+          else
+            user,
+      ];
+    } else if (seedPassword.isNotEmpty) {
+      // Rotate only the built-in local-development identities to the explicit
+      // current value. This replaces hashes left by older prototype versions
+      // without changing passwords for locally created test users.
+      state = [
+        for (final user in state)
+          if (_seedUserIds.contains(user.id))
+            () {
+              final digest = PasswordHasher.create(seedPassword);
+              return user.copyWith(
+                passwordHash: digest.hash,
+                passwordSalt: digest.salt,
+              );
+            }()
+          else
+            user,
+      ];
+    }
+    if (!_store.isSeeded) _store.writeAll(state);
+    if (_client != null || seedPassword.isNotEmpty) _store.writeAll(state);
+  }
+
+  final Ref _ref;
+  final CollectionStore<AppUser> _store;
+  final Map<String, String> _pendingRestampIdempotencyKeys = {};
+
+  SupabaseClient? get _client => _ref.read(supabaseClientProvider);
+
+  bool get _usesYorksV1IdentityProvisioning =>
+      _ref.read(yorksV1UserProvisioningEnabledProvider);
+
+  /// The retained-shell capabilities to stamp into legacy JWT claims. This
+  /// calculation is deliberately unavailable to the V1 exact-role commands:
+  /// V1 commercial authorization is resolved by protected database rules.
+  List<String> _claimCaps(AppUser user) {
+    final permissions = _ref.read(rolePermissionsProvider);
+    return [
+      for (final capability in RoleCapability.values)
+        if (resolveCapability(user, user.role, permissions, capability))
+          capability.name,
+    ];
+  }
+
+  /// Marks a request as the flag-off compatibility shell, allowing the Edge
+  /// Function to apply its fixed legacy capability allow-list. The server never
+  /// copies these values blindly, and Yorks V1 requests must not use this map.
+  Map<String, dynamic> _legacyShellClaimPayload(AppUser user) => {
+    'legacyShell': true,
+    'caps': _claimCaps(user),
+  };
+
+  /// Refresh every (non-admin) account of [role] after the retained legacy role
+  /// matrix changes. Exact V1 claims receive only server-owned defaults;
+  /// legacy-engineer records use their quarantined compatibility endpoint. A
+  /// no-op (returns 0) when Supabase isn't configured (tests / offline).
+  ///
+  /// Returns the number of users whose re-stamp FAILED. One user's failure
+  /// doesn't block the rest, but the count is surfaced to the admin rather than
+  /// swallowed — a partial failure means those users' server-side access lags
+  /// the matrix until they next sign in (which re-issues a fresh claim).
+  Future<int> restampRoleClaims(UserRole role) async {
+    // V1 commercial permissions are resolved by protected database
+    // capabilities, not legacy JWT `caps`. Do not send a legacy role string to
+    // the exact-role Edge Function while V1 provisioning is active.
+    if (_usesYorksV1IdentityProvisioning ||
+        _client == null ||
+        role == UserRole.admin) {
+      return 0;
+    }
+    var failures = 0;
+    for (final u in state) {
+      if (u.role != role) continue;
+      final legacyClaims = _legacyShellClaimPayload(u);
+      final caps = List<String>.from(legacyClaims['caps'] as List);
+      final commandFingerprint = [
+        _legacyClaimActionFor(u.role),
+        u.id,
+        u.role.name,
+        caps.join(','),
+      ].join('|');
+      final idempotencyKey = _pendingRestampIdempotencyKeys.putIfAbsent(
+        commandFingerprint,
+        () => _uuid.v4(),
+      );
+      try {
+        await _adminFn({
+          'action': _legacyClaimActionFor(u.role),
+          'appUserId': u.id,
+          'role': u.role.name,
+          'idempotencyKey': idempotencyKey,
+          ...legacyClaims,
+        });
+        _pendingRestampIdempotencyKeys.remove(commandFingerprint);
+      } catch (_) {
+        failures++;
+      }
+    }
+    return failures;
+  }
+
+  /// Calls the privileged `admin-users` gateway. A no-op (returns null) when no
+  /// Supabase backend is configured — widget tests and pure-offline dev keep the
+  /// legacy local-only behaviour. Throws on a remote failure so the caller can
+  /// surface it and NOT apply the local change (keeps the two in step).
+  Future<Map<String, dynamic>?> _adminFn(Map<String, dynamic> body) async {
+    // Every Auth-mutating command carries a client-generated idempotency key.
+    // The Edge Function converts this into transient, server-validated audit
+    // context; Postgres atomically deduplicates the trusted audit effect. UI
+    // busy guards prevent duplicate taps, while a caller can provide a stable
+    // key explicitly when it owns an application-level retry.
+    const mutatingActions = {
+      'create',
+      'createLegacy',
+      'updateClaims',
+      'updateLegacyClaims',
+      'setPassword',
+      'setActive',
+    };
+    final action = body['action'];
+    final command = action is String && mutatingActions.contains(action)
+        ? {...body, 'idempotencyKey': body['idempotencyKey'] ?? _uuid.v4()}
+        : body;
+    return _ref.read(adminUsersInvocationProvider)(command);
+  }
+
+  /// The isolated legacy endpoint can only carry the ambiguous historical
+  /// `engineer` role. Procurement and Admin retain their exact role literals
+  /// and therefore use the normal server allow-list even while V1 UI is off.
+  String _legacyCreateActionFor(UserRole role) {
+    return _client != null && role == UserRole.engineer
+        ? 'createLegacy'
+        : 'create';
+  }
+
+  String _legacyClaimActionFor(UserRole role) {
+    return _client != null && role == UserRole.engineer
+        ? 'updateLegacyClaims'
+        : 'updateClaims';
   }
 
   Future<AppUser> createUser({
@@ -119,58 +250,123 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     required String email,
     required UserRole role,
     required String password,
+    String? idempotencyKey,
+    String? appUserId,
   }) async {
-    final id = 'usr-${_uuid.v4().substring(0, 8)}';
+    if (_usesYorksV1IdentityProvisioning) {
+      throw StateError(
+        'Use the exact Yorks V1 role provisioning command while V1 is enabled.',
+      );
+    }
+    final id = appUserId ?? 'usr-${_uuid.v4().substring(0, 8)}';
     final draft = AppUser(
       id: id,
       fullName: fullName,
       email: email,
       role: role,
+      yorksV1RoleCache: _client == null
+          ? null
+          : YorksV1Role.fromServerClaim(role.name),
       createdAt: DateTime.now(),
     );
     // Provision in the identity provider first; a failure (e.g. duplicate email)
     // throws before anything is written locally.
     await _adminFn({
-      'action': 'create',
+      'action': _legacyCreateActionFor(role),
       'email': email,
       'password': password,
       'fullName': fullName,
       'role': role.name,
       'appUserId': id,
-      'caps': _claimCaps(draft),
+      'idempotencyKey': ?idempotencyKey,
+      ..._legacyShellClaimPayload(draft),
     });
-    final pw = PasswordHasher.create(password);
+    final pw = _client == null
+        ? PasswordHasher.create(password)
+        : (hash: '', salt: '');
     final user = draft.copyWith(
       passwordHash: pw.hash,
       passwordSalt: pw.salt,
       // The admin set a temporary password; the user changes it on first login.
       mustChangePassword: true,
     );
-    state = [user, ...state];
+    state = [user, ...state.where((existing) => existing.id != user.id)];
+    await _store.writeAll(state);
+    return user;
+  }
+
+  /// Provisions a connected Yorks V1 identity with one of the only four
+  /// accepted server role claims. The retained [AppUser.role] is written only
+  /// as a downward compatibility-shell projection; it is never used to infer a
+  /// V1 role and legacy `engineer` records are never promoted by this method.
+  Future<AppUser> createYorksV1User({
+    required String fullName,
+    required String email,
+    required YorksV1Role role,
+    required String password,
+    String? idempotencyKey,
+    String? appUserId,
+  }) async {
+    _requireYorksV1IdentityProvisioning();
+
+    final id = appUserId ?? 'usr-${_uuid.v4().substring(0, 8)}';
+    final draft = AppUser(
+      id: id,
+      fullName: fullName,
+      email: email,
+      role: _compatibilityShellRoleForYorksV1(role),
+      yorksV1RoleCache: role,
+      createdAt: DateTime.now(),
+    );
+    // The Edge Function owns the exact role allow-list and all default claim
+    // capabilities. Do not send client-calculated legacy caps with V1 roles.
+    await _adminFn({
+      'action': 'create',
+      'email': email,
+      'password': password,
+      'fullName': fullName,
+      'role': role.claimValue,
+      'appUserId': id,
+      'idempotencyKey': ?idempotencyKey,
+    });
+    final user = draft.copyWith(
+      passwordHash: '',
+      passwordSalt: '',
+      // The admin set a temporary password; the user changes it on first login.
+      mustChangePassword: true,
+    );
+    state = [user, ...state.where((existing) => existing.id != user.id)];
     await _store.writeAll(state);
     return user;
   }
 
   /// Materialise a user from their JWT claims when they aren't already in this
   /// device's roster (they were provisioned on another device). Existing records
-  /// are kept untouched so their overrides / employee link survive.
+  /// retain local overrides / employee links while trusted claim projections are
+  /// refreshed.
   Future<void> upsertFromClaims({
     required String id,
     required String email,
     required UserRole role,
+    required YorksV1Role? yorksV1Role,
     required String fullName,
     bool mustChangePassword = false,
   }) async {
     final existing = _byId(id);
     if (existing != null) {
-      // The user is already in this device's roster. Reconcile ONLY the
-      // authoritative must-change flag from the claim (leave local overrides /
-      // employee link untouched) so a change made on another device is honoured.
-      if (existing.mustChangePassword != mustChangePassword) {
+      // A legacy engineer still receives `null` for [yorksV1Role], so it cannot
+      // become either V1 engineering role through this reconciliation.
+      if (existing.mustChangePassword != mustChangePassword ||
+          existing.role != role ||
+          existing.yorksV1RoleCache != yorksV1Role) {
         state = [
           for (final u in state)
             if (u.id == id)
-              u.copyWith(mustChangePassword: mustChangePassword)
+              u.copyWith(
+                role: role,
+                yorksV1RoleCache: yorksV1Role,
+                mustChangePassword: mustChangePassword,
+              )
             else
               u,
         ];
@@ -183,6 +379,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       fullName: fullName.trim().isEmpty ? email : fullName,
       email: email,
       role: role,
+      yorksV1RoleCache: yorksV1Role,
       mustChangePassword: mustChangePassword,
       createdAt: DateTime.now(),
     );
@@ -224,7 +421,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     String newPassword, {
     required bool mustChange,
   }) async {
-    final pw = PasswordHasher.create(newPassword);
+    final pw = _client == null
+        ? PasswordHasher.create(newPassword)
+        : (hash: '', salt: '');
     state = [
       for (final u in state)
         if (u.id == id)
@@ -245,13 +444,17 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     String id,
     String newPassword, {
     bool temporary = false,
+    String? idempotencyKey,
   }) async {
     await _adminFn({
       'action': 'setPassword',
       'appUserId': id,
       'password': newPassword,
+      'idempotencyKey': ?idempotencyKey,
     });
-    final pw = PasswordHasher.create(newPassword);
+    final pw = _client == null
+        ? PasswordHasher.create(newPassword)
+        : (hash: '', salt: '');
     state = [
       for (final u in state)
         if (u.id == id)
@@ -269,9 +472,18 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   /// Activate/deactivate an account. Refuses to deactivate the last active admin
   /// (would lock everyone out). Returns false if blocked. A deactivated user is
   /// banned in the identity provider, so they can no longer sign in on ANY device.
-  Future<bool> setActive(String id, bool active) async {
+  Future<bool> setActive(
+    String id,
+    bool active, {
+    String? idempotencyKey,
+  }) async {
     if (!active && _isLastActiveAdmin(id)) return false;
-    await _adminFn({'action': 'setActive', 'appUserId': id, 'active': active});
+    await _adminFn({
+      'action': 'setActive',
+      'appUserId': id,
+      'active': active,
+      'idempotencyKey': ?idempotencyKey,
+    });
     state = [
       for (final u in state)
         if (u.id == id) u.copyWith(active: active) else u,
@@ -292,24 +504,31 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     await _store.writeAll(state);
   }
 
-  /// Set (or clear, with `null`) a per-user capability override. Clearing
-  /// returns that capability to the role default. Server-relevant caps
-  /// (rentals/people/goods/…) are re-stamped into the user's JWT claim so RLS
-  /// tracks the change.
+  /// Set (or clear, with `null`) a retained-shell permission override. Clearing
+  /// returns that capability to the role default. V1 authorization never reads
+  /// this local compatibility state; its protected capability rules remain
+  /// server-owned and this method fails closed while V1 provisioning is active.
   Future<void> setPermissionOverride(
     String id,
     PermissionKey key,
-    bool? value,
-  ) async {
+    bool? value, {
+    String? idempotencyKey,
+  }) async {
+    if (_usesYorksV1IdentityProvisioning) {
+      throw StateError(
+        'Yorks V1 capabilities are controlled by protected server rules.',
+      );
+    }
     // Admin always hard-grants everything, so an override would be dead state.
     final current = _byId(id);
     if (current == null || current.role == UserRole.admin) return;
     final updated = _applyOverride(current, key, value);
     await _adminFn({
-      'action': 'updateClaims',
+      'action': _legacyClaimActionFor(updated.role),
       'appUserId': id,
       'role': updated.role.name,
-      'caps': _claimCaps(updated),
+      'idempotencyKey': ?idempotencyKey,
+      ..._legacyShellClaimPayload(updated),
     });
     state = [
       for (final u in state)
@@ -320,7 +539,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
 
   AppUser _applyOverride(AppUser u, PermissionKey key, bool? value) =>
       switch (key) {
-        PermissionKey.cost => u.copyWith(canSeeCostOverride: value),
+        PermissionKey.viewCommercials => u.copyWith(canSeeCostOverride: value),
         PermissionKey.finance => u.copyWith(canViewFinanceOverride: value),
         PermissionKey.salary => u.copyWith(canSeeSalaryOverride: value),
         PermissionKey.rentals => u.copyWith(canAccessRentalsOverride: value),
@@ -331,16 +550,31 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   /// Change a user's role (changes which side they load on next sign-in, and
   /// re-stamps their JWT role/caps claims). Refuses to demote the last active
   /// admin. Returns false if blocked.
-  Future<bool> setRole(String id, UserRole role) async {
+  Future<bool> setRole(
+    String id,
+    UserRole role, {
+    String? idempotencyKey,
+  }) async {
+    if (_usesYorksV1IdentityProvisioning) {
+      throw StateError(
+        'Use the exact Yorks V1 role command while V1 is enabled.',
+      );
+    }
     if (role != UserRole.admin && _isLastActiveAdmin(id)) return false;
     final current = _byId(id);
     if (current == null) return false;
-    final updated = current.copyWith(role: role);
+    final updated = current.copyWith(
+      role: role,
+      yorksV1RoleCache: _client == null
+          ? null
+          : YorksV1Role.fromServerClaim(role.name),
+    );
     await _adminFn({
-      'action': 'updateClaims',
+      'action': _legacyClaimActionFor(role),
       'appUserId': id,
       'role': role.name,
-      'caps': _claimCaps(updated),
+      'idempotencyKey': ?idempotencyKey,
+      ..._legacyShellClaimPayload(updated),
     });
     state = [
       for (final u in state)
@@ -350,13 +584,74 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     return true;
   }
 
-  /// Permanently delete an account. Refuses to delete the last active admin —
-  /// that would leave the system with no way back into the admin panel (there is
-  /// no self-signup). Returns false if blocked, mirroring [setActive]/[setRole].
-  Future<bool> deleteUser(String id) async {
+  /// Explicitly maps a roster account to an exact Yorks V1 role. This is the
+  /// only retained User Management path that can turn a legacy `engineer`
+  /// account into a V1 Project Engineer or Site Engineer, and it does so only
+  /// after the server accepts the Admin's command.
+  Future<bool> setYorksV1Role(
+    String id,
+    YorksV1Role role, {
+    String? idempotencyKey,
+  }) async {
+    _requireYorksV1IdentityProvisioning();
+    if (role != YorksV1Role.admin && _isLastActiveAdmin(id)) return false;
+    final current = _byId(id);
+    if (current == null) return false;
+    final updated = current.copyWith(
+      role: _compatibilityShellRoleForYorksV1(role),
+      yorksV1RoleCache: role,
+    );
+    await _adminFn({
+      'action': 'updateClaims',
+      'appUserId': id,
+      'role': role.claimValue,
+      'idempotencyKey': ?idempotencyKey,
+    });
+    state = [
+      for (final u in state)
+        if (u.id == id) updated else u,
+    ];
+    await _store.writeAll(state);
+    return true;
+  }
+
+  void _requireYorksV1IdentityProvisioning() {
+    if (_usesYorksV1IdentityProvisioning) return;
+    throw StateError(
+      'Yorks V1 role provisioning requires an enabled connected V1 foundation.',
+    );
+  }
+
+  /// Safe one-way compatibility mapping. This deliberately has no inverse:
+  /// [UserRole.engineer] alone is never evidence of a Yorks V1 role.
+  static UserRole _compatibilityShellRoleForYorksV1(YorksV1Role role) =>
+      switch (role) {
+        YorksV1Role.projectEngineer ||
+        YorksV1Role.siteEngineer => UserRole.engineer,
+        YorksV1Role.procurement => UserRole.procurement,
+        YorksV1Role.admin => UserRole.admin,
+      };
+
+  /// Deletes only an offline/local development account. Connected identities
+  /// may already be referenced by project and audit history, so the server
+  /// path deactivates them rather than issuing an irreversible Auth deletion.
+  /// Returns false when the last active Admin would be affected.
+  Future<bool> deleteUser(String id, {String? idempotencyKey}) async {
     if (_isLastActiveAdmin(id)) return false;
-    await _adminFn({'action': 'delete', 'appUserId': id});
-    state = state.where((u) => u.id != id).toList();
+    if (_client != null) {
+      await _adminFn({
+        'action': 'setActive',
+        'appUserId': id,
+        'active': false,
+        'idempotencyKey': ?idempotencyKey,
+      });
+      state = [
+        for (final user in state)
+          if (user.id == id) user.copyWith(active: false) else user,
+      ];
+    } else {
+      state = state.where((u) => u.id != id).toList();
+    }
     await _store.writeAll(state);
     return true;
   }
@@ -379,7 +674,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     return true;
   }
 
-  static List<AppUser> _seed() {
+  static List<AppUser> _seed(String seedPassword) {
     final now = DateTime.now();
     AppUser seed({
       required String id,
@@ -389,7 +684,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       required DateTime createdAt,
       String? employeeId,
     }) {
-      final pw = PasswordHasher.create(kSeedPassword);
+      final pw = seedPassword.isEmpty
+          ? (hash: '', salt: '')
+          : PasswordHasher.create(seedPassword);
       return AppUser(
         id: id,
         fullName: fullName,

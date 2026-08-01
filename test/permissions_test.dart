@@ -9,19 +9,19 @@ import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/users_provider.dart';
 
 AppUser _user(UserRole role) => AppUser(
-      id: 'u1',
-      fullName: 'X',
-      email: 'x@y.z',
-      role: role,
-      createdAt: DateTime(2025, 1, 1),
-    );
+  id: 'u1',
+  fullName: 'X',
+  email: 'x@y.z',
+  role: role,
+  createdAt: DateTime(2025, 1, 1),
+);
 
 void main() {
   group('Effective permissions (override ?? role default)', () {
     test('with no override, effective = role default', () {
       final eng = _user(UserRole.engineer);
       expect(eng.effectiveCanSeeCost, false); // engineer default
-      expect(eng.overrideFor(PermissionKey.cost), isNull);
+      expect(eng.overrideFor(PermissionKey.viewCommercials), isNull);
 
       final proc = _user(UserRole.procurement);
       expect(proc.effectiveCanSeeCost, true); // procurement default
@@ -29,18 +29,22 @@ void main() {
     });
 
     test('an override wins over the role default', () {
-      final eng = _user(UserRole.engineer).copyWith(canViewFinanceOverride: true);
+      final eng = _user(
+        UserRole.engineer,
+      ).copyWith(canViewFinanceOverride: true);
       expect(eng.effectiveCanViewFinance, true);
       expect(eng.overrideFor(PermissionKey.finance), true);
 
-      final proc =
-          _user(UserRole.procurement).copyWith(canSeeCostOverride: false);
+      final proc = _user(
+        UserRole.procurement,
+      ).copyWith(canSeeCostOverride: false);
       expect(proc.effectiveCanSeeCost, false); // revoked despite role default
     });
 
     test('revoking access also revokes the matching write capability', () {
-      final proc = _user(UserRole.procurement)
-          .copyWith(canAccessRentalsOverride: false);
+      final proc = _user(
+        UserRole.procurement,
+      ).copyWith(canAccessRentalsOverride: false);
       expect(proc.effectiveCanAccessRentals, false);
       expect(proc.effectiveCanWriteRentals, false);
     });

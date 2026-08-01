@@ -1,165 +1,127 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// The Architectural Ledger — Typography Tokens
+/// Yorks Nexus V7 type scale.
 ///
-/// Uses Inter for its neutral, high-legibility "Swiss" aesthetic.
-/// Typography is the primary driver of the brand's authoritative voice.
+/// The bundled Noto Sans family is deliberately neutral, browser-dense and
+/// deterministic offline. Arabic keeps its dedicated family and line height.
 abstract final class AppTypography {
-  // ─── Editorial Scale ──────────────────────────────────────
-
-  /// Display Large (56px) — Hero metrics (Total Stock Value)
-  /// High-contrast, tight tracking (-2%)
-  static TextStyle get displayLarge => GoogleFonts.inter(
-    fontSize: 56,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -1.12, // -2%
-    height: 1.1,
-    color: AppColors.onSurface,
+  static TextStyle _inter({
+    required double size,
+    required FontWeight weight,
+    required double height,
+    double letterSpacing = 0,
+    Color color = AppColors.onSurface,
+  }) => TextStyle(
+    fontFamily: 'NexusSans',
+    fontSize: size,
+    fontWeight: weight,
+    height: height,
+    letterSpacing: letterSpacing,
+    color: color,
   );
 
-  /// Display Medium (45px)
-  static TextStyle get displayMedium => GoogleFonts.inter(
-    fontSize: 45,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.9,
-    height: 1.15,
-    color: AppColors.onSurface,
+  static TextStyle get displayLarge => _inter(
+    size: 40,
+    weight: FontWeight.w700,
+    height: 1.08,
+    letterSpacing: -1.2,
   );
 
-  /// Display Small (36px)
-  static TextStyle get displaySmall => GoogleFonts.inter(
-    fontSize: 36,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.72,
+  static TextStyle get displayMedium => _inter(
+    size: 36,
+    weight: FontWeight.w700,
+    height: 1.08,
+    letterSpacing: -1,
+  );
+
+  static TextStyle get displaySmall => _inter(
+    size: 32,
+    weight: FontWeight.w700,
+    height: 1.08,
+    letterSpacing: -1.12,
+  );
+
+  static TextStyle get headlineLarge => displaySmall;
+
+  static TextStyle get headlineMedium => _inter(
+    size: 24,
+    weight: FontWeight.w700,
+    height: 1.18,
+    letterSpacing: -0.48,
+  );
+
+  static TextStyle get headlineSmall => _inter(
+    size: 21,
+    weight: FontWeight.w700,
     height: 1.2,
-    color: AppColors.onSurface,
+    letterSpacing: -0.42,
   );
 
-  /// Headline Large (32px)
-  static TextStyle get headlineLarge => GoogleFonts.inter(
-    fontSize: 32,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.32,
-    height: 1.25,
-    color: AppColors.onSurface,
-  );
+  static TextStyle get titleLarge => headlineSmall;
 
-  /// Headline Medium (28px) — Section titles
-  static TextStyle get headlineMedium => GoogleFonts.inter(
-    fontSize: 28,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.28,
+  static TextStyle get titleMedium => _inter(
+    size: 16,
+    weight: FontWeight.w700,
     height: 1.3,
-    color: AppColors.onSurface,
+    letterSpacing: -0.1,
   );
 
-  /// Headline Small (24px)
-  static TextStyle get headlineSmall => GoogleFonts.inter(
-    fontSize: 24,
-    fontWeight: FontWeight.w600,
-    letterSpacing: -0.24,
+  static TextStyle get titleSmall =>
+      _inter(size: 14, weight: FontWeight.w700, height: 1.35);
+
+  static TextStyle get bodyLarge =>
+      _inter(size: 16, weight: FontWeight.w400, height: 1.5);
+
+  static TextStyle get bodyMedium => _inter(
+    size: 13,
+    weight: FontWeight.w400,
+    height: 1.5,
+    color: AppColors.inkSecondary,
+  );
+
+  static TextStyle get bodySmall => _inter(
+    size: 12,
+    weight: FontWeight.w400,
+    height: 1.45,
+    color: AppColors.muted,
+  );
+
+  static TextStyle get labelLarge =>
+      _inter(size: 12, weight: FontWeight.w700, height: 1.3);
+
+  static TextStyle get labelMedium => _inter(
+    size: 10.5,
+    weight: FontWeight.w700,
     height: 1.3,
-    color: AppColors.onSurface,
+    color: AppColors.muted,
   );
 
-  /// Title Large (22px)
-  static TextStyle get titleLarge => GoogleFonts.inter(
-    fontSize: 22,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0,
-    height: 1.3,
-    color: AppColors.onSurface,
+  static TextStyle get labelSmall => _inter(
+    size: 10,
+    weight: FontWeight.w600,
+    height: 1.35,
+    letterSpacing: 0.2,
+    color: AppColors.muted,
   );
 
-  /// Title Medium (16px)
-  static TextStyle get titleMedium => GoogleFonts.inter(
-    fontSize: 16,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.15,
-    height: 1.4,
-    color: AppColors.onSurface,
+  static TextStyle get eyebrow => _inter(
+    size: 10,
+    weight: FontWeight.w800,
+    height: 1.2,
+    letterSpacing: 1,
+    color: AppColors.blue,
   );
 
-  /// Title Small (14px) — English primary labels
-  static TextStyle get titleSmall => GoogleFonts.inter(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.1,
-    height: 1.4,
-    color: AppColors.onSurface,
-  );
-
-  /// Body Large (16px)
-  static TextStyle get bodyLarge => GoogleFonts.inter(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.5,
-    height: 1.5,
-    color: AppColors.onSurface,
-  );
-
-  /// Body Medium (14px) — English body text
-  static TextStyle get bodyMedium => GoogleFonts.inter(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.25,
-    height: 1.5,
-    color: AppColors.onSurface,
-  );
-
-  /// Body Small (12px)
-  static TextStyle get bodySmall => GoogleFonts.inter(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    letterSpacing: 0.4,
-    height: 1.5,
-    color: AppColors.onSurfaceVariant,
-  );
-
-  /// Label Large (14px)
-  static TextStyle get labelLarge => GoogleFonts.inter(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.1,
-    height: 1.4,
-    color: AppColors.onSurface,
-  );
-
-  /// Label Medium (12px) — Metadata & Urdu translation layer
-  static TextStyle get labelMedium => GoogleFonts.inter(
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
-    height: 1.4,
-    color: AppColors.onSurfaceVariant,
-  );
-
-  /// Label Small (11px)
-  static TextStyle get labelSmall => GoogleFonts.inter(
-    fontSize: 11,
-    fontWeight: FontWeight.w500,
-    letterSpacing: 0.5,
-    height: 1.4,
-    color: AppColors.onSurfaceVariant,
-  );
-
-  // ─── Bilingual Helpers ────────────────────────────────────
-
-  /// Urdu text style — 2pt smaller than the paired English style,
-  /// using onSurfaceVariant, with increased line-height (1.5)
-  /// to accommodate descending calligraphic strokes.
   static TextStyle urduStyle({required double englishFontSize}) => TextStyle(
-    fontFamily: 'NotoNastaliqUrdu',
+    fontFamily: 'NotoSansArabic',
     fontSize: englishFontSize - 2,
     fontWeight: FontWeight.w400,
     height: 1.5,
     color: AppColors.onSurfaceVariant,
   );
 
-  // ─── Text Theme ───────────────────────────────────────────
   static TextTheme get textTheme => TextTheme(
     displayLarge: displayLarge,
     displayMedium: displayMedium,

@@ -1,0 +1,1203 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../../../core/constants/constants.dart';
+import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/app_language.dart';
+import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/yorks_v1_arrangement.dart';
+import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
+import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
+import '../../../../shared/providers/yorks_v1_arrangement_repository_provider.dart';
+import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
+
+/// One responsive view for Procurement arrangement and Project Engineer review.
+/// Server-derived action flags decide whether the current viewer can edit or
+/// decide; this screen never infers authority from a local role label.
+class YorksV1ArrangementScreen extends ConsumerWidget {
+  const YorksV1ArrangementScreen({super.key, required this.requestId});
+
+  final String requestId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final workspace = ref.watch(yorksV1ArrangementWorkspaceProvider(requestId));
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        title: _BilingualText(
+          copy: YorksV1ArrangementStrings.arrangement,
+          language: language,
+          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          IconButton(
+            tooltip: YorksV1ArrangementStrings.arrangement.primary,
+            onPressed: () =>
+                ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: workspace.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => _ArrangementError(
+          language: language,
+          onRetry: () =>
+              ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
+        ),
+        data: (value) =>
+            _ArrangementWorkspaceBody(workspace: value, language: language),
+      ),
+    );
+  }
+}
+
+class _ArrangementWorkspaceBody extends ConsumerWidget {
+  const _ArrangementWorkspaceBody({
+    required this.workspace,
+    required this.language,
+  });
+
+  final YorksV1ArrangementWorkspace workspace;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final working = workspace.workingArrangement;
+    final inventory = workspace.canSave
+        ? ref.watch(yorksV1ArrangementInventoryProvider)
+        : const AsyncData<List<YorksV1InventoryItem>>([]);
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppSpacing.pageMaxWidth,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _WorkspaceHeader(workspace: workspace),
+                const SizedBox(height: AppSpacing.lg),
+                if (workspace.canBegin && working == null)
+                  _BeginArrangementAction(
+                    workspace: workspace,
+                    language: language,
+                  ),
+                if (working != null) ...[
+                  NexusSectionCard(
+                    title: YorksV1ArrangementStrings.arrangement.primary,
+                    child: inventory.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(AppSpacing.lg),
+                        child: LinearProgressIndicator(),
+                      ),
+                      error: (_, _) => _ArrangementError(
+                        language: language,
+                        onRetry: () =>
+                            ref.invalidate(yorksV1ArrangementInventoryProvider),
+                      ),
+                      data: (items) => _ArrangementEditor(
+                        workspace: workspace,
+                        arrangement: working,
+                        inventoryItems: items,
+                        language: language,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+                if (workspace.currentArrangement != null) ...[
+                  NexusSectionCard(
+                    title: YorksV1ArrangementStrings.reviewSummary.primary,
+                    child: _ArrangementReadOnly(
+                      arrangement: workspace.currentArrangement!,
+                      language: language,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (workspace.canDecide)
+                    _DecisionActions(
+                      workspace: workspace,
+                      arrangement: workspace.currentArrangement!,
+                      language: language,
+                    ),
+                ],
+                if (workspace.arrangements.isEmpty && !workspace.canBegin)
+                  NexusSectionCard(
+                    child: _BilingualText(
+                      copy: YorksV1ArrangementStrings.noArrangement,
+                      language: language,
+                      center: true,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                if (workspace.arrangements.length > 1) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  NexusSectionCard(
+                    title: YorksV1ArrangementStrings.arrangementHistory.primary,
+                    child: Column(
+                      children: [
+                        for (final arrangement in workspace.arrangements.skip(
+                          1,
+                        ))
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.md,
+                            ),
+                            child: _ArrangementHistoryRow(
+                              arrangement: arrangement,
+                              language: language,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceHeader extends StatelessWidget {
+  const _WorkspaceHeader({required this.workspace});
+
+  final YorksV1ArrangementWorkspace workspace;
+
+  @override
+  Widget build(BuildContext context) => NexusSectionCard(
+    child: Wrap(
+      spacing: AppSpacing.xxl,
+      runSpacing: AppSpacing.md,
+      children: [
+        _Meta(
+          label: YorksV1ArrangementStrings.version.primary,
+          value: workspace.currentArrangement == null
+              ? workspace.requestRecordVersion.toString()
+              : workspace.currentArrangement!.version.toString(),
+        ),
+        _Meta(
+          label: YorksV1ArrangementStrings.arrangement.primary,
+          value: workspace.requestNumber ?? '',
+        ),
+        if (workspace.currentArrangement != null)
+          _Meta(
+            label: YorksV1ArrangementStrings.decision.primary,
+            value: yorksV1ArrangementStatusCopy(
+              workspace.currentArrangement!.status,
+            ).primary,
+          ),
+      ],
+    ),
+  );
+}
+
+class _BeginArrangementAction extends ConsumerStatefulWidget {
+  const _BeginArrangementAction({
+    required this.workspace,
+    required this.language,
+  });
+
+  final YorksV1ArrangementWorkspace workspace;
+  final AppLanguage language;
+
+  @override
+  ConsumerState<_BeginArrangementAction> createState() =>
+      _BeginArrangementActionState();
+}
+
+class _BeginArrangementActionState
+    extends ConsumerState<_BeginArrangementAction> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) => NexusSectionCard(
+    child: PrimaryButton(
+      label: YorksV1ArrangementStrings.startArrangement.primary,
+      icon: Icons.playlist_add_check_rounded,
+      isLoading: _busy,
+      onPressed: _busy ? null : _begin,
+    ),
+  );
+
+  Future<void> _begin() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(yorksV1ArrangementRepositoryProvider)
+          .begin(
+            YorksV1BeginArrangementInput(
+              requestId: widget.workspace.requestId,
+              expectedRequestVersion: widget.workspace.requestRecordVersion,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      ref.invalidate(
+        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(
+        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(yorksV1MaterialRequestListProvider);
+    } catch (_) {
+      if (mounted) _showFailure(context);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+class _ArrangementEditor extends ConsumerStatefulWidget {
+  const _ArrangementEditor({
+    required this.workspace,
+    required this.arrangement,
+    required this.inventoryItems,
+    required this.language,
+  });
+
+  final YorksV1ArrangementWorkspace workspace;
+  final YorksV1ProcurementArrangement arrangement;
+  final List<YorksV1InventoryItem> inventoryItems;
+  final AppLanguage language;
+
+  @override
+  ConsumerState<_ArrangementEditor> createState() => _ArrangementEditorState();
+}
+
+class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
+  late Map<String, _EditableArrangementLine> _lines;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lines = {
+      for (final line in widget.arrangement.lines)
+        line.id: _EditableArrangementLine.fromLine(line, widget.inventoryItems),
+    };
+  }
+
+  @override
+  void didUpdateWidget(covariant _ArrangementEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.arrangement.id != widget.arrangement.id) {
+      _lines = {
+        for (final line in widget.arrangement.lines)
+          line.id: _EditableArrangementLine.fromLine(
+            line,
+            widget.inventoryItems,
+          ),
+      };
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth >= 980
+            ? _DesktopArrangementEditor(
+                lines: widget.arrangement.lines,
+                drafts: _lines,
+                inventoryItems: widget.inventoryItems,
+                enabled: !_busy,
+                onChanged: _replace,
+              )
+            : Column(
+                children: [
+                  for (final line in widget.arrangement.lines) ...[
+                    _MobileArrangementEditor(
+                      line: line,
+                      draft: _lines[line.id]!,
+                      inventoryItems: widget.inventoryItems,
+                      enabled: !_busy,
+                      onChanged: _replace,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                ],
+              ),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      PrimaryButton(
+        label: YorksV1ArrangementStrings.saveForApproval.primary,
+        icon: Icons.send_rounded,
+        isLoading: _busy,
+        onPressed: _busy ? null : _save,
+      ),
+    ],
+  );
+
+  void _replace(_EditableArrangementLine value) {
+    setState(() => _lines = {..._lines, value.arrangementLineId: value});
+  }
+
+  Future<void> _save() async {
+    final inputs = _lines.values.map((line) => line.toInput()).toList();
+    if (!_valid(inputs)) {
+      _showMessage(context, YorksV1ArrangementStrings.invalidLines.primary);
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(yorksV1ArrangementRepositoryProvider)
+          .save(
+            YorksV1SaveArrangementInput(
+              requestId: widget.workspace.requestId,
+              arrangementId: widget.arrangement.id,
+              expectedRequestVersion: widget.workspace.requestRecordVersion,
+              expectedArrangementVersion: widget.arrangement.recordVersion,
+              lines: inputs,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      ref.invalidate(
+        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(
+        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(yorksV1MaterialRequestListProvider);
+    } catch (_) {
+      if (mounted) _showFailure(context);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  bool _valid(List<YorksV1ArrangementLineInput> lines) {
+    for (final line in lines) {
+      final quantity = num.tryParse(line.arrangedQuantity.trim());
+      if (quantity == null || quantity < 0) return false;
+      if (line.source == YorksV1ArrangementSource.warehouse &&
+          (line.inventoryItemId == null ||
+              line.inventoryItemId!.trim().isEmpty)) {
+        return false;
+      }
+      if (line.source == YorksV1ArrangementSource.externalSupplier &&
+          (line.externalSupplier == null ||
+              line.externalSupplier!.trim().isEmpty)) {
+        return false;
+      }
+      if ((line.decision == YorksV1ArrangementDecision.partial ||
+              line.decision == YorksV1ArrangementDecision.unavailable) &&
+          (line.reason == null || line.reason!.trim().isEmpty)) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+class _DesktopArrangementEditor extends StatelessWidget {
+  const _DesktopArrangementEditor({
+    required this.lines,
+    required this.drafts,
+    required this.inventoryItems,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final List<YorksV1ArrangementLine> lines;
+  final Map<String, _EditableArrangementLine> drafts;
+  final List<YorksV1InventoryItem> inventoryItems;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: DataTable(
+      columnSpacing: AppSpacing.md,
+      columns: [
+        DataColumn(label: Text(YorksV1ArrangementStrings.rowNumber.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.requested.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.decision.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.source.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.arranged.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.availability.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.reason.primary)),
+      ],
+      rows: [
+        for (final line in lines)
+          DataRow(
+            cells: [
+              DataCell(Text(line.displayOrder.toString())),
+              DataCell(
+                SizedBox(
+                  width: 180,
+                  child: Text(
+                    '${line.description}\n${line.requestedQuantity} ${line.unit}',
+                  ),
+                ),
+              ),
+              DataCell(
+                _DecisionPicker(
+                  value: drafts[line.id]!,
+                  enabled: enabled,
+                  onChanged: onChanged,
+                ),
+              ),
+              DataCell(
+                _SourcePicker(
+                  value: drafts[line.id]!,
+                  enabled: enabled,
+                  onChanged: onChanged,
+                ),
+              ),
+              DataCell(
+                _QuantityField(
+                  value: drafts[line.id]!,
+                  enabled: enabled,
+                  onChanged: onChanged,
+                ),
+              ),
+              DataCell(
+                _InventoryOrSupplierField(
+                  value: drafts[line.id]!,
+                  inventoryItems: inventoryItems,
+                  enabled: enabled,
+                  onChanged: onChanged,
+                ),
+              ),
+              DataCell(
+                _ReasonField(
+                  value: drafts[line.id]!,
+                  enabled: enabled,
+                  onChanged: onChanged,
+                ),
+              ),
+            ],
+          ),
+      ],
+    ),
+  );
+}
+
+class _MobileArrangementEditor extends StatelessWidget {
+  const _MobileArrangementEditor({
+    required this.line,
+    required this.draft,
+    required this.inventoryItems,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final YorksV1ArrangementLine line;
+  final _EditableArrangementLine draft;
+  final List<YorksV1InventoryItem> inventoryItems;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '${line.displayOrder}. ${line.description}',
+          style: AppTypography.titleSmall,
+        ),
+        Text(
+          '${YorksV1ArrangementStrings.requested.primary}: ${line.requestedQuantity} ${line.unit}',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _DecisionPicker(value: draft, enabled: enabled, onChanged: onChanged),
+        const SizedBox(height: AppSpacing.md),
+        _SourcePicker(value: draft, enabled: enabled, onChanged: onChanged),
+        const SizedBox(height: AppSpacing.md),
+        _QuantityField(value: draft, enabled: enabled, onChanged: onChanged),
+        const SizedBox(height: AppSpacing.md),
+        _InventoryOrSupplierField(
+          value: draft,
+          inventoryItems: inventoryItems,
+          enabled: enabled,
+          onChanged: onChanged,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _ReasonField(value: draft, enabled: enabled, onChanged: onChanged),
+      ],
+    ),
+  );
+}
+
+class _DecisionPicker extends StatelessWidget {
+  const _DecisionPicker({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) =>
+      DropdownButtonFormField<YorksV1ArrangementDecision>(
+        initialValue: value.decision,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: YorksV1ArrangementStrings.decision.primary,
+        ),
+        items: [
+          for (final decision in YorksV1ArrangementDecision.values)
+            DropdownMenuItem(
+              value: decision,
+              child: Text(yorksV1ArrangementDecisionCopy(decision).primary),
+            ),
+        ],
+        onChanged: !enabled
+            ? null
+            : (decision) {
+                if (decision == null) return;
+                onChanged(
+                  value.copyWith(
+                    decision: decision,
+                    arrangedQuantity:
+                        decision == YorksV1ArrangementDecision.unavailable
+                        ? '0'
+                        : value.arrangedQuantity,
+                  ),
+                );
+              },
+      );
+}
+
+class _SourcePicker extends StatelessWidget {
+  const _SourcePicker({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) =>
+      DropdownButtonFormField<YorksV1ArrangementSource>(
+        initialValue: value.source,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: YorksV1ArrangementStrings.source.primary,
+        ),
+        items: [
+          for (final source in YorksV1ArrangementSource.values)
+            DropdownMenuItem(
+              value: source,
+              child: Text(yorksV1ArrangementSourceCopy(source).primary),
+            ),
+        ],
+        onChanged: !enabled
+            ? null
+            : (source) {
+                if (source == null) return;
+                onChanged(
+                  value.copyWith(
+                    source: source,
+                    inventoryItemId:
+                        source == YorksV1ArrangementSource.warehouse
+                        ? value.inventoryItemId
+                        : null,
+                    externalSupplier:
+                        source == YorksV1ArrangementSource.externalSupplier
+                        ? value.externalSupplier
+                        : null,
+                  ),
+                );
+              },
+      );
+}
+
+class _QuantityField extends StatelessWidget {
+  const _QuantityField({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 112,
+    child: TextFormField(
+      key: ValueKey(
+        'arranged-${value.arrangementLineId}-${value.arrangedQuantity}',
+      ),
+      initialValue: value.arrangedQuantity,
+      enabled: enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (quantity) =>
+          onChanged(value.copyWith(arrangedQuantity: quantity)),
+      decoration: InputDecoration(
+        labelText: YorksV1ArrangementStrings.arranged.primary,
+      ),
+    ),
+  );
+}
+
+class _InventoryOrSupplierField extends StatelessWidget {
+  const _InventoryOrSupplierField({
+    required this.value,
+    required this.inventoryItems,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final List<YorksV1InventoryItem> inventoryItems;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.source == YorksV1ArrangementSource.externalSupplier) {
+      return SizedBox(
+        width: 180,
+        child: TextFormField(
+          key: ValueKey(
+            'supplier-${value.arrangementLineId}-${value.externalSupplier}',
+          ),
+          initialValue: value.externalSupplier ?? '',
+          enabled: enabled,
+          onChanged: (supplier) =>
+              onChanged(value.copyWith(externalSupplier: supplier)),
+          decoration: InputDecoration(
+            labelText: YorksV1ArrangementStrings.supplierName.primary,
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      width: 220,
+      child: DropdownButtonFormField<String>(
+        initialValue:
+            inventoryItems.any((item) => item.id == value.inventoryItemId)
+            ? value.inventoryItemId
+            : null,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: YorksV1ArrangementStrings.warehouseItem.primary,
+        ),
+        items: [
+          for (final item in inventoryItems)
+            DropdownMenuItem(
+              value: item.id,
+              child: Text(
+                '${item.description} · ${item.availableQuantity} ${item.unit}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: !enabled
+            ? null
+            : (itemId) => onChanged(value.copyWith(inventoryItemId: itemId)),
+      ),
+    );
+  }
+}
+
+class _ReasonField extends StatelessWidget {
+  const _ReasonField({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 180,
+    child: TextFormField(
+      key: ValueKey('reason-${value.arrangementLineId}-${value.reason}'),
+      initialValue: value.reason ?? '',
+      enabled: enabled,
+      onChanged: (reason) => onChanged(value.copyWith(reason: reason)),
+      decoration: InputDecoration(
+        labelText: YorksV1ArrangementStrings.reason.primary,
+      ),
+    ),
+  );
+}
+
+class _ArrangementReadOnly extends StatelessWidget {
+  const _ArrangementReadOnly({
+    required this.arrangement,
+    required this.language,
+  });
+
+  final YorksV1ProcurementArrangement arrangement;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Wrap(
+        spacing: AppSpacing.xxl,
+        runSpacing: AppSpacing.md,
+        children: [
+          _Meta(
+            label: YorksV1ArrangementStrings.version.primary,
+            value: arrangement.version.toString(),
+          ),
+          _Meta(
+            label: YorksV1ArrangementStrings.startedBy.primary,
+            value: arrangement.startedByDisplayName,
+          ),
+          _Meta(
+            label: YorksV1ArrangementStrings.decision.primary,
+            value: yorksV1ArrangementStatusCopy(arrangement.status).primary,
+          ),
+        ],
+      ),
+      if (arrangement.reviewReason != null) ...[
+        const SizedBox(height: AppSpacing.md),
+        Text(arrangement.reviewReason!, style: AppTypography.bodyMedium),
+      ],
+      const SizedBox(height: AppSpacing.lg),
+      LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth >= 760
+            ? _ReadOnlyDesktopTable(lines: arrangement.lines)
+            : Column(
+                children: [
+                  for (final line in arrangement.lines) ...[
+                    _ReadOnlyLineCard(line: line),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                ],
+              ),
+      ),
+    ],
+  );
+}
+
+class _ReadOnlyDesktopTable extends StatelessWidget {
+  const _ReadOnlyDesktopTable({required this.lines});
+  final List<YorksV1ArrangementLine> lines;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: DataTable(
+      columns: [
+        DataColumn(label: Text(YorksV1ArrangementStrings.rowNumber.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.requested.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.decision.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.source.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.arranged.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.availability.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.reason.primary)),
+      ],
+      rows: [
+        for (final line in lines)
+          DataRow(
+            color: WidgetStatePropertyAll(_lineBackground(line)),
+            cells: [
+              DataCell(Text(line.displayOrder.toString())),
+              DataCell(
+                Text(
+                  '${line.description}\n${line.requestedQuantity} ${line.unit}',
+                ),
+              ),
+              DataCell(
+                Text(
+                  line.decision == null
+                      ? ''
+                      : yorksV1ArrangementDecisionCopy(line.decision!).primary,
+                ),
+              ),
+              DataCell(Text(yorksV1ArrangementSourceCopy(line.source).primary)),
+              DataCell(Text(line.arrangedQuantity ?? '')),
+              DataCell(
+                Text(
+                  line.source == YorksV1ArrangementSource.warehouse
+                      ? (line.warehouseAvailableAtSave ?? '')
+                      : (line.externalSupplier ?? ''),
+                ),
+              ),
+              DataCell(Text(line.reason ?? '')),
+            ],
+          ),
+      ],
+    ),
+  );
+}
+
+class _ReadOnlyLineCard extends StatelessWidget {
+  const _ReadOnlyLineCard({required this.line});
+  final YorksV1ArrangementLine line;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: _lineBackground(line),
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${line.displayOrder}. ${line.description}',
+          style: AppTypography.titleSmall,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '${YorksV1ArrangementStrings.requested.primary}: ${line.requestedQuantity} ${line.unit}',
+        ),
+        Text(
+          '${YorksV1ArrangementStrings.arranged.primary}: ${line.arrangedQuantity ?? ''}',
+        ),
+        Text(
+          '${YorksV1ArrangementStrings.source.primary}: ${yorksV1ArrangementSourceCopy(line.source).primary}',
+        ),
+        if (line.reason != null)
+          Text('${YorksV1ArrangementStrings.reason.primary}: ${line.reason}'),
+      ],
+    ),
+  );
+}
+
+Color _lineBackground(YorksV1ArrangementLine line) => switch (line.decision) {
+  YorksV1ArrangementDecision.partial => AppColors.warningContainer,
+  YorksV1ArrangementDecision.unavailable => AppColors.errorContainer,
+  _ => Colors.transparent,
+};
+
+class _DecisionActions extends ConsumerStatefulWidget {
+  const _DecisionActions({
+    required this.workspace,
+    required this.arrangement,
+    required this.language,
+  });
+
+  final YorksV1ArrangementWorkspace workspace;
+  final YorksV1ProcurementArrangement arrangement;
+  final AppLanguage language;
+
+  @override
+  ConsumerState<_DecisionActions> createState() => _DecisionActionsState();
+}
+
+class _DecisionActionsState extends ConsumerState<_DecisionActions> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: AppSpacing.md,
+    runSpacing: AppSpacing.md,
+    children: [
+      PrimaryButton(
+        label: YorksV1ArrangementStrings.approveArrangement.primary,
+        icon: Icons.verified_rounded,
+        isExpanded: false,
+        isLoading: _busy,
+        onPressed: _busy
+            ? null
+            : () => _decide(YorksV1ArrangementReviewDecision.approved),
+      ),
+      SecondaryButton(
+        label: YorksV1ArrangementStrings.returnToProcurement.primary,
+        icon: Icons.reply_rounded,
+        isExpanded: false,
+        onPressed: _busy
+            ? null
+            : () => _decide(YorksV1ArrangementReviewDecision.returned),
+      ),
+    ],
+  );
+
+  Future<void> _decide(YorksV1ArrangementReviewDecision decision) async {
+    String? reason;
+    if (decision == YorksV1ArrangementReviewDecision.returned) {
+      reason = await _returnReason(context);
+      if (reason == null || reason.trim().isEmpty) return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(yorksV1ArrangementRepositoryProvider)
+          .decide(
+            YorksV1DecideArrangementInput(
+              requestId: widget.workspace.requestId,
+              arrangementId: widget.arrangement.id,
+              expectedRequestVersion: widget.workspace.requestRecordVersion,
+              expectedArrangementVersion: widget.arrangement.recordVersion,
+              decision: decision,
+              reason: reason,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      ref.invalidate(
+        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(
+        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(yorksV1MaterialRequestListProvider);
+    } catch (_) {
+      if (mounted) _showFailure(context);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+class _ArrangementHistoryRow extends StatelessWidget {
+  const _ArrangementHistoryRow({
+    required this.arrangement,
+    required this.language,
+  });
+  final YorksV1ProcurementArrangement arrangement;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: const Icon(Icons.history_rounded),
+    title: Text(
+      '${YorksV1ArrangementStrings.version.primary} ${arrangement.version}',
+    ),
+    subtitle: Text(arrangement.startedByDisplayName),
+    trailing: Text(yorksV1ArrangementStatusCopy(arrangement.status).primary),
+  );
+}
+
+class _Meta extends StatelessWidget {
+  const _Meta({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 190,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTypography.labelLarge.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(value, style: AppTypography.bodyMedium),
+      ],
+    ),
+  );
+}
+
+class _ArrangementError extends StatelessWidget {
+  const _ArrangementError({required this.language, required this.onRetry});
+  final AppLanguage language;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: NexusSectionCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.error,
+            size: 40,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _BilingualText(
+            copy: YorksV1ArrangementStrings.savingFailed,
+            language: language,
+            center: true,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SecondaryButton(
+            label: YorksV1ArrangementStrings.arrangement.primary,
+            icon: Icons.refresh_rounded,
+            isExpanded: false,
+            onPressed: onRetry,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _EditableArrangementLine {
+  const _EditableArrangementLine({
+    required this.arrangementLineId,
+    required this.source,
+    required this.decision,
+    required this.arrangedQuantity,
+    this.externalSupplier,
+    this.inventoryItemId,
+    this.reason,
+  });
+
+  final String arrangementLineId;
+  final YorksV1ArrangementSource source;
+  final YorksV1ArrangementDecision decision;
+  final String arrangedQuantity;
+  final String? externalSupplier;
+  final String? inventoryItemId;
+  final String? reason;
+
+  factory _EditableArrangementLine.fromLine(
+    YorksV1ArrangementLine line,
+    List<YorksV1InventoryItem> inventory,
+  ) {
+    final matchingItem = inventory.where(
+      (item) => item.unit == line.unit && item.description == line.description,
+    );
+    return _EditableArrangementLine(
+      arrangementLineId: line.id,
+      source: line.source,
+      decision: line.decision ?? YorksV1ArrangementDecision.full,
+      arrangedQuantity: line.arrangedQuantity ?? line.requestedQuantity,
+      externalSupplier: line.externalSupplier,
+      inventoryItemId:
+          line.inventoryItemId ??
+          (matchingItem.isEmpty ? null : matchingItem.first.id),
+      reason: line.reason,
+    );
+  }
+
+  _EditableArrangementLine copyWith({
+    YorksV1ArrangementSource? source,
+    YorksV1ArrangementDecision? decision,
+    String? arrangedQuantity,
+    Object? externalSupplier = _keep,
+    Object? inventoryItemId = _keep,
+    Object? reason = _keep,
+  }) => _EditableArrangementLine(
+    arrangementLineId: arrangementLineId,
+    source: source ?? this.source,
+    decision: decision ?? this.decision,
+    arrangedQuantity: arrangedQuantity ?? this.arrangedQuantity,
+    externalSupplier: identical(externalSupplier, _keep)
+        ? this.externalSupplier
+        : externalSupplier as String?,
+    inventoryItemId: identical(inventoryItemId, _keep)
+        ? this.inventoryItemId
+        : inventoryItemId as String?,
+    reason: identical(reason, _keep) ? this.reason : reason as String?,
+  );
+
+  YorksV1ArrangementLineInput toInput() => YorksV1ArrangementLineInput(
+    arrangementLineId: arrangementLineId,
+    source: source,
+    decision: decision,
+    arrangedQuantity: arrangedQuantity,
+    externalSupplier: externalSupplier,
+    inventoryItemId: inventoryItemId,
+    reason: reason,
+  );
+}
+
+const _keep = Object();
+
+Future<String?> _returnReason(BuildContext context) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(YorksV1ArrangementStrings.returnToProcurement.primary),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        minLines: 2,
+        maxLines: 4,
+        decoration: InputDecoration(
+          labelText: YorksV1ArrangementStrings.returnReason.primary,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(AppStrings.cancel.primary),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(controller.text),
+          child: Text(YorksV1ArrangementStrings.returnToProcurement.primary),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
+void _showFailure(BuildContext context) =>
+    _showMessage(context, YorksV1ArrangementStrings.savingFailed.primary);
+
+void _showMessage(BuildContext context, String message) => ScaffoldMessenger.of(
+  context,
+).showSnackBar(SnackBar(content: Text(message)));
+
+class _BilingualText extends StatelessWidget {
+  const _BilingualText({
+    required this.copy,
+    required this.language,
+    this.style,
+    this.center = false,
+  });
+
+  final TranslatableString copy;
+  final AppLanguage language;
+  final TextStyle? style;
+  final bool center;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: center
+        ? CrossAxisAlignment.center
+        : CrossAxisAlignment.start,
+    children: [
+      Text(
+        copy.primary,
+        textAlign: center ? TextAlign.center : null,
+        style: style,
+      ),
+      if (language != AppLanguage.english) ...[
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          copy.secondary(language),
+          textAlign: center ? TextAlign.center : null,
+          style: (style ?? AppTypography.bodySmall).copyWith(
+            color: AppColors.muted,
+          ),
+        ),
+      ],
+    ],
+  );
+}

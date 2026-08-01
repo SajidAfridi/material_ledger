@@ -23,38 +23,42 @@ void main() {
     addTearDown(container.dispose);
   });
 
-  test('dispatch appends a signed ledger entry with the resulting balance',
-      () async {
-    final startQty =
-        container.read(materialsProvider).firstWhere((m) => m.id == 'mat-001').quantity;
-    final notifier = container.read(materialRequestsProvider.notifier);
-    await notifier.addRequest(
-      projectName: 'Ledger Test',
-      projectNameSecondary: '',
-      itemCount: 1,
-      lineItems: const [
-        RequestLineItem(
-          materialId: 'mat-001',
-          materialName: 'Gate Valve 2" (Brass)',
-          materialNameSecondary: '',
-          quantity: 10,
-          unitSymbol: 'pcs',
-        ),
-      ],
-    );
-    final reqId = container.read(materialRequestsProvider).first.id;
-    await notifier.dispatch(reqId, [10]);
+  test(
+    'dispatch appends a signed ledger entry with the resulting balance',
+    () async {
+      final startQty = container
+          .read(materialsProvider)
+          .firstWhere((m) => m.id == 'mat-001')
+          .quantity;
+      final notifier = container.read(materialRequestsProvider.notifier);
+      await notifier.addRequest(
+        projectName: 'Ledger Test',
+        projectNameSecondary: '',
+        itemCount: 1,
+        lineItems: const [
+          RequestLineItem(
+            materialId: 'mat-001',
+            materialName: 'Gate Valve 2" (Brass)',
+            materialNameSecondary: '',
+            quantity: 10,
+            unitSymbol: 'pcs',
+          ),
+        ],
+      );
+      final reqId = container.read(materialRequestsProvider).first.id;
+      await notifier.dispatch(reqId, [10]);
 
-    final moves = container
-        .read(stockMovementsProvider.notifier)
-        .forMaterial('mat-001');
-    expect(moves, isNotEmpty);
-    final dispatchMove = moves.first;
-    expect(dispatchMove.type, MovementType.dispatch);
-    expect(dispatchMove.delta, -10);
-    expect(dispatchMove.resultingBalance, startQty - 10);
-    expect(dispatchMove.refId, reqId);
-  });
+      final moves = container
+          .read(stockMovementsProvider.notifier)
+          .forMaterial('mat-001');
+      expect(moves, isNotEmpty);
+      final dispatchMove = moves.first;
+      expect(dispatchMove.type, MovementType.dispatch);
+      expect(dispatchMove.delta, -10);
+      expect(dispatchMove.resultingBalance, startQty - 10);
+      expect(dispatchMove.refId, reqId);
+    },
+  );
 
   test('a return appends a positive returnIn entry', () async {
     final notifier = container.read(materialRequestsProvider.notifier);
@@ -75,19 +79,21 @@ void main() {
     final reqId = container.read(materialRequestsProvider).first.id;
     await notifier.dispatch(reqId, [4]);
 
-    await container.read(returnsProvider.notifier).addReturn(
-      projectName: 'Ledger Return',
-      projectNameSecondary: '',
-      items: const [
-        ReturnItem(
-          description: 'Ball Valve 1" (SS 304)',
-          quantity: 4,
-          unitSymbol: 'pcs',
-          materialId: 'mat-002',
-          reason: ReturnReason.surplus,
-        ),
-      ],
-    );
+    await container
+        .read(returnsProvider.notifier)
+        .addReturn(
+          projectName: 'Ledger Return',
+          projectNameSecondary: '',
+          items: const [
+            ReturnItem(
+              description: 'Ball Valve 1" (SS 304)',
+              quantity: 4,
+              unitSymbol: 'pcs',
+              materialId: 'mat-002',
+              reason: ReturnReason.surplus,
+            ),
+          ],
+        );
 
     final moves = container
         .read(stockMovementsProvider.notifier)
@@ -97,11 +103,11 @@ void main() {
   });
 
   test('receiveStock appends a receipt entry', () async {
-    final before =
-        container.read(materialsProvider).firstWhere((m) => m.id == 'mat-003').quantity;
-    await container
-        .read(materialsProvider.notifier)
-        .receiveStock('mat-003', 8, unitCostAED: 100);
+    final before = container
+        .read(materialsProvider)
+        .firstWhere((m) => m.id == 'mat-003')
+        .quantity;
+    await container.read(materialsProvider.notifier).receiveStock('mat-003', 8);
     final moves = container
         .read(stockMovementsProvider.notifier)
         .forMaterial('mat-003');
@@ -111,7 +117,9 @@ void main() {
   });
 
   test('a zero-delta change is not ledgered', () async {
-    await container.read(materialsProvider.notifier).adjustQuantity('mat-004', 0);
+    await container
+        .read(materialsProvider.notifier)
+        .adjustQuantity('mat-004', 0);
     expect(
       container.read(stockMovementsProvider.notifier).forMaterial('mat-004'),
       isEmpty,

@@ -9,6 +9,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_plan.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 
 /// Phase 1 — Shows what changed between the arranged plan (baseline) and the
 /// engineer's edited plan, so only changed items go back for re-review
@@ -22,6 +23,9 @@ class PlanDiffScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(nexusFeatureFlagsProvider).phase1Planning) {
+      return const NexusFeatureUnavailableScreen(title: 'Plan changes');
+    }
     final lang = ref.watch(languageProvider);
     final plan = ref.watch(planForProjectProvider(projectId));
 
@@ -41,8 +45,8 @@ class PlanDiffScreen extends ConsumerWidget {
     final changed = [
       for (final i in current)
         if (baseById.containsKey(i.id) &&
-            baseById[i.id]!.quantity != i.quantity)
-          (old: baseById[i.id]!, now: i),
+            _changes(baseById[i.id]!, i).isNotEmpty)
+          (old: baseById[i.id]!, now: i, changes: _changes(baseById[i.id]!, i)),
     ];
     final unchanged = current.length - added.length - changed.length;
     final hasAny = added.isNotEmpty || removed.isNotEmpty || changed.isNotEmpty;
@@ -84,8 +88,7 @@ class PlanDiffScreen extends ConsumerWidget {
                     _DiffRow(
                       title: c.now.description,
                       chip: StatusChip.info(AppStrings.diffChanged.primary),
-                      detail:
-                          '${_fmt(c.old.quantity)} ${c.old.unitSymbol}  →  ${_fmt(c.now.quantity)} ${c.now.unitSymbol}',
+                      detail: c.changes.join('\n'),
                       strikeDetail: false,
                     ),
                   for (final i in added)
@@ -128,6 +131,61 @@ class PlanDiffScreen extends ConsumerWidget {
       ),
     );
   }
+
+  List<String> _changes(PlanItem old, PlanItem now) {
+    final changes = <String>[];
+    void add(String label, Object before, Object after) {
+      if (before != after) changes.add('$label: $before → $after');
+    }
+
+    add(AppStrings.description.primary, old.description, now.description);
+    add(AppStrings.sizeLabel.primary, old.size, now.size);
+    add(_PlanDiffCopy.modelSerial.primary, old.modelSerial, now.modelSerial);
+    add(_PlanDiffCopy.makeOrigin.primary, old.makeOrigin, now.makeOrigin);
+    add(AppStrings.quantity.primary, _fmt(old.quantity), _fmt(now.quantity));
+    add(AppStrings.unit.primary, old.unitSymbol, now.unitSymbol);
+    add(_PlanDiffCopy.remarks.primary, old.note, now.note);
+    add(_PlanDiffCopy.buildingScope.primary, old.buildingId, now.buildingId);
+    add(
+      _PlanDiffCopy.proposedSource.primary,
+      old.proposedSource.label,
+      now.proposedSource.label,
+    );
+    return changes;
+  }
+}
+
+abstract final class _PlanDiffCopy {
+  static const modelSerial = TranslatableString(
+    en: 'Model/Serial No.',
+    ar: 'رقم الموديل/التسلسل',
+    ur: 'ماڈل/سیریل نمبر',
+    hi: 'मॉडल/सीरियल नं.',
+  );
+  static const makeOrigin = TranslatableString(
+    en: 'Make/Origin',
+    ar: 'الصنع/المنشأ',
+    ur: 'میک/اصل',
+    hi: 'मेक/मूल',
+  );
+  static const remarks = TranslatableString(
+    en: 'Remarks',
+    ar: 'ملاحظات',
+    ur: 'ریمارکس',
+    hi: 'टिप्पणियाँ',
+  );
+  static const buildingScope = TranslatableString(
+    en: 'Building scope',
+    ar: 'نطاق المبنى',
+    ur: 'عمارت کا دائرہ',
+    hi: 'भवन दायरा',
+  );
+  static const proposedSource = TranslatableString(
+    en: 'Proposed source',
+    ar: 'المصدر المقترح',
+    ur: 'تجویز کردہ سورس',
+    hi: 'प्रस्तावित स्रोत',
+  );
 }
 
 class _DiffRow extends StatelessWidget {
@@ -176,6 +234,7 @@ class _DiffRow extends StatelessWidget {
             const Gap(AppSpacing.xs),
             Text(
               detail,
+              maxLines: 8,
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.onSurfaceVariant,
               ),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/constants.dart';
 import '../../../../core/feedback/feedback_service.dart';
@@ -14,10 +15,15 @@ import '../../../../shared/models/app_user.dart';
 import '../../../../shared/models/audit_log.dart';
 import '../../../../shared/models/effective_permissions.dart';
 import '../../../../shared/models/user_role.dart';
+import '../../../../shared/models/yorks_v1_commercial_capability.dart';
+import '../../../../shared/models/yorks_v1_domain_error.dart';
+import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/users_provider.dart';
+import '../../../../shared/providers/yorks_v1_commercial_capability_provider.dart';
 
 /// Strips the `Exception: ` prefix so remote-provisioning errors read cleanly in
 /// a snackbar.
@@ -27,15 +33,35 @@ String _friendlyErr(Object e) {
   return s.startsWith(p) ? s.substring(p.length) : s;
 }
 
+/// Display-only role text for the retained roster. V1 authorization never uses
+/// this cache; server commands and route guards read the current exact claim.
+String _roleLabel(AppUser user, {required bool yorksV1Provisioning}) {
+  if (!yorksV1Provisioning) return user.role.label;
+  final role = user.yorksV1RoleCache;
+  return role == null
+      ? AppStrings.yorksV1RoleMappingRequired.primary
+      : _yorksV1RoleText(role).primary;
+}
+
+TranslatableString _yorksV1RoleText(YorksV1Role role) => switch (role) {
+  YorksV1Role.projectEngineer => AppStrings.projectEngineerRole,
+  YorksV1Role.siteEngineer => AppStrings.siteEngineerRole,
+  YorksV1Role.procurement => AppStrings.procurementRole,
+  YorksV1Role.admin => AppStrings.adminRole,
+};
+
 /// The per-user capabilities an Admin can grant/revoke, with display labels.
 const _managedPermissions = <(PermissionKey, String)>[
-  (PermissionKey.cost, 'See unit cost'),
+  (PermissionKey.viewCommercials, 'View commercials'),
   (PermissionKey.finance, 'Financial reports'),
   (PermissionKey.salary, 'Salary & HR documents'),
   (PermissionKey.rentals, 'Rentals module'),
   (PermissionKey.people, 'People / HR module'),
   (PermissionKey.goods, 'Receive goods (stock-in)'),
 ];
+
+typedef _UserManagementBusyCommand =
+    Future<void> Function(Future<void> Function() command);
 
 /// Admin user management & access control (SRS §4.7). Create / edit /
 /// deactivate accounts, assign roles, reset passwords, grant or revoke
@@ -58,19 +84,29 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     super.dispose();
   }
 
-  bool _matches(AppUser u) {
+  bool _matches(AppUser u, {required bool yorksV1Provisioning}) {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return u.fullName.toLowerCase().contains(q) ||
         u.email.toLowerCase().contains(q) ||
-        u.role.label.toLowerCase().contains(q);
+        _roleLabel(
+          u,
+          yorksV1Provisioning: yorksV1Provisioning,
+        ).toLowerCase().contains(q);
   }
 
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
     final all = ref.watch(usersProvider);
-    final users = all.where(_matches).toList();
+    final yorksV1Provisioning = ref.watch(
+      yorksV1UserProvisioningEnabledProvider,
+    );
+    final users = all
+        .where(
+          (user) => _matches(user, yorksV1Provisioning: yorksV1Provisioning),
+        )
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -132,7 +168,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                             },
                           ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusFull,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -158,7 +196,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         itemCount: users.length,
                         separatorBuilder: (_, _) =>
                             const Gap(AppSpacing.listItemGap),
-                        itemBuilder: (context, i) => _UserCard(user: users[i]),
+                        itemBuilder: (context, i) => _UserCard(
+                          user: users[i],
+                          yorksV1Provisioning: yorksV1Provisioning,
+                        ),
                       ),
               ),
             ],
@@ -170,8 +211,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 }
 
 class _UserCard extends StatelessWidget {
-  const _UserCard({required this.user});
+  const _UserCard({required this.user, required this.yorksV1Provisioning});
   final AppUser user;
+  final bool yorksV1Provisioning;
 
   @override
   Widget build(BuildContext context) {
@@ -216,7 +258,9 @@ class _UserCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              StatusChip.info(user.role.label),
+              StatusChip.info(
+                _roleLabel(user, yorksV1Provisioning: yorksV1Provisioning),
+              ),
               const Gap(AppSpacing.xs),
               user.active
                   ? StatusChip.success(AppStrings.userActive.primary)
@@ -252,8 +296,26 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  UserRole _role = UserRole.engineer;
+  UserRole _legacyRole = UserRole.engineer;
+  YorksV1Role _yorksV1Role = YorksV1Role.siteEngineer;
   bool _busy = false;
+  String? _createCommandFingerprint;
+  String? _createIdempotencyKey;
+  String? _createAppUserId;
+
+  ({String idempotencyKey, String appUserId}) _createCommandFor(
+    String fingerprint,
+  ) {
+    if (_createCommandFingerprint != fingerprint) {
+      _createCommandFingerprint = fingerprint;
+      _createIdempotencyKey = const Uuid().v4();
+      _createAppUserId = 'usr-${const Uuid().v4().substring(0, 8)}';
+    }
+    return (
+      idempotencyKey: _createIdempotencyKey!,
+      appUserId: _createAppUserId!,
+    );
+  }
 
   @override
   void dispose() {
@@ -267,22 +329,48 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _busy = true);
     try {
+      final yorksV1Provisioning = ref.read(
+        yorksV1UserProvisioningEnabledProvider,
+      );
+      final fullName = _nameController.text.trim();
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      final command = _createCommandFor(
+        [
+          yorksV1Provisioning,
+          fullName,
+          email,
+          password,
+          yorksV1Provisioning ? _yorksV1Role.name : _legacyRole.name,
+        ].join('\u0000'),
+      );
       // When Supabase is configured this provisions the account in the identity
       // provider (via the admin-users function) before storing it locally; a
       // failure (e.g. duplicate email) throws and nothing is written.
-      final user = await ref
-          .read(usersProvider.notifier)
-          .createUser(
-            fullName: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            role: _role,
-            password: _passwordController.text,
-          );
+      final users = ref.read(usersProvider.notifier);
+      final user = yorksV1Provisioning
+          ? await users.createYorksV1User(
+              fullName: fullName,
+              email: email,
+              role: _yorksV1Role,
+              password: password,
+              idempotencyKey: command.idempotencyKey,
+              appUserId: command.appUserId,
+            )
+          : await users.createUser(
+              fullName: fullName,
+              email: email,
+              role: _legacyRole,
+              password: password,
+              idempotencyKey: command.idempotencyKey,
+              appUserId: command.appUserId,
+            );
       await ref.logAudit(
         action: 'User created',
         module: AuditModule.platform,
         refId: user.id,
-        detail: '${user.fullName} · ${user.role.label}',
+        detail:
+            '${user.fullName} · ${_roleLabel(user, yorksV1Provisioning: yorksV1Provisioning)}',
       );
       if (!mounted) return;
       // The app-level messenger outlives this sheet, so the success toast still
@@ -290,9 +378,7 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
       final messenger = ScaffoldMessenger.of(context);
       AppFeedback.confirm();
       Navigator.pop(context);
-      messenger.showSnackBar(
-        SnackBar(content: Text('${user.fullName} added')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('${user.fullName} added')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -309,6 +395,9 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final yorksV1Provisioning = ref.watch(
+      yorksV1UserProvisioningEnabledProvider,
+    );
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -360,22 +449,35 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
                     validator: (v) {
                       final t = (v ?? '').trim();
                       if (t.isEmpty) return AppStrings.fieldRequired.primary;
-                      if (!t.contains('@')) return AppStrings.emailAddress.primary;
+                      if (!t.contains('@')) {
+                        return AppStrings.emailAddress.primary;
+                      }
                       return null;
                     },
                   ),
                   const Gap(AppSpacing.lg),
-                  Text(AppStrings.roleLabel.primary, style: AppTypography.titleSmall),
+                  Text(
+                    AppStrings.roleLabel.primary,
+                    style: AppTypography.titleSmall,
+                  ),
                   const Gap(AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.sm,
                     children: [
-                      for (final r in UserRole.values)
-                        _RoleChip(
-                          label: r.label,
-                          selected: _role == r,
-                          onTap: () => setState(() => _role = r),
-                        ),
+                      if (yorksV1Provisioning)
+                        for (final role in YorksV1Role.values)
+                          _RoleChip(
+                            label: _yorksV1RoleText(role).primary,
+                            selected: _yorksV1Role == role,
+                            onTap: () => setState(() => _yorksV1Role = role),
+                          )
+                      else
+                        for (final role in UserRole.values)
+                          _RoleChip(
+                            label: role.label,
+                            selected: _legacyRole == role,
+                            onTap: () => setState(() => _legacyRole = role),
+                          ),
                     ],
                   ),
                   const Gap(AppSpacing.lg),
@@ -429,6 +531,15 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
   /// the sheet's controls and shows a progress line so the admin gets clear
   /// system-status feedback and can't fire a second action mid-flight.
   bool _busy = false;
+  final Map<String, String> _idempotencyKeys = {};
+  String? _pendingResetPassword;
+
+  String _idempotencyKeyFor(String command) =>
+      _idempotencyKeys.putIfAbsent(command, () => const Uuid().v4());
+
+  void _completeCommand(String command) {
+    _idempotencyKeys.remove(command);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +548,9 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
         .where((u) => u.id == widget.userId)
         .firstOrNull;
     if (user == null) return const SizedBox.shrink();
+    final yorksV1Provisioning = ref.watch(
+      yorksV1UserProvisioningEnabledProvider,
+    );
 
     // The app-level messenger outlives this sheet, so success toasts shown after
     // Navigator.pop still appear.
@@ -468,11 +582,17 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
 
     Future<void> toggleActive() => run(() async {
       final willActivate = !user.active;
+      final command = 'set-active:${user.id}:$willActivate';
       try {
         final allowed = await ref
             .read(usersProvider.notifier)
-            .setActive(user.id, willActivate);
+            .setActive(
+              user.id,
+              willActivate,
+              idempotencyKey: _idempotencyKeyFor(command),
+            );
         if (!allowed) return warn("Can't deactivate the only active admin.");
+        _completeCommand(command);
         await ref.logAudit(
           action: willActivate ? 'User reactivated' : 'User deactivated',
           module: AuditModule.platform,
@@ -492,13 +612,16 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
             .read(usersProvider.notifier)
             .setInventoryAccess(user.id, grant);
         await ref.logAudit(
-          action:
-              grant ? 'Inventory access granted' : 'Inventory access revoked',
+          action: grant
+              ? 'Inventory access granted'
+              : 'Inventory access revoked',
           module: AuditModule.platform,
           refId: user.id,
           detail: user.fullName,
         );
-        success(grant ? 'Inventory access granted' : 'Inventory access revoked');
+        success(
+          grant ? 'Inventory access granted' : 'Inventory access revoked',
+        );
       } catch (e) {
         warn(_friendlyErr(e));
       }
@@ -512,14 +635,23 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       // Set a temporary password the admin can share; the user must change it on
       // first sign-in. When Supabase is configured this resets the real Auth
       // credential via the admin-users function.
-      final temp = 'Temp${1000 + Random().nextInt(9000)}';
+      final temp = _pendingResetPassword ??=
+          'Temp${1000 + Random().nextInt(9000)}';
+      final command = 'set-password:${user.id}:$temp';
       try {
         await ref
             .read(usersProvider.notifier)
-            .setPassword(user.id, temp, temporary: true);
+            .setPassword(
+              user.id,
+              temp,
+              temporary: true,
+              idempotencyKey: _idempotencyKeyFor(command),
+            );
       } catch (e) {
         return warn(_friendlyErr(e));
       }
+      _pendingResetPassword = null;
+      _completeCommand(command);
       await ref.logAudit(
         action: 'Password reset',
         module: AuditModule.platform,
@@ -593,12 +725,19 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       );
     });
 
-    Future<void> setRole(UserRole role) => run(() async {
+    Future<void> setLegacyRole(UserRole role) => run(() async {
       if (role == user.role) return;
+      final command = 'set-role:${user.id}:${role.name}';
       try {
-        final allowed =
-            await ref.read(usersProvider.notifier).setRole(user.id, role);
+        final allowed = await ref
+            .read(usersProvider.notifier)
+            .setRole(
+              user.id,
+              role,
+              idempotencyKey: _idempotencyKeyFor(command),
+            );
         if (!allowed) return warn("Can't change the only active admin's role.");
+        _completeCommand(command);
         await ref.logAudit(
           action: 'User role changed',
           module: AuditModule.platform,
@@ -611,15 +750,46 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       }
     });
 
+    Future<void> setYorksV1Role(YorksV1Role role) => run(() async {
+      if (role == user.yorksV1RoleCache) return;
+      final command = 'set-v1-role:${user.id}:${role.claimValue}';
+      try {
+        final allowed = await ref
+            .read(usersProvider.notifier)
+            .setYorksV1Role(
+              user.id,
+              role,
+              idempotencyKey: _idempotencyKeyFor(command),
+            );
+        if (!allowed) return warn("Can't change the only active admin's role.");
+        _completeCommand(command);
+        final label = _yorksV1RoleText(role).primary;
+        await ref.logAudit(
+          action: 'User role changed',
+          module: AuditModule.platform,
+          refId: user.id,
+          detail: '${user.fullName} → $label',
+        );
+        success('Role changed to $label');
+      } catch (e) {
+        warn(_friendlyErr(e));
+      }
+    });
+
     Future<void> setOverride(PermissionKey key, bool value) => run(() async {
       // Toggling back to the role default clears the override entirely.
       final next = value == user.roleDefaultFor(key) ? null : value;
+      final command = 'set-override:${user.id}:${key.name}:$next';
       try {
-        await ref.read(usersProvider.notifier).setPermissionOverride(
+        await ref
+            .read(usersProvider.notifier)
+            .setPermissionOverride(
               user.id,
               key,
               next,
+              idempotencyKey: _idempotencyKeyFor(command),
             );
+        _completeCommand(command);
         await ref.logAudit(
           action: 'Permission updated',
           module: AuditModule.platform,
@@ -647,7 +817,9 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
         refId: user.id,
         detail: '${user.fullName} → ${employeeId ?? 'none'}',
       );
-      success(employeeId == null ? 'Employee link cleared' : 'Linked to employee');
+      success(
+        employeeId == null ? 'Employee link cleared' : 'Linked to employee',
+      );
     });
 
     Future<void> pickEmployee() async {
@@ -674,7 +846,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                   leading: const Icon(Icons.link_off_rounded),
                   title: const Text('Not linked'),
                   trailing: user.employeeId == null
-                      ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                        )
                       : null,
                   onTap: () {
                     Navigator.pop(ctx);
@@ -687,7 +862,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                     title: Text(e.fullName),
                     subtitle: Text('${e.jobRole} · ${e.id}'),
                     trailing: user.employeeId == e.id
-                        ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                        ? const Icon(
+                            Icons.check_rounded,
+                            color: AppColors.primary,
+                          )
                         : null,
                     onTap: () {
                       Navigator.pop(ctx);
@@ -734,8 +912,12 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       await run(() async {
         final navigator = Navigator.of(context); // capture before await
         final bool deleted;
+        const active = false;
+        final command = 'set-active:${user.id}:$active';
         try {
-          deleted = await ref.read(usersProvider.notifier).deleteUser(user.id);
+          deleted = await ref
+              .read(usersProvider.notifier)
+              .deleteUser(user.id, idempotencyKey: _idempotencyKeyFor(command));
         } catch (e) {
           return warn(_friendlyErr(e));
         }
@@ -744,6 +926,7 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
             "Can't delete the only active admin — assign another admin first.",
           );
         }
+        _completeCommand(command);
         await ref.logAudit(
           action: 'User deleted',
           module: AuditModule.platform,
@@ -779,7 +962,7 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               ),
               const Gap(AppSpacing.xxs),
               Text(
-                '${user.email} · ${user.role.label}',
+                '${user.email} · ${_roleLabel(user, yorksV1Provisioning: yorksV1Provisioning)}',
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.onSurfaceVariant,
                 ),
@@ -808,7 +991,7 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                 ),
                 activeThumbColor: AppColors.primary,
               ),
-              if (user.role == UserRole.engineer)
+              if (!yorksV1Provisioning && user.role == UserRole.engineer)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: user.inventoryAccess,
@@ -832,14 +1015,38 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
                 children: [
-                  for (final r in UserRole.values)
-                    _RoleChip(
-                      label: r.label,
-                      selected: r == user.role,
-                      onTap: _busy ? null : () => setRole(r),
-                    ),
+                  if (yorksV1Provisioning)
+                    for (final role in YorksV1Role.values)
+                      _RoleChip(
+                        label: _yorksV1RoleText(role).primary,
+                        selected: role == user.yorksV1RoleCache,
+                        onTap: _busy ? null : () => setYorksV1Role(role),
+                      )
+                  else
+                    for (final role in UserRole.values)
+                      _RoleChip(
+                        label: role.label,
+                        selected: role == user.role,
+                        onTap: _busy ? null : () => setLegacyRole(role),
+                      ),
                 ],
               ),
+
+              // V1 commercial authority is deliberately not backed by the
+              // retained local permission overrides below. The child fetches a
+              // live, Admin-only server projection and the Edge/DB command
+              // remains authoritative even if this display cache is stale.
+              if (yorksV1Provisioning && user.yorksV1RoleCache != null) ...[
+                const Gap(AppSpacing.lg),
+                _YorksV1CommercialAccessSection(
+                  appUserId: user.id,
+                  targetRole: user.yorksV1RoleCache!,
+                  busy: _busy,
+                  runBusyCommand: run,
+                  onFailure: warn,
+                  onSuccess: success,
+                ),
+              ],
 
               // ─── HR employee link (drives leave + balance) ───
               const Gap(AppSpacing.lg),
@@ -881,7 +1088,7 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               ),
 
               // ─── Permissions (per-user overrides) ────────────
-              if (user.role != UserRole.admin) ...[
+              if (!yorksV1Provisioning && user.role != UserRole.admin) ...[
                 const Gap(AppSpacing.lg),
                 Text('Permissions', style: AppTypography.titleSmall),
                 Text(
@@ -920,8 +1127,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               const Gap(AppSpacing.sm),
               TextButton.icon(
                 onPressed: _busy ? null : deleteUser,
-                icon: const Icon(Icons.delete_outline_rounded,
-                    color: AppColors.error),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.error,
+                ),
                 label: Text(
                   'Delete user',
                   style: AppTypography.labelLarge.copyWith(
@@ -934,6 +1143,250 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Connected, Admin-only V1 commercial capability controls.
+///
+/// This section renders only a small authorization projection. It never loads
+/// a commercial material, cost, quotation or other protected business value.
+class _YorksV1CommercialAccessSection extends ConsumerWidget {
+  const _YorksV1CommercialAccessSection({
+    required this.appUserId,
+    required this.targetRole,
+    required this.busy,
+    required this.runBusyCommand,
+    required this.onFailure,
+    required this.onSuccess,
+  });
+
+  final String appUserId;
+  final YorksV1Role targetRole;
+  final bool busy;
+  final _UserManagementBusyCommand runBusyCommand;
+  final ValueChanged<String> onFailure;
+  final ValueChanged<String> onSuccess;
+
+  /// Product Decisions permit a reasoned Admin override for an Engineer's
+  /// protected commercial *view*. `manage_commercials` remains unavailable to
+  /// both engineering roles and is also enforced by the server command.
+  bool _mayChange(YorksV1CommercialCapability capability) =>
+      switch (capability) {
+        YorksV1CommercialCapability.viewCommercials => true,
+        YorksV1CommercialCapability.manageCommercials =>
+          targetRole == YorksV1Role.procurement ||
+              targetRole == YorksV1Role.admin,
+      };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final access = ref.watch(yorksV1CommercialCapabilitiesProvider(appUserId));
+
+    return access.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: LinearProgressIndicator(minHeight: 2),
+      ),
+      error: (_, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          BilingualText(
+            english: YorksV1ProjectStrings.commercialAccess.primary,
+            secondary: YorksV1ProjectStrings.commercialAccess.secondary(
+              language,
+            ),
+            englishStyle: AppTypography.titleSmall,
+          ),
+          const Gap(AppSpacing.xs),
+          BilingualText(
+            english: YorksV1ProjectStrings.commercialAccessUnavailable.primary,
+            secondary: YorksV1ProjectStrings.commercialAccessUnavailable
+                .secondary(language),
+            englishStyle: AppTypography.bodySmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          const Gap(AppSpacing.xs),
+          TextButton.icon(
+            onPressed: busy
+                ? null
+                : () => ref.invalidate(
+                    yorksV1CommercialCapabilitiesProvider(appUserId),
+                  ),
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(YorksV1ProjectStrings.retry.primary),
+          ),
+        ],
+      ),
+      data: (capabilities) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          BilingualText(
+            english: YorksV1ProjectStrings.commercialAccess.primary,
+            secondary: YorksV1ProjectStrings.commercialAccess.secondary(
+              language,
+            ),
+            englishStyle: AppTypography.titleSmall,
+          ),
+          const Gap(AppSpacing.xs),
+          BilingualText(
+            english: YorksV1ProjectStrings.commercialAccessDescription.primary,
+            secondary: YorksV1ProjectStrings.commercialAccessDescription
+                .secondary(language),
+            englishStyle: AppTypography.bodySmall.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          const Gap(AppSpacing.sm),
+          for (final capability in YorksV1CommercialCapability.values)
+            _CommercialCapabilitySwitch(
+              capability: capability,
+              access: capabilities[capability],
+              enabled: !busy && _mayChange(capability),
+              onChanged: (granted) => _changeCapability(
+                context,
+                ref,
+                capability: capability,
+                granted: granted,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changeCapability(
+    BuildContext context,
+    WidgetRef ref, {
+    required YorksV1CommercialCapability capability,
+    required bool granted,
+  }) async {
+    final reason = await _askCommercialCapabilityReason(context);
+    if (reason == null) return;
+
+    await runBusyCommand(() async {
+      try {
+        await ref
+            .read(yorksV1CommercialCapabilityRepositoryProvider)
+            .setForAppUser(
+              appUserId: appUserId,
+              capability: capability,
+              granted: granted,
+              reason: reason,
+              idempotencyKey: const Uuid().v4(),
+            );
+        ref.invalidate(yorksV1CommercialCapabilitiesProvider(appUserId));
+        onSuccess(YorksV1ProjectStrings.accessUpdated.primary);
+      } on YorksV1DomainException catch (error) {
+        onFailure(YorksV1ProjectStrings.errorFor(error.code).primary);
+      } catch (_) {
+        onFailure(YorksV1ProjectStrings.commercialAccessUnavailable.primary);
+      }
+    });
+  }
+
+  Future<String?> _askCommercialCapabilityReason(BuildContext context) async {
+    final controller = TextEditingController();
+    String? validationError;
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            backgroundColor: AppColors.surfaceContainerLowest,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+            ),
+            title: Text(
+              YorksV1ProjectStrings.commercialAccessChangeReason.primary,
+            ),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 500,
+              decoration: InputDecoration(
+                hintText:
+                    YorksV1ProjectStrings.commercialAccessReasonHint.primary,
+                errorText: validationError,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(YorksV1ProjectStrings.cancel.primary),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final reason = controller.text.trim();
+                  if (reason.isEmpty) {
+                    setDialogState(
+                      () => validationError = YorksV1ProjectStrings
+                          .commercialAccessChangeReason
+                          .primary,
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, reason);
+                },
+                child: Text(YorksV1ProjectStrings.saveAccessChange.primary),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+}
+
+class _CommercialCapabilitySwitch extends ConsumerWidget {
+  const _CommercialCapabilitySwitch({
+    required this.capability,
+    required this.access,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final YorksV1CommercialCapability capability;
+  final YorksV1CommercialCapabilityAccess access;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final label = switch (capability) {
+      YorksV1CommercialCapability.viewCommercials =>
+        YorksV1ProjectStrings.viewCommercials,
+      YorksV1CommercialCapability.manageCommercials =>
+        YorksV1ProjectStrings.manageCommercials,
+    };
+    final source = access.usesRoleDefault
+        ? YorksV1ProjectStrings.roleDefault
+        : YorksV1ProjectStrings.customForUser;
+
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      value: access.effective,
+      onChanged: enabled ? onChanged : null,
+      title: BilingualText(
+        english: label.primary,
+        secondary: label.secondary(language),
+        englishStyle: AppTypography.bodyLarge,
+      ),
+      subtitle: BilingualText(
+        english: source.primary,
+        secondary: source.secondary(language),
+        englishStyle: AppTypography.bodySmall.copyWith(
+          color: AppColors.onSurfaceVariant,
+        ),
+      ),
+      activeThumbColor: AppColors.primary,
     );
   }
 }

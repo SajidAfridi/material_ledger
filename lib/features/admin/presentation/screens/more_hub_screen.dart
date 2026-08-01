@@ -9,6 +9,7 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/sync/sync_engine.dart';
 import '../../../../shared/widgets/notification_bell.dart';
 
@@ -23,6 +24,7 @@ class MoreHubScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
     final syncState = ref.watch(syncStatusProvider);
+    final browseEnabled = ref.watch(nexusFeatureFlagsProvider).browseMaterials;
 
     return SafeArea(
       child: ResponsiveCenter(
@@ -74,6 +76,15 @@ class MoreHubScreen extends ConsumerWidget {
               onTap: () => context.push(RoutePaths.accessRoles),
             ),
             const Gap(AppSpacing.listItemGap),
+            if (browseEnabled) ...[
+              _NavCard(
+                icon: Icons.category_outlined,
+                title: 'Material master data',
+                subtitle: 'Categories, approved units and custom-unit review',
+                onTap: () => context.push(RoutePaths.materialMasters),
+              ),
+              const Gap(AppSpacing.listItemGap),
+            ],
             _NavCard(
               icon: Icons.history_rounded,
               title: AppStrings.auditTrail.primary,

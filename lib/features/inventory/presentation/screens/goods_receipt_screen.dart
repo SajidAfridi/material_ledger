@@ -12,6 +12,7 @@ import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/goods_receipt_provider.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/sync/sync_indicators.dart';
 import '../../../engineer/presentation/widgets/inventory_picker_sheet.dart';
@@ -59,7 +60,10 @@ class _GoodsReceiptScreenState extends ConsumerState<GoodsReceiptScreen> {
 
     setState(() => _busy = true);
     final qty = double.parse(_qtyController.text.trim());
-    final cost = double.parse(_costController.text.trim());
+    final canViewCommercials = ref.read(canViewCommercialsProvider);
+    final cost = canViewCommercials
+        ? double.parse(_costController.text.trim())
+        : null;
     final supplier = _supplierController.text.trim();
 
     final grn = await ref
@@ -80,8 +84,7 @@ class _GoodsReceiptScreenState extends ConsumerState<GoodsReceiptScreen> {
       action: 'Goods received into store',
       module: AuditModule.materials,
       refId: grn.id,
-      detail:
-          '${_selected!.name} ×${_fmt(qty)} @ ${cost.toStringAsFixed(2)} · $supplier',
+      detail: '${_selected!.name} ×${_fmt(qty)} · $supplier',
     );
 
     if (!mounted) return;
@@ -93,13 +96,13 @@ class _GoodsReceiptScreenState extends ConsumerState<GoodsReceiptScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  String _fmt(double v) =>
-      v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 2);
+  String _fmt(double v) => v.toStringAsFixed(v.truncateToDouble() == v ? 0 : 2);
 
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
+    final canViewCommercials = ref.watch(canViewCommercialsProvider);
     final sel = _selected;
 
     return Scaffold(
@@ -197,18 +200,20 @@ class _GoodsReceiptScreenState extends ConsumerState<GoodsReceiptScreen> {
                         validator: _positiveNumber,
                       ),
                     ),
-                    const Gap(AppSpacing.lg),
-                    Expanded(
-                      child: LedgerTextField(
-                        controller: _costController,
-                        label: '${AppStrings.unitPrice.primary} (AED)',
-                        hintText: '0.00',
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                    if (canViewCommercials) ...[
+                      const Gap(AppSpacing.lg),
+                      Expanded(
+                        child: LedgerTextField(
+                          controller: _costController,
+                          label: '${AppStrings.unitPrice.primary} (AED)',
+                          hintText: '0.00',
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: _positiveNumber,
                         ),
-                        validator: _positiveNumber,
                       ),
-                    ),
+                    ],
                   ],
                 ),
                 const Gap(AppSpacing.lg),
@@ -232,7 +237,7 @@ class _GoodsReceiptScreenState extends ConsumerState<GoodsReceiptScreen> {
                 ),
 
                 // ─── Cost preview ───────────────────────────────
-                if (sel != null) ...[
+                if (sel != null && canViewCommercials) ...[
                   const Gap(AppSpacing.lg),
                   _CostPreview(
                     qtyController: _qtyController,

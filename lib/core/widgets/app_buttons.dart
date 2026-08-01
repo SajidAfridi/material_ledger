@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/constants.dart';
 
-/// Primary CTA button with gradient (design spec: primary → onPrimaryFixedVariant at 135°).
-/// Fully rounded to contrast against sharp, rectangular construction materials.
+/// Primary V7 action button.
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
@@ -30,17 +29,25 @@ class PrimaryButton extends StatelessWidget {
         minWidth: isExpanded ? double.infinity : 0,
       ),
       decoration: BoxDecoration(
-        gradient: onPressed != null ? AppColors.primaryGradient : null,
-        color: onPressed == null
-            ? AppColors.onSurfaceVariant.withValues(alpha: 0.12)
-            : null,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+        color: onPressed != null
+            ? AppColors.navy
+            : AppColors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        boxShadow: onPressed == null
+            ? null
+            : const [
+                BoxShadow(
+                  color: AppColors.shadow,
+                  blurRadius: AppSpacing.ambientBlur,
+                  offset: Offset(0, 6),
+                ),
+              ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: isLoading ? null : onPressed,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.xxl,
@@ -93,7 +100,7 @@ class PrimaryButton extends StatelessWidget {
   }
 }
 
-/// Secondary button — No fill, ghost border (15% outline-variant).
+/// Secondary V7 action button.
 class SecondaryButton extends StatelessWidget {
   const SecondaryButton({
     super.key,
@@ -117,8 +124,10 @@ class SecondaryButton extends StatelessWidget {
           isExpanded ? double.infinity : 0,
           AppSpacing.minTapTarget,
         ),
-        shape: const StadiumBorder(),
-        side: BorderSide(color: AppColors.ghostBorder),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        side: const BorderSide(color: AppColors.line),
       ),
       child: Row(
         mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,

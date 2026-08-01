@@ -24,6 +24,7 @@ dependencies:
   # UI Utilities
   gap:
   flutter_svg: ^2.0.17
+  cupertino_icons: ^1.0.8
 
   # Utilities
   intl:
@@ -39,13 +40,20 @@ dependencies:
   package_info_plus: ^10.1.0
   connectivity_plus: ^7.1.1
   url_launcher: ^6.3.2
+  web: ^1.1.1
   local_auth: ^3.0.1
+  # Licensed pure-Dart OOXML/XLSX parsing and generation for BOQ round-trips.
+  archive: ^4.0.7
+  xml: ^7.0.1
+  # Flutter-maintained native and browser XLSX selection/save dialogs.
+  file_selector: ^1.1.0
   # Crash & error monitoring — only active when a SENTRY_DSN is supplied at
   # build time (--dart-define); otherwise the app uses NoopObservability.
   sentry_flutter: ^9.0.0
   # Backend (self-hosted Supabase / Postgres in a UAE region). Only active when
   # SUPABASE_URL + SUPABASE_ANON_KEY are supplied at build time (--dart-define);
-  # otherwise the app uses the local sync backend (unchanged offline behaviour).
+  # release startup fails closed. Local mode requires explicit development
+  # defines and is never a production fallback.
   supabase_flutter: ^2.5.0
   # Push notification TRANSPORT ONLY (Supabase remains the backend/auth/db).
   # A no-op until google-services.json / GoogleService-Info.plist are added —
@@ -91,3 +99,13 @@ flutter:
     - assets/icons/
     - assets/images/
     - assets/fonts/
+
+  fonts:
+    - family: NexusSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+    - family: NotoSansArabic
+      fonts:
+        - asset: assets/fonts/NotoSansArabic-Regular.ttf

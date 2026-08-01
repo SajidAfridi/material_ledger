@@ -28,6 +28,8 @@ class SupabaseBootstrap {
     'materialPlans': 'material_plans_list_v2',
     'materialRequests': 'material_requests_list_v3',
     'materials': 'materials_list_v3',
+    'materialCategories': 'material_categories_v1',
+    'materialUnits': 'material_units_v1',
     'stockMovements': 'stock_movements_v2',
     'notifications': 'notifications_list_v3',
     'rentalUnits': 'rental_units_v2',
@@ -66,12 +68,21 @@ class SupabaseBootstrap {
   /// never be present in the cloud row). Salary/basic-wage are admin-device-local.
   static const _preserveLocalKeys = <String, List<String>>{
     'employees': ['salaryAED', 'basicWageAED'],
-    // reservedQty is derived per-device from open requests — never overwrite it
-    // with a cloud row (which doesn't carry it).
+    // Reservation state is derived per device and is not a commercial value.
     'materials': ['reservedQty'],
-    // Contract value is finance-gated in the UI; kept off the shared payload
-    // the same way salary is (see ProjectsNotifier._syncProject).
-    'projects': ['contractValueAED'],
+  };
+
+  static const _commercialKeys = {
+    'unitPrice',
+    'unitCost',
+    'unitCostAED',
+    'unit_cost',
+    'unit_cost_aed',
+    'totalCost',
+    'totalCostAED',
+    'total_cost',
+    'total_cost_aed',
+    'contractValueAED',
   };
 
   Future<void> _syncOneInner(String table, String key) async {
@@ -80,9 +91,19 @@ class SupabaseBootstrap {
       // Merge cloud into local rather than overwrite: cloud wins on a shared id,
       // but a local-only row (e.g. an offline create not yet pushed) is kept, so
       // launch / re-login hydration can never drop unsynced local data.
+      final safeRows = [
+        for (final rawRow in rows)
+          {
+            ...rawRow,
+            'data': sanitizeForCloud(
+              table,
+              Map<String, dynamic>.from(rawRow['data'] as Map),
+            ),
+          },
+      ];
       final merged = mergeRows(
         _prefs.getString(key),
-        rows,
+        safeRows,
         preserveLocalKeys: _preserveLocalKeys[table] ?? const [],
       );
       await _prefs.setString(key, jsonEncode(merged));
@@ -95,9 +116,38 @@ class SupabaseBootstrap {
     if (list.isEmpty) return;
     final now = DateTime.now().toUtc().toIso8601String();
     final payload = [
-      for (final m in list) {'id': m['id'], 'data': m, 'updated_at': now},
+      for (final m in list)
+        {'id': m['id'], 'data': sanitizeForCloud(table, m), 'updated_at': now},
     ];
     await _client.from(table).upsert(payload, onConflict: 'id');
+  }
+
+  /// Removes local-only or commercially restricted fields before any
+  /// first-device seed is uploaded. This closes the path that bypassed normal
+  /// provider-level payload sanitization when a cloud table was empty.
+  static Map<String, dynamic> sanitizeForCloud(
+    String table,
+    Map<String, dynamic> data,
+  ) {
+    final sanitized = _stripCommercialValues(data) as Map<String, dynamic>;
+    for (final key in _preserveLocalKeys[table] ?? const <String>[]) {
+      sanitized.remove(key);
+    }
+    return sanitized;
+  }
+
+  static Object? _stripCommercialValues(Object? value) {
+    if (value is List) {
+      return [for (final item in value) _stripCommercialValues(item)];
+    }
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          if (!_commercialKeys.contains(entry.key.toString()))
+            entry.key.toString(): _stripCommercialValues(entry.value),
+      };
+    }
+    return value;
   }
 
   /// Pure union-merge of cloud rows into the local store (extracted for testing).

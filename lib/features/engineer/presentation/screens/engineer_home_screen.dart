@@ -14,9 +14,12 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../widgets/attendance_home_card.dart';
 
-/// Engineer dashboard for the Yorks GodownPro Phase 1 + Phase 2 workflow.
+/// Engineer dashboard for the Yorks material workflow retained during rollout.
 ///
 /// The shell owns the bottom navigation / side navigation and New Request CTA;
 /// this screen only renders dashboard content to avoid duplicate floating CTAs.
@@ -28,6 +31,9 @@ class EngineerHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final yorksV1ProjectsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .projects;
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -48,8 +54,12 @@ class EngineerHomeScreen extends ConsumerWidget {
                 const Gap(AppSpacing.xl),
                 Expanded(
                   child: isWide
-                      ? const _WideDashboard()
-                      : const _StackedDashboard(),
+                      ? _WideDashboard(
+                          yorksV1ProjectsEnabled: yorksV1ProjectsEnabled,
+                        )
+                      : _StackedDashboard(
+                          yorksV1ProjectsEnabled: yorksV1ProjectsEnabled,
+                        ),
                 ),
               ],
             ),
@@ -61,43 +71,126 @@ class EngineerHomeScreen extends ConsumerWidget {
 }
 
 class _WideDashboard extends StatelessWidget {
-  const _WideDashboard();
+  const _WideDashboard({required this.yorksV1ProjectsEnabled});
+
+  final bool yorksV1ProjectsEnabled;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Expanded(
-          flex: 7,
+          flex: yorksV1ProjectsEnabled ? 1 : 7,
           child: SingleChildScrollView(
             padding: EdgeInsets.only(
-              right: AppSpacing.xl,
+              right: yorksV1ProjectsEnabled ? 0 : AppSpacing.xl,
               bottom: AppSpacing.xxl,
             ),
-            child: _MainContent(),
+            child: yorksV1ProjectsEnabled
+                ? const _YorksV1ProjectFoundationHome()
+                : const _MainContent(),
           ),
         ),
-        SizedBox(
-          width: 340,
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(bottom: AppSpacing.xxl),
-            child: _MaterialFeedPanel(),
+        if (!yorksV1ProjectsEnabled)
+          const SizedBox(
+            width: 340,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: AppSpacing.xxl),
+              child: _MaterialFeedPanel(),
+            ),
           ),
-        ),
       ],
     );
   }
 }
 
 class _StackedDashboard extends StatelessWidget {
-  const _StackedDashboard();
+  const _StackedDashboard({required this.yorksV1ProjectsEnabled});
+
+  final bool yorksV1ProjectsEnabled;
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
-      padding: EdgeInsets.only(bottom: AppSpacing.xxl),
-      child: _MainContent(),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+      child: yorksV1ProjectsEnabled
+          ? const _YorksV1ProjectFoundationHome()
+          : const _MainContent(),
+    );
+  }
+}
+
+/// Batch 2 has a trusted V1 project-creation flow but no normalized
+/// portfolio/plan projection yet. Once the V1 flag is on, this replaces the
+/// retained generic project dashboard so its local Project store cannot be
+/// displayed or mutated beside the normalized authority.
+class _YorksV1ProjectFoundationHome extends ConsumerWidget {
+  const _YorksV1ProjectFoundationHome();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final canCreate = role?.canCreateProject ?? false;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const AttendanceHomeCard(),
+        const Gap(AppSpacing.xl),
+        LedgerCard(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BilingualText(
+                english: YorksV1ProjectStrings.projects.primary,
+                secondary: YorksV1ProjectStrings.projects.secondary(language),
+                englishStyle: AppTypography.headlineMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+                secondaryStyle: AppTypography.labelLarge.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              const Gap(AppSpacing.md),
+              BilingualText(
+                english: YorksV1ProjectStrings.createProjectDescription.primary,
+                secondary: YorksV1ProjectStrings.createProjectDescription
+                    .secondary(language),
+                englishStyle: AppTypography.bodyLarge.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+                secondaryStyle: AppTypography.bodySmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              const Gap(AppSpacing.xl),
+              if (canCreate)
+                PrimaryButton(
+                  label: YorksV1ProjectStrings.createProject.primary,
+                  icon: Icons.add_rounded,
+                  onPressed: () =>
+                      context.push(RoutePaths.engineerCreateProject),
+                )
+              else
+                BilingualText(
+                  english: YorksV1ProjectStrings.noPermission.primary,
+                  secondary: YorksV1ProjectStrings.noPermission.secondary(
+                    language,
+                  ),
+                  englishStyle: AppTypography.titleMedium.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  secondaryStyle: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

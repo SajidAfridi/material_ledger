@@ -7,13 +7,16 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/project_workspace_strings.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/material_plan_provider.dart';
 import '../../../../shared/providers/material_request_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/widgets/notification_bell.dart';
 
 /// Materials tab hub (IA restructure). A landing page that routes to the
@@ -29,19 +32,40 @@ class MaterialsHubScreen extends ConsumerWidget {
     final role = ref.watch(currentRoleProvider);
     final canReceiveGoods = ref.watch(canReceiveGoodsProvider);
     final canViewFinance = ref.watch(canViewFinanceProvider);
-    final canSeeCost = ref.watch(canSeeCostProvider);
+    final canSeeCost = ref.watch(canViewCommercialsProvider);
+    final projectsEnabled = ref.watch(nexusFeatureFlagsProvider).projects;
+    final yorksV1ProjectsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .projects;
+    final browseEnabled = ref.watch(nexusFeatureFlagsProvider).browseMaterials;
     final currency = ref.watch(currencyProvider);
     final stockValue = ref.watch(totalStockValueProvider);
     final matCount = ref.watch(materialCountProvider);
-    final openRequests = ref.watch(openRequestCountProvider);
+    final openRequests = yorksV1ProjectsEnabled
+        ? 0
+        : ref.watch(openRequestCountProvider);
     // New projects to accept + plans to review + requests to dispatch —
     // badged on the Procurement card (must agree with the workspace + Home KPI).
-    final int newProjectsCount = ref.watch(projectsAwaitingAcceptanceCountProvider);
-    final int dispatchCount = ref.watch(dispatchQueueCountProvider);
-    final int planReviewCount = ref.watch(planReviewQueueCountProvider);
-    final int procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
+    final int procurementQueue;
+    if (yorksV1ProjectsEnabled) {
+      procurementQueue = 0;
+    } else {
+      final newProjectsCount = ref.watch(
+        projectsAwaitingAcceptanceCountProvider,
+      );
+      final dispatchCount = ref.watch(dispatchQueueCountProvider);
+      final planReviewCount = ref.watch(planReviewQueueCountProvider);
+      procurementQueue = newProjectsCount + dispatchCount + planReviewCount;
+    }
 
     final cards = <Widget>[
+      if (browseEnabled)
+        _NavCard(
+          icon: Icons.view_sidebar_outlined,
+          title: AppStrings.browseMaterials.primary,
+          subtitle: 'Search the complete HVAC catalogue and live availability',
+          onTap: () => context.push(RoutePaths.engineerBrowse),
+        ),
       // Office stock control.
       if (role.usesAdminPanel)
         _NavCard(
@@ -58,7 +82,7 @@ class MaterialsHubScreen extends ConsumerWidget {
           subtitle: AppStrings.browse.secondary(lang),
           onTap: () => context.push(RoutePaths.engineerBrowse),
         ),
-      if (role.usesAdminPanel)
+      if (role.usesAdminPanel && !yorksV1ProjectsEnabled)
         _NavCard(
           icon: Icons.assignment_turned_in_outlined,
           title: AppStrings.procurement.primary,
@@ -66,16 +90,24 @@ class MaterialsHubScreen extends ConsumerWidget {
           badge: procurementQueue,
           onTap: () => context.push(RoutePaths.procurement),
         ),
-      _NavCard(
-        icon: Icons.assignment_outlined,
-        title: AppStrings.requests.primary,
-        subtitle: AppStrings.requests.secondary(lang),
-        onTap: () => context.push(
-          role.isAdmin ? RoutePaths.adminRequests : RoutePaths.requests,
+      if (role.usesAdminPanel && projectsEnabled && !yorksV1ProjectsEnabled)
+        _NavCard(
+          icon: Icons.folder_open_outlined,
+          title: AppStrings.projects.primary,
+          subtitle: ProjectWorkspaceStrings.subtitle.primary,
+          onTap: () => context.push(RoutePaths.adminProjects),
         ),
-      ),
+      if (!yorksV1ProjectsEnabled)
+        _NavCard(
+          icon: Icons.assignment_outlined,
+          title: AppStrings.requests.primary,
+          subtitle: AppStrings.requests.secondary(lang),
+          onTap: () => context.push(
+            role.isAdmin ? RoutePaths.adminRequests : RoutePaths.requests,
+          ),
+        ),
       // New request — engineers raise these from site.
-      if (!role.usesAdminPanel)
+      if (!role.usesAdminPanel && !yorksV1ProjectsEnabled)
         _NavCard(
           icon: Icons.add_circle_outline_rounded,
           title: AppStrings.newRequest.primary,
@@ -91,12 +123,13 @@ class MaterialsHubScreen extends ConsumerWidget {
           subtitle: AppStrings.goodsReceipt.secondary(lang),
           onTap: () => context.push(RoutePaths.goodsReceipt),
         ),
-      _NavCard(
-        icon: Icons.assignment_return_outlined,
-        title: AppStrings.returnsAndReceipts.primary,
-        subtitle: AppStrings.returnsAndReceiptsHint.primary,
-        onTap: () => context.push(RoutePaths.returnStore),
-      ),
+      if (!yorksV1ProjectsEnabled)
+        _NavCard(
+          icon: Icons.assignment_return_outlined,
+          title: AppStrings.returnsAndReceipts.primary,
+          subtitle: AppStrings.returnsAndReceiptsHint.primary,
+          onTap: () => context.push(RoutePaths.returnStore),
+        ),
       if (role.usesAdminPanel)
         _NavCard(
           icon: Icons.swap_horiz_rounded,
@@ -104,7 +137,7 @@ class MaterialsHubScreen extends ConsumerWidget {
           subtitle: AppStrings.transactions.secondary(lang),
           onTap: () => context.push(RoutePaths.transactions),
         ),
-      if (canViewFinance)
+      if (canViewFinance && canSeeCost && !yorksV1ProjectsEnabled)
         _NavCard(
           icon: Icons.bar_chart_rounded,
           title: AppStrings.projectCosts.primary,
@@ -154,14 +187,16 @@ class MaterialsHubScreen extends ConsumerWidget {
                   icon: Icons.inventory_2_outlined,
                 ),
               ),
-              const Gap(AppSpacing.md),
-              Expanded(
-                child: _MiniStat(
-                  label: AppStrings.openRequests.primary,
-                  value: '$openRequests',
-                  icon: Icons.assignment_outlined,
+              if (!yorksV1ProjectsEnabled) ...[
+                const Gap(AppSpacing.md),
+                Expanded(
+                  child: _MiniStat(
+                    label: AppStrings.openRequests.primary,
+                    value: '$openRequests',
+                    icon: Icons.assignment_outlined,
+                  ),
                 ),
-              ),
+              ],
               const Gap(AppSpacing.md),
               Expanded(
                 child: _MiniStat(
@@ -174,7 +209,10 @@ class MaterialsHubScreen extends ConsumerWidget {
           ),
           const Gap(AppSpacing.xl),
 
-          for (final card in cards) ...[card, const Gap(AppSpacing.listItemGap)],
+          for (final card in cards) ...[
+            card,
+            const Gap(AppSpacing.listItemGap),
+          ],
         ],
       ),
     );
@@ -182,7 +220,11 @@ class MaterialsHubScreen extends ConsumerWidget {
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.label, required this.value, required this.icon});
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   final String label;
   final String value;

@@ -1,93 +1,96 @@
 import 'package:flutter/material.dart';
 
-/// The Architectural Ledger — Color Tokens
+/// Yorks Nexus V7 colour tokens.
 ///
-/// Derived from the design spec: deep authoritative blue primary,
-/// MD3 tonal system for hierarchy through color, not chrome.
-///
-/// **The "No-Line" Rule**: 1px solid borders are PROHIBITED.
-/// Boundaries defined solely through background color shifts.
+/// These values mirror the approved V7 client design. The Material aliases
+/// remain intentionally stable so existing screens can migrate incrementally.
 abstract final class AppColors {
-  // ─── Primary ───────────────────────────────────────────────
-  static const Color primary = Color(0xFF003FB1);
+  // ─── Brand and action colours ─────────────────────────────
+  static const Color navy = Color(0xFF0D2F57);
+  static const Color navyHover = Color(0xFF123F73);
+  static const Color blue = Color(0xFF1D68D9);
+  static const Color blueContainer = Color(0xFFEAF2FF);
+  static const Color blueContainerStrong = Color(0xFFC9DCFF);
+
+  static const Color primary = blue;
   static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color primaryContainer = Color(0xFF1A56DB);
-  static const Color onPrimaryContainer = Color(0xFFD6E2FF);
-  static const Color primaryFixed = Color(0xFFD6E2FF);
-  static const Color onPrimaryFixed = Color(0xFF001A40);
-  static const Color onPrimaryFixedVariant = Color(0xFF0040A0);
+  static const Color primaryContainer = blueContainer;
+  static const Color onPrimaryContainer = navy;
+  static const Color primaryFixed = blueContainer;
+  static const Color onPrimaryFixed = navy;
+  static const Color onPrimaryFixedVariant = Color(0xFF1252B1);
 
-  // ─── Secondary ─────────────────────────────────────────────
-  static const Color secondary = Color(0xFF565E71);
+  static const Color secondary = Color(0xFF34435A);
   static const Color onSecondary = Color(0xFFFFFFFF);
-  static const Color secondaryContainer = Color(0xFFDAE2F9);
-  static const Color onSecondaryContainer = Color(0xFF131B2C);
+  static const Color secondaryContainer = Color(0xFFF0F4F8);
+  static const Color onSecondaryContainer = Color(0xFF132033);
 
-  // ─── Tertiary ──────────────────────────────────────────────
-  static const Color tertiary = Color(0xFF705574);
+  static const Color tertiary = Color(0xFF6D4BD1);
   static const Color onTertiary = Color(0xFFFFFFFF);
-  static const Color tertiaryContainer = Color(0xFFFAD8FD);
-  static const Color onTertiaryContainer = Color(0xFF29132E);
+  static const Color tertiaryContainer = Color(0xFFF2EDFF);
+  static const Color onTertiaryContainer = Color(0xFF5A3BB5);
 
-  // ─── Error ─────────────────────────────────────────────────
-  static const Color error = Color(0xFFBA1A1A);
-  static const Color onError = Color(0xFFFFFFFF);
-  static const Color errorContainer = Color(0xFFFFDAD6);
-  static const Color onErrorContainer = Color(0xFF410002);
+  // ─── Text ─────────────────────────────────────────────────
+  static const Color ink = Color(0xFF132033);
+  static const Color inkSecondary = Color(0xFF34435A);
+  static const Color muted = Color(0xFF6B788C);
+  static const Color mutedLight = Color(0xFF8F9AAE);
 
-  // ─── Surface Hierarchy (Tonal Layering) ────────────────────
-  /// Layer 0 — Base canvas for the entire application
-  static const Color surface = Color(0xFFF7F9FB);
+  // ─── Surfaces ─────────────────────────────────────────────
+  /// Application canvas behind the workspace.
+  static const Color surface = Color(0xFFEEF3F8);
 
-  /// Layer 1 — The Worksurface (sidebars, secondary zones)
-  static const Color surfaceContainerLow = Color(0xFFF2F4F6);
-  static const Color surfaceContainer = Color(0xFFECEEF0);
-  static const Color surfaceContainerHigh = Color(0xFFE6E8EA);
-  static const Color surfaceContainerHighest = Color(0xFFE0E2E4);
-
-  /// Layer 2 — The Sheet (primary content cards)
+  /// White records, panels and cards.
   static const Color surfaceContainerLowest = Color(0xFFFFFFFF);
+  static const Color surfaceContainerLow = Color(0xFFF7F9FC);
+  static const Color surfaceContainer = Color(0xFFF0F4F8);
+  static const Color surfaceContainerHigh = Color(0xFFEDF1F5);
+  static const Color surfaceContainerHighest = Color(0xFFE4EAF1);
 
-  static const Color onSurface = Color(0xFF191C1E);
-  static const Color onSurfaceVariant = Color(0xFF434654);
-  static const Color inverseSurface = Color(0xFF2E3133);
-  static const Color onInverseSurface = Color(0xFFF0F0F3);
+  static const Color onSurface = ink;
+  static const Color onSurfaceVariant = muted;
+  static const Color inverseSurface = navy;
+  static const Color onInverseSurface = Color(0xFFFFFFFF);
 
-  // ─── Outline ───────────────────────────────────────────────
-  /// Use at 15% opacity for "Ghost Borders"
-  static const Color outline = Color(0xFF74777F);
-  static const Color outlineVariant = Color(0xFFC4C6D0);
+  // ─── Lines ────────────────────────────────────────────────
+  static const Color line = Color(0xFFDCE3EC);
+  static const Color lineStrong = Color(0xFFC8D2DF);
+  static const Color outline = lineStrong;
+  static const Color outlineVariant = line;
 
-  // ─── Status Colors (10% opacity fill + 100% text) ─────────
-  static const Color success = Color(0xFF1B6D2F);
+  // ─── Semantic states ──────────────────────────────────────
+  static const Color success = Color(0xFF0D8B63);
   static const Color onSuccess = Color(0xFFFFFFFF);
-  static const Color successContainer = Color(0xFFA4F4A8);
-  static const Color onSuccessContainer = Color(0xFF002107);
+  static const Color successContainer = Color(0xFFE9F8F2);
+  static const Color onSuccessContainer = Color(0xFF087452);
 
-  static const Color warning = Color(0xFF7D5700);
+  static const Color warning = Color(0xFFAD6A00);
   static const Color onWarning = Color(0xFFFFFFFF);
-  static const Color warningContainer = Color(0xFFFFDEA6);
-  static const Color onWarningContainer = Color(0xFF271900);
+  static const Color warningContainer = Color(0xFFFFF5DF);
+  static const Color onWarningContainer = Color(0xFF8C5700);
 
-  // ─── Scrim & Shadow ────────────────────────────────────────
+  static const Color error = Color(0xFFC23737);
+  static const Color onError = Color(0xFFFFFFFF);
+  static const Color errorContainer = Color(0xFFFFF0F0);
+  static const Color onErrorContainer = Color(0xFFA72E2E);
+
+  static const Color purple = Color(0xFF6D4BD1);
+  static const Color purpleContainer = Color(0xFFF2EDFF);
+  static const Color neutralContainer = Color(0xFFF1F4F7);
+  static const Color neutralText = Color(0xFF536175);
+
+  // ─── Effects ──────────────────────────────────────────────
   static const Color scrim = Color(0xFF000000);
+  static const Color shadow = Color(0x0F19304E);
 
-  /// Ambient shadow: tinted with primary at 4% opacity, 24px blur
-  static const Color shadow = Color(0x0A003FB1);
+  /// Compatibility alias used by existing outlined controls.
+  static Color get ghostBorder => line;
 
-  // ─── Helpers ───────────────────────────────────────────────
-
-  /// Ghost border color — outlineVariant at 15% opacity
-  static Color get ghostBorder => outlineVariant.withValues(alpha: 0.15);
-
-  /// Glass effect for floating mobile elements
   static Color get glassPrimaryContainer =>
-      primaryContainer.withValues(alpha: 0.9);
+      surfaceContainerLowest.withValues(alpha: 0.96);
 
-  /// Primary CTA gradient (135° angle)
+  /// Compatibility alias for legacy callers. V7 primary actions are solid.
   static const LinearGradient primaryGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [primary, onPrimaryFixedVariant],
+    colors: [navy, navy],
   );
 }

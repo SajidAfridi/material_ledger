@@ -1,0 +1,188 @@
+# Yorks V1 R35 — State, RPC and RLS Matrix
+
+This document is the implementation checklist for Postgres state machines,
+trusted commands and access policies. Names are canonical unless a migration
+records an explicit replacement.
+
+## 1. State machines
+
+### Project
+
+| From | Command | To | Authority |
+|---|---|---|---|
+| — | Create project | `draft` | Project Engineer, Site Engineer, Admin |
+| `draft` | Activate | `active` | Project Engineer/Admin; at least one active Project Engineer |
+| `active` | Put on hold | `on_hold` | Project Engineer/Admin with reason |
+| `on_hold` | Resume | `active` | Project Engineer/Admin with reason |
+| `active`, `on_hold` | Complete | `completed` | Project Engineer/Admin; no unresolved new-work blocker |
+| `completed` | Archive | `archived` | Admin with reason |
+
+### Material Request
+
+| From | Command | To | Authority |
+|---|---|---|---|
+| — | Save draft | `draft` | Assigned Project/Site Engineer |
+| `draft` | Submit | `submitted` | Draft creator with active project membership |
+| `submitted` | Begin arrangement | `arranging` | Procurement/Admin |
+| `arranging` | Save arrangement | `awaiting_approval` | Procurement/Admin |
+| `awaiting_approval` | Return for changes | `arranging` | Assigned Project Engineer/Admin; immutable returned decision/comment |
+| `awaiting_approval` | Approve | `approved` | Assigned Project Engineer/Admin |
+| `approved`, `partially_dispatched`, `partially_received` | Dispatch subset | `partially_dispatched` or `dispatched` | Procurement/Admin |
+| `partially_dispatched`, `dispatched`, `partially_received` | Confirm receipt review | `partially_received` or `received` | Assigned Project/Site Engineer/Admin |
+| `received` | Close | `closed` | Project Engineer/Admin when all committed work is resolved |
+| Eligible pre-dispatch state | Cancel | `cancelled` | Policy-defined Project Engineer/Admin with reason |
+
+State labels are not manually editable. Aggregate state is calculated by the
+trusted command from line facts inside the same transaction.
+
+### Arrangement line
+
+| Decision | Constraint |
+|---|---|
+| `full` | `arranged_qty = requested_qty` |
+| `partial` | `0 < arranged_qty < requested_qty` and reason present |
+| `unavailable` | `arranged_qty = 0` and reason present |
+
+### Dispatch and receipt
+
+Dispatch: `created -> dispatched -> receipt_pending -> partially_received -> received`
+
+Receipt review line UI outcome is `received`, `missing` or `damaged`. Good and
+exception quantities reconcile to the dispatched quantity as defined in
+`PRODUCT_DECISIONS.md`.
+
+### Return
+
+`draft -> submitted -> confirmed | rejected`
+
+Only `confirmed` appends an inventory movement.
+
+## 2. Quantity invariants
+
+| Invariant | Enforcement point |
+|---|---|
+| `requested_qty >= 0` and committed quantities are positive where required | checks plus submit/command validation |
+| `arranged_qty <= requested_qty` | arrangement line check and save RPC |
+| `approved_qty <= arranged_qty` | approval RPC |
+| `good_received_qty + in_transit_qty <= approved_qty` | dispatch and receipt RPCs under locks |
+| Warehouse reserved total cannot exceed available stock | arrangement save RPC under inventory locks |
+| Warehouse dispatch cannot exceed on-hand/available at commit | dispatch RPC under inventory locks |
+| `good + missing_or_damaged = dispatched` for each reviewed line | receipt RPC |
+| Missing/damaged does not increment good received | receipt RPC and movement trigger/constraint |
+| Confirmed returns do not exceed good received minus earlier confirmed returns | return submit/confirm RPC under source-line locks |
+| One committed effect per idempotency key/request hash | idempotency table unique constraint and RPC helper |
+
+All authoritative quantities are Postgres `numeric`. Flutter may format decimal
+input but does not decide the final comparison result.
+
+## 3. Trusted RPC command matrix
+
+Proposed stable function names use a `v1_` prefix during coexistence with legacy
+tables/functions.
+
+| RPC | Caller | Locks/version | Idempotent | Atomic effects |
+|---|---|---|---|---|
+| `v1_create_project` | Project Engineer, Site Engineer, Admin | reference/template rows | yes | project, Common/buildings, initial memberships, 29 BOQ groups, audit |
+| `v1_set_project_state` | Project Engineer/Admin by transition | project/version | yes | state, owner/action, audit/notification |
+| `v1_assign_project_member` | Project Engineer/Admin; creation exception for Site Engineer | project/member/version | yes | close prior membership, add membership, audit/notification |
+| `v1_submit_material_request` | Assigned Engineer draft creator | draft/project/counter/version | yes | number, snapshots, state, owner, audit/notification |
+| `v1_begin_arrangement` | Procurement/Admin | MR/version | yes | current arrangement work version, `arranging`, audit |
+| `v1_save_arrangement` | Procurement/Admin | MR, arrangement, inventory, reservations | yes | versioned lines, replacement reservations, awaiting approval, audit/notification |
+| `v1_decide_arrangement` | Assigned Project Engineer/Admin | MR/current arrangement/version | yes | approval or return decision, approved snapshots/state, audit/notification |
+| `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
+| `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, good/exception totals, state, audit/notification |
+| `v1_generate_delivery_order` | Procurement/Admin after review | dispatch/review/current DO revision | yes | immutable snapshot/revision, document link, audit |
+| `v1_submit_material_return` | Assigned Project/Site Engineer/Admin | source receipt/return/version/counter | yes | frozen return lines, number, submitted state, audit/notification |
+| `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
+| `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
+| `v1_cancel_material_request` | Project Engineer/Admin per policy | MR, reservations, dispatch existence | yes | cancel/retain history, release remainder, audit/notification |
+| `v1_close_material_request` | Project Engineer/Admin | MR and all logistics rows | yes | validated closed state, audit |
+| `v1_adjust_inventory` | Procurement/Admin capability | inventory item/version | yes | append-only adjustment movement and derived balance, audit |
+| `v1_create_document_version` | Entity-authorized user | document/link target/version | yes | Storage metadata/version/link/audit after upload finalization |
+| `v1_link_document` | Entity-authorized user | document/target/version | yes | classified link and audit |
+
+Every function derives actor, role and server time. User-supplied actor/role/time
+is ignored as authority.
+
+## 4. RLS capability matrix
+
+Legend: `R` read, `C` create, `U` update, `RPC` mutation only through trusted
+command, `—` denied. “Assigned” always means an active relevant project
+membership.
+
+| Domain | Project Engineer | Site Engineer | Procurement | Admin |
+|---|---|---|---|---|
+| Own profile | R/U non-authority fields | R/U non-authority fields | R/U non-authority fields | R/U non-authority fields |
+| Other profiles/team picker | R limited active directory | R limited active directory | R limited active directory | R; provision/disable via server |
+| Capabilities | R own effective | R own effective | R own effective | R/RPC manage |
+| Assigned projects/scopes | R/C/U assigned | R/C/U assigned | R running, no C/U | R/RPC controlled manage |
+| Project memberships | R; RPC manage assigned project | R, no manage after create | R, no write | R/RPC |
+| Assigned BOQ groups/columns/rows | R/C/U | R/C/U | R only | R/C/U |
+| MR drafts | own R/C/U/delete | own R/C/U/delete | — | R/support per policy |
+| Submitted MR operational data | R assigned | R assigned | R all running | R |
+| MR commercial projection | only with capability | only with capability | R with capability | R with capability |
+| Arrangements | R assigned; decision RPC if Project Engineer | R assigned, no decision | R; create/update through RPC | R/RPC |
+| Approval decisions | R assigned; RPC if Project Engineer | R assigned | R, no write | R/RPC |
+| Inventory catalogue/balances | no general inventory workspace | no general inventory workspace | R/RPC manage | R/RPC |
+| Reservations/movements | related non-commercial summary | related non-commercial summary | R; write only via RPC | R; write only via RPC |
+| Dispatches | R assigned | R assigned | R/RPC create | R/RPC |
+| Receipt reviews | R/RPC assigned | R/RPC assigned | R, no confirm | R/RPC |
+| Delivery Orders | R assigned projection | R assigned projection | R/RPC generate | R/RPC |
+| Returns | R/RPC create assigned | R/RPC create assigned | R/RPC confirm/reject | R/RPC |
+| Operational documents | R/C through authorized links | R/C through authorized links | R/C through authorized links | R/C |
+| Commercial documents | capability plus link | capability plus link | capability plus link | capability plus link |
+| Notifications | own R/U seen state | own R/U seen state | own R/U seen state | own R/U seen state |
+| Audit events | related read projection | related read projection | related read projection | R; no client C/U/delete |
+| Idempotency/reference counters | — | — | — | no direct client access |
+
+Direct Procurement inserts/updates/deletes on project, scope, membership and BOQ
+tables must fail even when a route or stale client attempts them.
+
+## 5. Storage policy matrix
+
+| Classification | Additional requirement |
+|---|---|
+| `operational` | Access to every current linked entity |
+| `commercial` | Every-linked-entity access plus `view_commercials` |
+| `admin_restricted` | Admin |
+
+Upload uses a short-lived authorized path/operation. The final document row and
+link are committed by a trusted function after object metadata/hash validation.
+Object-path guessing never grants read.
+
+## 6. Server-generated audit events
+
+At minimum, append events for:
+
+- project create/state/member changes;
+- BOQ import commit and destructive column/row operations;
+- MR submit/cancel/close;
+- arrangement begin/save/replace and reservation release;
+- approval/return-for-changes;
+- inventory adjustment;
+- dispatch and movement creation;
+- receipt confirmation;
+- DO generation/supersession;
+- return submit/confirm/reject;
+- document version/link change;
+- Admin user/capability change and override.
+
+Audit tables deny client insert, update and delete. Corrections append a new
+event referencing the original.
+
+## 7. Required negative proofs
+
+Every relevant migration/test must prove at least:
+
+1. unrelated Engineers cannot read or mutate another project;
+2. Site Engineer cannot manage team or approve;
+3. Procurement cannot create/edit project or BOQ, raise an Engineering MR, or
+   approve its arrangement;
+4. an Engineer without commercial capability receives no cost schema/value;
+5. direct table writes cannot bypass each critical RPC;
+6. stale versions fail without partial effects;
+7. competing reservations/dispatches cannot oversubscribe;
+8. repeated idempotency keys do not duplicate effects;
+9. revoked membership blocks future actions but preserves historical reads and
+   attribution;
+10. Storage path knowledge does not bypass document/link access.

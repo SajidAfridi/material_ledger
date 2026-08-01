@@ -45,6 +45,21 @@ class GoodsReceipt {
     if (note != null) 'note': note,
   };
 
+  Map<String, dynamic> toSharedJson() => toJson()..remove('unitCostAED');
+
+  GoodsReceipt withoutCommercials() => GoodsReceipt(
+    id: id,
+    materialId: materialId,
+    materialName: materialName,
+    quantity: quantity,
+    unitSymbol: unitSymbol,
+    unitCostAED: 0,
+    supplier: supplier,
+    receivedBy: receivedBy,
+    receivedAt: receivedAt,
+    note: note,
+  );
+
   factory GoodsReceipt.fromJson(Map<String, dynamic> json) => GoodsReceipt(
     id: json['id'] as String? ?? '',
     materialId: json['materialId'] as String? ?? '',
@@ -55,7 +70,8 @@ class GoodsReceipt {
     supplier: json['supplier'] as String? ?? '',
     receivedBy: json['receivedBy'] as String? ?? '',
     receivedAt:
-        DateTime.tryParse(json['receivedAt'] as String? ?? '') ?? DateTime.now(),
+        DateTime.tryParse(json['receivedAt'] as String? ?? '') ??
+        DateTime.now(),
     note: json['note'] as String?,
   );
 

@@ -237,7 +237,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Opacity(
                       opacity: _brandOpacity.value,
                       child: Text(
-                        'Yorks GodownPro',
+                        'Yorks AC. & Ref.',
                         style: GoogleFonts.inter(
                           fontSize: 42,
                           fontWeight: FontWeight.w800,

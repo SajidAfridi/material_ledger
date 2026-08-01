@@ -60,10 +60,7 @@ class _GateScaffold extends StatelessWidget {
                       color: AppColors.onSurfaceVariant,
                     ),
                   ),
-                  if (action != null) ...[
-                    const Gap(AppSpacing.xxl),
-                    action!,
-                  ],
+                  if (action != null) ...[const Gap(AppSpacing.xxl), action!],
                 ],
               ),
             ),
@@ -85,7 +82,7 @@ class UpdateRequiredScreen extends ConsumerWidget {
       icon: Icons.system_update_rounded,
       title: 'Update required',
       message:
-          'A newer version of Yorks GodownPro is required to continue. Please '
+          'A newer version of Yorks AC. & Ref. is required to continue. Please '
           'update to the latest version to keep working.',
       action: SizedBox(
         width: double.infinity,

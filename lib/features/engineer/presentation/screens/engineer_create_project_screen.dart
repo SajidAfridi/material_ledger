@@ -16,19 +16,43 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/notification_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../../../projects/presentation/screens/project_create_flow_screen.dart';
+import '../../../projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 
-/// Lightweight project creation flow for engineers.
-class EngineerCreateProjectScreen extends ConsumerStatefulWidget {
+/// Stable route entry point. The V7 flow remains fail-closed behind its module
+/// flag while the legacy form stays available for production rollback.
+class EngineerCreateProjectScreen extends ConsumerWidget {
   const EngineerCreateProjectScreen({super.key});
 
   @override
-  ConsumerState<EngineerCreateProjectScreen> createState() =>
-      _EngineerCreateProjectScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Rev 2.0/R35 takes precedence when its independently gated rollout is
+    // enabled. The V1 screen owns its exact-claim UX guard; it does not reuse
+    // this legacy shell role as project authority.
+    if (ref.watch(yorksV1FeatureFlagsProvider).projects) {
+      return const YorksV1ProjectCreateFlowScreen();
+    }
+    if (ref.watch(nexusFeatureFlagsProvider).projects) {
+      return const ProjectCreateFlowScreen();
+    }
+    return const _LegacyEngineerCreateProjectScreen();
+  }
 }
 
-class _EngineerCreateProjectScreenState
-    extends ConsumerState<EngineerCreateProjectScreen> {
+/// Existing project form retained unchanged until the V7 flag is enabled.
+class _LegacyEngineerCreateProjectScreen extends ConsumerStatefulWidget {
+  const _LegacyEngineerCreateProjectScreen();
+
+  @override
+  ConsumerState<_LegacyEngineerCreateProjectScreen> createState() =>
+      _LegacyEngineerCreateProjectScreenState();
+}
+
+class _LegacyEngineerCreateProjectScreenState
+    extends ConsumerState<_LegacyEngineerCreateProjectScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _secondaryNameController = TextEditingController();
@@ -151,7 +175,9 @@ class _EngineerCreateProjectScreenState
     // new "New projects" queue isn't the only way to discover it (FR — project
     // acceptance).
     final lang = ref.read(languageProvider);
-    ref.read(notificationsProvider.notifier).add(
+    ref
+        .read(notificationsProvider.notifier)
+        .add(
           type: NotificationType.project,
           title: AppStrings.notifNewProjectTitle.primary,
           titleSecondary: AppStrings.notifNewProjectTitle.secondary(lang),
@@ -183,244 +209,251 @@ class _EngineerCreateProjectScreenState
       backgroundColor: AppColors.surface,
       body: SafeArea(
         child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 840;
-          final horizontalPadding = isWide
-              ? AppSpacing.xxl
-              : AppSpacing.screenHorizontal;
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 840;
+            final horizontalPadding = isWide
+                ? AppSpacing.xxl
+                : AppSpacing.screenHorizontal;
 
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: CustomScrollView(
-                slivers: [
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      AppSpacing.lg,
-                      horizontalPadding,
-                      AppSpacing.xl,
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        AppSpacing.lg,
+                        horizontalPadding,
+                        AppSpacing.xl,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: _Header(onBack: context.pop),
+                      ),
                     ),
-                    sliver: SliverToBoxAdapter(
-                      child: _Header(onBack: context.pop),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
-                    ),
-                    sliver: SliverToBoxAdapter(
-                      child: LedgerCard(
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              LedgerTextField(
-                                controller: _nameController,
-                                label: AppStrings.projectName.primary,
-                                urduHint: AppStrings.projectName.ur,
-                                autofocus: true,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return AppStrings.fieldRequired.primary;
-                                  }
-                                  if (value.trim().length < 3) {
-                                    return AppStrings.enterAtLeast3Chars.primary;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const Gap(AppSpacing.lg),
-                              LedgerTextField(
-                                controller: _secondaryNameController,
-                                label: AppStrings.projectNameSecondary.primary,
-                                urduHint: AppStrings.projectNameSecondary.ur,
-                              ),
-                              const Gap(AppSpacing.lg),
-                              LedgerTextField(
-                                controller: _clientController,
-                                label: AppStrings.clientName.primary,
-                                urduHint: AppStrings.clientName.ur,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return AppStrings
-                                        .clientNameRequired
-                                        .primary;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const Gap(AppSpacing.lg),
-                              LedgerTextField(
-                                controller: _locationController,
-                                label: AppStrings.siteLocation.primary,
-                                urduHint: AppStrings.siteLocation.ur,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return AppStrings.locationRequired.primary;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const Gap(AppSpacing.lg),
-                              LedgerTextField(
-                                controller: _buildingNameController,
-                                label: AppStrings.buildingName.primary,
-                                urduHint: AppStrings.buildingName.ur,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return AppStrings
-                                        .buildingNameRequired
-                                        .primary;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const Gap(AppSpacing.lg),
-                              LedgerTextField(
-                                controller: _floorNumbersController,
-                                label: AppStrings.floorNumbers.primary,
-                                urduHint: AppStrings.floorNumbers.ur,
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return AppStrings
-                                        .floorNumbersRequired
-                                        .primary;
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const Gap(AppSpacing.lg),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: LedgerTextField(
-                                      controller: TextEditingController(
-                                        text: _formatDate(_startDate),
-                                      ),
-                                      label: AppStrings.startDate.primary,
-                                      urduHint: AppStrings.startDate.ur,
-                                      readOnly: true,
-                                      onTap: _selectStartDate,
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today_rounded,
-                                      ),
-                                      validator: (value) {
-                                        if (_startDate == null) {
-                                          return AppStrings
-                                              .startDateRequired
-                                              .primary;
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                  ),
-                                  const Gap(AppSpacing.md),
-                                  Expanded(
-                                    child: LedgerTextField(
-                                      controller: TextEditingController(
-                                        text: _formatDate(_expectedEndDate),
-                                      ),
-                                      label: AppStrings.expectedEndDate.primary,
-                                      urduHint: AppStrings.expectedEndDate.ur,
-                                      readOnly: true,
-                                      onTap: _selectExpectedEndDate,
-                                      suffixIcon: const Icon(
-                                        Icons.calendar_today_rounded,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Gap(AppSpacing.lg),
-                              LedgerTextField(
-                                controller: _siteNotesController,
-                                label: AppStrings.siteNotes.primary,
-                                urduHint: AppStrings.siteNotes.ur,
-                                maxLines: 3,
-                              ),
-                              const Gap(AppSpacing.xl),
-                              // ─── Job register (client's "Running Jobs" sheet)
-                              Align(
-                                alignment: AlignmentDirectional.centerStart,
-                                child: Text(
-                                  'Job register',
-                                  style: AppTypography.labelLarge.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: LedgerCard(
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                LedgerTextField(
+                                  controller: _nameController,
+                                  label: AppStrings.projectName.primary,
+                                  urduHint: AppStrings.projectName.ur,
+                                  autofocus: true,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return AppStrings.fieldRequired.primary;
+                                    }
+                                    if (value.trim().length < 3) {
+                                      return AppStrings
+                                          .enterAtLeast3Chars
+                                          .primary;
+                                    }
+                                    return null;
+                                  },
                                 ),
-                              ),
-                              const Gap(AppSpacing.md),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: LedgerTextField(
-                                      controller: _jobNumberController,
-                                      label: 'Job number',
-                                      hintText: 'e.g. 305 / B067',
-                                    ),
-                                  ),
-                                  const Gap(AppSpacing.md),
-                                  Expanded(
-                                    child: LedgerTextField(
-                                      controller: _mainContractorController,
-                                      label: 'Main contractor',
-                                      hintText: 'e.g. SEPCO, L&T',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Gap(AppSpacing.lg),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: LedgerTextField(
-                                      controller: _authorityRefController,
-                                      label: 'Authority ref',
-                                      hintText: 'ADWEA / DEWA',
-                                    ),
-                                  ),
-                                  const Gap(AppSpacing.md),
-                                  Expanded(
-                                    child: LedgerTextField(
-                                      controller: _consultantController,
-                                      label: 'Consultant',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (ref.watch(canViewFinanceProvider)) ...[
                                 const Gap(AppSpacing.lg),
                                 LedgerTextField(
-                                  controller: _contractValueController,
-                                  label: 'Contract value (AED)',
-                                  hintText: 'Management only',
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
+                                  controller: _secondaryNameController,
+                                  label:
+                                      AppStrings.projectNameSecondary.primary,
+                                  urduHint: AppStrings.projectNameSecondary.ur,
+                                ),
+                                const Gap(AppSpacing.lg),
+                                LedgerTextField(
+                                  controller: _clientController,
+                                  label: AppStrings.clientName.primary,
+                                  urduHint: AppStrings.clientName.ur,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return AppStrings
+                                          .clientNameRequired
+                                          .primary;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const Gap(AppSpacing.lg),
+                                LedgerTextField(
+                                  controller: _locationController,
+                                  label: AppStrings.siteLocation.primary,
+                                  urduHint: AppStrings.siteLocation.ur,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return AppStrings
+                                          .locationRequired
+                                          .primary;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const Gap(AppSpacing.lg),
+                                LedgerTextField(
+                                  controller: _buildingNameController,
+                                  label: AppStrings.buildingName.primary,
+                                  urduHint: AppStrings.buildingName.ur,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return AppStrings
+                                          .buildingNameRequired
+                                          .primary;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const Gap(AppSpacing.lg),
+                                LedgerTextField(
+                                  controller: _floorNumbersController,
+                                  label: AppStrings.floorNumbers.primary,
+                                  urduHint: AppStrings.floorNumbers.ur,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return AppStrings
+                                          .floorNumbersRequired
+                                          .primary;
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const Gap(AppSpacing.lg),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: LedgerTextField(
+                                        controller: TextEditingController(
+                                          text: _formatDate(_startDate),
+                                        ),
+                                        label: AppStrings.startDate.primary,
+                                        urduHint: AppStrings.startDate.ur,
+                                        readOnly: true,
+                                        onTap: _selectStartDate,
+                                        suffixIcon: const Icon(
+                                          Icons.calendar_today_rounded,
+                                        ),
+                                        validator: (value) {
+                                          if (_startDate == null) {
+                                            return AppStrings
+                                                .startDateRequired
+                                                .primary;
+                                          }
+                                          return null;
+                                        },
                                       ),
+                                    ),
+                                    const Gap(AppSpacing.md),
+                                    Expanded(
+                                      child: LedgerTextField(
+                                        controller: TextEditingController(
+                                          text: _formatDate(_expectedEndDate),
+                                        ),
+                                        label:
+                                            AppStrings.expectedEndDate.primary,
+                                        urduHint: AppStrings.expectedEndDate.ur,
+                                        readOnly: true,
+                                        onTap: _selectExpectedEndDate,
+                                        suffixIcon: const Icon(
+                                          Icons.calendar_today_rounded,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Gap(AppSpacing.lg),
+                                LedgerTextField(
+                                  controller: _siteNotesController,
+                                  label: AppStrings.siteNotes.primary,
+                                  urduHint: AppStrings.siteNotes.ur,
+                                  maxLines: 3,
+                                ),
+                                const Gap(AppSpacing.xl),
+                                // ─── Job register (client's "Running Jobs" sheet)
+                                Align(
+                                  alignment: AlignmentDirectional.centerStart,
+                                  child: Text(
+                                    'Job register',
+                                    style: AppTypography.labelLarge.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const Gap(AppSpacing.md),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: LedgerTextField(
+                                        controller: _jobNumberController,
+                                        label: 'Job number',
+                                        hintText: 'e.g. 305 / B067',
+                                      ),
+                                    ),
+                                    const Gap(AppSpacing.md),
+                                    Expanded(
+                                      child: LedgerTextField(
+                                        controller: _mainContractorController,
+                                        label: 'Main contractor',
+                                        hintText: 'e.g. SEPCO, L&T',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Gap(AppSpacing.lg),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: LedgerTextField(
+                                        controller: _authorityRefController,
+                                        label: 'Authority ref',
+                                        hintText: 'ADWEA / DEWA',
+                                      ),
+                                    ),
+                                    const Gap(AppSpacing.md),
+                                    Expanded(
+                                      child: LedgerTextField(
+                                        controller: _consultantController,
+                                        label: 'Consultant',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (ref.watch(canViewFinanceProvider) &&
+                                    ref.watch(canViewCommercialsProvider)) ...[
+                                  const Gap(AppSpacing.lg),
+                                  LedgerTextField(
+                                    controller: _contractValueController,
+                                    label: 'Contract value (AED)',
+                                    hintText: 'Management only',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                  ),
+                                ],
+                                const Gap(AppSpacing.xxl),
+                                PrimaryButton(
+                                  label: AppStrings.createProject.primary,
+                                  icon: Icons.check_rounded,
+                                  onPressed: _submit,
                                 ),
                               ],
-                              const Gap(AppSpacing.xxl),
-                              PrimaryButton(
-                                label: AppStrings.createProject.primary,
-                                icon: Icons.check_rounded,
-                                onPressed: _submit,
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SliverGap(AppSpacing.colossal),
-                ],
+                    const SliverGap(AppSpacing.colossal),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
         ),
       ),
     );

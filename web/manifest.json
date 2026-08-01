@@ -1,12 +1,11 @@
 {
-    "name": "Yorks GodownPro",
-    "short_name": "Yorks GodownPro",
+    "name": "Yorks AC. & Ref.",
+    "short_name": "Yorks AC. & Ref.",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Yorks GodownPro — operations platform.",
-    "orientation": "portrait-primary",
+    "description": "Yorks Airconditioning & Refrigeration LLC-SPC — controlled projects, materials, procurement and documents.",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/app_user.dart';
 import '../models/user_role.dart';
+import '../models/yorks_v1_role.dart';
 import '../services/password_hasher.dart';
 import '../sync/supabase_bootstrap.dart';
 import 'language_provider.dart';
@@ -41,6 +42,30 @@ enum SignInResult {
   deactivated,
   mustChangePassword,
   networkError,
+}
+
+/// Resolves the compatibility-shell role from the only trusted source: an
+/// exact server-controlled `app_metadata.role` claim.
+///
+/// Yorks V1 claims deliberately map *down* to the existing shell's three
+/// legacy buckets so a connected V1 identity can still sign in while retained
+/// modules are being migrated. This function is never V1 authorization:
+/// Yorks V1 commands and routes use [YorksV1Role.fromServerClaim] directly.
+/// In particular, a legacy `engineer` value does not become a Project Engineer
+/// or Site Engineer through this compatibility mapping.
+UserRole? userRoleFromAppMetadata(Map<String, dynamic> appMetadata) {
+  final raw = appMetadata['role'];
+  if (raw is! String) return null;
+  for (final role in UserRole.values) {
+    if (role.name == raw) return role;
+  }
+  return switch (YorksV1Role.fromServerClaim(raw)) {
+    YorksV1Role.projectEngineer ||
+    YorksV1Role.siteEngineer => UserRole.engineer,
+    YorksV1Role.procurement => UserRole.procurement,
+    YorksV1Role.admin => UserRole.admin,
+    null => null,
+  };
 }
 
 /// Verifies credentials and opens a session. When Supabase is configured this
@@ -108,12 +133,16 @@ class AuthController {
         (authUser.userMetadata?['must_change_password'] as bool?) ?? false;
 
     // A user provisioned on another device won't be in this device's roster —
-    // materialise them from the JWT claims so currentUser resolves.
-    // We fallback to 'admin' for the owner email if no role is found in metadata.
-    final rawRole = authUser.appMetadata['role'] as String?;
-    final resolvedRole = UserRole.fromName(
-      rawRole ?? (email == 'owner@gmail.com' ? 'admin' : 'engineer'),
+    // materialise them from the trusted JWT app_metadata so currentUser
+    // resolves. Never infer authorization from email or user_metadata.
+    final resolvedRole = userRoleFromAppMetadata(authUser.appMetadata);
+    final yorksV1Role = YorksV1Role.fromServerClaim(
+      authUser.appMetadata['role'],
     );
+    if (resolvedRole == null) {
+      await client.auth.signOut();
+      return SignInResult.invalidCredentials;
+    }
 
     await _ref
         .read(usersProvider.notifier)
@@ -122,6 +151,7 @@ class AuthController {
           email: authUser.email ?? '',
           fullName: (authUser.userMetadata?['full_name'] as String?) ?? '',
           role: resolvedRole,
+          yorksV1Role: yorksV1Role,
           mustChangePassword: mustChange,
         );
 
@@ -140,9 +170,12 @@ class AuthController {
     return mustChange ? SignInResult.mustChangePassword : SignInResult.ok;
   }
 
-  /// Local path — used only when Supabase is not configured (widget tests and
-  /// pure-offline development). Unchanged legacy behaviour.
+  /// Local path — used only when Supabase is not configured and local
+  /// development was explicitly enabled at startup.
   Future<SignInResult> _signInLocal(String email, String password) async {
+    if (_ref.read(localDemoPasswordProvider).isEmpty) {
+      return SignInResult.invalidCredentials;
+    }
     AppUser? user;
     for (final u in _ref.read(usersProvider)) {
       if (u.email.trim().toLowerCase() == email) {
@@ -197,9 +230,9 @@ class AuthController {
         ),
       );
     }
-    // Mirror into the local roster (clears must-change; keeps the offline /
-    // credential-fallback hash in step). Only reached if the remote call above
-    // succeeded (or there's no backend — tests / offline dev).
+    // Mirror the workflow flag into the local roster. Connected mode clears
+    // local password material; explicit local development stores its test hash.
+    // Only reached if the remote call above succeeded.
     final user = _ref.read(currentUserProvider);
     if (user != null) {
       await _ref

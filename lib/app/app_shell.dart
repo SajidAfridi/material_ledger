@@ -232,7 +232,8 @@ class _LedgerBottomBar extends StatelessWidget {
                   children: [
                     for (var i = 0; i < destinations.length; i++) ...[
                       // Reserve the centre slot for the docked New Request FAB.
-                      if (reserveCenterSlot && i == (destinations.length + 1) ~/ 2)
+                      if (reserveCenterSlot &&
+                          i == (destinations.length + 1) ~/ 2)
                         const SizedBox(width: 72),
                       Expanded(
                         child: _BottomBarItem(
@@ -334,10 +335,10 @@ class _BottomBarItemState extends State<_BottomBarItem> {
                 color: isActive
                     ? AppColors.primary
                     : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
-              letterSpacing: 0.1,
+                letterSpacing: 0.1,
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -368,7 +369,11 @@ class _CenterAddButton extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(Icons.add_rounded, size: 28, color: AppColors.onPrimary),
+        child: const Icon(
+          Icons.add_rounded,
+          size: 28,
+          color: AppColors.onPrimary,
+        ),
       ),
     );
   }
@@ -435,7 +440,7 @@ class _LedgerRail extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xl),
               child: Text(
-                isExtended ? 'Yorks GodownPro v1.0' : 'v1.0',
+                isExtended ? 'Yorks AC. & Ref. v1.0' : 'v1.0',
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
@@ -466,7 +471,7 @@ class _RailHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Text(
-            'Yorks GodownPro',
+            'Yorks AC. & Ref.',
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w800,
@@ -582,7 +587,11 @@ class _RailNewRequestButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.add_rounded, size: 20, color: AppColors.onPrimary),
+              const Icon(
+                Icons.add_rounded,
+                size: 20,
+                color: AppColors.onPrimary,
+              ),
               if (isExtended) ...[
                 const SizedBox(width: AppSpacing.sm),
                 Text(

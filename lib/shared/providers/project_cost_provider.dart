@@ -1,18 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/material_request.dart';
-import 'inventory_provider.dart';
+import 'commercial_records_provider.dart';
 import 'material_request_provider.dart';
 import 'material_return_provider.dart';
+import 'permissions_provider.dart';
 
 /// Cost roll-up for one project: value dispatched to site, value returned to
 /// store, and the net consumed cost. Costs are valued at the inventory unit
 /// cost (weighted average). Visible to Admin only (finance — FR-091/092).
 class ProjectCost {
-  const ProjectCost({
-    required this.dispatchedAED,
-    required this.returnedAED,
-  });
+  const ProjectCost({required this.dispatchedAED, required this.returnedAED});
 
   final double dispatchedAED;
   final double returnedAED;
@@ -34,15 +32,16 @@ final projectCostProvider = Provider.family<ProjectCost, String>((
   ref,
   projectName,
 ) {
-  final materials = ref.watch(materialsProvider);
+  final canViewCommercials = ref.watch(canViewCommercialsProvider);
+  if (!canViewCommercials) {
+    return const ProjectCost(dispatchedAED: 0, returnedAED: 0);
+  }
+  final commercials = ref.watch(commercialRecordsProvider);
   final requests = ref.watch(materialRequestsProvider);
   final returns = ref.watch(returnsProvider);
 
   double costOf(String materialId) {
-    for (final m in materials) {
-      if (m.id == materialId) return m.unitCostAED;
-    }
-    return 0;
+    return commercials['material:$materialId']?.unitCostAED ?? 0;
   }
 
   var dispatched = 0.0;
@@ -69,6 +68,7 @@ final projectCostProvider = Provider.family<ProjectCost, String>((
 
 /// Total net material cost across every project (accountant dashboard figure).
 final totalProjectCostProvider = Provider<double>((ref) {
+  if (!ref.watch(canViewCommercialsProvider)) return 0;
   final requests = ref.watch(materialRequestsProvider);
   final names = <String>{for (final r in requests) r.projectName};
   var total = 0.0;
@@ -80,15 +80,13 @@ final totalProjectCostProvider = Provider<double>((ref) {
 
 /// One CSV-ready cost row per project (used by the accountant export).
 class ProjectCostRow {
-  const ProjectCostRow({
-    required this.projectName,
-    required this.cost,
-  });
+  const ProjectCostRow({required this.projectName, required this.cost});
   final String projectName;
   final ProjectCost cost;
 }
 
 final projectCostRowsProvider = Provider<List<ProjectCostRow>>((ref) {
+  if (!ref.watch(canViewCommercialsProvider)) return const [];
   final requests = ref.watch(materialRequestsProvider);
   final names = <String>{for (final r in requests) r.projectName}.toList()
     ..sort();

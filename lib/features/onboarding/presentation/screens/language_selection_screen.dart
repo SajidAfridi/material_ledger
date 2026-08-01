@@ -128,77 +128,79 @@ class _LanguageSelectionScreenState
                 child: SafeArea(
                   bottom: false,
                   child: Column(
-                  children: [
-                    const SizedBox(height: AppSpacing.huge),
+                    children: [
+                      const SizedBox(height: AppSpacing.huge),
 
-                    // ─── Header: Logo + Welcome ────────────
-                    AnimatedBuilder(
-                      animation: _animController,
-                      builder: (context, child) => FractionalTranslation(
-                        translation: _headerSlide.value,
-                        child: Opacity(
-                          opacity: _headerOpacity.value,
-                          child: child,
+                      // ─── Header: Logo + Welcome ────────────
+                      AnimatedBuilder(
+                        animation: _animController,
+                        builder: (context, child) => FractionalTranslation(
+                          translation: _headerSlide.value,
+                          child: Opacity(
+                            opacity: _headerOpacity.value,
+                            child: child,
+                          ),
                         ),
+                        child: _buildHeader(selectedLanguage),
                       ),
-                      child: _buildHeader(selectedLanguage),
-                    ),
 
-                    const SizedBox(height: AppSpacing.xxxl),
+                      const SizedBox(height: AppSpacing.xxxl),
 
-                    // ─── Section Label ─────────────────────
-                    AnimatedBuilder(
-                      animation: _animController,
-                      builder: (context, child) =>
-                          Opacity(opacity: _cardsOpacity.value, child: child),
-                      child: _buildSectionLabel(selectedLanguage),
-                    ),
+                      // ─── Section Label ─────────────────────
+                      AnimatedBuilder(
+                        animation: _animController,
+                        builder: (context, child) =>
+                            Opacity(opacity: _cardsOpacity.value, child: child),
+                        child: _buildSectionLabel(selectedLanguage),
+                      ),
 
-                    const SizedBox(height: AppSpacing.lg),
+                      const SizedBox(height: AppSpacing.lg),
 
-                    // ─── Language Cards ────────────────────
-                    AnimatedBuilder(
-                      animation: _animController,
-                      builder: (context, child) => FractionalTranslation(
-                        translation: _cardsSlide.value,
-                        child: Opacity(
-                          opacity: _cardsOpacity.value,
-                          child: child,
+                      // ─── Language Cards ────────────────────
+                      AnimatedBuilder(
+                        animation: _animController,
+                        builder: (context, child) => FractionalTranslation(
+                          translation: _cardsSlide.value,
+                          child: Opacity(
+                            opacity: _cardsOpacity.value,
+                            child: child,
+                          ),
                         ),
+                        child: _buildLanguageCards(selectedLanguage),
                       ),
-                      child: _buildLanguageCards(selectedLanguage),
-                    ),
 
-                    const SizedBox(height: AppSpacing.xxl),
+                      const SizedBox(height: AppSpacing.xxl),
 
-                    // ─── Info Banner ───────────────────────
-                    AnimatedBuilder(
-                      animation: _animController,
-                      builder: (context, child) => FractionalTranslation(
-                        translation: _footerSlide.value,
-                        child: Opacity(
+                      // ─── Info Banner ───────────────────────
+                      AnimatedBuilder(
+                        animation: _animController,
+                        builder: (context, child) => FractionalTranslation(
+                          translation: _footerSlide.value,
+                          child: Opacity(
+                            opacity: _footerOpacity.value,
+                            child: child,
+                          ),
+                        ),
+                        child: _buildInfoBanner(selectedLanguage),
+                      ),
+
+                      const SizedBox(height: AppSpacing.xxxl),
+
+                      // ─── Footer Branding ──────────────────
+                      AnimatedBuilder(
+                        animation: _animController,
+                        builder: (context, child) => Opacity(
                           opacity: _footerOpacity.value,
                           child: child,
                         ),
+                        child: _buildFooterBranding(),
                       ),
-                      child: _buildInfoBanner(selectedLanguage),
-                    ),
 
-                    const SizedBox(height: AppSpacing.xxxl),
-
-                    // ─── Footer Branding ──────────────────
-                    AnimatedBuilder(
-                      animation: _animController,
-                      builder: (context, child) =>
-                          Opacity(opacity: _footerOpacity.value, child: child),
-                      child: _buildFooterBranding(),
-                    ),
-
-                    // Bottom space for CTA clearance
-                    const SizedBox(height: 100),
-                  ],
+                      // Bottom space for CTA clearance
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
-              ),
               ),
             ),
           ),
@@ -228,7 +230,7 @@ class _LanguageSelectionScreenState
 
         // App Name
         Text(
-          'YORKS GODOWNPRO',
+          'YORKS AC. & REF.',
           style: GoogleFonts.inter(
             fontSize: 24,
             fontWeight: FontWeight.w800,
@@ -419,7 +421,7 @@ class _LanguageSelectionScreenState
     return Column(
       children: [
         Text(
-          'Yorks GodownPro',
+          'Yorks AC. & Ref.',
           style: GoogleFonts.inter(
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -505,55 +507,55 @@ class _LanguageSelectionScreenState
           color: Colors.transparent,
           child: InkWell(
             onTap: _onGetStarted,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-          child: Container(
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  getStarted.primary,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+            child: Container(
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    getStarted.primary,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  '/',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    color: Colors.white.withValues(alpha: 0.5),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    '/',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      color: Colors.white.withValues(alpha: 0.5),
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  getStarted.secondary(language),
-                  textDirection: language.isRtl
-                      ? TextDirection.rtl
-                      : TextDirection.ltr,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    getStarted.secondary(language),
+                    textDirection: language.isRtl
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Icon(
+                    Icons.arrow_forward_rounded,
                     color: Colors.white.withValues(alpha: 0.9),
+                    size: 20,
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  color: Colors.white.withValues(alpha: 0.9),
-                  size: 20,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }

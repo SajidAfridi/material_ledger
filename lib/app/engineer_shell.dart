@@ -8,14 +8,16 @@ import '../core/feedback/feedback_service.dart';
 import '../core/widgets/widgets.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
+import '../shared/models/yorks_v1_project_strings.dart';
 import '../shared/providers/language_provider.dart';
+import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/sync/sync_status_banner.dart';
 import 'router.dart';
 
 /// Engineer shell — responsive navigation.
 ///
-/// Mobile (< 840px): Custom bottom navigation with floating "New Request" CTA.
-/// Tablet/Desktop (≥ 840px): Custom NavigationRail with highlighted CTA.
+/// Mobile (< 840px): Custom bottom navigation with a legacy request CTA when
+/// that retained workflow is active. Tablet/Desktop (≥ 840px): custom rail.
 ///
 /// Tabs: Dashboard · Browse · Projects · Profile
 class EngineerShellScreen extends ConsumerWidget {
@@ -52,6 +54,37 @@ class EngineerShellScreen extends ConsumerWidget {
     ),
   ];
 
+  /// The third retained shell branch is the generic local project list. During
+  /// the Batch 2 V1 rollout it must not be entered; use that familiar nav slot
+  /// to open the connected V1 creation flow instead. The underlying branch
+  /// index remains stable for the other tabs.
+  static const _yorksV1NavItems = [
+    _NavItem(
+      icon: Icons.dashboard_outlined,
+      activeIcon: Icons.dashboard_rounded,
+      translatable: AppStrings.dashboard,
+      path: RoutePaths.engineerHome,
+    ),
+    _NavItem(
+      icon: Icons.inventory_2_outlined,
+      activeIcon: Icons.inventory_2_rounded,
+      translatable: AppStrings.browse,
+      path: RoutePaths.engineerBrowse,
+    ),
+    _NavItem(
+      icon: Icons.add_circle_outline_rounded,
+      activeIcon: Icons.add_circle_rounded,
+      translatable: YorksV1ProjectStrings.createProject,
+      path: RoutePaths.engineerCreateProject,
+    ),
+    _NavItem(
+      icon: Icons.person_outlined,
+      activeIcon: Icons.person_rounded,
+      translatable: AppStrings.profile,
+      path: RoutePaths.engineerProfile,
+    ),
+  ];
+
   /// New Request is the 5th branch (no visible tab) — reached via the centre
   /// "+" FAB / rail button. Index follows the 4 tab branches (0–3).
   static const _newRequestIndex = 4;
@@ -72,11 +105,43 @@ class EngineerShellScreen extends ConsumerWidget {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final useRail = screenWidth >= 840;
     final lang = ref.watch(languageProvider);
+    final yorksV1ProjectsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .projects;
+    // Batch 2 supplies the normalized project foundation only. Its requests
+    // arrive later, so this rollout must not open the retained generic request
+    // workflow beside normalized project records.
+    final showLegacyRequestAction = !yorksV1ProjectsEnabled;
+    final navItems = yorksV1ProjectsEnabled ? _yorksV1NavItems : _navItems;
+    void onNavItemTap(int index) {
+      if (yorksV1ProjectsEnabled && index == 2) {
+        context.push(RoutePaths.engineerCreateProject);
+        return;
+      }
+      _goBranch(index);
+    }
 
     if (useRail) {
-      return _buildRailLayout(context, ref, currentIndex, screenWidth, lang);
+      return _buildRailLayout(
+        context,
+        ref,
+        currentIndex,
+        screenWidth,
+        lang,
+        navItems,
+        onNavItemTap,
+        showLegacyRequestAction,
+      );
     }
-    return _buildMobileLayout(context, ref, currentIndex, lang);
+    return _buildMobileLayout(
+      context,
+      ref,
+      currentIndex,
+      lang,
+      navItems,
+      onNavItemTap,
+      showLegacyRequestAction,
+    );
   }
 
   // ─── Mobile: Custom Bottom NavigationBar ───────────────────────
@@ -85,6 +150,9 @@ class EngineerShellScreen extends ConsumerWidget {
     WidgetRef ref,
     int currentIndex,
     AppLanguage lang,
+    List<_NavItem> navItems,
+    ValueChanged<int> onNavItemTap,
+    bool showLegacyRequestAction,
   ) {
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -94,26 +162,30 @@ class EngineerShellScreen extends ConsumerWidget {
           Expanded(child: navigationShell),
         ],
       ),
-      // The "New Request" CTA lives in the bottom bar — a centred, popped-out
-      // button docked into the navigation. It activates the New Request branch
-      // (kept mounted in the IndexedStack) so the draft survives tab switches.
-      floatingActionButton: _CenterAddButton(
-        isActive: currentIndex == _newRequestIndex,
-        onTap: () {
-          AppFeedback.primaryAction();
-          navigationShell.goBranch(
-            _newRequestIndex,
-            initialLocation: _newRequestIndex == currentIndex,
-          );
-        },
-      ),
+      // The retained CTA is hidden while V1 projects are active. A V1 request
+      // entry point arrives with the corresponding normalized request slice.
+      floatingActionButton: showLegacyRequestAction
+          ? _CenterAddButton(
+              isActive: currentIndex == _newRequestIndex,
+              onTap: () {
+                AppFeedback.primaryAction();
+                navigationShell.goBranch(
+                  _newRequestIndex,
+                  initialLocation: _newRequestIndex == currentIndex,
+                );
+              },
+            )
+          : null,
       // Centre-docked but lowered — a real FAB location (not a Transform), so
       // the tappable area moves down WITH the button and stays easy to hit.
-      floatingActionButtonLocation: const _LoweredCenterDockedFab(),
+      floatingActionButtonLocation: showLegacyRequestAction
+          ? const _LoweredCenterDockedFab()
+          : null,
       bottomNavigationBar: _LedgerBottomBar(
         currentIndex: currentIndex,
-        items: _navItems,
-        onItemTap: _goBranch,
+        items: navItems,
+        onItemTap: onNavItemTap,
+        showCenterAction: showLegacyRequestAction,
       ),
     );
   }
@@ -125,6 +197,9 @@ class EngineerShellScreen extends ConsumerWidget {
     int currentIndex,
     double screenWidth,
     AppLanguage lang,
+    List<_NavItem> navItems,
+    ValueChanged<int> onNavItemTap,
+    bool showLegacyRequestAction,
   ) {
     final isExtended = screenWidth >= 1200;
 
@@ -135,10 +210,11 @@ class EngineerShellScreen extends ConsumerWidget {
           // ─── Custom Rail ──────────────────────────────
           _LedgerNavRail(
             currentIndex: currentIndex,
-            items: _navItems,
+            items: navItems,
             isExtended: isExtended,
             lang: lang,
-            onItemTap: _goBranch,
+            onItemTap: onNavItemTap,
+            showNewRequest: showLegacyRequestAction,
             onNewRequest: () {
               AppFeedback.primaryAction();
               navigationShell.goBranch(
@@ -179,11 +255,13 @@ class _LedgerBottomBar extends StatelessWidget {
     required this.currentIndex,
     required this.items,
     required this.onItemTap,
+    required this.showCenterAction,
   });
 
   final int currentIndex;
   final List<_NavItem> items;
   final ValueChanged<int> onItemTap;
+  final bool showCenterAction;
 
   @override
   Widget build(BuildContext context) {
@@ -218,8 +296,10 @@ class _LedgerBottomBar extends StatelessWidget {
               child: Row(
                 children: [
                   for (var index = 0; index < items.length; index++) ...[
-                    // Reserve the centre slot for the docked "New Request" button.
-                    if (index == items.length ~/ 2) const SizedBox(width: 76),
+                    // Reserve the centre slot only while the retained request
+                    // CTA is available.
+                    if (showCenterAction && index == items.length ~/ 2)
+                      const SizedBox(width: 76),
                     Expanded(
                       child: _BottomBarItem(
                         item: items[index],
@@ -419,6 +499,7 @@ class _LedgerNavRail extends StatelessWidget {
     required this.lang,
     required this.onItemTap,
     required this.onNewRequest,
+    required this.showNewRequest,
   });
 
   final int currentIndex;
@@ -427,6 +508,7 @@ class _LedgerNavRail extends StatelessWidget {
   final AppLanguage lang;
   final ValueChanged<int> onItemTap;
   final VoidCallback onNewRequest;
+  final bool showNewRequest;
 
   @override
   Widget build(BuildContext context) {
@@ -458,17 +540,18 @@ class _LedgerNavRail extends StatelessWidget {
               );
             }),
 
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isExtended ? AppSpacing.lg : AppSpacing.md,
-                vertical: AppSpacing.sm,
+            if (showNewRequest)
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isExtended ? AppSpacing.lg : AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                child: _RailNewRequestButton(
+                  isExtended: isExtended,
+                  lang: lang,
+                  onTap: onNewRequest,
+                ),
               ),
-              child: _RailNewRequestButton(
-                isExtended: isExtended,
-                lang: lang,
-                onTap: onNewRequest,
-              ),
-            ),
 
             const Spacer(),
 
@@ -476,7 +559,7 @@ class _LedgerNavRail extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xl),
               child: Text(
-                isExtended ? 'GodownPro v1.0' : 'v1.0',
+                isExtended ? 'Yorks AC. & Ref. v1.0' : 'v1.0',
                 style: GoogleFonts.inter(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
@@ -511,7 +594,7 @@ class _RailHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'GodownPro',
+                  'Yorks AC. & Ref.',
                   style: GoogleFonts.inter(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,

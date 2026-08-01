@@ -7,8 +7,12 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/material_item.dart';
+import '../../../../shared/models/material_master.dart';
 import '../../../../shared/providers/inventory_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/material_master_provider.dart';
+import '../../../../shared/providers/nexus_feature_flags_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 
 /// Full-screen modal for adding or editing a material in inventory.
 class AddMaterialSheet extends ConsumerStatefulWidget {
@@ -33,6 +37,8 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
   late final TextEditingController _ralController;
   late MaterialCategory _category;
   late MaterialUnit _unit;
+  late String _categoryMasterId;
+  late String _unitMasterId;
   bool _saving = false;
 
   @override
@@ -68,6 +74,8 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
     _ralController = TextEditingController(text: item?.ralColour);
     _category = item?.category ?? MaterialCategory.airInletOutlet;
     _unit = item?.unit ?? MaterialUnit.pieces;
+    _categoryMasterId = item?.categoryMasterId ?? 'cat-air-terminals';
+    _unitMasterId = item?.unitMasterId ?? 'unit-nos';
   }
 
   @override
@@ -88,13 +96,32 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _saving = true);
 
-    final price = double.tryParse(_priceController.text.trim()) ?? 0;
+    final canViewCommercials = ref.read(canViewCommercialsProvider);
+    final price = canViewCommercials
+        ? double.tryParse(_priceController.text.trim()) ?? 0
+        : null;
     final minStock = double.tryParse(_minStockController.text.trim()) ?? 0;
 
     final brand = _brandController.text.trim();
     final country = _countryController.text.trim();
     final size = _sizeController.text.trim();
     final ral = _ralController.text.trim();
+    final mastersEnabled = ref.read(nexusFeatureFlagsProvider).browseMaterials;
+    final selectedUnit = ref
+        .read(materialUnitsProvider)
+        .where((value) => value.id == _unitMasterId)
+        .firstOrNull;
+    if (mastersEnabled) {
+      _category = MaterialCategory.fromLabel(
+        legacyCategoryLabelForMasterId(_categoryMasterId),
+      );
+      _unit = MaterialUnit.fromSymbol(
+        legacyUnitSymbolForMasterId(
+          _unitMasterId,
+          fallback: selectedUnit?.symbol ?? _unit.symbol,
+        ),
+      );
+    }
 
     if (widget.material != null) {
       final updated = widget.material!.copyWith(
@@ -102,14 +129,17 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
         urduName: _urduNameController.text.trim(),
         category: _category,
         unit: _unit,
-        unitPrice: price,
+        categoryMasterId: mastersEnabled ? _categoryMasterId : null,
+        unitMasterId: mastersEnabled ? _unitMasterId : null,
         minStockLevel: minStock,
         brand: brand,
         countryOfOrigin: country,
         size: size,
         ralColour: ral,
       );
-      await ref.read(materialsProvider.notifier).updateMaterial(updated);
+      await ref
+          .read(materialsProvider.notifier)
+          .updateMaterial(updated, unitCostAED: price);
     } else {
       final qty = double.tryParse(_quantityController.text.trim()) ?? 0;
       await ref
@@ -119,8 +149,10 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
             urduName: _urduNameController.text.trim(),
             category: _category,
             unit: _unit,
+            categoryMasterId: mastersEnabled ? _categoryMasterId : null,
+            unitMasterId: mastersEnabled ? _unitMasterId : null,
             quantity: qty,
-            unitPrice: price,
+            unitPrice: price ?? 0,
             minStockLevel: minStock,
             brand: brand,
             countryOfOrigin: country,
@@ -133,9 +165,70 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
     Navigator.pop(context, true);
   }
 
+  Future<void> _addCustomUnit() async {
+    final name = TextEditingController();
+    final symbol = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Custom unit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Unit name'),
+            ),
+            TextField(
+              controller: symbol,
+              decoration: const InputDecoration(labelText: 'Symbol'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true ||
+        name.text.trim().isEmpty ||
+        symbol.text.trim().isEmpty) {
+      return;
+    }
+    final id = await ref
+        .read(materialUnitsProvider.notifier)
+        .add(name: name.text, symbol: symbol.text);
+    final unit = ref
+        .read(materialUnitsProvider)
+        .where((value) => value.id == id)
+        .firstOrNull;
+    if (!mounted) return;
+    if (unit?.isSelectable == true) {
+      setState(() => _unitMasterId = id);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Custom unit sent to Admin for approval.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
+    final canViewCommercials = ref.watch(canViewCommercialsProvider);
+    final mastersEnabled = ref.watch(nexusFeatureFlagsProvider).browseMaterials;
+    final categories = ref.watch(activeMaterialCategoriesProvider);
+    final units = ref.watch(selectableMaterialUnitsProvider);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(
@@ -243,10 +336,35 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                           style: AppTypography.titleSmall,
                         ),
                         const Gap(AppSpacing.sm),
-                        _CategorySelector(
-                          selected: _category,
-                          onChanged: (c) => setState(() => _category = c),
-                        ),
+                        if (mastersEnabled)
+                          DropdownButtonFormField<String>(
+                            initialValue:
+                                categories.any(
+                                  (value) => value.id == _categoryMasterId,
+                                )
+                                ? _categoryMasterId
+                                : categories.firstOrNull?.id,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final category in categories)
+                                DropdownMenuItem(
+                                  value: category.id,
+                                  child: Text(category.name),
+                                ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() => _categoryMasterId = value);
+                              }
+                            },
+                          )
+                        else
+                          _CategorySelector(
+                            selected: _category,
+                            onChanged: (c) => setState(() => _category = c),
+                          ),
                         const Gap(AppSpacing.xl),
 
                         // Unit
@@ -255,10 +373,47 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                           style: AppTypography.titleSmall,
                         ),
                         const Gap(AppSpacing.sm),
-                        _UnitSelector(
-                          selected: _unit,
-                          onChanged: (u) => setState(() => _unit = u),
-                        ),
+                        if (mastersEnabled)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              DropdownButtonFormField<String>(
+                                initialValue:
+                                    units.any(
+                                      (value) => value.id == _unitMasterId,
+                                    )
+                                    ? _unitMasterId
+                                    : units.firstOrNull?.id,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: [
+                                  for (final unit in units)
+                                    DropdownMenuItem(
+                                      value: unit.id,
+                                      child: Text(
+                                        '${unit.symbol} — ${unit.name}',
+                                      ),
+                                    ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _unitMasterId = value);
+                                  }
+                                },
+                              ),
+                              TextButton.icon(
+                                onPressed: _addCustomUnit,
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text('Custom unit…'),
+                              ),
+                            ],
+                          )
+                        else
+                          _UnitSelector(
+                            selected: _unit,
+                            onChanged: (u) => setState(() => _unit = u),
+                          ),
                         const Gap(AppSpacing.xl),
 
                         // ─── Stock details (Air Inlet & Outlet spec) ──
@@ -334,63 +489,71 @@ class _AddMaterialSheetState extends ConsumerState<AddMaterialSheet> {
                           const Gap(AppSpacing.xl),
                         ],
 
-                        // Quantity + Price row
-                        Row(
-                          children: [
-                            if (widget.material == null) ...[
-                              Expanded(
-                                child: LedgerTextField(
-                                  controller: _quantityController,
-                                  label: AppStrings.quantity.primary,
-                                  hintText: '0',
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  validator: (v) {
-                                    if ((v ?? '').trim().isEmpty) {
-                                      return AppStrings.fieldRequired.primary;
-                                    }
-                                    final val = double.tryParse(v!.trim());
-                                    // 0 is allowed (an unstocked item), but guard
-                                    // negatives and fat-finger huge quantities.
-                                    if (val == null || val < 0) {
-                                      return AppStrings
-                                          .enterValidNumber
-                                          .primary;
-                                    }
-                                    if (val > 1000000) return 'Too large';
-                                    return null;
-                                  },
+                        // Quantity + protected Unit Price. Engineers can create
+                        // operational catalogue rows without ever receiving or
+                        // submitting a commercial field.
+                        if (widget.material == null || canViewCommercials) ...[
+                          Row(
+                            children: [
+                              if (widget.material == null) ...[
+                                Expanded(
+                                  child: LedgerTextField(
+                                    controller: _quantityController,
+                                    label: AppStrings.quantity.primary,
+                                    hintText: '0',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    validator: (v) {
+                                      if ((v ?? '').trim().isEmpty) {
+                                        return AppStrings.fieldRequired.primary;
+                                      }
+                                      final val = double.tryParse(v!.trim());
+                                      // 0 is allowed (an unstocked item), but
+                                      // guard negatives and fat-finger values.
+                                      if (val == null || val < 0) {
+                                        return AppStrings
+                                            .enterValidNumber
+                                            .primary;
+                                      }
+                                      if (val > 1000000) return 'Too large';
+                                      return null;
+                                    },
+                                  ),
                                 ),
-                              ),
-                              const Gap(AppSpacing.lg),
+                                if (canViewCommercials)
+                                  const Gap(AppSpacing.lg),
+                              ],
+                              if (canViewCommercials)
+                                Expanded(
+                                  child: LedgerTextField(
+                                    controller: _priceController,
+                                    label: AppStrings.unitPrice.primary,
+                                    hintText: '0.00',
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    validator: (v) {
+                                      if ((v ?? '').trim().isEmpty) {
+                                        return AppStrings.fieldRequired.primary;
+                                      }
+                                      final val = double.tryParse(v!.trim());
+                                      if (val == null || val < 0) {
+                                        return AppStrings
+                                            .enterValidNumber
+                                            .primary;
+                                      }
+                                      if (val > 1000000) return 'Too large';
+                                      return null;
+                                    },
+                                  ),
+                                ),
                             ],
-                            Expanded(
-                              child: LedgerTextField(
-                                controller: _priceController,
-                                label: AppStrings.unitPrice.primary,
-                                hintText: '0.00',
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                validator: (v) {
-                                  if ((v ?? '').trim().isEmpty) {
-                                    return AppStrings.fieldRequired.primary;
-                                  }
-                                  final val = double.tryParse(v!.trim());
-                                  if (val == null || val < 0) {
-                                    return AppStrings.enterValidNumber.primary;
-                                  }
-                                  if (val > 1000000) return 'Too large';
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Gap(AppSpacing.lg),
+                          ),
+                          const Gap(AppSpacing.lg),
+                        ],
 
                         // Min stock level
                         LedgerTextField(
