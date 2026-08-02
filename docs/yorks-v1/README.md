@@ -2,8 +2,9 @@
 
 Status: **approved re-baseline**
 Approved: 1 August 2026
-Current delivery stage: **Batch 4 complete; Batch 5 — Material Request vertical
-slice — is the next dependency under the Rev 2.0/R35 authority**
+Current delivery stage: **Batches 0–9 complete; Batch 10 local release
+evidence passed. Staging acceptance, protected Android signing and deployment
+remain release-owner activities.**
 
 This folder is the repository-local contract for the Yorks V1 Procurement
 Control and Inventory turnaround. Rev 2.0 supersedes the overlapping Nexus V7
@@ -40,6 +41,10 @@ explicit V7-to-V1 conflict resolution.
 | [`BATCH_02_COMPLETION.md`](BATCH_02_COMPLETION.md) | Identity, projects, audit/RLS hardening and verification |
 | [`BATCH_03_COMPLETION.md`](BATCH_03_COMPLETION.md) | Editable BOQ groups, responsive spreadsheet and verification |
 | [`BATCH_04_COMPLETION.md`](BATCH_04_COMPLETION.md) | Excel BOQ round-trip, protected import command and verification |
+| [`BATCH_08_COMPLETION.md`](BATCH_08_COMPLETION.md) | Delivery Orders, returns and verification |
+| [`BATCH_09_COMPLETION.md`](BATCH_09_COMPLETION.md) | Controlled documents, audit and retained-module coverage |
+| [`BATCH_10_RELEASE_READINESS.md`](BATCH_10_RELEASE_READINESS.md) | Local release evidence, staging matrix and controlled-cutover runbook |
+| [`RELEASE_NOTES_DRAFT.md`](RELEASE_NOTES_DRAFT.md) | Release content and conditions for the staging sign-off |
 
 ## Product north star
 

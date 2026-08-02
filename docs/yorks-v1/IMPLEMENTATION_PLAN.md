@@ -1,7 +1,8 @@
 # Yorks V1 R35 — Dependency-Ordered Implementation Plan
 
-Status: Batches 0–4 are complete. Batch 5 — Material Request vertical slice —
-is the next dependency.
+Status: Batches 0–9 are complete. Batch 10 is in its controlled release
+readiness phase; local evidence is complete, while staging, signing and
+deployment require release-owner authority.
 
 ## Delivery strategy
 
@@ -241,6 +242,10 @@ emits one event; retained modules work; deferred routes are unreachable.
 Rollback: document UI off; objects/versions/audit retained.
 
 ## Batch 10 — Release validation and controlled cutover
+
+Implementation status: **local evidence passed; staging/production cutover
+pending.** See [`BATCH_10_RELEASE_READINESS.md`](BATCH_10_RELEASE_READINESS.md)
+and [`RELEASE_NOTES_DRAFT.md`](RELEASE_NOTES_DRAFT.md).
 
 Deliver:
 
