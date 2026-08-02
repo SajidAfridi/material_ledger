@@ -54,6 +54,7 @@ import '../features/procurement/presentation/screens/procurement_workspace_scree
 import '../features/projects/presentation/screens/project_workspace_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_boq_screens.dart';
 import '../features/projects/presentation/screens/yorks_v1_documents_screen.dart';
+import '../features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
@@ -95,6 +96,8 @@ abstract final class RoutePaths {
   static const String engineerProjects = '/projects';
   static const String engineerCreateProject = '/projects/new';
   static const String projectWorkspace = '/projects/:id';
+  static const String yorksV1Projects = '/yorks/projects';
+  static const String yorksV1Project = '/yorks/projects/:projectId';
   static const String yorksV1BoqGroups = '/yorks/projects/:projectId/boq';
   static const String yorksV1BoqWorksheet =
       '/yorks/projects/:projectId/boq/:groupId';
@@ -136,6 +139,8 @@ abstract final class RoutePaths {
   static String planReviewPath(String projectId) => '/plan/$projectId';
   static String projectWorkspacePath(String projectId) =>
       '/projects/$projectId';
+  static String yorksV1ProjectPath(String projectId) =>
+      '/yorks/projects/$projectId';
   static String yorksV1BoqGroupsPath(String projectId) =>
       '/yorks/projects/$projectId/boq';
   static String yorksV1BoqWorksheetPath(String projectId, String groupId) =>
@@ -691,10 +696,24 @@ GoRouter createAppRouter({
         ),
       ),
       GoRoute(
+        path: RoutePaths.yorksV1Projects,
+        pageBuilder: (context, state) =>
+            _yorksV1Slide(state.pageKey, const YorksV1ProjectsScreen()),
+      ),
+      GoRoute(
         path: RoutePaths.yorksV1BoqGroups,
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1BoqGroupsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1Project,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1ProjectWorkspaceScreen(
             projectId: state.pathParameters['projectId'] ?? '',
           ),
         ),

@@ -1,6 +1,7 @@
 # Yorks V1 — UI Convergence Plan
 
-Status: **Batch 11A in progress.** This is an incremental visual-convergence
+Status: **Batch 11A complete; Batch 11B in progress.** The normalized
+portfolio foundation is complete. This is an incremental visual-convergence
 track on top of the completed V1 security/workflow batches; it does not replace
 the release-readiness work in Batch 10.
 
@@ -22,8 +23,8 @@ the release-readiness work in Batch 10.
 
 | Slice | Scope | Acceptance evidence |
 | --- | --- | --- |
-| 11A | R35 auth surface; Yorks desktop sidebar/top bar; mobile operational navigation around existing V1 screens | Login and role shell at 1366x768 and 360px; all existing V1 route/role guards unchanged |
-| 11B | Portfolio/read-only project context, five-stage creation, project workspace, BOQ group and worksheet visual alignment | Project Engineer, Site Engineer, Procurement and Admin variants; keyboard worksheet and mobile row editor checks |
+| 11A | R35 auth surface; Yorks desktop sidebar/top bar; mobile operational navigation around existing V1 screens | **Complete.** Login and role shell at 1366x768 and 360px; all existing V1 route/role guards unchanged |
+| 11B | Portfolio/read-only project context, five-stage creation, project workspace, BOQ group and worksheet visual alignment | **In progress.** RLS-backed portfolio and four-tab project workspace are complete; the existing five-stage creation and BOQ flows remain connected. Role visual regression continues with the remaining workspace refinements. |
 | 11C | Material Request list/draft/detail plus Procurement arrangement and Engineer approval alignment | Draft privacy, commercial allowed/denied, partial/unavailable and return-reason states |
 | 11D | Inventory, dispatch/receipt, delivery order and return workspace alignment | Desktop table/mobile editor; required reference/outcome and server rejection states |
 | 11E | Documents, retained administration and engineering tools; loading/error/offline/forbidden presentation | Controlled print/document evidence and accessible responsive review |
@@ -37,10 +38,16 @@ silently recreated beside V1 authority:
 - Accounts, RFQ, quotations and PO remain unavailable in V1.
 - Dispatch and return navigation starts from an authorised Material Request;
   global list surfaces are introduced only with a safe server projection.
-- The normalized project portfolio needs a protected read projection before it
-  replaces the retained legacy project register. Until then, project creation
-  remains the connected route and Procurement’s project item is visibly
-  view-only/integration-pending rather than pretending to be functional.
+- The normalized project portfolio now uses an explicitly non-commercial read
+  model over `v1_projects`, `v1_project_parties`, `v1_project_scopes` and
+  `v1_project_members`. Each relation is already protected by the existing
+  `v1_project_readable` RLS predicate; this deliberately avoids a broad legacy
+  project-register fallback. Procurement has the same read model with a
+  visible View Only affordance and no project/BOQ command path.
+- The project workspace currently provides Overview, BOQ, Material Requests
+  and Documents. BOQ and Documents open the selected project's connected
+  record; Material Requests opens the role-authorized request workspace while
+  its project-scoped list filter is completed in Slice 11C.
 
 Every convergence slice preserves the existing positive/negative RLS tests;
 UI visibility is never treated as authorization.

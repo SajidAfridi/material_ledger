@@ -89,7 +89,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         label: YorksV1ShellStrings.projects,
         icon: Icons.account_tree_outlined,
         selectedIcon: Icons.account_tree_rounded,
-        path: RoutePaths.engineerCreateProject,
+        path: RoutePaths.yorksV1Projects,
         group: YorksV1ShellStrings.projects,
       ),
       _YorksDestination(
@@ -149,7 +149,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           label: YorksV1ShellStrings.projects,
           icon: Icons.account_tree_outlined,
           selectedIcon: Icons.account_tree_rounded,
-          disabledMessage: YorksV1ShellStrings.integrationPending,
+          path: RoutePaths.yorksV1Projects,
           suffix: YorksV1ShellStrings.viewOnly,
         ),
       ],
@@ -216,8 +216,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       if (location == path ||
           (path == RoutePaths.yorksV1MaterialRequests &&
               location.startsWith('/yorks/material-requests')) ||
-          (path == RoutePaths.engineerCreateProject &&
-              location.startsWith('/projects/new'))) {
+          (path == RoutePaths.yorksV1Projects &&
+              location.startsWith('/yorks/projects'))) {
         return destination;
       }
     }

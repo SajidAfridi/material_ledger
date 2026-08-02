@@ -1,5 +1,6 @@
 import 'app_strings.dart';
 import 'yorks_v1_domain_error.dart';
+import 'yorks_v1_project.dart';
 
 /// Centralized, bilingual-capable copy for the Yorks V1 R35 Projects slice.
 ///
@@ -114,12 +115,6 @@ abstract final class YorksV1ProjectStrings {
     ar: 'تعديل',
     ur: 'ترمیم کریں',
     hi: 'संपादित करें',
-  );
-  static const retry = TranslatableString(
-    en: 'Retry',
-    ar: 'إعادة المحاولة',
-    ur: 'دوبارہ کوشش کریں',
-    hi: 'पुनः प्रयास करें',
   );
   static const cancel = TranslatableString(
     en: 'Cancel',
@@ -573,6 +568,243 @@ abstract final class YorksV1ProjectStrings {
     ur: 'پراجیکٹ بنانے کے لیے دوبارہ سائن اِن کریں۔',
     hi: 'परियोजना बनाने के लिए फिर से साइन इन करें।',
   );
+
+  static const portfolioDescription = TranslatableString(
+    en: 'Authorized project context, current owner and connected work.',
+    ar: 'سياق المشروع المصرح به والمالك الحالي والعمل المتصل.',
+    ur: 'مجاز پراجیکٹ سیاق، موجودہ مالک اور منسلک کام۔',
+    hi: 'अधिकृत परियोजना संदर्भ, वर्तमान स्वामी और जुड़ा हुआ कार्य।',
+  );
+  static const viewOnlyPortfolio = TranslatableString(
+    en: 'View-only project context',
+    ar: 'سياق مشروع للعرض فقط',
+    ur: 'صرف دیکھنے کے لیے پراجیکٹ سیاق',
+    hi: 'केवल देखने योग्य परियोजना संदर्भ',
+  );
+  static const searchProjects = TranslatableString(
+    en: 'Search projects',
+    ar: 'البحث في المشاريع',
+    ur: 'پراجیکٹس تلاش کریں',
+    hi: 'परियोजनाएँ खोजें',
+  );
+  static const allStates = TranslatableString(
+    en: 'All states',
+    ar: 'كل الحالات',
+    ur: 'تمام حالتیں',
+    hi: 'सभी स्थितियाँ',
+  );
+  static const noProjects = TranslatableString(
+    en: 'No authorized projects yet',
+    ar: 'لا توجد مشاريع مصرح بها حتى الآن',
+    ur: 'ابھی کوئی مجاز پراجیکٹ نہیں',
+    hi: 'अभी तक कोई अधिकृत परियोजना नहीं है',
+  );
+  static const noProjectsDescription = TranslatableString(
+    en: 'Create a project to establish its Common scope, team history and BOQ groups together.',
+    ar: 'أنشئ مشروعاً لتأسيس نطاقه المشترك وسجل فريقه ومجموعات جدول الكميات معاً.',
+    ur: 'اس کا مشترک دائرہ، ٹیم ہسٹری اور BOQ گروپس ایک ساتھ قائم کرنے کے لیے پراجیکٹ بنائیں۔',
+    hi: 'उसका साझा दायरा, टीम इतिहास और BOQ समूह एक साथ स्थापित करने के लिए परियोजना बनाएँ।',
+  );
+  static const noMatchingProjects = TranslatableString(
+    en: 'No projects match this search or state filter.',
+    ar: 'لا توجد مشاريع تطابق هذا البحث أو عامل تصفية الحالة.',
+    ur: 'اس تلاش یا حالت فلٹر سے کوئی پراجیکٹ میل نہیں کھاتا۔',
+    hi: 'इस खोज या स्थिति फ़िल्टर से कोई परियोजना मेल नहीं खाती।',
+  );
+  static const portfolioUnavailable = TranslatableString(
+    en: 'Project context is unavailable right now. Refresh when connected.',
+    ar: 'سياق المشروع غير متاح حالياً. حدّث عند الاتصال.',
+    ur: 'پراجیکٹ سیاق فی الحال دستیاب نہیں۔ کنکشن پر ریفریش کریں۔',
+    hi: 'परियोजना संदर्भ अभी उपलब्ध नहीं है। कनेक्ट होने पर रीफ़्रेश करें।',
+  );
+  static const retry = TranslatableString(
+    en: 'Retry',
+    ar: 'إعادة المحاولة',
+    ur: 'دوبارہ کوشش کریں',
+    hi: 'पुनः प्रयास करें',
+  );
+  static const openProject = TranslatableString(
+    en: 'Open project',
+    ar: 'فتح المشروع',
+    ur: 'پراجیکٹ کھولیں',
+    hi: 'परियोजना खोलें',
+  );
+  static const projectWorkspace = TranslatableString(
+    en: 'Project workspace',
+    ar: 'مساحة عمل المشروع',
+    ur: 'پراجیکٹ ورک اسپیس',
+    hi: 'परियोजना कार्यक्षेत्र',
+  );
+  static const workspaceDescription = TranslatableString(
+    en: 'Review the controlled project context and continue through its connected records.',
+    ar: 'راجع سياق المشروع المضبوط وتابع عبر سجلاته المتصلة.',
+    ur: 'کنٹرولڈ پراجیکٹ سیاق کا جائزہ لیں اور اس کے منسلک ریکارڈز سے جاری رکھیں۔',
+    hi: 'नियंत्रित परियोजना संदर्भ की समीक्षा करें और उसके जुड़े रिकॉर्ड से आगे बढ़ें।',
+  );
+  static const overview = TranslatableString(
+    en: 'Overview',
+    ar: 'نظرة عامة',
+    ur: 'جائزہ',
+    hi: 'अवलोकन',
+  );
+  static const boq = TranslatableString(
+    en: 'BOQ',
+    ar: 'جدول الكميات',
+    ur: 'BOQ',
+    hi: 'बीओक्यू',
+  );
+  static const materialRequests = TranslatableString(
+    en: 'Material Requests',
+    ar: 'طلبات المواد',
+    ur: 'میٹیریل ریکویسٹس',
+    hi: 'सामग्री अनुरोध',
+  );
+  static const documents = TranslatableString(
+    en: 'Documents',
+    ar: 'المستندات',
+    ur: 'دستاویزات',
+    hi: 'दस्तावेज़',
+  );
+  static const projectFacts = TranslatableString(
+    en: 'Project facts',
+    ar: 'حقائق المشروع',
+    ur: 'پراجیکٹ حقائق',
+    hi: 'परियोजना तथ्य',
+  );
+  static const state = TranslatableString(
+    en: 'State',
+    ar: 'الحالة',
+    ur: 'حالت',
+    hi: 'स्थिति',
+  );
+  static const currentOwner = TranslatableString(
+    en: 'Current owner',
+    ar: 'المالك الحالي',
+    ur: 'موجودہ مالک',
+    hi: 'वर्तमान स्वामी',
+  );
+  static const site = TranslatableString(
+    en: 'Site',
+    ar: 'الموقع',
+    ur: 'سائٹ',
+    hi: 'साइट',
+  );
+  static const clientLabel = TranslatableString(
+    en: 'Client',
+    ar: 'العميل',
+    ur: 'کلائنٹ',
+    hi: 'ग्राहक',
+  );
+  static const buildingsActive = TranslatableString(
+    en: 'Active buildings',
+    ar: 'المباني النشطة',
+    ur: 'فعال عمارتیں',
+    hi: 'सक्रिय भवन',
+  );
+  static const activeTeam = TranslatableString(
+    en: 'Active team',
+    ar: 'الفريق النشط',
+    ur: 'فعال ٹیم',
+    hi: 'सक्रिय टीम',
+  );
+  static const updated = TranslatableString(
+    en: 'Updated',
+    ar: 'تم التحديث',
+    ur: 'اپ ڈیٹ',
+    hi: 'अपडेट किया गया',
+  );
+  static const openBoq = TranslatableString(
+    en: 'Open BOQ',
+    ar: 'فتح جدول الكميات',
+    ur: 'BOQ کھولیں',
+    hi: 'बीओक्यू खोलें',
+  );
+  static const openRequests = TranslatableString(
+    en: 'Open material requests',
+    ar: 'فتح طلبات المواد',
+    ur: 'میٹیریل ریکویسٹس کھولیں',
+    hi: 'सामग्री अनुरोध खोलें',
+  );
+  static const openDocuments = TranslatableString(
+    en: 'Open documents',
+    ar: 'فتح المستندات',
+    ur: 'دستاویزات کھولیں',
+    hi: 'दस्तावेज़ खोलें',
+  );
+  static const draftState = TranslatableString(
+    en: 'Draft',
+    ar: 'مسودة',
+    ur: 'ڈرافٹ',
+    hi: 'ड्राफ़्ट',
+  );
+  static const activeState = TranslatableString(
+    en: 'Active',
+    ar: 'نشط',
+    ur: 'فعال',
+    hi: 'सक्रिय',
+  );
+  static const onHoldState = TranslatableString(
+    en: 'On hold',
+    ar: 'معلق',
+    ur: 'ہولڈ پر',
+    hi: 'होल्ड पर',
+  );
+  static const completedState = TranslatableString(
+    en: 'Completed',
+    ar: 'مكتمل',
+    ur: 'مکمل',
+    hi: 'पूर्ण',
+  );
+  static const archivedState = TranslatableString(
+    en: 'Archived',
+    ar: 'مؤرشف',
+    ur: 'آرکائیو شدہ',
+    hi: 'संग्रहीत',
+  );
+  static const projectEngineerRole = TranslatableString(
+    en: 'Project Engineer',
+    ar: 'مهندس المشروع',
+    ur: 'پراجیکٹ انجینئر',
+    hi: 'प्रोजेक्ट इंजीनियर',
+  );
+  static const siteEngineerRole = TranslatableString(
+    en: 'Site Engineer',
+    ar: 'مهندس الموقع',
+    ur: 'سائٹ انجینئر',
+    hi: 'साइट इंजीनियर',
+  );
+  static const procurementRole = TranslatableString(
+    en: 'Procurement',
+    ar: 'المشتريات',
+    ur: 'پروکیورمنٹ',
+    hi: 'खरीद',
+  );
+  static const adminRole = TranslatableString(
+    en: 'Admin',
+    ar: 'المسؤول',
+    ur: 'ایڈمن',
+    hi: 'व्यवस्थापक',
+  );
+
+  static TranslatableString stateLabel(YorksV1ProjectLifecycle state) {
+    return switch (state) {
+      YorksV1ProjectLifecycle.draft => draftState,
+      YorksV1ProjectLifecycle.active => activeState,
+      YorksV1ProjectLifecycle.onHold => onHoldState,
+      YorksV1ProjectLifecycle.completed => completedState,
+      YorksV1ProjectLifecycle.archived => archivedState,
+    };
+  }
+
+  static TranslatableString roleLabel(String? role) {
+    return switch (role) {
+      'project_engineer' => projectEngineerRole,
+      'site_engineer' => siteEngineerRole,
+      'procurement' => procurementRole,
+      'admin' => adminRole,
+      _ => projectTeam,
+    };
+  }
 
   static TranslatableString errorFor(YorksV1DomainErrorCode code) {
     return switch (code) {
