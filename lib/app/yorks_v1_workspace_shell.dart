@@ -78,19 +78,20 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
   }
 
   List<_YorksDestination> _destinationsFor(YorksV1Role? role) {
+    final workspace = _workspaceCopy(role);
     final shared = <_YorksDestination>[
       _YorksDestination(
         label: YorksV1ShellStrings.overview,
         icon: Icons.dashboard_outlined,
         selectedIcon: Icons.dashboard_rounded,
         path: RoutePaths.engineerHome,
+        group: workspace,
       ),
       _YorksDestination(
         label: YorksV1ShellStrings.projects,
         icon: Icons.account_tree_outlined,
         selectedIcon: Icons.account_tree_rounded,
         path: RoutePaths.yorksV1Projects,
-        group: YorksV1ShellStrings.projects,
       ),
       _YorksDestination(
         label: YorksV1ShellStrings.materialRequests,
@@ -107,7 +108,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           label: YorksV1ShellStrings.materialReturns,
           icon: Icons.assignment_return_outlined,
           selectedIcon: Icons.assignment_return_rounded,
-          disabledMessage: YorksV1ShellStrings.selectedRequestRequired,
+          path: RoutePaths.yorksV1Returns,
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.ductSizer,
@@ -137,13 +138,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           label: YorksV1ShellStrings.dispatches,
           icon: Icons.local_shipping_outlined,
           selectedIcon: Icons.local_shipping_rounded,
-          disabledMessage: YorksV1ShellStrings.selectedRequestRequired,
+          path: RoutePaths.yorksV1Dispatches,
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.materialReturns,
           icon: Icons.assignment_return_outlined,
           selectedIcon: Icons.assignment_return_rounded,
-          disabledMessage: YorksV1ShellStrings.selectedRequestRequired,
+          path: RoutePaths.yorksV1Returns,
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.projects,
@@ -165,13 +166,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           label: YorksV1ShellStrings.materialReturns,
           icon: Icons.assignment_return_outlined,
           selectedIcon: Icons.assignment_return_rounded,
-          disabledMessage: YorksV1ShellStrings.selectedRequestRequired,
+          path: RoutePaths.yorksV1Returns,
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.dispatches,
           icon: Icons.local_shipping_outlined,
           selectedIcon: Icons.local_shipping_rounded,
-          disabledMessage: YorksV1ShellStrings.selectedRequestRequired,
+          path: RoutePaths.yorksV1Dispatches,
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.configuration,
@@ -218,6 +219,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
               location.startsWith('/yorks/material-requests')) ||
           (path == RoutePaths.yorksV1Projects &&
               location.startsWith('/yorks/projects'))) {
+        return destination;
+      }
+      if (path == RoutePaths.yorksV1Dispatches &&
+          location == RoutePaths.yorksV1Dispatches) {
+        return destination;
+      }
+      if (path == RoutePaths.yorksV1Returns &&
+          location == RoutePaths.yorksV1Returns) {
         return destination;
       }
     }
@@ -270,6 +279,34 @@ class _YorksWorkspaceTopBar extends StatelessWidget {
                     color: AppColors.mutedLight,
                   ),
                   Text(title.primary, style: AppTypography.titleSmall),
+                ],
+              ),
+            ),
+            _YorksQuickNavigationButton(
+              destinations: _topLevelDestinationsFor(role),
+              language: language,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Tooltip(
+              message: AppStrings.allSynced.secondary(language),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    AppStrings.allSynced.primary,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.inkSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -361,10 +398,10 @@ class _YorksDesktopSidebar extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
+                AppSpacing.xl,
                 AppSpacing.lg,
                 AppSpacing.xl,
+                AppSpacing.xxl,
               ),
               child: Row(
                 children: [
@@ -393,7 +430,7 @@ class _YorksDesktopSidebar extends StatelessWidget {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 children: [
                   for (final destination in destinations) ...[
                     if (destination.group != null &&
@@ -432,8 +469,13 @@ class _YorksDesktopSidebar extends StatelessWidget {
               ),
             ),
             Container(
-              margin: const EdgeInsets.all(AppSpacing.md),
-              padding: const EdgeInsets.all(AppSpacing.md),
+              margin: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              padding: const EdgeInsets.all(AppSpacing.sm + 1),
               decoration: BoxDecoration(
                 color: AppColors.surfaceContainerLow,
                 border: Border.all(color: AppColors.line),
@@ -466,6 +508,34 @@ class _YorksDesktopSidebar extends StatelessWidget {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.sm,
+                AppSpacing.xl,
+                AppSpacing.md,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    YorksV1ShellStrings.workspaceSaved.primary,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.inkSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -490,28 +560,15 @@ class _YorksMobileNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final visible = destinations
         .where((item) => item.path != null)
-        .take(4)
+        .take(5)
         .toList();
     return SafeArea(
       top: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(
-          AppSpacing.sm,
-          0,
-          AppSpacing.sm,
-          AppSpacing.sm,
-        ),
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         decoration: BoxDecoration(
-          color: AppColors.navy,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.shadow,
-              blurRadius: 16,
-              offset: Offset(0, 5),
-            ),
-          ],
+          color: AppColors.surfaceContainerLowest,
+          border: const Border(top: BorderSide(color: AppColors.line)),
         ),
         child: Row(
           children: [
@@ -558,9 +615,7 @@ class _YorksNavigationTile extends StatelessWidget {
       enabled: !disabled,
       label: destination.label.primary,
       child: Tooltip(
-        message: disabled
-            ? destination.disabledMessage?.secondary(language) ?? ''
-            : destination.label.secondary(language),
+        message: destination.label.secondary(language),
         child: Material(
           color: selected ? AppColors.blueContainer : Colors.transparent,
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -646,7 +701,7 @@ class _YorksMobileItem extends StatelessWidget {
               Icon(
                 selected ? destination.selectedIcon : destination.icon,
                 size: 21,
-                color: selected ? Colors.white : AppColors.blueContainerStrong,
+                color: selected ? AppColors.blue : AppColors.muted,
               ),
               const SizedBox(height: 2),
               Text(
@@ -654,9 +709,7 @@ class _YorksMobileItem extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.labelSmall.copyWith(
-                  color: selected
-                      ? Colors.white
-                      : AppColors.blueContainerStrong,
+                  color: selected ? AppColors.blue : AppColors.muted,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
@@ -724,6 +777,64 @@ class _YorksMobileMoreItem extends StatelessWidget {
   );
 }
 
+class _YorksQuickNavigationButton extends StatelessWidget {
+  const _YorksQuickNavigationButton({
+    required this.destinations,
+    required this.language,
+  });
+
+  final List<_YorksDestination> destinations;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: YorksV1ShellStrings.quickNavigation.secondary(language),
+    child: OutlinedButton.icon(
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: AppColors.surfaceContainerLowest,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            children: [
+              Text(
+                YorksV1ShellStrings.quickNavigation.primary,
+                style: AppTypography.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              for (final destination in destinations)
+                _YorksNavigationTile(
+                  destination: destination,
+                  selected: false,
+                  language: language,
+                ),
+            ],
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.search_rounded, size: 18),
+      label: Text(YorksV1ShellStrings.searchWorkspace.primary),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(180, AppSpacing.controlHeight),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        side: const BorderSide(color: AppColors.line),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        foregroundColor: AppColors.muted,
+        textStyle: AppTypography.labelMedium,
+      ),
+    ),
+  );
+}
+
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.name});
 
@@ -760,7 +871,6 @@ class _YorksDestination {
     this.path,
     this.group,
     this.suffix,
-    this.disabledMessage,
   });
 
   final TranslatableString label;
@@ -769,7 +879,6 @@ class _YorksDestination {
   final String? path;
   final TranslatableString? group;
   final TranslatableString? suffix;
-  final TranslatableString? disabledMessage;
 }
 
 TranslatableString _roleCopy(YorksV1Role? role) => switch (role) {
@@ -779,3 +888,19 @@ TranslatableString _roleCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.admin => AppStrings.adminRole,
   null => YorksV1ShellStrings.account,
 };
+
+TranslatableString _workspaceCopy(YorksV1Role? role) => switch (role) {
+  YorksV1Role.projectEngineer ||
+  YorksV1Role.siteEngineer => YorksV1ShellStrings.engineerWorkspace,
+  YorksV1Role.procurement => YorksV1ShellStrings.procurementWorkspace,
+  YorksV1Role.admin => YorksV1ShellStrings.managementWorkspace,
+  null => YorksV1ShellStrings.operationalWorkspace,
+};
+
+List<_YorksDestination> _topLevelDestinationsFor(YorksV1Role? role) {
+  final shell = YorksV1WorkspaceShell(child: const SizedBox.shrink());
+  return shell
+      ._destinationsFor(role)
+      .where((item) => item.path != null)
+      .toList();
+}

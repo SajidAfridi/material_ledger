@@ -39,6 +39,12 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'گودام کا ذخیرہ',
     hi: 'वेयरहाउस इन्वेंटरी',
   );
+  static const refresh = TranslatableString(
+    en: 'Refresh',
+    ar: 'تحديث',
+    ur: 'ریفریش',
+    hi: 'रीफ़्रेश',
+  );
   static const dispatchAndReceipt = TranslatableString(
     en: 'Dispatch and receipt',
     ar: 'الإرسال والاستلام',

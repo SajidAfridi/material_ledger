@@ -8,6 +8,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
@@ -29,30 +30,38 @@ class _YorksV1InventoryScreenState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final inventory = ref.watch(yorksV1InventoryWorkspaceProvider(_search));
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _BilingualText(
-          copy: YorksV1LogisticsStrings.inventory,
-          language: language,
-          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: YorksV1LogisticsStrings.inventory.primary,
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _refresh,
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        tooltip: YorksV1LogisticsStrings.addStock.primary,
-        onPressed: () => _openAdjustment(context),
-        icon: const Icon(Icons.add_rounded),
-        label: Text(YorksV1LogisticsStrings.addStock.primary),
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _BilingualText(
+                copy: YorksV1LogisticsStrings.inventory,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: YorksV1LogisticsStrings.refresh.primary,
+                  icon: const Icon(Icons.refresh_rounded),
+                  onPressed: _refresh,
+                ),
+              ],
+            )
+          : null,
+      floatingActionButton: compactRoute
+          ? FloatingActionButton.extended(
+              tooltip: YorksV1LogisticsStrings.addStock.primary,
+              onPressed: () => _openAdjustment(context),
+              icon: const Icon(Icons.add_rounded),
+              label: Text(YorksV1LogisticsStrings.addStock.primary),
+            )
+          : null,
       body: SafeArea(
         top: false,
         child: Center(
@@ -63,7 +72,39 @@ class _YorksV1InventoryScreenState
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (!compactRoute) ...[
+                    YorksR35PageHeader(
+                      eyebrow: YorksV1ShellStrings.procurementWorkspace.primary,
+                      title: YorksV1LogisticsStrings.inventory.primary,
+                      description:
+                          YorksV1LogisticsStrings.movementHistory.primary,
+                      actions: [
+                        SizedBox(
+                          height: AppSpacing.controlHeight,
+                          child: OutlinedButton.icon(
+                            onPressed: _refresh,
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                            label: Text(
+                              YorksV1LogisticsStrings.refresh.primary,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          height: AppSpacing.minTapTarget,
+                          child: FilledButton.icon(
+                            onPressed: () => _openAdjustment(context),
+                            icon: const Icon(Icons.add_rounded),
+                            label: Text(
+                              YorksV1LogisticsStrings.addStock.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
                   TextField(
                     minLines: 1,
                     decoration: InputDecoration(

@@ -115,6 +115,8 @@ abstract final class RoutePaths {
   static const String yorksV1MaterialRequestReturnsDocuments =
       '/yorks/material-requests/:requestId/returns';
   static const String yorksV1Inventory = '/yorks/inventory';
+  static const String yorksV1Dispatches = '/yorks/dispatches';
+  static const String yorksV1Returns = '/yorks/returns';
   static const String engineerProjectsView = '/my-projects';
   static const String engineerNewRequest = '/new-request';
   static const String engineerPickMaterials = '/pick-materials';
@@ -476,13 +478,15 @@ GoRouter createAppRouter({
         return _yorksV1ProjectFallbackPath();
       }
       if ((path == RoutePaths.yorksV1Inventory ||
+              path == RoutePaths.yorksV1Dispatches ||
               (path.startsWith('/yorks/material-requests/') &&
                   path.endsWith('/logistics'))) &&
           !yorksV1LogisticsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
-      if (path.startsWith('/yorks/material-requests/') &&
-          path.endsWith('/returns') &&
+      if ((path == RoutePaths.yorksV1Returns ||
+              (path.startsWith('/yorks/material-requests/') &&
+                  path.endsWith('/returns'))) &&
           !yorksV1ReturnsDocumentsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
@@ -784,6 +788,24 @@ GoRouter createAppRouter({
         path: RoutePaths.yorksV1Inventory,
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const YorksV1InventoryScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1Dispatches,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksV1WorkflowQueueScreen(
+            kind: YorksV1WorkflowQueueKind.dispatches,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1Returns,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksV1WorkflowQueueScreen(
+            kind: YorksV1WorkflowQueueKind.returns,
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1DuctSizer,

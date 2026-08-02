@@ -16,6 +16,7 @@ import '../../../../shared/models/yorks_v1_boq_workbook.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_repository_provider.dart';
@@ -40,43 +41,52 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
     final editable = role != null && role != YorksV1Role.procurement;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _CopyText(
-          copy: YorksV1BoqStrings.worksheets,
-          language: language,
-          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          if (documentsEnabled)
-            IconButton(
-              tooltip: YorksV1DocumentStrings.documents.primary,
-              onPressed: () => context.push(
-                RoutePaths.yorksV1ProjectDocumentsPath(projectId),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _CopyText(
+                copy: YorksV1BoqStrings.worksheets,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              icon: const Icon(Icons.folder_open_outlined),
-            ),
-          if (requestsEnabled)
-            IconButton(
-              tooltip: YorksV1MaterialRequestStrings.requests.primary,
-              onPressed: () => context.push(RoutePaths.yorksV1MaterialRequests),
-              icon: const Icon(Icons.assignment_outlined),
-            ),
-          if (requestsEnabled && role?.canCreateMaterialRequest == true)
-            IconButton(
-              tooltip: YorksV1MaterialRequestStrings.newRequest.primary,
-              onPressed: () => context.push(
-                RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
-              ),
-              icon: const Icon(Icons.add_task_outlined),
-            ),
-        ],
-      ),
-      floatingActionButton: editable
+              actions: [
+                if (documentsEnabled)
+                  IconButton(
+                    tooltip: YorksV1DocumentStrings.documents.primary,
+                    onPressed: () => context.push(
+                      RoutePaths.yorksV1ProjectDocumentsPath(projectId),
+                    ),
+                    icon: const Icon(Icons.folder_open_outlined),
+                  ),
+                if (requestsEnabled)
+                  IconButton(
+                    tooltip: YorksV1MaterialRequestStrings.requests.primary,
+                    onPressed: () =>
+                        context.push(RoutePaths.yorksV1MaterialRequests),
+                    icon: const Icon(Icons.assignment_outlined),
+                  ),
+                if (requestsEnabled && role?.canCreateMaterialRequest == true)
+                  IconButton(
+                    tooltip: YorksV1MaterialRequestStrings.newRequest.primary,
+                    onPressed: () => context.push(
+                      RoutePaths.yorksV1MaterialRequestDraftPath(
+                        const Uuid().v4(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_task_outlined),
+                  ),
+              ],
+            )
+          : null,
+      floatingActionButton: compactRoute && editable
           ? FloatingActionButton.extended(
               onPressed: () => _createGroup(context, ref),
               icon: const Icon(Icons.create_new_folder_outlined),
@@ -92,20 +102,59 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
             AppSpacing.lg,
             AppSpacing.xxl,
           ),
-          child: groups.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, _) => _ErrorState(
-              language: language,
-              onRetry: () =>
-                  ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
-            ),
-            data: (items) => _GroupsBody(
-              groups: items,
-              language: language,
-              projectId: projectId,
-              editable: editable,
-              onAddGroup: () => _createGroup(context, ref),
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!compactRoute) ...[
+                YorksR35PageHeader(
+                  eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+                  title: YorksV1BoqStrings.worksheets.primary,
+                  description: YorksV1BoqStrings.boqDescription.primary,
+                  actions: [
+                    if (requestsEnabled)
+                      SizedBox(
+                        height: AppSpacing.controlHeight,
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              context.push(RoutePaths.yorksV1MaterialRequests),
+                          icon: const Icon(Icons.assignment_outlined, size: 18),
+                          label: Text(
+                            YorksV1MaterialRequestStrings.requests.primary,
+                          ),
+                        ),
+                      ),
+                    if (editable)
+                      SizedBox(
+                        height: AppSpacing.minTapTarget,
+                        child: FilledButton.icon(
+                          onPressed: () => _createGroup(context, ref),
+                          icon: const Icon(Icons.create_new_folder_outlined),
+                          label: Text(YorksV1BoqStrings.addGroup.primary),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
+              Expanded(
+                child: groups.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (_, _) => _ErrorState(
+                    language: language,
+                    onRetry: () =>
+                        ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
+                  ),
+                  data: (items) => _GroupsBody(
+                    groups: items,
+                    language: language,
+                    projectId: projectId,
+                    editable: editable,
+                    onAddGroup: () => _createGroup(context, ref),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -349,56 +398,65 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     final editable =
         role != null && role != YorksV1Role.procurement && !state.isReadOnly;
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-        title: _CopyText(
-          copy: YorksV1BoqStrings.worksheet,
-          language: language,
-          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          if (documentsEnabled)
-            IconButton(
-              tooltip: YorksV1DocumentStrings.documents.primary,
-              onPressed: () => context.push(
-                RoutePaths.yorksV1ProjectDocumentsPath(
-                  projectId,
-                  entityType: 'boq_group',
-                  entityId: groupId,
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              leading: IconButton(
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.pop(),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              title: _CopyText(
+                copy: YorksV1BoqStrings.worksheet,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              icon: const Icon(Icons.folder_open_outlined),
-            ),
-          if (editable && state.worksheet?.group.isCustom == true)
-            IconButton(
-              tooltip: YorksV1BoqStrings.archiveGroup.primary,
-              icon: const Icon(Icons.archive_outlined),
-              onPressed: () => _archive(context, ref, state.worksheet!.group),
-            ),
-          IconButton(
-            tooltip: YorksV1BoqStrings.refresh.primary,
-            onPressed: controller.load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          if (requestsEnabled && role?.canCreateMaterialRequest == true)
-            IconButton(
-              tooltip: YorksV1MaterialRequestStrings.newRequest.primary,
-              onPressed: () => context.push(
-                RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
-              ),
-              icon: const Icon(Icons.add_task_outlined),
-            ),
-        ],
-      ),
+              actions: [
+                if (documentsEnabled)
+                  IconButton(
+                    tooltip: YorksV1DocumentStrings.documents.primary,
+                    onPressed: () => context.push(
+                      RoutePaths.yorksV1ProjectDocumentsPath(
+                        projectId,
+                        entityType: 'boq_group',
+                        entityId: groupId,
+                      ),
+                    ),
+                    icon: const Icon(Icons.folder_open_outlined),
+                  ),
+                if (editable && state.worksheet?.group.isCustom == true)
+                  IconButton(
+                    tooltip: YorksV1BoqStrings.archiveGroup.primary,
+                    icon: const Icon(Icons.archive_outlined),
+                    onPressed: () =>
+                        _archive(context, ref, state.worksheet!.group),
+                  ),
+                IconButton(
+                  tooltip: YorksV1BoqStrings.refresh.primary,
+                  onPressed: controller.load,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+                if (requestsEnabled && role?.canCreateMaterialRequest == true)
+                  IconButton(
+                    tooltip: YorksV1MaterialRequestStrings.newRequest.primary,
+                    onPressed: () => context.push(
+                      RoutePaths.yorksV1MaterialRequestDraftPath(
+                        const Uuid().v4(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.add_task_outlined),
+                  ),
+              ],
+            )
+          : null,
       body: SafeArea(
         top: false,
         child: switch (state.status) {
@@ -414,6 +472,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             editable: editable,
             excelEnabled: excelEnabled,
             onSaved: () => ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
+            showPageHeader: !compactRoute,
             onImport: editable && excelEnabled && state.worksheet != null
                 ? () => _importWorkbook(
                     context,
@@ -550,6 +609,7 @@ class _WorksheetBody extends StatelessWidget {
     required this.editable,
     required this.excelEnabled,
     required this.onSaved,
+    required this.showPageHeader,
     this.onImport,
     this.onExport,
   });
@@ -560,6 +620,7 @@ class _WorksheetBody extends StatelessWidget {
   final bool editable;
   final bool excelEnabled;
   final VoidCallback onSaved;
+  final bool showPageHeader;
   final Future<void> Function()? onImport;
   final Future<void> Function()? onExport;
 
@@ -576,6 +637,14 @@ class _WorksheetBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (showPageHeader) ...[
+            YorksR35PageHeader(
+              eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+              title: worksheet.group.effectiveTitle,
+              description: YorksV1BoqStrings.worksheet.primary,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+          ],
           _WorksheetHeader(
             worksheet: worksheet,
             language: language,

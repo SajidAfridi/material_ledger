@@ -8,6 +8,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_arrangement.dart';
 import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_repository_provider.dart';
@@ -25,25 +26,32 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final workspace = ref.watch(yorksV1ArrangementWorkspaceProvider(requestId));
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _BilingualText(
-          copy: YorksV1ArrangementStrings.arrangement,
-          language: language,
-          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: YorksV1ArrangementStrings.arrangement.primary,
-            onPressed: () =>
-                ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _BilingualText(
+                copy: YorksV1ArrangementStrings.arrangement,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: YorksV1ArrangementStrings.arrangement.primary,
+                  onPressed: () => ref.invalidate(
+                    yorksV1ArrangementWorkspaceProvider(requestId),
+                  ),
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            )
+          : null,
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _ArrangementError(
@@ -51,8 +59,11 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
           onRetry: () =>
               ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
         ),
-        data: (value) =>
-            _ArrangementWorkspaceBody(workspace: value, language: language),
+        data: (value) => _ArrangementWorkspaceBody(
+          workspace: value,
+          language: language,
+          showPageHeader: !compactRoute,
+        ),
       ),
     );
   }
@@ -62,10 +73,12 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
   const _ArrangementWorkspaceBody({
     required this.workspace,
     required this.language,
+    required this.showPageHeader,
   });
 
   final YorksV1ArrangementWorkspace workspace;
   final AppLanguage language;
+  final bool showPageHeader;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,6 +98,31 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (showPageHeader) ...[
+                  YorksR35PageHeader(
+                    eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+                    title: YorksV1ArrangementStrings.arrangement.primary,
+                    description:
+                        YorksV1ArrangementStrings.reviewSummary.primary,
+                    actions: [
+                      SizedBox(
+                        height: AppSpacing.controlHeight,
+                        child: OutlinedButton.icon(
+                          onPressed: () => ref.invalidate(
+                            yorksV1ArrangementWorkspaceProvider(
+                              workspace.requestId,
+                            ),
+                          ),
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: Text(
+                            YorksV1ArrangementStrings.arrangement.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
                 _WorkspaceHeader(workspace: workspace),
                 const SizedBox(height: AppSpacing.lg),
                 if (workspace.canBegin && working == null)

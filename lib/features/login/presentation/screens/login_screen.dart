@@ -206,7 +206,7 @@ class _AuthBrandPanel extends StatelessWidget {
                 const SizedBox(width: AppSpacing.sm),
                 Flexible(
                   child: Text(
-                    YorksV1ShellStrings.protectedSession.primary,
+                    YorksV1ShellStrings.accountabilityNotice.primary,
                     style: AppTypography.bodySmall.copyWith(
                       color: Colors.white.withValues(alpha: 0.72),
                     ),

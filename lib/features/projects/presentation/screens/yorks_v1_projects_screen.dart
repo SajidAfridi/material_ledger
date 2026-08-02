@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
@@ -12,8 +13,12 @@ import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
+import '../../../../shared/models/yorks_v1_material_request.dart';
+import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 
 /// The normalized, R35-aligned project portfolio.
@@ -27,6 +32,586 @@ class YorksV1ProjectsScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<YorksV1ProjectsScreen> createState() =>
       _YorksV1ProjectsScreenState();
+}
+
+/// R35's role-aware operational overview.
+///
+/// It replaces the retained V7 dashboard only while the normalized Yorks V1
+/// rollout is active. Every number and card comes from a safe V1 projection;
+/// the overview is deliberately a navigation surface and never owns workflow
+/// transitions itself.
+class YorksV1OverviewScreen extends ConsumerWidget {
+  const YorksV1OverviewScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final projects = ref.watch(yorksV1ProjectPortfolioProvider);
+    final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
+    final canCreateProject = role?.canCreateProject == true;
+    final canCreateRequest = role?.canCreateMaterialRequest == true;
+    final procurement = role == YorksV1Role.procurement;
+
+    final projectItems =
+        projects.valueOrNull ?? const <YorksV1ProjectPortfolioItem>[];
+    final requestItems =
+        requests.valueOrNull ?? const <YorksV1MaterialRequest>[];
+    final activeProjects = projectItems
+        .where((item) => item.project.state == YorksV1ProjectLifecycle.active)
+        .length;
+    final openRequests = requestItems
+        .where(
+          (item) =>
+              item.state != YorksV1MaterialRequestState.draft &&
+              item.state != YorksV1MaterialRequestState.received &&
+              item.state != YorksV1MaterialRequestState.closed &&
+              item.state != YorksV1MaterialRequestState.cancelled,
+        )
+        .length;
+    final dispatchReady = requestItems
+        .where(
+          (item) =>
+              item.state == YorksV1MaterialRequestState.approved ||
+              item.state == YorksV1MaterialRequestState.partiallyDispatched,
+        )
+        .length;
+
+    return NexusPageShell(
+      eyebrow: _workspaceEyebrow(role).primary,
+      title: YorksV1ShellStrings.overview.primary,
+      description: YorksV1ShellStrings.projectCloseoutDescription.primary,
+      actions: [
+        if (canCreateProject)
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: FilledButton.icon(
+              onPressed: () => context.push(RoutePaths.engineerCreateProject),
+              icon: const Icon(Icons.add_rounded),
+              label: Text(YorksV1ProjectStrings.createProject.primary),
+            ),
+          )
+        else if (procurement)
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: FilledButton.icon(
+              onPressed: () => context.go(RoutePaths.yorksV1MaterialRequests),
+              icon: const Icon(Icons.assignment_outlined),
+              label: Text(YorksV1MaterialRequestStrings.requests.primary),
+            ),
+          ),
+        if (canCreateRequest)
+          SizedBox(
+            height: AppSpacing.controlHeight,
+            child: OutlinedButton.icon(
+              onPressed: () => context.push(
+                RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
+              ),
+              icon: const Icon(Icons.add_task_outlined, size: 18),
+              label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
+            ),
+          ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _OverviewMetrics(
+            activeProjects: activeProjects,
+            openRequests: openRequests,
+            dispatchReady: dispatchReady,
+            procurement: procurement,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          if (procurement) ...[
+            const _ProcurementFlow(),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+          _OverviewSection(
+            title: YorksV1ProjectStrings.projects.primary,
+            action: YorksV1ProjectStrings.openProject.primary,
+            onAction: () => context.go(RoutePaths.yorksV1Projects),
+            child: projects.when(
+              loading: () => const _OverviewLoading(),
+              error: (_, _) => _OverviewRetry(
+                onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
+              ),
+              data: (items) => items.isEmpty
+                  ? _OverviewEmpty(
+                      icon: Icons.account_tree_outlined,
+                      copy: YorksV1ProjectStrings.noProjects,
+                    )
+                  : Column(
+                      children: [
+                        for (final item in items.take(5))
+                          _OverviewProjectRow(item: item),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _OverviewSection(
+            title: YorksV1MaterialRequestStrings.requests.primary,
+            action: YorksV1MaterialRequestStrings.requests.primary,
+            onAction: () => context.go(RoutePaths.yorksV1MaterialRequests),
+            child: requests.when(
+              loading: () => const _OverviewLoading(),
+              error: (_, _) => _OverviewRetry(
+                onRetry: () =>
+                    ref.invalidate(yorksV1MaterialRequestListProvider),
+              ),
+              data: (items) => items.isEmpty
+                  ? _OverviewEmpty(
+                      icon: Icons.assignment_outlined,
+                      copy: YorksV1MaterialRequestStrings.noRequests,
+                    )
+                  : Column(
+                      children: [
+                        for (final item in items.take(5))
+                          _OverviewRequestRow(item: item),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewMetrics extends StatelessWidget {
+  const _OverviewMetrics({
+    required this.activeProjects,
+    required this.openRequests,
+    required this.dispatchReady,
+    required this.procurement,
+  });
+
+  final int activeProjects;
+  final int openRequests;
+  final int dispatchReady;
+  final bool procurement;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final count = constraints.maxWidth >= 980
+          ? 3
+          : constraints.maxWidth >= 560
+          ? 2
+          : 1;
+      return GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: count,
+        crossAxisSpacing: AppSpacing.md,
+        mainAxisSpacing: AppSpacing.md,
+        childAspectRatio: count == 1 ? 3.8 : 1.85,
+        children: [
+          _OverviewMetric(
+            icon: Icons.account_tree_outlined,
+            label: YorksV1ProjectStrings.projects.primary,
+            value: '$activeProjects',
+            tone: AppColors.blue,
+          ),
+          _OverviewMetric(
+            icon: Icons.assignment_outlined,
+            label: YorksV1MaterialRequestStrings.requests.primary,
+            value: '$openRequests',
+            tone: AppColors.warning,
+          ),
+          _OverviewMetric(
+            icon: procurement
+                ? Icons.local_shipping_outlined
+                : Icons.pending_actions_outlined,
+            label: procurement
+                ? YorksV1ShellStrings.dispatches.primary
+                : YorksV1MaterialRequestStrings.nextAction.primary,
+            value: '$dispatchReady',
+            tone: AppColors.success,
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) => LedgerCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: tone.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Icon(icon, size: 18, color: tone),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(value, style: AppTypography.displaySmall),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          label,
+          style: AppTypography.labelLarge.copyWith(color: AppColors.muted),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProcurementFlow extends StatelessWidget {
+  const _ProcurementFlow();
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = [
+      (
+        YorksV1MaterialRequestStrings.materialRequest,
+        Icons.assignment_outlined,
+      ),
+      (YorksV1ShellStrings.procurement, Icons.playlist_add_check_rounded),
+      (YorksV1MaterialRequestStrings.approved, Icons.task_alt_rounded),
+      (YorksV1ShellStrings.dispatches, Icons.local_shipping_outlined),
+      (YorksV1MaterialRequestStrings.received, Icons.inventory_2_outlined),
+    ];
+    return LedgerCard(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 720;
+          return Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (var index = 0; index < steps.length; index++)
+                SizedBox(
+                  width: compact
+                      ? (constraints.maxWidth - AppSpacing.sm) / 2
+                      : (constraints.maxWidth - (AppSpacing.sm * 4)) / 5,
+                  child: _ProcurementFlowStep(
+                    index: index + 1,
+                    label: steps[index].$1.primary,
+                    icon: steps[index].$2,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProcurementFlowStep extends StatelessWidget {
+  const _ProcurementFlowStep({
+    required this.index,
+    required this.label,
+    required this.icon,
+  });
+
+  final int index;
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 82),
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 25,
+          height: 25,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.blueContainer,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          ),
+          child: Text(
+            '$index',
+            style: AppTypography.labelMedium.copyWith(color: AppColors.blue),
+          ),
+        ),
+        const Spacer(),
+        Icon(icon, size: 16, color: AppColors.inkSecondary),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.labelMedium,
+        ),
+      ],
+    ),
+  );
+}
+
+class _OverviewSection extends StatelessWidget {
+  const _OverviewSection({
+    required this.title,
+    required this.action,
+    required this.onAction,
+    required this.child,
+  });
+
+  final String title;
+  final String action;
+  final VoidCallback onAction;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LedgerCard(
+    padding: EdgeInsets.zero,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.xl,
+            AppSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(onPressed: onAction, child: Text(action)),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.line),
+        child,
+      ],
+    ),
+  );
+}
+
+class _OverviewProjectRow extends StatelessWidget {
+  const _OverviewProjectRow({required this.item});
+
+  final YorksV1ProjectPortfolioItem item;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: () => context.push(RoutePaths.yorksV1ProjectPath(item.project.id)),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            _OverviewRecordIcon(icon: Icons.account_tree_outlined),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.project.name,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    '${item.project.reference} · ${item.project.siteLocation ?? '—'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _ProjectStateChip(state: item.project.state),
+            const SizedBox(width: AppSpacing.sm),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _OverviewRequestRow extends StatelessWidget {
+  const _OverviewRequestRow({required this.item});
+
+  final YorksV1MaterialRequest item;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: () => context.push(RoutePaths.yorksV1MaterialRequestPath(item.id)),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            _OverviewRecordIcon(icon: Icons.assignment_outlined),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.requestNumber ??
+                        YorksV1MaterialRequestStrings.draft.primary,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    '${item.projectReference} · ${item.scopeName} · ${item.lines.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            StatusChip(
+              label: yorksV1MaterialRequestStateCopy(item.state).primary,
+              tone: _requestTone(item.state),
+              showDot: true,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _OverviewRecordIcon extends StatelessWidget {
+  const _OverviewRecordIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: AppSpacing.minTapTarget,
+    height: AppSpacing.minTapTarget,
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Icon(icon, color: AppColors.blue, size: 21),
+  );
+}
+
+class _OverviewLoading extends StatelessWidget {
+  const _OverviewLoading();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.all(AppSpacing.xxl),
+    child: Center(child: CircularProgressIndicator()),
+  );
+}
+
+class _OverviewRetry extends StatelessWidget {
+  const _OverviewRetry({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.xl),
+    child: OutlinedButton.icon(
+      onPressed: onRetry,
+      icon: const Icon(Icons.refresh_rounded),
+      label: Text(YorksV1MaterialRequestStrings.refresh.primary),
+    ),
+  );
+}
+
+class _OverviewEmpty extends StatelessWidget {
+  const _OverviewEmpty({required this.icon, required this.copy});
+
+  final IconData icon;
+  final TranslatableString copy;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.xxl),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: AppColors.muted, size: 36),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          copy.primary,
+          textAlign: TextAlign.center,
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+        ),
+      ],
+    ),
+  );
+}
+
+NexusStatusTone _requestTone(YorksV1MaterialRequestState state) {
+  switch (state) {
+    case YorksV1MaterialRequestState.approved:
+    case YorksV1MaterialRequestState.received:
+    case YorksV1MaterialRequestState.closed:
+      return NexusStatusTone.success;
+    case YorksV1MaterialRequestState.awaitingApproval:
+    case YorksV1MaterialRequestState.partiallyDispatched:
+    case YorksV1MaterialRequestState.dispatched:
+    case YorksV1MaterialRequestState.partiallyReceived:
+      return NexusStatusTone.warning;
+    case YorksV1MaterialRequestState.cancelled:
+      return NexusStatusTone.danger;
+    case YorksV1MaterialRequestState.submitted:
+    case YorksV1MaterialRequestState.arranging:
+      return NexusStatusTone.info;
+    case YorksV1MaterialRequestState.draft:
+      return NexusStatusTone.neutral;
+  }
+}
+
+TranslatableString _workspaceEyebrow(YorksV1Role? role) {
+  switch (role) {
+    case YorksV1Role.procurement:
+      return YorksV1ShellStrings.procurementWorkspace;
+    case YorksV1Role.admin:
+      return YorksV1ShellStrings.managementWorkspace;
+    case YorksV1Role.projectEngineer:
+    case YorksV1Role.siteEngineer:
+      return YorksV1ShellStrings.engineerWorkspace;
+    case null:
+      return YorksV1ShellStrings.operationalWorkspace;
+  }
 }
 
 class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
@@ -132,19 +717,23 @@ class _YorksV1ProjectWorkspaceScreenState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.go(RoutePaths.yorksV1Projects),
-          icon: const Icon(Icons.arrow_back_rounded),
-        ),
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              leading: IconButton(
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.canPop()
+                    ? context.pop()
+                    : context.go(RoutePaths.yorksV1Projects),
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+            )
+          : null,
       body: SafeArea(
         top: false,
         child: portfolio.when(

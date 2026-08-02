@@ -8,6 +8,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
@@ -24,24 +25,30 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final workspace = ref.watch(yorksV1LogisticsWorkspaceProvider(requestId));
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _BilingualText(
-          copy: YorksV1LogisticsStrings.dispatchAndReceipt,
-          language: language,
-          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: YorksV1LogisticsStrings.dispatchAndReceipt.primary,
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => _refresh(ref),
-          ),
-        ],
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _BilingualText(
+                copy: YorksV1LogisticsStrings.dispatchAndReceipt,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: YorksV1LogisticsStrings.refresh.primary,
+                  icon: const Icon(Icons.refresh_rounded),
+                  onPressed: () => _refresh(ref),
+                ),
+              ],
+            )
+          : null,
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _LogisticsError(onRetry: () => _refresh(ref)),
@@ -49,6 +56,7 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
           workspace: value,
           language: language,
           onChanged: () => _refresh(ref),
+          showPageHeader: !compactRoute,
         ),
       ),
     );
@@ -65,11 +73,13 @@ class _LogisticsBody extends StatelessWidget {
     required this.workspace,
     required this.language,
     required this.onChanged,
+    required this.showPageHeader,
   });
 
   final YorksV1LogisticsWorkspace workspace;
   final AppLanguage language;
   final VoidCallback onChanged;
+  final bool showPageHeader;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -82,6 +92,24 @@ class _LogisticsBody extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (showPageHeader) ...[
+                YorksR35PageHeader(
+                  eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+                  title: YorksV1LogisticsStrings.dispatchAndReceipt.primary,
+                  description: YorksV1LogisticsStrings.dispatchHistory.primary,
+                  actions: [
+                    SizedBox(
+                      height: AppSpacing.controlHeight,
+                      child: OutlinedButton.icon(
+                        onPressed: onChanged,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(YorksV1LogisticsStrings.refresh.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               _WorkspaceHeader(workspace: workspace),
               const SizedBox(height: AppSpacing.lg),
               if (workspace.canDispatch) ...[

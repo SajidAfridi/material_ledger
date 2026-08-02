@@ -12,6 +12,7 @@ import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
@@ -35,20 +36,25 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
     final workspace = ref.watch(
       yorksV1ReturnsDocumentsWorkspaceProvider(requestId),
     );
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _ReturnsBilingualTitle(language: language),
-        actions: [
-          IconButton(
-            tooltip: YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => _refresh(ref),
-          ),
-        ],
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _ReturnsBilingualTitle(language: language),
+              actions: [
+                IconButton(
+                  tooltip:
+                      YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+                  icon: const Icon(Icons.refresh_rounded),
+                  onPressed: () => _refresh(ref),
+                ),
+              ],
+            )
+          : null,
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
@@ -61,6 +67,7 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
         data: (value) => _ReturnsDocumentsBody(
           workspace: value,
           onChanged: () => _refresh(ref),
+          showPageHeader: !compactRoute,
         ),
       ),
     );
@@ -97,10 +104,12 @@ class _ReturnsDocumentsBody extends ConsumerStatefulWidget {
   const _ReturnsDocumentsBody({
     required this.workspace,
     required this.onChanged,
+    required this.showPageHeader,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final VoidCallback onChanged;
+  final bool showPageHeader;
 
   @override
   ConsumerState<_ReturnsDocumentsBody> createState() =>
@@ -179,6 +188,25 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.showPageHeader) ...[
+                YorksR35PageHeader(
+                  eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+                  title:
+                      YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+                  description: YorksV1LogisticsStrings.materialReturns.primary,
+                  actions: [
+                    SizedBox(
+                      height: AppSpacing.controlHeight,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.onChanged,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(YorksV1LogisticsStrings.refresh.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               NexusSectionCard(
                 child: _WorkspaceFacts(workspace: widget.workspace),
               ),

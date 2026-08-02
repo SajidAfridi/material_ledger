@@ -23,14 +23,50 @@ abstract final class YorksV1ShellStrings {
     ur: 'آپریشنل ورک اسپیس',
     hi: 'ऑपरेशनल वर्कस्पेस',
   );
+  static const engineerWorkspace = TranslatableString(
+    en: 'Engineer Workspace',
+    ar: 'مساحة عمل المهندس',
+    ur: 'انجینئر ورک اسپیس',
+    hi: 'इंजीनियर कार्यक्षेत्र',
+  );
+  static const procurementWorkspace = TranslatableString(
+    en: 'Procurement Workspace',
+    ar: 'مساحة عمل المشتريات',
+    ur: 'پروکیورمنٹ ورک اسپیس',
+    hi: 'खरीद कार्यक्षेत्र',
+  );
+  static const managementWorkspace = TranslatableString(
+    en: 'Management Workspace',
+    ar: 'مساحة عمل الإدارة',
+    ur: 'مینجمنٹ ورک اسپیس',
+    hi: 'प्रबंधन कार्यक्षेत्र',
+  );
+  static const workspaceSaved = TranslatableString(
+    en: 'Workspace saved',
+    ar: 'تم حفظ مساحة العمل',
+    ur: 'ورک اسپیس محفوظ ہے',
+    hi: 'कार्यस्थान सहेजा गया',
+  );
+  static const quickNavigation = TranslatableString(
+    en: 'Quick navigation',
+    ar: 'تنقل سريع',
+    ur: 'فوری نیویگیشن',
+    hi: 'त्वरित नेविगेशन',
+  );
+  static const searchWorkspace = TranslatableString(
+    en: 'Search workspace',
+    ar: 'البحث في مساحة العمل',
+    ur: 'ورک اسپیس تلاش کریں',
+    hi: 'कार्यस्थान खोजें',
+  );
   static const projectCloseoutControl = TranslatableString(
-    en: 'Project-to-closeout control.',
+    en: 'Every project stays controlled from start to closeout.',
     ar: 'تحكم متكامل من المشروع حتى الإقفال.',
     ur: 'پراجیکٹ سے کلوز آؤٹ تک کنٹرول۔',
     hi: 'प्रोजेक्ट से क्लोज़आउट तक नियंत्रण।',
   );
   static const projectCloseoutDescription = TranslatableString(
-    en: 'A controlled workspace for projects, material requests, delivery evidence and traceability.',
+    en: 'BOQ, materials, site requests and procurement remain connected in one dependable workspace.',
     ar: 'مساحة عمل مضبوطة للمشاريع وطلبات المواد وإثباتات التسليم والتتبع.',
     ur: 'پراجیکٹس، میٹیریل ریکویسٹ، ڈلیوری شواہد اور ٹریس ایبلٹی کے لیے کنٹرولڈ ورک اسپیس۔',
     hi: 'प्रोजेक्ट, मटेरियल रिक्वेस्ट, डिलीवरी प्रमाण और ट्रेसबिलिटी के लिए नियंत्रित कार्यक्षेत्र।',
@@ -58,6 +94,12 @@ abstract final class YorksV1ShellStrings {
     ar: 'جلستك وسجلاتك التشغيلية محمية.',
     ur: 'آپ کا سیشن اور آپریشنل ریکارڈ محفوظ ہیں۔',
     hi: 'आपका सत्र और ऑपरेशनल रिकॉर्ड सुरक्षित हैं।',
+  );
+  static const accountabilityNotice = TranslatableString(
+    en: 'Every BOQ, request and approval records the responsible user and time.',
+    ar: 'يسجل كل جدول كميات وطلب وموافقة المستخدم المسؤول والوقت.',
+    ur: 'ہر BOQ، درخواست اور منظوری ذمہ دار صارف اور وقت ریکارڈ کرتی ہے۔',
+    hi: 'हर BOQ, अनुरोध और अनुमोदन में जिम्मेदार उपयोगकर्ता और समय दर्ज होता है।',
   );
   static const projects = TranslatableString(
     en: 'Projects',

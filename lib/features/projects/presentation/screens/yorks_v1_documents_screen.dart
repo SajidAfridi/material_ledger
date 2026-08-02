@@ -10,6 +10,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_provider.dart';
@@ -55,35 +56,43 @@ class _YorksV1DocumentsScreenState
     final workspace = ref.watch(
       yorksV1DocumentWorkspaceProvider(widget.projectId),
     );
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _CopyText(
-          copy: YorksV1DocumentStrings.documents,
-          language: language,
-          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: YorksV1DocumentStrings.retry.primary,
-            onPressed: _working ? null : _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _working ? null : () => _uploadNewVersion(),
-        icon: _working
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.upload_file_outlined),
-        label: Text(YorksV1DocumentStrings.addDocument.primary),
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _CopyText(
+                copy: YorksV1DocumentStrings.documents,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: YorksV1DocumentStrings.retry.primary,
+                  onPressed: _working ? null : _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            )
+          : null,
+      floatingActionButton: compactRoute
+          ? FloatingActionButton.extended(
+              onPressed: _working ? null : () => _uploadNewVersion(),
+              icon: _working
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file_outlined),
+              label: Text(YorksV1DocumentStrings.addDocument.primary),
+            )
+          : null,
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _ErrorState(onRetry: _refresh),
@@ -98,6 +107,8 @@ class _YorksV1DocumentsScreenState
           onDownload: _download,
           onLink: _link,
           onRemove: _remove,
+          showPageHeader: !compactRoute,
+          onCreateDocument: () => _uploadNewVersion(),
         ),
       ),
     );
@@ -319,6 +330,8 @@ class _WorkspaceBody extends StatelessWidget {
     required this.onDownload,
     required this.onLink,
     required this.onRemove,
+    required this.showPageHeader,
+    required this.onCreateDocument,
   });
 
   final YorksV1DocumentWorkspace workspace;
@@ -331,6 +344,8 @@ class _WorkspaceBody extends StatelessWidget {
   final ValueChanged<YorksV1Document> onDownload;
   final ValueChanged<YorksV1Document> onLink;
   final ValueChanged<YorksV1Document> onRemove;
+  final bool showPageHeader;
+  final VoidCallback onCreateDocument;
 
   @override
   Widget build(BuildContext context) {
@@ -360,6 +375,27 @@ class _WorkspaceBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (showPageHeader) ...[
+                    YorksR35PageHeader(
+                      eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+                      title: YorksV1DocumentStrings.documents.primary,
+                      description:
+                          YorksV1DocumentStrings.documentsDescription.primary,
+                      actions: [
+                        SizedBox(
+                          height: AppSpacing.minTapTarget,
+                          child: FilledButton.icon(
+                            onPressed: busy ? null : onCreateDocument,
+                            icon: const Icon(Icons.upload_file_outlined),
+                            label: Text(
+                              YorksV1DocumentStrings.addDocument.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
                   NexusSectionCard(
                     child: _CopyText(
                       copy: YorksV1DocumentStrings.documentsDescription,

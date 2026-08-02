@@ -17,6 +17,7 @@ import '../../../../shared/providers/project_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../projects/presentation/screens/yorks_v1_projects_screen.dart';
 import '../widgets/attendance_home_card.dart';
 
 /// Engineer dashboard for the Yorks material workflow retained during rollout.
@@ -34,6 +35,7 @@ class EngineerHomeScreen extends ConsumerWidget {
     final yorksV1ProjectsEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
         .projects;
+    if (yorksV1ProjectsEnabled) return const YorksV1OverviewScreen();
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
