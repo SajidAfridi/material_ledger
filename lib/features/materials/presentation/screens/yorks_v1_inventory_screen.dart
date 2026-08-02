@@ -38,7 +38,7 @@ class _YorksV1InventoryScreenState
           ? AppBar(
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
-              title: _BilingualText(
+              title: _ActiveText(
                 copy: YorksV1LogisticsStrings.inventory,
                 language: language,
                 style: AppTypography.titleLarge.copyWith(
@@ -754,7 +754,7 @@ class _InventoryEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: _BilingualText(
+    child: _ActiveText(
       copy: YorksV1LogisticsStrings.noInventory,
       language: language,
       center: true,
@@ -777,8 +777,8 @@ class _InventoryError extends StatelessWidget {
   );
 }
 
-class _BilingualText extends StatelessWidget {
-  const _BilingualText({
+class _ActiveText extends StatelessWidget {
+  const _ActiveText({
     required this.copy,
     required this.language,
     required this.style,
@@ -791,23 +791,11 @@ class _BilingualText extends StatelessWidget {
   final bool center;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: center
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start,
-    children: [
-      Text(
-        copy.primary,
-        textAlign: center ? TextAlign.center : TextAlign.start,
-        style: style,
-      ),
-      const SizedBox(height: AppSpacing.xxs),
-      Text(
-        copy.secondary(language),
-        textAlign: center ? TextAlign.center : TextAlign.start,
-        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-      ),
-    ],
+  Widget build(BuildContext context) => Text(
+    copy.active(language),
+    textAlign: center ? TextAlign.center : TextAlign.start,
+    textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+    style: style,
   );
 }
 

@@ -34,7 +34,7 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
           ? AppBar(
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
-              title: _BilingualText(
+              title: _ActiveText(
                 copy: YorksV1ArrangementStrings.arrangement,
                 language: language,
                 style: AppTypography.titleLarge.copyWith(
@@ -171,7 +171,7 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                 ],
                 if (workspace.arrangements.isEmpty && !workspace.canBegin)
                   NexusSectionCard(
-                    child: _BilingualText(
+                    child: _ActiveText(
                       copy: YorksV1ArrangementStrings.noArrangement,
                       language: language,
                       center: true,
@@ -1072,7 +1072,7 @@ class _ArrangementError extends StatelessWidget {
             size: 40,
           ),
           const SizedBox(height: AppSpacing.md),
-          _BilingualText(
+          _ActiveText(
             copy: YorksV1ArrangementStrings.savingFailed,
             language: language,
             center: true,
@@ -1201,8 +1201,8 @@ void _showMessage(BuildContext context, String message) => ScaffoldMessenger.of(
   context,
 ).showSnackBar(SnackBar(content: Text(message)));
 
-class _BilingualText extends StatelessWidget {
-  const _BilingualText({
+class _ActiveText extends StatelessWidget {
+  const _ActiveText({
     required this.copy,
     required this.language,
     this.style,
@@ -1215,27 +1215,10 @@ class _BilingualText extends StatelessWidget {
   final bool center;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: center
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start,
-    children: [
-      Text(
-        copy.primary,
-        textAlign: center ? TextAlign.center : null,
-        style: style,
-      ),
-      if (language != AppLanguage.english) ...[
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          copy.secondary(language),
-          textAlign: center ? TextAlign.center : null,
-          style: (style ?? AppTypography.bodySmall).copyWith(
-            color: AppColors.muted,
-          ),
-        ),
-      ],
-    ],
+  Widget build(BuildContext context) => Text(
+    copy.active(language),
+    textAlign: center ? TextAlign.center : null,
+    textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+    style: style,
   );
 }

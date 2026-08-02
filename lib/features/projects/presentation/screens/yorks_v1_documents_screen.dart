@@ -644,16 +644,11 @@ class _CopyText extends StatelessWidget {
   final bool center;
 
   @override
-  Widget build(BuildContext context) => BilingualText(
-    english: copy.primary,
-    secondary: copy.secondary(language),
-    englishStyle: style ?? AppTypography.bodyMedium,
-    secondaryStyle: (style ?? AppTypography.bodyMedium).copyWith(
-      color: AppColors.muted,
-    ),
-    crossAxisAlignment: center
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start,
+  Widget build(BuildContext context) => YorksV1ActiveText(
+    copy: copy,
+    language: language,
+    style: style ?? AppTypography.bodyMedium,
+    textAlign: center ? TextAlign.center : null,
   );
 }
 

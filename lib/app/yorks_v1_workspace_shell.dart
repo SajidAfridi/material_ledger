@@ -599,7 +599,7 @@ class _YorksNavigationTile extends StatelessWidget {
       enabled: !disabled,
       label: destination.label.primary,
       child: Tooltip(
-        message: destination.label.secondary(language),
+        message: destination.label.active(language),
         child: Material(
           color: selected ? AppColors.blueContainer : Colors.transparent,
           borderRadius: BorderRadius.circular(AppSpacing.radiusSm),

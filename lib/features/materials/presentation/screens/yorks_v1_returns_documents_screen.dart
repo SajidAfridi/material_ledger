@@ -85,18 +85,10 @@ class _ReturnsBilingualTitle extends StatelessWidget {
   final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-        style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-      ),
-      Text(
-        YorksV1LogisticsStrings.deliveryOrdersAndReturns.secondary(language),
-        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-      ),
-    ],
+  Widget build(BuildContext context) => Text(
+    YorksV1LogisticsStrings.deliveryOrdersAndReturns.active(language),
+    textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+    style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
   );
 }
 

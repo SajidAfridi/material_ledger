@@ -203,15 +203,10 @@ class _CalculatorScaffold extends StatelessWidget {
     appBar: AppBar(
       backgroundColor: AppColors.surface,
       surfaceTintColor: Colors.transparent,
-      title: BilingualText(
-        english: title.primary,
-        secondary: title.secondary(language),
-        englishStyle: AppTypography.titleLarge.copyWith(
-          fontWeight: FontWeight.w800,
-        ),
-        secondaryStyle: AppTypography.bodySmall.copyWith(
-          color: AppColors.muted,
-        ),
+      title: YorksV1ActiveText(
+        copy: title,
+        language: language,
+        style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
       ),
     ),
     body: SafeArea(
@@ -225,15 +220,10 @@ class _CalculatorScaffold extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 NexusSectionCard(
-                  child: BilingualText(
-                    english:
-                        YorksV1EngineeringToolsStrings.referenceOnly.primary,
-                    secondary: YorksV1EngineeringToolsStrings.referenceOnly
-                        .secondary(language),
-                    englishStyle: AppTypography.bodyMedium,
-                    secondaryStyle: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
-                    ),
+                  child: YorksV1ActiveText(
+                    copy: YorksV1EngineeringToolsStrings.referenceOnly,
+                    language: language,
+                    style: AppTypography.bodyMedium,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),

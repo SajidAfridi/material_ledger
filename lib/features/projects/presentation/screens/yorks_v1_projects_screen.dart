@@ -259,7 +259,7 @@ class _R35OverviewHero extends StatelessWidget {
                   : YorksV1ShellStrings.overviewWorkspaceDescription.primary,
               style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
             ),
-            const Spacer(),
+            const SizedBox(height: AppSpacing.xxxl),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
@@ -1851,15 +1851,10 @@ class _CopyText extends StatelessWidget {
   final bool center;
 
   @override
-  Widget build(BuildContext context) => BilingualText(
-    english: copy.primary,
-    secondary: copy.secondary(language),
-    englishStyle: style ?? AppTypography.bodyMedium,
-    secondaryStyle: (style ?? AppTypography.bodyMedium).copyWith(
-      color: AppColors.muted,
-    ),
-    crossAxisAlignment: center
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start,
+  Widget build(BuildContext context) => YorksV1ActiveText(
+    copy: copy,
+    language: language,
+    style: style ?? AppTypography.bodyMedium,
+    textAlign: center ? TextAlign.center : null,
   );
 }

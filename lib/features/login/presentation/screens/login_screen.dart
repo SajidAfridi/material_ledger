@@ -225,9 +225,7 @@ class _AuthBrandMark extends StatelessWidget {
 }
 
 class _AuthHero extends StatelessWidget {
-  const _AuthHero({this.copyCompact = false});
-
-  final bool copyCompact;
+  const _AuthHero();
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
@@ -245,46 +243,40 @@ class _AuthHero extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         Text(
           YorksV1ShellStrings.signInHero.primary,
-          style:
-              (copyCompact
-                      ? AppTypography.headlineLarge
-                      : AppTypography.displayMedium)
-                  .copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
-                    letterSpacing: -1.25,
-                  ),
+          style: AppTypography.displayMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            height: 1.05,
+            letterSpacing: -1.25,
+          ),
         ),
-        if (!copyCompact) ...[
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            YorksV1ShellStrings.signInHeroDescription.primary,
-            style: AppTypography.bodyLarge.copyWith(
-              color: const Color(0xFFC8D9EC),
-              height: 1.6,
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          YorksV1ShellStrings.signInHeroDescription.primary,
+          style: AppTypography.bodyLarge.copyWith(
+            color: const Color(0xFFC8D9EC),
+            height: 1.6,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxxl),
+        const Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _AuthCapability(
+              label: YorksV1ShellStrings.projects,
+              icon: Icons.folder_outlined,
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxxl),
-          const Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              _AuthCapability(
-                label: YorksV1ShellStrings.projects,
-                icon: Icons.folder_outlined,
-              ),
-              _AuthCapability(
-                label: YorksV1ShellStrings.documentControl,
-                icon: Icons.description_outlined,
-              ),
-              _AuthCapability(
-                label: YorksV1ShellStrings.procurement,
-                icon: Icons.inventory_2_outlined,
-              ),
-            ],
-          ),
-        ],
+            _AuthCapability(
+              label: YorksV1ShellStrings.documentControl,
+              icon: Icons.description_outlined,
+            ),
+            _AuthCapability(
+              label: YorksV1ShellStrings.procurement,
+              icon: Icons.inventory_2_outlined,
+            ),
+          ],
+        ),
       ],
     ),
   );

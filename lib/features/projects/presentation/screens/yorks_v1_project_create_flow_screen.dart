@@ -971,6 +971,7 @@ class _R35ProjectCreationFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sidebarMinHeight = MediaQuery.sizeOf(context).height * 0.75;
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -996,37 +997,40 @@ class _R35ProjectCreationFrame extends StatelessWidget {
       child: navigation == null
           ? body
           : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
                   width: 270,
-                  child: ColoredBox(
-                    color: AppColors.surfaceContainerLow,
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            YorksV1ProjectStrings.projectSetup.primary,
-                            style: AppTypography.titleLarge.copyWith(
-                              color: AppColors.ink,
-                              fontWeight: FontWeight.w800,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: sidebarMinHeight),
+                    child: ColoredBox(
+                      color: AppColors.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              YorksV1ProjectStrings.projectSetup.primary,
+                              style: AppTypography.titleLarge.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            YorksV1ProjectStrings
-                                .projectSetupDescription
-                                .primary,
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.muted,
-                              height: 1.45,
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              YorksV1ProjectStrings
+                                  .projectSetupDescription
+                                  .primary,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.muted,
+                                height: 1.45,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                          navigation!,
-                        ],
+                            const SizedBox(height: AppSpacing.xl),
+                            navigation!,
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1279,10 +1283,8 @@ class _DetailsStage extends StatelessWidget {
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-reference'),
               controller: referenceController,
-              label: YorksV1ProjectStrings.yorksReference.primary,
-              urduHint: YorksV1ProjectStrings.yorksReference.secondary(
-                language,
-              ),
+              label: YorksV1ProjectStrings.yorksReference.active(language),
+              hintText: YorksV1ProjectStrings.yorksReference.active(language),
               onChanged: onReferenceChanged,
               validator: (value) =>
                   value == null || value.trim().isEmpty ? required : null,
@@ -1290,8 +1292,8 @@ class _DetailsStage extends StatelessWidget {
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-name'),
               controller: nameController,
-              label: YorksV1ProjectStrings.projectName.primary,
-              urduHint: YorksV1ProjectStrings.projectName.secondary(language),
+              label: YorksV1ProjectStrings.projectName.active(language),
+              hintText: YorksV1ProjectStrings.projectName.active(language),
               onChanged: onNameChanged,
               validator: (value) =>
                   value == null || value.trim().isEmpty ? required : null,
@@ -1299,15 +1301,17 @@ class _DetailsStage extends StatelessWidget {
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-client'),
               controller: clientController,
-              label: YorksV1ProjectStrings.client.primary,
-              urduHint: YorksV1ProjectStrings.client.secondary(language),
+              label: YorksV1ProjectStrings.client.active(language),
+              hintText: YorksV1ProjectStrings.client.active(language),
               onChanged: onClientChanged,
             ),
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-job-contract'),
               controller: jobOrContractController,
-              label: YorksV1ProjectStrings.jobOrContractReference.primary,
-              urduHint: YorksV1ProjectStrings.jobOrContractReference.secondary(
+              label: YorksV1ProjectStrings.jobOrContractReference.active(
+                language,
+              ),
+              hintText: YorksV1ProjectStrings.jobOrContractReference.active(
                 language,
               ),
               onChanged: onJobOrContractChanged,
@@ -1315,8 +1319,8 @@ class _DetailsStage extends StatelessWidget {
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-site'),
               controller: siteController,
-              label: YorksV1ProjectStrings.siteLocation.primary,
-              urduHint: YorksV1ProjectStrings.siteLocation.secondary(language),
+              label: YorksV1ProjectStrings.siteLocation.active(language),
+              hintText: YorksV1ProjectStrings.siteLocation.active(language),
               onChanged: onSiteChanged,
             ),
             _DateField(
@@ -1359,8 +1363,8 @@ class _DetailsStage extends StatelessWidget {
               LedgerTextField(
                 key: const ValueKey('yorks-v1-project-notes'),
                 controller: notesController,
-                label: YorksV1ProjectStrings.notes.primary,
-                urduHint: YorksV1ProjectStrings.notes.secondary(language),
+                label: YorksV1ProjectStrings.notes.active(language),
+                hintText: YorksV1ProjectStrings.notes.active(language),
                 maxLines: 4,
                 onChanged: onNotesChanged,
               ),
@@ -1499,8 +1503,8 @@ class _PartiesAndAccessStage extends StatelessWidget {
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-project-consultant'),
                       controller: consultantController,
-                      label: YorksV1ProjectStrings.consultant.primary,
-                      urduHint: YorksV1ProjectStrings.consultant.secondary(
+                      label: YorksV1ProjectStrings.consultant.active(language),
+                      hintText: YorksV1ProjectStrings.consultant.active(
                         language,
                       ),
                       onChanged: onConsultantChanged,
@@ -1508,8 +1512,10 @@ class _PartiesAndAccessStage extends StatelessWidget {
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-project-main-contractor'),
                       controller: mainContractorController,
-                      label: YorksV1ProjectStrings.mainContractor.primary,
-                      urduHint: YorksV1ProjectStrings.mainContractor.secondary(
+                      label: YorksV1ProjectStrings.mainContractor.active(
+                        language,
+                      ),
+                      hintText: YorksV1ProjectStrings.mainContractor.active(
                         language,
                       ),
                       onChanged: onMainContractorChanged,
@@ -1749,8 +1755,8 @@ class _InitialTeamRolePicker extends StatelessWidget {
             'yorks-v1-project-team-picker-${projectRole.name}-$selectedCount',
           ),
           isExpanded: true,
-          decoration: InputDecoration(labelText: selectLabel.primary),
-          hint: Text(selectLabel.secondary(language)),
+          decoration: InputDecoration(labelText: selectLabel.active(language)),
+          hint: Text(selectLabel.active(language)),
           items: [
             for (final member in choices)
               DropdownMenuItem(
@@ -1926,8 +1932,8 @@ class _NamedPartyAdder extends StatelessWidget {
             Expanded(
               child: LedgerTextField(
                 controller: controller,
-                label: label.primary,
-                urduHint: label.secondary(language),
+                label: label.active(language),
+                hintText: label.active(language),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -2029,16 +2035,20 @@ class _BuildingsStage extends StatelessWidget {
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-building-code'),
                       controller: codeController,
-                      label: YorksV1ProjectStrings.buildingCode.primary,
-                      urduHint: YorksV1ProjectStrings.buildingCode.secondary(
+                      label: YorksV1ProjectStrings.buildingCode.active(
+                        language,
+                      ),
+                      hintText: YorksV1ProjectStrings.buildingCode.active(
                         language,
                       ),
                     ),
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-building-name'),
                       controller: nameController,
-                      label: YorksV1ProjectStrings.buildingName.primary,
-                      urduHint: YorksV1ProjectStrings.buildingName.secondary(
+                      label: YorksV1ProjectStrings.buildingName.active(
+                        language,
+                      ),
+                      hintText: YorksV1ProjectStrings.buildingName.active(
                         language,
                       ),
                     ),
@@ -2061,17 +2071,15 @@ class _BuildingsStage extends StatelessWidget {
               LedgerTextField(
                 key: const ValueKey('yorks-v1-building-floors'),
                 controller: floorsController,
-                label: YorksV1ProjectStrings.floorsOrLevels.primary,
-                urduHint: YorksV1ProjectStrings.floorsOrLevels.secondary(
-                  language,
-                ),
+                label: YorksV1ProjectStrings.floorsOrLevels.active(language),
+                hintText: YorksV1ProjectStrings.floorsOrLevels.active(language),
               ),
               const SizedBox(height: AppSpacing.lg),
               LedgerTextField(
                 key: const ValueKey('yorks-v1-building-delivery-address'),
                 controller: deliveryAddressController,
-                label: YorksV1ProjectStrings.deliveryAddress.primary,
-                urduHint: YorksV1ProjectStrings.deliveryAddress.secondary(
+                label: YorksV1ProjectStrings.deliveryAddress.active(language),
+                hintText: YorksV1ProjectStrings.deliveryAddress.active(
                   language,
                 ),
                 maxLines: 2,
@@ -2231,24 +2239,22 @@ class _AttachmentsStage extends StatelessWidget {
           LedgerTextField(
             key: const ValueKey('yorks-v1-attachment-file-name'),
             controller: nameController,
-            label: YorksV1ProjectStrings.attachmentFileName.primary,
-            urduHint: YorksV1ProjectStrings.attachmentFileName.secondary(
-              language,
-            ),
+            label: YorksV1ProjectStrings.attachmentFileName.active(language),
+            hintText: YorksV1ProjectStrings.attachmentFileName.active(language),
           ),
           const SizedBox(height: AppSpacing.lg),
           LedgerTextField(
             key: const ValueKey('yorks-v1-attachment-mime-type'),
             controller: mimeTypeController,
-            label: YorksV1ProjectStrings.attachmentType.primary,
-            urduHint: YorksV1ProjectStrings.attachmentType.secondary(language),
+            label: YorksV1ProjectStrings.attachmentType.active(language),
+            hintText: YorksV1ProjectStrings.attachmentType.active(language),
           ),
           const SizedBox(height: AppSpacing.lg),
           LedgerTextField(
             key: const ValueKey('yorks-v1-attachment-size-bytes'),
             controller: sizeBytesController,
-            label: YorksV1ProjectStrings.attachmentSize.primary,
-            urduHint: YorksV1ProjectStrings.attachmentSize.secondary(language),
+            label: YorksV1ProjectStrings.attachmentSize.active(language),
+            hintText: YorksV1ProjectStrings.attachmentSize.active(language),
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -2663,11 +2669,10 @@ class _LocalizedCopy extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BilingualText(
-      english: copy.primary,
-      secondary: copy.secondary(language),
-      englishStyle: englishStyle,
-      secondaryStyle: secondaryStyle,
+    return YorksV1ActiveText(
+      copy: copy,
+      language: language,
+      style: englishStyle ?? secondaryStyle,
     );
   }
 }

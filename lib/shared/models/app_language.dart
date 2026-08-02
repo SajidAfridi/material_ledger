@@ -1,14 +1,16 @@
 /// Supported app language modes.
 ///
-/// English is always the primary content language.
-/// The selected value controls the secondary translation layer.
-/// If English is selected, secondary falls back to Arabic.
+/// The selected value controls the single visible content language.
+///
+/// English is the default. Translation catalogues remain available for the
+/// configured Arabic, Urdu and Hindi experiences. The Yorks V1 workspace
+/// renders one language for each control at a time.
 enum AppLanguage {
   english(
     code: 'en',
     name: 'English',
     nativeName: 'English',
-    subtitle: 'English + Arabic mode',
+    subtitle: 'English interface',
   ),
   arabic(
     code: 'ar',
@@ -48,7 +50,7 @@ enum AppLanguage {
   static AppLanguage fromCode(String code) {
     return AppLanguage.values.firstWhere(
       (lang) => lang.code == code,
-      orElse: () => AppLanguage.arabic,
+      orElse: () => AppLanguage.english,
     );
   }
 }

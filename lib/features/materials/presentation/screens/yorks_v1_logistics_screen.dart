@@ -33,7 +33,7 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
           ? AppBar(
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
-              title: _BilingualText(
+              title: _ActiveText(
                 copy: YorksV1LogisticsStrings.dispatchAndReceipt,
                 language: language,
                 style: AppTypography.titleLarge.copyWith(
@@ -125,7 +125,7 @@ class _LogisticsBody extends StatelessWidget {
               NexusSectionCard(
                 title: YorksV1LogisticsStrings.dispatchHistory.primary,
                 child: workspace.dispatches.isEmpty
-                    ? _BilingualText(
+                    ? _ActiveText(
                         copy: YorksV1LogisticsStrings.noDispatch,
                         language: language,
                         center: true,
@@ -1005,8 +1005,8 @@ class _LogisticsError extends StatelessWidget {
   );
 }
 
-class _BilingualText extends StatelessWidget {
-  const _BilingualText({
+class _ActiveText extends StatelessWidget {
+  const _ActiveText({
     required this.copy,
     required this.language,
     required this.style,
@@ -1019,23 +1019,11 @@ class _BilingualText extends StatelessWidget {
   final bool center;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: center
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start,
-    children: [
-      Text(
-        copy.primary,
-        textAlign: center ? TextAlign.center : TextAlign.start,
-        style: style,
-      ),
-      const SizedBox(height: AppSpacing.xxs),
-      Text(
-        copy.secondary(language),
-        textAlign: center ? TextAlign.center : TextAlign.start,
-        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-      ),
-    ],
+  Widget build(BuildContext context) => Text(
+    copy.active(language),
+    textAlign: center ? TextAlign.center : TextAlign.start,
+    textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+    style: style,
   );
 }
 

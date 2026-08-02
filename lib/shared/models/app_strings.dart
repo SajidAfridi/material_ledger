@@ -3771,10 +3771,16 @@ class TranslatableString {
   /// English primary text.
   String get primary => en;
 
-  /// Secondary text for current language mode.
+  /// Text for the one language currently visible in the workspace.
+  String active(AppLanguage lang) {
+    if (lang == AppLanguage.english) return primary;
+    return secondary(lang);
+  }
+
+  /// Translation for the configured non-English language.
   ///
-  /// If language mode is English, we still show Arabic as secondary
-  /// so UI remains English + Arabic.
+  /// Kept as a compatibility API for existing call sites. New UI should use
+  /// [active] so it renders exactly one language.
   String secondary(AppLanguage lang) {
     switch (lang) {
       case AppLanguage.english:
