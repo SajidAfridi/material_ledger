@@ -221,6 +221,9 @@ Rollback: snapshots remain; use reject/supersede/compensating events.
 
 ## Batch 9 — Documents, audit and retained modules
 
+Implementation status: **passed.** See
+[`BATCH_09_COMPLETION.md`](BATCH_09_COMPLETION.md).
+
 Deliver:
 
 - Storage-backed immutable document versions and classified many-to-many links;

@@ -15,6 +15,7 @@ import '../features/admin/presentation/screens/material_masters_screen.dart';
 import '../features/admin/presentation/screens/user_management_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
+import '../features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
 import '../features/engineer/presentation/screens/engineer_create_project_screen.dart';
 import '../features/engineer/presentation/screens/engineer_home_screen.dart';
 import '../features/engineer/presentation/screens/engineer_new_request_screen.dart';
@@ -52,6 +53,7 @@ import '../features/procurement/presentation/screens/procurement_plan_review_scr
 import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
 import '../features/projects/presentation/screens/project_workspace_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_boq_screens.dart';
+import '../features/projects/presentation/screens/yorks_v1_documents_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
@@ -95,6 +97,8 @@ abstract final class RoutePaths {
   static const String yorksV1BoqGroups = '/yorks/projects/:projectId/boq';
   static const String yorksV1BoqWorksheet =
       '/yorks/projects/:projectId/boq/:groupId';
+  static const String yorksV1ProjectDocuments =
+      '/yorks/projects/:projectId/documents';
   static const String yorksV1MaterialRequests = '/yorks/material-requests';
   static const String yorksV1MaterialRequestDraft =
       '/yorks/material-requests/draft/:draftId';
@@ -119,6 +123,8 @@ abstract final class RoutePaths {
   static const String planDiff = '/plan-diff/:id';
   static const String confirmReceipt = '/receipt/:id';
   static const String returnStore = '/return';
+  static const String yorksV1DuctSizer = '/tools/duct-sizer';
+  static const String yorksV1EspCalculator = '/tools/esp-calculator';
 
   /// Engineer self-service leave (reached from the Profile tab).
   static const String myLeave = '/my-leave';
@@ -133,6 +139,20 @@ abstract final class RoutePaths {
       '/yorks/projects/$projectId/boq';
   static String yorksV1BoqWorksheetPath(String projectId, String groupId) =>
       '/yorks/projects/$projectId/boq/$groupId';
+  static String yorksV1ProjectDocumentsPath(
+    String projectId, {
+    String? entityType,
+    String? entityId,
+  }) {
+    final queryParameters = <String, String>{};
+    if (entityType != null) queryParameters['entity_type'] = entityType;
+    if (entityId != null) queryParameters['entity_id'] = entityId;
+    return Uri(
+      path: '/yorks/projects/$projectId/documents',
+      queryParameters: queryParameters,
+    ).toString();
+  }
+
   static String yorksV1MaterialRequestDraftPath(String draftId) =>
       '/yorks/material-requests/draft/$draftId';
   static String yorksV1MaterialRequestPath(String requestId) =>
@@ -350,6 +370,7 @@ GoRouter createAppRouter({
   bool yorksV1ArrangementEnabled = false,
   bool yorksV1LogisticsEnabled = false,
   bool yorksV1ReturnsDocumentsEnabled = false,
+  bool yorksV1DocumentsEnabled = false,
   YorksV1Role? yorksV1Role,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
   // [refreshListenable] let route guards re-evaluate the moment an Admin edits
@@ -424,6 +445,11 @@ GoRouter createAppRouter({
       }
 
       if (path.startsWith('/yorks/projects/') && !yorksV1BoqEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (path.startsWith('/yorks/projects/') &&
+          path.endsWith('/documents') &&
+          !yorksV1DocumentsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
 
@@ -675,6 +701,17 @@ GoRouter createAppRouter({
         ),
       ),
       GoRoute(
+        path: RoutePaths.yorksV1ProjectDocuments,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1DocumentsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            focusEntityType: state.uri.queryParameters['entity_type'],
+            focusEntityId: state.uri.queryParameters['entity_id'],
+          ),
+        ),
+      ),
+      GoRoute(
         path: RoutePaths.yorksV1MaterialRequests,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const YorksV1MaterialRequestsScreen()),
@@ -719,6 +756,16 @@ GoRouter createAppRouter({
         path: RoutePaths.yorksV1Inventory,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const YorksV1InventoryScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1DuctSizer,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const YorksV1DuctSizerScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1EspCalculator,
+        pageBuilder: (context, state) =>
+            _slide(state.pageKey, const YorksV1EspCalculatorScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequest,
@@ -962,6 +1009,7 @@ bool _isLegacyProjectOrRequestRoute(String path) {
       path == RoutePaths.engineerProjectsView ||
       path == RoutePaths.adminProjects ||
       path == RoutePaths.procurement ||
+      path == RoutePaths.finance ||
       path == RoutePaths.engineerNewRequest ||
       path == RoutePaths.engineerPickMaterials ||
       path == RoutePaths.requests ||

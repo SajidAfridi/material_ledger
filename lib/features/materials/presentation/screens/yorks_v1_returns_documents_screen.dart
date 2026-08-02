@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:pdf/pdf.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
+import '../../../../shared/models/yorks_v1_document.dart';
+import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
+import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
@@ -435,6 +442,7 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
   Widget build(BuildContext context) {
     final order = widget.dispatch.deliveryOrder;
     final current = order?.currentRevision;
+    final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -513,6 +521,36 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
                       onPressed: _working ? null : () => _print(order, current),
                     ),
                   ),
+                  if (documentsEnabled)
+                    SizedBox(
+                      width: 160,
+                      child: SecondaryButton(
+                        label: YorksV1DocumentStrings.documents.primary,
+                        icon: Icons.folder_open_outlined,
+                        onPressed: _working
+                            ? null
+                            : () => context.push(
+                                RoutePaths.yorksV1ProjectDocumentsPath(
+                                  widget.workspace.projectId,
+                                  entityType: 'delivery_order',
+                                  entityId: order.id,
+                                ),
+                              ),
+                      ),
+                    ),
+                  if (documentsEnabled)
+                    SizedBox(
+                      width: 230,
+                      child: SecondaryButton(
+                        label: YorksV1DocumentStrings
+                            .storeControlledVersion
+                            .primary,
+                        icon: Icons.verified_outlined,
+                        onPressed: _working
+                            ? null
+                            : () => _storePdfSnapshot(order, current),
+                      ),
+                    ),
                 ],
               ],
             ),
@@ -579,6 +617,55 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
     dispatch: widget.dispatch,
     revision: revision,
   );
+
+  Future<void> _storePdfSnapshot(
+    YorksV1DeliveryOrder order,
+    YorksV1DeliveryOrderRevision revision,
+  ) async {
+    setState(() => _working = true);
+    try {
+      final bytes = await widget.documents.buildDeliveryOrderPdf(
+        workspace: widget.workspace,
+        dispatch: widget.dispatch,
+        revision: revision,
+        format: PdfPageFormat.a4,
+      );
+      await ref
+          .read(yorksV1DocumentsRepositoryProvider)
+          .upload(
+            YorksV1DocumentUploadInput(
+              projectId: widget.workspace.projectId,
+              entityType: YorksV1DocumentEntityType.deliveryOrder,
+              entityId: order.id,
+              classification: YorksV1DocumentClassification.operational,
+              fileName: widget.documents
+                  .suggestedDeliveryOrderExcelName(order, revision)
+                  .replaceFirst(RegExp(r'\.xlsx$'), '.pdf'),
+              mimeType: 'application/pdf',
+              bytes: bytes,
+              origin: YorksV1DocumentOrigin.generated,
+              sourceEntityType: YorksV1DocumentEntityType.deliveryOrder,
+              sourceEntityId: order.id,
+              sourceRevision: revision.revisionNumber.toString(),
+              idempotencyKey: const Uuid().v5(
+                Namespace.url.value,
+                'yorks-delivery-order-pdf:${order.id}:${revision.revisionNumber}',
+              ),
+            ),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(YorksV1DocumentStrings.uploadSucceeded.primary),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) _failure(context);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
 }
 
 class _FourColumnTable extends StatelessWidget {
@@ -905,6 +992,7 @@ class _MaterialReturnCardState extends ConsumerState<_MaterialReturnCard> {
   @override
   Widget build(BuildContext context) {
     final materialReturn = widget.materialReturn;
+    final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -970,6 +1058,33 @@ class _MaterialReturnCardState extends ConsumerState<_MaterialReturnCard> {
                   onPressed: _working ? null : _print,
                 ),
               ),
+              if (documentsEnabled)
+                SizedBox(
+                  width: 160,
+                  child: SecondaryButton(
+                    label: YorksV1DocumentStrings.documents.primary,
+                    icon: Icons.folder_open_outlined,
+                    onPressed: _working
+                        ? null
+                        : () => context.push(
+                            RoutePaths.yorksV1ProjectDocumentsPath(
+                              widget.workspace.projectId,
+                              entityType: 'material_return',
+                              entityId: materialReturn.id,
+                            ),
+                          ),
+                  ),
+                ),
+              if (documentsEnabled)
+                SizedBox(
+                  width: 230,
+                  child: SecondaryButton(
+                    label:
+                        YorksV1DocumentStrings.storeControlledVersion.primary,
+                    icon: Icons.verified_outlined,
+                    onPressed: _working ? null : _storePdfSnapshot,
+                  ),
+                ),
               if (materialReturn.canConfirm)
                 SizedBox(
                   width: 230,
@@ -1015,6 +1130,52 @@ class _MaterialReturnCardState extends ConsumerState<_MaterialReturnCard> {
     workspace: widget.workspace,
     materialReturn: widget.materialReturn,
   );
+
+  Future<void> _storePdfSnapshot() async {
+    setState(() => _working = true);
+    try {
+      final materialReturn = widget.materialReturn;
+      final bytes = await widget.documents.buildMaterialReturnPdf(
+        workspace: widget.workspace,
+        materialReturn: materialReturn,
+        format: PdfPageFormat.a4,
+      );
+      await ref
+          .read(yorksV1DocumentsRepositoryProvider)
+          .upload(
+            YorksV1DocumentUploadInput(
+              projectId: widget.workspace.projectId,
+              entityType: YorksV1DocumentEntityType.materialReturn,
+              entityId: materialReturn.id,
+              classification: YorksV1DocumentClassification.operational,
+              fileName: widget.documents
+                  .suggestedMaterialReturnExcelName(materialReturn)
+                  .replaceFirst(RegExp(r'\.xlsx$'), '.pdf'),
+              mimeType: 'application/pdf',
+              bytes: bytes,
+              origin: YorksV1DocumentOrigin.generated,
+              sourceEntityType: YorksV1DocumentEntityType.materialReturn,
+              sourceEntityId: materialReturn.id,
+              sourceRevision: materialReturn.recordVersion.toString(),
+              idempotencyKey: const Uuid().v5(
+                Namespace.url.value,
+                'yorks-material-return-pdf:${materialReturn.id}:${materialReturn.recordVersion}',
+              ),
+            ),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(YorksV1DocumentStrings.uploadSucceeded.primary),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) _failure(context);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
 
   Future<void> _confirm() async {
     final mappings =

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pdf/pdf.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
@@ -11,6 +12,8 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
+import '../../../../shared/models/yorks_v1_document.dart';
+import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
@@ -20,6 +23,7 @@ import '../../../../shared/providers/yorks_v1_boq_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_repository_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
@@ -972,6 +976,7 @@ class _RequestDetailBody extends ConsumerWidget {
     final returnsDocumentsEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
         .returnsDocuments;
+    final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     final fileService = ref.watch(yorksV1BoqWorkbookFileServiceProvider);
     final documentService = YorksV1MaterialRequestDocumentService();
     final canCancel =
@@ -1075,12 +1080,39 @@ class _RequestDetailBody extends ConsumerWidget {
                             ),
                           ),
                         ),
+                      if (documentsEnabled)
+                        SecondaryButton(
+                          label: YorksV1DocumentStrings.documents.primary,
+                          isExpanded: false,
+                          icon: Icons.folder_open_outlined,
+                          onPressed: () => context.push(
+                            RoutePaths.yorksV1ProjectDocumentsPath(
+                              request.projectId,
+                              entityType: 'material_request',
+                              entityId: request.id,
+                            ),
+                          ),
+                        ),
                       SecondaryButton(
                         label: YorksV1MaterialRequestStrings.printPdf.primary,
                         isExpanded: false,
                         icon: Icons.print_outlined,
                         onPressed: () => documentService.printPdf(request),
                       ),
+                      if (documentsEnabled)
+                        SecondaryButton(
+                          label: YorksV1DocumentStrings
+                              .storeControlledVersion
+                              .primary,
+                          isExpanded: false,
+                          icon: Icons.verified_outlined,
+                          onPressed: () => _storePdfSnapshot(
+                            context,
+                            ref,
+                            request,
+                            documentService,
+                          ),
+                        ),
                       if (canCancel)
                         SecondaryButton(
                           label: YorksV1MaterialRequestStrings
@@ -1131,6 +1163,47 @@ class _RequestDetailBody extends ConsumerWidget {
     } catch (_) {
       if (context.mounted) {
         _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      }
+    }
+  }
+
+  Future<void> _storePdfSnapshot(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1MaterialRequest request,
+    YorksV1MaterialRequestDocumentService documentService,
+  ) async {
+    try {
+      final bytes = await documentService.buildPdf(request, PdfPageFormat.a4);
+      await ref
+          .read(yorksV1DocumentsRepositoryProvider)
+          .upload(
+            YorksV1DocumentUploadInput(
+              projectId: request.projectId,
+              entityType: YorksV1DocumentEntityType.materialRequest,
+              entityId: request.id,
+              classification: YorksV1DocumentClassification.operational,
+              fileName: documentService
+                  .suggestedExcelName(request)
+                  .replaceFirst(RegExp(r'\.xlsx$'), '.pdf'),
+              mimeType: 'application/pdf',
+              bytes: bytes,
+              origin: YorksV1DocumentOrigin.generated,
+              sourceEntityType: YorksV1DocumentEntityType.materialRequest,
+              sourceEntityId: request.id,
+              sourceRevision: request.recordVersion.toString(),
+              idempotencyKey: const Uuid().v5(
+                Namespace.url.value,
+                'yorks-mr-pdf:${request.id}:${request.recordVersion}',
+              ),
+            ),
+          );
+      if (context.mounted) {
+        _snack(context, YorksV1DocumentStrings.uploadSucceeded.primary);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        _snack(context, YorksV1DocumentStrings.uploadFailed.primary);
       }
     }
   }

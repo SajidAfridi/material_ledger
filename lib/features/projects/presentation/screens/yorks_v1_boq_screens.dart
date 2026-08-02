@@ -13,6 +13,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_boq_workbook.dart';
+import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -38,6 +39,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
     final groups = ref.watch(yorksV1BoqGroupsProvider(projectId));
     final editable = role != null && role != YorksV1Role.procurement;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
+    final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -50,6 +52,14 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
           style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
         ),
         actions: [
+          if (documentsEnabled)
+            IconButton(
+              tooltip: YorksV1DocumentStrings.documents.primary,
+              onPressed: () => context.push(
+                RoutePaths.yorksV1ProjectDocumentsPath(projectId),
+              ),
+              icon: const Icon(Icons.folder_open_outlined),
+            ),
           if (requestsEnabled)
             IconButton(
               tooltip: YorksV1MaterialRequestStrings.requests.primary,
@@ -336,6 +346,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     );
     final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
+    final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     final editable =
         role != null && role != YorksV1Role.procurement && !state.isReadOnly;
 
@@ -355,6 +366,18 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
           style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
         ),
         actions: [
+          if (documentsEnabled)
+            IconButton(
+              tooltip: YorksV1DocumentStrings.documents.primary,
+              onPressed: () => context.push(
+                RoutePaths.yorksV1ProjectDocumentsPath(
+                  projectId,
+                  entityType: 'boq_group',
+                  entityId: groupId,
+                ),
+              ),
+              icon: const Icon(Icons.folder_open_outlined),
+            ),
           if (editable && state.worksheet?.group.isCustom == true)
             IconButton(
               tooltip: YorksV1BoqStrings.archiveGroup.primary,

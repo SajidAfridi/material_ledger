@@ -16,6 +16,7 @@ import 'package:material_ledger/shared/providers/role_permissions_provider.dart'
 import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/users_provider.dart';
 import 'package:material_ledger/shared/services/observability_service.dart';
+import 'package:material_ledger/shared/services/app_config_service.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:material_ledger/shared/sync/outbox.dart';
 import 'package:material_ledger/shared/sync/sync_backend.dart';
@@ -25,6 +26,7 @@ import 'package:material_ledger/shared/sync/sync_engine.dart';
 import 'package:material_ledger/features/engineer/presentation/screens/engineer_create_project_screen.dart';
 import 'package:material_ledger/features/engineer/presentation/screens/engineer_projects_screen.dart';
 import 'package:material_ledger/features/engineer/presentation/screens/engineer_home_screen.dart';
+import 'package:material_ledger/features/engineer/presentation/screens/engineer_profile_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/access_roles_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/user_management_screen.dart';
 import 'package:material_ledger/features/admin/presentation/screens/admin_projects_screen.dart';
@@ -35,6 +37,7 @@ import 'package:material_ledger/features/leave/presentation/screens/my_leave_scr
 import 'package:material_ledger/features/leave/presentation/screens/leave_requests_screen.dart';
 import 'package:material_ledger/features/people/presentation/screens/people_dashboard_screen.dart';
 import 'package:material_ledger/features/procurement/presentation/screens/procurement_workspace_screen.dart';
+import 'package:material_ledger/shared/screens/activity_log_screen.dart';
 
 const _testLocalPassword = 'test-only-local-password';
 
@@ -44,6 +47,9 @@ Future<ProviderContainer> _container({String? email}) async {
   final c = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
+      appVersionProvider.overrideWithValue(
+        const AppVersionInfo(version: '1.0.0', build: 1),
+      ),
       localDemoPasswordProvider.overrideWithValue(_testLocalPassword),
       observabilityProvider.overrideWithValue(const NoopObservability()),
       // Construct the sync engine WITHOUT start() so no periodic timer leaks
@@ -125,6 +131,12 @@ void main() {
     });
     testWidgets('User management', (t) async {
       await _smoke(t, const UserManagementScreen(), email: _owner);
+    });
+    testWidgets('Configuration profile', (t) async {
+      await _smoke(t, const EngineerProfileScreen(), email: _owner);
+    });
+    testWidgets('Audit activity', (t) async {
+      await _smoke(t, const ActivityLogScreen(), email: _owner);
     });
     testWidgets('Admin projects (job register + value)', (t) async {
       await _smoke(t, const AdminProjectsScreen(), email: _owner);

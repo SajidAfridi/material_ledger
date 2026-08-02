@@ -10,9 +10,11 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/security/session_lock.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/yorks_v1_engineering_tools_strings.dart';
 import '../../../../shared/providers/employee_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/services/app_config_service.dart';
 import '../../../../shared/sync/connectivity_service.dart';
 
@@ -26,6 +28,9 @@ class EngineerProfileScreen extends ConsumerWidget {
     final currency = ref.watch(currencyProvider);
     final role = ref.watch(currentRoleProvider);
     final online = ref.watch(isOnlineProvider);
+    final engineeringToolsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .documents;
     // Same source as the home "My data" card + the /me detail screen.
     final emp = ref.watch(employeeProvider);
 
@@ -136,6 +141,21 @@ class EngineerProfileScreen extends ConsumerWidget {
                       title: 'Activity Log',
                       onTap: () => context.push(RoutePaths.activityLog),
                     ),
+                    if (engineeringToolsEnabled)
+                      _ProfileTile(
+                        icon: Icons.straighten_outlined,
+                        title: YorksV1EngineeringToolsStrings.ductSizer.primary,
+                        onTap: () => context.push(RoutePaths.yorksV1DuctSizer),
+                      ),
+                    if (engineeringToolsEnabled)
+                      _ProfileTile(
+                        icon: Icons.calculate_outlined,
+                        title: YorksV1EngineeringToolsStrings
+                            .espCalculator
+                            .primary,
+                        onTap: () =>
+                            context.push(RoutePaths.yorksV1EspCalculator),
+                      ),
                     // Dev-only connectivity simulator — demo the offline →
                     // queued → synced flow without leaving Wi-Fi. Release-hidden.
                     if (kDebugMode)
