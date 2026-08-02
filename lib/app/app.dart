@@ -46,6 +46,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final yorksV1LogisticsEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
       .logistics;
+  final yorksV1ReturnsDocumentsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .returnsDocuments;
+  final yorksV1DocumentsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .documents;
   final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
 
   // Re-run route guards when an Admin edits role permissions — WITHOUT
@@ -66,6 +72,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     yorksV1RequestsEnabled: yorksV1RequestsEnabled,
     yorksV1ArrangementEnabled: yorksV1ArrangementEnabled,
     yorksV1LogisticsEnabled: yorksV1LogisticsEnabled,
+    yorksV1ReturnsDocumentsEnabled: yorksV1ReturnsDocumentsEnabled,
+    yorksV1DocumentsEnabled: yorksV1DocumentsEnabled,
     yorksV1Role: yorksV1Role,
     rolePermissions: () => ref.read(rolePermissionsProvider),
     refreshListenable: refresh,

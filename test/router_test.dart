@@ -162,4 +162,40 @@ void main() {
       }
     },
   );
+
+  testWidgets('V1 Admin cannot deep link to deferred Accounts', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final router = createAppRouter(
+      isOnboarded: true,
+      isLoggedIn: true,
+      role: UserRole.admin,
+      user: AppUser(
+        id: 'admin-user',
+        fullName: 'Admin User',
+        email: 'admin@yorks.test',
+        role: UserRole.admin,
+        createdAt: DateTime.utc(2026, 8, 1),
+      ),
+      yorksV1ProjectsEnabled: true,
+      yorksV1Role: YorksV1Role.admin,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
+    router.go(RoutePaths.finance);
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      RoutePaths.engineerHome,
+    );
+  });
 }

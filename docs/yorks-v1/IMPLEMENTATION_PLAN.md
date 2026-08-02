@@ -203,6 +203,9 @@ audited compensation, never restoration of the old writer.
 
 ## Batch 8 — Delivery Orders and Material Returns
 
+Implementation status: **passed.** See
+[`BATCH_08_COMPLETION.md`](BATCH_08_COMPLETION.md).
+
 Deliver:
 
 - immutable DO revision snapshot after receipt review;
@@ -217,6 +220,9 @@ confirmation posts stock once; short/multi-page output passes visual QA.
 Rollback: snapshots remain; use reject/supersede/compensating events.
 
 ## Batch 9 — Documents, audit and retained modules
+
+Implementation status: **passed.** See
+[`BATCH_09_COMPLETION.md`](BATCH_09_COMPLETION.md).
 
 Deliver:
 

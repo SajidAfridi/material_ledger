@@ -17,6 +17,7 @@ class YorksV1FeatureFlags {
     bool arrangement = false,
     bool logistics = false,
     bool returnsDocuments = false,
+    bool documents = false,
   }) : _foundation = foundation,
        _projects = projects,
        _boq = boq,
@@ -24,7 +25,8 @@ class YorksV1FeatureFlags {
        _requests = requests,
        _arrangement = arrangement,
        _logistics = logistics,
-       _returnsDocuments = returnsDocuments;
+       _returnsDocuments = returnsDocuments,
+       _documents = documents;
 
   const YorksV1FeatureFlags.fromEnvironment()
     : _foundation = const bool.fromEnvironment('YORKS_V1_FOUNDATION'),
@@ -36,7 +38,8 @@ class YorksV1FeatureFlags {
       _logistics = const bool.fromEnvironment('YORKS_V1_LOGISTICS'),
       _returnsDocuments = const bool.fromEnvironment(
         'YORKS_V1_RETURNS_DOCUMENTS',
-      );
+      ),
+      _documents = const bool.fromEnvironment('YORKS_V1_DOCUMENTS');
 
   final bool _foundation;
   final bool _projects;
@@ -46,6 +49,7 @@ class YorksV1FeatureFlags {
   final bool _arrangement;
   final bool _logistics;
   final bool _returnsDocuments;
+  final bool _documents;
 
   bool get foundation => _foundation;
   bool get projects => foundation && _projects;
@@ -55,4 +59,5 @@ class YorksV1FeatureFlags {
   bool get arrangement => requests && _arrangement;
   bool get logistics => arrangement && _logistics;
   bool get returnsDocuments => logistics && _returnsDocuments;
+  bool get documents => returnsDocuments && _documents;
 }

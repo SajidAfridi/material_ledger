@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
+import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
@@ -46,6 +47,29 @@ void main() {
 
     expect(find.text('Movement history'), findsOneWidget);
     expect(find.text('Opening balance'), findsOneWidget);
+  });
+
+  testWidgets('return quantity uses a focused editor on a 360px mobile width', (
+    tester,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _testApp(
+        preferences: preferences,
+        child: const YorksV1ReturnsDocumentsScreen(requestId: 'request-1'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copper pipe'), findsOneWidget);
+    await tester.tap(find.text('Copper pipe'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Return quantity'), findsOneWidget);
+    expect(find.text('Save return draft'), findsWidgets);
   });
 }
 
@@ -133,7 +157,67 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
   Future<YorksV1LogisticsWorkspace> confirmReceipt(
     YorksV1ReceiptConfirmationInput input,
   ) => getWorkspace(input.requestId);
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
+    String requestId,
+  ) async => _returnsWorkspace(requestId);
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
+    YorksV1DeliveryOrderGenerationInput input,
+  ) async => _returnsWorkspace(input.requestId);
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> saveMaterialReturnDraft(
+    YorksV1MaterialReturnDraftInput input,
+  ) async => _returnsWorkspace(input.requestId);
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> submitMaterialReturn(
+    YorksV1MaterialReturnSubmissionInput input,
+  ) async => _returnsWorkspace('request-1');
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> confirmMaterialReturn(
+    YorksV1MaterialReturnConfirmationInput input,
+  ) async => _returnsWorkspace('request-1');
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> rejectMaterialReturn(
+    YorksV1MaterialReturnRejectionInput input,
+  ) async => _returnsWorkspace('request-1');
 }
+
+YorksV1ReturnsDocumentsWorkspace _returnsWorkspace(String requestId) =>
+    YorksV1ReturnsDocumentsWorkspace(
+      requestId: requestId,
+      projectId: 'project-1',
+      requestNumber: 'Y-001-MR001',
+      requestState: 'received',
+      requestRecordVersion: 1,
+      projectName: 'Yorks Project',
+      scopeName: 'Building A',
+      canGenerateDeliveryOrder: false,
+      canSubmitMaterialReturn: true,
+      canConfirmMaterialReturn: false,
+      deliveryOrderDispatches: const [],
+      returnCandidates: const [
+        YorksV1ReturnCandidate(
+          receiptReviewLineId: 'receipt-line-1',
+          dispatchNumber: 'Y-001-DSP001',
+          displayOrder: 1,
+          description: 'Copper pipe',
+          unit: 'Mtr',
+          source: YorksV1LogisticsSource.warehouse,
+          goodReceivedQuantity: '3',
+          confirmedReturnQuantity: '0',
+          eligibleReturnQuantity: '3',
+        ),
+      ],
+      materialReturns: const [],
+      returnInventoryItems: const [],
+    );
 
 const _item = YorksV1LogisticsInventoryItem(
   id: 'inventory-1',

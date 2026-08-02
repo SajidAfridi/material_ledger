@@ -83,6 +83,51 @@ void main() {
       expect(client.calls, isEmpty);
     },
   );
+
+  test('Delivery Order input normalizes its globally unique reference', () {
+    const input = YorksV1DeliveryOrderGenerationInput(
+      requestId: 'request-1',
+      dispatchId: 'dispatch-1',
+      expectedRequestVersion: 2,
+      expectedDispatchVersion: 3,
+      deliveryOrderReference: '  yorks   do-001 ',
+      idempotencyKey: '11111111-1111-4111-8111-111111111112',
+    );
+
+    expect(input.toRpcPayload()['delivery_order_reference'], 'YORKS DO-001');
+  });
+
+  test(
+    'returns and documents repository boundary remains default-off',
+    () async {
+      final client = _RecordingRpcClient();
+      final repository = YorksV1SupabaseLogisticsRepository(
+        featureFlags: const YorksV1FeatureFlags(
+          foundation: true,
+          projects: true,
+          boq: true,
+          excel: true,
+          requests: true,
+          arrangement: true,
+          logistics: true,
+        ),
+        connectivity: DefaultConnectivity(),
+        rpcClient: client,
+      );
+
+      await expectLater(
+        repository.getReturnsDocumentsWorkspace('request-1'),
+        throwsA(
+          isA<YorksV1DomainException>().having(
+            (error) => error.code,
+            'code',
+            YorksV1DomainErrorCode.featureDisabled,
+          ),
+        ),
+      );
+      expect(client.calls, isEmpty);
+    },
+  );
 }
 
 Map<String, dynamic> _workspaceJson() => {

@@ -3,6 +3,36 @@ import 'yorks_v1_logistics.dart';
 
 /// Centralized user-facing copy for the Batch 7 warehouse and logistics flow.
 abstract final class YorksV1LogisticsStrings {
+  static const companyName = TranslatableString(
+    en: 'Yorks AC. & Ref.',
+    ar: 'يوركس للتكييف والتبريد',
+    ur: 'یارکس اے سی اینڈ ریف۔',
+    hi: 'यॉर्क्स एसी एंड रेफ।',
+  );
+  static const serialNumber = TranslatableString(
+    en: 'S:No',
+    ar: 'م',
+    ur: 'نمبر',
+    hi: 'क्र.',
+  );
+  static const deliveryQuantity = TranslatableString(
+    en: 'Qty',
+    ar: 'الكمية',
+    ur: 'مقدار',
+    hi: 'मात्रा',
+  );
+  static const state = TranslatableString(
+    en: 'State',
+    ar: 'الحالة',
+    ur: 'حالت',
+    hi: 'स्थिति',
+  );
+  static const draftedBy = TranslatableString(
+    en: 'Drafted by',
+    ar: 'أعده',
+    ur: 'تیار کنندہ',
+    hi: 'ड्राफ़्ट करने वाला',
+  );
   static const inventory = TranslatableString(
     en: 'Warehouse inventory',
     ar: 'مخزون المستودع',
@@ -40,7 +70,7 @@ abstract final class YorksV1LogisticsStrings {
     hi: 'स्टॉक जोड़ें या समायोजित करें',
   );
   static const itemDescription = TranslatableString(
-    en: 'Item description',
+    en: 'Item Description',
     ar: 'وصف الصنف',
     ur: 'آئٹم کی تفصیل',
     hi: 'आइटम विवरण',
@@ -231,6 +261,150 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ہر لائن کا جائزہ لیں۔ گم یا خراب لائنوں کے لیے نوٹ ضروری ہے۔',
     hi: 'हर पंक्ति की समीक्षा करें। लापता और क्षतिग्रस्त पंक्तियों के लिए नोट आवश्यक है।',
   );
+  static const deliveryOrdersAndReturns = TranslatableString(
+    en: 'Delivery Orders and returns',
+    ar: 'أوامر التسليم والمرتجعات',
+    ur: 'ڈیلیوری آرڈرز اور واپسی',
+    hi: 'डिलीवरी ऑर्डर और वापसी',
+  );
+  static const deliveryOrders = TranslatableString(
+    en: 'Delivery Orders',
+    ar: 'أوامر التسليم',
+    ur: 'ڈیلیوری آرڈرز',
+    hi: 'डिलीवरी ऑर्डर',
+  );
+  static const deliveryOrder = TranslatableString(
+    en: 'Delivery Order',
+    ar: 'أمر التسليم',
+    ur: 'ڈیلیوری آرڈر',
+    hi: 'डिलीवरी ऑर्डर',
+  );
+  static const deliveryOrderReference = TranslatableString(
+    en: 'Delivery Order reference',
+    ar: 'مرجع أمر التسليم',
+    ur: 'ڈیلیوری آرڈر حوالہ',
+    hi: 'डिलीवरी ऑर्डर संदर्भ',
+  );
+  static const generateDeliveryOrder = TranslatableString(
+    en: 'Generate Delivery Order',
+    ar: 'إنشاء أمر التسليم',
+    ur: 'ڈیلیوری آرڈر بنائیں',
+    hi: 'डिलीवरी ऑर्डर बनाएं',
+  );
+  static const regenerateDeliveryOrder = TranslatableString(
+    en: 'Create new revision',
+    ar: 'إنشاء مراجعة جديدة',
+    ur: 'نیا ورژن بنائیں',
+    hi: 'नया संशोधन बनाएं',
+  );
+  static const revision = TranslatableString(
+    en: 'Revision',
+    ar: 'المراجعة',
+    ur: 'ورژن',
+    hi: 'संशोधन',
+  );
+  static const noDeliveryOrders = TranslatableString(
+    en: 'No receipt-reviewed dispatches are available yet.',
+    ar: 'لا توجد عمليات إرسال تمت مراجعة استلامها بعد.',
+    ur: 'ابھی کوئی وصولی شدہ ڈسپیچ دستیاب نہیں ہے۔',
+    hi: 'अभी तक कोई प्राप्ति-समीक्षित डिस्पैच उपलब्ध नहीं है।',
+  );
+  static const exportExcel = TranslatableString(
+    en: 'Excel',
+    ar: 'إكسل',
+    ur: 'ایکسل',
+    hi: 'एक्सेल',
+  );
+  static const printDocument = TranslatableString(
+    en: 'Print / PDF',
+    ar: 'طباعة / PDF',
+    ur: 'پرنٹ / PDF',
+    hi: 'प्रिंट / PDF',
+  );
+  static const materialReturns = TranslatableString(
+    en: 'Material returns',
+    ar: 'مرتجعات المواد',
+    ur: 'میٹریل واپسی',
+    hi: 'सामग्री वापसी',
+  );
+  static const eligibleToReturn = TranslatableString(
+    en: 'Eligible to return',
+    ar: 'المتاح للإرجاع',
+    ur: 'واپسی کے لیے اہل',
+    hi: 'वापसी के लिए योग्य',
+  );
+  static const returnQuantity = TranslatableString(
+    en: 'Return quantity',
+    ar: 'كمية الإرجاع',
+    ur: 'واپسی کی مقدار',
+    hi: 'वापसी मात्रा',
+  );
+  static const returnNote = TranslatableString(
+    en: 'Return note (optional)',
+    ar: 'ملاحظة الإرجاع (اختيارية)',
+    ur: 'واپسی نوٹ (اختیاری)',
+    hi: 'वापसी नोट (वैकल्पिक)',
+  );
+  static const saveReturnDraft = TranslatableString(
+    en: 'Save return draft',
+    ar: 'حفظ مسودة الإرجاع',
+    ur: 'واپسی ڈرافٹ محفوظ کریں',
+    hi: 'वापसी ड्राफ़्ट सहेजें',
+  );
+  static const submitReturn = TranslatableString(
+    en: 'Submit return',
+    ar: 'إرسال الإرجاع',
+    ur: 'واپسی جمع کرائیں',
+    hi: 'वापसी जमा करें',
+  );
+  static const confirmReturn = TranslatableString(
+    en: 'Confirm warehouse return',
+    ar: 'تأكيد إرجاع المستودع',
+    ur: 'گودام واپسی کی تصدیق کریں',
+    hi: 'वेयरहाउस वापसी की पुष्टि करें',
+  );
+  static const rejectReturn = TranslatableString(
+    en: 'Reject return',
+    ar: 'رفض الإرجاع',
+    ur: 'واپسی مسترد کریں',
+    hi: 'वापसी अस्वीकार करें',
+  );
+  static const rejectionReason = TranslatableString(
+    en: 'Rejection reason',
+    ar: 'سبب الرفض',
+    ur: 'مسترد کرنے کی وجہ',
+    hi: 'अस्वीकृति का कारण',
+  );
+  static const newInventoryItem = TranslatableString(
+    en: 'Create identified inventory item',
+    ar: 'إنشاء صنف مخزون محدد',
+    ur: 'شناخت شدہ انوینٹری آئٹم بنائیں',
+    hi: 'पहचानी गई इन्वेंटरी वस्तु बनाएं',
+  );
+  static const mapInventoryItem = TranslatableString(
+    en: 'Map to inventory item',
+    ar: 'ربط بصنف المخزون',
+    ur: 'انوینٹری آئٹم سے منسلک کریں',
+    hi: 'इन्वेंटरी आइटम से जोड़ें',
+  );
+  static const noEligibleReturns = TranslatableString(
+    en: 'No good received quantity is currently eligible for return.',
+    ar: 'لا توجد كمية مستلمة سليمة متاحة للإرجاع حالياً.',
+    ur: 'اس وقت کوئی درست وصول شدہ مقدار واپسی کے لیے اہل نہیں ہے۔',
+    hi: 'वर्तमान में वापसी के लिए कोई अच्छी प्राप्त मात्रा योग्य नहीं है।',
+  );
+  static const noMaterialReturns = TranslatableString(
+    en: 'No material returns have been prepared.',
+    ar: 'لم يتم إعداد أي مرتجعات مواد.',
+    ur: 'ابھی کوئی میٹریل واپسی تیار نہیں کی گئی۔',
+    hi: 'अभी तक कोई सामग्री वापसी तैयार नहीं की गई है।',
+  );
+  static const invalidReturn = TranslatableString(
+    en: 'Enter a positive quantity that does not exceed the eligible amount.',
+    ar: 'أدخل كمية موجبة لا تتجاوز الكمية المتاحة.',
+    ur: 'مثبت مقدار درج کریں جو اہل مقدار سے زیادہ نہ ہو۔',
+    hi: 'ऐसी धनात्मक मात्रा दर्ज करें जो योग्य राशि से अधिक न हो।',
+  );
 }
 
 TranslatableString yorksV1LogisticsSourceCopy(YorksV1LogisticsSource source) =>
@@ -292,3 +466,32 @@ TranslatableString yorksV1ReceiptOutcomeCopy(YorksV1ReceiptOutcome outcome) =>
         hi: 'क्षतिग्रस्त',
       ),
     };
+
+TranslatableString yorksV1MaterialReturnStateCopy(
+  YorksV1MaterialReturnState state,
+) => switch (state) {
+  YorksV1MaterialReturnState.draft => const TranslatableString(
+    en: 'Draft',
+    ar: 'مسودة',
+    ur: 'ڈرافٹ',
+    hi: 'ड्राफ़्ट',
+  ),
+  YorksV1MaterialReturnState.submitted => const TranslatableString(
+    en: 'Submitted',
+    ar: 'مرسل',
+    ur: 'جمع شدہ',
+    hi: 'जमा किया गया',
+  ),
+  YorksV1MaterialReturnState.confirmed => const TranslatableString(
+    en: 'Confirmed',
+    ar: 'مؤكد',
+    ur: 'تصدیق شدہ',
+    hi: 'पुष्ट',
+  ),
+  YorksV1MaterialReturnState.rejected => const TranslatableString(
+    en: 'Rejected',
+    ar: 'مرفوض',
+    ur: 'مسترد',
+    hi: 'अस्वीकृत',
+  ),
+};

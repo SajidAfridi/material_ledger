@@ -443,6 +443,464 @@ class YorksV1InventoryWorkspace {
   }
 }
 
+enum YorksV1MaterialReturnState {
+  draft('draft'),
+  submitted('submitted'),
+  confirmed('confirmed'),
+  rejected('rejected');
+
+  const YorksV1MaterialReturnState(this.wireValue);
+  final String wireValue;
+
+  static YorksV1MaterialReturnState? fromWireValue(Object? value) {
+    if (value is! String) return null;
+    for (final state in values) {
+      if (state.wireValue == value) return state;
+    }
+    return null;
+  }
+}
+
+/// The exactly-four-column, cost-free payload retained for a Delivery Order.
+class YorksV1DeliveryOrderLine {
+  const YorksV1DeliveryOrderLine({
+    required this.serialNumber,
+    required this.description,
+    required this.quantity,
+    required this.unit,
+  });
+
+  final int serialNumber;
+  final String description;
+  final String quantity;
+  final String unit;
+
+  factory YorksV1DeliveryOrderLine.fromRpcJson(Map<String, dynamic> json) {
+    return YorksV1DeliveryOrderLine(
+      serialNumber: _positiveInt(json['s_no']),
+      description: _requiredString(json, 'item_description'),
+      quantity: _string(json['quantity']),
+      unit: _requiredString(json, 'unit'),
+    );
+  }
+}
+
+class YorksV1DeliveryOrderRevision {
+  YorksV1DeliveryOrderRevision({
+    required this.id,
+    required this.revisionNumber,
+    required this.isCurrent,
+    required this.generatedAt,
+    required this.generatedByDisplayName,
+    required List<YorksV1DeliveryOrderLine> lines,
+  }) : lines = List.unmodifiable(lines);
+
+  final String id;
+  final int revisionNumber;
+  final bool isCurrent;
+  final DateTime generatedAt;
+  final String generatedByDisplayName;
+  final List<YorksV1DeliveryOrderLine> lines;
+
+  factory YorksV1DeliveryOrderRevision.fromRpcJson(Map<String, dynamic> json) {
+    final rawLines = json['lines'];
+    if (rawLines is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1DeliveryOrderRevision(
+      id: _requiredString(json, 'id'),
+      revisionNumber: _positiveInt(json['revision_number']),
+      isCurrent: json['is_current'] == true,
+      generatedAt: _requiredDate(json, 'generated_at'),
+      generatedByDisplayName: _requiredString(
+        json,
+        'generated_by_display_name',
+      ),
+      lines: [
+        for (final line in rawLines)
+          if (line is Map)
+            YorksV1DeliveryOrderLine.fromRpcJson(
+              Map<String, dynamic>.from(line),
+            ),
+      ],
+    );
+  }
+}
+
+class YorksV1DeliveryOrder {
+  YorksV1DeliveryOrder({
+    required this.id,
+    required this.dispatchId,
+    required this.reference,
+    required this.recordVersion,
+    required List<YorksV1DeliveryOrderRevision> revisions,
+    this.currentRevisionId,
+  }) : revisions = List.unmodifiable(revisions);
+
+  final String id;
+  final String dispatchId;
+  final String reference;
+  final int recordVersion;
+  final String? currentRevisionId;
+  final List<YorksV1DeliveryOrderRevision> revisions;
+
+  YorksV1DeliveryOrderRevision? get currentRevision {
+    for (final revision in revisions) {
+      if (revision.isCurrent || revision.id == currentRevisionId) {
+        return revision;
+      }
+    }
+    return revisions.isEmpty ? null : revisions.first;
+  }
+
+  factory YorksV1DeliveryOrder.fromRpcJson(Map<String, dynamic> json) {
+    final rawRevisions = json['revisions'];
+    if (rawRevisions is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1DeliveryOrder(
+      id: _requiredString(json, 'id'),
+      dispatchId: _requiredString(json, 'dispatch_id'),
+      reference: _requiredString(json, 'delivery_order_reference'),
+      recordVersion: _positiveInt(json['record_version']),
+      currentRevisionId: _trimToNull(json['current_revision_id']),
+      revisions: [
+        for (final revision in rawRevisions)
+          if (revision is Map)
+            YorksV1DeliveryOrderRevision.fromRpcJson(
+              Map<String, dynamic>.from(revision),
+            ),
+      ],
+    );
+  }
+}
+
+class YorksV1DeliveryOrderDispatch {
+  const YorksV1DeliveryOrderDispatch({
+    required this.dispatchId,
+    required this.dispatchNumber,
+    required this.dispatchDate,
+    required this.dispatchRecordVersion,
+    required this.canGenerate,
+    this.receiptReviewedAt,
+    this.deliveryOrder,
+  });
+
+  final String dispatchId;
+  final String dispatchNumber;
+  final DateTime dispatchDate;
+  final int dispatchRecordVersion;
+  final bool canGenerate;
+  final DateTime? receiptReviewedAt;
+  final YorksV1DeliveryOrder? deliveryOrder;
+
+  factory YorksV1DeliveryOrderDispatch.fromRpcJson(Map<String, dynamic> json) {
+    final rawOrder = json['delivery_order'];
+    return YorksV1DeliveryOrderDispatch(
+      dispatchId: _requiredString(json, 'dispatch_id'),
+      dispatchNumber: _requiredString(json, 'dispatch_number'),
+      dispatchDate: _requiredDate(json, 'dispatch_date'),
+      dispatchRecordVersion: _positiveInt(json['dispatch_record_version']),
+      canGenerate: json['can_generate'] == true,
+      receiptReviewedAt: _nullableDate(json['receipt_reviewed_at']),
+      deliveryOrder: rawOrder is Map
+          ? YorksV1DeliveryOrder.fromRpcJson(
+              Map<String, dynamic>.from(rawOrder),
+            )
+          : null,
+    );
+  }
+}
+
+class YorksV1ReturnCandidate {
+  const YorksV1ReturnCandidate({
+    required this.receiptReviewLineId,
+    required this.dispatchNumber,
+    required this.displayOrder,
+    required this.description,
+    required this.unit,
+    required this.source,
+    required this.goodReceivedQuantity,
+    required this.confirmedReturnQuantity,
+    required this.eligibleReturnQuantity,
+    this.brandOrigin,
+    this.sourceInventoryItemId,
+  });
+
+  final String receiptReviewLineId;
+  final String dispatchNumber;
+  final int displayOrder;
+  final String description;
+  final String? brandOrigin;
+  final String unit;
+  final YorksV1LogisticsSource source;
+  final String goodReceivedQuantity;
+  final String confirmedReturnQuantity;
+  final String eligibleReturnQuantity;
+  final String? sourceInventoryItemId;
+
+  factory YorksV1ReturnCandidate.fromRpcJson(Map<String, dynamic> json) {
+    return YorksV1ReturnCandidate(
+      receiptReviewLineId: _requiredString(json, 'receipt_review_line_id'),
+      dispatchNumber: _requiredString(json, 'dispatch_number'),
+      displayOrder: _positiveInt(json['display_order']),
+      description: _requiredString(json, 'item_description'),
+      brandOrigin: _trimToNull(json['brand_origin']),
+      unit: _requiredString(json, 'unit'),
+      source: YorksV1LogisticsSource.fromWireValue(json['source_kind']),
+      goodReceivedQuantity: _string(json['good_received_qty']),
+      confirmedReturnQuantity: _string(json['confirmed_return_qty']),
+      eligibleReturnQuantity: _string(json['eligible_return_qty']),
+      sourceInventoryItemId: _trimToNull(json['source_inventory_item_id']),
+    );
+  }
+}
+
+class YorksV1ReturnInventoryItem {
+  const YorksV1ReturnInventoryItem({
+    required this.id,
+    required this.description,
+    required this.unit,
+    this.brandOrigin,
+  });
+
+  final String id;
+  final String description;
+  final String? brandOrigin;
+  final String unit;
+
+  factory YorksV1ReturnInventoryItem.fromRpcJson(Map<String, dynamic> json) {
+    return YorksV1ReturnInventoryItem(
+      id: _requiredString(json, 'id'),
+      description: _requiredString(json, 'item_description'),
+      brandOrigin: _trimToNull(json['brand_origin']),
+      unit: _requiredString(json, 'unit'),
+    );
+  }
+}
+
+class YorksV1MaterialReturnLine {
+  const YorksV1MaterialReturnLine({
+    required this.id,
+    required this.receiptReviewLineId,
+    required this.dispatchNumber,
+    required this.displayOrder,
+    required this.description,
+    required this.unit,
+    required this.source,
+    required this.goodQuantitySnapshot,
+    required this.returnQuantity,
+    this.brandOrigin,
+    this.eligibleQuantityAtSubmit,
+    this.targetInventoryItemId,
+  });
+
+  final String id;
+  final String receiptReviewLineId;
+  final String dispatchNumber;
+  final int displayOrder;
+  final String description;
+  final String? brandOrigin;
+  final String unit;
+  final YorksV1LogisticsSource source;
+  final String goodQuantitySnapshot;
+  final String? eligibleQuantityAtSubmit;
+  final String returnQuantity;
+  final String? targetInventoryItemId;
+
+  factory YorksV1MaterialReturnLine.fromRpcJson(Map<String, dynamic> json) {
+    return YorksV1MaterialReturnLine(
+      id: _requiredString(json, 'id'),
+      receiptReviewLineId: _requiredString(json, 'receipt_review_line_id'),
+      dispatchNumber: _requiredString(json, 'dispatch_number'),
+      displayOrder: _positiveInt(json['display_order']),
+      description: _requiredString(json, 'item_description'),
+      brandOrigin: _trimToNull(json['brand_origin']),
+      unit: _requiredString(json, 'unit'),
+      source: YorksV1LogisticsSource.fromWireValue(json['source_kind']),
+      goodQuantitySnapshot: _string(json['good_quantity_snapshot']),
+      eligibleQuantityAtSubmit: _trimToNull(
+        json['eligible_quantity_at_submit'],
+      ),
+      returnQuantity: _string(json['return_quantity']),
+      targetInventoryItemId: _trimToNull(json['target_inventory_item_id']),
+    );
+  }
+}
+
+class YorksV1MaterialReturn {
+  YorksV1MaterialReturn({
+    required this.id,
+    required this.state,
+    required this.recordVersion,
+    required this.draftedAt,
+    required this.draftedByDisplayName,
+    required this.canEditDraft,
+    required this.canSubmit,
+    required this.canConfirm,
+    required this.canReject,
+    required List<YorksV1MaterialReturnLine> lines,
+    this.number,
+    this.note,
+    this.submittedAt,
+    this.submittedByDisplayName,
+    this.decidedAt,
+    this.decidedByDisplayName,
+    this.rejectionReason,
+  }) : lines = List.unmodifiable(lines);
+
+  final String id;
+  final String? number;
+  final YorksV1MaterialReturnState state;
+  final String? note;
+  final int recordVersion;
+  final DateTime draftedAt;
+  final String draftedByDisplayName;
+  final DateTime? submittedAt;
+  final String? submittedByDisplayName;
+  final DateTime? decidedAt;
+  final String? decidedByDisplayName;
+  final String? rejectionReason;
+  final bool canEditDraft;
+  final bool canSubmit;
+  final bool canConfirm;
+  final bool canReject;
+  final List<YorksV1MaterialReturnLine> lines;
+
+  factory YorksV1MaterialReturn.fromRpcJson(Map<String, dynamic> json) {
+    final rawLines = json['lines'];
+    final state = YorksV1MaterialReturnState.fromWireValue(json['state']);
+    if (rawLines is! List || state == null) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialReturn(
+      id: _requiredString(json, 'id'),
+      number: _trimToNull(json['return_number']),
+      state: state,
+      note: _trimToNull(json['note']),
+      recordVersion: _positiveInt(json['record_version']),
+      draftedAt: _requiredDate(json, 'drafted_at'),
+      draftedByDisplayName: _requiredString(json, 'drafted_by_display_name'),
+      submittedAt: _nullableDate(json['submitted_at']),
+      submittedByDisplayName: _trimToNull(json['submitted_by_display_name']),
+      decidedAt: _nullableDate(json['decided_at']),
+      decidedByDisplayName: _trimToNull(json['decided_by_display_name']),
+      rejectionReason: _trimToNull(json['rejection_reason']),
+      canEditDraft: json['can_edit_draft'] == true,
+      canSubmit: json['can_submit'] == true,
+      canConfirm: json['can_confirm'] == true,
+      canReject: json['can_reject'] == true,
+      lines: [
+        for (final line in rawLines)
+          if (line is Map)
+            YorksV1MaterialReturnLine.fromRpcJson(
+              Map<String, dynamic>.from(line),
+            ),
+      ],
+    );
+  }
+}
+
+class YorksV1ReturnsDocumentsWorkspace {
+  YorksV1ReturnsDocumentsWorkspace({
+    required this.requestId,
+    required this.projectId,
+    required this.requestState,
+    required this.requestRecordVersion,
+    required this.projectName,
+    required this.scopeName,
+    required this.canGenerateDeliveryOrder,
+    required this.canSubmitMaterialReturn,
+    required this.canConfirmMaterialReturn,
+    required List<YorksV1DeliveryOrderDispatch> deliveryOrderDispatches,
+    required List<YorksV1ReturnCandidate> returnCandidates,
+    required List<YorksV1MaterialReturn> materialReturns,
+    required List<YorksV1ReturnInventoryItem> returnInventoryItems,
+    this.requestNumber,
+  }) : deliveryOrderDispatches = List.unmodifiable(deliveryOrderDispatches),
+       returnCandidates = List.unmodifiable(returnCandidates),
+       materialReturns = List.unmodifiable(materialReturns),
+       returnInventoryItems = List.unmodifiable(returnInventoryItems);
+
+  final String requestId;
+  final String projectId;
+  final String? requestNumber;
+  final String requestState;
+  final int requestRecordVersion;
+  final String projectName;
+  final String scopeName;
+  final bool canGenerateDeliveryOrder;
+  final bool canSubmitMaterialReturn;
+  final bool canConfirmMaterialReturn;
+  final List<YorksV1DeliveryOrderDispatch> deliveryOrderDispatches;
+  final List<YorksV1ReturnCandidate> returnCandidates;
+  final List<YorksV1MaterialReturn> materialReturns;
+  final List<YorksV1ReturnInventoryItem> returnInventoryItems;
+
+  factory YorksV1ReturnsDocumentsWorkspace.fromRpcJson(
+    Map<String, dynamic> json,
+  ) {
+    final rawOrders = json['delivery_orders'];
+    final rawCandidates = json['return_candidates'];
+    final rawReturns = json['returns'];
+    final rawInventoryItems = json['return_inventory_items'];
+    if (rawOrders is! List ||
+        rawCandidates is! List ||
+        rawReturns is! List ||
+        rawInventoryItems is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1ReturnsDocumentsWorkspace(
+      requestId: _requiredString(json, 'request_id'),
+      projectId: _requiredString(json, 'project_id'),
+      requestNumber: _trimToNull(json['request_number']),
+      requestState: _requiredString(json, 'request_state'),
+      requestRecordVersion: _positiveInt(json['request_record_version']),
+      projectName: _requiredString(json, 'project_name'),
+      scopeName: _requiredString(json, 'scope_name'),
+      canGenerateDeliveryOrder: json['can_generate_delivery_order'] == true,
+      canSubmitMaterialReturn: json['can_submit_material_return'] == true,
+      canConfirmMaterialReturn: json['can_confirm_material_return'] == true,
+      deliveryOrderDispatches: [
+        for (final dispatch in rawOrders)
+          if (dispatch is Map)
+            YorksV1DeliveryOrderDispatch.fromRpcJson(
+              Map<String, dynamic>.from(dispatch),
+            ),
+      ],
+      returnCandidates: [
+        for (final candidate in rawCandidates)
+          if (candidate is Map)
+            YorksV1ReturnCandidate.fromRpcJson(
+              Map<String, dynamic>.from(candidate),
+            ),
+      ],
+      materialReturns: [
+        for (final materialReturn in rawReturns)
+          if (materialReturn is Map)
+            YorksV1MaterialReturn.fromRpcJson(
+              Map<String, dynamic>.from(materialReturn),
+            ),
+      ],
+      returnInventoryItems: [
+        for (final item in rawInventoryItems)
+          if (item is Map)
+            YorksV1ReturnInventoryItem.fromRpcJson(
+              Map<String, dynamic>.from(item),
+            ),
+      ],
+    );
+  }
+}
+
 class YorksV1InventoryAdjustmentInput {
   const YorksV1InventoryAdjustmentInput({
     required this.quantityDelta,
@@ -586,12 +1044,177 @@ class YorksV1ReceiptConfirmationInput {
   };
 }
 
+class YorksV1DeliveryOrderGenerationInput {
+  const YorksV1DeliveryOrderGenerationInput({
+    required this.requestId,
+    required this.dispatchId,
+    required this.expectedRequestVersion,
+    required this.expectedDispatchVersion,
+    required this.deliveryOrderReference,
+    required this.idempotencyKey,
+  });
+
+  final String requestId;
+  final String dispatchId;
+  final int expectedRequestVersion;
+  final int expectedDispatchVersion;
+  final String deliveryOrderReference;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'request_id': requestId,
+    'dispatch_id': dispatchId,
+    'expected_request_version': expectedRequestVersion,
+    'expected_dispatch_version': expectedDispatchVersion,
+    'delivery_order_reference': _normalizeDeliveryOrderReference(
+      deliveryOrderReference,
+    ),
+  };
+}
+
+class YorksV1MaterialReturnDraftLineInput {
+  const YorksV1MaterialReturnDraftLineInput({
+    required this.receiptReviewLineId,
+    required this.returnQuantity,
+  });
+
+  final String receiptReviewLineId;
+  final String returnQuantity;
+
+  Map<String, Object?> toRpcJson() => {
+    'receipt_review_line_id': receiptReviewLineId,
+    'return_qty': returnQuantity.trim(),
+  };
+}
+
+class YorksV1MaterialReturnDraftInput {
+  YorksV1MaterialReturnDraftInput({
+    required this.requestId,
+    required this.expectedVersion,
+    required List<YorksV1MaterialReturnDraftLineInput> lines,
+    required this.idempotencyKey,
+    this.returnId,
+    this.note,
+  }) : lines = List.unmodifiable(lines);
+
+  final String? returnId;
+  final String requestId;
+  final int expectedVersion;
+  final String? note;
+  final List<YorksV1MaterialReturnDraftLineInput> lines;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'return_id': _trimToNull(returnId),
+    'request_id': requestId,
+    'expected_version': expectedVersion,
+    'note': _trimToNull(note),
+    'lines': [for (final line in lines) line.toRpcJson()],
+  };
+}
+
+class YorksV1MaterialReturnSubmissionInput {
+  const YorksV1MaterialReturnSubmissionInput({
+    required this.returnId,
+    required this.expectedVersion,
+    required this.idempotencyKey,
+  });
+
+  final String returnId;
+  final int expectedVersion;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'return_id': returnId,
+    'expected_version': expectedVersion,
+  };
+}
+
+class YorksV1NewReturnInventoryItemInput {
+  const YorksV1NewReturnInventoryItemInput({
+    required this.description,
+    required this.unit,
+    this.brandOrigin,
+  });
+
+  final String description;
+  final String? brandOrigin;
+  final String unit;
+
+  Map<String, Object?> toRpcJson() => {
+    'item_description': description.trim(),
+    'brand_origin': _trimToNull(brandOrigin),
+    'unit': unit.trim(),
+  };
+}
+
+class YorksV1MaterialReturnLineMappingInput {
+  const YorksV1MaterialReturnLineMappingInput({
+    required this.returnLineId,
+    this.inventoryItemId,
+    this.newInventoryItem,
+  });
+
+  final String returnLineId;
+  final String? inventoryItemId;
+  final YorksV1NewReturnInventoryItemInput? newInventoryItem;
+
+  Map<String, Object?> toRpcJson() => {
+    'return_line_id': returnLineId,
+    'inventory_item_id': _trimToNull(inventoryItemId),
+    'new_inventory_item': newInventoryItem?.toRpcJson(),
+  };
+}
+
+class YorksV1MaterialReturnConfirmationInput {
+  YorksV1MaterialReturnConfirmationInput({
+    required this.returnId,
+    required this.expectedVersion,
+    required List<YorksV1MaterialReturnLineMappingInput> lineMappings,
+    required this.idempotencyKey,
+  }) : lineMappings = List.unmodifiable(lineMappings);
+
+  final String returnId;
+  final int expectedVersion;
+  final List<YorksV1MaterialReturnLineMappingInput> lineMappings;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'return_id': returnId,
+    'expected_version': expectedVersion,
+    'line_mappings': [for (final mapping in lineMappings) mapping.toRpcJson()],
+  };
+}
+
+class YorksV1MaterialReturnRejectionInput {
+  const YorksV1MaterialReturnRejectionInput({
+    required this.returnId,
+    required this.expectedVersion,
+    required this.reason,
+    required this.idempotencyKey,
+  });
+
+  final String returnId;
+  final int expectedVersion;
+  final String reason;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'return_id': returnId,
+    'expected_version': expectedVersion,
+    'reason': reason.trim(),
+  };
+}
+
 String _dateOnly(DateTime date) {
   final local = date.toLocal();
   return '${local.year.toString().padLeft(4, '0')}-'
       '${local.month.toString().padLeft(2, '0')}-'
       '${local.day.toString().padLeft(2, '0')}';
 }
+
+String _normalizeDeliveryOrderReference(String value) =>
+    value.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
 
 String _string(Object? value) => switch (value) {
   String text => text,

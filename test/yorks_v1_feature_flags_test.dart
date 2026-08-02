@@ -18,6 +18,7 @@ void main() {
       expect(flags.arrangement, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
+      expect(flags.documents, false);
     });
 
     test('downstream settings fail closed when foundation is disabled', () {
@@ -29,6 +30,7 @@ void main() {
         arrangement: true,
         logistics: true,
         returnsDocuments: true,
+        documents: true,
       );
 
       expect(flags.foundation, false);
@@ -39,6 +41,7 @@ void main() {
       expect(flags.arrangement, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
+      expect(flags.documents, false);
     });
 
     test('a missing intermediate dependency closes every later feature', () {
@@ -50,6 +53,7 @@ void main() {
         arrangement: true,
         logistics: true,
         returnsDocuments: true,
+        documents: true,
       );
 
       expect(flags.foundation, true);
@@ -60,6 +64,7 @@ void main() {
       expect(flags.arrangement, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
+      expect(flags.documents, false);
     });
 
     test('the complete approved dependency chain can be enabled', () {
@@ -72,6 +77,7 @@ void main() {
         arrangement: true,
         logistics: true,
         returnsDocuments: true,
+        documents: true,
       );
 
       expect(flags.foundation, true);
@@ -82,6 +88,7 @@ void main() {
       expect(flags.arrangement, true);
       expect(flags.logistics, true);
       expect(flags.returnsDocuments, true);
+      expect(flags.documents, true);
     });
 
     test('legacy Nexus overrides cannot enable Yorks V1', () {
@@ -110,6 +117,7 @@ void main() {
       expect(flags.arrangement, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
+      expect(flags.documents, false);
     });
   });
 }
