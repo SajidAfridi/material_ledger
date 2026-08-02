@@ -20,16 +20,52 @@ class YorksV1MaterialRequestDocumentService {
 
   final YorksV1BoqWorkbookCodec workbookCodec;
 
-  Uint8List buildExcel(YorksV1MaterialRequest request) {
-    final commercial = request.lines.any((line) => line.unitCost != null);
+  Uint8List buildExcel(YorksV1MaterialRequest request) => _buildExcel(
+    id: request.id,
+    projectId: request.projectId,
+    title: request.requestNumber ?? request.projectReference,
+    worksheetTitle: request.requestNumber ?? request.projectReference,
+    version: request.recordVersion,
+    updatedAt: request.updatedAt,
+    lines: request.lines,
+    includeCommercial: request.lines.any((line) => line.unitCost != null),
+  );
+
+  /// Exports the same controlled operational table while a request is still
+  /// private and editable. Technical planning fields are retained as
+  /// non-commercial supplemental columns; commercial values are never added to
+  /// a draft export.
+  Uint8List buildDraftExcel(YorksV1MaterialRequestDraft draft) => _buildExcel(
+    id: draft.id,
+    projectId: draft.projectId ?? 'draft',
+    title: 'material_request_draft',
+    worksheetTitle: 'Material Request Draft',
+    version: draft.serverRecordVersion,
+    updatedAt: draft.updatedAt,
+    lines: draft.lines,
+    includeCommercial: false,
+  );
+
+  Uint8List _buildExcel({
+    required String id,
+    required String projectId,
+    required String title,
+    required String worksheetTitle,
+    required int version,
+    required DateTime updatedAt,
+    required List<YorksV1MaterialRequestLine> lines,
+    required bool includeCommercial,
+  }) {
     final headings = <String>[
       YorksV1MaterialRequestStrings.rowNumber.primary,
       YorksV1MaterialRequestStrings.itemDescription.primary,
+      YorksV1MaterialRequestStrings.size.primary,
+      YorksV1MaterialRequestStrings.planningModelTag.primary,
       YorksV1MaterialRequestStrings.brandOrigin.primary,
       YorksV1MaterialRequestStrings.quantity.primary,
       YorksV1MaterialRequestStrings.unit.primary,
-      if (commercial) YorksV1MaterialRequestStrings.unitCost.primary,
-      if (commercial) YorksV1MaterialRequestStrings.totalCost.primary,
+      if (includeCommercial) YorksV1MaterialRequestStrings.unitCost.primary,
+      if (includeCommercial) YorksV1MaterialRequestStrings.totalCost.primary,
     ];
     final columns = [
       for (var index = 0; index < headings.length; index++)
@@ -41,32 +77,34 @@ class YorksV1MaterialRequestDocumentService {
     ];
     final worksheet = YorksV1BoqWorksheet(
       group: YorksV1BoqGroup(
-        id: request.id,
-        projectId: request.projectId,
-        name: request.requestNumber ?? request.id,
-        worksheetTitle: request.requestNumber ?? request.projectReference,
+        id: id,
+        projectId: projectId,
+        name: title,
+        worksheetTitle: worksheetTitle,
         displayOrder: 1,
         isCustom: false,
         isArchived: false,
-        version: request.recordVersion,
-        rowCount: request.lines.length,
+        version: version,
+        rowCount: lines.length,
         columnCount: columns.length,
-        updatedAt: request.updatedAt,
+        updatedAt: updatedAt,
       ),
       columns: columns,
       rows: [
-        for (final line in request.lines)
+        for (final line in lines)
           YorksV1BoqRow(
             id: line.id,
             displayOrder: line.displayOrder,
             values: {
               'mr_column_0': line.displayOrder.toString(),
               'mr_column_1': line.description,
-              'mr_column_2': line.brandOrigin ?? '',
-              'mr_column_3': line.quantity,
-              'mr_column_4': line.unit,
-              if (commercial) 'mr_column_5': line.unitCost ?? '',
-              if (commercial) 'mr_column_6': line.totalCost ?? '',
+              'mr_column_2': line.size ?? '',
+              'mr_column_3': line.planningModelTag ?? '',
+              'mr_column_4': line.brandOrigin ?? '',
+              'mr_column_5': line.quantity,
+              'mr_column_6': line.unit,
+              if (includeCommercial) 'mr_column_7': line.unitCost ?? '',
+              if (includeCommercial) 'mr_column_8': line.totalCost ?? '',
             },
             canonicalValues: const {},
           ),
@@ -77,6 +115,9 @@ class YorksV1MaterialRequestDocumentService {
 
   String suggestedExcelName(YorksV1MaterialRequest request) =>
       '${_safeName(request.requestNumber ?? request.projectReference)}.xlsx';
+
+  String suggestedDraftExcelName(YorksV1MaterialRequestDraft draft) =>
+      'material_request_draft_${_safeName(draft.id)}.xlsx';
 
   Future<void> printPdf(YorksV1MaterialRequest request) =>
       Printing.layoutPdf(onLayout: (format) => buildPdf(request, format));
@@ -168,6 +209,8 @@ class YorksV1MaterialRequestDocumentService {
             headers: [
               YorksV1MaterialRequestStrings.rowNumber.primary,
               YorksV1MaterialRequestStrings.itemDescription.primary,
+              YorksV1MaterialRequestStrings.size.primary,
+              YorksV1MaterialRequestStrings.planningModelTag.primary,
               YorksV1MaterialRequestStrings.brandOrigin.primary,
               YorksV1MaterialRequestStrings.quantity.primary,
               YorksV1MaterialRequestStrings.unit.primary,
@@ -179,6 +222,8 @@ class YorksV1MaterialRequestDocumentService {
                 [
                   line.displayOrder.toString(),
                   line.description,
+                  line.size ?? '',
+                  line.planningModelTag ?? '',
                   line.brandOrigin ?? '',
                   line.quantity,
                   line.unit,

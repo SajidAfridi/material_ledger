@@ -44,9 +44,9 @@ class OnboardingNotifier extends StateNotifier<bool> {
   }
 }
 
-// ─── Secondary Language ──────────────────────────────────────────
+// ─── Display language ────────────────────────────────────────────
 
-/// The currently selected secondary language (Arabic by default).
+/// The currently selected display language (English by default).
 final languageProvider = StateNotifierProvider<LanguageNotifier, AppLanguage>((
   ref,
 ) {
@@ -58,7 +58,7 @@ class LanguageNotifier extends StateNotifier<AppLanguage> {
   LanguageNotifier(this._prefs)
     : super(
         AppLanguage.fromCode(
-          _prefs.getString(_kLanguageKey) ?? AppLanguage.arabic.code,
+          _prefs.getString(_kLanguageKey) ?? AppLanguage.english.code,
         ),
       );
 
@@ -101,12 +101,12 @@ class CurrencyNotifier extends StateNotifier<AppCurrency> {
 /// The signed-in user's id, or `null` when logged out. Set only after
 /// credentials are verified (see `authControllerProvider` in session_provider).
 /// This is the seam that becomes the Firebase Auth uid.
-final authSessionProvider = StateNotifierProvider<AuthSessionNotifier, String?>((
-  ref,
-) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return AuthSessionNotifier(prefs);
-});
+final authSessionProvider = StateNotifierProvider<AuthSessionNotifier, String?>(
+  (ref) {
+    final prefs = ref.watch(sharedPreferencesProvider);
+    return AuthSessionNotifier(prefs);
+  },
+);
 
 /// Convenience boolean for redirect logic / widgets.
 final isLoggedInProvider = Provider<bool>(
@@ -114,7 +114,8 @@ final isLoggedInProvider = Provider<bool>(
 );
 
 class AuthSessionNotifier extends StateNotifier<String?> {
-  AuthSessionNotifier(this._prefs) : super(_prefs.getString(kAuthUserIdPrefKey));
+  AuthSessionNotifier(this._prefs)
+    : super(_prefs.getString(kAuthUserIdPrefKey));
 
   final SharedPreferences _prefs;
 

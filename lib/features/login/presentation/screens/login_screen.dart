@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
@@ -9,12 +8,15 @@ import '../../../../core/security/session_lock.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 
-/// Common login screen for Engineer, Office Management, and Admin roles.
-/// Responsive: mobile shows a single-column layout;
-/// iPad / desktop shows a branded side panel + sign-in card.
+/// Secure Yorks authentication in the approved R35 access composition.
+///
+/// The visual model follows the HTML prototype exactly; credentials still go
+/// through [AuthController], so no prototype localStorage authorization or
+/// session behavior leaks into the production path.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -42,28 +44,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  // ─── Validators ─────────────────────────────────────────────────
   String? _validateEmail(String? value) {
     final text = value?.trim() ?? '';
-    if (text.isEmpty) return 'Email is required';
+    if (text.isEmpty) return YorksV1ShellStrings.emailRequired.primary;
     if (!text.contains('@') || !text.contains('.')) {
-      return 'Enter a valid email';
+      return YorksV1ShellStrings.emailInvalid.primary;
     }
     return null;
   }
 
-  String? _validatePassword(String? value) {
-    if ((value ?? '').isEmpty) return 'Password is required';
-    return null;
-  }
+  String? _validatePassword(String? value) => (value ?? '').isEmpty
+      ? YorksV1ShellStrings.passwordRequired.primary
+      : null;
 
-  // ─── Login Handler ──────────────────────────────────────────────
   Future<void> _handleLogin() async {
-    if (_isLoading) return;
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-
+    if (_isLoading || !(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isLoading = true);
-
     final result = await ref
         .read(authControllerProvider)
         .signIn(
@@ -76,22 +72,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     switch (result) {
       case SignInResult.ok:
       case SignInResult.mustChangePassword:
-        // The user just authenticated with credentials — clear any cold-start
-        // lock so they aren't immediately biometric-prompted on top of login.
         ref.read(sessionLockedProvider.notifier).unlock();
-        // Router redirects to the correct side based on the signed-in role
-        // (and to change-password when required).
         context.go(RoutePaths.engineerHome);
       case SignInResult.invalidCredentials:
-        _showLoginError('Invalid email or password.');
+        _showLoginError(YorksV1ShellStrings.invalidCredentials.primary);
       case SignInResult.deactivated:
-        _showLoginError(
-          'This account has been deactivated. Contact your administrator.',
-        );
+        _showLoginError(YorksV1ShellStrings.accountDeactivated.primary);
       case SignInResult.networkError:
-        _showLoginError(
-          "Can't reach the server. Check your connection and try again.",
-        );
+        _showLoginError(YorksV1ShellStrings.serverUnreachable.primary);
     }
   }
 
@@ -108,647 +96,543 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
+  void _toggleObscurePassword() {
+    setState(() => _obscurePassword = !_obscurePassword);
+  }
+
+  void _setRememberMe(bool value) {
+    setState(() => _rememberMe = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isWide = screenWidth >= 768;
-
+    final desktop = MediaQuery.sizeOf(context).width > 900;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      body: isWide ? _buildWideLayout(language) : _buildMobileLayout(language),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MOBILE LAYOUT — Original single-column design
-  // ═══════════════════════════════════════════════════════════════
-  Widget _buildMobileLayout(AppLanguage language) {
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: AutofillGroup(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: AppSpacing.huge),
-                  _buildMobileBrandHeader(),
-                  const SizedBox(height: AppSpacing.massive),
-                  BilingualText(
-                    english: AppStrings.login.primary,
-                    secondary: AppStrings.login.secondary(language),
-                    englishStyle: AppTypography.displaySmall,
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-                  _buildMobileForm(language),
-                  const SizedBox(height: AppSpacing.xxxl),
-                  _buildMobileHeroBanner(),
-                  const SizedBox(height: AppSpacing.colossal),
-                  _buildMobileFooter(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileBrandHeader() {
-    return Center(
-      child: Column(
-        children: [
-          const BrandLogo(size: 96),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Yorks Air Conditioning & Refrigeration',
-            textAlign: TextAlign.center,
-            style: AppTypography.headlineSmall.copyWith(
-              fontWeight: FontWeight.w800,
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'SINCE 1984',
-            style: AppTypography.labelMedium.copyWith(
-              letterSpacing: 3.0,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileHeroBanner() {
-    return Container(
-      width: double.infinity,
-      height: 160,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0x55DDE3ED), Color(0x99F1F4F8)],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.precision_manufacturing_rounded,
-          size: 64,
-          color: AppColors.primary.withValues(alpha: 0.35),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileFooter() {
-    return Center(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.verified_user_rounded,
-            size: 14,
-            color: AppColors.onSurfaceVariant.withValues(alpha: 0.6),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            AppStrings.secureIndustrialEnvironment.primary,
-            style: AppTypography.labelMedium.copyWith(
-              letterSpacing: 1.8,
-              color: AppColors.onSurfaceVariant.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  WIDE LAYOUT — Branded left panel + Sign-in card on right
-  // ═══════════════════════════════════════════════════════════════
-  Widget _buildWideLayout(AppLanguage language) {
-    return Row(
-      children: [
-        // ─── Left: Branded Panel ──────────────────────────────
-        Expanded(child: _buildBrandedPanel()),
-
-        // ─── Right: Sign-In Area ──────────────────────────────
-        Expanded(child: _buildSignInPanel(language)),
-      ],
-    );
-  }
-
-  // ─── Left Branded Panel ────────────────────────────────────────
-  Widget _buildBrandedPanel() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A56DB), Color(0xFF003FB1), Color(0xFF002D7A)],
-          stops: [0.0, 0.55, 1.0],
-        ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Warehouse image overlay (Currently disabled: missing asset)
-          /*
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/warehouse_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
-          ),
-          */
-          // Dark overlay for text legibility
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFF003FB1).withValues(alpha: 0.85),
-                    const Color(0xFF002D7A).withValues(alpha: 0.95),
-                  ],
+      body: desktop
+          ? Row(
+              children: [
+                const Expanded(flex: 9, child: _AuthBrandPanel()),
+                Expanded(
+                  flex: 11,
+                  child: _AuthFormPanel(owner: this, language: language),
                 ),
-              ),
-            ),
-          ),
-          // Content
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.huge,
-                vertical: AppSpacing.xxxl,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Logo + brand
-                  Row(
-                    children: [
-                      const BrandLogo(size: 44),
-                      const SizedBox(width: AppSpacing.lg),
-                      Flexible(
-                        child: Text(
-                          'Yorks Air Conditioning & Refrigeration',
-                          style: GoogleFonts.inter(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            height: 1.15,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const Spacer(flex: 3),
-
-                  // Headline
-                  Text(
-                    'The Architectural\nLedger.',
-                    style: GoogleFonts.inter(
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1.15,
-                      letterSpacing: -0.96,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-
-                  // Description
-                  Text(
-                    'Precision-engineered inventory management\nfor the modern construction site.',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white.withValues(alpha: 0.75),
-                      height: 1.6,
-                    ),
-                  ),
-
-                  const Spacer(flex: 4),
-
-                  // Stats row
-                  Row(
-                    children: [
-                      _buildStat('12k+', 'ACTIVE PROJECTS'),
-                      const SizedBox(width: AppSpacing.huge),
-                      _buildStat('99.9%', 'UPTIME PRECISION'),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xxl),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+              ],
+            )
+          : _AuthMobileLayout(owner: this, language: language),
     );
   }
+}
 
-  Widget _buildStat(String value, String label) {
-    return Row(
+class _AuthBrandPanel extends StatelessWidget {
+  const _AuthBrandPanel({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF081D36), AppColors.navy, AppColors.navyHover],
+        stops: [0, 0.65, 1],
+      ),
+    ),
+    child: Stack(
+      fit: StackFit.expand,
       children: [
-        Container(
-          width: 3,
-          height: 28,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(2),
+        const IgnorePointer(
+          child: CustomPaint(painter: _AuthPerspectiveGridPainter()),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? AppSpacing.xl : AppSpacing.massive,
+              compact ? AppSpacing.lg : AppSpacing.huge,
+              compact ? AppSpacing.xl : AppSpacing.massive,
+              compact ? AppSpacing.xl : AppSpacing.massive,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _AuthBrandMark(),
+                if (compact) ...[
+                  const Spacer(),
+                  Text(
+                    YorksV1ShellStrings.operationalWorkspace.primary
+                        .toUpperCase(),
+                    style: AppTypography.eyebrow.copyWith(
+                      color: const Color(0xFF82BCFF),
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ] else ...[
+                  const Spacer(flex: 3),
+                  const _AuthHero(),
+                  const Spacer(flex: 4),
+                  Text(
+                    YorksV1ShellStrings.authorisedPersonnelOnly.primary,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: Colors.white.withValues(alpha: 0.52),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
-        Column(
+      ],
+    ),
+  );
+}
+
+class _AuthBrandMark extends StatelessWidget {
+  const _AuthBrandMark();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      const BrandLogo(size: 58, shadow: true),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
+              YorksV1ShellStrings.companyName.primary,
+              style: AppTypography.titleLarge.copyWith(
                 color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: AppSpacing.xxs),
+            const SizedBox(height: 2),
             Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Colors.white.withValues(alpha: 0.6),
-                letterSpacing: 2.0,
+              YorksV1ShellStrings.companyLegalName.primary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: Colors.white.withValues(alpha: 0.66),
               ),
             ),
           ],
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
-  // ─── Right Sign-In Panel ───────────────────────────────────────
-  Widget _buildSignInPanel(AppLanguage language) {
-    return Container(
-      color: AppColors.surface,
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.huge,
-              vertical: AppSpacing.xxxl,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Sign-in card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.xxxl),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-                    ),
-                    child: AutofillGroup(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          BilingualText(
-                            english: AppStrings.signIn.primary,
-                            secondary: AppStrings.signIn.secondary(language),
-                            englishStyle: GoogleFonts.inter(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xxl),
-                          _buildWideForm(language),
-                        ],
-                      ),
-                    ),
-                  ),
+class _AuthHero extends StatelessWidget {
+  const _AuthHero();
 
-                  const SizedBox(height: AppSpacing.xxl),
-
-                  // Contact support
-                  Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.help_outline_rounded,
-                          size: 18,
-                          color: AppColors.onSurfaceVariant.withValues(
-                            alpha: 0.6,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        BilingualText(
-                          english: AppStrings.contactSupport.primary,
-                          secondary: AppStrings.contactSupport.secondary(
-                            language,
-                          ),
-                          englishStyle: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                          ),
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // Version footer
-                  Center(
-                    child: Text(
-                      'YORKS AC. & REF. — CONTROLLED PROJECT WORKSPACE',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.onSurfaceVariant.withValues(
-                          alpha: 0.4,
-                        ),
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.xxxl),
-
-                  // Trust badges
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildTrustBadge(Icons.verified_user_outlined),
-                      const SizedBox(width: AppSpacing.xxl),
-                      _buildTrustBadge(Icons.shield_outlined),
-                      const SizedBox(width: AppSpacing.xxl),
-                      _buildTrustBadge(Icons.security_rounded),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 500),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          YorksV1ShellStrings.operationalWorkspace.primary.toUpperCase(),
+          style: AppTypography.eyebrow.copyWith(
+            color: const Color(0xFF82BCFF),
+            letterSpacing: 1.5,
           ),
         ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          YorksV1ShellStrings.signInHero.primary,
+          style: AppTypography.displayMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            height: 1.05,
+            letterSpacing: -1.25,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          YorksV1ShellStrings.signInHeroDescription.primary,
+          style: AppTypography.bodyLarge.copyWith(
+            color: const Color(0xFFC8D9EC),
+            height: 1.6,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxxl),
+        const Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _AuthCapability(
+              label: YorksV1ShellStrings.projects,
+              icon: Icons.folder_outlined,
+            ),
+            _AuthCapability(
+              label: YorksV1ShellStrings.documentControl,
+              icon: Icons.description_outlined,
+            ),
+            _AuthCapability(
+              label: YorksV1ShellStrings.procurement,
+              icon: Icons.inventory_2_outlined,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _AuthCapability extends StatelessWidget {
+  const _AuthCapability({required this.label, required this.icon});
+
+  final TranslatableString label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: AppSpacing.minTapTarget,
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.09),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.19)),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 17, color: const Color(0xFFC8D9EC)),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          label.primary,
+          style: AppTypography.labelLarge.copyWith(
+            color: const Color(0xFFE5EFFA),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AuthFormPanel extends StatelessWidget {
+  const _AuthFormPanel({required this.owner, required this.language});
+
+  final _LoginScreenState owner;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.surface,
+    child: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.huge),
+          child: _AuthCard(owner: owner, language: language),
+        ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildTrustBadge(IconData icon) {
-    return Icon(
-      icon,
-      size: 24,
-      color: AppColors.onSurfaceVariant.withValues(alpha: 0.25),
-    );
-  }
+class _AuthMobileLayout extends StatelessWidget {
+  const _AuthMobileLayout({required this.owner, required this.language});
 
-  // ─── Wide form (inside card) ───────────────────────────────────
-  Widget _buildWideForm(AppLanguage language) {
-    return Form(
-      key: _formKey,
+  final _LoginScreenState owner;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.surface,
+    child: SingleChildScrollView(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Email
-          _buildBilingualLabel(
-            AppStrings.emailAddress.primary,
-            AppStrings.emailAddress.secondary(language),
-            language,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          TextFormField(
-            controller: _emailController,
-            focusNode: _emailFocusNode,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.email],
-            style: AppTypography.bodyLarge,
-            decoration: InputDecoration(
-              hintText: 'your@company.com',
-              hintStyle: AppTypography.bodyMedium.copyWith(
-                color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-              ),
+          SizedBox(height: 280, child: const _AuthBrandPanel(compact: true)),
+          Transform.translate(
+            offset: const Offset(0, -22),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: _AuthCard(owner: owner, language: language, compact: true),
             ),
-            onFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
-            validator: _validateEmail,
           ),
-          const SizedBox(height: AppSpacing.xl),
-
-          // Password
-          _buildBilingualLabel(
-            AppStrings.password.primary,
-            AppStrings.password.secondary(language),
-            language,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          TextFormField(
-            controller: _passwordController,
-            focusNode: _passwordFocusNode,
-            obscureText: _obscurePassword,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.password],
-            style: AppTypography.bodyLarge,
-            decoration: InputDecoration(
-              hintText: '••••••••',
-              hintStyle: AppTypography.bodyMedium.copyWith(
-                color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-              ),
-              suffixIcon: IconButton(
-                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  size: 20,
-                ),
-              ),
-            ),
-            onFieldSubmitted: (_) => _handleLogin(),
-            validator: _validatePassword,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
-          // Remember me
-          Row(
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: Checkbox(
-                  value: _rememberMe,
-                  onChanged: (v) => setState(() => _rememberMe = v ?? false),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _rememberMe = !_rememberMe),
-                  child: BilingualText(
-                    english: AppStrings.rememberMe.primary,
-                    secondary: AppStrings.rememberMe.secondary(language),
-                    englishStyle: AppTypography.bodyMedium,
-                    gap: 2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-
-          // Login button
-          _buildWideLoginButton(language),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildBilingualLabel(
-    String english,
-    String secondary,
-    AppLanguage language,
-  ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(english, style: AppTypography.titleSmall),
-        Text(
-          secondary,
-          style: AppTypography.bodySmall,
-          textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
-        ),
-      ],
-    );
-  }
+class _AuthCard extends StatelessWidget {
+  const _AuthCard({
+    required this.owner,
+    required this.language,
+    this.compact = false,
+  });
 
-  Widget _buildWideLoginButton(AppLanguage language) {
-    return IgnorePointer(
-      ignoring: _isLoading,
-      child: AnimatedOpacity(
-        opacity: _isLoading ? 0.7 : 1.0,
-        duration: const Duration(milliseconds: 200),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _handleLogin,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            child: Ink(
-              width: double.infinity,
-              height: 56,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-              ),
-              child: _isLoading
-                  ? const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      ),
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          AppStrings.login.primary,
-                          style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          AppStrings.login.secondary(language),
-                          textDirection: language.isRtl
-                              ? TextDirection.rtl
-                              : TextDirection.ltr,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
+  final _LoginScreenState owner;
+  final AppLanguage language;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 455),
+    child: Container(
+      padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxxl),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 36,
+            offset: Offset(0, 16),
           ),
+        ],
+      ),
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              YorksV1ShellStrings.secureAccess.primary.toUpperCase(),
+              style: AppTypography.eyebrow.copyWith(
+                color: AppColors.blue,
+                letterSpacing: 1.25,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              AppStrings.signIn.primary,
+              style: AppTypography.headlineMedium.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1ShellStrings.signInDescription.primary,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.muted,
+                height: 1.55,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            _AuthForm(owner: owner, language: language),
+            const SizedBox(height: AppSpacing.lg),
+            const Divider(color: AppColors.line, height: 1),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.shield_outlined,
+                  size: 17,
+                  color: Color(0xFF456785),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    YorksV1ShellStrings.accountabilityNotice.primary,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ─── Mobile form ───────────────────────────────────────────────
-  Widget _buildMobileForm(AppLanguage language) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          LedgerTextField(
-            controller: _emailController,
-            focusNode: _emailFocusNode,
-            label: AppStrings.emailAddress.primary,
-            urduHint: AppStrings.emailAddress.secondary(language),
-            keyboardType: TextInputType.emailAddress,
-            suffixIcon: const Icon(Icons.email_outlined),
-            validator: _validateEmail,
-            onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+class _AuthForm extends StatelessWidget {
+  const _AuthForm({required this.owner, required this.language});
+
+  final _LoginScreenState owner;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Form(
+    key: owner._formKey,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AuthFieldLabel(label: YorksV1ShellStrings.companyEmail),
+        const SizedBox(height: AppSpacing.sm),
+        TextFormField(
+          controller: owner._emailController,
+          focusNode: owner._emailFocusNode,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.email],
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.ink),
+          decoration: _inputDecoration(
+            hintText: YorksV1ShellStrings.companyEmailHint.primary,
           ),
-          const SizedBox(height: AppSpacing.xl),
-          LedgerTextField(
-            controller: _passwordController,
-            focusNode: _passwordFocusNode,
-            label: AppStrings.password.primary,
-            urduHint: AppStrings.password.secondary(language),
-            obscureText: _obscurePassword,
+          onFieldSubmitted: (_) => owner._passwordFocusNode.requestFocus(),
+          validator: owner._validateEmail,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _AuthFieldLabel(label: AppStrings.password),
+        const SizedBox(height: AppSpacing.sm),
+        TextFormField(
+          controller: owner._passwordController,
+          focusNode: owner._passwordFocusNode,
+          obscureText: owner._obscurePassword,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.password],
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.ink),
+          decoration: _inputDecoration(
+            hintText: YorksV1ShellStrings.passwordHint.primary,
             suffixIcon: IconButton(
-              tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
+              tooltip:
+                  (owner._obscurePassword
+                          ? YorksV1ShellStrings.showPassword
+                          : YorksV1ShellStrings.hidePassword)
+                      .secondary(language),
+              onPressed: owner._toggleObscurePassword,
               icon: Icon(
-                _obscurePassword
+                owner._obscurePassword
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
+                size: 20,
               ),
             ),
-            validator: _validatePassword,
-            onSubmitted: (_) => _handleLogin(),
           ),
-          const SizedBox(height: AppSpacing.xxl),
-          PrimaryButton(
-            label: AppStrings.accessSystem.primary,
-            icon: _isLoading ? null : Icons.arrow_forward_rounded,
-            isTrailingIcon: true,
-            isLoading: _isLoading,
-            onPressed: _isLoading ? null : _handleLogin,
+          onFieldSubmitted: (_) => owner._handleLogin(),
+          validator: owner._validatePassword,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            SizedBox(
+              width: AppSpacing.minTapTarget,
+              height: AppSpacing.minTapTarget,
+              child: Checkbox(
+                value: owner._rememberMe,
+                onChanged: (value) => owner._setRememberMe(value ?? false),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                AppStrings.rememberMe.primary,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
+            Text(
+              YorksV1ShellStrings.protectedSessionStatus.primary,
+              style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        SizedBox(
+          height: 48,
+          child: FilledButton(
+            onPressed: owner._isLoading ? null : owner._handleLogin,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: owner._isLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        AppStrings.signIn.primary,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      const Icon(Icons.arrow_forward_rounded, size: 20),
+                    ],
+                  ),
           ),
-        ],
+        ),
+      ],
+    ),
+  );
+}
+
+InputDecoration _inputDecoration({String? hintText, Widget? suffixIcon}) =>
+    InputDecoration(
+      hintText: hintText,
+      hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.mutedLight),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      suffixIcon: suffixIcon,
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: AppColors.blue, width: 1.5),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: AppColors.error),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
     );
+
+class _AuthFieldLabel extends StatelessWidget {
+  const _AuthFieldLabel({required this.label});
+
+  final TranslatableString label;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    label.primary,
+    style: AppTypography.labelLarge.copyWith(
+      color: AppColors.inkSecondary,
+      fontWeight: FontWeight.w700,
+    ),
+  );
+}
+
+class _AuthPerspectiveGridPainter extends CustomPainter {
+  const _AuthPerspectiveGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF78BAFF).withValues(alpha: 0.13)
+      ..strokeWidth = 1;
+    const horizon = 0.68;
+    final horizonY = size.height * horizon;
+    for (var x = -size.width * 0.2; x <= size.width * 1.2; x += 42) {
+      canvas.drawLine(
+        Offset(size.width / 2, horizonY),
+        Offset(x, size.height),
+        paint,
+      );
+    }
+    for (var index = 1; index < 9; index++) {
+      final t = index / 9;
+      final y = horizonY + ((size.height - horizonY) * t * t);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
   }
+
+  @override
+  bool shouldRepaint(covariant _AuthPerspectiveGridPainter oldDelegate) =>
+      false;
 }

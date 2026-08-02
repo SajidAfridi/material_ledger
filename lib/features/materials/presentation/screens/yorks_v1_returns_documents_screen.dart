@@ -12,6 +12,7 @@ import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
@@ -35,20 +36,25 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
     final workspace = ref.watch(
       yorksV1ReturnsDocumentsWorkspaceProvider(requestId),
     );
+    final compactRoute =
+        MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        title: _ReturnsBilingualTitle(language: language),
-        actions: [
-          IconButton(
-            tooltip: YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => _refresh(ref),
-          ),
-        ],
-      ),
+      appBar: compactRoute
+          ? AppBar(
+              backgroundColor: AppColors.surface,
+              surfaceTintColor: Colors.transparent,
+              title: _ReturnsBilingualTitle(language: language),
+              actions: [
+                IconButton(
+                  tooltip:
+                      YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+                  icon: const Icon(Icons.refresh_rounded),
+                  onPressed: () => _refresh(ref),
+                ),
+              ],
+            )
+          : null,
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
@@ -61,6 +67,7 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
         data: (value) => _ReturnsDocumentsBody(
           workspace: value,
           onChanged: () => _refresh(ref),
+          showPageHeader: !compactRoute,
         ),
       ),
     );
@@ -78,18 +85,10 @@ class _ReturnsBilingualTitle extends StatelessWidget {
   final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-        style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
-      ),
-      Text(
-        YorksV1LogisticsStrings.deliveryOrdersAndReturns.secondary(language),
-        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-      ),
-    ],
+  Widget build(BuildContext context) => Text(
+    YorksV1LogisticsStrings.deliveryOrdersAndReturns.active(language),
+    textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+    style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
   );
 }
 
@@ -97,10 +96,12 @@ class _ReturnsDocumentsBody extends ConsumerStatefulWidget {
   const _ReturnsDocumentsBody({
     required this.workspace,
     required this.onChanged,
+    required this.showPageHeader,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final VoidCallback onChanged;
+  final bool showPageHeader;
 
   @override
   ConsumerState<_ReturnsDocumentsBody> createState() =>
@@ -168,6 +169,11 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
     }
   }
 
+  void _removeReturnLine(String receiptReviewLineId) {
+    _quantities[receiptReviewLineId]?.clear();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -179,6 +185,25 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.showPageHeader) ...[
+                YorksR35PageHeader(
+                  eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
+                  title:
+                      YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+                  description: YorksV1LogisticsStrings.materialReturns.primary,
+                  actions: [
+                    SizedBox(
+                      height: AppSpacing.controlHeight,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.onChanged,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(YorksV1LogisticsStrings.refresh.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               NexusSectionCard(
                 child: _WorkspaceFacts(workspace: widget.workspace),
               ),
@@ -230,6 +255,7 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
           _ResponsiveReturnCandidates(
             candidates: candidates,
             controllers: _quantities,
+            onRemove: _removeReturnLine,
           ),
         const SizedBox(height: AppSpacing.md),
         TextField(
@@ -749,10 +775,12 @@ class _ResponsiveReturnCandidates extends StatelessWidget {
   const _ResponsiveReturnCandidates({
     required this.candidates,
     required this.controllers,
+    required this.onRemove,
   });
 
   final List<YorksV1ReturnCandidate> candidates;
   final Map<String, TextEditingController> controllers;
+  final ValueChanged<String> onRemove;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -779,6 +807,13 @@ class _ResponsiveReturnCandidates extends StatelessWidget {
                         controller: controllers[candidate.receiptReviewLineId]!,
                       ),
                     ),
+                    IconButton(
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).deleteButtonTooltip,
+                      onPressed: () => onRemove(candidate.receiptReviewLineId),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
                   ],
                 ),
               ),
@@ -793,6 +828,7 @@ class _ResponsiveReturnCandidates extends StatelessWidget {
               child: _MobileReturnCandidate(
                 candidate: candidate,
                 controller: controllers[candidate.receiptReviewLineId]!,
+                onRemove: () => onRemove(candidate.receiptReviewLineId),
               ),
             ),
         ],
@@ -840,10 +876,12 @@ class _MobileReturnCandidate extends StatelessWidget {
   const _MobileReturnCandidate({
     required this.candidate,
     required this.controller,
+    required this.onRemove,
   });
 
   final YorksV1ReturnCandidate candidate;
   final TextEditingController controller;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -857,6 +895,7 @@ class _MobileReturnCandidate extends StatelessWidget {
         builder: (_) => _MobileReturnQuantityEditor(
           candidate: candidate,
           controller: controller,
+          onRemove: onRemove,
         ),
       ),
       child: Container(
@@ -868,20 +907,31 @@ class _MobileReturnCandidate extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: _CandidateDescription(candidate)),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${candidate.eligibleReturnQuantity} ${candidate.unit}',
-                  style: AppTypography.bodyMedium,
-                ),
-                Text(
-                  YorksV1LogisticsStrings.eligibleToReturn.primary,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${candidate.eligibleReturnQuantity} ${candidate.unit}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyMedium,
                   ),
-                ),
-              ],
+                  Text(
+                    YorksV1LogisticsStrings.eligibleToReturn.primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+              onPressed: onRemove,
+              icon: const Icon(Icons.delete_outline_rounded),
             ),
           ],
         ),
@@ -894,10 +944,12 @@ class _MobileReturnQuantityEditor extends StatelessWidget {
   const _MobileReturnQuantityEditor({
     required this.candidate,
     required this.controller,
+    required this.onRemove,
   });
 
   final YorksV1ReturnCandidate candidate;
   final TextEditingController controller;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -925,6 +977,15 @@ class _MobileReturnQuantityEditor extends StatelessWidget {
             label: YorksV1LogisticsStrings.saveReturnDraft.primary,
             icon: Icons.check_outlined,
             onPressed: () => Navigator.of(context).pop(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SecondaryButton(
+            label: MaterialLocalizations.of(context).deleteButtonTooltip,
+            icon: Icons.delete_outline_rounded,
+            onPressed: () {
+              onRemove();
+              Navigator.of(context).pop();
+            },
           ),
         ],
       ),

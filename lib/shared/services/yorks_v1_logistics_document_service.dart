@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -101,40 +100,34 @@ class YorksV1LogisticsDocumentService {
     required YorksV1DeliveryOrderRevision revision,
     required PdfPageFormat format,
   }) async {
-    final document = pw.Document();
+    final logo = await _loadLogo();
+    final theme = await _buildTheme();
+    final deliveryOrder = dispatch.deliveryOrder!;
+    final document = pw.Document(theme: theme);
     document.addPage(
       pw.MultiPage(
         pageFormat: format,
-        margin: const pw.EdgeInsets.all(28),
-        header: (_) => _pdfHeader(
-          YorksV1LogisticsStrings.deliveryOrder.primary,
-          '${dispatch.deliveryOrder!.reference} · '
-          '${YorksV1LogisticsStrings.revision.primary} ${revision.revisionNumber}',
-        ),
+        margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
+        header: (_) => _deliveryHeader(logo),
         build: (_) => [
-          _metadata([
-            _PdfMeta(
-              YorksV1LogisticsStrings.project.primary,
-              workspace.projectName,
+          pw.SizedBox(height: 14),
+          pw.Center(
+            child: pw.Text(
+              YorksV1LogisticsStrings.deliveryOrderTitle.primary,
+              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
             ),
-            _PdfMeta(
-              YorksV1LogisticsStrings.scope.primary,
-              workspace.scopeName,
-            ),
-            _PdfMeta(
-              YorksV1LogisticsStrings.dispatchAndReceipt.primary,
-              dispatch.dispatchNumber,
-            ),
-            _PdfMeta(
-              YorksV1LogisticsStrings.revision.primary,
-              revision.revisionNumber.toString(),
-            ),
-            _PdfMeta(
-              YorksV1LogisticsStrings.goodReceived.primary,
-              DateFormat('d MMM yyyy').format(revision.generatedAt.toLocal()),
-            ),
-          ]),
-          pw.SizedBox(height: 16),
+          ),
+          pw.SizedBox(height: 12),
+          _deliveryMetaBox(
+            recipient: workspace.projectName,
+            reference: deliveryOrder.reference,
+            date: DateFormat(
+              'dd/MM/yyyy',
+            ).format(dispatch.dispatchDate.toLocal()),
+          ),
+          pw.SizedBox(height: 10),
+          _deliveryProjectBox(workspace),
+          pw.SizedBox(height: 14),
           _table(
             headers: [
               YorksV1LogisticsStrings.serialNumber.primary,
@@ -151,6 +144,15 @@ class YorksV1LogisticsDocumentService {
                   line.unit,
                 ],
             ],
+          ),
+          pw.SizedBox(height: 22),
+          _deliverySignatures(),
+          pw.SizedBox(height: 14),
+          pw.Center(
+            child: pw.Text(
+              YorksV1LogisticsStrings.goodsReceivedInGoodCondition.primary,
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+            ),
           ),
         ],
       ),
@@ -293,6 +295,177 @@ class YorksV1LogisticsDocumentService {
       pw.Text(reference, style: const pw.TextStyle(fontSize: 9)),
       pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
     ],
+  );
+
+  static Future<pw.MemoryImage?> _loadLogo() async {
+    try {
+      final data = await rootBundle.load('assets/logo.png');
+      return pw.MemoryImage(data.buffer.asUint8List());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<pw.ThemeData?> _buildTheme() async {
+    try {
+      final base = pw.Font.ttf(
+        await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+      );
+      final bold = pw.Font.ttf(
+        await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+      );
+      final arabic = pw.Font.ttf(
+        await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+      );
+      return pw.ThemeData.withFont(
+        base: base,
+        bold: bold,
+        fontFallback: [arabic],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static pw.Widget _deliveryHeader(pw.MemoryImage? logo) => pw.Container(
+    padding: const pw.EdgeInsets.only(bottom: 8),
+    decoration: const pw.BoxDecoration(
+      border: pw.Border(bottom: pw.BorderSide(width: .7)),
+    ),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
+      children: [
+        pw.Expanded(
+          child: pw.Text(
+            'Yorks Airconditioning & Refrigeration LLC-SPC',
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        if (logo != null) pw.Image(logo, width: 58, height: 58),
+        pw.Expanded(
+          child: pw.Text(
+            'يوركس للتكييف والتبريد',
+            textAlign: pw.TextAlign.right,
+            style: const pw.TextStyle(fontSize: 8),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  static pw.Widget _deliveryMetaBox({
+    required String recipient,
+    required String reference,
+    required String date,
+  }) => pw.Container(
+    width: double.infinity,
+    decoration: pw.BoxDecoration(border: pw.Border.all(width: .7)),
+    child: pw.Table(
+      border: pw.TableBorder.symmetric(inside: const pw.BorderSide(width: .5)),
+      columnWidths: const {
+        0: pw.FlexColumnWidth(2.2),
+        1: pw.FlexColumnWidth(2.8),
+        2: pw.FlexColumnWidth(1.3),
+        3: pw.FlexColumnWidth(1.7),
+      },
+      children: [
+        pw.TableRow(
+          children: [
+            _pdfCell(YorksV1LogisticsStrings.recipient.primary, bold: true),
+            _pdfCell(recipient),
+            _pdfCell(YorksV1LogisticsStrings.reference.primary, bold: true),
+            _pdfCell(reference),
+          ],
+        ),
+        pw.TableRow(
+          children: [
+            _pdfCell(YorksV1LogisticsStrings.date.primary, bold: true),
+            _pdfCell(date),
+            _pdfCell(
+              YorksV1LogisticsStrings.deliveryOrderTitle.primary,
+              bold: true,
+            ),
+            _pdfCell('R35'),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  static pw.Widget _deliveryProjectBox(
+    YorksV1ReturnsDocumentsWorkspace workspace,
+  ) => pw.Container(
+    width: double.infinity,
+    decoration: pw.BoxDecoration(border: pw.Border.all(width: .7)),
+    padding: const pw.EdgeInsets.all(7),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _pdfLabelValue(
+          YorksV1LogisticsStrings.project.primary,
+          workspace.projectName,
+        ),
+        pw.SizedBox(height: 4),
+        _pdfLabelValue(
+          YorksV1LogisticsStrings.deliveryAddress.primary,
+          workspace.scopeName,
+        ),
+      ],
+    ),
+  );
+
+  static pw.Widget _deliverySignatures() => pw.Table(
+    border: pw.TableBorder.all(width: .5),
+    columnWidths: const {
+      0: pw.FlexColumnWidth(1.4),
+      1: pw.FlexColumnWidth(1.6),
+      2: pw.FlexColumnWidth(1.4),
+      3: pw.FlexColumnWidth(1.6),
+    },
+    children: [
+      pw.TableRow(
+        children: [
+          _pdfCell(
+            YorksV1LogisticsStrings.inspectedAndChecked.primary,
+            bold: true,
+          ),
+          _pdfCell(''),
+          _pdfCell(YorksV1LogisticsStrings.receiverName.primary, bold: true),
+          _pdfCell(''),
+        ],
+      ),
+      pw.TableRow(
+        children: [
+          _pdfCell(YorksV1LogisticsStrings.signature.primary, bold: true),
+          _pdfCell(''),
+          _pdfCell(YorksV1LogisticsStrings.signature.primary, bold: true),
+          _pdfCell(''),
+        ],
+      ),
+    ],
+  );
+
+  static pw.Widget _pdfCell(String value, {bool bold = false}) => pw.Padding(
+    padding: const pw.EdgeInsets.all(6),
+    child: pw.Text(
+      value,
+      style: pw.TextStyle(
+        fontSize: 8,
+        fontWeight: bold ? pw.FontWeight.bold : null,
+      ),
+    ),
+  );
+
+  static pw.Widget _pdfLabelValue(String label, String value) => pw.RichText(
+    text: pw.TextSpan(
+      children: [
+        pw.TextSpan(
+          text: '$label: ',
+          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 8)),
+      ],
+    ),
   );
 
   static pw.Widget _metadata(List<_PdfMeta> values) => pw.Wrap(

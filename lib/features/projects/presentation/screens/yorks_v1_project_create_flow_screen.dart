@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
@@ -12,6 +13,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
+import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_project_creation_draft.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
@@ -20,9 +22,12 @@ import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
+import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
+import '../../../../shared/services/yorks_v1_document_file_service.dart';
 
 /// The normalized Yorks V1 R35 project creation experience.
 ///
@@ -61,9 +66,6 @@ class _YorksV1ProjectCreateFlowScreenState
   final _buildingNameController = TextEditingController();
   final _buildingFloorsController = TextEditingController();
   final _buildingDeliveryAddressController = TextEditingController();
-  final _attachmentNameController = TextEditingController();
-  final _attachmentMimeTypeController = TextEditingController();
-  final _attachmentSizeBytesController = TextEditingController();
 
   Timer? _draftSaveTimer;
   YorksV1ProjectCreationDraft? _pendingDraft;
@@ -72,6 +74,7 @@ class _YorksV1ProjectCreateFlowScreenState
   YorksV1Project? _createdProject;
   bool _hasFrpRoom = false;
   bool _isCreating = false;
+  List<YorksV1SelectedDocument> _selectedAttachmentFiles = const [];
 
   List<TextEditingController> get _controllers => [
     _referenceController,
@@ -88,9 +91,6 @@ class _YorksV1ProjectCreateFlowScreenState
     _buildingNameController,
     _buildingFloorsController,
     _buildingDeliveryAddressController,
-    _attachmentNameController,
-    _attachmentMimeTypeController,
-    _attachmentSizeBytesController,
   ];
 
   @override
@@ -130,6 +130,7 @@ class _YorksV1ProjectCreateFlowScreenState
       _activeAuthUserId = authUserId;
       _createdProject = null;
       _validationErrors = const {};
+      _selectedAttachmentFiles = const [];
     }
 
     final draft = ref.watch(yorksV1ProjectCreationDraftProvider(authUserId));
@@ -158,52 +159,82 @@ class _YorksV1ProjectCreateFlowScreenState
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        child: NexusPageShell(
-          eyebrow: YorksV1ProjectStrings.projectCreationEyebrow.primary,
-          title: YorksV1ProjectStrings.createProject.primary,
-          description: YorksV1ProjectStrings.createProjectDescription.primary,
-          controller: _scrollController,
-          actions: [_DraftStatus(language: language)],
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final desktop =
-                  MediaQuery.sizeOf(context).width >=
-                  AppSpacing.yorksV1DesktopBreakpoint;
-              final content = _buildStageContent(
-                draft: draft,
-                language: language,
-                saving: saving,
-                creatorRole: role,
-                creatorAuthUserId: authUserId,
-                teamDirectory: teamDirectory,
-              );
-              final navigation = _StageNavigation(
-                currentStage: draft.currentStage,
-                language: language,
-                vertical: desktop,
-                onSelect: _selectStage,
-              );
-
-              if (desktop) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final desktop =
+                constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
+            final content = _buildStageContent(
+              draft: draft,
+              language: language,
+              saving: saving,
+              creatorRole: role,
+              creatorAuthUserId: authUserId,
+              teamDirectory: teamDirectory,
+            );
+            final navigation = _StageNavigation(
+              currentStage: draft.currentStage,
+              language: language,
+              vertical: desktop,
+              onSelect: _selectStage,
+            );
+            final horizontal = desktop
+                ? AppSpacing.xxxl + AppSpacing.xs
+                : AppSpacing.lg;
+            return SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                AppSpacing.xxxl,
+                horizontal,
+                72,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppSpacing.pageMaxWidth,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 250, child: navigation),
-                    const SizedBox(width: AppSpacing.xl),
-                    Expanded(child: content),
+                    YorksR35PageHeader(
+                      eyebrow:
+                          YorksV1ProjectStrings.projectCreationEyebrow.primary,
+                      title: YorksV1ProjectStrings.createProject.primary,
+                      description: YorksV1ProjectStrings
+                          .createProjectDescription
+                          .primary,
+                      actions: [
+                        SizedBox(
+                          height: AppSpacing.minTapTarget,
+                          child: OutlinedButton(
+                            onPressed: saving ? null : () => _saveDraft(draft),
+                            child: Text(
+                              YorksV1ProjectStrings.saveDraft.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xxxl),
+                    if (desktop)
+                      _R35ProjectCreationFrame(
+                        navigation: navigation,
+                        currentStage: draft.currentStage,
+                        content: content,
+                      )
+                    else ...[
+                      navigation,
+                      const SizedBox(height: AppSpacing.lg),
+                      _R35ProjectCreationFrame(
+                        currentStage: draft.currentStage,
+                        content: content,
+                      ),
+                    ],
                   ],
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  navigation,
-                  const SizedBox(height: AppSpacing.lg),
-                  content,
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -290,12 +321,10 @@ class _YorksV1ProjectCreateFlowScreenState
       YorksV1ProjectCreationStage.attachments => _AttachmentsStage(
         draft: draft,
         language: language,
-        nameController: _attachmentNameController,
-        mimeTypeController: _attachmentMimeTypeController,
-        sizeBytesController: _attachmentSizeBytesController,
         validationErrors: _validationErrors,
         onAddAttachment: _addAttachment,
         onRemoveAttachment: _removeAttachmentAt,
+        pendingFiles: _selectedAttachmentFiles,
       ),
       YorksV1ProjectCreationStage.reviewAndCreate => _ReviewStage(
         draft: draft,
@@ -713,40 +742,58 @@ class _YorksV1ProjectCreateFlowScreenState
   }
 
   Future<void> _addAttachment() async {
-    final fileName = _attachmentNameController.text.trim();
-    if (fileName.isEmpty) {
-      _showMessage(YorksV1ProjectStrings.requiredField, error: true);
-      return;
+    try {
+      final selected = await ref
+          .read(yorksV1DocumentFileServiceProvider)
+          .selectDocument();
+      if (selected == null || !mounted) return;
+
+      final current = _currentDraft();
+      final alreadyAdded = current.attachments.any(
+        (attachment) =>
+            attachment.fileName.trim().toLowerCase() ==
+            selected.fileName.trim().toLowerCase(),
+      );
+      if (alreadyAdded) {
+        _showMessage(YorksV1ProjectStrings.duplicateAttachment, error: true);
+        return;
+      }
+
+      await _flushPendingDraft();
+      final refreshed = _currentDraft();
+      await _saveDraft(
+        refreshed.copyWith(
+          attachments: [
+            ...refreshed.attachments,
+            YorksV1ProjectAttachmentInput(
+              fileName: selected.fileName,
+              mimeType: selected.mimeType,
+              sizeBytes: selected.bytes.lengthInBytes,
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedAttachmentFiles = [..._selectedAttachmentFiles, selected];
+      });
+    } on YorksV1DomainException catch (error) {
+      _showMessage(YorksV1ProjectStrings.errorFor(error.code), error: true);
+    } catch (_) {
+      _showMessage(
+        YorksV1ProjectStrings.errorFor(
+          YorksV1DomainErrorCode.unexpectedResponse,
+        ),
+        error: true,
+      );
     }
-    final rawSize = _attachmentSizeBytesController.text.trim();
-    final sizeBytes = rawSize.isEmpty ? null : int.tryParse(rawSize);
-    if (rawSize.isNotEmpty && (sizeBytes == null || sizeBytes < 0)) {
-      _showMessage(YorksV1ProjectStrings.stageNeedsAttention, error: true);
-      return;
-    }
-    await _flushPendingDraft();
-    final current = _currentDraft();
-    await _saveDraft(
-      current.copyWith(
-        attachments: [
-          ...current.attachments,
-          YorksV1ProjectAttachmentInput(
-            fileName: fileName,
-            mimeType: _emptyToNull(_attachmentMimeTypeController.text),
-            sizeBytes: sizeBytes,
-          ),
-        ],
-      ),
-    );
-    _attachmentNameController.clear();
-    _attachmentMimeTypeController.clear();
-    _attachmentSizeBytesController.clear();
   }
 
   Future<void> _removeAttachmentAt(int index) async {
     await _flushPendingDraft();
     final current = _currentDraft();
     if (index < 0 || index >= current.attachments.length) return;
+    final removedFileName = current.attachments[index].fileName;
     await _saveDraft(
       current.copyWith(
         attachments: [
@@ -755,6 +802,15 @@ class _YorksV1ProjectCreateFlowScreenState
         ],
       ),
     );
+    if (!mounted) return;
+    setState(() {
+      _selectedAttachmentFiles = [
+        for (final file in _selectedAttachmentFiles)
+          if (file.fileName.trim().toLowerCase() !=
+              removedFileName.trim().toLowerCase())
+            file,
+      ];
+    });
   }
 
   Future<void> _createProject() async {
@@ -790,6 +846,39 @@ class _YorksV1ProjectCreateFlowScreenState
           .read(yorksV1ProjectCommandControllerProvider.notifier)
           .createProject(draft.toCreationInput());
 
+      // The five-stage R35 flow ends at a usable workspace.  The create RPC
+      // intentionally records the new project as a draft so activation stays
+      // an audited, server-authorized lifecycle transition.  Complete that
+      // transition here when the transaction returned an active Project
+      // Engineer membership (the server re-checks the same invariant under a
+      // row lock).  Without this bridge a newly-created project could be
+      // opened in the UI but every MR submission would correctly be rejected
+      // because submissions require an active project.
+      var createdProject = result.project;
+      if (createdProject.state == YorksV1ProjectLifecycle.draft &&
+          result.members.any(
+            (member) =>
+                member.projectRole ==
+                    YorksV1ProjectMembershipRole.projectEngineer &&
+                member.effectiveTo == null,
+          )) {
+        createdProject = await ref
+            .read(yorksV1ProjectCommandControllerProvider.notifier)
+            .setProjectState(
+              YorksV1SetProjectStateInput(
+                idempotencyKey: const Uuid().v4(),
+                projectId: createdProject.id,
+                currentState: createdProject.state,
+                targetState: YorksV1ProjectLifecycle.active,
+                expectedProjectVersion: createdProject.recordVersion,
+              ),
+            );
+      }
+
+      final failedAttachmentUploads = await _uploadSelectedAttachments(
+        createdProject,
+      );
+
       final authUserId = _activeAuthUserId;
       if (authUserId != null) {
         await ref
@@ -799,9 +888,13 @@ class _YorksV1ProjectCreateFlowScreenState
       if (!mounted) return;
       setState(() {
         _isCreating = false;
-        _createdProject = result.project;
+        _createdProject = createdProject;
+        _selectedAttachmentFiles = const [];
       });
-      widget.onProjectCreated?.call(result.project);
+      if (failedAttachmentUploads > 0) {
+        _showMessage(YorksV1ProjectStrings.attachmentUploadFailed);
+      }
+      widget.onProjectCreated?.call(createdProject);
     } on YorksV1DomainException catch (error) {
       if (!mounted) return;
       setState(() => _isCreating = false);
@@ -816,6 +909,34 @@ class _YorksV1ProjectCreateFlowScreenState
         error: true,
       );
     }
+  }
+
+  Future<int> _uploadSelectedAttachments(YorksV1Project project) async {
+    final files = List<YorksV1SelectedDocument>.of(_selectedAttachmentFiles);
+    if (files.isEmpty) return 0;
+
+    var failed = 0;
+    for (final file in files) {
+      try {
+        await ref
+            .read(yorksV1DocumentsRepositoryProvider)
+            .upload(
+              YorksV1DocumentUploadInput(
+                projectId: project.id,
+                entityType: YorksV1DocumentEntityType.project,
+                entityId: project.id,
+                classification: YorksV1DocumentClassification.operational,
+                fileName: file.fileName,
+                mimeType: file.mimeType,
+                bytes: file.bytes,
+                idempotencyKey: const Uuid().v4(),
+              ),
+            );
+      } catch (_) {
+        failed++;
+      }
+    }
+    return failed;
   }
 
   YorksV1ProjectCreationStage _firstInvalidStage(
@@ -928,28 +1049,147 @@ class _CreatedProjectState extends ConsumerWidget {
   }
 }
 
-class _DraftStatus extends StatelessWidget {
-  const _DraftStatus({required this.language});
+class _R35ProjectCreationFrame extends StatelessWidget {
+  const _R35ProjectCreationFrame({
+    required this.currentStage,
+    required this.content,
+    this.navigation,
+  });
 
-  final AppLanguage language;
+  final YorksV1ProjectCreationStage currentStage;
+  final Widget content;
+  final Widget? navigation;
 
   @override
   Widget build(BuildContext context) {
+    final sidebarMinHeight = MediaQuery.sizeOf(context).height * 0.75;
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _R35CreationStageHeader(stage: currentStage),
+        const Divider(height: 1, color: AppColors.line),
+        Padding(padding: const EdgeInsets.all(AppSpacing.xxxl), child: content),
+      ],
+    );
     return Container(
-      constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.successContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.26)),
-      ),
-      child: Center(
-        child: Text(
-          YorksV1ProjectStrings.draftSaved.primary,
-          style: AppTypography.labelLarge.copyWith(
-            color: AppColors.onSuccessContainer,
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 26,
+            offset: Offset(0, 10),
           ),
-        ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: navigation == null
+          ? body
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 270,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: sidebarMinHeight),
+                    child: ColoredBox(
+                      color: AppColors.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              YorksV1ProjectStrings.projectSetup.primary,
+                              style: AppTypography.titleLarge.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              YorksV1ProjectStrings
+                                  .projectSetupDescription
+                                  .primary,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.muted,
+                                height: 1.45,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            navigation!,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const VerticalDivider(width: 1, color: AppColors.line),
+                Expanded(child: body),
+              ],
+            ),
+    );
+  }
+}
+
+class _R35CreationStageHeader extends StatelessWidget {
+  const _R35CreationStageHeader({required this.stage});
+
+  final YorksV1ProjectCreationStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final step = YorksV1ProjectStrings.stepOf.primary
+        .replaceFirst('{current}', '${stage.index + 1}')
+        .replaceFirst(
+          '{total}',
+          '${YorksV1ProjectCreationStage.values.length}',
+        );
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xxxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step.toUpperCase(),
+            style: AppTypography.eyebrow.copyWith(
+              color: AppColors.blue,
+              letterSpacing: 1.3,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            _stageCopy(stage).primary,
+            style: AppTypography.headlineMedium.copyWith(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                YorksV1ProjectStrings.stepSaved.primary,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -982,12 +1222,9 @@ class _StageNavigation extends StatelessWidget {
         ),
     ];
     if (vertical) {
-      return NexusSectionCard(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children,
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
       );
     }
     return SingleChildScrollView(
@@ -1128,107 +1365,105 @@ class _DetailsStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final required = YorksV1ProjectStrings.requiredField.primary;
-    return NexusSectionCard(
-      title: YorksV1ProjectStrings.projectDetails.primary,
-      child: Form(
-        key: formKey,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 620;
-            final fields = [
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-reference'),
-                controller: referenceController,
-                label: YorksV1ProjectStrings.yorksReference.primary,
-                urduHint: YorksV1ProjectStrings.yorksReference.secondary(
-                  language,
-                ),
-                onChanged: onReferenceChanged,
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? required : null,
+    return Form(
+      key: formKey,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 620;
+          final fields = [
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-reference'),
+              controller: referenceController,
+              label: YorksV1ProjectStrings.yorksReference.active(language),
+              hintText: YorksV1ProjectStrings.yorksReferenceHint.active(
+                language,
               ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-name'),
-                controller: nameController,
-                label: YorksV1ProjectStrings.projectName.primary,
-                urduHint: YorksV1ProjectStrings.projectName.secondary(language),
-                onChanged: onNameChanged,
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? required : null,
+              onChanged: onReferenceChanged,
+              validator: (value) =>
+                  value == null || value.trim().isEmpty ? required : null,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-name'),
+              controller: nameController,
+              label: YorksV1ProjectStrings.projectName.active(language),
+              hintText: YorksV1ProjectStrings.projectNameHint.active(language),
+              onChanged: onNameChanged,
+              validator: (value) =>
+                  value == null || value.trim().isEmpty ? required : null,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-client'),
+              controller: clientController,
+              label: YorksV1ProjectStrings.client.active(language),
+              hintText: YorksV1ProjectStrings.clientHint.active(language),
+              onChanged: onClientChanged,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-job-contract'),
+              controller: jobOrContractController,
+              label: YorksV1ProjectStrings.jobOrContractReference.active(
+                language,
               ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-client'),
-                controller: clientController,
-                label: YorksV1ProjectStrings.client.primary,
-                urduHint: YorksV1ProjectStrings.client.secondary(language),
-                onChanged: onClientChanged,
+              hintText: YorksV1ProjectStrings.jobOrContractReferenceHint.active(
+                language,
               ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-job-contract'),
-                controller: jobOrContractController,
-                label: YorksV1ProjectStrings.jobOrContractReference.primary,
-                urduHint: YorksV1ProjectStrings.jobOrContractReference
-                    .secondary(language),
-                onChanged: onJobOrContractChanged,
-              ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-site'),
-                controller: siteController,
-                label: YorksV1ProjectStrings.siteLocation.primary,
-                urduHint: YorksV1ProjectStrings.siteLocation.secondary(
-                  language,
-                ),
-                onChanged: onSiteChanged,
-              ),
-              _DateField(
-                copy: YorksV1ProjectStrings.startDate,
-                value: startDate,
-                language: language,
-                onTap: onSelectStartDate,
-              ),
-              _DateField(
-                copy: YorksV1ProjectStrings.endDate,
-                value: endDate,
-                language: language,
-                onTap: onSelectEndDate,
-                error:
-                    validationErrors.contains(
-                      YorksV1ProjectValidationCode.invalidDateRange,
-                    )
-                    ? YorksV1ProjectStrings.endDateAfterStart.primary
-                    : null,
-              ),
-            ];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (wide)
-                  Wrap(
-                    spacing: AppSpacing.lg,
-                    runSpacing: AppSpacing.lg,
-                    children: [
-                      for (final field in fields)
-                        SizedBox(
-                          width: (constraints.maxWidth - AppSpacing.lg) / 2,
-                          child: field,
-                        ),
-                    ],
+              onChanged: onJobOrContractChanged,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-site'),
+              controller: siteController,
+              label: YorksV1ProjectStrings.siteLocation.active(language),
+              hintText: YorksV1ProjectStrings.siteLocationHint.active(language),
+              onChanged: onSiteChanged,
+            ),
+            _DateField(
+              copy: YorksV1ProjectStrings.startDate,
+              value: startDate,
+              language: language,
+              onTap: onSelectStartDate,
+            ),
+            _DateField(
+              copy: YorksV1ProjectStrings.endDate,
+              value: endDate,
+              language: language,
+              onTap: onSelectEndDate,
+              error:
+                  validationErrors.contains(
+                    YorksV1ProjectValidationCode.invalidDateRange,
                   )
-                else
-                  ..._withGaps(fields),
-                const SizedBox(height: AppSpacing.lg),
-                LedgerTextField(
-                  key: const ValueKey('yorks-v1-project-notes'),
-                  controller: notesController,
-                  label: YorksV1ProjectStrings.notes.primary,
-                  urduHint: YorksV1ProjectStrings.notes.secondary(language),
-                  maxLines: 4,
-                  onChanged: onNotesChanged,
-                ),
-              ],
-            );
-          },
-        ),
+                  ? YorksV1ProjectStrings.endDateAfterStart.primary
+                  : null,
+            ),
+          ];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (wide)
+                Wrap(
+                  spacing: AppSpacing.lg,
+                  runSpacing: AppSpacing.lg,
+                  children: [
+                    for (final field in fields)
+                      SizedBox(
+                        width: (constraints.maxWidth - AppSpacing.lg) / 2,
+                        child: field,
+                      ),
+                  ],
+                )
+              else
+                ..._withGaps(fields),
+              const SizedBox(height: AppSpacing.lg),
+              LedgerTextField(
+                key: const ValueKey('yorks-v1-project-notes'),
+                controller: notesController,
+                label: YorksV1ProjectStrings.notes.active(language),
+                hintText: YorksV1ProjectStrings.notesHint.active(language),
+                maxLines: 4,
+                onChanged: onNotesChanged,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1251,9 +1486,14 @@ class _DateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selected = value == null
-        ? YorksV1ProjectStrings.selectDate.primary
-        : MaterialLocalizations.of(context).formatMediumDate(value!);
+    final selected = value == null ? null : DateUtils.dateOnly(value!);
+    final parts = selected == null
+        ? const ['DD', 'MM', 'YYYY']
+        : [
+            selected.day.toString().padLeft(2, '0'),
+            selected.month.toString().padLeft(2, '0'),
+            selected.year.toString().padLeft(4, '0'),
+          ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1264,11 +1504,78 @@ class _DateField extends StatelessWidget {
           secondaryStyle: AppTypography.labelSmall,
         ),
         const SizedBox(height: AppSpacing.sm),
-        OutlinedButton.icon(
-          key: ValueKey('yorks-v1-project-date-${copy.primary}'),
-          onPressed: onTap,
-          icon: const Icon(Icons.calendar_today_outlined),
-          label: Text(selected),
+        Semantics(
+          button: true,
+          label: copy.primary,
+          child: InkWell(
+            key: ValueKey('yorks-v1-project-date-${copy.primary}'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : 300.0;
+                final gap = availableWidth < 360
+                    ? AppSpacing.xs
+                    : AppSpacing.sm;
+                final boxWidth = ((availableWidth - 48 - (gap * 3)) / 3)
+                    .clamp(44.0, 74.0)
+                    .toDouble();
+                return Row(
+                  children: [
+                    for (var index = 0; index < parts.length; index++) ...[
+                      SizedBox(
+                        width: boxWidth,
+                        height: 48,
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: availableWidth < 360
+                                ? AppSpacing.xs
+                                : AppSpacing.md,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceContainerLowest,
+                            border: Border.all(color: AppColors.line),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusMd,
+                            ),
+                          ),
+                          child: Text(
+                            parts[index],
+                            style: AppTypography.bodyLarge.copyWith(
+                              color: selected == null
+                                  ? AppColors.mutedLight
+                                  : AppColors.ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (index != parts.length - 1) SizedBox(width: gap),
+                    ],
+                    SizedBox(width: gap),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLowest,
+                        border: Border.all(color: AppColors.line),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
         if (error != null) ...[
           const SizedBox(height: AppSpacing.xs),
@@ -1361,8 +1668,8 @@ class _PartiesAndAccessStage extends StatelessWidget {
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-project-consultant'),
                       controller: consultantController,
-                      label: YorksV1ProjectStrings.consultant.primary,
-                      urduHint: YorksV1ProjectStrings.consultant.secondary(
+                      label: YorksV1ProjectStrings.consultant.active(language),
+                      hintText: YorksV1ProjectStrings.consultant.active(
                         language,
                       ),
                       onChanged: onConsultantChanged,
@@ -1370,8 +1677,10 @@ class _PartiesAndAccessStage extends StatelessWidget {
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-project-main-contractor'),
                       controller: mainContractorController,
-                      label: YorksV1ProjectStrings.mainContractor.primary,
-                      urduHint: YorksV1ProjectStrings.mainContractor.secondary(
+                      label: YorksV1ProjectStrings.mainContractor.active(
+                        language,
+                      ),
+                      hintText: YorksV1ProjectStrings.mainContractor.active(
                         language,
                       ),
                       onChanged: onMainContractorChanged,
@@ -1611,8 +1920,8 @@ class _InitialTeamRolePicker extends StatelessWidget {
             'yorks-v1-project-team-picker-${projectRole.name}-$selectedCount',
           ),
           isExpanded: true,
-          decoration: InputDecoration(labelText: selectLabel.primary),
-          hint: Text(selectLabel.secondary(language)),
+          decoration: InputDecoration(labelText: selectLabel.active(language)),
+          hint: Text(selectLabel.active(language)),
           items: [
             for (final member in choices)
               DropdownMenuItem(
@@ -1685,6 +1994,12 @@ class _InitialTeamMemberChips extends StatelessWidget {
             englishStyle: AppTypography.bodySmall.copyWith(
               color: AppColors.error,
             ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _LocalizedCopy(
+            copy: YorksV1ProjectStrings.profileId,
+            language: language,
+            englishStyle: AppTypography.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
@@ -1788,8 +2103,8 @@ class _NamedPartyAdder extends StatelessWidget {
             Expanded(
               child: LedgerTextField(
                 controller: controller,
-                label: label.primary,
-                urduHint: label.secondary(language),
+                label: label.active(language),
+                hintText: label.active(language),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -1878,7 +2193,7 @@ class _BuildingsStage extends StatelessWidget {
                   border: Border.all(color: AppColors.blueContainerStrong),
                 ),
                 child: _LocalizedCopy(
-                  copy: YorksV1ProjectStrings.commonScopeDescription,
+                  copy: YorksV1ProjectStrings.buildingsIntro,
                   language: language,
                   englishStyle: AppTypography.bodyMedium,
                 ),
@@ -1891,16 +2206,20 @@ class _BuildingsStage extends StatelessWidget {
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-building-code'),
                       controller: codeController,
-                      label: YorksV1ProjectStrings.buildingCode.primary,
-                      urduHint: YorksV1ProjectStrings.buildingCode.secondary(
+                      label: YorksV1ProjectStrings.buildingCode.active(
+                        language,
+                      ),
+                      hintText: YorksV1ProjectStrings.buildingCode.active(
                         language,
                       ),
                     ),
                     LedgerTextField(
                       key: const ValueKey('yorks-v1-building-name'),
                       controller: nameController,
-                      label: YorksV1ProjectStrings.buildingName.primary,
-                      urduHint: YorksV1ProjectStrings.buildingName.secondary(
+                      label: YorksV1ProjectStrings.buildingName.active(
+                        language,
+                      ),
+                      hintText: YorksV1ProjectStrings.buildingName.active(
                         language,
                       ),
                     ),
@@ -1923,17 +2242,15 @@ class _BuildingsStage extends StatelessWidget {
               LedgerTextField(
                 key: const ValueKey('yorks-v1-building-floors'),
                 controller: floorsController,
-                label: YorksV1ProjectStrings.floorsOrLevels.primary,
-                urduHint: YorksV1ProjectStrings.floorsOrLevels.secondary(
-                  language,
-                ),
+                label: YorksV1ProjectStrings.floorsOrLevels.active(language),
+                hintText: YorksV1ProjectStrings.floorsOrLevels.active(language),
               ),
               const SizedBox(height: AppSpacing.lg),
               LedgerTextField(
                 key: const ValueKey('yorks-v1-building-delivery-address'),
                 controller: deliveryAddressController,
-                label: YorksV1ProjectStrings.deliveryAddress.primary,
-                urduHint: YorksV1ProjectStrings.deliveryAddress.secondary(
+                label: YorksV1ProjectStrings.deliveryAddress.active(language),
+                hintText: YorksV1ProjectStrings.deliveryAddress.active(
                   language,
                 ),
                 maxLines: 2,
@@ -2060,22 +2377,18 @@ class _AttachmentsStage extends StatelessWidget {
   const _AttachmentsStage({
     required this.draft,
     required this.language,
-    required this.nameController,
-    required this.mimeTypeController,
-    required this.sizeBytesController,
     required this.validationErrors,
     required this.onAddAttachment,
     required this.onRemoveAttachment,
+    required this.pendingFiles,
   });
 
   final YorksV1ProjectCreationDraft draft;
   final AppLanguage language;
-  final TextEditingController nameController;
-  final TextEditingController mimeTypeController;
-  final TextEditingController sizeBytesController;
   final Set<YorksV1ProjectValidationCode> validationErrors;
   final VoidCallback onAddAttachment;
   final ValueChanged<int> onRemoveAttachment;
+  final List<YorksV1SelectedDocument> pendingFiles;
 
   @override
   Widget build(BuildContext context) {
@@ -2085,39 +2398,62 @@ class _AttachmentsStage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _LocalizedCopy(
-            copy: YorksV1ProjectStrings.attachmentsOptionalDescription,
+            copy: YorksV1ProjectStrings.attachmentsDropzoneDescription,
             language: language,
             englishStyle: AppTypography.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.lg),
-          LedgerTextField(
-            key: const ValueKey('yorks-v1-attachment-file-name'),
-            controller: nameController,
-            label: YorksV1ProjectStrings.attachmentFileName.primary,
-            urduHint: YorksV1ProjectStrings.attachmentFileName.secondary(
-              language,
+          Semantics(
+            button: true,
+            label: YorksV1ProjectStrings.attachmentsDropzoneTitle.primary,
+            child: InkWell(
+              key: const ValueKey('yorks-v1-attachment-dropzone'),
+              onTap: onAddAttachment,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              child: CustomPaint(
+                painter: _DashedAttachmentBorderPainter(
+                  color: AppColors.blue.withValues(alpha: 0.55),
+                  radius: AppSpacing.radiusMd,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.xxxl,
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.file_upload_outlined,
+                        size: 30,
+                        color: AppColors.muted,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        YorksV1ProjectStrings.attachmentsDropzoneTitle.primary,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.titleMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        YorksV1ProjectStrings
+                            .attachmentsDropzoneDescription
+                            .primary,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      OutlinedButton.icon(
+                        onPressed: onAddAttachment,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(
+                          YorksV1ProjectStrings.addAttachment.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          LedgerTextField(
-            key: const ValueKey('yorks-v1-attachment-mime-type'),
-            controller: mimeTypeController,
-            label: YorksV1ProjectStrings.attachmentType.primary,
-            urduHint: YorksV1ProjectStrings.attachmentType.secondary(language),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          LedgerTextField(
-            key: const ValueKey('yorks-v1-attachment-size-bytes'),
-            controller: sizeBytesController,
-            label: YorksV1ProjectStrings.attachmentSize.primary,
-            urduHint: YorksV1ProjectStrings.attachmentSize.secondary(language),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          SecondaryButton(
-            label: YorksV1ProjectStrings.addAttachment.primary,
-            onPressed: onAddAttachment,
-            icon: Icons.attach_file,
           ),
           if (validationErrors.contains(
             YorksV1ProjectValidationCode.invalidAttachment,
@@ -2130,10 +2466,20 @@ class _AttachmentsStage extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.lg),
           if (draft.attachments.isEmpty)
-            _LocalizedCopy(
-              copy: YorksV1ProjectStrings.noAttachmentsAdded,
-              language: language,
-              englishStyle: AppTypography.bodyMedium,
+            Column(
+              children: [
+                Text(
+                  YorksV1ProjectStrings.noAttachmentsAdded.primary,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  YorksV1ProjectStrings.attachmentsDoNotBlock.primary,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySmall,
+                ),
+              ],
             )
           else
             Column(
@@ -2145,6 +2491,10 @@ class _AttachmentsStage extends StatelessWidget {
                 ) ...[
                   _AttachmentSummary(
                     attachment: draft.attachments[index],
+                    pendingFile: _pendingFileFor(
+                      draft.attachments[index],
+                      pendingFiles,
+                    ),
                     onRemove: () => onRemoveAttachment(index),
                   ),
                   if (index != draft.attachments.length - 1)
@@ -2156,12 +2506,27 @@ class _AttachmentsStage extends StatelessWidget {
       ),
     );
   }
+
+  YorksV1SelectedDocument? _pendingFileFor(
+    YorksV1ProjectAttachmentInput attachment,
+    List<YorksV1SelectedDocument> files,
+  ) {
+    for (final file in files) {
+      if (file.fileName == attachment.fileName) return file;
+    }
+    return null;
+  }
 }
 
 class _AttachmentSummary extends StatelessWidget {
-  const _AttachmentSummary({required this.attachment, required this.onRemove});
+  const _AttachmentSummary({
+    required this.attachment,
+    required this.pendingFile,
+    required this.onRemove,
+  });
 
   final YorksV1ProjectAttachmentInput attachment;
+  final YorksV1SelectedDocument? pendingFile;
   final VoidCallback onRemove;
 
   @override
@@ -2177,7 +2542,16 @@ class _AttachmentSummary extends StatelessWidget {
               Text(attachment.fileName, style: AppTypography.titleMedium),
               if (attachment.mimeType?.trim().isNotEmpty ?? false) ...[
                 const SizedBox(height: AppSpacing.xxs),
-                Text(attachment.mimeType!, style: AppTypography.bodySmall),
+                Text(
+                  [
+                    attachment.mimeType!,
+                    if (attachment.sizeBytes != null)
+                      _formatAttachmentSize(attachment.sizeBytes!),
+                    if (pendingFile != null)
+                      YorksV1ProjectStrings.attachmentReady.primary,
+                  ].join(' · '),
+                  style: AppTypography.bodySmall,
+                ),
               ],
             ],
           ),
@@ -2190,6 +2564,45 @@ class _AttachmentSummary extends StatelessWidget {
       ],
     );
   }
+}
+
+String _formatAttachmentSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+class _DashedAttachmentBorderPainter extends CustomPainter {
+  _DashedAttachmentBorderPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
+      );
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + 7).clamp(0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += 12;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedAttachmentBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 class _ReviewStage extends StatelessWidget {
@@ -2207,103 +2620,158 @@ class _ReviewStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final directory = teamDirectory.asData?.value ?? const [];
+    final memberByAuthUserId = {
+      for (final member in directory) member.authUserId: member,
+    };
+    final hasUnavailableMember = _hasUnavailableInitialMember(draft, directory);
+    String? projectEngineer;
+    for (final member in draft.initialMembers) {
+      if (member.projectRole != YorksV1ProjectMembershipRole.projectEngineer) {
+        continue;
+      }
+      final directoryMember = memberByAuthUserId[member.authUserId];
+      if (directoryMember != null) {
+        projectEngineer = _safeMemberDisplayName(directoryMember);
+        break;
+      }
+    }
+    final start = draft.startDate == null
+        ? YorksV1ProjectStrings.notProvided.primary
+        : MaterialLocalizations.of(context).formatMediumDate(draft.startDate!);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NexusSectionCard(
-          title: YorksV1ProjectStrings.reviewBeforeCreate.primary,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.successContainer,
+            border: Border.all(color: AppColors.success.withValues(alpha: .25)),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _LocalizedCopy(
-                copy: YorksV1ProjectStrings.connectedCreationDescription,
-                language: language,
-                englishStyle: AppTypography.bodyMedium,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _ReviewValue(
-                label: YorksV1ProjectStrings.yorksReference,
-                value: draft.reference,
-                language: language,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _ReviewValue(
-                label: YorksV1ProjectStrings.projectName,
-                value: draft.name,
-                language: language,
-              ),
-              if (_emptyToNull(draft.clientName) != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ReviewValue(
-                  label: YorksV1ProjectStrings.client,
-                  value: draft.clientName!,
-                  language: language,
-                ),
-              ],
-              if (_emptyToNull(draft.siteLocation) != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ReviewValue(
-                  label: YorksV1ProjectStrings.siteLocation,
-                  value: draft.siteLocation!,
-                  language: language,
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        NexusSectionCard(
-          title: YorksV1ProjectStrings.buildings.primary,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _LocalizedCopy(
-                copy: YorksV1ProjectStrings.commonScopeDescription,
-                language: language,
-                englishStyle: AppTypography.bodyMedium,
-              ),
-              if (draft.buildings.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                for (final building in draft.buildings)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: Text(building.name, style: AppTypography.bodyMedium),
-                  ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        NexusSectionCard(
-          title: YorksV1ProjectStrings.partiesAndAccess.primary,
-          child: _ReviewPartiesAndAccess(
-            draft: draft,
-            language: language,
-            teamDirectory: teamDirectory,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        NexusSectionCard(
-          title: YorksV1ProjectStrings.attachments.primary,
-          child: draft.attachments.isEmpty
-              ? _LocalizedCopy(
-                  copy: YorksV1ProjectStrings.noAttachmentsAdded,
-                  language: language,
-                  englishStyle: AppTypography.bodyMedium,
-                )
-              : Column(
+              const Icon(Icons.check_circle_outline, color: AppColors.success),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final attachment in draft.attachments)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: Text(
-                          attachment.fileName,
-                          style: AppTypography.bodyMedium,
-                        ),
+                    Text(
+                      YorksV1ProjectStrings.readyToCreateWorkspace.primary,
+                      style: AppTypography.titleMedium.copyWith(
+                        color: AppColors.onSuccessContainer,
+                        fontWeight: FontWeight.w800,
                       ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      YorksV1ProjectStrings
+                          .materialsNotRequiredAtCreation
+                          .primary,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.onSuccessContainer,
+                      ),
+                    ),
                   ],
                 ),
+              ),
+            ],
+          ),
+        ),
+        if (hasUnavailableMember) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.errorContainer,
+              border: Border.all(color: AppColors.error.withValues(alpha: .2)),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _LocalizedCopy(
+                  copy: YorksV1ProjectStrings.teamMemberNoLongerAvailable,
+                  language: language,
+                  englishStyle: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                _LocalizedCopy(
+                  copy: YorksV1ProjectStrings.profileId,
+                  language: language,
+                  englishStyle: AppTypography.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 680;
+            final cards = [
+              _ReviewSummaryCard(
+                title: YorksV1ProjectStrings.projects.primary,
+                rows: [
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.yorksReference.primary,
+                    value: draft.reference,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.projectName.primary,
+                    value: draft.name,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.client.primary,
+                    value:
+                        _emptyToNull(draft.clientName) ??
+                        YorksV1ProjectStrings.notProvided.primary,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.startDate.primary,
+                    value: start,
+                  ),
+                ],
+              ),
+              _ReviewSummaryCard(
+                title: YorksV1ProjectStrings.accessAndBuildings.primary,
+                rows: [
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.projectTeam.primary,
+                    value: '${draft.initialMembers.length}',
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.projectEngineers.primary,
+                    value:
+                        projectEngineer ??
+                        YorksV1ProjectStrings.notProvided.primary,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.buildings.primary,
+                    value: '${draft.buildings.length}',
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.attachments.primary,
+                    value: '${draft.attachments.length}',
+                  ),
+                ],
+              ),
+            ];
+            if (!wide) return Column(children: _withGaps(cards));
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cards[0]),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(child: cards[1]),
+              ],
+            );
+          },
         ),
         if (validationErrors.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -2314,64 +2782,59 @@ class _ReviewStage extends StatelessWidget {
   }
 }
 
-class _ReviewPartiesAndAccess extends StatelessWidget {
-  const _ReviewPartiesAndAccess({
-    required this.draft,
-    required this.language,
-    required this.teamDirectory,
-  });
+class _ReviewSummaryRow {
+  const _ReviewSummaryRow({required this.label, required this.value});
 
-  final YorksV1ProjectCreationDraft draft;
-  final AppLanguage language;
-  final AsyncValue<List<YorksV1ProjectTeamDirectoryMember>> teamDirectory;
+  final String label;
+  final String value;
+}
+
+class _ReviewSummaryCard extends StatelessWidget {
+  const _ReviewSummaryCard({required this.title, required this.rows});
+
+  final String title;
+  final List<_ReviewSummaryRow> rows;
 
   @override
   Widget build(BuildContext context) {
-    final namedParties = draft.parties
-        .where((party) => party.name.trim().isNotEmpty)
-        .toList(growable: false);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (namedParties.isNotEmpty)
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final party in namedParties) Chip(label: Text(party.name)),
-            ],
-          ),
-        if (draft.initialMembers.isNotEmpty) ...[
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: AppTypography.titleMedium),
           const SizedBox(height: AppSpacing.md),
-          teamDirectory.when(
-            loading: () => _LocalizedCopy(
-              copy: YorksV1ProjectStrings.loadingTeamDirectory,
-              language: language,
-              englishStyle: AppTypography.bodyMedium,
+          for (var index = 0; index < rows.length; index++) ...[
+            if (index > 0) const Divider(height: AppSpacing.lg),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    rows[index].label,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Text(
+                    rows[index].value,
+                    textAlign: TextAlign.end,
+                    style: AppTypography.labelLarge,
+                  ),
+                ),
+              ],
             ),
-            error: (_, _) => _InitialTeamMemberChips(
-              initialMembers: draft.initialMembers,
-              memberByAuthUserId: const {},
-              language: language,
-              onRemove: null,
-            ),
-            data: (members) => _InitialTeamMemberChips(
-              initialMembers: draft.initialMembers,
-              memberByAuthUserId: {
-                for (final member in members) member.authUserId: member,
-              },
-              language: language,
-              onRemove: null,
-            ),
-          ),
+          ],
         ],
-        if (namedParties.isEmpty && draft.initialMembers.isEmpty)
-          _LocalizedCopy(
-            copy: YorksV1ProjectStrings.accessDescription,
-            language: language,
-            englishStyle: AppTypography.bodyMedium,
-          ),
-      ],
+      ),
     );
   }
 }
@@ -2525,11 +2988,10 @@ class _LocalizedCopy extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BilingualText(
-      english: copy.primary,
-      secondary: copy.secondary(language),
-      englishStyle: englishStyle,
-      secondaryStyle: secondaryStyle,
+    return YorksV1ActiveText(
+      copy: copy,
+      language: language,
+      style: englishStyle ?? secondaryStyle,
     );
   }
 }

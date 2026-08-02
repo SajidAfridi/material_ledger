@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Nexus Chrome (Supabase)" type="FlutterRunConfigurationType" factoryName="Flutter">
-    <option name="additionalArgs" value="--dart-define=SUPABASE_URL=https://czykuksmlwswjsgotrpo.supabase.co --dart-define=SUPABASE_ANON_KEY=sb_publishable_10ZCSxRXuNhS6x-hYOudpg_hMK3VtY6 --dart-define=NEXUS_V7_PROJECTS=true --dart-define=NEXUS_V7_BROWSE_MATERIALS=true --dart-define=NEXUS_V7_PHASE1_PLANNING=true --dart-define=NEXUS_V7_PROCUREMENT_REVIEW=true" />
+    <option name="additionalArgs" value="--dart-define=SUPABASE_URL=https://czykuksmlwswjsgotrpo.supabase.co --dart-define=SUPABASE_ANON_KEY=sb_publishable_10ZCSxRXuNhS6x-hYOudpg_hMK3VtY6 --dart-define=YORKS_V1_FOUNDATION=true --dart-define=YORKS_V1_PROJECTS=true --dart-define=YORKS_V1_BOQ=true --dart-define=YORKS_V1_EXCEL=true --dart-define=YORKS_V1_REQUESTS=true --dart-define=YORKS_V1_ARRANGEMENT=true --dart-define=YORKS_V1_LOGISTICS=true --dart-define=YORKS_V1_RETURNS_DOCUMENTS=true --dart-define=YORKS_V1_DOCUMENTS=true --dart-define=NEXUS_V7_PROJECTS=true --dart-define=NEXUS_V7_BROWSE_MATERIALS=true --dart-define=NEXUS_V7_PHASE1_PLANNING=true --dart-define=NEXUS_V7_PROCUREMENT_REVIEW=true" />
     <option name="filePath" value="$PROJECT_DIR$/lib/main.dart" />
     <method />
   </configuration>

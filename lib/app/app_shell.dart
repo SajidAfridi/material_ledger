@@ -14,8 +14,11 @@ import '../shared/models/user_role.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/sync/sync_status_banner.dart';
 import 'router.dart';
+import 'yorks_v1_workspace_shell.dart';
 
 /// The single, role-aware application shell.
 ///
@@ -88,6 +91,17 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(currentRoleProvider);
+    final yorksV1ProjectsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .projects;
+    final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
+    // Office roles use the same R35 shell as field roles during the Yorks V1
+    // rollout. The legacy indexed stack is retained underneath for non-V1
+    // routes and rollback, but its navigation chrome no longer competes with
+    // the Yorks operational workspace.
+    if (yorksV1ProjectsEnabled && yorksV1Role != null) {
+      return YorksV1WorkspaceShell(child: navigationShell);
+    }
     final lang = ref.watch(languageProvider);
     final destinations = _destinationsFor(
       role,

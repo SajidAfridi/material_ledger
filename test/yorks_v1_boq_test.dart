@@ -65,6 +65,36 @@ void main() {
     );
 
     test(
+      'edits canonical cells and archives omitted rows and columns on save',
+      () async {
+        final repository = _FakeBoqRepository(_worksheet());
+        final controller = YorksV1BoqWorksheetController(
+          groupId: _groupId,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.load();
+        controller.updateCell(
+          rowId: _rowId,
+          columnId: _columnId,
+          value: 'Updated damper',
+        );
+        final extra = controller.addBlankRow(afterRowId: _rowId);
+        controller.removeRow(extra.id);
+        controller.removeColumn(_columnId);
+
+        expect(controller.state.worksheet!.rows.single.canonicalValues, {
+          'description': 'Updated damper',
+        });
+        expect(await controller.save(), isTrue);
+        expect(repository.saved.single.worksheet.rows, hasLength(1));
+        expect(repository.saved.single.worksheet.columns, isEmpty);
+      },
+    );
+
+    test(
       'keeps local edits visible when the server reports a conflict',
       () async {
         final repository = _FakeBoqRepository(
@@ -188,6 +218,37 @@ void main() {
       ]);
       expect(preview.rows.single.valueFor(1), '708');
       expect(preview.isValid, isTrue);
+    });
+
+    test('exports a project workbook with one worksheet per BOQ group', () {
+      final first = _worksheet();
+      final second = _worksheet().copyWith(
+        group: YorksV1BoqGroup(
+          id: '10000000-0000-4000-8000-000000000099',
+          projectId: first.group.projectId,
+          name: 'Ventilation Fans',
+          worksheetTitle: 'Ventilation Fans',
+          displayOrder: 2,
+          isCustom: false,
+          isArchived: false,
+          version: 1,
+          rowCount: first.group.rowCount,
+          columnCount: first.group.columnCount,
+          updatedAt: first.group.updatedAt,
+        ),
+      );
+
+      final workbook = codec.decode(
+        bytes: codec.encodeWorksheets([first, second]),
+        fileName: 'Yorks_BOQ.xlsx',
+      );
+
+      expect(workbook.sheets.map((sheet) => sheet.name), [
+        'Damper Schedule',
+        'Ventilation Fans',
+      ]);
+      expect(workbook.sheets.first.rows, isNotEmpty);
+      expect(workbook.sheets.last.rows, isNotEmpty);
     });
 
     test('flags blank and duplicate headings before an import command', () {

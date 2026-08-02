@@ -13,6 +13,7 @@ import '../shared/providers/language_provider.dart';
 import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/sync/sync_status_banner.dart';
 import 'router.dart';
+import 'yorks_v1_workspace_shell.dart';
 
 /// Engineer shell — responsive navigation.
 ///
@@ -108,6 +109,13 @@ class EngineerShellScreen extends ConsumerWidget {
     final yorksV1ProjectsEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
         .projects;
+    // The connected V1 routes share one production R35 chrome. Keeping this
+    // switch at the shell boundary avoids nesting a legacy rail/bottom bar
+    // around the new Yorks workspace as soon as the V1 project authority is
+    // active. The stateful branches still remain mounted for a safe rollback.
+    if (yorksV1ProjectsEnabled) {
+      return YorksV1WorkspaceShell(child: navigationShell);
+    }
     // Batch 2 supplies the normalized project foundation only. Its requests
     // arrive later, so this rollout must not open the retained generic request
     // workflow beside normalized project records.
