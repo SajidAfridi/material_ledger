@@ -1,16 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/user_role.dart';
 import '../models/yorks_v1_role.dart';
 import 'language_provider.dart' show authSessionProvider, supabaseClientProvider;
+import 'session_provider.dart' show currentRoleProvider, currentUserProvider;
+import 'users_provider.dart' show localDemoPasswordProvider;
 
-/// The immutable Supabase Auth identity for V1 local-draft isolation. It is not
-/// a profile ID and is never synthesized from the legacy local user roster.
+/// The immutable Supabase Auth identity for V1 local-draft isolation. In the
+/// explicit local demo build only, the seeded local account ID is used for
+/// creator-owned draft recovery; production and connected builds remain Auth
+/// JWT based.
 final yorksV1AuthUserIdProvider = Provider<String?>((ref) {
   // The Supabase client instance is stable across sign-in/out. Watching the
   // session notifier makes this projection refresh when that client's current
   // Auth user changes, without treating the legacy app-user ID as authority.
   ref.watch(authSessionProvider);
-  return ref.watch(supabaseClientProvider)?.auth.currentUser?.id;
+  final client = ref.watch(supabaseClientProvider);
+  final authUserId = client?.auth.currentUser?.id;
+  if (authUserId != null) return authUserId;
+
+  // Local-only identity for the interactive demo. Committed V1 commands still
+  // stop at their repository backend guard until Supabase is configured.
+  if (client == null &&
+      ref.read(localDemoPasswordProvider).trim().isNotEmpty) {
+    return ref.watch(currentUserProvider)?.id;
+  }
+  return null;
 });
 
 /// V1 client eligibility reads only the exact, server-controlled JWT
@@ -25,5 +40,25 @@ final yorksV1CurrentRoleProvider = Provider<YorksV1Role?>((ref) {
       ?.auth
       .currentUser
       ?.appMetadata;
-  return YorksV1Role.fromServerClaim(appMetadata?['role']);
+  final serverRole = YorksV1Role.fromServerClaim(appMetadata?['role']);
+  if (serverRole != null) return serverRole;
+
+  // The explicit local demo build has no Auth JWT by design. Give its three
+  // fixed local personas a V1 presentation role so the complete transformed
+  // UI can be demonstrated without weakening connected-environment
+  // authorization. This branch is unreachable unless local development was
+  // explicitly compiled with LOCAL_DEMO_PASSWORD; Supabase builds remain
+  // strictly claim-based and fail closed when a claim is absent.
+  final client = ref.read(supabaseClientProvider);
+  if (client == null &&
+      ref.read(localDemoPasswordProvider).trim().isNotEmpty) {
+    return switch (ref.watch(currentRoleProvider)) {
+      // The local engineer persona is the seeded Project Engineer demo.
+      // A real connected account must receive project_engineer from the JWT.
+      UserRole.engineer => YorksV1Role.projectEngineer,
+      UserRole.procurement => YorksV1Role.procurement,
+      UserRole.admin => YorksV1Role.admin,
+    };
+  }
+  return null;
 });
