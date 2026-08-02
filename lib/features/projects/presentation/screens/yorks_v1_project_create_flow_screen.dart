@@ -158,52 +158,82 @@ class _YorksV1ProjectCreateFlowScreenState
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        child: NexusPageShell(
-          eyebrow: YorksV1ProjectStrings.projectCreationEyebrow.primary,
-          title: YorksV1ProjectStrings.createProject.primary,
-          description: YorksV1ProjectStrings.createProjectDescription.primary,
-          controller: _scrollController,
-          actions: [_DraftStatus(language: language)],
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final desktop =
-                  MediaQuery.sizeOf(context).width >=
-                  AppSpacing.yorksV1DesktopBreakpoint;
-              final content = _buildStageContent(
-                draft: draft,
-                language: language,
-                saving: saving,
-                creatorRole: role,
-                creatorAuthUserId: authUserId,
-                teamDirectory: teamDirectory,
-              );
-              final navigation = _StageNavigation(
-                currentStage: draft.currentStage,
-                language: language,
-                vertical: desktop,
-                onSelect: _selectStage,
-              );
-
-              if (desktop) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final desktop =
+                constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
+            final content = _buildStageContent(
+              draft: draft,
+              language: language,
+              saving: saving,
+              creatorRole: role,
+              creatorAuthUserId: authUserId,
+              teamDirectory: teamDirectory,
+            );
+            final navigation = _StageNavigation(
+              currentStage: draft.currentStage,
+              language: language,
+              vertical: desktop,
+              onSelect: _selectStage,
+            );
+            final horizontal = desktop
+                ? AppSpacing.xxxl + AppSpacing.xs
+                : AppSpacing.lg;
+            return SingleChildScrollView(
+              controller: _scrollController,
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                AppSpacing.xxxl,
+                horizontal,
+                72,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppSpacing.pageMaxWidth,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 250, child: navigation),
-                    const SizedBox(width: AppSpacing.xl),
-                    Expanded(child: content),
+                    YorksR35PageHeader(
+                      eyebrow:
+                          YorksV1ProjectStrings.projectCreationEyebrow.primary,
+                      title: YorksV1ProjectStrings.createProject.primary,
+                      description: YorksV1ProjectStrings
+                          .createProjectDescription
+                          .primary,
+                      actions: [
+                        SizedBox(
+                          height: AppSpacing.minTapTarget,
+                          child: OutlinedButton(
+                            onPressed: saving ? null : () => _saveDraft(draft),
+                            child: Text(
+                              YorksV1ProjectStrings.saveDraft.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xxxl),
+                    if (desktop)
+                      _R35ProjectCreationFrame(
+                        navigation: navigation,
+                        currentStage: draft.currentStage,
+                        content: content,
+                      )
+                    else ...[
+                      navigation,
+                      const SizedBox(height: AppSpacing.lg),
+                      _R35ProjectCreationFrame(
+                        currentStage: draft.currentStage,
+                        content: content,
+                      ),
+                    ],
                   ],
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  navigation,
-                  const SizedBox(height: AppSpacing.lg),
-                  content,
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -928,28 +958,143 @@ class _CreatedProjectState extends ConsumerWidget {
   }
 }
 
-class _DraftStatus extends StatelessWidget {
-  const _DraftStatus({required this.language});
+class _R35ProjectCreationFrame extends StatelessWidget {
+  const _R35ProjectCreationFrame({
+    required this.currentStage,
+    required this.content,
+    this.navigation,
+  });
 
-  final AppLanguage language;
+  final YorksV1ProjectCreationStage currentStage;
+  final Widget content;
+  final Widget? navigation;
 
   @override
   Widget build(BuildContext context) {
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _R35CreationStageHeader(stage: currentStage),
+        const Divider(height: 1, color: AppColors.line),
+        Padding(padding: const EdgeInsets.all(AppSpacing.xxxl), child: content),
+      ],
+    );
     return Container(
-      constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.successContainer,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.26)),
-      ),
-      child: Center(
-        child: Text(
-          YorksV1ProjectStrings.draftSaved.primary,
-          style: AppTypography.labelLarge.copyWith(
-            color: AppColors.onSuccessContainer,
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 26,
+            offset: Offset(0, 10),
           ),
-        ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: navigation == null
+          ? body
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 270,
+                  child: ColoredBox(
+                    color: AppColors.surfaceContainerLow,
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            YorksV1ProjectStrings.projectSetup.primary,
+                            style: AppTypography.titleLarge.copyWith(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            YorksV1ProjectStrings
+                                .projectSetupDescription
+                                .primary,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.muted,
+                              height: 1.45,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          navigation!,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const VerticalDivider(width: 1, color: AppColors.line),
+                Expanded(child: body),
+              ],
+            ),
+    );
+  }
+}
+
+class _R35CreationStageHeader extends StatelessWidget {
+  const _R35CreationStageHeader({required this.stage});
+
+  final YorksV1ProjectCreationStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final step = YorksV1ProjectStrings.stepOf.primary
+        .replaceFirst('{current}', '${stage.index + 1}')
+        .replaceFirst(
+          '{total}',
+          '${YorksV1ProjectCreationStage.values.length}',
+        );
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xxxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            step.toUpperCase(),
+            style: AppTypography.eyebrow.copyWith(
+              color: AppColors.blue,
+              letterSpacing: 1.3,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            _stageCopy(stage).primary,
+            style: AppTypography.headlineMedium.copyWith(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                YorksV1ProjectStrings.stepSaved.primary,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -982,12 +1127,9 @@ class _StageNavigation extends StatelessWidget {
         ),
     ];
     if (vertical) {
-      return NexusSectionCard(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children,
-        ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
       );
     }
     return SingleChildScrollView(
@@ -1128,107 +1270,103 @@ class _DetailsStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final required = YorksV1ProjectStrings.requiredField.primary;
-    return NexusSectionCard(
-      title: YorksV1ProjectStrings.projectDetails.primary,
-      child: Form(
-        key: formKey,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 620;
-            final fields = [
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-reference'),
-                controller: referenceController,
-                label: YorksV1ProjectStrings.yorksReference.primary,
-                urduHint: YorksV1ProjectStrings.yorksReference.secondary(
-                  language,
-                ),
-                onChanged: onReferenceChanged,
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? required : null,
+    return Form(
+      key: formKey,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 620;
+          final fields = [
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-reference'),
+              controller: referenceController,
+              label: YorksV1ProjectStrings.yorksReference.primary,
+              urduHint: YorksV1ProjectStrings.yorksReference.secondary(
+                language,
               ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-name'),
-                controller: nameController,
-                label: YorksV1ProjectStrings.projectName.primary,
-                urduHint: YorksV1ProjectStrings.projectName.secondary(language),
-                onChanged: onNameChanged,
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? required : null,
+              onChanged: onReferenceChanged,
+              validator: (value) =>
+                  value == null || value.trim().isEmpty ? required : null,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-name'),
+              controller: nameController,
+              label: YorksV1ProjectStrings.projectName.primary,
+              urduHint: YorksV1ProjectStrings.projectName.secondary(language),
+              onChanged: onNameChanged,
+              validator: (value) =>
+                  value == null || value.trim().isEmpty ? required : null,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-client'),
+              controller: clientController,
+              label: YorksV1ProjectStrings.client.primary,
+              urduHint: YorksV1ProjectStrings.client.secondary(language),
+              onChanged: onClientChanged,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-job-contract'),
+              controller: jobOrContractController,
+              label: YorksV1ProjectStrings.jobOrContractReference.primary,
+              urduHint: YorksV1ProjectStrings.jobOrContractReference.secondary(
+                language,
               ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-client'),
-                controller: clientController,
-                label: YorksV1ProjectStrings.client.primary,
-                urduHint: YorksV1ProjectStrings.client.secondary(language),
-                onChanged: onClientChanged,
-              ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-job-contract'),
-                controller: jobOrContractController,
-                label: YorksV1ProjectStrings.jobOrContractReference.primary,
-                urduHint: YorksV1ProjectStrings.jobOrContractReference
-                    .secondary(language),
-                onChanged: onJobOrContractChanged,
-              ),
-              LedgerTextField(
-                key: const ValueKey('yorks-v1-project-site'),
-                controller: siteController,
-                label: YorksV1ProjectStrings.siteLocation.primary,
-                urduHint: YorksV1ProjectStrings.siteLocation.secondary(
-                  language,
-                ),
-                onChanged: onSiteChanged,
-              ),
-              _DateField(
-                copy: YorksV1ProjectStrings.startDate,
-                value: startDate,
-                language: language,
-                onTap: onSelectStartDate,
-              ),
-              _DateField(
-                copy: YorksV1ProjectStrings.endDate,
-                value: endDate,
-                language: language,
-                onTap: onSelectEndDate,
-                error:
-                    validationErrors.contains(
-                      YorksV1ProjectValidationCode.invalidDateRange,
-                    )
-                    ? YorksV1ProjectStrings.endDateAfterStart.primary
-                    : null,
-              ),
-            ];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (wide)
-                  Wrap(
-                    spacing: AppSpacing.lg,
-                    runSpacing: AppSpacing.lg,
-                    children: [
-                      for (final field in fields)
-                        SizedBox(
-                          width: (constraints.maxWidth - AppSpacing.lg) / 2,
-                          child: field,
-                        ),
-                    ],
+              onChanged: onJobOrContractChanged,
+            ),
+            LedgerTextField(
+              key: const ValueKey('yorks-v1-project-site'),
+              controller: siteController,
+              label: YorksV1ProjectStrings.siteLocation.primary,
+              urduHint: YorksV1ProjectStrings.siteLocation.secondary(language),
+              onChanged: onSiteChanged,
+            ),
+            _DateField(
+              copy: YorksV1ProjectStrings.startDate,
+              value: startDate,
+              language: language,
+              onTap: onSelectStartDate,
+            ),
+            _DateField(
+              copy: YorksV1ProjectStrings.endDate,
+              value: endDate,
+              language: language,
+              onTap: onSelectEndDate,
+              error:
+                  validationErrors.contains(
+                    YorksV1ProjectValidationCode.invalidDateRange,
                   )
-                else
-                  ..._withGaps(fields),
-                const SizedBox(height: AppSpacing.lg),
-                LedgerTextField(
-                  key: const ValueKey('yorks-v1-project-notes'),
-                  controller: notesController,
-                  label: YorksV1ProjectStrings.notes.primary,
-                  urduHint: YorksV1ProjectStrings.notes.secondary(language),
-                  maxLines: 4,
-                  onChanged: onNotesChanged,
-                ),
-              ],
-            );
-          },
-        ),
+                  ? YorksV1ProjectStrings.endDateAfterStart.primary
+                  : null,
+            ),
+          ];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (wide)
+                Wrap(
+                  spacing: AppSpacing.lg,
+                  runSpacing: AppSpacing.lg,
+                  children: [
+                    for (final field in fields)
+                      SizedBox(
+                        width: (constraints.maxWidth - AppSpacing.lg) / 2,
+                        child: field,
+                      ),
+                  ],
+                )
+              else
+                ..._withGaps(fields),
+              const SizedBox(height: AppSpacing.lg),
+              LedgerTextField(
+                key: const ValueKey('yorks-v1-project-notes'),
+                controller: notesController,
+                label: YorksV1ProjectStrings.notes.primary,
+                urduHint: YorksV1ProjectStrings.notes.secondary(language),
+                maxLines: 4,
+                onChanged: onNotesChanged,
+              ),
+            ],
+          );
+        },
       ),
     );
   }

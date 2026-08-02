@@ -3,17 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/yorks_v1_shell_strings.dart';
 
-/// Splash screen — The Architectural Ledger branding.
+/// The approved R35 access splash.
 ///
-/// Full primary-blue gradient background with animated logo reveal,
-/// branding text cascade, and loading indicator.
-/// Auto-navigates after animations complete.
+/// This is intentionally a short, calm hand-off into secure sign-in. It has no
+/// product state or authorization logic: those remain owned by the router and
+/// the auth controller after the splash ends.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -22,358 +22,241 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with TickerProviderStateMixin {
-  late final AnimationController _logoController;
-  late final AnimationController _textController;
-  late final AnimationController _footerController;
+    with SingleTickerProviderStateMixin {
   late final AnimationController _progressController;
-
-  // Logo animations
-  late final Animation<double> _logoScale;
-  late final Animation<double> _logoOpacity;
-  late final Animation<double> _glassOpacity;
-
-  // Text animations — staggered cascade
-  late final Animation<double> _brandOpacity;
-  late final Animation<Offset> _brandSlide;
-  late final Animation<double> _taglineOpacity;
-  late final Animation<Offset> _taglineSlide;
-  late final Animation<double> _urduOpacity;
-
-  // Footer
-  late final Animation<double> _footerOpacity;
-  late final Animation<double> _lineWidth;
+  Timer? _continueTimer;
 
   @override
   void initState() {
     super.initState();
-
-    // Set status bar for blue background
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Color(0xFF0D47A1),
+        systemNavigationBarColor: AppColors.navy,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-
-    // ─── Logo Controller (0–800ms) ────────────────────────────
-    _logoController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(parent: _logoController, curve: Curves.easeOutBack),
-    );
-
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _logoController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
-    );
-
-    _glassOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _logoController,
-        curve: const Interval(0.2, 0.8, curve: Curves.easeOut),
-      ),
-    );
-
-    // ─── Text Controller (staggered, 0–1000ms) ───────────────
-    _textController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-
-    _brandOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _textController,
-        curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
-      ),
-    );
-    _brandSlide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _textController,
-            curve: const Interval(0.0, 0.5, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _taglineOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _textController,
-        curve: const Interval(0.25, 0.65, curve: Curves.easeOut),
-      ),
-    );
-    _taglineSlide = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _textController,
-            curve: const Interval(0.25, 0.7, curve: Curves.easeOutCubic),
-          ),
-        );
-
-    _urduOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _textController,
-        curve: const Interval(0.5, 0.85, curve: Curves.easeOut),
-      ),
-    );
-
-    // ─── Footer Controller (0–800ms) ─────────────────────────
-    _footerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _footerOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _footerController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
-    );
-
-    _lineWidth = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _footerController,
-        curve: const Interval(0.1, 0.9, curve: Curves.easeInOutCubic),
-      ),
-    );
-
-    // ─── Progress Controller (looping) ───────────────────────
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-
-    _startAnimationSequence();
-  }
-
-  Future<void> _startAnimationSequence() async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    if (!mounted) return;
-
-    // Phase 1: Logo
-    _logoController.forward();
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-
-    // Phase 2: Text cascade
-    _textController.forward();
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    // Phase 3: Footer + progress
-    _footerController.forward();
-    _progressController.repeat();
-
-    // Phase 4: Navigate to language selection after a pause
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (!mounted) return;
-    context.go(RoutePaths.languageSelection);
+      duration: const Duration(milliseconds: 1250),
+    )..forward();
+    _continueTimer = Timer(const Duration(milliseconds: 1250), () {
+      if (mounted) context.go(RoutePaths.login);
+    });
   }
 
   @override
   void dispose() {
-    _logoController.dispose();
-    _textController.dispose();
-    _footerController.dispose();
+    _continueTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1A56DB), // primaryContainer
-              Color(0xFF003FB1), // primary
-              Color(0xFF002D7A), // darker primary
-            ],
-            stops: [0.0, 0.6, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // ─── Spacer to push content to center ────────
-              const Spacer(flex: 3),
-
-              // ─── Logo with glass container ───────────────
-              AnimatedBuilder(
-                animation: _logoController,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _logoOpacity.value,
-                    child: Transform.scale(
-                      scale: _logoScale.value,
-                      child: child,
-                    ),
-                  );
-                },
-                child: _buildLogo(),
-              ),
-
-              const SizedBox(height: AppSpacing.huge),
-
-              // ─── Brand Name ──────────────────────────────
-              AnimatedBuilder(
-                animation: _textController,
-                builder: (context, _) {
-                  return FractionalTranslation(
-                    translation: _brandSlide.value,
-                    child: Opacity(
-                      opacity: _brandOpacity.value,
-                      child: Text(
-                        'Yorks AC. & Ref.',
-                        style: GoogleFonts.inter(
-                          fontSize: 42,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: -0.84,
-                          height: 1.1,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              // ─── Tagline ─────────────────────────────────
-              AnimatedBuilder(
-                animation: _textController,
-                builder: (context, _) {
-                  return FractionalTranslation(
-                    translation: _taglineSlide.value,
-                    child: Opacity(
-                      opacity: _taglineOpacity.value,
-                      child: Text(
-                        'THE ARCHITECTURAL LEDGER',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white.withValues(alpha: 0.85),
-                          letterSpacing: 4.0,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              // ─── Urdu tagline ────────────────────────────
-              AnimatedBuilder(
-                animation: _textController,
-                builder: (context, _) {
-                  return Opacity(
-                    opacity: _urduOpacity.value,
-                    child: Text(
-                      'السجل المعماري',
-                      textDirection: TextDirection.rtl,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.white.withValues(alpha: 0.6),
-                        height: 1.5,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              // ─── Spacer ─────────────────────────────────
-              const Spacer(flex: 4),
-
-              // ─── Bottom: Line + Badge ────────────────────
-              AnimatedBuilder(
-                animation: _footerController,
-                builder: (context, _) {
-                  return Opacity(
-                    opacity: _footerOpacity.value,
-                    child: Column(
-                      children: [
-                        // Animated expanding line
-                        AnimatedBuilder(
-                          animation: _footerController,
-                          builder: (context, _) {
-                            return Container(
-                              height: 2,
-                              width: (size.width * 0.5) * _lineWidth.value,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.0),
-                                    Colors.white.withValues(alpha: 0.4),
-                                    Colors.white.withValues(alpha: 0.0),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(1),
-                              ),
-                            );
-                          },
-                        ),
-
-                        const SizedBox(height: AppSpacing.xxl),
-
-                        // Secure badge
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.verified_user_rounded,
-                              size: 14,
-                              color: Colors.white.withValues(alpha: 0.5),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Text(
-                              'SECURE INDUSTRIAL ENVIRONMENT',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.5),
-                                letterSpacing: 2.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppSpacing.huge),
-            ],
-          ),
+  Widget build(BuildContext context) => Scaffold(
+    body: DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF081D36), AppColors.navy, AppColors.navyHover],
+          stops: [0, 0.58, 1],
         ),
       ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const IgnorePointer(
+            child: CustomPaint(painter: _SplashGridPainter()),
+          ),
+          const IgnorePointer(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                height: 300,
+                child: CustomPaint(painter: _SiteLinePainter()),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: _progressController,
+                  curve: const Interval(0, 0.5, curve: Curves.easeOut),
+                ),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1).animate(
+                    CurvedAnimation(
+                      parent: _progressController,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
+                  child: _SplashContent(progress: _progressController),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SplashContent extends StatelessWidget {
+  const _SplashContent({required this.progress});
+
+  final Animation<double> progress;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 480),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+              color: Colors.white.withValues(alpha: 0.06),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: const BrandLogo(size: 108, shadow: false),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          Text(
+            YorksV1ShellStrings.companyName.primary,
+            textAlign: TextAlign.center,
+            style: AppTypography.headlineLarge.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1.2,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            YorksV1ShellStrings.companyLegalName.primary,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyLarge.copyWith(
+              color: Colors.white.withValues(alpha: 0.76),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            YorksV1ShellStrings.operationalWorkspace.primary.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: AppTypography.eyebrow.copyWith(
+              color: const Color(0xFF82BCFF),
+              letterSpacing: 1.6,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.colossal),
+          AnimatedBuilder(
+            animation: progress,
+            builder: (context, _) => Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  child: LinearProgressIndicator(
+                    value: 0.1 + (progress.value * 0.9),
+                    minHeight: 5,
+                    backgroundColor: Colors.white.withValues(alpha: 0.18),
+                    valueColor: const AlwaysStoppedAnimation(Color(0xFF55A9FF)),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  YorksV1ShellStrings.preparingWorkspace.primary,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: Colors.white.withValues(alpha: 0.75),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxxl),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                size: 17,
+                color: Colors.white.withValues(alpha: 0.58),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                YorksV1ShellStrings.secureProjectWorkspace.primary,
+                style: AppTypography.bodySmall.copyWith(
+                  color: Colors.white.withValues(alpha: 0.64),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SplashGridPainter extends CustomPainter {
+  const _SplashGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.055)
+      ..strokeWidth = 1;
+    const step = 46.0;
+    for (var x = 0.0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (var y = 0.0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SplashGridPainter oldDelegate) => false;
+}
+
+class _SiteLinePainter extends CustomPainter {
+  const _SiteLinePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, size.height * 0.62)
+      ..lineTo(size.width * 0.06, size.height * 0.43)
+      ..lineTo(size.width * 0.12, size.height * 0.62)
+      ..lineTo(size.width * 0.18, size.height * 0.3)
+      ..lineTo(size.width * 0.25, size.height * 0.57)
+      ..lineTo(size.width * 0.33, size.height * 0.38)
+      ..lineTo(size.width * 0.42, size.height * 0.61)
+      ..lineTo(size.width * 0.51, size.height * 0.25)
+      ..lineTo(size.width * 0.6, size.height * 0.52)
+      ..lineTo(size.width * 0.69, size.height * 0.34)
+      ..lineTo(size.width * 0.78, size.height * 0.61)
+      ..lineTo(size.width * 0.88, size.height * 0.4)
+      ..lineTo(size.width, size.height * 0.57)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()..color = Colors.black.withValues(alpha: 0.16),
     );
   }
 
-  Widget _buildLogo() {
-    return AnimatedBuilder(
-      animation: _logoController,
-      builder: (context, child) {
-        return Opacity(opacity: _glassOpacity.value, child: child);
-      },
-      child: const BrandLogo(size: 120),
-    );
-  }
+  @override
+  bool shouldRepaint(covariant _SiteLinePainter oldDelegate) => false;
 }

@@ -32,11 +32,41 @@ abstract final class YorksV1ProjectStrings {
     ur: 'پراجیکٹ، رسائی اور عمارتیں ترتیب دیں، پھر بنانے سے پہلے منسلک ریکارڈ کا جائزہ لیں۔',
     hi: 'परियोजना, पहुँच और भवन तैयार करें, फिर बनाने से पहले जुड़े रिकॉर्ड की समीक्षा करें।',
   );
+  static const projectSetup = TranslatableString(
+    en: 'Project setup',
+    ar: 'إعداد المشروع',
+    ur: 'پراجیکٹ سیٹ اپ',
+    hi: 'प्रोजेक्ट सेटअप',
+  );
+  static const projectSetupDescription = TranslatableString(
+    en: 'Add the project information and project team. Project Engineers can later add, replace or remove Site Engineer access.',
+    ar: 'أضف معلومات المشروع وفريقه. يمكن لمهندسي المشروع لاحقاً إضافة أو استبدال أو إزالة وصول مهندسي الموقع.',
+    ur: 'پراجیکٹ کی معلومات اور ٹیم شامل کریں۔ پراجیکٹ انجینئر بعد میں سائٹ انجینئر رسائی شامل، تبدیل یا ختم کر سکتے ہیں۔',
+    hi: 'प्रोजेक्ट जानकारी और टीम जोड़ें। प्रोजेक्ट इंजीनियर बाद में साइट इंजीनियर पहुंच जोड़, बदल या हटा सकते हैं।',
+  );
+  static const stepSaved = TranslatableString(
+    en: 'Saved just now',
+    ar: 'تم الحفظ الآن',
+    ur: 'ابھی محفوظ ہوا',
+    hi: 'अभी सहेजा गया',
+  );
+  static const stepOf = TranslatableString(
+    en: 'Step {current} of {total}',
+    ar: 'الخطوة {current} من {total}',
+    ur: 'مرحلہ {current} از {total}',
+    hi: 'चरण {current} / {total}',
+  );
   static const draftSaved = TranslatableString(
     en: 'Draft saved on this device',
     ar: 'تم حفظ المسودة على هذا الجهاز',
     ur: 'ڈرافٹ اس ڈیوائس پر محفوظ ہو گیا',
     hi: 'ड्राफ़्ट इस डिवाइस पर सहेजा गया',
+  );
+  static const saveDraft = TranslatableString(
+    en: 'Save draft',
+    ar: 'حفظ المسودة',
+    ur: 'ڈرافٹ محفوظ کریں',
+    hi: 'ड्राफ्ट सहेजें',
   );
   static const connectedCreation = TranslatableString(
     en: 'Connected creation',

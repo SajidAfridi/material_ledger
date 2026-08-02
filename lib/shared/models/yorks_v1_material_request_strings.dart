@@ -124,6 +124,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'درخواست کا عنوان (اختیاری)',
     hi: 'अनुरोध शीर्षक (वैकल्पिक)',
   );
+  static const requestInformation = TranslatableString(
+    en: 'Request Information',
+    ar: 'معلومات الطلب',
+    ur: 'درخواست کی معلومات',
+    hi: 'अनुरोध जानकारी',
+  );
+  static const materialItems = TranslatableString(
+    en: 'Material Items',
+    ar: 'مواد الطلب',
+    ur: 'میٹیریل آئٹمز',
+    hi: 'सामग्री आइटम',
+  );
+  static const review = TranslatableString(
+    en: 'Review',
+    ar: 'مراجعة',
+    ur: 'جائزہ',
+    hi: 'समीक्षा',
+  );
   static const project = TranslatableString(
     en: 'Project',
     ar: 'المشروع',

@@ -26,7 +26,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(YorksV1ShellStrings.companyName.primary), findsOneWidget);
+    expect(
+      find.text(YorksV1ShellStrings.companyName.primary),
+      findsAtLeastNWidgets(2),
+    );
     expect(
       find.text(YorksV1ShellStrings.browseInventory.primary),
       findsOneWidget,

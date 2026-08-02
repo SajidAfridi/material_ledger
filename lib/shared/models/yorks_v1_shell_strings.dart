@@ -23,6 +23,126 @@ abstract final class YorksV1ShellStrings {
     ur: 'آپریشنل ورک اسپیس',
     hi: 'ऑपरेशनल वर्कस्पेस',
   );
+  static const preparingWorkspace = TranslatableString(
+    en: 'Preparing your workspace…',
+    ar: 'جارٍ تجهيز مساحة العمل…',
+    ur: 'آپ کا ورک اسپیس تیار کیا جا رہا ہے…',
+    hi: 'आपका कार्यक्षेत्र तैयार किया जा रहा है…',
+  );
+  static const secureProjectWorkspace = TranslatableString(
+    en: 'Secure project workspace',
+    ar: 'مساحة عمل مشروع آمنة',
+    ur: 'محفوظ پراجیکٹ ورک اسپیس',
+    hi: 'सुरक्षित प्रोजेक्ट कार्यक्षेत्र',
+  );
+  static const signInHero = TranslatableString(
+    en: 'Keep every project, material request and delivery easy to follow.',
+    ar: 'اجعل كل مشروع وطلب مواد وتسليم سهل المتابعة.',
+    ur: 'ہر پراجیکٹ، میٹیریل ریکویسٹ اور ڈلیوری کو آسانی سے ٹریک کریں۔',
+    hi: 'हर प्रोजेक्ट, सामग्री अनुरोध और डिलीवरी को आसानी से ट्रैक करें।',
+  );
+  static const signInHeroDescription = TranslatableString(
+    en: 'Projects, BOQ folders, Material Requests, procurement dispatches and documents remain connected in one dependable workspace.',
+    ar: 'تبقى المشاريع ومجلدات جدول الكميات وطلبات المواد والإرساليات والمستندات متصلة في مساحة عمل موثوقة واحدة.',
+    ur: 'پراجیکٹس، BOQ فولڈرز، میٹیریل ریکویسٹس، پروکیورمنٹ ڈسپیچز اور دستاویزات ایک قابلِ اعتماد ورک اسپیس میں منسلک رہتے ہیں۔',
+    hi: 'प्रोजेक्ट, बीओक्यू फ़ोल्डर, सामग्री अनुरोध, खरीद डिस्पैच और दस्तावेज़ एक भरोसेमंद कार्यक्षेत्र में जुड़े रहते हैं।',
+  );
+  static const signInDescription = TranslatableString(
+    en: 'Use your Yorks company email and password. User access is created and managed by Admin.',
+    ar: 'استخدم بريد Yorks الإلكتروني وكلمة المرور. يتم إنشاء وإدارة وصول المستخدم بواسطة المسؤول.',
+    ur: 'اپنی Yorks کمپنی ای میل اور پاس ورڈ استعمال کریں۔ صارف کی رسائی ایڈمن بناتا اور منظم کرتا ہے۔',
+    hi: 'अपने Yorks कंपनी ईमेल और पासवर्ड का उपयोग करें। उपयोगकर्ता पहुंच एडमिन द्वारा बनाई और प्रबंधित की जाती है।',
+  );
+  static const protectedSessionStatus = TranslatableString(
+    en: 'Protected session',
+    ar: 'جلسة محمية',
+    ur: 'محفوظ سیشن',
+    hi: 'सुरक्षित सत्र',
+  );
+  static const authorisedPersonnelOnly = TranslatableString(
+    en: 'Authorised Yorks AC. & Ref. personnel only',
+    ar: 'لموظفي Yorks AC. & Ref. المصرح لهم فقط',
+    ur: 'صرف مجاز Yorks AC. & Ref. عملہ',
+    hi: 'केवल अधिकृत Yorks AC. & Ref. कर्मियों के लिए',
+  );
+  static const savedJustNow = TranslatableString(
+    en: 'Saved just now',
+    ar: 'تم الحفظ الآن',
+    ur: 'ابھی محفوظ ہوا',
+    hi: 'अभी सहेजा गया',
+  );
+  static const goodAfternoon = TranslatableString(
+    en: 'Good afternoon',
+    ar: 'مساء الخير',
+    ur: 'شب بخیر',
+    hi: 'शुभ अपराह्न',
+  );
+  static const workspaceReady = TranslatableString(
+    en: 'your workspace is ready.',
+    ar: 'مساحة عملك جاهزة.',
+    ur: 'آپ کا ورک اسپیس تیار ہے۔',
+    hi: 'आपका कार्यक्षेत्र तैयार है।',
+  );
+  static const overviewWorkspaceDescription = TranslatableString(
+    en: 'Create projects, organise BOQ folders and confirm delivered materials.',
+    ar: 'أنشئ المشاريع ونظّم مجلدات جدول الكميات وأكد المواد المسلّمة.',
+    ur: 'پراجیکٹس بنائیں، BOQ فولڈرز منظم کریں اور ڈیلیور شدہ مواد کی تصدیق کریں۔',
+    hi: 'प्रोजेक्ट बनाएं, बीओक्यू फ़ोल्डर व्यवस्थित करें और वितरित सामग्री की पुष्टि करें।',
+  );
+  static const openRequests = TranslatableString(
+    en: 'Open Requests',
+    ar: 'الطلبات المفتوحة',
+    ur: 'اوپن ریکویسٹس',
+    hi: 'खुले अनुरोध',
+  );
+  static const needsYourAction = TranslatableString(
+    en: 'Needs Your Action',
+    ar: 'يتطلب إجراءك',
+    ur: 'آپ کی کارروائی درکار ہے',
+    hi: 'आपकी कार्रवाई आवश्यक है',
+  );
+  static const roleActionDescription = TranslatableString(
+    en: 'Only the records that require this role are shown.',
+    ar: 'تظهر فقط السجلات التي تتطلب هذا الدور.',
+    ur: 'صرف وہ ریکارڈز دکھائے جاتے ہیں جن کے لیے یہ کردار درکار ہے۔',
+    hi: 'केवल वे रिकॉर्ड दिखाए जाते हैं जिनके लिए इस भूमिका की आवश्यकता है।',
+  );
+  static const nothingWaiting = TranslatableString(
+    en: 'Nothing is waiting for you',
+    ar: 'لا يوجد ما ينتظرك',
+    ur: 'آپ کے لیے کچھ زیرِ انتظار نہیں',
+    hi: 'आपके लिए कुछ भी प्रतीक्षारत नहीं है',
+  );
+  static const nothingWaitingDescription = TranslatableString(
+    en: 'Open Projects or Material Requests to continue working.',
+    ar: 'افتح المشاريع أو طلبات المواد لمتابعة العمل.',
+    ur: 'کام جاری رکھنے کے لیے پراجیکٹس یا میٹیریل ریکویسٹس کھولیں۔',
+    hi: 'काम जारी रखने के लिए प्रोजेक्ट या सामग्री अनुरोध खोलें।',
+  );
+  static const workspaceScope = TranslatableString(
+    en: 'BOQ · Requests · Documents',
+    ar: 'جدول الكميات · الطلبات · المستندات',
+    ur: 'BOQ · ریکویسٹس · دستاویزات',
+    hi: 'बीओक्यू · अनुरोध · दस्तावेज़',
+  );
+  static const scope = TranslatableString(
+    en: 'Scope',
+    ar: 'النطاق',
+    ur: 'اسکوپ',
+    hi: 'दायरा',
+  );
+  static const viewAll = TranslatableString(
+    en: 'View All',
+    ar: 'عرض الكل',
+    ur: 'سب دیکھیں',
+    hi: 'सभी देखें',
+  );
+  static const connectedProjectControl = TranslatableString(
+    en: 'R35 · Procurement Control & Inventory',
+    ar: 'R35 · ضبط المشتريات والمخزون',
+    ur: 'R35 · پروکیورمنٹ کنٹرول اور انوینٹری',
+    hi: 'R35 · खरीद नियंत्रण और इन्वेंट्री',
+  );
   static const engineerWorkspace = TranslatableString(
     en: 'Engineer Workspace',
     ar: 'مساحة عمل المهندس',
@@ -59,6 +179,12 @@ abstract final class YorksV1ShellStrings {
     ur: 'ورک اسپیس تلاش کریں',
     hi: 'कार्यस्थान खोजें',
   );
+  static const searchOrJump = TranslatableString(
+    en: 'Search or jump to…',
+    ar: 'ابحث أو انتقل إلى…',
+    ur: 'تلاش کریں یا یہاں جائیں…',
+    hi: 'खोजें या यहां जाएं…',
+  );
   static const projectCloseoutControl = TranslatableString(
     en: 'Every project stays controlled from start to closeout.',
     ar: 'تحكم متكامل من المشروع حتى الإقفال.',
@@ -88,6 +214,12 @@ abstract final class YorksV1ShellStrings {
     ar: 'name@company.com',
     ur: 'name@company.com',
     hi: 'name@company.com',
+  );
+  static const passwordHint = TranslatableString(
+    en: 'Enter password',
+    ar: 'أدخل كلمة المرور',
+    ur: 'پاس ورڈ درج کریں',
+    hi: 'पासवर्ड दर्ज करें',
   );
   static const protectedSession = TranslatableString(
     en: 'Your session and operational records are protected.',

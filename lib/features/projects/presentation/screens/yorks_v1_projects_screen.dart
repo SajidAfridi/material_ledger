@@ -17,6 +17,7 @@ import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
@@ -46,6 +47,7 @@ class YorksV1OverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final user = ref.watch(currentUserProvider);
     final projects = ref.watch(yorksV1ProjectPortfolioProvider);
     final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
     final canCreateProject = role?.canCreateProject == true;
@@ -56,9 +58,6 @@ class YorksV1OverviewScreen extends ConsumerWidget {
         projects.valueOrNull ?? const <YorksV1ProjectPortfolioItem>[];
     final requestItems =
         requests.valueOrNull ?? const <YorksV1MaterialRequest>[];
-    final activeProjects = projectItems
-        .where((item) => item.project.state == YorksV1ProjectLifecycle.active)
-        .length;
     final openRequests = requestItems
         .where(
           (item) =>
@@ -76,339 +75,527 @@ class YorksV1OverviewScreen extends ConsumerWidget {
         )
         .length;
 
-    return NexusPageShell(
-      eyebrow: _workspaceEyebrow(role).primary,
-      title: YorksV1ShellStrings.overview.primary,
-      description: YorksV1ShellStrings.projectCloseoutDescription.primary,
-      actions: [
-        if (canCreateProject)
-          SizedBox(
-            height: AppSpacing.minTapTarget,
-            child: FilledButton.icon(
-              onPressed: () => context.push(RoutePaths.engineerCreateProject),
-              icon: const Icon(Icons.add_rounded),
-              label: Text(YorksV1ProjectStrings.createProject.primary),
-            ),
-          )
-        else if (procurement)
-          SizedBox(
-            height: AppSpacing.minTapTarget,
-            child: FilledButton.icon(
-              onPressed: () => context.go(RoutePaths.yorksV1MaterialRequests),
-              icon: const Icon(Icons.assignment_outlined),
-              label: Text(YorksV1MaterialRequestStrings.requests.primary),
-            ),
-          ),
-        if (canCreateRequest)
-          SizedBox(
-            height: AppSpacing.controlHeight,
-            child: OutlinedButton.icon(
-              onPressed: () => context.push(
-                RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
-              ),
-              icon: const Icon(Icons.add_task_outlined, size: 18),
-              label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
-            ),
-          ),
-      ],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _OverviewMetrics(
-            activeProjects: activeProjects,
-            openRequests: openRequests,
-            dispatchReady: dispatchReady,
-            procurement: procurement,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          if (procurement) ...[
-            const _ProcurementFlow(),
-            const SizedBox(height: AppSpacing.lg),
-          ],
-          _OverviewSection(
-            title: YorksV1ProjectStrings.projects.primary,
-            action: YorksV1ProjectStrings.openProject.primary,
-            onAction: () => context.go(RoutePaths.yorksV1Projects),
-            child: projects.when(
-              loading: () => const _OverviewLoading(),
-              error: (_, _) => _OverviewRetry(
-                onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
-              ),
-              data: (items) => items.isEmpty
-                  ? _OverviewEmpty(
-                      icon: Icons.account_tree_outlined,
-                      copy: YorksV1ProjectStrings.noProjects,
-                    )
-                  : Column(
-                      children: [
-                        for (final item in items.take(5))
-                          _OverviewProjectRow(item: item),
-                      ],
-                    ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _OverviewSection(
-            title: YorksV1MaterialRequestStrings.requests.primary,
-            action: YorksV1MaterialRequestStrings.requests.primary,
-            onAction: () => context.go(RoutePaths.yorksV1MaterialRequests),
-            child: requests.when(
-              loading: () => const _OverviewLoading(),
-              error: (_, _) => _OverviewRetry(
-                onRetry: () =>
-                    ref.invalidate(yorksV1MaterialRequestListProvider),
-              ),
-              data: (items) => items.isEmpty
-                  ? _OverviewEmpty(
-                      icon: Icons.assignment_outlined,
-                      copy: YorksV1MaterialRequestStrings.noRequests,
-                    )
-                  : Column(
-                      children: [
-                        for (final item in items.take(5))
-                          _OverviewRequestRow(item: item),
-                      ],
-                    ),
-            ),
-          ),
-        ],
+    return _R35OverviewPage(
+      displayName: user?.fullName,
+      projects: projects,
+      requests: requests,
+      projectCount: projectItems.length,
+      openRequests: openRequests,
+      dispatchReady: dispatchReady,
+      canCreateProject: canCreateProject,
+      canCreateRequest: canCreateRequest,
+      procurement: procurement,
+      onCreateProject: () => context.push(RoutePaths.engineerCreateProject),
+      onCreateRequest: () => context.push(
+        RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
       ),
+      onOpenProjects: () => context.go(RoutePaths.yorksV1Projects),
+      onOpenRequests: () => context.go(RoutePaths.yorksV1MaterialRequests),
+      onRetryProjects: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
+      onRetryRequests: () => ref.invalidate(yorksV1MaterialRequestListProvider),
     );
   }
 }
 
-class _OverviewMetrics extends StatelessWidget {
-  const _OverviewMetrics({
-    required this.activeProjects,
+class _R35OverviewPage extends StatelessWidget {
+  const _R35OverviewPage({
+    required this.displayName,
+    required this.projects,
+    required this.requests,
+    required this.projectCount,
     required this.openRequests,
     required this.dispatchReady,
+    required this.canCreateProject,
+    required this.canCreateRequest,
     required this.procurement,
+    required this.onCreateProject,
+    required this.onCreateRequest,
+    required this.onOpenProjects,
+    required this.onOpenRequests,
+    required this.onRetryProjects,
+    required this.onRetryRequests,
   });
 
-  final int activeProjects;
+  final String? displayName;
+  final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final int projectCount;
   final int openRequests;
   final int dispatchReady;
+  final bool canCreateProject;
+  final bool canCreateRequest;
   final bool procurement;
+  final VoidCallback onCreateProject;
+  final VoidCallback onCreateRequest;
+  final VoidCallback onOpenProjects;
+  final VoidCallback onOpenRequests;
+  final VoidCallback onRetryProjects;
+  final VoidCallback onRetryRequests;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final count = constraints.maxWidth >= 980
-          ? 3
-          : constraints.maxWidth >= 560
-          ? 2
-          : 1;
-      return GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: count,
-        crossAxisSpacing: AppSpacing.md,
-        mainAxisSpacing: AppSpacing.md,
-        childAspectRatio: count == 1 ? 3.8 : 1.85,
+      final desktop =
+          constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
+      final name = (displayName ?? '').trim().split(RegExp(r'\\s+')).first;
+      final safeName = name.isEmpty
+          ? YorksV1ShellStrings.companyName.primary
+          : name;
+      final horizontal = desktop
+          ? AppSpacing.xxxl + AppSpacing.xs
+          : AppSpacing.lg;
+      return ColoredBox(
+        color: AppColors.surface,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            AppSpacing.xxxl,
+            horizontal,
+            72,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: AppSpacing.pageMaxWidth,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _R35OverviewHero(
+                  name: safeName,
+                  projectCount: projectCount,
+                  openRequests: openRequests,
+                  canCreateProject: canCreateProject,
+                  canCreateRequest: canCreateRequest,
+                  procurement: procurement,
+                  onCreateProject: onCreateProject,
+                  onCreateRequest: onCreateRequest,
+                  onOpenRequests: onOpenRequests,
+                ),
+                const SizedBox(height: AppSpacing.xxxl),
+                _R35SectionHeading(
+                  title: YorksV1ShellStrings.needsYourAction.primary,
+                  description:
+                      YorksV1ShellStrings.roleActionDescription.primary,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _R35ActionCard(requests: requests, onRetry: onRetryRequests),
+                const SizedBox(height: AppSpacing.xxxl),
+                _R35SectionHeading(
+                  title: YorksV1ProjectStrings.projects.primary,
+                  action: YorksV1ShellStrings.viewAll.primary,
+                  onAction: onOpenProjects,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _R35ProjectPanel(projects: projects, onRetry: onRetryProjects),
+                if (procurement) ...[
+                  const SizedBox(height: AppSpacing.xxxl),
+                  _R35SectionHeading(
+                    title: YorksV1ShellStrings.dispatches.primary,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _R35DispatchReadiness(value: dispatchReady),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _R35OverviewHero extends StatelessWidget {
+  const _R35OverviewHero({
+    required this.name,
+    required this.projectCount,
+    required this.openRequests,
+    required this.canCreateProject,
+    required this.canCreateRequest,
+    required this.procurement,
+    required this.onCreateProject,
+    required this.onCreateRequest,
+    required this.onOpenRequests,
+  });
+
+  final String name;
+  final int projectCount;
+  final int openRequests;
+  final bool canCreateProject;
+  final bool canCreateRequest;
+  final bool procurement;
+  final VoidCallback onCreateProject;
+  final VoidCallback onCreateRequest;
+  final VoidCallback onOpenRequests;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final stacked = constraints.maxWidth < 800;
+      final main = _R35Card(
+        minHeight: stacked ? null : 314,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              YorksV1ShellStrings.goodAfternoon.primary.toUpperCase(),
+              style: AppTypography.eyebrow.copyWith(
+                color: const Color(0xFF82B7F4),
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '$name, ${YorksV1ShellStrings.workspaceReady.primary}',
+              style: AppTypography.headlineLarge.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.1,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              procurement
+                  ? YorksV1ShellStrings.projectCloseoutDescription.primary
+                  : YorksV1ShellStrings.overviewWorkspaceDescription.primary,
+              style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
+            ),
+            const Spacer(),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                if (canCreateProject)
+                  _R35PrimaryAction(
+                    label: YorksV1ProjectStrings.createProject.primary,
+                    icon: Icons.add_rounded,
+                    onPressed: onCreateProject,
+                  ),
+                if (canCreateRequest)
+                  _R35SecondaryAction(
+                    label: YorksV1MaterialRequestStrings.newRequest.primary,
+                    icon: Icons.assignment_outlined,
+                    onPressed: onCreateRequest,
+                  ),
+                _R35SecondaryAction(
+                  label: YorksV1ShellStrings.openRequests.primary,
+                  onPressed: onOpenRequests,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final snapshot = _R35Card(
+        minHeight: stacked ? null : 314,
+        child: Column(
+          children: [
+            _R35SnapshotTile(
+              label: YorksV1ProjectStrings.projects.primary,
+              value: '$projectCount',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _R35SnapshotTile(
+              label: YorksV1ShellStrings.needsYourAction.primary,
+              value: '$openRequests',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _R35SnapshotTile(
+              label: YorksV1ShellStrings.scope.primary,
+              value: YorksV1ShellStrings.workspaceScope.primary,
+              valueText: true,
+            ),
+          ],
+        ),
+      );
+      if (stacked) {
+        return Column(
+          children: [
+            main,
+            const SizedBox(height: AppSpacing.md),
+            snapshot,
+          ],
+        );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _OverviewMetric(
-            icon: Icons.account_tree_outlined,
-            label: YorksV1ProjectStrings.projects.primary,
-            value: '$activeProjects',
-            tone: AppColors.blue,
-          ),
-          _OverviewMetric(
-            icon: Icons.assignment_outlined,
-            label: YorksV1MaterialRequestStrings.requests.primary,
-            value: '$openRequests',
-            tone: AppColors.warning,
-          ),
-          _OverviewMetric(
-            icon: procurement
-                ? Icons.local_shipping_outlined
-                : Icons.pending_actions_outlined,
-            label: procurement
-                ? YorksV1ShellStrings.dispatches.primary
-                : YorksV1MaterialRequestStrings.nextAction.primary,
-            value: '$dispatchReady',
-            tone: AppColors.success,
-          ),
+          Expanded(flex: 3, child: main),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(flex: 2, child: snapshot),
         ],
       );
     },
   );
 }
 
-class _OverviewMetric extends StatelessWidget {
-  const _OverviewMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.tone,
-  });
+class _R35Card extends StatelessWidget {
+  const _R35Card({required this.child, this.minHeight});
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) => LedgerCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: tone.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          ),
-          child: Icon(icon, size: 18, color: tone),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Text(value, style: AppTypography.displaySmall),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          label,
-          style: AppTypography.labelLarge.copyWith(color: AppColors.muted),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ProcurementFlow extends StatelessWidget {
-  const _ProcurementFlow();
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = [
-      (
-        YorksV1MaterialRequestStrings.materialRequest,
-        Icons.assignment_outlined,
-      ),
-      (YorksV1ShellStrings.procurement, Icons.playlist_add_check_rounded),
-      (YorksV1MaterialRequestStrings.approved, Icons.task_alt_rounded),
-      (YorksV1ShellStrings.dispatches, Icons.local_shipping_outlined),
-      (YorksV1MaterialRequestStrings.received, Icons.inventory_2_outlined),
-    ];
-    return LedgerCard(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 720;
-          return Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (var index = 0; index < steps.length; index++)
-                SizedBox(
-                  width: compact
-                      ? (constraints.maxWidth - AppSpacing.sm) / 2
-                      : (constraints.maxWidth - (AppSpacing.sm * 4)) / 5,
-                  child: _ProcurementFlowStep(
-                    index: index + 1,
-                    label: steps[index].$1.primary,
-                    icon: steps[index].$2,
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ProcurementFlowStep extends StatelessWidget {
-  const _ProcurementFlowStep({
-    required this.index,
-    required this.label,
-    required this.icon,
-  });
-
-  final int index;
-  final String label;
-  final IconData icon;
+  final Widget child;
+  final double? minHeight;
 
   @override
   Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 82),
-    padding: const EdgeInsets.all(AppSpacing.md),
+    constraints: BoxConstraints(minHeight: minHeight ?? 0),
+    padding: const EdgeInsets.all(AppSpacing.xxxl),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      boxShadow: const [
+        BoxShadow(
+          color: AppColors.shadow,
+          blurRadius: 26,
+          offset: Offset(0, 10),
+        ),
+      ],
+    ),
+    child: child,
+  );
+}
+
+class _R35SnapshotTile extends StatelessWidget {
+  const _R35SnapshotTile({
+    required this.label,
+    required this.value,
+    this.valueText = false,
+  });
+
+  final String label;
+  final String value;
+  final bool valueText;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(AppSpacing.lg),
     decoration: BoxDecoration(
       color: AppColors.surfaceContainerLow,
       border: Border.all(color: AppColors.line),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 25,
-          height: 25,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.blueContainer,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-          ),
-          child: Text(
-            '$index',
-            style: AppTypography.labelMedium.copyWith(color: AppColors.blue),
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.1,
           ),
         ),
-        const Spacer(),
-        Icon(icon, size: 16, color: AppColors.inkSecondary),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.labelMedium,
+          value,
+          style:
+              (valueText ? AppTypography.titleSmall : AppTypography.titleLarge)
+                  .copyWith(color: AppColors.ink, fontWeight: FontWeight.w800),
         ),
       ],
     ),
   );
 }
 
-class _OverviewSection extends StatelessWidget {
-  const _OverviewSection({
+class _R35PrimaryAction extends StatelessWidget {
+  const _R35PrimaryAction({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+  });
+
+  final String label;
+  final IconData? icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 52,
+    child: FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon ?? Icons.arrow_forward_rounded, size: 20),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.navy,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+        ),
+      ),
+    ),
+  );
+}
+
+class _R35SecondaryAction extends StatelessWidget {
+  const _R35SecondaryAction({
+    required this.label,
+    required this.onPressed,
+    this.icon,
+  });
+
+  final String label;
+  final IconData? icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 52,
+    child: OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 19),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.inkSecondary,
+        side: const BorderSide(color: AppColors.line),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+        ),
+      ),
+    ),
+  );
+}
+
+class _R35SectionHeading extends StatelessWidget {
+  const _R35SectionHeading({
     required this.title,
-    required this.action,
-    required this.onAction,
-    required this.child,
+    this.description,
+    this.action,
+    this.onAction,
   });
 
   final String title;
-  final String action;
-  final VoidCallback onAction;
-  final Widget child;
+  final String? description;
+  final String? action;
+  final VoidCallback? onAction;
 
   @override
-  Widget build(BuildContext context) => LedgerCard(
-    padding: EdgeInsets.zero,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
-            AppSpacing.lg,
-            AppSpacing.xl,
-            AppSpacing.md,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: AppTypography.titleLarge.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (description != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                description!,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ],
+        ),
+      ),
+      if (action != null && onAction != null)
+        SizedBox(
+          height: AppSpacing.minTapTarget,
+          child: OutlinedButton(onPressed: onAction, child: Text(action!)),
+        ),
+    ],
+  );
+}
+
+class _R35ActionCard extends StatelessWidget {
+  const _R35ActionCard({required this.requests, required this.onRetry});
+
+  final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => _R35Card(
+    minHeight: 300,
+    child: requests.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => _OverviewRetry(onRetry: onRetry),
+      data: (items) {
+        final actionable = items
+            .where((item) => item.state != YorksV1MaterialRequestState.draft)
+            .take(5)
+            .toList();
+        if (actionable.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.check_rounded,
+                  color: Color(0xFF9ABEE9),
+                  size: 40,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  YorksV1ShellStrings.nothingWaiting.primary,
                   style: AppTypography.titleMedium.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-              TextButton(onPressed: onAction, child: Text(action)),
-            ],
-          ),
-        ),
-        const Divider(height: 1, color: AppColors.line),
-        child,
-      ],
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  YorksV1ShellStrings.nothingWaitingDescription.primary,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return Column(
+          children: [
+            for (final item in actionable) _OverviewRequestRow(item: item),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _R35ProjectPanel extends StatelessWidget {
+  const _R35ProjectPanel({required this.projects, required this.onRetry});
+
+  final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => _R35Card(
+    child: projects.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppSpacing.xxl),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, _) => _OverviewRetry(onRetry: onRetry),
+      data: (items) => items.isEmpty
+          ? _OverviewEmpty(
+              icon: Icons.account_tree_outlined,
+              copy: YorksV1ProjectStrings.noProjects,
+            )
+          : Column(
+              children: [
+                for (final item in items.take(5))
+                  _OverviewProjectRow(item: item),
+              ],
+            ),
+    ),
+  );
+}
+
+class _R35DispatchReadiness extends StatelessWidget {
+  const _R35DispatchReadiness({required this.value});
+
+  final int value;
+
+  @override
+  Widget build(BuildContext context) => _R35Card(
+    child: _R35SnapshotTile(
+      label: YorksV1ShellStrings.dispatches.primary,
+      value: '$value',
     ),
   );
 }
@@ -529,16 +716,6 @@ class _OverviewRecordIcon extends StatelessWidget {
   );
 }
 
-class _OverviewLoading extends StatelessWidget {
-  const _OverviewLoading();
-
-  @override
-  Widget build(BuildContext context) => const Padding(
-    padding: EdgeInsets.all(AppSpacing.xxl),
-    child: Center(child: CircularProgressIndicator()),
-  );
-}
-
 class _OverviewRetry extends StatelessWidget {
   const _OverviewRetry({required this.onRetry});
 
@@ -597,20 +774,6 @@ NexusStatusTone _requestTone(YorksV1MaterialRequestState state) {
       return NexusStatusTone.info;
     case YorksV1MaterialRequestState.draft:
       return NexusStatusTone.neutral;
-  }
-}
-
-TranslatableString _workspaceEyebrow(YorksV1Role? role) {
-  switch (role) {
-    case YorksV1Role.procurement:
-      return YorksV1ShellStrings.procurementWorkspace;
-    case YorksV1Role.admin:
-      return YorksV1ShellStrings.managementWorkspace;
-    case YorksV1Role.projectEngineer:
-    case YorksV1Role.siteEngineer:
-      return YorksV1ShellStrings.engineerWorkspace;
-    case null:
-      return YorksV1ShellStrings.operationalWorkspace;
   }
 }
 

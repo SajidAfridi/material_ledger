@@ -12,11 +12,11 @@ import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 
-/// Yorks R35 sign-in experience.
+/// Secure Yorks authentication in the approved R35 access composition.
 ///
-/// The screen is deliberately a presentation layer over [AuthController]:
-/// Supabase remains authoritative when configured and explicitly enabled local
-/// development remains the only local-auth path. No auth state is stored here.
+/// The visual model follows the HTML prototype exactly; credentials still go
+/// through [AuthController], so no prototype localStorage authorization or
+/// session behavior leaks into the production path.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -107,145 +107,268 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
-    final wide =
-        MediaQuery.sizeOf(context).width >= AppSpacing.stackedBreakpoint;
+    final desktop = MediaQuery.sizeOf(context).width > 900;
     return Scaffold(
-      backgroundColor: AppColors.surfaceContainerLow,
-      body: wide
+      backgroundColor: AppColors.surface,
+      body: desktop
           ? Row(
               children: [
-                const Expanded(child: _AuthBrandPanel()),
+                const Expanded(flex: 9, child: _AuthBrandPanel()),
                 Expanded(
+                  flex: 11,
                   child: _AuthFormPanel(owner: this, language: language),
                 ),
               ],
             )
-          : _AuthFormPanel(owner: this, language: language, compact: true),
+          : _AuthMobileLayout(owner: this, language: language),
     );
   }
 }
 
 class _AuthBrandPanel extends StatelessWidget {
-  const _AuthBrandPanel();
+  const _AuthBrandPanel({this.compact = false});
+
+  final bool compact;
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: AppColors.navy,
-    child: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.massive),
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF081D36), AppColors.navy, AppColors.navyHover],
+        stops: [0, 0.65, 1],
+      ),
+    ),
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        const IgnorePointer(
+          child: CustomPaint(painter: _AuthPerspectiveGridPainter()),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? AppSpacing.xl : AppSpacing.massive,
+              compact ? AppSpacing.lg : AppSpacing.huge,
+              compact ? AppSpacing.xl : AppSpacing.massive,
+              compact ? AppSpacing.xl : AppSpacing.massive,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _AuthBrandMark(),
+                if (compact) ...[
+                  const Spacer(),
+                  Text(
+                    YorksV1ShellStrings.operationalWorkspace.primary
+                        .toUpperCase(),
+                    style: AppTypography.eyebrow.copyWith(
+                      color: const Color(0xFF82BCFF),
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ] else ...[
+                  const Spacer(flex: 3),
+                  const _AuthHero(),
+                  const Spacer(flex: 4),
+                  Text(
+                    YorksV1ShellStrings.authorisedPersonnelOnly.primary,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: Colors.white.withValues(alpha: 0.52),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AuthBrandMark extends StatelessWidget {
+  const _AuthBrandMark();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      const BrandLogo(size: 58, shadow: true),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const BrandLogo(size: 46, shadow: false),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        YorksV1ShellStrings.companyName.primary,
-                        style: AppTypography.titleLarge.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        YorksV1ShellStrings.companyLegalName.primary,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: Colors.white.withValues(alpha: 0.68),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(flex: 3),
             Text(
-              YorksV1ShellStrings.operationalWorkspace.primary.toUpperCase(),
-              style: AppTypography.eyebrow.copyWith(
-                color: AppColors.blueContainerStrong,
+              YorksV1ShellStrings.companyName.primary,
+              style: AppTypography.titleLarge.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 2),
             Text(
-              YorksV1ShellStrings.projectCloseoutControl.primary,
-              style: AppTypography.displayMedium.copyWith(color: Colors.white),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 470),
-              child: Text(
-                YorksV1ShellStrings.projectCloseoutDescription.primary,
-                style: AppTypography.bodyLarge.copyWith(
-                  color: Colors.white.withValues(alpha: 0.74),
-                ),
+              YorksV1ShellStrings.companyLegalName.primary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: Colors.white.withValues(alpha: 0.66),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xxxl),
-            const Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                _AuthCapability(label: YorksV1ShellStrings.projects),
-                _AuthCapability(label: YorksV1ShellStrings.documentControl),
-                _AuthCapability(label: YorksV1ShellStrings.procurement),
-              ],
-            ),
-            const Spacer(flex: 4),
-            Row(
-              children: [
-                const Icon(
-                  Icons.verified_user_outlined,
-                  size: 18,
-                  color: AppColors.blueContainerStrong,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(
-                    YorksV1ShellStrings.accountabilityNotice.primary,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: Colors.white.withValues(alpha: 0.72),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _AuthHero extends StatelessWidget {
+  const _AuthHero({this.copyCompact = false});
+
+  final bool copyCompact;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 500),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          YorksV1ShellStrings.operationalWorkspace.primary.toUpperCase(),
+          style: AppTypography.eyebrow.copyWith(
+            color: const Color(0xFF82BCFF),
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          YorksV1ShellStrings.signInHero.primary,
+          style:
+              (copyCompact
+                      ? AppTypography.headlineLarge
+                      : AppTypography.displayMedium)
+                  .copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
+                    letterSpacing: -1.25,
+                  ),
+        ),
+        if (!copyCompact) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            YorksV1ShellStrings.signInHeroDescription.primary,
+            style: AppTypography.bodyLarge.copyWith(
+              color: const Color(0xFFC8D9EC),
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxxl),
+          const Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _AuthCapability(
+                label: YorksV1ShellStrings.projects,
+                icon: Icons.folder_outlined,
+              ),
+              _AuthCapability(
+                label: YorksV1ShellStrings.documentControl,
+                icon: Icons.description_outlined,
+              ),
+              _AuthCapability(
+                label: YorksV1ShellStrings.procurement,
+                icon: Icons.inventory_2_outlined,
+              ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _AuthCapability extends StatelessWidget {
+  const _AuthCapability({required this.label, required this.icon});
+
+  final TranslatableString label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: AppSpacing.minTapTarget,
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.09),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.19)),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 17, color: const Color(0xFFC8D9EC)),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          label.primary,
+          style: AppTypography.labelLarge.copyWith(
+            color: const Color(0xFFE5EFFA),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AuthFormPanel extends StatelessWidget {
+  const _AuthFormPanel({required this.owner, required this.language});
+
+  final _LoginScreenState owner;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.surface,
+    child: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.huge),
+          child: _AuthCard(owner: owner, language: language),
         ),
       ),
     ),
   );
 }
 
-class _AuthCapability extends StatelessWidget {
-  const _AuthCapability({required this.label});
+class _AuthMobileLayout extends StatelessWidget {
+  const _AuthMobileLayout({required this.owner, required this.language});
 
-  final TranslatableString label;
+  final _LoginScreenState owner;
+  final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.md,
-      vertical: AppSpacing.sm,
-    ),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.11),
-      border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-    ),
-    child: Text(
-      label.primary,
-      style: AppTypography.labelLarge.copyWith(color: Colors.white),
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.surface,
+    child: SingleChildScrollView(
+      child: Column(
+        children: [
+          SizedBox(height: 280, child: const _AuthBrandPanel(compact: true)),
+          Transform.translate(
+            offset: const Offset(0, -22),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: _AuthCard(owner: owner, language: language, compact: true),
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
 
-class _AuthFormPanel extends StatelessWidget {
-  const _AuthFormPanel({
+class _AuthCard extends StatelessWidget {
+  const _AuthCard({
     required this.owner,
     required this.language,
     this.compact = false,
@@ -256,105 +379,78 @@ class _AuthFormPanel extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: Center(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.huge),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (compact) ...[
-                const _AuthCompactBrand(),
-                const SizedBox(height: AppSpacing.xxxl),
-              ],
-              Container(
-                padding: EdgeInsets.all(
-                  compact ? AppSpacing.xl : AppSpacing.xxxl,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLowest,
-                  border: Border.all(color: AppColors.line),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.shadow,
-                      blurRadius: 28,
-                      offset: Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: AutofillGroup(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        YorksV1ShellStrings.secureAccess.primary.toUpperCase(),
-                        style: AppTypography.eyebrow,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      BilingualText(
-                        english: AppStrings.signIn.primary,
-                        secondary: AppStrings.signIn.secondary(language),
-                        englishStyle: AppTypography.headlineMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        YorksV1ShellStrings.protectedSession.primary,
-                        style: AppTypography.bodyMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.xxl),
-                      _AuthForm(owner: owner, language: language),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.shield_outlined,
-                    size: 16,
-                    color: AppColors.muted,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Flexible(
-                    child: Text(
-                      YorksV1ShellStrings.companyLegalName.primary,
-                      textAlign: TextAlign.center,
-                      style: AppTypography.labelSmall,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 455),
+    child: Container(
+      padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxxl),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 36,
+            offset: Offset(0, 16),
           ),
+        ],
+      ),
+      child: AutofillGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              YorksV1ShellStrings.secureAccess.primary.toUpperCase(),
+              style: AppTypography.eyebrow.copyWith(
+                color: AppColors.blue,
+                letterSpacing: 1.25,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              AppStrings.signIn.primary,
+              style: AppTypography.headlineMedium.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1ShellStrings.signInDescription.primary,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.muted,
+                height: 1.55,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            _AuthForm(owner: owner, language: language),
+            const SizedBox(height: AppSpacing.lg),
+            const Divider(color: AppColors.line, height: 1),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.shield_outlined,
+                  size: 17,
+                  color: Color(0xFF456785),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    YorksV1ShellStrings.accountabilityNotice.primary,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     ),
-  );
-}
-
-class _AuthCompactBrand extends StatelessWidget {
-  const _AuthCompactBrand();
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      const BrandLogo(size: 62, shadow: false),
-      const SizedBox(height: AppSpacing.md),
-      Text(
-        YorksV1ShellStrings.companyName.primary,
-        style: AppTypography.titleLarge.copyWith(color: AppColors.navy),
-      ),
-      const SizedBox(height: AppSpacing.xs),
-      Text(
-        YorksV1ShellStrings.operationalWorkspace.primary,
-        style: AppTypography.bodySmall,
-      ),
-    ],
   );
 }
 
@@ -370,10 +466,7 @@ class _AuthForm extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AuthFieldLabel(
-          label: YorksV1ShellStrings.companyEmail,
-          language: language,
-        ),
+        _AuthFieldLabel(label: YorksV1ShellStrings.companyEmail),
         const SizedBox(height: AppSpacing.sm),
         TextFormField(
           controller: owner._emailController,
@@ -381,16 +474,15 @@ class _AuthForm extends StatelessWidget {
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
-          style: AppTypography.bodyLarge,
-          decoration: InputDecoration(
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.ink),
+          decoration: _inputDecoration(
             hintText: YorksV1ShellStrings.companyEmailHint.primary,
-            prefixIcon: const Icon(Icons.mail_outline_rounded),
           ),
           onFieldSubmitted: (_) => owner._passwordFocusNode.requestFocus(),
           validator: owner._validateEmail,
         ),
         const SizedBox(height: AppSpacing.lg),
-        _AuthFieldLabel(label: AppStrings.password, language: language),
+        _AuthFieldLabel(label: AppStrings.password),
         const SizedBox(height: AppSpacing.sm),
         TextFormField(
           controller: owner._passwordController,
@@ -398,9 +490,9 @@ class _AuthForm extends StatelessWidget {
           obscureText: owner._obscurePassword,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.password],
-          style: AppTypography.bodyLarge,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.lock_outline_rounded),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.ink),
+          decoration: _inputDecoration(
+            hintText: YorksV1ShellStrings.passwordHint.primary,
             suffixIcon: IconButton(
               tooltip:
                   (owner._obscurePassword
@@ -412,6 +504,7 @@ class _AuthForm extends StatelessWidget {
                 owner._obscurePassword
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
+                size: 20,
               ),
             ),
           ),
@@ -419,45 +512,43 @@ class _AuthForm extends StatelessWidget {
           validator: owner._validatePassword,
         ),
         const SizedBox(height: AppSpacing.sm),
-        Semantics(
-          checked: owner._rememberMe,
-          button: true,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-              onTap: () => owner._setRememberMe(!owner._rememberMe),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minHeight: AppSpacing.minTapTarget,
-                ),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: owner._rememberMe,
-                      onChanged: (value) =>
-                          owner._setRememberMe(value ?? false),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: BilingualText(
-                        english: AppStrings.rememberMe.primary,
-                        secondary: AppStrings.rememberMe.secondary(language),
-                        englishStyle: AppTypography.bodyMedium,
-                      ),
-                    ),
-                  ],
+        Row(
+          children: [
+            SizedBox(
+              width: AppSpacing.minTapTarget,
+              height: AppSpacing.minTapTarget,
+              child: Checkbox(
+                value: owner._rememberMe,
+                onChanged: (value) => owner._setRememberMe(value ?? false),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                AppStrings.rememberMe.primary,
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.muted,
                 ),
               ),
             ),
-          ),
+            Text(
+              YorksV1ShellStrings.protectedSessionStatus.primary,
+              style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.sm),
         SizedBox(
-          height: 52,
-          child: FilledButton.icon(
+          height: 48,
+          child: FilledButton(
             onPressed: owner._isLoading ? null : owner._handleLogin,
-            icon: owner._isLoading
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: owner._isLoading
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -466,8 +557,20 @@ class _AuthForm extends StatelessWidget {
                       color: Colors.white,
                     ),
                   )
-                : const Icon(Icons.login_rounded),
-            label: Text(AppStrings.signIn.primary),
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        AppStrings.signIn.primary,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      const Icon(Icons.arrow_forward_rounded, size: 20),
+                    ],
+                  ),
           ),
         ),
       ],
@@ -475,16 +578,69 @@ class _AuthForm extends StatelessWidget {
   );
 }
 
+InputDecoration _inputDecoration({String? hintText, Widget? suffixIcon}) =>
+    InputDecoration(
+      hintText: hintText,
+      hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.mutedLight),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      suffixIcon: suffixIcon,
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: AppColors.blue, width: 1.5),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: AppColors.error),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+    );
+
 class _AuthFieldLabel extends StatelessWidget {
-  const _AuthFieldLabel({required this.label, required this.language});
+  const _AuthFieldLabel({required this.label});
 
   final TranslatableString label;
-  final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => BilingualText(
-    english: label.primary,
-    secondary: label.secondary(language),
-    englishStyle: AppTypography.titleSmall,
+  Widget build(BuildContext context) => Text(
+    label.primary,
+    style: AppTypography.labelLarge.copyWith(
+      color: AppColors.inkSecondary,
+      fontWeight: FontWeight.w700,
+    ),
   );
+}
+
+class _AuthPerspectiveGridPainter extends CustomPainter {
+  const _AuthPerspectiveGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF78BAFF).withValues(alpha: 0.13)
+      ..strokeWidth = 1;
+    const horizon = 0.68;
+    final horizonY = size.height * horizon;
+    for (var x = -size.width * 0.2; x <= size.width * 1.2; x += 42) {
+      canvas.drawLine(
+        Offset(size.width / 2, horizonY),
+        Offset(x, size.height),
+        paint,
+      );
+    }
+    for (var index = 1; index < 9; index++) {
+      final t = index / 9;
+      final y = horizonY + ((size.height - horizonY) * t * t);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AuthPerspectiveGridPainter oldDelegate) =>
+      false;
 }
