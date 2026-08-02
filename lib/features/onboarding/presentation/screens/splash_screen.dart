@@ -3,25 +3,27 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
+import '../../../../shared/providers/language_provider.dart';
 
 /// The approved R35 access splash.
 ///
 /// This is intentionally a short, calm hand-off into secure sign-in. It has no
 /// product state or authorization logic: those remain owned by the router and
 /// the auth controller after the splash ends.
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _progressController;
   Timer? _continueTimer;
@@ -41,7 +43,15 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1250),
     )..forward();
-    _continueTimer = Timer(const Duration(milliseconds: 1250), () {
+    _continueTimer = Timer(const Duration(milliseconds: 1250), () async {
+      if (!mounted) return;
+      // The approved R35 prototype goes directly from splash to sign-in. The
+      // old first-run language gate could redirect that hand-off back to
+      // splash forever on a fresh browser profile. English is the configured
+      // default; users can change the display language later from Profile.
+      if (!ref.read(onboardingCompleteProvider)) {
+        await ref.read(onboardingCompleteProvider.notifier).complete();
+      }
       if (mounted) context.go(RoutePaths.login);
     });
   }
