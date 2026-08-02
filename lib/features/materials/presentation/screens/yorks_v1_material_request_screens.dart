@@ -969,6 +969,9 @@ class _RequestDetailBody extends ConsumerWidget {
         .watch(yorksV1FeatureFlagsProvider)
         .arrangement;
     final logisticsEnabled = ref.watch(yorksV1FeatureFlagsProvider).logistics;
+    final returnsDocumentsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .returnsDocuments;
     final fileService = ref.watch(yorksV1BoqWorkbookFileServiceProvider);
     final documentService = YorksV1MaterialRequestDocumentService();
     final canCancel =
@@ -985,6 +988,10 @@ class _RequestDetailBody extends ConsumerWidget {
         request.state != YorksV1MaterialRequestState.cancelled;
     final canOpenLogistics =
         logisticsEnabled &&
+        request.state != YorksV1MaterialRequestState.draft &&
+        request.state != YorksV1MaterialRequestState.cancelled;
+    final canOpenReturnsDocuments =
+        returnsDocumentsEnabled &&
         request.state != YorksV1MaterialRequestState.draft &&
         request.state != YorksV1MaterialRequestState.cancelled;
     return SafeArea(
@@ -1051,6 +1058,19 @@ class _RequestDetailBody extends ConsumerWidget {
                           icon: Icons.local_shipping_outlined,
                           onPressed: () => context.push(
                             RoutePaths.yorksV1MaterialRequestLogisticsPath(
+                              request.id,
+                            ),
+                          ),
+                        ),
+                      if (canOpenReturnsDocuments)
+                        SecondaryButton(
+                          label: YorksV1LogisticsStrings
+                              .deliveryOrdersAndReturns
+                              .primary,
+                          isExpanded: false,
+                          icon: Icons.assignment_return_outlined,
+                          onPressed: () => context.push(
+                            RoutePaths.yorksV1MaterialRequestReturnsDocumentsPath(
                               request.id,
                             ),
                           ),

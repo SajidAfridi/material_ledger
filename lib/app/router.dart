@@ -42,6 +42,7 @@ import '../features/materials/presentation/screens/yorks_v1_arrangement_screen.d
 import '../features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
+import '../features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
 import '../features/people/presentation/screens/employee_profile_screen.dart';
@@ -103,6 +104,8 @@ abstract final class RoutePaths {
       '/yorks/material-requests/:requestId/arrangement';
   static const String yorksV1MaterialRequestLogistics =
       '/yorks/material-requests/:requestId/logistics';
+  static const String yorksV1MaterialRequestReturnsDocuments =
+      '/yorks/material-requests/:requestId/returns';
   static const String yorksV1Inventory = '/yorks/inventory';
   static const String engineerProjectsView = '/my-projects';
   static const String engineerNewRequest = '/new-request';
@@ -138,6 +141,8 @@ abstract final class RoutePaths {
       '/yorks/material-requests/$requestId/arrangement';
   static String yorksV1MaterialRequestLogisticsPath(String requestId) =>
       '/yorks/material-requests/$requestId/logistics';
+  static String yorksV1MaterialRequestReturnsDocumentsPath(String requestId) =>
+      '/yorks/material-requests/$requestId/returns';
   static String planBuildPath(String projectId) => '/plan-build/$projectId';
   static String planDiffPath(String projectId) => '/plan-diff/$projectId';
   static String confirmReceiptPath(String requestId) => '/receipt/$requestId';
@@ -344,6 +349,7 @@ GoRouter createAppRouter({
   bool yorksV1RequestsEnabled = false,
   bool yorksV1ArrangementEnabled = false,
   bool yorksV1LogisticsEnabled = false,
+  bool yorksV1ReturnsDocumentsEnabled = false,
   YorksV1Role? yorksV1Role,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
   // [refreshListenable] let route guards re-evaluate the moment an Admin edits
@@ -434,6 +440,11 @@ GoRouter createAppRouter({
               (path.startsWith('/yorks/material-requests/') &&
                   path.endsWith('/logistics'))) &&
           !yorksV1LogisticsEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (path.startsWith('/yorks/material-requests/') &&
+          path.endsWith('/returns') &&
+          !yorksV1ReturnsDocumentsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
       if (path.startsWith('/yorks/material-requests/draft/') &&
@@ -691,6 +702,15 @@ GoRouter createAppRouter({
         pageBuilder: (context, state) => _slide(
           state.pageKey,
           YorksV1LogisticsScreen(
+            requestId: state.pathParameters['requestId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialRequestReturnsDocuments,
+        pageBuilder: (context, state) => _slide(
+          state.pageKey,
+          YorksV1ReturnsDocumentsScreen(
             requestId: state.pathParameters['requestId'] ?? '',
           ),
         ),

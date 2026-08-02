@@ -23,3 +23,10 @@ final yorksV1LogisticsWorkspaceProvider = FutureProvider.autoDispose
           .watch(yorksV1LogisticsRepositoryProvider)
           .getWorkspace(requestId);
     });
+
+final yorksV1ReturnsDocumentsWorkspaceProvider = FutureProvider.autoDispose
+    .family<YorksV1ReturnsDocumentsWorkspace, String>((ref, requestId) {
+      return ref
+          .watch(yorksV1LogisticsRepositoryProvider)
+          .getReturnsDocumentsWorkspace(requestId);
+    });

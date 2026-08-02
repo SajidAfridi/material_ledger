@@ -28,6 +28,30 @@ abstract interface class YorksV1LogisticsRepository {
   Future<YorksV1LogisticsWorkspace> confirmReceipt(
     YorksV1ReceiptConfirmationInput input,
   );
+
+  Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
+    String requestId,
+  );
+
+  Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
+    YorksV1DeliveryOrderGenerationInput input,
+  );
+
+  Future<YorksV1ReturnsDocumentsWorkspace> saveMaterialReturnDraft(
+    YorksV1MaterialReturnDraftInput input,
+  );
+
+  Future<YorksV1ReturnsDocumentsWorkspace> submitMaterialReturn(
+    YorksV1MaterialReturnSubmissionInput input,
+  );
+
+  Future<YorksV1ReturnsDocumentsWorkspace> confirmMaterialReturn(
+    YorksV1MaterialReturnConfirmationInput input,
+  );
+
+  Future<YorksV1ReturnsDocumentsWorkspace> rejectMaterialReturn(
+    YorksV1MaterialReturnRejectionInput input,
+  );
 }
 
 class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
@@ -126,11 +150,100 @@ class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
     return _workspace(response);
   }
 
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_returns_documents_workspace_projection',
+      parameters: {'p_request_id': requestId},
+      requiresReturnsDocuments: true,
+    );
+    return _returnsDocumentsWorkspace(response);
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
+    YorksV1DeliveryOrderGenerationInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_generate_delivery_order',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _returnsDocumentsWorkspace(response);
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> saveMaterialReturnDraft(
+    YorksV1MaterialReturnDraftInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_save_material_return_draft',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _returnsDocumentsWorkspace(response);
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> submitMaterialReturn(
+    YorksV1MaterialReturnSubmissionInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_submit_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _returnsDocumentsWorkspace(response);
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> confirmMaterialReturn(
+    YorksV1MaterialReturnConfirmationInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_confirm_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _returnsDocumentsWorkspace(response);
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> rejectMaterialReturn(
+    YorksV1MaterialReturnRejectionInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_reject_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _returnsDocumentsWorkspace(response);
+  }
+
   Future<Object?> _invoke({
     required String functionName,
     required Map<String, Object?> parameters,
+    bool requiresReturnsDocuments = false,
   }) async {
-    if (!_featureFlags.logistics) {
+    if (!_featureFlags.logistics ||
+        (requiresReturnsDocuments && !_featureFlags.returnsDocuments)) {
       throw const YorksV1DomainException(
         YorksV1DomainErrorCode.featureDisabled,
       );
@@ -201,6 +314,19 @@ class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
       );
     }
     return YorksV1LogisticsWorkspace.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  static YorksV1ReturnsDocumentsWorkspace _returnsDocumentsWorkspace(
+    Object? response,
+  ) {
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1ReturnsDocumentsWorkspace.fromRpcJson(
       Map<String, dynamic>.from(response),
     );
   }

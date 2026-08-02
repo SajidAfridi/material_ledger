@@ -203,6 +203,9 @@ audited compensation, never restoration of the old writer.
 
 ## Batch 8 — Delivery Orders and Material Returns
 
+Implementation status: **passed.** See
+[`BATCH_08_COMPLETION.md`](BATCH_08_COMPLETION.md).
+
 Deliver:
 
 - immutable DO revision snapshot after receipt review;
