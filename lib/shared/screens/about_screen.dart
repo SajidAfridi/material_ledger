@@ -419,8 +419,8 @@ class _EcosystemSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const roles = [
-      _RoleData(
+    final roles = [
+      const _RoleData(
         icon: Icons.supervisor_account_rounded,
         title: 'Project Manager',
         urdu: 'پروجیکٹ مینیجر',
@@ -429,7 +429,7 @@ class _EcosystemSection extends StatelessWidget {
             'monitors budgets across all sites.',
         color: AppColors.primary,
       ),
-      _RoleData(
+      const _RoleData(
         icon: Icons.engineering_rounded,
         title: 'Site Engineer',
         urdu: 'سائٹ انجینئر',
@@ -440,14 +440,14 @@ class _EcosystemSection extends StatelessWidget {
       ),
       _RoleData(
         icon: Icons.warehouse_rounded,
-        title: 'Godown Keeper',
-        urdu: 'گودام کیپر',
+        title: AppStrings.procurementRole.primary,
+        urdu: AppStrings.procurementRole.ur,
         description:
             'Manages physical stock, records incoming/outgoing '
             'transactions, validates availability.',
         color: AppColors.success,
       ),
-      _RoleData(
+      const _RoleData(
         icon: Icons.account_balance_rounded,
         title: 'Accountant',
         urdu: 'اکاؤنٹنٹ',

@@ -69,6 +69,7 @@ import '../shared/screens/privacy_policy_screen.dart';
 import '../shared/screens/terms_of_service_screen.dart';
 import 'app_shell.dart';
 import 'engineer_shell.dart';
+import 'yorks_v1_workspace_shell.dart';
 
 /// Route path constants
 abstract final class RoutePaths {
@@ -231,6 +232,13 @@ Page<void> _slide(
   ),
   transitionDuration: const Duration(milliseconds: 300),
 );
+
+/// V1 record routes retain their feature-local scaffold and controllers while
+/// sharing the approved R35 Yorks navigation chrome. The wrapper is deliberately
+/// absent from retained legacy routes so the V1 rollout cannot restyle or alter
+/// their behavior by accident.
+Page<void> _yorksV1Slide(LocalKey key, Widget child) =>
+    _slide(key, YorksV1WorkspaceShell(child: child));
 
 /// Slide-in page for screens that were originally office-shell *tabs* and so
 /// have no `Scaffold`/`Material` of their own. When reached as a full-screen
@@ -671,8 +679,9 @@ GoRouter createAppRouter({
       // lives INSIDE the shell as a branch (see above), so it's not here.
       GoRoute(
         path: RoutePaths.engineerCreateProject,
-        pageBuilder: (context, state) =>
-            _slide(state.pageKey, const EngineerCreateProjectScreen()),
+        pageBuilder: (context, state) => yorksV1ProjectsEnabled
+            ? _yorksV1Slide(state.pageKey, const EngineerCreateProjectScreen())
+            : _slide(state.pageKey, const EngineerCreateProjectScreen()),
       ),
       GoRoute(
         path: RoutePaths.projectWorkspace,
@@ -683,7 +692,7 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1BoqGroups,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1BoqGroupsScreen(
             projectId: state.pathParameters['projectId'] ?? '',
@@ -692,7 +701,7 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1BoqWorksheet,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1BoqWorksheetScreen(
             projectId: state.pathParameters['projectId'] ?? '',
@@ -702,7 +711,7 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1ProjectDocuments,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1DocumentsScreen(
             projectId: state.pathParameters['projectId'] ?? '',
@@ -714,11 +723,11 @@ GoRouter createAppRouter({
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequests,
         pageBuilder: (context, state) =>
-            _slide(state.pageKey, const YorksV1MaterialRequestsScreen()),
+            _yorksV1Slide(state.pageKey, const YorksV1MaterialRequestsScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestDraft,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1MaterialRequestDraftScreen(
             draftId: state.pathParameters['draftId'] ?? '',
@@ -727,7 +736,7 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestArrangement,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1ArrangementScreen(
             requestId: state.pathParameters['requestId'] ?? '',
@@ -736,7 +745,7 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestLogistics,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1LogisticsScreen(
             requestId: state.pathParameters['requestId'] ?? '',
@@ -745,7 +754,7 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestReturnsDocuments,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1ReturnsDocumentsScreen(
             requestId: state.pathParameters['requestId'] ?? '',
@@ -755,21 +764,21 @@ GoRouter createAppRouter({
       GoRoute(
         path: RoutePaths.yorksV1Inventory,
         pageBuilder: (context, state) =>
-            _slide(state.pageKey, const YorksV1InventoryScreen()),
+            _yorksV1Slide(state.pageKey, const YorksV1InventoryScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1DuctSizer,
         pageBuilder: (context, state) =>
-            _slide(state.pageKey, const YorksV1DuctSizerScreen()),
+            _yorksV1Slide(state.pageKey, const YorksV1DuctSizerScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1EspCalculator,
         pageBuilder: (context, state) =>
-            _slide(state.pageKey, const YorksV1EspCalculatorScreen()),
+            _yorksV1Slide(state.pageKey, const YorksV1EspCalculatorScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequest,
-        pageBuilder: (context, state) => _slide(
+        pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
           YorksV1MaterialRequestDetailScreen(
             requestId: state.pathParameters['requestId'] ?? '',
