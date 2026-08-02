@@ -169,6 +169,11 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
     }
   }
 
+  void _removeReturnLine(String receiptReviewLineId) {
+    _quantities[receiptReviewLineId]?.clear();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -250,6 +255,7 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
           _ResponsiveReturnCandidates(
             candidates: candidates,
             controllers: _quantities,
+            onRemove: _removeReturnLine,
           ),
         const SizedBox(height: AppSpacing.md),
         TextField(
@@ -769,10 +775,12 @@ class _ResponsiveReturnCandidates extends StatelessWidget {
   const _ResponsiveReturnCandidates({
     required this.candidates,
     required this.controllers,
+    required this.onRemove,
   });
 
   final List<YorksV1ReturnCandidate> candidates;
   final Map<String, TextEditingController> controllers;
+  final ValueChanged<String> onRemove;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -799,6 +807,13 @@ class _ResponsiveReturnCandidates extends StatelessWidget {
                         controller: controllers[candidate.receiptReviewLineId]!,
                       ),
                     ),
+                    IconButton(
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).deleteButtonTooltip,
+                      onPressed: () => onRemove(candidate.receiptReviewLineId),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
                   ],
                 ),
               ),
@@ -813,6 +828,7 @@ class _ResponsiveReturnCandidates extends StatelessWidget {
               child: _MobileReturnCandidate(
                 candidate: candidate,
                 controller: controllers[candidate.receiptReviewLineId]!,
+                onRemove: () => onRemove(candidate.receiptReviewLineId),
               ),
             ),
         ],
@@ -860,10 +876,12 @@ class _MobileReturnCandidate extends StatelessWidget {
   const _MobileReturnCandidate({
     required this.candidate,
     required this.controller,
+    required this.onRemove,
   });
 
   final YorksV1ReturnCandidate candidate;
   final TextEditingController controller;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -877,6 +895,7 @@ class _MobileReturnCandidate extends StatelessWidget {
         builder: (_) => _MobileReturnQuantityEditor(
           candidate: candidate,
           controller: controller,
+          onRemove: onRemove,
         ),
       ),
       child: Container(
@@ -888,20 +907,31 @@ class _MobileReturnCandidate extends StatelessWidget {
         child: Row(
           children: [
             Expanded(child: _CandidateDescription(candidate)),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${candidate.eligibleReturnQuantity} ${candidate.unit}',
-                  style: AppTypography.bodyMedium,
-                ),
-                Text(
-                  YorksV1LogisticsStrings.eligibleToReturn.primary,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${candidate.eligibleReturnQuantity} ${candidate.unit}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyMedium,
                   ),
-                ),
-              ],
+                  Text(
+                    YorksV1LogisticsStrings.eligibleToReturn.primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+              onPressed: onRemove,
+              icon: const Icon(Icons.delete_outline_rounded),
             ),
           ],
         ),
@@ -914,10 +944,12 @@ class _MobileReturnQuantityEditor extends StatelessWidget {
   const _MobileReturnQuantityEditor({
     required this.candidate,
     required this.controller,
+    required this.onRemove,
   });
 
   final YorksV1ReturnCandidate candidate;
   final TextEditingController controller;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -945,6 +977,15 @@ class _MobileReturnQuantityEditor extends StatelessWidget {
             label: YorksV1LogisticsStrings.saveReturnDraft.primary,
             icon: Icons.check_outlined,
             onPressed: () => Navigator.of(context).pop(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SecondaryButton(
+            label: MaterialLocalizations.of(context).deleteButtonTooltip,
+            icon: Icons.delete_outline_rounded,
+            onPressed: () {
+              onRemove();
+              Navigator.of(context).pop();
+            },
           ),
         ],
       ),

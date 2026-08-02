@@ -139,6 +139,8 @@ class YorksV1MaterialRequestLine {
     required this.quantity,
     required this.unit,
     this.brandOrigin,
+    this.size,
+    this.planningModelTag,
     this.sourceBoqGroupId,
     this.sourceBoqRowId,
     this.unitCost,
@@ -151,6 +153,12 @@ class YorksV1MaterialRequestLine {
   final YorksV1MaterialRequestLineSource source;
   final String description;
   final String? brandOrigin;
+
+  /// Non-commercial technical context copied from BOQ/import rows. A model or
+  /// equipment tag is intentionally separate from the manufacturer serial
+  /// captured during receipt/asset registration.
+  final String? size;
+  final String? planningModelTag;
   final String quantity;
   final String unit;
   final String? sourceBoqGroupId;
@@ -165,6 +173,8 @@ class YorksV1MaterialRequestLine {
   YorksV1MaterialRequestLine copyWith({
     String? description,
     Object? brandOrigin = _keep,
+    Object? size = _keep,
+    Object? planningModelTag = _keep,
     String? quantity,
     String? unit,
   }) => YorksV1MaterialRequestLine(
@@ -175,6 +185,10 @@ class YorksV1MaterialRequestLine {
     brandOrigin: identical(brandOrigin, _keep)
         ? this.brandOrigin
         : brandOrigin as String?,
+    size: identical(size, _keep) ? this.size : size as String?,
+    planningModelTag: identical(planningModelTag, _keep)
+        ? this.planningModelTag
+        : planningModelTag as String?,
     quantity: quantity ?? this.quantity,
     unit: unit ?? this.unit,
     sourceBoqGroupId: sourceBoqGroupId,
@@ -195,23 +209,36 @@ class YorksV1MaterialRequestLine {
     'source': source.wireValue,
     'description': description,
     'brandOrigin': _trimToNull(brandOrigin),
+    'size': _trimToNull(size),
+    'planningModelTag': _trimToNull(planningModelTag),
     'quantity': quantity,
     'unit': unit,
     'sourceBoqGroupId': sourceBoqGroupId,
     'sourceBoqRowId': sourceBoqRowId,
   };
 
-  Map<String, dynamic> toRpcJson() => {
-    'id': id.trim(),
-    'display_order': displayOrder,
-    'source_kind': source.wireValue,
-    'source_boq_group_id': _trimToNull(sourceBoqGroupId),
-    'source_boq_row_id': _trimToNull(sourceBoqRowId),
-    'item_description': description.trim(),
-    'brand_origin': _trimToNull(brandOrigin),
-    'requested_qty': quantity.trim(),
-    'unit': unit.trim(),
-  };
+  Map<String, dynamic> toRpcJson() {
+    final technicalAttributes = <String, String>{
+      if (_trimToNull(size) != null) 'size': _trimToNull(size)!,
+      if (_trimToNull(planningModelTag) != null)
+        'planning_model_tag': _trimToNull(planningModelTag)!,
+    };
+    return {
+      'id': id.trim(),
+      'display_order': displayOrder,
+      'source_kind': source.wireValue,
+      'source_boq_group_id': _trimToNull(sourceBoqGroupId),
+      'source_boq_row_id': _trimToNull(sourceBoqRowId),
+      'item_description': description.trim(),
+      'brand_origin': _trimToNull(brandOrigin),
+      // Omit the additive object when empty so an older deployed V1 function
+      // can continue saving existing drafts until the migration is applied.
+      if (technicalAttributes.isNotEmpty)
+        'technical_attributes': technicalAttributes,
+      'requested_qty': quantity.trim(),
+      'unit': unit.trim(),
+    };
+  }
 
   factory YorksV1MaterialRequestLine.fromDraftJson(Map<String, dynamic> json) {
     return YorksV1MaterialRequestLine(
@@ -220,6 +247,12 @@ class YorksV1MaterialRequestLine {
       source: YorksV1MaterialRequestLineSource.fromWireValue(json['source']),
       description: _string(json['description'] ?? json['item_description']),
       brandOrigin: _trimToNull(json['brandOrigin'] ?? json['brand_origin']),
+      size:
+          _technicalText(json['technical_attributes'], 'size') ??
+          _trimToNull(json['size']),
+      planningModelTag:
+          _technicalText(json['technical_attributes'], 'planning_model_tag') ??
+          _trimToNull(json['planningModelTag'] ?? json['planning_model_tag']),
       quantity: _string(json['quantity'] ?? json['requested_qty']),
       unit: _string(json['unit']),
       sourceBoqGroupId: _trimToNull(
@@ -240,6 +273,11 @@ class YorksV1MaterialRequestLine {
       ),
       description: _requiredString(json, 'item_description'),
       brandOrigin: _trimToNull(json['brand_origin']),
+      size: _technicalText(json['technical_attributes'], 'size'),
+      planningModelTag: _technicalText(
+        json['technical_attributes'],
+        'planning_model_tag',
+      ),
       quantity: _string(json['requested_qty']),
       unit: _requiredString(json, 'unit'),
       sourceBoqGroupId: _trimToNull(json['source_boq_group_id']),
@@ -249,6 +287,11 @@ class YorksV1MaterialRequestLine {
       currencyCode: _trimToNull(json['currency_code']),
     );
   }
+}
+
+String? _technicalText(Object? attributes, String key) {
+  if (attributes is! Map) return null;
+  return _trimToNull(attributes[key]);
 }
 
 /// The server-authoritative request projection. For an unauthorized user, the

@@ -773,6 +773,24 @@ abstract final class YorksV1ProjectStrings {
     ur: 'کنٹرولڈ پراجیکٹ سیاق کا جائزہ لیں اور اس کے منسلک ریکارڈز سے جاری رکھیں۔',
     hi: 'नियंत्रित परियोजना संदर्भ की समीक्षा करें और उसके जुड़े रिकॉर्ड से आगे बढ़ें।',
   );
+  static const activateProject = TranslatableString(
+    en: 'Activate project',
+    ar: 'تفعيل المشروع',
+    ur: 'پراجیکٹ فعال کریں',
+    hi: 'परियोजना सक्रिय करें',
+  );
+  static const projectActivated = TranslatableString(
+    en: 'Project activated.',
+    ar: 'تم تفعيل المشروع.',
+    ur: 'پراجیکٹ فعال ہو گیا۔',
+    hi: 'परियोजना सक्रिय हो गई।',
+  );
+  static const projectActivationFailed = TranslatableString(
+    en: 'Could not activate this project. Review the team and try again.',
+    ar: 'تعذر تفعيل هذا المشروع. راجع الفريق وحاول مرة أخرى.',
+    ur: 'یہ پراجیکٹ فعال نہیں ہو سکا۔ ٹیم کا جائزہ لے کر دوبارہ کوشش کریں۔',
+    hi: 'यह परियोजना सक्रिय नहीं हो सकी। टीम की समीक्षा करके फिर प्रयास करें।',
+  );
   static const overview = TranslatableString(
     en: 'Overview',
     ar: 'نظرة عامة',

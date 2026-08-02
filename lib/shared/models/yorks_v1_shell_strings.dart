@@ -185,6 +185,90 @@ abstract final class YorksV1ShellStrings {
     ur: 'تلاش کریں یا یہاں جائیں…',
     hi: 'खोजें या यहां जाएं…',
   );
+  static const searchHint = TranslatableString(
+    en: 'Search projects, requests, BOQ, documents or materials…',
+    ar: 'ابحث في المشاريع والطلبات وجدول الكميات والمستندات والمواد…',
+    ur: 'پراجیکٹس، ریکویسٹس، BOQ، دستاویزات یا مواد تلاش کریں…',
+    hi: 'प्रोजेक्ट, अनुरोध, बीओक्यू, दस्तावेज़ या सामग्री खोजें…',
+  );
+  static const searchResults = TranslatableString(
+    en: 'Search results',
+    ar: 'نتائج البحث',
+    ur: 'تلاش کے نتائج',
+    hi: 'खोज परिणाम',
+  );
+  static const searchModules = TranslatableString(
+    en: 'Modules',
+    ar: 'الوحدات',
+    ur: 'ماڈیولز',
+    hi: 'मॉड्यूल',
+  );
+  static const searchStartTyping = TranslatableString(
+    en: 'Start typing to search the workspace',
+    ar: 'ابدأ الكتابة للبحث في مساحة العمل',
+    ur: 'ورک اسپیس تلاش کرنے کے لیے ٹائپ کریں',
+    hi: 'कार्यस्थान खोजने के लिए लिखना शुरू करें',
+  );
+  static const searchNoResults = TranslatableString(
+    en: 'No matching records found',
+    ar: 'لم يتم العثور على سجلات مطابقة',
+    ur: 'کوئی مماثل ریکارڈ نہیں ملا',
+    hi: 'कोई मेल खाने वाला रिकॉर्ड नहीं मिला',
+  );
+  static const searchLoading = TranslatableString(
+    en: 'Searching your authorised workspace…',
+    ar: 'جارٍ البحث في مساحة العمل المصرح بها…',
+    ur: 'آپ کے مجاز ورک اسپیس میں تلاش جاری ہے…',
+    hi: 'आपके अधिकृत कार्यस्थान में खोज जारी है…',
+  );
+  static const searchKeyboardHint = TranslatableString(
+    en: '↑ ↓ to move · Enter to open · Esc to close',
+    ar: '↑ ↓ للتنقل · Enter للفتح · Esc للإغلاق',
+    ur: '↑ ↓ منتقل کریں · Enter کھولیں · Esc بند کریں',
+    hi: '↑ ↓ चलें · Enter खोलें · Esc बंद करें',
+  );
+  static const searchModule = TranslatableString(
+    en: 'Module',
+    ar: 'وحدة',
+    ur: 'ماڈیول',
+    hi: 'मॉड्यूल',
+  );
+  static const searchProject = TranslatableString(
+    en: 'Project',
+    ar: 'مشروع',
+    ur: 'پراجیکٹ',
+    hi: 'प्रोजेक्ट',
+  );
+  static const searchBoqGroup = TranslatableString(
+    en: 'BOQ group',
+    ar: 'مجموعة جدول الكميات',
+    ur: 'BOQ گروپ',
+    hi: 'बीओक्यू समूह',
+  );
+  static const searchBoqItem = TranslatableString(
+    en: 'BOQ item',
+    ar: 'بند جدول الكميات',
+    ur: 'BOQ آئٹم',
+    hi: 'बीओक्यू आइटम',
+  );
+  static const searchMaterialRequest = TranslatableString(
+    en: 'Material request',
+    ar: 'طلب مواد',
+    ur: 'میٹیریل ریکویسٹ',
+    hi: 'सामग्री अनुरोध',
+  );
+  static const searchMaterialItem = TranslatableString(
+    en: 'Material item',
+    ar: 'بند المواد',
+    ur: 'میٹیریل آئٹم',
+    hi: 'सामग्री आइटम',
+  );
+  static const searchDocument = TranslatableString(
+    en: 'Document',
+    ar: 'مستند',
+    ur: 'دستاویز',
+    hi: 'दस्तावेज़',
+  );
   static const projectCloseoutControl = TranslatableString(
     en: 'Every project stays controlled from start to closeout.',
     ar: 'تحكم متكامل من المشروع حتى الإقفال.',

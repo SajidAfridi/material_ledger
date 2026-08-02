@@ -20,6 +20,7 @@ import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
+import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 
 /// The normalized, R35-aligned project portfolio.
@@ -144,6 +145,10 @@ class _R35OverviewPage extends StatelessWidget {
       final horizontal = desktop
           ? AppSpacing.xxxl + AppSpacing.xs
           : AppSpacing.lg;
+      final contentWidth = (constraints.maxWidth - horizontal * 2).clamp(
+        0.0,
+        AppSpacing.pageMaxWidth,
+      );
       return ColoredBox(
         color: AppColors.surface,
         child: SingleChildScrollView(
@@ -153,10 +158,8 @@ class _R35OverviewPage extends StatelessWidget {
             horizontal,
             72,
           ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.pageMaxWidth,
-            ),
+          child: SizedBox(
+            width: contentWidth,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -316,13 +319,18 @@ class _R35OverviewHero extends StatelessWidget {
           ],
         );
       }
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(flex: 3, child: main),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(flex: 2, child: snapshot),
-        ],
+      // Let the cards grow to their content height. A fixed-height row makes
+      // the hero overflow when the headline wraps (and can cascade into the
+      // RenderBox `hasSize` assertion on narrower desktop windows).
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(flex: 3, child: main),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(flex: 2, child: snapshot),
+          ],
+        ),
       );
     },
   );
@@ -657,7 +665,7 @@ class _OverviewRequestRow extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     color: Colors.transparent,
     child: InkWell(
-      onTap: () => context.push(RoutePaths.yorksV1MaterialRequestPath(item.id)),
+      onTap: () => context.push(_materialRequestOpenPath(item)),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Row(
@@ -697,6 +705,16 @@ class _OverviewRequestRow extends StatelessWidget {
       ),
     ),
   );
+}
+
+String _materialRequestOpenPath(YorksV1MaterialRequest request) {
+  if (request.state.isDraft) {
+    return RoutePaths.yorksV1MaterialRequestDraftPath(
+      request.id,
+      projectId: request.projectId,
+    );
+  }
+  return RoutePaths.yorksV1MaterialRequestPath(request.id);
 }
 
 class _OverviewRecordIcon extends StatelessWidget {
@@ -879,6 +897,7 @@ class _YorksV1ProjectWorkspaceScreenState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final role = ref.watch(yorksV1CurrentRoleProvider);
     final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
@@ -919,16 +938,68 @@ class _YorksV1ProjectWorkspaceScreenState
                 onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
               );
             }
+            final selectedProject = project;
             return _ProjectWorkspaceBody(
-              item: project,
+              item: selectedProject,
               tab: _tab,
               language: language,
-              onTabChanged: (value) => setState(() => _tab = value),
+              onActivate:
+                  selectedProject.project.state == YorksV1ProjectLifecycle.draft
+                  ? () => _activateProject(selectedProject.project)
+                  : null,
+              onNewRequest: role?.canCreateMaterialRequest == true
+                  ? () => context.push(
+                      RoutePaths.yorksV1MaterialRequestDraftPath(
+                        const Uuid().v4(),
+                        projectId: selectedProject.project.id,
+                      ),
+                    )
+                  : null,
+              onTabChanged: (value) {
+                // The R35 workspace treats BOQ as a full-screen worksheet
+                // workspace. Open it directly from the project tab instead of
+                // rendering a second "Open BOQ" card inside the page.
+                if (value == _ProjectWorkspaceTab.boq) {
+                  context.push(
+                    RoutePaths.yorksV1BoqGroupsPath(widget.projectId),
+                  );
+                  return;
+                }
+                setState(() => _tab = value);
+              },
             );
           },
         ),
       ),
     );
+  }
+
+  Future<void> _activateProject(YorksV1Project project) async {
+    try {
+      await ref
+          .read(yorksV1ProjectCommandControllerProvider.notifier)
+          .setProjectState(
+            YorksV1SetProjectStateInput(
+              idempotencyKey: const Uuid().v4(),
+              projectId: project.id,
+              currentState: project.state,
+              targetState: YorksV1ProjectLifecycle.active,
+              expectedProjectVersion: project.recordVersion,
+            ),
+          );
+      ref.invalidate(yorksV1ProjectPortfolioProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1ProjectStrings.projectActivated.primary)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(YorksV1ProjectStrings.projectActivationFailed.primary),
+        ),
+      );
+    }
   }
 }
 
@@ -1568,12 +1639,16 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     required this.item,
     required this.tab,
     required this.language,
+    required this.onActivate,
+    required this.onNewRequest,
     required this.onTabChanged,
   });
 
   final YorksV1ProjectPortfolioItem item;
   final _ProjectWorkspaceTab tab;
   final AppLanguage language;
+  final VoidCallback? onActivate;
+  final VoidCallback? onNewRequest;
   final ValueChanged<_ProjectWorkspaceTab> onTabChanged;
 
   @override
@@ -1587,6 +1662,24 @@ class _ProjectWorkspaceBody extends StatelessWidget {
           .where((value) => value.trim().isNotEmpty)
           .join(' · '),
       actions: [
+        if (onActivate != null)
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: OutlinedButton.icon(
+              onPressed: onActivate,
+              icon: const Icon(Icons.play_circle_outline_rounded),
+              label: Text(YorksV1ProjectStrings.activateProject.primary),
+            ),
+          ),
+        if (onNewRequest != null)
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: FilledButton.icon(
+              onPressed: onNewRequest,
+              icon: const Icon(Icons.add_task_outlined),
+              label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
+            ),
+          ),
         SizedBox(
           height: AppSpacing.minTapTarget,
           child: FilledButton.icon(
@@ -1629,7 +1722,9 @@ class _ProjectWorkspaceBody extends StatelessWidget {
               icon: Icons.assignment_outlined,
               title: YorksV1ProjectStrings.materialRequests,
               action: YorksV1ProjectStrings.openRequests,
-              onOpen: () => context.push(RoutePaths.yorksV1MaterialRequests),
+              onOpen: () => context.push(
+                RoutePaths.yorksV1MaterialRequestsPath(projectId: project.id),
+              ),
             ),
             _ProjectWorkspaceTab.documents => _LinkedRecordCard(
               icon: Icons.folder_open_outlined,

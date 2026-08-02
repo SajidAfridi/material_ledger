@@ -32,6 +32,12 @@ abstract final class YorksV1BoqStrings {
     ur: 'کسٹم گروپ شامل کریں',
     hi: 'कस्टम समूह जोड़ें',
   );
+  static const newGroup = TranslatableString(
+    en: 'New Group',
+    ar: 'مجموعة جديدة',
+    ur: 'نیا گروپ',
+    hi: 'नया समूह',
+  );
   static const customGroupName = TranslatableString(
     en: 'Custom group name',
     ar: 'اسم المجموعة المخصصة',
@@ -98,11 +104,35 @@ abstract final class YorksV1BoqStrings {
     ur: 'خالی قطار',
     hi: 'खाली पंक्ति',
   );
+  static const addFirstRow = TranslatableString(
+    en: 'Add First Row',
+    ar: 'إضافة الصف الأول',
+    ur: 'پہلی قطار شامل کریں',
+    hi: 'पहली पंक्ति जोड़ें',
+  );
   static const similarRow = TranslatableString(
     en: 'Similar row',
     ar: 'صف مماثل',
     ur: 'مشابہ قطار',
     hi: 'समान पंक्ति',
+  );
+  static const createRequestFromFolder = TranslatableString(
+    en: 'Use entire folder for a material request',
+    ar: 'استخدم المجلد بالكامل لطلب مواد',
+    ur: 'پورا فولڈر میٹریل ریکویسٹ کے لیے استعمال کریں',
+    hi: 'पूरे फ़ोल्डर से सामग्री अनुरोध बनाएँ',
+  );
+  static const sendWholeGroup = TranslatableString(
+    en: 'Send Whole Group',
+    ar: 'إرسال المجموعة كاملة',
+    ur: 'پورا گروپ بھیجیں',
+    hi: 'पूरा समूह भेजें',
+  );
+  static const createRequestFromFolderDescription = TranslatableString(
+    en: 'Copies every BOQ row into a private draft. Review it before submitting to Procurement.',
+    ar: 'ينسخ كل صفوف جدول الكميات إلى مسودة خاصة. راجعها قبل إرسالها إلى المشتريات.',
+    ur: 'ہر BOQ قطار کو نجی ڈرافٹ میں کاپی کرتا ہے۔ پروکیورمنٹ کو بھیجنے سے پہلے جائزہ لیں۔',
+    hi: 'हर BOQ पंक्ति को निजी ड्राफ्ट में कॉपी करता है। प्रोक्योरमेंट को भेजने से पहले समीक्षा करें।',
   );
   static const save = TranslatableString(
     en: 'Save',
@@ -200,6 +230,12 @@ abstract final class YorksV1BoqStrings {
     ur: 'قطار حذف کریں',
     hi: 'पंक्ति हटाएँ',
   );
+  static const deleteRowConfirmation = TranslatableString(
+    en: 'Delete this populated row? Its values remain in the audited worksheet history.',
+    ar: 'هل تريد حذف هذا الصف المعبأ؟ تبقى قيمه في سجل ورقة العمل المدقق.',
+    ur: 'کیا اس بھرے ہوئے قطار کو حذف کریں؟ اس کی ویلیوز آڈٹ شدہ ورک شیٹ ہسٹری میں رہیں گی۔',
+    hi: 'क्या इस भरी हुई पंक्ति को हटाना है? इसके मान ऑडिटेड वर्कशीट इतिहास में रहेंगे।',
+  );
   static const noRows = TranslatableString(
     en: 'No rows yet. Add a column, then start the worksheet with a blank row.',
     ar: 'لا توجد صفوف بعد. أضف عموداً ثم ابدأ ورقة العمل بصف فارغ.',
@@ -267,13 +303,13 @@ abstract final class YorksV1BoqStrings {
     hi: 'प्लानिंग मॉडल / टैग',
   );
   static const importWorkbook = TranslatableString(
-    en: 'Import workbook',
-    ar: 'استيراد مصنف',
-    ur: 'ورک بک امپورٹ کریں',
-    hi: 'वर्कबुक आयात करें',
+    en: 'Import Excel',
+    ar: 'استيراد Excel',
+    ur: 'Excel امپورٹ کریں',
+    hi: 'Excel आयात करें',
   );
   static const exportWorkbook = TranslatableString(
-    en: 'Export workbook',
+    en: 'Export Excel',
     ar: 'تصدير مصنف',
     ur: 'ورک بک ایکسپورٹ کریں',
     hi: 'वर्कबुक निर्यात करें',

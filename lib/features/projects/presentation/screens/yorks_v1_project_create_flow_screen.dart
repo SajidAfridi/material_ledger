@@ -846,8 +846,37 @@ class _YorksV1ProjectCreateFlowScreenState
           .read(yorksV1ProjectCommandControllerProvider.notifier)
           .createProject(draft.toCreationInput());
 
+      // The five-stage R35 flow ends at a usable workspace.  The create RPC
+      // intentionally records the new project as a draft so activation stays
+      // an audited, server-authorized lifecycle transition.  Complete that
+      // transition here when the transaction returned an active Project
+      // Engineer membership (the server re-checks the same invariant under a
+      // row lock).  Without this bridge a newly-created project could be
+      // opened in the UI but every MR submission would correctly be rejected
+      // because submissions require an active project.
+      var createdProject = result.project;
+      if (createdProject.state == YorksV1ProjectLifecycle.draft &&
+          result.members.any(
+            (member) =>
+                member.projectRole ==
+                    YorksV1ProjectMembershipRole.projectEngineer &&
+                member.effectiveTo == null,
+          )) {
+        createdProject = await ref
+            .read(yorksV1ProjectCommandControllerProvider.notifier)
+            .setProjectState(
+              YorksV1SetProjectStateInput(
+                idempotencyKey: const Uuid().v4(),
+                projectId: createdProject.id,
+                currentState: createdProject.state,
+                targetState: YorksV1ProjectLifecycle.active,
+                expectedProjectVersion: createdProject.recordVersion,
+              ),
+            );
+      }
+
       final failedAttachmentUploads = await _uploadSelectedAttachments(
-        result.project,
+        createdProject,
       );
 
       final authUserId = _activeAuthUserId;
@@ -859,13 +888,13 @@ class _YorksV1ProjectCreateFlowScreenState
       if (!mounted) return;
       setState(() {
         _isCreating = false;
-        _createdProject = result.project;
+        _createdProject = createdProject;
         _selectedAttachmentFiles = const [];
       });
       if (failedAttachmentUploads > 0) {
         _showMessage(YorksV1ProjectStrings.attachmentUploadFailed);
       }
-      widget.onProjectCreated?.call(result.project);
+      widget.onProjectCreated?.call(createdProject);
     } on YorksV1DomainException catch (error) {
       if (!mounted) return;
       setState(() => _isCreating = false);

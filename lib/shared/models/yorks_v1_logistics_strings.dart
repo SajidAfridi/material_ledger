@@ -9,6 +9,60 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'یارکس اے سی اینڈ ریف۔',
     hi: 'यॉर्क्स एसी एंड रेफ।',
   );
+  static const deliveryOrderTitle = TranslatableString(
+    en: 'DELIVERY ORDER',
+    ar: 'أمر تسليم',
+    ur: 'ڈیلیوری آرڈر',
+    hi: 'डिलीवरी ऑर्डर',
+  );
+  static const reference = TranslatableString(
+    en: 'Ref.',
+    ar: 'المرجع',
+    ur: 'حوالہ',
+    hi: 'संदर्भ',
+  );
+  static const date = TranslatableString(
+    en: 'Date',
+    ar: 'التاريخ',
+    ur: 'تاریخ',
+    hi: 'दिनांक',
+  );
+  static const recipient = TranslatableString(
+    en: 'M/s.',
+    ar: 'السادة',
+    ur: 'برائے',
+    hi: 'प्रति',
+  );
+  static const deliveryAddress = TranslatableString(
+    en: 'Delivery Address',
+    ar: 'عنوان التسليم',
+    ur: 'ڈیلیوری کا پتہ',
+    hi: 'डिलीवरी पता',
+  );
+  static const inspectedAndChecked = TranslatableString(
+    en: 'Inspected & checked by Yorks',
+    ar: 'تم الفحص والتحقق بواسطة يوركس',
+    ur: 'Yorks نے معائنہ اور جانچ کی',
+    hi: 'Yorks द्वारा निरीक्षण और जाँच',
+  );
+  static const receiverName = TranslatableString(
+    en: "Receiver's Name",
+    ar: 'اسم المستلم',
+    ur: 'وصول کنندہ کا نام',
+    hi: 'प्राप्तकर्ता का नाम',
+  );
+  static const signature = TranslatableString(
+    en: 'Signature / Date',
+    ar: 'التوقيع / التاريخ',
+    ur: 'دستخط / تاریخ',
+    hi: 'हस्ताक्षर / दिनांक',
+  );
+  static const goodsReceivedInGoodCondition = TranslatableString(
+    en: 'GOODS RECEIVED IN GOOD CONDITION',
+    ar: 'تم استلام البضائع بحالة جيدة',
+    ur: 'سامان اچھی حالت میں وصول ہوا',
+    hi: 'सामान अच्छी स्थिति में प्राप्त हुआ',
+  );
   static const serialNumber = TranslatableString(
     en: 'S:No',
     ar: 'م',

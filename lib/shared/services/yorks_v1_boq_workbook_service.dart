@@ -256,31 +256,54 @@ class YorksV1BoqWorkbookCodec {
     return issues;
   }
 
-  Uint8List encodeWorksheet(YorksV1BoqWorksheet worksheet) {
-    final rows = <List<String>>[
-      [worksheet.group.effectiveTitle],
-      [for (final column in worksheet.columns) column.heading],
-      for (final row in worksheet.rows)
-        [
-          for (final column in worksheet.columns)
-            _scalarText(row.valueFor(column.id)),
-        ],
-    ];
+  Uint8List encodeWorksheet(YorksV1BoqWorksheet worksheet) =>
+      encodeWorksheets([worksheet]);
+
+  /// Encodes a complete project BOQ workbook. Each group remains a separate
+  /// worksheet so arbitrary BOQ columns are preserved and can be re-imported
+  /// without flattening the project into a single table.
+  Uint8List encodeWorksheets(List<YorksV1BoqWorksheet> worksheets) {
+    if (worksheets.isEmpty || worksheets.length > _maxSheets) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
     final archive = Archive()
-      ..addFile(ArchiveFile.string('[Content_Types].xml', _contentTypesXml))
+      ..addFile(
+        ArchiveFile.string(
+          '[Content_Types].xml',
+          _contentTypesXmlFor(worksheets.length),
+        ),
+      )
       ..addFile(ArchiveFile.string('_rels/.rels', _rootRelationshipsXml))
-      ..addFile(ArchiveFile.string('xl/workbook.xml', _workbookXml))
       ..addFile(
         ArchiveFile.string(
           'xl/_rels/workbook.xml.rels',
-          _workbookRelationshipsXml,
+          _workbookRelationshipsXmlFor(worksheets.length),
         ),
       )
       ..addFile(
-        ArchiveFile.string('xl/worksheets/sheet1.xml', _worksheetXml(rows)),
+        ArchiveFile.string('xl/workbook.xml', _workbookXmlFor(worksheets)),
       );
+    for (var index = 0; index < worksheets.length; index++) {
+      final worksheet = worksheets[index];
+      archive.addFile(
+        ArchiveFile.string(
+          'xl/worksheets/sheet${index + 1}.xml',
+          _worksheetXml(_worksheetRows(worksheet)),
+        ),
+      );
+    }
     return Uint8List.fromList(ZipEncoder().encode(archive));
   }
+
+  static List<List<String>> _worksheetRows(YorksV1BoqWorksheet worksheet) => [
+    [worksheet.group.effectiveTitle],
+    [for (final column in worksheet.columns) column.heading],
+    for (final row in worksheet.rows)
+      [
+        for (final column in worksheet.columns)
+          _scalarText(row.valueFor(column.id)),
+      ],
+  ];
 
   static String _readText(Map<String, ArchiveFile> entries, String path) {
     final file = entries[path];
@@ -435,16 +458,29 @@ class YorksV1BoqWorkbookCodec {
     return switch (normalized) {
       'itemdescription' ||
       'description' ||
-      'item' => YorksV1BoqCanonicalField.description,
+      'item' ||
+      'materialdescription' ||
+      'materialitem' ||
+      'itemname' => YorksV1BoqCanonicalField.description,
       'brandorigin' ||
       'makeorigin' ||
       'brand' ||
-      'make' => YorksV1BoqCanonicalField.brandOrigin,
-      'qty' || 'quantity' || 'qnty' => YorksV1BoqCanonicalField.quantity,
-      'unit' || 'uom' => YorksV1BoqCanonicalField.unit,
+      'make' ||
+      'manufacturer' ||
+      'manufacturerorigin' => YorksV1BoqCanonicalField.brandOrigin,
+      'qty' ||
+      'quantity' ||
+      'qnty' ||
+      'requestedqty' ||
+      'quantityrequested' ||
+      'requestedquantity' ||
+      'qtyrequested' => YorksV1BoqCanonicalField.quantity,
+      'unit' || 'units' || 'uom' || 'unitofmeasure' =>
+        YorksV1BoqCanonicalField.unit,
       'modelserialno' ||
       'modelserialnumber' ||
       'modeltag' ||
+      'modeltagno' ||
       'equipmenttag' ||
       'planningmodeltag' => YorksV1BoqCanonicalField.planningModelTag,
       _ => null,
@@ -533,28 +569,75 @@ class YorksV1BoqWorkbookCodec {
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&apos;');
 
-  static const _contentTypesXml =
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-      '<Default Extension="xml" ContentType="application/xml"/>'
-      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-      '</Types>';
   static const _rootRelationshipsXml =
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
       '</Relationships>';
-  static const _workbookXml =
+  static String _contentTypesXmlFor(int count) {
+    final output = StringBuffer(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      '<Default Extension="xml" ContentType="application/xml"/>'
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    );
+    for (var index = 1; index <= count; index++) {
+      output.write(
+        '<Override PartName="/xl/worksheets/sheet$index.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
+      );
+    }
+    output.write('</Types>');
+    return output.toString();
+  }
+
+  static String _workbookXmlFor(List<YorksV1BoqWorksheet> worksheets) {
+    final output = StringBuffer(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-      '<sheets><sheet name="BOQ" sheetId="1" r:id="rId1"/></sheets>'
-      '</workbook>';
-  static const _workbookRelationshipsXml =
+      '<sheets>',
+    );
+    final usedNames = <String>{};
+    for (var index = 0; index < worksheets.length; index++) {
+      final base = _safeSheetName(worksheets[index].group.effectiveTitle);
+      var name = base;
+      var suffix = 2;
+      while (!usedNames.add(name.toLowerCase())) {
+        final suffixText = ' ($suffix)';
+        name =
+            '${base.substring(0, (31 - suffixText.length).clamp(1, 31))}$suffixText';
+        suffix++;
+      }
+      output.write(
+        '<sheet name="${_xmlEscape(name)}" sheetId="${index + 1}" '
+        'r:id="rId${index + 1}"/>',
+      );
+    }
+    output.write('</sheets></workbook>');
+    return output.toString();
+  }
+
+  static String _workbookRelationshipsXmlFor(int count) {
+    final output = StringBuffer(
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-      '</Relationships>';
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    );
+    for (var index = 0; index < count; index++) {
+      output.write(
+        '<Relationship Id="rId${index + 1}" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet${index + 1}.xml"/>',
+      );
+    }
+    output.write('</Relationships>');
+    return output.toString();
+  }
+
+  static String _safeSheetName(String source) {
+    final cleaned = source.replaceAll(RegExp(r'[\\/:?*\[\]]+'), ' ').trim();
+    final value = cleaned.isEmpty ? 'BOQ' : cleaned;
+    return value.length > 31 ? value.substring(0, 31) : value;
+  }
 }

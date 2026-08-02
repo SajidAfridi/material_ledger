@@ -41,6 +41,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
     final editable = role != null && role != YorksV1Role.procurement;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
+    final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
 
@@ -58,6 +59,12 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                 ),
               ),
               actions: [
+                if (excelEnabled)
+                  IconButton(
+                    tooltip: YorksV1BoqStrings.exportWorkbook.primary,
+                    onPressed: () => _exportProjectWorkbook(context, ref),
+                    icon: const Icon(Icons.file_download_outlined),
+                  ),
                 if (documentsEnabled)
                   IconButton(
                     tooltip: YorksV1DocumentStrings.documents.primary,
@@ -69,8 +76,11 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                 if (requestsEnabled)
                   IconButton(
                     tooltip: YorksV1MaterialRequestStrings.requests.primary,
-                    onPressed: () =>
-                        context.push(RoutePaths.yorksV1MaterialRequests),
+                    onPressed: () => context.push(
+                      RoutePaths.yorksV1MaterialRequestsPath(
+                        projectId: projectId,
+                      ),
+                    ),
                     icon: const Icon(Icons.assignment_outlined),
                   ),
                 if (requestsEnabled && role?.canCreateMaterialRequest == true)
@@ -79,6 +89,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                     onPressed: () => context.push(
                       RoutePaths.yorksV1MaterialRequestDraftPath(
                         const Uuid().v4(),
+                        projectId: projectId,
                       ),
                     ),
                     icon: const Icon(Icons.add_task_outlined),
@@ -90,7 +101,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
           ? FloatingActionButton.extended(
               onPressed: () => _createGroup(context, ref),
               icon: const Icon(Icons.create_new_folder_outlined),
-              label: Text(YorksV1BoqStrings.addGroup.primary),
+              label: Text(YorksV1BoqStrings.newGroup.primary),
             )
           : null,
       body: SafeArea(
@@ -111,12 +122,27 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                   title: YorksV1BoqStrings.worksheets.primary,
                   description: YorksV1BoqStrings.boqDescription.primary,
                   actions: [
+                    if (excelEnabled)
+                      SizedBox(
+                        height: AppSpacing.controlHeight,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _exportProjectWorkbook(context, ref),
+                          icon: const Icon(
+                            Icons.file_download_outlined,
+                            size: 18,
+                          ),
+                          label: Text(YorksV1BoqStrings.exportWorkbook.primary),
+                        ),
+                      ),
                     if (requestsEnabled)
                       SizedBox(
                         height: AppSpacing.controlHeight,
                         child: OutlinedButton.icon(
-                          onPressed: () =>
-                              context.push(RoutePaths.yorksV1MaterialRequests),
+                        onPressed: () => context.push(
+                          RoutePaths.yorksV1MaterialRequestsPath(
+                            projectId: projectId,
+                          ),
+                        ),
                           icon: const Icon(Icons.assignment_outlined, size: 18),
                           label: Text(
                             YorksV1MaterialRequestStrings.requests.primary,
@@ -129,7 +155,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                         child: FilledButton.icon(
                           onPressed: () => _createGroup(context, ref),
                           icon: const Icon(Icons.create_new_folder_outlined),
-                          label: Text(YorksV1BoqStrings.addGroup.primary),
+                          label: Text(YorksV1BoqStrings.newGroup.primary),
                         ),
                       ),
                   ],
@@ -185,6 +211,46 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
         SnackBar(content: Text(YorksV1BoqStrings.saveFailed.primary)),
       );
     }
+  }
+
+  Future<void> _exportProjectWorkbook(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    try {
+      final repository = ref.read(yorksV1BoqRepositoryProvider);
+      final groups = (await repository.listGroups(
+        projectId,
+      )).where((group) => !group.isArchived).toList(growable: false);
+      if (groups.isEmpty) return;
+      final worksheets = await Future.wait([
+        for (final group in groups) repository.getWorksheet(group.id),
+      ]);
+      final codec = ref.read(yorksV1BoqWorkbookCodecProvider);
+      final saved = await ref
+          .read(yorksV1BoqWorkbookFileServiceProvider)
+          .saveWorkbook(
+            bytes: codec.encodeWorksheets(worksheets),
+            suggestedName: 'Yorks_BOQ_${_safeWorkbookName(projectId)}.xlsx',
+          );
+      if (!context.mounted || !saved) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1BoqStrings.exported.primary)),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1BoqStrings.exportFailed.primary)),
+      );
+    }
+  }
+
+  static String _safeWorkbookName(String source) {
+    final safe = source
+        .trim()
+        .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_');
+    return safe.isEmpty ? 'project' : safe;
   }
 }
 
@@ -450,6 +516,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
                     onPressed: () => context.push(
                       RoutePaths.yorksV1MaterialRequestDraftPath(
                         const Uuid().v4(),
+                        projectId: projectId,
                       ),
                     ),
                     icon: const Icon(Icons.add_task_outlined),
@@ -473,6 +540,16 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             excelEnabled: excelEnabled,
             onSaved: () => ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
             showPageHeader: !compactRoute,
+            onCreateRequestFromFolder:
+                requestsEnabled && role?.canCreateMaterialRequest == true
+                ? () => context.push(
+                    RoutePaths.yorksV1MaterialRequestDraftPath(
+                      const Uuid().v4(),
+                      boqGroupId: groupId,
+                      projectId: projectId,
+                    ),
+                  )
+                : null,
             onImport: editable && excelEnabled && state.worksheet != null
                 ? () => _importWorkbook(
                     context,
@@ -610,6 +687,7 @@ class _WorksheetBody extends StatelessWidget {
     required this.excelEnabled,
     required this.onSaved,
     required this.showPageHeader,
+    this.onCreateRequestFromFolder,
     this.onImport,
     this.onExport,
   });
@@ -621,6 +699,7 @@ class _WorksheetBody extends StatelessWidget {
   final bool excelEnabled;
   final VoidCallback onSaved;
   final bool showPageHeader;
+  final VoidCallback? onCreateRequestFromFolder;
   final Future<void> Function()? onImport;
   final Future<void> Function()? onExport;
 
@@ -669,6 +748,7 @@ class _WorksheetBody extends StatelessWidget {
               }
             },
             onRefresh: controller.load,
+            onCreateRequestFromFolder: onCreateRequestFromFolder,
           ),
           const SizedBox(height: AppSpacing.md),
           if (!editable) _ReadOnlyBanner(language: language),
@@ -708,6 +788,7 @@ class _WorksheetHeader extends StatelessWidget {
     this.onImport,
     this.onExport,
     required this.onRefresh,
+    this.onCreateRequestFromFolder,
   });
 
   final YorksV1BoqWorksheet worksheet;
@@ -720,6 +801,7 @@ class _WorksheetHeader extends StatelessWidget {
   final Future<void> Function()? onImport;
   final Future<void> Function()? onExport;
   final Future<void> Function() onRefresh;
+  final VoidCallback? onCreateRequestFromFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -784,6 +866,13 @@ class _WorksheetHeader extends StatelessWidget {
                         : onSave,
                     icon: const Icon(Icons.save_outlined),
                     label: Text(YorksV1BoqStrings.save.primary),
+                  ),
+                if (onCreateRequestFromFolder != null)
+                  OutlinedButton.icon(
+                    key: const ValueKey('boq-create-request-from-folder'),
+                    onPressed: onCreateRequestFromFolder,
+                    icon: const Icon(Icons.assignment_outlined),
+                    label: Text(YorksV1BoqStrings.sendWholeGroup.primary),
                   ),
               ],
             );
@@ -935,6 +1024,14 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (widget.workbook.sheets.length > 1) ...[
+                        _ImportSheetChoices(
+                          sheets: widget.workbook.sheets,
+                          selected: _sheet,
+                          onSelected: _selectSheet,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
                       LayoutBuilder(
                         builder: (context, constraints) {
                           final narrow = constraints.maxWidth < 600;
@@ -1097,6 +1194,80 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
       ),
     );
   }
+}
+
+class _ImportSheetChoices extends StatelessWidget {
+  const _ImportSheetChoices({
+    required this.sheets,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<YorksV1BoqWorkbookSheet> sheets;
+  final YorksV1BoqWorkbookSheet selected;
+  final ValueChanged<YorksV1BoqWorkbookSheet> onSelected;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.maxWidth >= 700
+          ? 210.0
+          : constraints.maxWidth >= 460
+          ? 190.0
+          : constraints.maxWidth;
+      return Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final sheet in sheets)
+            SizedBox(
+              width: width,
+              child: OutlinedButton(
+                key: ValueKey('boq-import-sheet-choice-${sheet.name}'),
+                onPressed: () => onSelected(sheet),
+                style: OutlinedButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  backgroundColor: identical(sheet, selected)
+                      ? AppColors.blueContainer
+                      : AppColors.surfaceContainerLowest,
+                  side: BorderSide(
+                    color: identical(sheet, selected)
+                        ? AppColors.primary
+                        : AppColors.line,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.table_chart_outlined, size: 18),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      sheet.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '${sheet.nonEmptyRowIndexes.length} ${YorksV1BoqStrings.rows.primary}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      );
+    },
+  );
 }
 
 class _ImportColumnEditor extends StatelessWidget {
@@ -1274,6 +1445,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
   static const _rowHeight = 54.0;
   static const _serialWidth = 64.0;
   static const _columnWidth = 184.0;
+  static const _actionWidth = 56.0;
   final _serialScroll = ScrollController();
   final _bodyScroll = ScrollController();
   final _horizontalScroll = ScrollController();
@@ -1332,6 +1504,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
 
   Widget _buildToolbar(BuildContext context) {
     final hasSelection = _selectedRowId != null;
+    final addFirstRow = widget.worksheet.rows.isEmpty;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: const BoxDecoration(
@@ -1348,19 +1521,34 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
               icon: const Icon(Icons.view_column_outlined, size: 18),
               label: Text(YorksV1BoqStrings.addColumn.primary),
             ),
-            OutlinedButton.icon(
-              key: const ValueKey('boq-add-blank-row'),
-              onPressed: widget.worksheet.columns.isEmpty
-                  ? null
-                  : () {
-                      final row = widget.onAddBlankRow(
-                        afterRowId: _selectedRowId,
-                      );
-                      setState(() => _selectedRowId = row.id);
-                    },
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(YorksV1BoqStrings.blankRow.primary),
-            ),
+            if (addFirstRow)
+              FilledButton.icon(
+                key: const ValueKey('boq-add-blank-row'),
+                onPressed: widget.worksheet.columns.isEmpty
+                    ? null
+                    : () {
+                        final row = widget.onAddBlankRow(
+                          afterRowId: _selectedRowId,
+                        );
+                        setState(() => _selectedRowId = row.id);
+                      },
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: Text(YorksV1BoqStrings.addFirstRow.primary),
+              )
+            else
+              OutlinedButton.icon(
+                key: const ValueKey('boq-add-blank-row'),
+                onPressed: widget.worksheet.columns.isEmpty
+                    ? null
+                    : () {
+                        final row = widget.onAddBlankRow(
+                          afterRowId: _selectedRowId,
+                        );
+                        setState(() => _selectedRowId = row.id);
+                      },
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: Text(YorksV1BoqStrings.blankRow.primary),
+              ),
             OutlinedButton.icon(
               key: const ValueKey('boq-add-similar-row'),
               onPressed: !hasSelection
@@ -1441,7 +1629,9 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                         controller: _horizontalScroll,
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(
-                          width: columns.length * _columnWidth,
+                          width:
+                              columns.length * _columnWidth +
+                              (widget.editable ? _actionWidth : 0),
                           child: Column(
                             children: [
                               SizedBox(
@@ -1455,6 +1645,8 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                         onRename: widget.onRenameColumn,
                                         onDelete: () => _deleteColumn(column),
                                       ),
+                                    if (widget.editable)
+                                      const _GridActionHeader(),
                                   ],
                                 ),
                               ),
@@ -1497,6 +1689,11 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                                                 .id,
                                                         value: value,
                                                       ),
+                                                ),
+                                              if (widget.editable)
+                                                _GridRowDeleteAction(
+                                                  onPressed: () =>
+                                                      _deleteRow(row),
                                                 ),
                                             ],
                                           );
@@ -1624,6 +1821,21 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
     widget.onRemoveColumn(column.id);
   }
 
+  Future<void> _deleteRow(YorksV1BoqRow row) async {
+    final populated = row.values.values.any(
+      (value) => value != null && '$value'.trim().isNotEmpty,
+    );
+    if (populated) {
+      final confirmed = await _confirm(
+        context: context,
+        title: YorksV1BoqStrings.deleteRow,
+        body: YorksV1BoqStrings.deleteRowConfirmation,
+      );
+      if (confirmed != true) return;
+    }
+    widget.onRemoveRow(row.id);
+  }
+
   Future<void> _openMobileEditor(int rowIndex) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -1722,6 +1934,57 @@ class _HeaderCell extends StatelessWidget {
       border: Border(bottom: BorderSide(color: AppColors.line)),
     ),
     child: Text(label, style: AppTypography.labelLarge),
+  );
+}
+
+class _GridActionHeader extends StatelessWidget {
+  const _GridActionHeader();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: _YorksV1BoqSpreadsheetState._actionWidth,
+    height: _YorksV1BoqSpreadsheetState._rowHeight,
+    child: Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        border: Border(
+          left: BorderSide(color: AppColors.line),
+          bottom: BorderSide(color: AppColors.line),
+        ),
+      ),
+      child: const Icon(Icons.more_horiz_rounded, size: 18),
+    ),
+  );
+}
+
+class _GridRowDeleteAction extends StatelessWidget {
+  const _GridRowDeleteAction({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: _YorksV1BoqSpreadsheetState._actionWidth,
+    height: _YorksV1BoqSpreadsheetState._rowHeight,
+    child: Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        border: Border(
+          left: BorderSide(color: AppColors.line),
+          bottom: BorderSide(color: AppColors.line),
+        ),
+      ),
+      child: IconButton(
+        tooltip: YorksV1BoqStrings.deleteRow.primary,
+        constraints: const BoxConstraints(
+          minWidth: AppSpacing.minTapTarget,
+          minHeight: AppSpacing.minTapTarget,
+        ),
+        onPressed: onPressed,
+        icon: const Icon(Icons.delete_outline_rounded, size: 18),
+      ),
+    ),
   );
 }
 

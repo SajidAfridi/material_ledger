@@ -11,12 +11,15 @@ import '../../../../shared/controllers/yorks_v1_material_request_draft_controlle
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_boq.dart';
+import '../../../../shared/models/yorks_v1_boq_strings.dart';
+import '../../../../shared/models/yorks_v1_boq_workbook.dart';
 import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -28,17 +31,22 @@ import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_repository_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
+import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
+import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 
 /// V1 material request overview. It reads only the server projection; drafts
 /// are returned only to their creator by the database contract.
 class YorksV1MaterialRequestsScreen extends ConsumerWidget {
-  const YorksV1MaterialRequestsScreen({super.key});
+  const YorksV1MaterialRequestsScreen({super.key, this.projectId});
+
+  final String? projectId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
-    final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
+    final requests = ref.watch(yorksV1MaterialRequestListProvider(projectId));
     final canCreate = role?.canCreateMaterialRequest ?? false;
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
@@ -77,7 +85,10 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
       floatingActionButton: compactRoute && canCreate
           ? FloatingActionButton.extended(
               onPressed: () => context.push(
-                RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
+                RoutePaths.yorksV1MaterialRequestDraftPath(
+                  const Uuid().v4(),
+                  projectId: projectId,
+                ),
               ),
               icon: const Icon(Icons.add_rounded),
               label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
@@ -100,19 +111,8 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                   eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
                   title: YorksV1MaterialRequestStrings.requests.primary,
                   description:
-                      YorksV1MaterialRequestStrings.submitToProcurement.primary,
+                      YorksV1MaterialRequestStrings.requestsDescription.primary,
                   actions: [
-                    SizedBox(
-                      height: AppSpacing.controlHeight,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            ref.invalidate(yorksV1MaterialRequestListProvider),
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: Text(
-                          YorksV1MaterialRequestStrings.refresh.primary,
-                        ),
-                      ),
-                    ),
                     if (canCreate)
                       SizedBox(
                         height: AppSpacing.minTapTarget,
@@ -120,6 +120,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                           onPressed: () => context.push(
                             RoutePaths.yorksV1MaterialRequestDraftPath(
                               const Uuid().v4(),
+                              projectId: projectId,
                             ),
                           ),
                           icon: const Icon(Icons.add_rounded),
@@ -132,6 +133,8 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
+              _RequestsWorkflowBanner(),
+              const SizedBox(height: AppSpacing.lg),
               Expanded(
                 child: requests.when(
                   loading: () =>
@@ -141,22 +144,13 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                     onRetry: () =>
                         ref.invalidate(yorksV1MaterialRequestListProvider),
                   ),
-                  data: (items) => items.isEmpty
-                      ? _EmptyRequests(language: language, canCreate: canCreate)
-                      : ListView.separated(
-                          itemCount: items.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: AppSpacing.md),
-                          itemBuilder: (context, index) => _RequestCard(
-                            request: items[index],
-                            language: language,
-                            onOpen: () => context.push(
-                              RoutePaths.yorksV1MaterialRequestPath(
-                                items[index].id,
-                              ),
-                            ),
-                          ),
-                        ),
+                  data: (items) => _RequestsPanel(
+                    requests: items,
+                    language: language,
+                    canCreate: canCreate,
+                    onOpen: (request) =>
+                        context.push(_materialRequestOpenPath(request)),
+                  ),
                 ),
               ),
             ],
@@ -449,13 +443,31 @@ class _WorkflowQueueEmpty extends StatelessWidget {
   }
 }
 
-class YorksV1MaterialRequestDraftScreen extends ConsumerWidget {
-  const YorksV1MaterialRequestDraftScreen({super.key, required this.draftId});
+class YorksV1MaterialRequestDraftScreen extends ConsumerStatefulWidget {
+  const YorksV1MaterialRequestDraftScreen({
+    super.key,
+    required this.draftId,
+    this.boqGroupId,
+    this.projectId,
+  });
 
   final String draftId;
+  final String? boqGroupId;
+  final String? projectId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<YorksV1MaterialRequestDraftScreen> createState() =>
+      _YorksV1MaterialRequestDraftScreenState();
+}
+
+class _YorksV1MaterialRequestDraftScreenState
+    extends ConsumerState<YorksV1MaterialRequestDraftScreen> {
+  bool _seededFromBoq = false;
+  bool _seededProjectFromRoute = false;
+  bool _hydratedFromServer = false;
+
+  @override
+  Widget build(BuildContext context) {
     final owner = ref.watch(yorksV1AuthUserIdProvider);
     final language = ref.watch(languageProvider);
     if (owner == null || owner.isEmpty) {
@@ -467,12 +479,46 @@ class YorksV1MaterialRequestDraftScreen extends ConsumerWidget {
     }
     final key = YorksV1MaterialRequestDraftKey(
       ownerAuthUserId: owner,
-      draftId: draftId,
+      draftId: widget.draftId,
     );
     final state = ref.watch(yorksV1MaterialRequestDraftControllerProvider(key));
     final controller = ref.read(
       yorksV1MaterialRequestDraftControllerProvider(key).notifier,
     );
+    final shouldHydrateFromServer =
+        state.draft.serverRecordVersion == 0 &&
+        state.draft.updatedAt.millisecondsSinceEpoch == 0;
+    final serverDraft = shouldHydrateFromServer
+        ? ref.watch(yorksV1MaterialRequestDetailProvider(widget.draftId))
+        : null;
+    if (!_hydratedFromServer &&
+        serverDraft is AsyncData<YorksV1MaterialRequest>) {
+      final request = serverDraft.value;
+      if (request.state.isDraft) {
+        _hydratedFromServer = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) controller.hydrateFromServer(request);
+        });
+      }
+    }
+    final routeProjectId = widget.projectId?.trim();
+    final canSeedProjectFromRoute =
+        routeProjectId != null &&
+        routeProjectId.isNotEmpty &&
+        state.draft.projectId == null &&
+        (!_shouldHydrateFromServer(state) || serverDraft is AsyncError);
+    if (!_seededProjectFromRoute && canSeedProjectFromRoute) {
+      _seededProjectFromRoute = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) controller.setProject(routeProjectId);
+      });
+    }
+    if (!_seededFromBoq && widget.boqGroupId != null) {
+      _seededFromBoq = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _seedDraftFromBoq(controller, state.draft);
+      });
+    }
     return _DraftForm(
       state: state,
       controller: controller,
@@ -480,6 +526,48 @@ class YorksV1MaterialRequestDraftScreen extends ConsumerWidget {
       language: language,
     );
   }
+
+  bool _shouldHydrateFromServer(YorksV1MaterialRequestDraftState state) =>
+      state.draft.serverRecordVersion == 0 &&
+      state.draft.updatedAt.millisecondsSinceEpoch == 0;
+
+  Future<void> _seedDraftFromBoq(
+    YorksV1MaterialRequestDraftController controller,
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    final groupId = widget.boqGroupId?.trim();
+    final projectId = widget.projectId?.trim();
+    if (groupId == null || groupId.isEmpty || draft.lines.isNotEmpty) return;
+    try {
+      if (projectId != null && projectId.isNotEmpty) {
+        await controller.setProject(projectId);
+      }
+      final worksheet = await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .getWorksheet(groupId);
+      await controller.addBoqRows(
+        worksheet: worksheet,
+        rowIds: worksheet.rows.map((row) => row.id),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(YorksV1MaterialRequestStrings.saveFailed.primary),
+        ),
+      );
+    }
+  }
+}
+
+String _materialRequestOpenPath(YorksV1MaterialRequest request) {
+  if (request.state.isDraft) {
+    return RoutePaths.yorksV1MaterialRequestDraftPath(
+      request.id,
+      projectId: request.projectId,
+    );
+  }
+  return RoutePaths.yorksV1MaterialRequestPath(request.id);
 }
 
 class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
@@ -559,13 +647,39 @@ class _DraftForm extends ConsumerWidget {
     final scopes = draft.projectId == null
         ? const AsyncData<List<YorksV1MaterialRequestScopeOption>>([])
         : ref.watch(yorksV1MaterialRequestScopesProvider(draft.projectId!));
+    // R35 starts every new request at the server-created Common / All
+    // Buildings scope.  Keep that convenience without making the scope a
+    // client-side authority: the ordered RPC response is still the source of
+    // truth and the submit RPC validates the selected scope again.
+    if (draft.projectId != null &&
+        draft.scopeId == null &&
+        scopes is AsyncData<List<YorksV1MaterialRequestScopeOption>> &&
+        scopes.value.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        final current = controller.currentDraft;
+        if (current.projectId == draft.projectId && current.scopeId == null) {
+          controller.setScope(scopes.value.first.id);
+        }
+      });
+    }
+    final selectedProject = projects.valueOrNull
+        ?.where((item) => item.id == draft.projectId)
+        .firstOrNull;
+    final projectIsActive =
+        selectedProject?.state == YorksV1ProjectLifecycle.active.wireValue;
     final canSubmit =
         draft.canSubmitLocally &&
+        projectIsActive &&
         state.status != YorksV1MaterialRequestDraftSyncStatus.submitting;
     final isBusy =
         state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
     final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
+    final workbookFileService = ref.watch(
+      yorksV1BoqWorkbookFileServiceProvider,
+    );
+    final documentService = YorksV1MaterialRequestDocumentService();
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
 
@@ -606,11 +720,12 @@ class _DraftForm extends ConsumerWidget {
             final save = isBusy
                 ? null
                 : () => _save(context, ref, controller, draft);
-            final requestNumber = draft.serverRecordVersion == 0
-                ? YorksV1MaterialRequestStrings.draft.primary
-                : YorksV1MaterialRequestStrings.editDraft.primary;
+            final requestNumber = _previewRequestNumber(selectedProject);
             final form = _R35RequestCard(
               title: YorksV1MaterialRequestStrings.requestInformation.primary,
+              description: YorksV1MaterialRequestStrings
+                  .requestInformationDescription
+                  .primary,
               child: _RequestFormFields(
                 draft: draft,
                 projects: projects,
@@ -620,10 +735,12 @@ class _DraftForm extends ConsumerWidget {
             );
             final items = _R35RequestCard(
               title: YorksV1MaterialRequestStrings.materialItems.primary,
-              description: YorksV1MaterialRequestStrings.draftPrivate.primary,
+              description: YorksV1MaterialRequestStrings
+                  .materialItemsDescription
+                  .primary,
               actions: [
                 _R35RequestAction(
-                  label: YorksV1MaterialRequestStrings.addCustomLine.primary,
+                  label: YorksV1MaterialRequestStrings.addCustomItem.primary,
                   icon: Icons.add_rounded,
                   primary: true,
                   onPressed: isBusy ? null : controller.addCustomLine,
@@ -642,6 +759,19 @@ class _DraftForm extends ConsumerWidget {
                     onPressed: isBusy
                         ? null
                         : () => _importExcel(context, ref, controller),
+                  ),
+                if (excelEnabled)
+                  _R35RequestAction(
+                    label: YorksV1MaterialRequestStrings.exportExcel.primary,
+                    icon: Icons.download_outlined,
+                    onPressed: isBusy
+                        ? null
+                        : () => _exportDraft(
+                            context,
+                            workbookFileService,
+                            documentService,
+                            draft,
+                          ),
                   ),
               ],
               child: _RequestLinesEditor(
@@ -668,6 +798,13 @@ class _DraftForm extends ConsumerWidget {
                   copy: YorksV1MaterialRequestStrings.missingRequired,
                   language: language,
                 ),
+              if (draft.projectId != null &&
+                  selectedProject != null &&
+                  !projectIsActive)
+                _InlineMessage(
+                  copy: YorksV1MaterialRequestStrings.projectMustBeActive,
+                  language: language,
+                ),
             ];
             return SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
@@ -686,6 +823,9 @@ class _DraftForm extends ConsumerWidget {
                     if (!compactRoute) ...[
                       _R35RequestHero(
                         title: requestNumber,
+                        requesterName: ref.watch(actorNameProvider),
+                        projectName: selectedProject?.name,
+                        lineCount: draft.lines.length,
                         onCancel: () => context.pop(),
                         onSubmit: submit,
                         submitting:
@@ -719,6 +859,7 @@ class _DraftForm extends ConsumerWidget {
                               draft: draft,
                               projects: projects,
                               scopes: scopes,
+                              requesterName: ref.watch(actorNameProvider),
                               onSave: save,
                               onSubmit: submit,
                               submitting:
@@ -736,6 +877,7 @@ class _DraftForm extends ConsumerWidget {
                         draft: draft,
                         projects: projects,
                         scopes: scopes,
+                        requesterName: ref.watch(actorNameProvider),
                         onSave: save,
                         onSubmit: submit,
                         submitting:
@@ -791,15 +933,30 @@ class _DraftForm extends ConsumerWidget {
   }
 }
 
+/// Display-only preview matching the R35 prototype. The server assigns the
+/// authoritative request number during Submit; this value must never be used
+/// as an identifier for a write or workflow transition.
+String _previewRequestNumber(YorksV1MaterialRequestProjectOption? project) {
+  final reference = project?.reference.trim();
+  final prefix = reference == null || reference.isEmpty ? 'YRA' : reference;
+  return '$prefix-MR101';
+}
+
 class _R35RequestHero extends StatelessWidget {
   const _R35RequestHero({
     required this.title,
+    required this.requesterName,
+    required this.projectName,
+    required this.lineCount,
     required this.onCancel,
     required this.onSubmit,
     required this.submitting,
   });
 
   final String title;
+  final String requesterName;
+  final String? projectName;
+  final int lineCount;
   final VoidCallback onCancel;
   final VoidCallback? onSubmit;
   final bool submitting;
@@ -830,7 +987,7 @@ class _R35RequestHero extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              YorksV1MaterialRequestStrings.draftPrivate.primary,
+              YorksV1MaterialRequestStrings.requestScopeDescription.primary,
               style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
             ),
             const SizedBox(height: AppSpacing.xxxl),
@@ -860,18 +1017,22 @@ class _R35RequestHero extends StatelessWidget {
         child: Column(
           children: [
             _R35RequestFact(
-              label: YorksV1MaterialRequestStrings.requestNumber.primary,
-              value: title,
+              label: YorksV1MaterialRequestStrings.requestedBy.primary,
+              value: requesterName.trim().isEmpty
+                  ? YorksV1MaterialRequestStrings.requester.primary
+                  : requesterName,
             ),
             const SizedBox(height: AppSpacing.md),
             _R35RequestFact(
-              label: YorksV1MaterialRequestStrings.project.primary,
-              value: YorksV1MaterialRequestStrings.draft.primary,
+              label: YorksV1MaterialRequestStrings.projectEngineer.primary,
+              value: projectName?.trim().isNotEmpty == true
+                  ? YorksV1MaterialRequestStrings.notProvided.primary
+                  : YorksV1MaterialRequestStrings.selectProject.primary,
             ),
             const SizedBox(height: AppSpacing.md),
             _R35RequestFact(
-              label: YorksV1MaterialRequestStrings.lines.primary,
-              value: '0',
+              label: YorksV1MaterialRequestStrings.items.primary,
+              value: '$lineCount',
             ),
           ],
         ),
@@ -886,7 +1047,11 @@ class _R35RequestHero extends StatelessWidget {
         );
       }
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        // This row lives inside the draft's vertical SingleChildScrollView,
+        // so its incoming height is unbounded. Stretching children across
+        // that axis would request an infinite height and leave the viewport
+        // without a size on Flutter web.
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(flex: 3, child: lead),
           const SizedBox(width: AppSpacing.lg),
@@ -912,46 +1077,55 @@ class _R35RequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _R35RequestSurface(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final heading = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.titleLarge.copyWith(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  if (description != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      description!,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                ],
+            Text(
+              title,
+              style: AppTypography.titleLarge.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            if (actions.isNotEmpty)
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: actions,
+            if (description != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                description!,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
               ),
+            ],
           ],
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        child,
-      ],
+        );
+        final actionWrap = Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: actions,
+        );
+        final compact = constraints.maxWidth < 760;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (compact) ...[
+              heading,
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                actionWrap,
+              ],
+            ] else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: heading),
+                  if (actions.isNotEmpty) actionWrap,
+                ],
+              ),
+            const SizedBox(height: AppSpacing.xl),
+            child,
+          ],
+        );
+      },
     ),
   );
 }
@@ -961,6 +1135,7 @@ class _R35RequestReview extends StatelessWidget {
     required this.draft,
     required this.projects,
     required this.scopes,
+    required this.requesterName,
     required this.onSave,
     required this.onSubmit,
     required this.submitting,
@@ -969,6 +1144,7 @@ class _R35RequestReview extends StatelessWidget {
   final YorksV1MaterialRequestDraft draft;
   final AsyncValue<List<YorksV1MaterialRequestProjectOption>> projects;
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+  final String requesterName;
   final VoidCallback? onSave;
   final VoidCallback? onSubmit;
   final bool submitting;
@@ -983,26 +1159,37 @@ class _R35RequestReview extends StatelessWidget {
         .where((item) => item.id == draft.scopeId)
         .toList(growable: false);
     final scope = scopeMatches.isEmpty ? null : scopeMatches.first;
+    final ready =
+        draft.canSubmitLocally &&
+        project?.state == YorksV1ProjectLifecycle.active.wireValue;
     return _R35RequestSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            YorksV1MaterialRequestStrings.review.primary,
-            style: AppTypography.titleLarge.copyWith(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  YorksV1MaterialRequestStrings.review.primary,
+                  style: AppTypography.titleLarge.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _ReviewStatusChip(ready: ready),
+            ],
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            YorksV1MaterialRequestStrings.draftPrivate.primary,
+            YorksV1MaterialRequestStrings.reviewDescription.primary,
             style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
           ),
           const SizedBox(height: AppSpacing.lg),
           _R35RequestFact(
             label: YorksV1MaterialRequestStrings.requestNumber.primary,
-            value: YorksV1MaterialRequestStrings.draft.primary,
+            value: _previewRequestNumber(project),
           ),
           const SizedBox(height: AppSpacing.sm),
           _R35RequestFact(
@@ -1013,18 +1200,25 @@ class _R35RequestReview extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _R35RequestFact(
-            label: YorksV1MaterialRequestStrings.scope.primary,
+            label: YorksV1MaterialRequestStrings.scopeLabel.primary,
             value: scope?.name ?? YorksV1MaterialRequestStrings.scope.primary,
           ),
           const SizedBox(height: AppSpacing.sm),
           _R35RequestFact(
-            label: YorksV1MaterialRequestStrings.timing.primary,
+            label: YorksV1MaterialRequestStrings.delivery.primary,
             value: yorksV1MaterialRequestTimingCopy(draft.timing).primary,
           ),
           const SizedBox(height: AppSpacing.sm),
           _R35RequestFact(
-            label: YorksV1MaterialRequestStrings.lines.primary,
-            value: '${draft.lines.length}',
+            label: YorksV1MaterialRequestStrings.requestedBy.primary,
+            value: requesterName.trim().isEmpty
+                ? YorksV1MaterialRequestStrings.notProvided.primary
+                : requesterName,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _R35RequestFact(
+            label: YorksV1MaterialRequestStrings.projectEngineer.primary,
+            value: YorksV1MaterialRequestStrings.notProvided.primary,
           ),
           const SizedBox(height: AppSpacing.xl),
           _R35RequestAction(
@@ -1072,6 +1266,42 @@ class _R35RequestSurface extends StatelessWidget {
     ),
     child: child,
   );
+}
+
+class _ReviewStatusChip extends StatelessWidget {
+  const _ReviewStatusChip({required this.ready});
+
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = ready
+        ? AppColors.successContainer
+        : AppColors.warningContainer;
+    final foreground = ready
+        ? AppColors.onSuccessContainer
+        : AppColors.onWarningContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        (ready
+                ? YorksV1MaterialRequestStrings.ready
+                : YorksV1MaterialRequestStrings.addItems)
+            .primary,
+        style: AppTypography.labelMedium.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _R35RequestFact extends StatelessWidget {
@@ -1193,7 +1423,7 @@ class _RequestFormFields extends StatelessWidget {
     builder: (context, constraints) {
       final half = constraints.maxWidth >= 760;
       final title = TextFormField(
-        key: ValueKey('mr_title_${draft.title}'),
+        key: const ValueKey('mr-title'),
         initialValue: draft.title ?? '',
         onChanged: controller.setTitle,
         decoration: InputDecoration(
@@ -1214,16 +1444,7 @@ class _RequestFormFields extends StatelessWidget {
         _TimingPicker(draft: draft, controller: controller),
         if (draft.timing == YorksV1MaterialRequestTiming.scheduled)
           _ScheduledDateField(draft: draft, controller: controller),
-        TextFormField(
-          key: ValueKey('mr_delivery_${draft.deliveryNote}'),
-          initialValue: draft.deliveryNote ?? '',
-          minLines: 2,
-          maxLines: 3,
-          onChanged: controller.setDeliveryNote,
-          decoration: InputDecoration(
-            labelText: YorksV1MaterialRequestStrings.deliveryNote.primary,
-          ),
-        ),
+        _OptionalDeliveryNote(draft: draft, controller: controller),
       ];
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1251,6 +1472,52 @@ class _RequestFormFields extends StatelessWidget {
       );
     },
   );
+}
+
+class _OptionalDeliveryNote extends StatefulWidget {
+  const _OptionalDeliveryNote({required this.draft, required this.controller});
+
+  final YorksV1MaterialRequestDraft draft;
+  final YorksV1MaterialRequestDraftController controller;
+
+  @override
+  State<_OptionalDeliveryNote> createState() => _OptionalDeliveryNoteState();
+}
+
+class _OptionalDeliveryNoteState extends State<_OptionalDeliveryNote> {
+  late bool _expanded = widget.draft.deliveryNote?.trim().isNotEmpty == true;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_expanded) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => setState(() => _expanded = true),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: Text(YorksV1MaterialRequestStrings.deliveryNote.primary),
+        ),
+      );
+    }
+    return TextFormField(
+      key: const ValueKey('mr-delivery'),
+      initialValue: widget.draft.deliveryNote ?? '',
+      minLines: 2,
+      maxLines: 3,
+      onChanged: widget.controller.setDeliveryNote,
+      decoration: InputDecoration(
+        labelText: YorksV1MaterialRequestStrings.deliveryNote.primary,
+        suffixIcon: IconButton(
+          tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () {
+            widget.controller.setDeliveryNote(null);
+            setState(() => _expanded = false);
+          },
+        ),
+      ),
+    );
+  }
 }
 
 class _ProjectDropdown extends StatelessWidget {
@@ -1308,7 +1575,7 @@ class _ScopeDropdown extends StatelessWidget {
       initialValue: items.any((item) => item.id == value) ? value : null,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: YorksV1MaterialRequestStrings.scope.primary,
+        labelText: YorksV1MaterialRequestStrings.buildingOther.primary,
       ),
       items: [
         for (final item in items)
@@ -1330,7 +1597,7 @@ class _TimingPicker extends StatelessWidget {
       DropdownButtonFormField<YorksV1MaterialRequestTiming>(
         initialValue: draft.timing,
         decoration: InputDecoration(
-          labelText: YorksV1MaterialRequestStrings.timing.primary,
+          labelText: YorksV1MaterialRequestStrings.requestTiming.primary,
         ),
         items: [
           for (final timing in YorksV1MaterialRequestTiming.values)
@@ -1377,7 +1644,7 @@ class _ScheduledDateField extends StatelessWidget {
   );
 }
 
-class _RequestLinesEditor extends StatelessWidget {
+class _RequestLinesEditor extends ConsumerWidget {
   const _RequestLinesEditor({
     required this.lines,
     required this.controller,
@@ -1389,19 +1656,21 @@ class _RequestLinesEditor extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (lines.isEmpty) {
       return Text(
         YorksV1MaterialRequestStrings.missingRequired.primary,
         style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
       );
     }
+    final showCommercial = ref.watch(canViewCommercialsProvider);
     return LayoutBuilder(
-      builder: (context, constraints) => constraints.maxWidth >= 900
+      builder: (context, constraints) => constraints.maxWidth >= 760
           ? _DesktopLinesTable(
               lines: lines,
               controller: controller,
               enabled: enabled,
+              showCommercial: showCommercial,
             )
           : Column(
               children: [
@@ -1424,97 +1693,261 @@ class _DesktopLinesTable extends StatelessWidget {
     required this.lines,
     required this.controller,
     required this.enabled,
+    required this.showCommercial,
   });
 
   final List<YorksV1MaterialRequestLine> lines;
   final YorksV1MaterialRequestDraftController controller;
   final bool enabled;
+  final bool showCommercial;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      columnSpacing: AppSpacing.md,
-      headingTextStyle: AppTypography.labelLarge,
-      columns: [
-        DataColumn(
-          label: Text(YorksV1MaterialRequestStrings.rowNumber.primary),
-        ),
-        DataColumn(
-          label: Text(YorksV1MaterialRequestStrings.itemDescription.primary),
-        ),
-        DataColumn(
-          label: Text(YorksV1MaterialRequestStrings.brandOrigin.primary),
-        ),
-        DataColumn(label: Text(YorksV1MaterialRequestStrings.quantity.primary)),
-        DataColumn(label: Text(YorksV1MaterialRequestStrings.unit.primary)),
-        const DataColumn(label: SizedBox.shrink()),
-      ],
-      rows: [
-        for (final line in lines)
-          DataRow(
-            cells: [
-              DataCell(Text(line.displayOrder.toString())),
-              DataCell(
-                _LineTextField(
-                  initialValue: line.description,
-                  enabled: enabled,
-                  onChanged: (value) => controller.updateLine(
-                    line.id,
-                    (current) => current.copyWith(description: value),
-                  ),
-                ),
-              ),
-              DataCell(
-                _LineTextField(
-                  initialValue: line.brandOrigin ?? '',
-                  enabled: enabled,
-                  onChanged: (value) => controller.updateLine(
-                    line.id,
-                    (current) => current.copyWith(
-                      brandOrigin: value.trim().isEmpty ? null : value,
-                    ),
-                  ),
-                ),
-              ),
-              DataCell(
-                _LineTextField(
-                  initialValue: line.quantity,
-                  enabled: enabled,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  onChanged: (value) => controller.updateLine(
-                    line.id,
-                    (current) => current.copyWith(quantity: value),
-                  ),
-                ),
-              ),
-              DataCell(
-                _LineTextField(
-                  initialValue: line.unit,
-                  enabled: enabled,
-                  onChanged: (value) => controller.updateLine(
-                    line.id,
-                    (current) => current.copyWith(unit: value),
-                  ),
-                ),
-              ),
-              DataCell(
-                IconButton(
-                  tooltip: MaterialLocalizations.of(
-                    context,
-                  ).deleteButtonTooltip,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  onPressed: enabled
-                      ? () => controller.removeLine(line.id)
-                      : null,
-                ),
-              ),
-            ],
+  Widget build(BuildContext context) {
+    final tableWidth = showCommercial ? 1310.0 : 1080.0;
+    final headerStyle = AppTypography.labelSmall.copyWith(
+      color: AppColors.muted,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.8,
+    );
+    final rows = <TableRow>[
+      TableRow(
+        decoration: const BoxDecoration(color: AppColors.surfaceContainerLow),
+        children: [
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.serialNumber.primary,
+              style: headerStyle,
+            ),
           ),
-      ],
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.itemDescription.primary
+                  .toUpperCase(),
+              style: headerStyle,
+            ),
+          ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.size.primary.toUpperCase(),
+              style: headerStyle,
+            ),
+          ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.planningModelTag.primary
+                  .toUpperCase(),
+              style: headerStyle,
+            ),
+          ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.brandOrigin.primary.toUpperCase(),
+              style: headerStyle,
+            ),
+          ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.quantity.primary.toUpperCase(),
+              style: headerStyle,
+            ),
+          ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.unit.primary.toUpperCase(),
+              style: headerStyle,
+            ),
+          ),
+          if (showCommercial)
+            _MrTableCell(
+              child: Text(
+                YorksV1MaterialRequestStrings.unitCost.primary.toUpperCase(),
+                style: headerStyle,
+              ),
+            ),
+          if (showCommercial)
+            _MrTableCell(
+              child: Text(
+                YorksV1MaterialRequestStrings.totalCost.primary.toUpperCase(),
+                style: headerStyle,
+              ),
+            ),
+          _MrTableCell(child: const SizedBox.shrink()),
+        ],
+      ),
+    ];
+    for (final line in lines) {
+      rows.add(
+        TableRow(
+          children: [
+            _MrTableCell(
+              child: Text(
+                line.displayOrder.toString(),
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.inkSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _LineTextField(
+                fieldKey: ValueKey('${line.id}-description'),
+                initialValue: line.description,
+                enabled: enabled,
+                onChanged: (value) => controller.updateLine(
+                  line.id,
+                  (current) => current.copyWith(description: value),
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _LineTextField(
+                fieldKey: ValueKey('${line.id}-size'),
+                initialValue: line.size ?? '',
+                enabled: enabled,
+                onChanged: (value) => controller.updateLine(
+                  line.id,
+                  (current) => current.copyWith(
+                    size: value.trim().isEmpty ? null : value,
+                  ),
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _LineTextField(
+                fieldKey: ValueKey('${line.id}-planning-model-tag'),
+                initialValue: line.planningModelTag ?? '',
+                enabled: enabled,
+                onChanged: (value) => controller.updateLine(
+                  line.id,
+                  (current) => current.copyWith(
+                    planningModelTag: value.trim().isEmpty ? null : value,
+                  ),
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _LineTextField(
+                fieldKey: ValueKey('${line.id}-brand-origin'),
+                initialValue: line.brandOrigin ?? '',
+                enabled: enabled,
+                onChanged: (value) => controller.updateLine(
+                  line.id,
+                  (current) => current.copyWith(
+                    brandOrigin: value.trim().isEmpty ? null : value,
+                  ),
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _LineTextField(
+                fieldKey: ValueKey('${line.id}-quantity'),
+                initialValue: line.quantity,
+                enabled: enabled,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                onChanged: (value) => controller.updateLine(
+                  line.id,
+                  (current) => current.copyWith(quantity: value),
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _LineTextField(
+                fieldKey: ValueKey('${line.id}-unit'),
+                initialValue: line.unit,
+                enabled: enabled,
+                onChanged: (value) => controller.updateLine(
+                  line.id,
+                  (current) => current.copyWith(unit: value),
+                ),
+              ),
+            ),
+            if (showCommercial)
+              _MrTableCell(
+                child: Text(
+                  line.unitCost ?? '—',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.inkSecondary,
+                  ),
+                ),
+              ),
+            if (showCommercial)
+              _MrTableCell(
+                child: Text(
+                  line.totalCost ?? '—',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.inkSecondary,
+                  ),
+                ),
+              ),
+            _MrTableCell(
+              child: IconButton(
+                tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+                icon: const Icon(Icons.delete_outline_rounded),
+                onPressed: enabled
+                    ? () => controller.removeLine(line.id)
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Table(
+              columnWidths: {
+                0: const FixedColumnWidth(64),
+                1: const FixedColumnWidth(260),
+                2: const FixedColumnWidth(150),
+                3: const FixedColumnWidth(190),
+                4: const FixedColumnWidth(180),
+                5: const FixedColumnWidth(90),
+                6: const FixedColumnWidth(90),
+                if (showCommercial) 7: const FixedColumnWidth(110),
+                if (showCommercial) 8: const FixedColumnWidth(120),
+                showCommercial ? 9 : 7: const FixedColumnWidth(58),
+              },
+              border: TableBorder(
+                horizontalInside: BorderSide(color: AppColors.line),
+                verticalInside: BorderSide(color: AppColors.line),
+                top: BorderSide(color: AppColors.line),
+                bottom: BorderSide(color: AppColors.line),
+                left: BorderSide(color: AppColors.line),
+                right: BorderSide(color: AppColors.line),
+              ),
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: rows,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MrTableCell extends StatelessWidget {
+  const _MrTableCell({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.sm,
     ),
+    child: child,
   );
 }
 
@@ -1551,6 +1984,7 @@ class _FocusedLineEditor extends StatelessWidget {
           ],
         ),
         _LineLabeledField(
+          fieldKey: ValueKey('${line.id}-description'),
           label: YorksV1MaterialRequestStrings.itemDescription.primary,
           initialValue: line.description,
           enabled: enabled,
@@ -1561,6 +1995,7 @@ class _FocusedLineEditor extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         _LineLabeledField(
+          fieldKey: ValueKey('${line.id}-brand-origin'),
           label: YorksV1MaterialRequestStrings.brandOrigin.primary,
           initialValue: line.brandOrigin ?? '',
           enabled: enabled,
@@ -1572,10 +2007,36 @@ class _FocusedLineEditor extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
+        _LineLabeledField(
+          fieldKey: ValueKey('${line.id}-size'),
+          label: YorksV1MaterialRequestStrings.size.primary,
+          initialValue: line.size ?? '',
+          enabled: enabled,
+          onChanged: (value) => controller.updateLine(
+            line.id,
+            (current) =>
+                current.copyWith(size: value.trim().isEmpty ? null : value),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _LineLabeledField(
+          fieldKey: ValueKey('${line.id}-planning-model-tag'),
+          label: YorksV1MaterialRequestStrings.planningModelTag.primary,
+          initialValue: line.planningModelTag ?? '',
+          enabled: enabled,
+          onChanged: (value) => controller.updateLine(
+            line.id,
+            (current) => current.copyWith(
+              planningModelTag: value.trim().isEmpty ? null : value,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
             Expanded(
               child: _LineLabeledField(
+                fieldKey: ValueKey('${line.id}-quantity'),
                 label: YorksV1MaterialRequestStrings.quantity.primary,
                 initialValue: line.quantity,
                 enabled: enabled,
@@ -1591,6 +2052,7 @@ class _FocusedLineEditor extends StatelessWidget {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _LineLabeledField(
+                fieldKey: ValueKey('${line.id}-unit'),
                 label: YorksV1MaterialRequestStrings.unit.primary,
                 initialValue: line.unit,
                 enabled: enabled,
@@ -1609,33 +2071,36 @@ class _FocusedLineEditor extends StatelessWidget {
 
 class _LineTextField extends StatelessWidget {
   const _LineTextField({
+    required this.fieldKey,
     required this.initialValue,
     required this.onChanged,
     required this.enabled,
     this.keyboardType,
   });
 
+  final Key fieldKey;
   final String initialValue;
   final ValueChanged<String> onChanged;
   final bool enabled;
   final TextInputType? keyboardType;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 180,
-    child: TextFormField(
-      key: ValueKey(initialValue),
-      initialValue: initialValue,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      onChanged: onChanged,
-      decoration: const InputDecoration(isDense: true),
+  Widget build(BuildContext context) => TextFormField(
+    key: fieldKey,
+    initialValue: initialValue,
+    enabled: enabled,
+    keyboardType: keyboardType,
+    onChanged: onChanged,
+    decoration: const InputDecoration(
+      isDense: true,
+      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
     ),
   );
 }
 
 class _LineLabeledField extends StatelessWidget {
   const _LineLabeledField({
+    required this.fieldKey,
     required this.label,
     required this.initialValue,
     required this.onChanged,
@@ -1643,6 +2108,7 @@ class _LineLabeledField extends StatelessWidget {
     this.keyboardType,
   });
 
+  final Key fieldKey;
   final String label;
   final String initialValue;
   final ValueChanged<String> onChanged;
@@ -1651,13 +2117,108 @@ class _LineLabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TextFormField(
-    key: ValueKey('$label-$initialValue'),
+    key: fieldKey,
     initialValue: initialValue,
     enabled: enabled,
     keyboardType: keyboardType,
     onChanged: onChanged,
     decoration: InputDecoration(labelText: label),
   );
+}
+
+class _RequestsWorkflowBanner extends StatelessWidget {
+  const _RequestsWorkflowBanner();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.lg,
+      vertical: AppSpacing.md,
+    ),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer.withValues(alpha: 0.55),
+      border: Border.all(color: AppColors.blueContainerStrong),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.blueContainer,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: const Icon(
+            Icons.description_outlined,
+            color: AppColors.blue,
+            size: 21,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                YorksV1MaterialRequestStrings.workflowTitle.primary,
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                YorksV1MaterialRequestStrings.workflowDescription.primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _RequestsPanel extends StatelessWidget {
+  const _RequestsPanel({
+    required this.requests,
+    required this.language,
+    required this.canCreate,
+    required this.onOpen,
+  });
+
+  final List<YorksV1MaterialRequest> requests;
+  final AppLanguage language;
+  final bool canCreate;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (requests.isEmpty) {
+      return _EmptyRequests(language: language, canCreate: canCreate);
+    }
+    return LedgerCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: requests.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+            itemBuilder: (context, index) => _RequestCard(
+              request: requests[index],
+              language: language,
+              onOpen: () => onOpen(requests[index]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _RequestCard extends StatelessWidget {
@@ -1678,40 +2239,57 @@ class _RequestCard extends StatelessWidget {
     child: InkWell(
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
       onTap: onOpen,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        ),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    request.requestNumber ??
-                        YorksV1MaterialRequestStrings.draftPrivate.primary,
-                    style: AppTypography.titleMedium.copyWith(
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.blueContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: const Icon(
+                Icons.description_outlined,
+                color: AppColors.blue,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${request.requestNumber ?? YorksV1MaterialRequestStrings.draft.primary} · ${request.title ?? request.projectName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleSmall.copyWith(
+                      color: AppColors.ink,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                ),
-                _StateChip(request: request, language: language),
-              ],
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    '${request.projectReference} · ${request.scopeName} · ${request.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              request.title ?? request.projectName,
-              style: AppTypography.bodyLarge,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${request.projectReference} · ${request.scopeName}',
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${yorksV1MaterialRequestTimingCopy(request.timing).primary} · ${request.lines.length}',
-              style: AppTypography.labelLarge.copyWith(color: AppColors.muted),
-            ),
+            const SizedBox(width: AppSpacing.md),
+            _StateChip(request: request, language: language),
+            const SizedBox(width: AppSpacing.xs),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           ],
         ),
       ),
@@ -2092,6 +2670,10 @@ class _RequestReadOnlyLines extends StatelessWidget {
           DataColumn(
             label: Text(YorksV1MaterialRequestStrings.itemDescription.primary),
           ),
+          DataColumn(label: Text(YorksV1MaterialRequestStrings.size.primary)),
+          DataColumn(
+            label: Text(YorksV1MaterialRequestStrings.planningModelTag.primary),
+          ),
           DataColumn(
             label: Text(YorksV1MaterialRequestStrings.brandOrigin.primary),
           ),
@@ -2114,6 +2696,8 @@ class _RequestReadOnlyLines extends StatelessWidget {
               cells: [
                 DataCell(Text(line.displayOrder.toString())),
                 DataCell(Text(line.description)),
+                DataCell(Text(line.size ?? '—')),
+                DataCell(Text(line.planningModelTag ?? '—')),
                 DataCell(Text(line.brandOrigin ?? '—')),
                 DataCell(Text(line.quantity)),
                 DataCell(Text(line.unit)),
@@ -2282,26 +2866,44 @@ Future<void> _addBoqRows(
         .read(yorksV1BoqRepositoryProvider)
         .listGroups(draft.projectId!);
     if (!context.mounted) return;
-    final selectedGroup = await showModalBottomSheet<YorksV1BoqGroup>(
+    final selected = await showModalBottomSheet<_BoqSourceSelection>(
       context: context,
       showDragHandle: true,
       builder: (context) => ListView(
         children: [
-          for (final group in groups.where((group) => group.rowCount > 0))
+          for (final group in groups.where((group) => group.rowCount > 0)) ...[
             ListTile(
               title: Text(group.effectiveTitle),
               subtitle: Text('${group.rowCount}'),
-              onTap: () => Navigator.of(context).pop(group),
+              leading: const Icon(Icons.folder_outlined),
+              onTap: () => Navigator.of(
+                context,
+              ).pop(_BoqSourceSelection(group: group, wholeFolder: false)),
             ),
+            ListTile(
+              title: Text(
+                '${YorksV1MaterialRequestStrings.useEntireBoqFolder.primary} · ${group.effectiveTitle}',
+              ),
+              subtitle: Text(
+                YorksV1BoqStrings.createRequestFromFolderDescription.primary,
+              ),
+              leading: const Icon(Icons.playlist_add_check_outlined),
+              onTap: () => Navigator.of(
+                context,
+              ).pop(_BoqSourceSelection(group: group, wholeFolder: true)),
+            ),
+          ],
         ],
       ),
     );
-    if (selectedGroup == null) return;
+    if (selected == null) return;
     final worksheet = await ref
         .read(yorksV1BoqRepositoryProvider)
-        .getWorksheet(selectedGroup.id);
+        .getWorksheet(selected.group.id);
     if (!context.mounted) return;
-    final selectedRowIds = await _pickRows(context, worksheet);
+    final selectedRowIds = selected.wholeFolder
+        ? worksheet.rows.map((row) => row.id).toSet()
+        : await _pickRows(context, worksheet);
     if (selectedRowIds == null || selectedRowIds.isEmpty) return;
     await controller.addBoqRows(worksheet: worksheet, rowIds: selectedRowIds);
   } catch (_) {
@@ -2309,6 +2911,13 @@ Future<void> _addBoqRows(
       _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
     }
   }
+}
+
+class _BoqSourceSelection {
+  const _BoqSourceSelection({required this.group, required this.wholeFolder});
+
+  final YorksV1BoqGroup group;
+  final bool wholeFolder;
 }
 
 Future<Set<String>?> _pickRows(
@@ -2330,10 +2939,15 @@ Future<Set<String>?> _pickRows(
                 CheckboxListTile(
                   value: selected.contains(row.id),
                   title: Text(
-                    row.canonicalValues['description']?.toString() ?? '',
+                    _boqDisplayValue(
+                      worksheet,
+                      row,
+                      YorksV1BoqCanonicalField.description,
+                    ),
                   ),
                   subtitle: Text(
-                    '${row.canonicalValues['quantity'] ?? ''} ${row.canonicalValues['unit'] ?? ''}',
+                    '${_boqDisplayValue(worksheet, row, YorksV1BoqCanonicalField.quantity)} '
+                    '${_boqDisplayValue(worksheet, row, YorksV1BoqCanonicalField.unit)}',
                   ),
                   onChanged: (value) => setState(() {
                     if (value ?? false) {
@@ -2361,6 +2975,22 @@ Future<Set<String>?> _pickRows(
   );
 }
 
+String _boqDisplayValue(
+  YorksV1BoqWorksheet worksheet,
+  YorksV1BoqRow row,
+  YorksV1BoqCanonicalField field,
+) {
+  final canonical = row.canonicalValues[field.wireValue];
+  if (canonical != null && '$canonical'.trim().isNotEmpty) {
+    return '$canonical'.trim();
+  }
+  final column = worksheet.columns
+      .where((item) => item.canonicalField == field)
+      .firstOrNull;
+  final value = column == null ? null : row.valueFor(column.id);
+  return value?.toString().trim() ?? '';
+}
+
 Future<void> _importExcel(
   BuildContext context,
   WidgetRef ref,
@@ -2376,9 +3006,12 @@ Future<void> _importExcel(
       bytes: selected.bytes,
       fileName: selected.fileName,
     );
+    if (!context.mounted) return;
+    final sheet = await _chooseWorkbookSheet(context, workbook);
+    if (sheet == null) return;
     final preview = codec.preview(
       workbook: workbook,
-      sheet: workbook.sheets.first,
+      sheet: sheet,
       fallbackTitle: selected.fileName,
     );
     final fields = <YorksV1BoqCanonicalField, int>{
@@ -2393,6 +3026,20 @@ Future<void> _importExcel(
       throw StateError('required columns');
     }
     final brand = fields[YorksV1BoqCanonicalField.brandOrigin];
+    final planningModelTag = fields[YorksV1BoqCanonicalField.planningModelTag];
+    final size = preview.columns
+        .where(
+          (column) => RegExp(
+            r'(^|\b)(size|dimension|dimensions)(\b|$)',
+            caseSensitive: false,
+          ).hasMatch(column.heading.trim()),
+        )
+        .map((column) => column.sourceIndex)
+        .firstOrNull;
+    // Import is an editing operation, not a submit operation. Preserve rows
+    // that are incomplete (for example a draft export with an empty Qty) so
+    // the engineer can correct them in the same spreadsheet editor instead
+    // of silently losing the row during round-trip.
     final lines = [
       for (var index = 0; index < preview.rows.length; index++)
         YorksV1MaterialRequestLine(
@@ -2403,14 +3050,177 @@ Future<void> _importExcel(
           brandOrigin: brand == null
               ? null
               : preview.rows[index].valueFor(brand),
+          size: size == null ? null : preview.rows[index].valueFor(size),
+          planningModelTag: planningModelTag == null
+              ? null
+              : preview.rows[index].valueFor(planningModelTag),
           quantity: preview.rows[index].valueFor(quantity),
           unit: preview.rows[index].valueFor(unit),
         ),
-    ].where((line) => line.hasValidOperationalValues);
+    ];
     await controller.addExcelLines(lines);
   } catch (_) {
     if (context.mounted) {
       _snack(context, YorksV1MaterialRequestStrings.importFailed.primary);
+    }
+  }
+}
+
+Future<YorksV1BoqWorkbookSheet?> _chooseWorkbookSheet(
+  BuildContext context,
+  YorksV1BoqParsedWorkbook workbook,
+) => showDialog<YorksV1BoqWorkbookSheet>(
+  context: context,
+  builder: (context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.68;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 720, maxHeight: maxHeight),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.xl,
+            AppSpacing.xl,
+            AppSpacing.md,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          YorksV1MaterialRequestStrings
+                              .chooseEquipmentSchedule
+                              .primary,
+                          style: AppTypography.titleLarge.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '${workbook.fileName} contains ${workbook.sheets.length} worksheets. ${YorksV1MaterialRequestStrings.worksheetImportDescription.primary}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const Divider(height: AppSpacing.xl),
+              Expanded(
+                child: GridView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    mainAxisExtent: 78,
+                    crossAxisSpacing: AppSpacing.sm,
+                    mainAxisSpacing: AppSpacing.sm,
+                  ),
+                  itemCount: workbook.sheets.length,
+                  itemBuilder: (context, index) {
+                    final sheet = workbook.sheets[index];
+                    final populated = sheet.nonEmptyRowIndexes.length;
+                    return OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(sheet),
+                      style: OutlinedButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        side: const BorderSide(color: AppColors.line),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusSm,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.table_chart_outlined, size: 19),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  sheet.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.labelLarge.copyWith(
+                                    color: AppColors.ink,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                Text(
+                                  '$populated ${YorksV1BoqStrings.rows.primary}',
+                                  style: AppTypography.labelSmall.copyWith(
+                                    color: AppColors.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, size: 19),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Divider(height: AppSpacing.xl),
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(YorksV1MaterialRequestStrings.cancel.primary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  },
+);
+
+Future<void> _exportDraft(
+  BuildContext context,
+  YorksV1BoqWorkbookFileService fileService,
+  YorksV1MaterialRequestDocumentService documentService,
+  YorksV1MaterialRequestDraft draft,
+) async {
+  try {
+    final saved = await fileService.saveWorkbook(
+      bytes: documentService.buildDraftExcel(draft),
+      suggestedName: documentService.suggestedDraftExcelName(draft),
+    );
+    if (saved && context.mounted) {
+      _snack(context, YorksV1MaterialRequestStrings.saved.primary);
+    }
+  } catch (_) {
+    if (context.mounted) {
+      _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
     }
   }
 }

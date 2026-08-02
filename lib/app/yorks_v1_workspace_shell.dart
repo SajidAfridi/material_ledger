@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
@@ -12,6 +13,7 @@ import '../shared/providers/language_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
 import 'router.dart';
+import 'yorks_v1_workspace_search.dart';
 
 /// R35 workspace chrome for every connected Yorks V1 operational route.
 ///
@@ -34,45 +36,69 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final desktop =
         MediaQuery.sizeOf(context).width >= AppSpacing.yorksV1DesktopBreakpoint;
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: Row(
-        children: [
-          if (desktop)
-            _YorksDesktopSidebar(
-              destinations: destinations,
-              activePath: current?.path,
-              language: language,
-              role: role,
-              userName: user?.fullName,
-            ),
-          Expanded(
-            child: Column(
-              children: [
-                // Feature screens own the compact mobile/tablet app bar. A
-                // second global header there would crowd the focused editor
-                // and duplicate the title; the full R35 context top bar is a
-                // desktop office affordance.
-                if (desktop)
-                  _YorksWorkspaceTopBar(
-                    title: current?.label ?? YorksV1ShellStrings.overview,
-                    language: language,
-                    role: role,
-                  ),
-                Expanded(child: child),
-              ],
-            ),
-          ),
+    void openSearch() {
+      showYorksV1WorkspaceSearch(
+        context,
+        targets: [
+          for (final destination in destinations)
+            if (destination.path != null)
+              YorksV1SearchNavigationTarget(
+                label: destination.label,
+                icon: destination.icon,
+                path: destination.path!,
+              ),
         ],
-      ),
-      bottomNavigationBar: desktop
-          ? null
-          : _YorksMobileNavigation(
-              destinations: destinations,
-              activePath: current?.path,
-              language: language,
-              role: role,
+        language: language,
+        role: role,
+      );
+    }
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): openSearch,
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            openSearch,
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Row(
+          children: [
+            if (desktop)
+              _YorksDesktopSidebar(
+                destinations: destinations,
+                activePath: current?.path,
+                language: language,
+                role: role,
+                userName: user?.fullName,
+              ),
+            Expanded(
+              child: Column(
+                children: [
+                  // Feature screens own the compact mobile/tablet app bar. A
+                  // second global header there would crowd the focused editor
+                  // and duplicate the title; the full R35 context top bar is a
+                  // desktop office affordance.
+                  if (desktop)
+                    _YorksWorkspaceTopBar(
+                      title: current?.label ?? YorksV1ShellStrings.overview,
+                      language: language,
+                      role: role,
+                    ),
+                  Expanded(child: child),
+                ],
+              ),
             ),
+          ],
+        ),
+        bottomNavigationBar: desktop
+            ? null
+            : _YorksMobileNavigation(
+                destinations: destinations,
+                activePath: current?.path,
+                language: language,
+                role: role,
+              ),
+      ),
     );
   }
 
@@ -277,6 +303,7 @@ class _YorksWorkspaceTopBar extends StatelessWidget {
               child: _YorksQuickNavigationButton(
                 destinations: _topLevelDestinationsFor(role),
                 language: language,
+                role: role,
               ),
             ),
             const SizedBox(width: AppSpacing.lg),
@@ -765,10 +792,12 @@ class _YorksQuickNavigationButton extends StatelessWidget {
   const _YorksQuickNavigationButton({
     required this.destinations,
     required this.language,
+    required this.role,
   });
 
   final List<_YorksDestination> destinations;
   final AppLanguage language;
+  final YorksV1Role? role;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -778,34 +807,19 @@ class _YorksQuickNavigationButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => showModalBottomSheet<void>(
-          context: context,
-          backgroundColor: AppColors.surfaceContainerLowest,
-          showDragHandle: true,
-          builder: (sheetContext) => SafeArea(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
-              children: [
-                Text(
-                  YorksV1ShellStrings.quickNavigation.primary,
-                  style: AppTypography.titleLarge,
+        onTap: () => showYorksV1WorkspaceSearch(
+          context,
+          targets: [
+            for (final destination in destinations)
+              if (destination.path != null)
+                YorksV1SearchNavigationTarget(
+                  label: destination.label,
+                  icon: destination.icon,
+                  path: destination.path!,
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final destination in destinations)
-                  _YorksNavigationTile(
-                    destination: destination,
-                    selected: false,
-                    language: language,
-                  ),
-              ],
-            ),
-          ),
+          ],
+          language: language,
+          role: role,
         ),
         child: Container(
           height: 48,

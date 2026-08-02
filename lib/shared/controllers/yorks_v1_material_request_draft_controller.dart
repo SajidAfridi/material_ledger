@@ -61,6 +61,11 @@ class YorksV1MaterialRequestDraftController
   final CollectionStore<YorksV1MaterialRequestDraft> _store;
   final YorksV1MaterialRequestRepository _repository;
   final String Function() _uuidFactory;
+  Future<void> _persistQueue = Future<void>.value();
+
+  /// Read-only snapshot for UI callbacks that need to guard a deferred
+  /// default (for example the Common scope) against a newer project choice.
+  YorksV1MaterialRequestDraft get currentDraft => state.draft;
 
   static YorksV1MaterialRequestDraft _restoreOrEmpty({
     required String ownerAuthUserId,
@@ -125,6 +130,39 @@ class YorksV1MaterialRequestDraftController
   Future<void> setDeliveryNote(String? deliveryNote) =>
       update((draft) => draft.copyWith(deliveryNote: deliveryNote));
 
+  /// Restores a server-saved draft when it is opened from the request queue
+  /// after local recovery has no copy. This is deliberately one-way and only
+  /// applies to an untouched local draft; unsaved local edits must never be
+  /// overwritten by a later refresh.
+  Future<void> hydrateFromServer(YorksV1MaterialRequest request) async {
+    final current = state.draft;
+    if (request.id != _draftId ||
+        !request.state.isDraft ||
+        current.serverRecordVersion != 0 ||
+        current.updatedAt.millisecondsSinceEpoch != 0) {
+      return;
+    }
+    final hydrated = YorksV1MaterialRequestDraft(
+      id: current.id,
+      ownerAuthUserId: current.ownerAuthUserId,
+      submissionIdempotencyKey: current.submissionIdempotencyKey,
+      serverRecordVersion: request.recordVersion,
+      projectId: request.projectId,
+      scopeId: request.scopeId,
+      title: request.title,
+      timing: request.timing,
+      scheduledDate: request.scheduledDate,
+      deliveryNote: request.deliveryNote,
+      lines: request.lines,
+      updatedAt: request.updatedAt,
+    );
+    state = YorksV1MaterialRequestDraftState(
+      draft: hydrated,
+      status: YorksV1MaterialRequestDraftSyncStatus.saved,
+    );
+    await _persist(hydrated);
+  }
+
   Future<void> addCustomLine() async {
     final draft = state.draft;
     await _replace(
@@ -161,10 +199,29 @@ class YorksV1MaterialRequestDraftController
           source: YorksV1MaterialRequestLineSource.boq,
           sourceBoqGroupId: worksheet.group.id,
           sourceBoqRowId: row.id,
-          description: row.canonicalValues['description']?.toString() ?? '',
-          brandOrigin: row.canonicalValues['brand_origin']?.toString(),
-          quantity: row.canonicalValues['quantity']?.toString() ?? '',
-          unit: row.canonicalValues['unit']?.toString() ?? '',
+          description: _canonicalValue(
+            worksheet,
+            row,
+            YorksV1BoqCanonicalField.description,
+          ),
+          brandOrigin: _canonicalValue(
+            worksheet,
+            row,
+            YorksV1BoqCanonicalField.brandOrigin,
+            nullable: true,
+          ),
+          planningModelTag: _canonicalValue(
+            worksheet,
+            row,
+            YorksV1BoqCanonicalField.planningModelTag,
+            nullable: true,
+          ),
+          quantity: _canonicalValue(
+            worksheet,
+            row,
+            YorksV1BoqCanonicalField.quantity,
+          ),
+          unit: _canonicalValue(worksheet, row, YorksV1BoqCanonicalField.unit),
         ),
       );
     }
@@ -185,6 +242,8 @@ class YorksV1MaterialRequestDraftController
           source: YorksV1MaterialRequestLineSource.excel,
           description: importedLines[index].description,
           brandOrigin: importedLines[index].brandOrigin,
+          size: importedLines[index].size,
+          planningModelTag: importedLines[index].planningModelTag,
           quantity: importedLines[index].quantity,
           unit: importedLines[index].unit,
         ),
@@ -223,6 +282,8 @@ class YorksV1MaterialRequestDraftController
               source: remaining[index].source,
               description: remaining[index].description,
               brandOrigin: remaining[index].brandOrigin,
+              size: remaining[index].size,
+              planningModelTag: remaining[index].planningModelTag,
               quantity: remaining[index].quantity,
               unit: remaining[index].unit,
               sourceBoqGroupId: remaining[index].sourceBoqGroupId,
@@ -315,6 +376,10 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<void> discardLocal() async {
+    // Complete edits that may still be flushing from a text field before the
+    // confirmed submit removes the recoverable draft. Without this barrier a
+    // late keystroke write could recreate a draft after submission.
+    await _persistQueue;
     final all = _store
         .readAll()
         .where(
@@ -327,23 +392,50 @@ class YorksV1MaterialRequestDraftController
 
   Future<void> _replace(YorksV1MaterialRequestDraft draft) async {
     final updated = draft.copyWith(updatedAt: DateTime.now().toUtc());
-    await _persist(updated);
+    // Update the in-memory state before awaiting device storage. Text-field
+    // callbacks are intentionally fire-and-forget; waiting here made the
+    // submit button observe the previous line values when a user typed and
+    // submitted quickly.
     state = YorksV1MaterialRequestDraftState(draft: updated);
+    await _persist(updated);
   }
 
   Future<void> _persist(YorksV1MaterialRequestDraft draft) async {
-    final all = _store.readAll();
-    final replaced = <YorksV1MaterialRequestDraft>[];
-    var found = false;
-    for (final stored in all) {
-      if (stored.id == _draftId && stored.ownerAuthUserId == _ownerAuthUserId) {
-        replaced.add(draft);
-        found = true;
-      } else {
-        replaced.add(stored);
+    final operation = _persistQueue.then((_) async {
+      final all = _store.readAll();
+      final replaced = <YorksV1MaterialRequestDraft>[];
+      var found = false;
+      for (final stored in all) {
+        if (stored.id == _draftId &&
+            stored.ownerAuthUserId == _ownerAuthUserId) {
+          replaced.add(draft);
+          found = true;
+        } else {
+          replaced.add(stored);
+        }
       }
-    }
-    if (!found) replaced.add(draft);
-    await _store.writeAll(replaced);
+      if (!found) replaced.add(draft);
+      await _store.writeAll(replaced);
+    });
+    // Keep the queue usable after an individual local-storage failure while
+    // still returning the original error to the caller.
+    _persistQueue = operation.catchError((_) {});
+    await operation;
+  }
+
+  static String _canonicalValue(
+    YorksV1BoqWorksheet worksheet,
+    YorksV1BoqRow row,
+    YorksV1BoqCanonicalField field, {
+    bool nullable = false,
+  }) {
+    final value = row.canonicalValues[field.wireValue];
+    if (value != null && '$value'.trim().isNotEmpty) return '$value'.trim();
+    final column = worksheet.columns
+        .where((item) => item.canonicalField == field)
+        .firstOrNull;
+    final fallback = column == null ? null : row.valueFor(column.id);
+    final text = fallback?.toString().trim() ?? '';
+    return nullable && text.isEmpty ? '' : text;
   }
 }

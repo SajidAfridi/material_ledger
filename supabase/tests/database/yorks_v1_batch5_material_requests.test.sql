@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(24);
+select plan(26);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -106,6 +106,10 @@ select jsonb_build_object(
     'source_boq_row_id', '51000000-0000-4000-8000-000000000001',
     'item_description', 'Motorized Smoke Damper',
     'brand_origin', 'UAE',
+    'technical_attributes', jsonb_build_object(
+      'size', '600 x 600',
+      'planning_model_tag', 'MSD-01A'
+    ),
     'requested_qty', '4',
     'unit', 'Nos'
   ))
@@ -143,6 +147,22 @@ select ok(
     '52000000-0000-4000-8000-000000000001'::uuid
   ) #>> '{lines,0,source_kind}') = 'boq',
   'Draft retains the BOQ source snapshot but has no allocated request number'
+);
+
+select is(
+  (select public.v1_material_request_projection(
+    '52000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{lines,0,technical_attributes,size}'),
+  '600 x 600',
+  'Draft preserves non-commercial technical size context'
+);
+
+select is(
+  (select public.v1_material_request_projection(
+    '52000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{lines,0,technical_attributes,planning_model_tag}'),
+  'MSD-01A',
+  'Draft preserves the planning model tag separately from receipt serial data'
 );
 
 set local role authenticated;

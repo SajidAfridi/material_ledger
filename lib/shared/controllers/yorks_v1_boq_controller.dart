@@ -173,7 +173,7 @@ class YorksV1BoqWorksheetController
       id: _uuidFactory(),
       displayOrder: sourceIndex + 2,
       values: source.values,
-      canonicalValues: const {},
+      canonicalValues: source.canonicalValues,
     );
     _replace(
       worksheet.copyWith(
@@ -189,12 +189,35 @@ class YorksV1BoqWorksheetController
     required String value,
   }) {
     final worksheet = _editableWorksheet();
+    final column = worksheet.columns
+        .where((item) => item.id == columnId)
+        .firstOrNull;
+    if (column == null) return;
+    final canonicalValues = <String, Object?>{};
+    for (final entry in worksheet.rows) {
+      if (entry.id != rowId) {
+        continue;
+      }
+      canonicalValues.addAll(entry.canonicalValues);
+      final canonical = column.canonicalField;
+      if (canonical != null) {
+        final clean = value.trim();
+        if (clean.isEmpty) {
+          canonicalValues.remove(canonical.wireValue);
+        } else {
+          canonicalValues[canonical.wireValue] = clean;
+        }
+      }
+    }
     _replace(
       worksheet.copyWith(
         rows: [
           for (final row in worksheet.rows)
             if (row.id == rowId)
-              row.copyWith(values: {...row.values, columnId: value})
+              row.copyWith(
+                values: {...row.values, columnId: value},
+                canonicalValues: canonicalValues,
+              )
             else
               row,
         ],
@@ -311,7 +334,21 @@ class YorksV1BoqWorksheetController
                   preview.columns[columnIndex].sourceIndex,
                 ),
           },
-          canonicalValues: const {},
+          canonicalValues: {
+            for (
+              var columnIndex = 0;
+              columnIndex < columns.length;
+              columnIndex++
+            )
+              if (preview.rows[rowIndex]
+                      .valueFor(preview.columns[columnIndex].sourceIndex)
+                      .trim()
+                      .isNotEmpty &&
+                  preview.columns[columnIndex].canonicalField != null)
+                preview.columns[columnIndex].canonicalField!.wireValue: preview
+                    .rows[rowIndex]
+                    .valueFor(preview.columns[columnIndex].sourceIndex),
+          },
         ),
     ];
     final imported = YorksV1BoqWorksheet(

@@ -161,10 +161,38 @@ abstract final class RoutePaths {
     ).toString();
   }
 
-  static String yorksV1MaterialRequestDraftPath(String draftId) =>
-      '/yorks/material-requests/draft/$draftId';
+  static String yorksV1MaterialRequestDraftPath(
+    String draftId, {
+    String? boqGroupId,
+    String? projectId,
+  }) {
+    if ((boqGroupId == null || boqGroupId.trim().isEmpty) &&
+        (projectId == null || projectId.trim().isEmpty)) {
+      return '/yorks/material-requests/draft/$draftId';
+    }
+    final query = <String, String>{};
+    if (boqGroupId != null && boqGroupId.trim().isNotEmpty) {
+      query['boq_group_id'] = boqGroupId;
+    }
+    if (projectId != null && projectId.trim().isNotEmpty) {
+      query['project_id'] = projectId;
+    }
+    return Uri(
+      path: '/yorks/material-requests/draft/$draftId',
+      queryParameters: query,
+    ).toString();
+  }
+
   static String yorksV1MaterialRequestPath(String requestId) =>
       '/yorks/material-requests/$requestId';
+  static String yorksV1MaterialRequestsPath({String? projectId}) {
+    final trimmed = projectId?.trim();
+    if (trimmed == null || trimmed.isEmpty) return yorksV1MaterialRequests;
+    return Uri(
+      path: yorksV1MaterialRequests,
+      queryParameters: {'project_id': trimmed},
+    ).toString();
+  }
   static String yorksV1MaterialRequestArrangementPath(String requestId) =>
       '/yorks/material-requests/$requestId/arrangement';
   static String yorksV1MaterialRequestLogisticsPath(String requestId) =>
@@ -746,7 +774,12 @@ GoRouter createAppRouter({
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequests,
         pageBuilder: (context, state) =>
-            _yorksV1Slide(state.pageKey, const YorksV1MaterialRequestsScreen()),
+            _yorksV1Slide(
+              state.pageKey,
+              YorksV1MaterialRequestsScreen(
+                projectId: state.uri.queryParameters['project_id'],
+              ),
+            ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestDraft,
@@ -754,6 +787,8 @@ GoRouter createAppRouter({
           state.pageKey,
           YorksV1MaterialRequestDraftScreen(
             draftId: state.pathParameters['draftId'] ?? '',
+            boqGroupId: state.uri.queryParameters['boq_group_id'],
+            projectId: state.uri.queryParameters['project_id'],
           ),
         ),
       ),

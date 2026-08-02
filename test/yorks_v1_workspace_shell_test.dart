@@ -57,6 +57,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('R35 workspace search opens a navigable command palette', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1366, 768));
+    addTearDown(() => _resetViewport(tester));
+
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      _ShellTestApp(
+        role: YorksV1Role.projectEngineer,
+        preferences: preferences,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(YorksV1ShellStrings.searchOrJump.primary));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text(YorksV1ShellStrings.searchHint.primary), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Projects');
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text(YorksV1ShellStrings.projects.primary), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Yorks R35 sign-in remains usable at mobile and desktop widths', (
     tester,
   ) async {
