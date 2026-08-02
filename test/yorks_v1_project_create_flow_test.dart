@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,11 +14,13 @@ import 'package:material_ledger/shared/models/yorks_v1_project_team_directory_me
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_document_file_service_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_team_directory_repository.dart';
+import 'package:material_ledger/shared/services/yorks_v1_document_file_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _authUserId = 'test-auth-user-001';
@@ -27,6 +30,7 @@ void main() {
     required YorksV1Role? role,
     required _FakeProjectRepository repository,
     YorksV1ProjectTeamDirectoryRepository? teamDirectoryRepository,
+    YorksV1DocumentFileService? documentFileService,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
@@ -39,6 +43,10 @@ void main() {
         yorksV1ProjectTeamDirectoryRepositoryProvider.overrideWithValue(
           teamDirectoryRepository ?? _FakeTeamDirectoryRepository(),
         ),
+        if (documentFileService != null)
+          yorksV1DocumentFileServiceProvider.overrideWithValue(
+            documentFileService,
+          ),
       ],
     );
     addTearDown(container.dispose);
@@ -93,6 +101,57 @@ void main() {
     expect(
       find.byKey(const ValueKey('yorks-v1-project-reference')),
       findsNothing,
+    );
+  });
+
+  testWidgets('attachments choose files directly without metadata fields', (
+    tester,
+  ) async {
+    final container = await createContainer(
+      role: YorksV1Role.projectEngineer,
+      repository: _FakeProjectRepository(),
+      documentFileService: _FakeDocumentFileService(),
+    );
+    final draftNotifier = container.read(
+      yorksV1ProjectCreationDraftProvider(_authUserId).notifier,
+    );
+    await draftNotifier.save(
+      container
+          .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+          .copyWith(
+            reference: 'YRA-ATTACH-001',
+            name: 'Attachment project',
+            currentStage: YorksV1ProjectCreationStage.attachments,
+            buildings: const [
+              YorksV1ProjectBuildingInput(code: 'B1', name: 'Building One'),
+            ],
+          ),
+    );
+
+    await _pumpScreen(tester, container);
+
+    expect(
+      find.byKey(const ValueKey('yorks-v1-attachment-file-name')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('yorks-v1-attachment-dropzone')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('yorks-v1-attachment-dropzone')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('site-plan.pdf'), findsOneWidget);
+    expect(
+      container
+          .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+          .attachments
+          .single
+          .sizeBytes,
+      3,
     );
   });
 
@@ -509,4 +568,22 @@ class _FakeTeamDirectoryRepository
   Future<List<YorksV1ProjectTeamDirectoryMember>> listActiveMembers() async {
     return members;
   }
+}
+
+class _FakeDocumentFileService implements YorksV1DocumentFileService {
+  @override
+  Future<YorksV1SelectedDocument?> selectDocument() async {
+    return YorksV1SelectedDocument(
+      fileName: 'site-plan.pdf',
+      mimeType: 'application/pdf',
+      bytes: Uint8List.fromList([1, 2, 3]),
+    );
+  }
+
+  @override
+  Future<bool> saveDocument({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) async => true;
 }

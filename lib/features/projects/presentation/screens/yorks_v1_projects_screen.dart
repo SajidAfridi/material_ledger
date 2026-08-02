@@ -137,7 +137,7 @@ class _R35OverviewPage extends StatelessWidget {
     builder: (context, constraints) {
       final desktop =
           constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
-      final name = (displayName ?? '').trim().split(RegExp(r'\\s+')).first;
+      final name = (displayName ?? '').trim().split(RegExp(r'\s+')).first;
       final safeName = name.isEmpty
           ? YorksV1ShellStrings.companyName.primary
           : name;

@@ -25,6 +25,7 @@ import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/widgets/notification_bell.dart';
 import '../../../../shared/widgets/profile_menu_button.dart';
+import '../../../projects/presentation/screens/yorks_v1_projects_screen.dart';
 
 /// Home dashboard for office roles (procurement / admin). The single overview —
 /// it replaces the old Dashboard tab AND the Admin-Panel "Overview". KPI cards
@@ -40,6 +41,7 @@ class DashboardScreen extends ConsumerWidget {
     final yorksV1ProjectsEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
         .projects;
+    if (yorksV1ProjectsEnabled) return const YorksV1OverviewScreen();
     final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
     final canSeeCost = ref.watch(canSeeCostProvider);
     final canAccessRentals = ref.watch(canAccessRentalsProvider);
