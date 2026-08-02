@@ -49,12 +49,17 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           Expanded(
             child: Column(
               children: [
-                _YorksWorkspaceTopBar(
-                  title: current?.label ?? YorksV1ShellStrings.overview,
-                  language: language,
-                  role: role,
-                  userName: user?.fullName,
-                ),
+                // Feature screens own the compact mobile/tablet app bar. A
+                // second global header there would crowd the focused editor
+                // and duplicate the title; the full R35 context top bar is a
+                // desktop office affordance.
+                if (desktop)
+                  _YorksWorkspaceTopBar(
+                    title: current?.label ?? YorksV1ShellStrings.overview,
+                    language: language,
+                    role: role,
+                    userName: user?.fullName,
+                  ),
                 Expanded(child: child),
               ],
             ),
