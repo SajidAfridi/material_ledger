@@ -70,18 +70,42 @@ class YorksV1LogisticsDocumentService {
     ],
   );
 
+  /// Printing receives the exact immutable A4 bytes used by the PDF download
+  /// and stored controlled-document snapshot.  Never rebuild a second printer
+  /// layout from mutable dispatch rows.
   Future<void> printDeliveryOrder({
     required YorksV1ReturnsDocumentsWorkspace workspace,
     required YorksV1DeliveryOrderDispatch dispatch,
     required YorksV1DeliveryOrderRevision revision,
-  }) => Printing.layoutPdf(
-    onLayout: (format) => buildDeliveryOrderPdf(
+  }) async {
+    final bytes = await buildDeliveryOrderPdf(
       workspace: workspace,
       dispatch: dispatch,
       revision: revision,
-      format: format,
-    ),
-  );
+      format: PdfPageFormat.a4,
+    );
+    await Printing.layoutPdf(onLayout: (_) async => bytes);
+  }
+
+  Future<void> shareDeliveryOrderPdf({
+    required YorksV1ReturnsDocumentsWorkspace workspace,
+    required YorksV1DeliveryOrderDispatch dispatch,
+    required YorksV1DeliveryOrderRevision revision,
+  }) async {
+    final bytes = await buildDeliveryOrderPdf(
+      workspace: workspace,
+      dispatch: dispatch,
+      revision: revision,
+      format: PdfPageFormat.a4,
+    );
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: suggestedDeliveryOrderPdfName(
+        dispatch.deliveryOrder!,
+        revision,
+      ),
+    );
+  }
 
   Future<void> printMaterialReturn({
     required YorksV1ReturnsDocumentsWorkspace workspace,
@@ -103,61 +127,41 @@ class YorksV1LogisticsDocumentService {
     final logo = await _loadLogo();
     final theme = await _buildTheme();
     final deliveryOrder = dispatch.deliveryOrder!;
-    final document = pw.Document(theme: theme);
+    _validateDeliveryOrder(revision);
+    final document = pw.Document(
+      theme: theme,
+      title: '${deliveryOrder.reference} - Delivery Order',
+      author: 'Yorks Air Conditioning and Refrigeration LLC-SPC',
+      creator: 'Yorks Project Management',
+    );
     document.addPage(
       pw.MultiPage(
-        pageFormat: format,
-        margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
-        header: (_) => _deliveryHeader(logo),
+        pageFormat: PdfPageFormat.a4,
+        maxPages: 200,
+        margin: pw.EdgeInsets.fromLTRB(
+          12 * PdfPageFormat.mm,
+          9 * PdfPageFormat.mm,
+          12 * PdfPageFormat.mm,
+          7 * PdfPageFormat.mm,
+        ),
+        header: (_) => _deliveryOrderHeader(
+          logo: logo,
+          workspace: workspace,
+          dispatch: dispatch,
+          deliveryOrder: deliveryOrder,
+        ),
+        footer: _pageNumber,
         build: (_) => [
-          pw.SizedBox(height: 14),
-          pw.Center(
-            child: pw.Text(
-              YorksV1LogisticsStrings.deliveryOrderTitle.primary,
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 12),
-          _deliveryMetaBox(
-            recipient: workspace.projectName,
-            reference: deliveryOrder.reference,
-            date: DateFormat(
-              'dd/MM/yyyy',
-            ).format(dispatch.dispatchDate.toLocal()),
-          ),
-          pw.SizedBox(height: 10),
-          _deliveryProjectBox(workspace),
-          pw.SizedBox(height: 14),
-          _table(
-            headers: [
-              YorksV1LogisticsStrings.serialNumber.primary,
-              YorksV1LogisticsStrings.itemDescription.primary,
-              YorksV1LogisticsStrings.deliveryQuantity.primary,
-              YorksV1LogisticsStrings.unit.primary,
-            ],
-            rows: [
-              for (final line in revision.lines)
-                [
-                  line.serialNumber.toString(),
-                  line.description,
-                  line.quantity,
-                  line.unit,
-                ],
-            ],
-          ),
-          pw.SizedBox(height: 22),
-          _deliverySignatures(),
-          pw.SizedBox(height: 14),
-          pw.Center(
-            child: pw.Text(
-              YorksV1LogisticsStrings.goodsReceivedInGoodCondition.primary,
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
-            ),
-          ),
+          _deliveryOrderTable(revision.lines),
+          // A revision contains the server-produced, immutable good-received
+          // snapshot.  Do not recompute its quantities from live receipts.
+          pw.NewPage(freeSpace: 66 * PdfPageFormat.mm),
+          pw.Spacer(),
+          _deliveryOrderClosingBlock(workspace),
         ],
       ),
     );
-    return document.save();
+    return document.save(enableEventLoopBalancing: true);
   }
 
   Future<Uint8List> buildMaterialReturnPdf({
@@ -230,6 +234,11 @@ class YorksV1LogisticsDocumentService {
     YorksV1DeliveryOrderRevision revision,
   ) => '${_safeName(deliveryOrder.reference)}_r${revision.revisionNumber}.xlsx';
 
+  String suggestedDeliveryOrderPdfName(
+    YorksV1DeliveryOrder deliveryOrder,
+    YorksV1DeliveryOrderRevision revision,
+  ) => '${_safeName(deliveryOrder.reference)}_r${revision.revisionNumber}.pdf';
+
   String suggestedMaterialReturnExcelName(
     YorksV1MaterialReturn materialReturn,
   ) => '${_safeName(materialReturn.number ?? 'material_return')}.xlsx';
@@ -297,176 +306,377 @@ class YorksV1LogisticsDocumentService {
     ],
   );
 
-  static Future<pw.MemoryImage?> _loadLogo() async {
-    try {
-      final data = await rootBundle.load('assets/logo.png');
-      return pw.MemoryImage(data.buffer.asUint8List());
-    } catch (_) {
-      return null;
-    }
+  static Future<pw.MemoryImage>? _logoFuture;
+  static Future<pw.ThemeData>? _themeFuture;
+
+  static Future<pw.MemoryImage> _loadLogo() =>
+      _logoFuture ??= _loadLogoUncached();
+
+  static Future<pw.MemoryImage> _loadLogoUncached() async {
+    final data = await rootBundle.load('assets/branding/source_emblem.png');
+    return pw.MemoryImage(data.buffer.asUint8List());
   }
 
-  static Future<pw.ThemeData?> _buildTheme() async {
-    try {
-      final base = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
-      );
-      final bold = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
-      );
-      final arabic = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
-      );
-      return pw.ThemeData.withFont(
-        base: base,
-        bold: bold,
-        fontFallback: [arabic],
-      );
-    } catch (_) {
-      return null;
-    }
+  static Future<pw.ThemeData> _buildTheme() =>
+      _themeFuture ??= _buildThemeUncached();
+
+  static Future<pw.ThemeData> _buildThemeUncached() async {
+    final base = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final arabic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    );
+    return pw.ThemeData.withFont(
+      base: base,
+      bold: bold,
+      fontFallback: [arabic],
+    );
   }
 
-  static pw.Widget _deliveryHeader(pw.MemoryImage? logo) => pw.Container(
-    padding: const pw.EdgeInsets.only(bottom: 8),
-    decoration: const pw.BoxDecoration(
-      border: pw.Border(bottom: pw.BorderSide(width: .7)),
+  static final PdfColor _documentInk = PdfColor.fromHex('#111111');
+  static final PdfColor _documentGrid = PdfColor.fromHex('#222222');
+  static final PdfColor _headerFill = PdfColor.fromHex('#D0D0D0');
+  static final PdfColor _documentMuted = PdfColor.fromHex('#5C6673');
+
+  static pw.Widget _deliveryOrderHeader({
+    required pw.MemoryImage? logo,
+    required YorksV1ReturnsDocumentsWorkspace workspace,
+    required YorksV1DeliveryOrderDispatch dispatch,
+    required YorksV1DeliveryOrder deliveryOrder,
+  }) => pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+    children: [
+      _companyHeader(logo),
+      pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+      pw.Center(
+        child: pw.Text(
+          YorksV1LogisticsStrings.deliveryOrderTitle.primary,
+          style: pw.TextStyle(
+            fontSize: 14,
+            fontWeight: pw.FontWeight.bold,
+            color: _documentInk,
+          ),
+        ),
+      ),
+      pw.SizedBox(height: 2.6 * PdfPageFormat.mm),
+      pw.Table(
+        columnWidths: const {
+          0: pw.FlexColumnWidth(4.2),
+          1: pw.FlexColumnWidth(1.8),
+        },
+        children: [
+          pw.TableRow(
+            children: [
+              _deliveryTopText('M/s. ${workspace.projectName}', bold: true),
+              _deliveryTopText('Ref: ${deliveryOrder.reference}', bold: true),
+            ],
+          ),
+          pw.TableRow(
+            children: [
+              _deliveryTopText(workspace.scopeName),
+              _deliveryTopText(
+                'Date: ${DateFormat('dd/MM/yyyy').format(dispatch.dispatchDate.toLocal())}',
+              ),
+            ],
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 3 * PdfPageFormat.mm),
+      _deliveryLabelValue(
+        'Project',
+        '${workspace.requestNumber ?? workspace.requestId} - ${workspace.projectName}',
+        valueBold: true,
+      ),
+      pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+      _deliveryLabelValue('Materials', 'Material delivery', valueBold: true),
+      pw.SizedBox(height: 4 * PdfPageFormat.mm),
+    ],
+  );
+
+  static pw.Widget _companyHeader(pw.MemoryImage? logo) => pw.Container(
+    width: double.infinity,
+    padding: pw.EdgeInsets.symmetric(
+      horizontal: 4.5 * PdfPageFormat.mm,
+      vertical: 3 * PdfPageFormat.mm,
+    ),
+    decoration: pw.BoxDecoration(
+      border: pw.Border.all(color: _documentGrid, width: .8),
     ),
     child: pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
         pw.Expanded(
-          child: pw.Text(
-            'Yorks Airconditioning & Refrigeration LLC-SPC',
-            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          flex: 10,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            mainAxisSize: pw.MainAxisSize.min,
+            children: [
+              pw.Text(
+                'Yorks Air Conditioning and Refrigeration LLC-SPC',
+                style: pw.TextStyle(
+                  fontSize: 10.2,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 1.2 * PdfPageFormat.mm),
+              pw.Text(
+                'SINCE 1984',
+                style: pw.TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
           ),
         ),
-        if (logo != null) pw.Image(logo, width: 58, height: 58),
+        pw.SizedBox(width: 3 * PdfPageFormat.mm),
+        pw.SizedBox(
+          width: 20 * PdfPageFormat.mm,
+          height: 20 * PdfPageFormat.mm,
+          child: logo == null
+              ? pw.SizedBox()
+              : pw.Image(logo, fit: pw.BoxFit.contain),
+        ),
+        pw.SizedBox(width: 3 * PdfPageFormat.mm),
         pw.Expanded(
+          flex: 10,
           child: pw.Text(
-            'يوركس للتكييف والتبريد',
+            'يوركس للتكييف والتبريد ذ.م.م - ش.ش.و',
+            textDirection: pw.TextDirection.rtl,
             textAlign: pw.TextAlign.right,
-            style: const pw.TextStyle(fontSize: 8),
+            style: const pw.TextStyle(fontSize: 7.4),
           ),
         ),
       ],
     ),
   );
 
-  static pw.Widget _deliveryMetaBox({
-    required String recipient,
-    required String reference,
-    required String date,
-  }) => pw.Container(
-    width: double.infinity,
-    decoration: pw.BoxDecoration(border: pw.Border.all(width: .7)),
-    child: pw.Table(
-      border: pw.TableBorder.symmetric(inside: const pw.BorderSide(width: .5)),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(2.2),
-        1: pw.FlexColumnWidth(2.8),
-        2: pw.FlexColumnWidth(1.3),
-        3: pw.FlexColumnWidth(1.7),
-      },
-      children: [
-        pw.TableRow(
-          children: [
-            _pdfCell(YorksV1LogisticsStrings.recipient.primary, bold: true),
-            _pdfCell(recipient),
-            _pdfCell(YorksV1LogisticsStrings.reference.primary, bold: true),
-            _pdfCell(reference),
-          ],
+  static pw.Widget _deliveryTopText(String text, {bool bold = false}) =>
+      pw.Padding(
+        padding: pw.EdgeInsets.only(
+          right: 2 * PdfPageFormat.mm,
+          bottom: 1.2 * PdfPageFormat.mm,
         ),
-        pw.TableRow(
-          children: [
-            _pdfCell(YorksV1LogisticsStrings.date.primary, bold: true),
-            _pdfCell(date),
-            _pdfCell(
-              YorksV1LogisticsStrings.deliveryOrderTitle.primary,
-              bold: true,
-            ),
-            _pdfCell('R35'),
-          ],
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontSize: bold ? 8.4 : 7.5,
+            fontWeight: bold ? pw.FontWeight.bold : null,
+          ),
         ),
-      ],
-    ),
-  );
+      );
 
-  static pw.Widget _deliveryProjectBox(
-    YorksV1ReturnsDocumentsWorkspace workspace,
-  ) => pw.Container(
-    width: double.infinity,
-    decoration: pw.BoxDecoration(border: pw.Border.all(width: .7)),
-    padding: const pw.EdgeInsets.all(7),
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _pdfLabelValue(
-          YorksV1LogisticsStrings.project.primary,
-          workspace.projectName,
-        ),
-        pw.SizedBox(height: 4),
-        _pdfLabelValue(
-          YorksV1LogisticsStrings.deliveryAddress.primary,
-          workspace.scopeName,
-        ),
-      ],
-    ),
-  );
-
-  static pw.Widget _deliverySignatures() => pw.Table(
-    border: pw.TableBorder.all(width: .5),
-    columnWidths: const {
-      0: pw.FlexColumnWidth(1.4),
-      1: pw.FlexColumnWidth(1.6),
-      2: pw.FlexColumnWidth(1.4),
-      3: pw.FlexColumnWidth(1.6),
-    },
+  static pw.Widget _deliveryLabelValue(
+    String label,
+    String value, {
+    bool valueBold = false,
+  }) => pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
-      pw.TableRow(
-        children: [
-          _pdfCell(
-            YorksV1LogisticsStrings.inspectedAndChecked.primary,
-            bold: true,
-          ),
-          _pdfCell(''),
-          _pdfCell(YorksV1LogisticsStrings.receiverName.primary, bold: true),
-          _pdfCell(''),
-        ],
+      pw.SizedBox(
+        width: 23 * PdfPageFormat.mm,
+        child: pw.Text(
+          '$label:',
+          style: pw.TextStyle(fontSize: 8.7, fontWeight: pw.FontWeight.bold),
+        ),
       ),
-      pw.TableRow(
-        children: [
-          _pdfCell(YorksV1LogisticsStrings.signature.primary, bold: true),
-          _pdfCell(''),
-          _pdfCell(YorksV1LogisticsStrings.signature.primary, bold: true),
-          _pdfCell(''),
-        ],
+      pw.Expanded(
+        child: pw.Text(
+          value,
+          style: pw.TextStyle(
+            fontSize: 8.2,
+            fontWeight: valueBold ? pw.FontWeight.bold : null,
+          ),
+        ),
       ),
     ],
   );
 
-  static pw.Widget _pdfCell(String value, {bool bold = false}) => pw.Padding(
-    padding: const pw.EdgeInsets.all(6),
-    child: pw.Text(
-      value,
-      style: pw.TextStyle(
-        fontSize: 8,
-        fontWeight: bold ? pw.FontWeight.bold : null,
+  static pw.Widget _deliveryOrderTable(List<YorksV1DeliveryOrderLine> lines) =>
+      pw.Table(
+        border: pw.TableBorder.all(color: _documentGrid, width: .7),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(.7),
+          1: pw.FlexColumnWidth(5.1),
+          2: pw.FlexColumnWidth(1.05),
+          3: pw.FlexColumnWidth(1.15),
+        },
+        defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+        children: [
+          pw.TableRow(
+            repeat: true,
+            decoration: pw.BoxDecoration(color: _headerFill),
+            children: [
+              _deliveryTableHeader('S. No.'),
+              _deliveryTableHeader('Description'),
+              _deliveryTableHeader('Qty.'),
+              _deliveryTableHeader('Unit'),
+            ],
+          ),
+          for (var index = 0; index < lines.length; index++)
+            pw.TableRow(
+              children: [
+                _deliveryCell('${index + 1}', alignment: pw.Alignment.center),
+                _deliveryCell(lines[index].description),
+                _deliveryCell(
+                  lines[index].quantity,
+                  alignment: pw.Alignment.center,
+                ),
+                _deliveryCell(
+                  lines[index].unit,
+                  alignment: pw.Alignment.center,
+                ),
+              ],
+            ),
+        ],
+      );
+
+  static pw.Widget _deliveryTableHeader(String text) => pw.Padding(
+    padding: pw.EdgeInsets.symmetric(
+      horizontal: 1.5 * PdfPageFormat.mm,
+      vertical: 2.6 * PdfPageFormat.mm,
+    ),
+    child: pw.Center(
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 8.2, fontWeight: pw.FontWeight.bold),
       ),
     ),
   );
 
-  static pw.Widget _pdfLabelValue(String label, String value) => pw.RichText(
-    text: pw.TextSpan(
-      children: [
-        pw.TextSpan(
-          text: '$label: ',
-          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+  static pw.Widget _deliveryCell(
+    String text, {
+    pw.Alignment alignment = pw.Alignment.centerLeft,
+  }) => pw.Container(
+    alignment: alignment,
+    padding: pw.EdgeInsets.symmetric(
+      horizontal: 2.2 * PdfPageFormat.mm,
+      vertical: 4 * PdfPageFormat.mm,
+    ),
+    child: pw.Text(text, style: const pw.TextStyle(fontSize: 8.1)),
+  );
+
+  static pw.Widget _deliveryOrderClosingBlock(
+    YorksV1ReturnsDocumentsWorkspace workspace,
+  ) => pw.Column(
+    mainAxisSize: pw.MainAxisSize.min,
+    children: [
+      _writingLine('Delivery Address', workspace.scopeName),
+      pw.SizedBox(height: 4 * PdfPageFormat.mm),
+      pw.Row(
+        children: [
+          pw.Expanded(
+            child: _writingLine(
+              YorksV1LogisticsStrings.inspectedAndChecked.primary,
+              '',
+            ),
+          ),
+          pw.SizedBox(width: 8 * PdfPageFormat.mm),
+          pw.Expanded(
+            child: _writingLine(
+              YorksV1LogisticsStrings.receiverName.primary,
+              '',
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 4.5 * PdfPageFormat.mm),
+      pw.Row(
+        children: [
+          pw.Expanded(child: _writingLine('Signature', '')),
+          pw.SizedBox(width: 8 * PdfPageFormat.mm),
+          pw.Expanded(child: _writingLine('Signature', '')),
+        ],
+      ),
+      pw.SizedBox(height: 4.5 * PdfPageFormat.mm),
+      pw.Row(
+        children: [
+          pw.Expanded(child: _writingLine('Date', '')),
+          pw.SizedBox(width: 8 * PdfPageFormat.mm),
+          pw.Expanded(child: _writingLine('Date', '')),
+        ],
+      ),
+      pw.SizedBox(height: 6 * PdfPageFormat.mm),
+      pw.Center(
+        child: pw.Text(
+          YorksV1LogisticsStrings.goodsReceivedInGoodCondition.primary,
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
-        pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 8)),
-      ],
+      ),
+      pw.SizedBox(height: 6 * PdfPageFormat.mm),
+      _companyContact(),
+    ],
+  );
+
+  static pw.Widget _writingLine(String label, String value) => pw.Row(
+    crossAxisAlignment: pw.CrossAxisAlignment.end,
+    children: [
+      pw.Text(
+        '$label:',
+        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+      ),
+      pw.SizedBox(width: 2 * PdfPageFormat.mm),
+      pw.Expanded(
+        child: pw.Container(
+          constraints: pw.BoxConstraints(minHeight: 4.8 * PdfPageFormat.mm),
+          padding: pw.EdgeInsets.only(
+            left: 1 * PdfPageFormat.mm,
+            bottom: .8 * PdfPageFormat.mm,
+          ),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: _documentGrid, width: .65),
+            ),
+          ),
+          child: value.trim().isEmpty
+              ? pw.SizedBox()
+              : pw.Text(value.trim(), style: const pw.TextStyle(fontSize: 7.2)),
+        ),
+      ),
+    ],
+  );
+
+  static pw.Widget _companyContact() => pw.Container(
+    width: double.infinity,
+    padding: pw.EdgeInsets.only(top: 1.5 * PdfPageFormat.mm),
+    decoration: pw.BoxDecoration(
+      border: pw.Border(top: pw.BorderSide(color: _documentGrid, width: .45)),
+    ),
+    child: pw.Text(
+      'Tel.: 02-5509788 · Fax: 02-5509688 · P.O. Box: 4757 · Abu Dhabi · United Arab Emirates · yorks_sk@yorks.ae',
+      textAlign: pw.TextAlign.center,
+      style: const pw.TextStyle(fontSize: 6.2),
     ),
   );
+
+  static pw.Widget _pageNumber(pw.Context context) => pw.Align(
+    alignment: pw.Alignment.centerRight,
+    child: pw.Text(
+      'Page ${context.pageNumber} of ${context.pagesCount}',
+      style: pw.TextStyle(fontSize: 6.2, color: _documentMuted),
+    ),
+  );
+
+  static void _validateDeliveryOrder(YorksV1DeliveryOrderRevision revision) {
+    if (revision.lines.isEmpty) {
+      throw StateError('The Delivery Order has no confirmed material lines.');
+    }
+    for (var index = 0; index < revision.lines.length; index++) {
+      final line = revision.lines[index];
+      if (line.description.trim().isEmpty ||
+          line.unit.trim().isEmpty ||
+          double.tryParse(line.quantity.trim()) == null ||
+          double.parse(line.quantity.trim()) <= 0) {
+        throw StateError(
+          'Delivery Order row ${index + 1} has incomplete final receipt values.',
+        );
+      }
+    }
+  }
 
   static pw.Widget _metadata(List<_PdfMeta> values) => pw.Wrap(
     spacing: 18,

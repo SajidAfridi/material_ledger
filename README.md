@@ -48,6 +48,20 @@ flutter pub get
 flutter run
 ```
 
+### Controlled PDF and print builds
+
+The Material Request and final Delivery Order use the same generated A4 PDF
+bytes for download, printing and document storage. Build release artifacts with
+`--dart-define=use_arabic=true` so the formal bilingual document header is
+correctly shaped:
+
+```bash
+flutter build web --release \
+  --dart-define=SUPABASE_URL=<your-project-url> \
+  --dart-define=SUPABASE_ANON_KEY=<your-publishable-key> \
+  --dart-define=use_arabic=true
+```
+
 ### Requirements
 - Flutter SDK ^3.10.4
 - iOS 12+ / Android API 23+

@@ -138,11 +138,11 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                       SizedBox(
                         height: AppSpacing.controlHeight,
                         child: OutlinedButton.icon(
-                        onPressed: () => context.push(
-                          RoutePaths.yorksV1MaterialRequestsPath(
-                            projectId: projectId,
+                          onPressed: () => context.push(
+                            RoutePaths.yorksV1MaterialRequestsPath(
+                              projectId: projectId,
+                            ),
                           ),
-                        ),
                           icon: const Icon(Icons.assignment_outlined, size: 18),
                           label: Text(
                             YorksV1MaterialRequestStrings.requests.primary,
@@ -1640,6 +1640,9 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                   children: [
                                     for (final column in columns)
                                       _ColumnHeader(
+                                        key: ValueKey(
+                                          'boq-column-header-${column.id}',
+                                        ),
                                         column: column,
                                         editable: widget.editable,
                                         onRename: widget.onRenameColumn,
@@ -1662,6 +1665,9 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                         itemBuilder: (context, rowIndex) {
                                           final row = rows[rowIndex];
                                           return Row(
+                                            key: ValueKey(
+                                              'boq-grid-row-${row.id}',
+                                            ),
                                             children: [
                                               for (
                                                 var colIndex = 0;
@@ -1669,6 +1675,9 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                                 colIndex++
                                               )
                                                 _GridCell(
+                                                  key: ValueKey(
+                                                    'boq-grid-cell-${row.id}-${columns[colIndex].id}',
+                                                  ),
                                                   width: _columnWidth,
                                                   row: row,
                                                   column: columns[colIndex],
@@ -1785,13 +1794,13 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
     if (current < 0) return;
     final target = (current + delta).clamp(0, rows.length - 1);
     if (target == current || !_bodyScroll.hasClients) return;
-    _bodyScroll.animateTo(
+    // Spreadsheet navigation should be immediate.  Avoid queuing a scroll
+    // animation for every Arrow/Enter press while the engineer is editing.
+    _bodyScroll.jumpTo(
       (target * _rowHeight).clamp(
         _bodyScroll.position.minScrollExtent,
         _bodyScroll.position.maxScrollExtent,
       ),
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode(rows[target].id, columnId).requestFocus();
@@ -1854,8 +1863,11 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
   }
 }
 
-class _ColumnHeader extends StatelessWidget {
+/// Holds a BOQ heading locally until the engineer commits it.  This prevents
+/// a complete worksheet state replacement for every typed character.
+class _ColumnHeader extends StatefulWidget {
   const _ColumnHeader({
+    super.key,
     required this.column,
     required this.editable,
     required this.onRename,
@@ -1866,6 +1878,58 @@ class _ColumnHeader extends StatelessWidget {
   final bool editable;
   final void Function(String, String) onRename;
   final VoidCallback onDelete;
+
+  @override
+  State<_ColumnHeader> createState() => _ColumnHeaderState();
+}
+
+class _ColumnHeaderState extends State<_ColumnHeader> {
+  late final TextEditingController _textController;
+  late final FocusNode _focusNode;
+  late String _lastCommitted;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastCommitted = widget.column.heading;
+    _textController = TextEditingController(text: widget.column.heading);
+    _focusNode = FocusNode();
+    _focusNode.addListener(_commitOnBlur);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ColumnHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focusNode.hasFocus && widget.column.heading != _textController.text) {
+      _lastCommitted = widget.column.heading;
+      _textController.value = TextEditingValue(
+        text: widget.column.heading,
+        selection: TextSelection.collapsed(
+          offset: widget.column.heading.length,
+        ),
+      );
+    }
+  }
+
+  void _commitOnBlur() {
+    if (!_focusNode.hasFocus) _commit();
+  }
+
+  void _commit() {
+    final value = _textController.text.trim();
+    if (value.isEmpty || value == _lastCommitted) return;
+    _lastCommitted = value;
+    widget.onRename(widget.column.id, value);
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_commitOnBlur)
+      ..dispose();
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1886,13 +1950,11 @@ class _ColumnHeader extends StatelessWidget {
           children: [
             Expanded(
               child: TextFormField(
-                key: ValueKey('boq-column-${column.id}'),
-                initialValue: column.heading,
-                enabled: editable,
-                onFieldSubmitted: (value) => onRename(column.id, value),
-                onChanged: (value) {
-                  if (value.trim().isNotEmpty) onRename(column.id, value);
-                },
+                key: ValueKey('boq-column-${widget.column.id}'),
+                controller: _textController,
+                focusNode: _focusNode,
+                enabled: widget.editable,
+                onFieldSubmitted: (_) => _commit(),
                 style: AppTypography.labelLarge,
                 decoration: const InputDecoration(
                   isDense: true,
@@ -1903,7 +1965,7 @@ class _ColumnHeader extends StatelessWidget {
                 ),
               ),
             ),
-            if (editable)
+            if (widget.editable)
               IconButton(
                 tooltip: YorksV1BoqStrings.deleteColumn.primary,
                 constraints: const BoxConstraints(
@@ -1911,7 +1973,7 @@ class _ColumnHeader extends StatelessWidget {
                   minWidth: AppSpacing.minTapTarget,
                 ),
                 padding: EdgeInsets.zero,
-                onPressed: onDelete,
+                onPressed: widget.onDelete,
                 icon: const Icon(Icons.close_rounded, size: 17),
               ),
           ],
@@ -2015,8 +2077,12 @@ class _SerialCell extends StatelessWidget {
   );
 }
 
-class _GridCell extends StatelessWidget {
+/// The text controller belongs to the active cell, not the complete BOQ
+/// worksheet.  A commit happens on blur or Enter, which keeps browser typing
+/// smooth even for imported sheets with hundreds of rows.
+class _GridCell extends StatefulWidget {
   const _GridCell({
+    super.key,
     required this.width,
     required this.row,
     required this.column,
@@ -2035,8 +2101,62 @@ class _GridCell extends StatelessWidget {
   final ValueChanged<String> onValueChanged;
 
   @override
+  State<_GridCell> createState() => _GridCellState();
+}
+
+class _GridCellState extends State<_GridCell> {
+  late final TextEditingController _textController;
+  late String _lastCommitted;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastCommitted = _valueFor(widget);
+    _textController = TextEditingController(text: _lastCommitted);
+    widget.focusNode.addListener(_commitOnBlur);
+  }
+
+  @override
+  void didUpdateWidget(covariant _GridCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_commitOnBlur);
+      widget.focusNode.addListener(_commitOnBlur);
+    }
+    final value = _valueFor(widget);
+    if (!widget.focusNode.hasFocus && value != _textController.text) {
+      _lastCommitted = value;
+      _textController.value = TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: value.length),
+      );
+    }
+  }
+
+  String _valueFor(_GridCell cell) =>
+      '${cell.row.valueFor(cell.column.id) ?? ''}';
+
+  void _commitOnBlur() {
+    if (!widget.focusNode.hasFocus) _commit();
+  }
+
+  void _commit() {
+    final value = _textController.text;
+    if (value == _lastCommitted) return;
+    _lastCommitted = value;
+    widget.onValueChanged(value);
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_commitOnBlur);
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => SizedBox(
-    width: width,
+    width: widget.width,
     child: Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
@@ -2049,12 +2169,12 @@ class _GridCell extends StatelessWidget {
         ),
       ),
       child: TextFormField(
-        key: ValueKey('boq-cell-${row.id}-${column.id}'),
-        initialValue: '${row.valueFor(column.id) ?? ''}',
-        focusNode: focusNode,
-        enabled: editable,
-        onTap: onSelected,
-        onChanged: onValueChanged,
+        key: ValueKey('boq-cell-${widget.row.id}-${widget.column.id}'),
+        controller: _textController,
+        focusNode: widget.focusNode,
+        enabled: widget.editable,
+        onTap: widget.onSelected,
+        onFieldSubmitted: (_) => _commit(),
         style: AppTypography.bodySmall,
         decoration: const InputDecoration(
           isDense: true,

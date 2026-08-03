@@ -881,6 +881,150 @@ abstract final class YorksV1ProjectStrings {
     ur: 'دستاویزات کھولیں',
     hi: 'दस्तावेज़ खोलें',
   );
+  static const boqGroups = TranslatableString(
+    en: 'BOQ Groups',
+    ar: 'مجموعات جدول الكميات',
+    ur: 'BOQ گروپس',
+    hi: 'बीओक्यू समूह',
+  );
+  static const boqItems = TranslatableString(
+    en: 'BOQ Items',
+    ar: 'بنود جدول الكميات',
+    ur: 'BOQ آئٹمز',
+    hi: 'बीओक्यू आइटम',
+  );
+  static const requests = TranslatableString(
+    en: 'Requests',
+    ar: 'الطلبات',
+    ur: 'درخواستیں',
+    hi: 'अनुरोध',
+  );
+  static const foldersOfMaterials = TranslatableString(
+    en: 'Folders of materials',
+    ar: 'مجلدات المواد',
+    ur: 'میٹیریل فولڈرز',
+    hi: 'सामग्री फ़ोल्डर',
+  );
+  static const availableToRequest = TranslatableString(
+    en: 'Available to request',
+    ar: 'متاح للطلب',
+    ur: 'درخواست کے لیے دستیاب',
+    hi: 'अनुरोध के लिए उपलब्ध',
+  );
+  static const currentlyOpen = TranslatableString(
+    en: 'currently open',
+    ar: 'مفتوح حاليًا',
+    ur: 'فی الحال کھلی',
+    hi: 'वर्तमान में खुला',
+  );
+  static const projectLevelFiles = TranslatableString(
+    en: 'Project-level files',
+    ar: 'ملفات على مستوى المشروع',
+    ur: 'پراجیکٹ لیول فائلز',
+    hi: 'प्रोजेक्ट-स्तरीय फ़ाइलें',
+  );
+  static const plusCommonScope = TranslatableString(
+    en: 'Plus Common scope',
+    ar: 'بالإضافة إلى النطاق المشترك',
+    ur: 'کامن اسکوپ کے علاوہ',
+    hi: 'कॉमन स्कोप के साथ',
+  );
+  static const workspaceGuide = TranslatableString(
+    en: 'Work from BOQ, Material Requests and Documents.',
+    ar: 'اعمل من جدول الكميات وطلبات المواد والمستندات.',
+    ur: 'BOQ، میٹیریل ریکویسٹس اور دستاویزات سے کام کریں۔',
+    hi: 'बीओक्यू, सामग्री अनुरोध और दस्तावेज़ से काम करें।',
+  );
+  static const workspaceGuideDescription = TranslatableString(
+    en: 'Procurement arrangement, approval, dispatch, receipt and returns remain inside the Material Request so nothing is lost between departments.',
+    ar: 'يبقى ترتيب المشتريات والموافقة والإرسال والاستلام والمرتجعات داخل طلب المواد حتى لا يضيع شيء بين الأقسام.',
+    ur: 'پروکیورمنٹ انتظام، منظوری، ڈسپیچ، وصولی اور ریٹرنز میٹیریل ریکویسٹ میں رہتے ہیں تاکہ شعبوں کے درمیان کچھ ضائع نہ ہو۔',
+    hi: 'खरीद व्यवस्था, अनुमोदन, डिस्पैच, प्राप्ति और रिटर्न सामग्री अनुरोध में रहते हैं ताकि विभागों के बीच कुछ न खोए।',
+  );
+  static const groups = TranslatableString(
+    en: 'groups',
+    ar: 'مجموعات',
+    ur: 'گروپس',
+    hi: 'समूह',
+  );
+  static const items = TranslatableString(
+    en: 'Items',
+    ar: 'العناصر',
+    ur: 'آئٹمز',
+    hi: 'आइटम',
+  );
+  static const ready = TranslatableString(
+    en: 'Ready',
+    ar: 'جاهز',
+    ur: 'تیار',
+    hi: 'तैयार',
+  );
+  static const total = TranslatableString(
+    en: 'Total',
+    ar: 'الإجمالي',
+    ur: 'کل',
+    hi: 'कुल',
+  );
+  static const received = TranslatableString(
+    en: 'Received',
+    ar: 'تم الاستلام',
+    ur: 'وصول شدہ',
+    hi: 'प्राप्त',
+  );
+  static const files = TranslatableString(
+    en: 'files',
+    ar: 'ملفات',
+    ur: 'فائلز',
+    hi: 'फ़ाइलें',
+  );
+  static const links = TranslatableString(
+    en: 'Links',
+    ar: 'روابط',
+    ur: 'لنکس',
+    hi: 'लिंक',
+  );
+  static const boqModuleDescription = TranslatableString(
+    en: 'Create folders, add materials and documents, or send an entire group to Procurement.',
+    ar: 'أنشئ مجلدات وأضف موادًا ومستندات أو أرسل مجموعة كاملة إلى المشتريات.',
+    ur: 'فولڈرز بنائیں، میٹیریل اور دستاویزات شامل کریں یا مکمل گروپ پروکیورمنٹ کو بھیجیں۔',
+    hi: 'फ़ोल्डर बनाएं, सामग्री और दस्तावेज़ जोड़ें, या पूरा समूह खरीद को भेजें।',
+  );
+  static const requestsModuleDescription = TranslatableString(
+    en: 'Request custom items or choose items already saved inside BOQ groups.',
+    ar: 'اطلب عناصر مخصصة أو اختر عناصر محفوظة داخل مجموعات جدول الكميات.',
+    ur: 'کسٹم آئٹمز کی درخواست کریں یا BOQ گروپس میں محفوظ آئٹمز منتخب کریں۔',
+    hi: 'कस्टम आइटम का अनुरोध करें या बीओक्यू समूहों में सहेजे आइटम चुनें।',
+  );
+  static const documentsModuleDescription = TranslatableString(
+    en: 'Upload or link the project files that engineers need from desktop, tablet or phone.',
+    ar: 'ارفع أو اربط ملفات المشروع التي يحتاجها المهندسون من سطح المكتب أو الجهاز اللوحي أو الهاتف.',
+    ur: 'وہ پراجیکٹ فائلز اپ لوڈ یا لنک کریں جو انجینئرز کو ڈیسک ٹاپ، ٹیبلٹ یا فون سے درکار ہیں۔',
+    hi: 'डेस्कटॉप, टैबलेट या फोन से इंजीनियरों को आवश्यक प्रोजेक्ट फाइल अपलोड या लिंक करें।',
+  );
+  static const recentMaterialRequests = TranslatableString(
+    en: 'Recent Material Requests',
+    ar: 'طلبات المواد الأخيرة',
+    ur: 'حالیہ میٹیریل ریکویسٹس',
+    hi: 'हालिया सामग्री अनुरोध',
+  );
+  static const recentRequestsDescription = TranslatableString(
+    en: 'The same request number and status are visible to Engineer and Procurement.',
+    ar: 'رقم الطلب والحالة نفسيهما مرئيان للمهندس والمشتريات.',
+    ur: 'وہی درخواست نمبر اور حالت انجینئر اور پروکیورمنٹ کو نظر آتے ہیں۔',
+    hi: 'वही अनुरोध संख्या और स्थिति इंजीनियर और खरीद को दिखाई देते हैं।',
+  );
+  static const noRecentRequests = TranslatableString(
+    en: 'No material requests yet',
+    ar: 'لا توجد طلبات مواد بعد',
+    ur: 'ابھی کوئی میٹیریل ریکویسٹ نہیں',
+    hi: 'अभी कोई सामग्री अनुरोध नहीं',
+  );
+  static const requestsUnavailable = TranslatableString(
+    en: 'Material Requests are unavailable right now.',
+    ar: 'طلبات المواد غير متاحة حاليًا.',
+    ur: 'میٹیریل ریکویسٹس فی الحال دستیاب نہیں ہیں۔',
+    hi: 'सामग्री अनुरोध अभी उपलब्ध नहीं हैं।',
+  );
   static const draftState = TranslatableString(
     en: 'Draft',
     ar: 'مسودة',

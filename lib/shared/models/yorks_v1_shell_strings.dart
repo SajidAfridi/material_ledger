@@ -353,6 +353,186 @@ abstract final class YorksV1ShellStrings {
     ur: 'براؤز / انوینٹری',
     hi: 'ब्राउज़ / इन्वेंटरी',
   );
+  static const procurementGreeting = TranslatableString(
+    en: 'Good evening · Procurement',
+    ar: 'مساء الخير · المشتريات',
+    ur: 'شام بخیر · پروکیورمنٹ',
+    hi: 'शुभ संध्या · खरीद',
+  );
+  static const procurementHero = TranslatableString(
+    en: 'Arrange, approve and dispatch without over-supplying.',
+    ar: 'رتب واعتمد وأرسل دون زيادة في التوريد.',
+    ur: 'ضرورت سے زیادہ سپلائی کے بغیر ترتیب دیں، منظور کریں اور ڈسپیچ کریں۔',
+    hi: 'अधिक आपूर्ति किए बिना व्यवस्थित करें, अनुमोदित करें और डिस्पैच करें।',
+  );
+  static const procurementHeroDescription = TranslatableString(
+    en: 'Projects are view-only. Procurement works from the Engineer’s Material Request, records unavailable items clearly, and dispatches only the quantities approved.',
+    ar: 'المشاريع للعرض فقط. تعمل المشتريات من طلب مواد المهندس وتسجل العناصر غير المتاحة بوضوح وترسل الكميات المعتمدة فقط.',
+    ur: 'پراجیکٹس صرف دیکھنے کے لیے ہیں۔ پروکیورمنٹ انجینئر کی میٹیریل ریکویسٹ سے کام کرتی ہے، ناقابل فراہمی آئٹمز واضح کرتی ہے اور صرف منظور شدہ مقدار ڈسپیچ کرتی ہے۔',
+    hi: 'प्रोजेक्ट केवल देखने योग्य हैं। खरीद इंजीनियर के सामग्री अनुरोध से काम करता है, अनुपलब्ध वस्तुओं को स्पष्ट रूप से दर्ज करता है और केवल स्वीकृत मात्रा भेजता है।',
+  );
+  static const viewProjects = TranslatableString(
+    en: 'View Projects',
+    ar: 'عرض المشاريع',
+    ur: 'پراجیکٹس دیکھیں',
+    hi: 'प्रोजेक्ट देखें',
+  );
+  static const newToArrange = TranslatableString(
+    en: 'New to arrange',
+    ar: 'جديد للترتيب',
+    ur: 'ترتیب کے لیے نئی',
+    hi: 'व्यवस्था के लिए नया',
+  );
+  static const readyToDispatch = TranslatableString(
+    en: 'Ready to dispatch',
+    ar: 'جاهز للإرسال',
+    ur: 'ڈسپیچ کے لیے تیار',
+    hi: 'डिस्पैच के लिए तैयार',
+  );
+  static const lowOutOfStock = TranslatableString(
+    en: 'Low / out of stock',
+    ar: 'مخزون منخفض / نفد',
+    ur: 'کم / ختم شدہ اسٹاک',
+    hi: 'कम / स्टॉक में नहीं',
+  );
+  static const request = TranslatableString(
+    en: 'Request',
+    ar: 'الطلب',
+    ur: 'درخواست',
+    hi: 'अनुरोध',
+  );
+  static const requestStepDescription = TranslatableString(
+    en: 'Engineer submits',
+    ar: 'يقدم المهندس',
+    ur: 'انجینئر جمع کراتا ہے',
+    hi: 'इंजीनियर जमा करता है',
+  );
+  static const arrange = TranslatableString(
+    en: 'Arrange',
+    ar: 'ترتيب',
+    ur: 'ترتیب',
+    hi: 'व्यवस्थित करें',
+  );
+  static const arrangeStepDescription = TranslatableString(
+    en: 'Supply or mark unavailable',
+    ar: 'وفر أو حدد غير المتاح',
+    ur: 'سپلائی کریں یا ناقابل فراہمی نشان لگائیں',
+    hi: 'आपूर्ति करें या अनुपलब्ध चिह्नित करें',
+  );
+  static const approve = TranslatableString(
+    en: 'Approve',
+    ar: 'اعتماد',
+    ur: 'منظور کریں',
+    hi: 'स्वीकृत करें',
+  );
+  static const approveStepDescription = TranslatableString(
+    en: 'Project Engineer reviews',
+    ar: 'يراجع مهندس المشروع',
+    ur: 'پراجیکٹ انجینئر جائزہ لیتا ہے',
+    hi: 'प्रोजेक्ट इंजीनियर समीक्षा करता है',
+  );
+  static const dispatch = TranslatableString(
+    en: 'Dispatch',
+    ar: 'إرسال',
+    ur: 'ڈسپیچ',
+    hi: 'डिस्पैच',
+  );
+  static const dispatchStepDescription = TranslatableString(
+    en: 'Only approved quantities',
+    ar: 'الكميات المعتمدة فقط',
+    ur: 'صرف منظور شدہ مقدار',
+    hi: 'केवल स्वीकृत मात्रा',
+  );
+  static const receipt = TranslatableString(
+    en: 'Receipt',
+    ar: 'استلام',
+    ur: 'وصولی',
+    hi: 'प्राप्ति',
+  );
+  static const receiptStepDescription = TranslatableString(
+    en: 'Project team confirms',
+    ar: 'يؤكد فريق المشروع',
+    ur: 'پراجیکٹ ٹیم تصدیق کرتی ہے',
+    hi: 'प्रोजेक्ट टीम पुष्टि करती है',
+  );
+  static const newRequests = TranslatableString(
+    en: 'New requests',
+    ar: 'طلبات جديدة',
+    ur: 'نئی درخواستیں',
+    hi: 'नए अनुरोध',
+  );
+  static const newRequestsDescription = TranslatableString(
+    en: 'Need Procurement arrangement',
+    ar: 'تحتاج إلى ترتيب المشتريات',
+    ur: 'پروکیورمنٹ انتظام درکار ہے',
+    hi: 'खरीद व्यवस्था आवश्यक है',
+  );
+  static const engineerReview = TranslatableString(
+    en: 'Engineer review',
+    ar: 'مراجعة المهندس',
+    ur: 'انجینئر ریویو',
+    hi: 'इंजीनियर समीक्षा',
+  );
+  static const engineerReviewDescription = TranslatableString(
+    en: 'Waiting for Project Engineer',
+    ar: 'بانتظار مهندس المشروع',
+    ur: 'پراجیکٹ انجینئر کا انتظار ہے',
+    hi: 'प्रोजेक्ट इंजीनियर की प्रतीक्षा है',
+  );
+  static const approved = TranslatableString(
+    en: 'Approved',
+    ar: 'معتمد',
+    ur: 'منظور شدہ',
+    hi: 'स्वीकृत',
+  );
+  static const approvedDescription = TranslatableString(
+    en: 'Ready for controlled dispatch',
+    ar: 'جاهز للإرسال المتحكم به',
+    ur: 'کنٹرولڈ ڈسپیچ کے لیے تیار',
+    hi: 'नियंत्रित डिस्पैच के लिए तैयार',
+  );
+  static const awaitingReceipt = TranslatableString(
+    en: 'Awaiting receipt',
+    ar: 'بانتظار الاستلام',
+    ur: 'وصولی کا انتظار',
+    hi: 'प्राप्ति की प्रतीक्षा',
+  );
+  static const awaitingReceiptDescription = TranslatableString(
+    en: 'Sent to project team',
+    ar: 'أرسلت إلى فريق المشروع',
+    ur: 'پراجیکٹ ٹیم کو بھیج دیا گیا',
+    hi: 'प्रोजेक्ट टीम को भेजा गया',
+  );
+  static const needsProcurementAction = TranslatableString(
+    en: 'Needs Procurement Action',
+    ar: 'يتطلب إجراء المشتريات',
+    ur: 'پروکیورمنٹ کی کارروائی درکار ہے',
+    hi: 'खरीद कार्रवाई आवश्यक है',
+  );
+  static const procurementActionDescription = TranslatableString(
+    en: 'Only requests that Procurement can act on are shown here.',
+    ar: 'تظهر هنا فقط الطلبات التي يمكن للمشتريات التصرف بشأنها.',
+    ur: 'یہاں صرف وہ درخواستیں دکھائی جاتی ہیں جن پر پروکیورمنٹ کارروائی کر سکتی ہے۔',
+    hi: 'यहां केवल वे अनुरोध दिखाए जाते हैं जिन पर खरीद कार्रवाई कर सकता है।',
+  );
+  static const viewAllRequests = TranslatableString(
+    en: 'View All Requests',
+    ar: 'عرض كل الطلبات',
+    ur: 'تمام درخواستیں دیکھیں',
+    hi: 'सभी अनुरोध देखें',
+  );
+  static const noProcurementAction = TranslatableString(
+    en: 'Nothing needs Procurement action',
+    ar: 'لا شيء يحتاج إلى إجراء المشتريات',
+    ur: 'کسی چیز کو پروکیورمنٹ کی کارروائی درکار نہیں',
+    hi: 'किसी चीज़ को खरीद कार्रवाई की आवश्यकता नहीं है',
+  );
+  static const requestsUnavailable = TranslatableString(
+    en: 'Material Requests are unavailable right now.',
+    ar: 'طلبات المواد غير متاحة حاليًا.',
+    ur: 'میٹیریل ریکویسٹس فی الحال دستیاب نہیں ہیں۔',
+    hi: 'सामग्री अनुरोध अभी उपलब्ध नहीं हैं।',
+  );
   static const dispatches = TranslatableString(
     en: 'Dispatches',
     ar: 'الإرساليات',

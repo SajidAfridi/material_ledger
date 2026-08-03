@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_material_request_draft_controller.dart';
@@ -11,8 +12,10 @@ import 'package:material_ledger/shared/repositories/yorks_v1_material_request_re
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
 import 'package:material_ledger/shared/services/yorks_v1_material_request_document_service.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
+import 'package:pdf/pdf.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Yorks V1 Material Request draft controller', () {
     test(
       'keeps draft recovery private and submits one versioned command',
@@ -667,6 +670,47 @@ void main() {
       });
     },
   );
+
+  test('Material Request PDF uses the controlled A4 print layout', () async {
+    final request = YorksV1MaterialRequest(
+      id: _draftId,
+      projectId: _projectId,
+      projectReference: 'YRA-123',
+      projectName: 'Yorks Test Project',
+      scopeId: _scopeId,
+      scopeName: 'Common / All Buildings',
+      state: YorksV1MaterialRequestState.submitted,
+      recordVersion: 2,
+      createdAt: DateTime.utc(2026, 8, 3),
+      updatedAt: DateTime.utc(2026, 8, 3),
+      submittedAt: DateTime.utc(2026, 8, 3),
+      timing: YorksV1MaterialRequestTiming.normal,
+      requestNumber: 'YRA123-MR101',
+      requesterDisplayName: 'Project Engineer',
+      requesterProjectRole: 'Project Engineer',
+      lines: const [
+        YorksV1MaterialRequestLine(
+          id: 'line-1',
+          displayOrder: 1,
+          source: YorksV1MaterialRequestLineSource.custom,
+          description: 'Motorized smoke damper',
+          size: '600 x 600',
+          planningModelTag: 'MSD-01A',
+          brandOrigin: 'UAE',
+          quantity: '2',
+          unit: 'Nos',
+        ),
+      ],
+    );
+
+    final bytes = await YorksV1MaterialRequestDocumentService().buildPdf(
+      request,
+      PdfPageFormat.a4,
+    );
+
+    expect(bytes.length, greaterThan(500));
+    expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+  });
 }
 
 const _siteEngineer = '10000000-0000-4000-8000-000000000002';

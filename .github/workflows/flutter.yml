@@ -59,6 +59,7 @@ jobs:
           flutter build web --release
           --dart-define=SUPABASE_URL=https://ci.invalid
           --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
+          --dart-define=use_arabic=true
 
   database:
     name: Supabase database
@@ -116,6 +117,7 @@ jobs:
           flutter build apk --release
           --dart-define=SUPABASE_URL=https://ci.invalid
           --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
+          --dart-define=use_arabic=true
 
       - name: Verify release APK uses the CI certificate
         shell: bash

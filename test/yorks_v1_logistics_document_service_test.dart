@@ -7,6 +7,7 @@ import 'package:material_ledger/shared/services/yorks_v1_logistics_document_serv
 import 'package:pdf/pdf.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   const service = YorksV1LogisticsDocumentService();
   final revision = YorksV1DeliveryOrderRevision(
     id: 'revision-1',

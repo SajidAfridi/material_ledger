@@ -14,49 +14,96 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('R35 engineer overview remains laid out at desktop and mobile widths', (
-    tester,
-  ) async {
-    final preferences = await SharedPreferences.getInstance();
-    final router = GoRouter(
-      routes: [
-        GoRoute(
-          path: '/',
-          builder: (_, _) => const YorksV1WorkspaceShell(
-            child: YorksV1OverviewScreen(),
+  testWidgets(
+    'R35 engineer overview remains laid out at desktop and mobile widths',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) =>
+                const YorksV1WorkspaceShell(child: YorksV1OverviewScreen()),
           ),
-        ),
-      ],
-    );
-
-    for (final size in [
-      const Size(1366, 768),
-      const Size(1024, 768),
-      const Size(768, 900),
-      const Size(360, 800),
-    ]) {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedPreferencesProvider.overrideWithValue(preferences),
-            yorksV1CurrentRoleProvider.overrideWithValue(
-              YorksV1Role.projectEngineer,
-            ),
-            yorksV1ProjectPortfolioProvider.overrideWith((ref) async => []),
-            yorksV1MaterialRequestListProvider(
-              null,
-            ).overrideWith((ref) async => []),
-          ],
-          child: MaterialApp.router(routerConfig: router),
-        ),
+        ],
       );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    }
 
-    tester.view.resetPhysicalSize();
-    tester.view.resetDevicePixelRatio();
-  });
+      for (final size in [
+        const Size(1366, 768),
+        const Size(1024, 768),
+        const Size(768, 900),
+        const Size(360, 800),
+      ]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1CurrentRoleProvider.overrideWithValue(
+                YorksV1Role.projectEngineer,
+              ),
+              yorksV1ProjectPortfolioProvider.overrideWith((ref) async => []),
+              yorksV1MaterialRequestListProvider(
+                null,
+              ).overrideWith((ref) async => []),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    },
+  );
+
+  testWidgets(
+    'R35 procurement overview remains laid out at desktop and mobile widths',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) =>
+                const YorksV1WorkspaceShell(child: YorksV1OverviewScreen()),
+          ),
+        ],
+      );
+
+      for (final size in [
+        const Size(1366, 768),
+        const Size(1024, 768),
+        const Size(360, 800),
+      ]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1CurrentRoleProvider.overrideWithValue(
+                YorksV1Role.procurement,
+              ),
+              yorksV1ProjectPortfolioProvider.overrideWith((ref) async => []),
+              yorksV1MaterialRequestListProvider(
+                null,
+              ).overrideWith((ref) async => []),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Needs Procurement Action'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'viewport $size');
+      }
+
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    },
+  );
 }

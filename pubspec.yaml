@@ -99,6 +99,7 @@ flutter:
     - assets/icons/
     - assets/images/
     - assets/fonts/
+    - assets/branding/source_emblem.png
 
   fonts:
     - family: NexusSans

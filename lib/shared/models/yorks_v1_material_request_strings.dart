@@ -244,12 +244,6 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'درخواست کا وقت',
     hi: 'अनुरोध समय',
   );
-  static const buildingOther = TranslatableString(
-    en: 'Building / Other',
-    ar: 'المبنى / أخرى',
-    ur: 'عمارت / دیگر',
-    hi: 'भवन / अन्य',
-  );
   static const state = TranslatableString(
     en: 'State',
     ar: 'الحالة',
@@ -597,6 +591,282 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'يحتاج المصنف إلى أعمدة وصف الصنف والكمية والوحدة.',
     ur: 'ورک بک میں آئٹم کی تفصیل، مقدار اور یونٹ کالم درکار ہیں۔',
     hi: 'वर्कबुक में आइटम विवरण, मात्रा और इकाई कॉलम चाहिए।',
+  );
+  static const arrangeItems = TranslatableString(
+    en: 'Arrange Items',
+    ar: 'ترتيب العناصر',
+    ur: 'آئٹمز ترتیب دیں',
+    hi: 'आइटम व्यवस्थित करें',
+  );
+  static const pdf = TranslatableString(
+    en: 'PDF',
+    ar: 'PDF',
+    ur: 'PDF',
+    hi: 'PDF',
+  );
+  static const print = TranslatableString(
+    en: 'Print',
+    ar: 'طباعة',
+    ur: 'پرنٹ',
+    hi: 'प्रिंट',
+  );
+  static const requestStatus = TranslatableString(
+    en: 'Request Status',
+    ar: 'حالة الطلب',
+    ur: 'درخواست کی حالت',
+    hi: 'अनुरोध स्थिति',
+  );
+  static const requestStatusDescription = TranslatableString(
+    en: 'Engineer and Procurement follow the same five-step record.',
+    ar: 'يتبع المهندس والمشتريات نفس السجل ذي الخطوات الخمس.',
+    ur: 'انجینئر اور پروکیورمنٹ ایک ہی پانچ مرحلے کے ریکارڈ پر عمل کرتے ہیں۔',
+    hi: 'इंजीनियर और खरीद विभाग एक ही पांच-चरण रिकॉर्ड का पालन करते हैं।',
+  );
+  static const request = TranslatableString(
+    en: 'Request',
+    ar: 'الطلب',
+    ur: 'درخواست',
+    hi: 'अनुरोध',
+  );
+  static const procurement = TranslatableString(
+    en: 'Procurement',
+    ar: 'المشتريات',
+    ur: 'پروکیورمنٹ',
+    hi: 'खरीद',
+  );
+  static const dispatch = TranslatableString(
+    en: 'Dispatch',
+    ar: 'الإرسال',
+    ur: 'ڈسپیچ',
+    hi: 'डिस्पैच',
+  );
+  static const procurementArranging = TranslatableString(
+    en: 'Procurement is arranging the items',
+    ar: 'تقوم المشتريات بترتيب العناصر',
+    ur: 'پروکیورمنٹ آئٹمز کا انتظام کر رہی ہے',
+    hi: 'खरीद विभाग आइटम व्यवस्थित कर रहा है',
+  );
+  static const waitingForApproval = TranslatableString(
+    en: 'Waiting for a Project Engineer approval',
+    ar: 'بانتظار موافقة مهندس المشروع',
+    ur: 'پراجیکٹ انجینئر کی منظوری کا انتظار ہے',
+    hi: 'प्रोजेक्ट इंजीनियर की मंजूरी की प्रतीक्षा है',
+  );
+  static const readyForDispatch = TranslatableString(
+    en: 'Ready for dispatch',
+    ar: 'جاهز للإرسال',
+    ur: 'ڈسپیچ کے لیے تیار',
+    hi: 'डिस्पैच के लिए तैयार',
+  );
+  static const awaitingReceipt = TranslatableString(
+    en: 'Awaiting site receipt',
+    ar: 'بانتظار استلام الموقع',
+    ur: 'سائٹ وصولی کا انتظار ہے',
+    hi: 'साइट प्राप्ति की प्रतीक्षा है',
+  );
+  static const receiptCompleted = TranslatableString(
+    en: 'Receipt review completed',
+    ar: 'اكتملت مراجعة الاستلام',
+    ur: 'وصولی کا جائزہ مکمل ہو گیا',
+    hi: 'प्राप्ति समीक्षा पूर्ण हुई',
+  );
+  static const requestDetails = TranslatableString(
+    en: 'Request Details',
+    ar: 'تفاصيل الطلب',
+    ur: 'درخواست کی تفصیلات',
+    hi: 'अनुरोध विवरण',
+  );
+  static const requestingRole = TranslatableString(
+    en: 'Requesting role',
+    ar: 'دور مقدم الطلب',
+    ur: 'درخواست کنندہ کا کردار',
+    hi: 'अनुरोधकर्ता भूमिका',
+  );
+  static const requested = TranslatableString(
+    en: 'Requested',
+    ar: 'المطلوب',
+    ur: 'درخواست کردہ',
+    hi: 'अनुरोधित',
+  );
+  static const lastUpdated = TranslatableString(
+    en: 'Last updated',
+    ar: 'آخر تحديث',
+    ur: 'آخری اپڈیٹ',
+    hi: 'अंतिम अपडेट',
+  );
+  static const controlledTableDescription = TranslatableString(
+    en: 'The formal request is a read-only snapshot of the submitted lines.',
+    ar: 'الطلب الرسمي لقطة للبنود المقدمة للقراءة فقط.',
+    ur: 'رسمی درخواست جمع کرائی گئی لائنوں کا صرف پڑھنے کے لیے اسنیپ شاٹ ہے۔',
+    hi: 'औपचारिक अनुरोध जमा की गई पंक्तियों का केवल-पढ़ने योग्य स्नैपशॉट है।',
+  );
+  static const materialRequestForm = TranslatableString(
+    en: 'MATERIAL REQUEST FORM',
+    ar: 'نموذج طلب المواد',
+    ur: 'میٹیریل ریکویسٹ فارم',
+    hi: 'सामग्री अनुरोध फॉर्म',
+  );
+  static const formalCompanyArabic = TranslatableString(
+    en: 'Yorks AC. & Ref.',
+    ar: 'يوركس للتكييف والتبريد',
+    ur: 'یارکس اے سی اینڈ ریف',
+    hi: 'यॉर्क्स एसी एंड रेफ.',
+  );
+  static const projectReference = TranslatableString(
+    en: 'Project Ref.',
+    ar: 'مرجع المشروع',
+    ur: 'پراجیکٹ حوالہ',
+    hi: 'प्रोजेक्ट संदर्भ',
+  );
+  static const projectName = TranslatableString(
+    en: 'Project Name',
+    ar: 'اسم المشروع',
+    ur: 'پراجیکٹ نام',
+    hi: 'प्रोजेक्ट नाम',
+  );
+  static const projectEngineers = TranslatableString(
+    en: 'Project Engineers',
+    ar: 'مهندسو المشروع',
+    ur: 'پراجیکٹ انجینئرز',
+    hi: 'प्रोजेक्ट इंजीनियर',
+  );
+  static const deliveryType = TranslatableString(
+    en: 'Delivery Type',
+    ar: 'نوع التسليم',
+    ur: 'ڈیلیوری کی قسم',
+    hi: 'डिलीवरी प्रकार',
+  );
+  static const buildingOther = TranslatableString(
+    en: 'Building / Other',
+    ar: 'المبنى / أخرى',
+    ur: 'عمارت / دیگر',
+    hi: 'भवन / अन्य',
+  );
+  static const requestedByEngineer = TranslatableString(
+    en: 'Requested by (Site / Project Engineer)',
+    ar: 'مطلوب من مهندس الموقع / المشروع',
+    ur: 'سائٹ / پراجیکٹ انجینئر نے درخواست دی',
+    hi: 'साइट / प्रोजेक्ट इंजीनियर द्वारा अनुरोधित',
+  );
+  static const approvedByEngineer = TranslatableString(
+    en: 'Approved by (Project Engineer)',
+    ar: 'معتمد من مهندس المشروع',
+    ur: 'پراجیکٹ انجینئر نے منظور کیا',
+    hi: 'प्रोजेक्ट इंजीनियर द्वारा स्वीकृत',
+  );
+  static const dispatchedByProcurement = TranslatableString(
+    en: 'Ordered / Dispatched by (Procurement)',
+    ar: 'تم الطلب / الإرسال بواسطة المشتريات',
+    ur: 'پروکیورمنٹ نے آرڈر / ڈسپیچ کیا',
+    hi: 'खरीद द्वारा आदेशित / डिस्पैच',
+  );
+  static const name = TranslatableString(
+    en: 'Name',
+    ar: 'الاسم',
+    ur: 'نام',
+    hi: 'नाम',
+  );
+  static const role = TranslatableString(
+    en: 'Role',
+    ar: 'الدور',
+    ur: 'کردار',
+    hi: 'भूमिका',
+  );
+  static const date = TranslatableString(
+    en: 'Date',
+    ar: 'التاريخ',
+    ur: 'تاریخ',
+    hi: 'दिनांक',
+  );
+  static const arrangementDescription = TranslatableString(
+    en: 'Procurement records the available quantities and any exception before approval.',
+    ar: 'تسجل المشتريات الكميات المتاحة وأي استثناء قبل الموافقة.',
+    ur: 'پروکیورمنٹ منظوری سے پہلے دستیاب مقدار اور کسی بھی استثنا کو ریکارڈ کرتی ہے۔',
+    hi: 'खरीद मंजूरी से पहले उपलब्ध मात्रा और किसी भी अपवाद को दर्ज करता है।',
+  );
+  static const notArrangedYet = TranslatableString(
+    en: 'Not arranged yet',
+    ar: 'لم يتم الترتيب بعد',
+    ur: 'ابھی ترتیب نہیں دیا گیا',
+    hi: 'अभी व्यवस्थित नहीं किया गया',
+  );
+  static const arrangementPendingDescription = TranslatableString(
+    en: 'Procurement will choose the source, arrange available quantities and identify any item that cannot be provided.',
+    ar: 'ستختار المشتريات المصدر وترتب الكميات المتاحة وتحدد أي بند لا يمكن توفيره.',
+    ur: 'پروکیورمنٹ ذریعہ منتخب کرے گی، دستیاب مقدار ترتیب دے گی اور ناقابل فراہمی آئٹمز واضح کرے گی۔',
+    hi: 'खरीद स्रोत चुनेगा, उपलब्ध मात्रा व्यवस्थित करेगा और अनुपलब्ध वस्तुओं को स्पष्ट करेगा।',
+  );
+  static const arrangementUnavailable = TranslatableString(
+    en: 'Arrangement details are unavailable',
+    ar: 'تفاصيل الترتيب غير متاحة',
+    ur: 'ترتیب کی تفصیلات دستیاب نہیں ہیں',
+    hi: 'व्यवस्था विवरण उपलब्ध नहीं है',
+  );
+  static const arrangementUnavailableDescription = TranslatableString(
+    en: 'Refresh when connected to load the latest authorised arrangement.',
+    ar: 'قم بالتحديث أثناء الاتصال لتحميل أحدث ترتيب مخوّل.',
+    ur: 'تازہ مجاز ترتیب لوڈ کرنے کے لیے کنکشن کے ساتھ ریفریش کریں۔',
+    hi: 'नवीनतम अधिकृत व्यवस्था लोड करने के लिए कनेक्ट होने पर रीफ्रेश करें।',
+  );
+  static const dispatchDescription = TranslatableString(
+    en: 'Dispatch and site receipt remain part of this same material request.',
+    ar: 'يبقى الإرسال واستلام الموقع جزءًا من طلب المواد نفسه.',
+    ur: 'ڈسپیچ اور سائٹ وصولی اسی میٹیریل ریکویسٹ کا حصہ رہتے ہیں۔',
+    hi: 'डिस्पैच और साइट प्राप्ति इसी सामग्री अनुरोध का हिस्सा रहते हैं।',
+  );
+  static const noDispatchYet = TranslatableString(
+    en: 'No dispatch yet',
+    ar: 'لا يوجد إرسال بعد',
+    ur: 'ابھی کوئی ڈسپیچ نہیں',
+    hi: 'अभी कोई डिस्पैच नहीं',
+  );
+  static const dispatchPendingDescription = TranslatableString(
+    en: 'Procurement can dispatch after a Project Engineer approves the arrangement.',
+    ar: 'يمكن للمشتريات الإرسال بعد موافقة مهندس المشروع على الترتيب.',
+    ur: 'پروکیورمنٹ پراجیکٹ انجینئر کی منظوری کے بعد ڈسپیچ کر سکتی ہے۔',
+    hi: 'प्रोजेक्ट इंजीनियर के व्यवस्था अनुमोदन के बाद खरीद डिस्पैच कर सकता है।',
+  );
+  static const dispatchReadyDescription = TranslatableString(
+    en: 'Approved quantities can now be prepared for controlled dispatch.',
+    ar: 'يمكن الآن تجهيز الكميات المعتمدة للإرسال المتحكم به.',
+    ur: 'منظور شدہ مقدار اب کنٹرولڈ ڈسپیچ کے لیے تیار کی جا سکتی ہے۔',
+    hi: 'स्वीकृत मात्रा अब नियंत्रित डिस्पैच के लिए तैयार की जा सकती है।',
+  );
+  static const returnsDescription = TranslatableString(
+    en: 'Delivery Orders and material returns are linked to the original request.',
+    ar: 'ترتبط أوامر التسليم ومرتجعات المواد بالطلب الأصلي.',
+    ur: 'ڈیلیوری آرڈرز اور میٹیریل ریٹرنز اصل درخواست سے منسلک ہیں۔',
+    hi: 'डिलीवरी ऑर्डर और सामग्री रिटर्न मूल अनुरोध से जुड़े हैं।',
+  );
+  static const noReturnedMaterial = TranslatableString(
+    en: 'No returned material',
+    ar: 'لا توجد مواد مرتجعة',
+    ur: 'کوئی واپس شدہ میٹیریل نہیں',
+    hi: 'कोई लौटाई गई सामग्री नहीं',
+  );
+  static const returnAfterReceipt = TranslatableString(
+    en: 'An eligible received item can be returned from this request when it is no longer required.',
+    ar: 'يمكن إرجاع بند مستلم مؤهل من هذا الطلب عند عدم الحاجة إليه.',
+    ur: 'جب وصول شدہ میٹیریل کی ضرورت نہ رہے تو اسے اس درخواست سے واپس کیا جا سکتا ہے۔',
+    hi: 'जब प्राप्त वस्तु की आवश्यकता न हो तो इसे इस अनुरोध से लौटाया जा सकता है।',
+  );
+  static const item = TranslatableString(
+    en: 'Item',
+    ar: 'البند',
+    ur: 'آئٹم',
+    hi: 'आइटम',
+  );
+  static const warehouse = TranslatableString(
+    en: 'Warehouse',
+    ar: 'المستودع',
+    ur: 'گودام',
+    hi: 'गोदाम',
+  );
+  static const externalSupplier = TranslatableString(
+    en: 'External supplier',
+    ar: 'مورد خارجي',
+    ur: 'بیرونی سپلائر',
+    hi: 'बाहरी आपूर्तिकर्ता',
   );
 }
 

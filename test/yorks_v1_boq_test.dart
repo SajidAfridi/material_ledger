@@ -362,6 +362,31 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('commits a desktop cell only after blur or Enter', (
+      tester,
+    ) async {
+      final updates = <String>[];
+      await tester.binding.setSurfaceSize(const Size(1200, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _spreadsheetHarness(
+          onUpdateCell: ({required rowId, required columnId, required value}) {
+            updates.add('$rowId:$columnId:$value');
+          },
+        ),
+      );
+
+      final cell = find.byKey(const ValueKey('boq-cell-$_rowId-$_columnId'));
+      await tester.tap(cell);
+      await tester.enterText(cell, 'Edited smoke damper');
+      await tester.pump();
+      expect(updates, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('boq-column-$_columnId')));
+      await tester.pump();
+      expect(updates, ['$_rowId:$_columnId:Edited smoke damper']);
+    });
   });
 }
 
@@ -407,6 +432,12 @@ YorksV1BoqWorksheet _worksheet() {
 Widget _spreadsheetHarness({
   YorksV1BoqWorksheet? worksheet,
   Size size = const Size(1200, 700),
+  void Function({
+    required String rowId,
+    required String columnId,
+    required String value,
+  })?
+  onUpdateCell,
 }) {
   final effective = worksheet ?? _worksheet();
   return MaterialApp(
@@ -419,6 +450,7 @@ Widget _spreadsheetHarness({
           worksheet: effective,
           editable: true,
           onUpdateCell:
+              onUpdateCell ??
               ({required rowId, required columnId, required value}) {},
           onAddBlankRow: ({afterRowId}) => effective.rows.first,
           onAddSimilarRow: ({required sourceRowId}) => effective.rows.first,

@@ -1034,11 +1034,10 @@ class _EspRows extends StatelessWidget {
     bool enabled = true,
   }) => SizedBox(
     width: 100,
-    child: TextFormField(
-      key: ValueKey('${row.id}-$key-$initial'),
-      initialValue: initial,
+    child: _EspEditableField(
+      key: ValueKey('${row.id}-$key'),
+      value: initial,
       enabled: enabled,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: const InputDecoration(
         isDense: true,
         border: OutlineInputBorder(),
@@ -1171,16 +1170,74 @@ class _EspMobileRow extends StatelessWidget {
     String value,
     ValueChanged<String> changed, {
     bool enabled = true,
-  }) => TextFormField(
-    key: ValueKey('${row.id}-$label-$value'),
-    initialValue: value,
+  }) => _EspEditableField(
+    key: ValueKey('${row.id}-$label'),
+    value: value,
     enabled: enabled,
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
     decoration: InputDecoration(
       labelText: label,
       border: const OutlineInputBorder(),
     ),
     onChanged: changed,
+  );
+}
+
+/// A row editor must keep its identity while the parent recalculates totals.
+/// Re-keying a TextFormField with its current value recreates its editable
+/// state on every keystroke, which drops focus and makes typing appear to jump
+/// between fields. This small stateful wrapper keeps the controller stable and
+/// still accepts external values when a saved/imported row is reopened.
+class _EspEditableField extends StatefulWidget {
+  const _EspEditableField({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.decoration,
+    this.enabled = true,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+  final InputDecoration decoration;
+  final bool enabled;
+
+  @override
+  State<_EspEditableField> createState() => _EspEditableFieldState();
+}
+
+class _EspEditableFieldState extends State<_EspEditableField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _EspEditableField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+    controller: _controller,
+    enabled: widget.enabled,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    decoration: widget.decoration,
+    onChanged: widget.onChanged,
   );
 }
 

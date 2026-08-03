@@ -127,216 +127,488 @@ class YorksV1MaterialRequestDocumentService {
   String suggestedDraftExcelName(YorksV1MaterialRequestDraft draft) =>
       'Material_Request_Draft_${_safeName(draft.id)}.xlsx';
 
-  Future<void> printPdf(YorksV1MaterialRequest request) =>
-      Printing.layoutPdf(onLayout: (_) => buildPdf(request, PdfPageFormat.a4));
+  static const double _mm = PdfPageFormat.mm;
+  static final PdfColor _documentInk = PdfColor.fromHex('#111111');
+  static final PdfColor _documentGrid = PdfColor.fromHex('#222222');
+  static final PdfColor _headerFill = PdfColor.fromHex('#E8E8E8');
+  static final PdfColor _documentMuted = PdfColor.fromHex('#5C6673');
+
+  /// Print and PDF sharing intentionally use exactly the same A4 bytes.  This
+  /// avoids a browser/printer layout drift and preserves the controlled
+  /// snapshot supplied by the server-authorized request projection.
+  Future<void> printPdf(YorksV1MaterialRequest request) async {
+    final bytes = await buildPdf(request, PdfPageFormat.a4);
+    await Printing.layoutPdf(onLayout: (_) async => bytes);
+  }
+
+  Future<void> sharePdf(YorksV1MaterialRequest request) async {
+    final bytes = await buildPdf(request, PdfPageFormat.a4);
+    await Printing.sharePdf(bytes: bytes, filename: suggestedPdfName(request));
+  }
+
+  String suggestedPdfName(YorksV1MaterialRequest request) =>
+      '${_safeName(request.requestNumber ?? request.projectReference)}_Material_Request.pdf';
 
   Future<Uint8List> buildPdf(
     YorksV1MaterialRequest request,
     PdfPageFormat format,
   ) async {
-    final dateFormat = DateFormat('d MMM yyyy');
+    _validatePdfRequest(request);
     final commercial = request.lines.any((line) => line.unitCost != null);
     final theme = await _buildTheme();
     final logo = await _loadLogo();
-    final document = pw.Document(theme: theme);
+    final document = pw.Document(
+      theme: theme,
+      title:
+          '${request.requestNumber ?? request.projectReference} - Material Request',
+      author: YorksV1MaterialRequestStrings.companyLegalName.primary,
+      creator: 'Yorks Project Management',
+    );
     document.addPage(
       pw.MultiPage(
-        // Material Requests always print as the controlled A4 portrait
-        // document, regardless of the printer's last-used format.
+        // The controlled document is A4 portrait regardless of the printer's
+        // previously selected paper size. [format] remains in the public
+        // signature for backwards-compatible callers.
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 34),
-        header: (_) => _pdfHeader(logo),
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            '${YorksV1MaterialRequestStrings.companyName.primary} · ${request.requestNumber ?? YorksV1MaterialRequestStrings.materialRequestDraft.primary} · ${context.pageNumber}',
-            style: const pw.TextStyle(fontSize: 7),
-          ),
-        ),
+        maxPages: 200,
+        margin: pw.EdgeInsets.fromLTRB(12 * _mm, 9 * _mm, 12 * _mm, 8 * _mm),
+        header: (_) => _formalHeader(logo, request),
+        footer: _pageNumber,
         build: (_) => [
-          pw.SizedBox(height: 18),
-          pw.Text(
-            YorksV1MaterialRequestStrings.materialRequest.primary,
-            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 12),
-          pw.Wrap(
-            spacing: 18,
-            runSpacing: 6,
-            children: [
-              _meta(
-                YorksV1MaterialRequestStrings.project.primary,
-                '${request.projectReference} · ${request.projectName}',
-              ),
-              _meta(
-                YorksV1MaterialRequestStrings.scope.primary,
-                request.scopeName,
-              ),
-              _meta(
-                YorksV1MaterialRequestStrings.timing.primary,
-                yorksV1MaterialRequestTimingCopy(request.timing).primary,
-              ),
-              if (request.scheduledDate != null)
-                _meta(
-                  YorksV1MaterialRequestStrings.scheduledDate.primary,
-                  dateFormat.format(request.scheduledDate!),
-                ),
-              _meta(
-                YorksV1MaterialRequestStrings.state.primary,
-                yorksV1MaterialRequestStateCopy(request.state).primary,
-              ),
-              if (request.requesterDisplayName != null)
-                _meta(
-                  YorksV1MaterialRequestStrings.requester.primary,
-                  request.requesterDisplayName!,
-                ),
-              if (request.currentActionOwnerRole != null)
-                _meta(
-                  YorksV1MaterialRequestStrings.currentOwner.primary,
-                  request.currentActionOwnerRole!,
-                ),
-            ],
-          ),
-          if (request.title != null) ...[
-            pw.SizedBox(height: 12),
-            pw.Text(request.title!, style: const pw.TextStyle(fontSize: 11)),
-          ],
-          pw.SizedBox(height: 18),
-          pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColor.fromInt(0xFFE7EEF9),
-            ),
-            cellStyle: const pw.TextStyle(fontSize: 8.5),
-            headers: [
-              YorksV1MaterialRequestStrings.rowNumber.primary,
-              YorksV1MaterialRequestStrings.itemDescription.primary,
-              YorksV1MaterialRequestStrings.brandOrigin.primary,
-              YorksV1MaterialRequestStrings.quantity.primary,
-              YorksV1MaterialRequestStrings.unit.primary,
-              if (commercial) YorksV1MaterialRequestStrings.unitCost.primary,
-              if (commercial) YorksV1MaterialRequestStrings.totalCost.primary,
-            ],
-            data: [
-              for (var index = 0; index < request.lines.length; index++)
-                [
-                  (index + 1).toString(),
-                  _displayDescription(request.lines[index]),
-                  request.lines[index].brandOrigin ?? '',
-                  request.lines[index].quantity,
-                  request.lines[index].unit,
-                  if (commercial) request.lines[index].unitCost ?? '',
-                  if (commercial)
-                    _calculatedTotal(request.lines[index]) ??
-                        request.lines[index].totalCost ??
-                        '',
-                ],
-            ],
-          ),
+          _materialTable(request, commercial: commercial),
           if (request.deliveryNote != null) ...[
-            pw.SizedBox(height: 16),
+            pw.SizedBox(height: 4 * _mm),
             pw.Text(
               YorksV1MaterialRequestStrings.deliveryNoteLabel.primary,
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
             ),
-            pw.SizedBox(height: 4),
-            pw.Text(request.deliveryNote!),
+            pw.SizedBox(height: 1 * _mm),
+            pw.Text(
+              request.deliveryNote!,
+              style: const pw.TextStyle(fontSize: 8),
+            ),
           ],
+          // Keep all three approval areas together near the bottom of the
+          // final page without reserving their space on every preceding page.
+          pw.NewPage(freeSpace: 52 * _mm),
+          pw.Spacer(),
+          _approvalClosingBlock(request),
         ],
       ),
     );
-    return document.save();
+    return document.save(enableEventLoopBalancing: true);
   }
 
-  static Future<pw.MemoryImage?> _loadLogo() async {
-    try {
-      final data = await rootBundle.load('assets/logo.png');
-      return pw.MemoryImage(data.buffer.asUint8List());
-    } catch (_) {
-      return null;
-    }
+  static Future<pw.MemoryImage>? _logoFuture;
+  static Future<pw.ThemeData>? _themeFuture;
+
+  static Future<pw.MemoryImage> _loadLogo() =>
+      _logoFuture ??= _loadLogoUncached();
+
+  static Future<pw.MemoryImage> _loadLogoUncached() async {
+    final data = await rootBundle.load('assets/branding/source_emblem.png');
+    return pw.MemoryImage(data.buffer.asUint8List());
   }
 
-  static Future<pw.ThemeData?> _buildTheme() async {
-    try {
-      final base = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
-      );
-      final bold = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
-      );
-      final arabic = pw.Font.ttf(
-        await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
-      );
-      return pw.ThemeData.withFont(
-        base: base,
-        bold: bold,
-        fontFallback: [arabic],
-      );
-    } catch (_) {
-      return null;
-    }
+  static Future<pw.ThemeData> _buildTheme() =>
+      _themeFuture ??= _buildThemeUncached();
+
+  static Future<pw.ThemeData> _buildThemeUncached() async {
+    final base = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+    );
+    final arabic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    );
+    return pw.ThemeData.withFont(
+      base: base,
+      bold: bold,
+      fontFallback: [arabic],
+    );
   }
 
-  static pw.Widget _pdfHeader(pw.MemoryImage? logo) => pw.Container(
-    padding: const pw.EdgeInsets.only(bottom: 8),
-    decoration: const pw.BoxDecoration(
-      border: pw.Border(bottom: pw.BorderSide(width: .7)),
+  static pw.Widget _formalHeader(
+    pw.MemoryImage? logo,
+    YorksV1MaterialRequest request,
+  ) {
+    final requestedBy = [
+      request.requesterDisplayName?.trim(),
+      request.requesterProjectRole?.trim(),
+    ].whereType<String>().where((value) => value.isNotEmpty).join(' · ');
+    final scheduledDate = request.scheduledDate == null
+        ? '—'
+        : DateFormat('dd MMM yyyy').format(request.scheduledDate!.toLocal());
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        _companyHeader(logo),
+        pw.SizedBox(height: 2.5 * _mm),
+        pw.Center(
+          child: pw.Text(
+            'MATERIAL REQUEST FORM',
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+              color: _documentInk,
+            ),
+          ),
+        ),
+        pw.SizedBox(height: 2.6 * _mm),
+        pw.Table(
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1.05),
+            1: pw.FlexColumnWidth(2.35),
+            2: pw.FlexColumnWidth(1.05),
+            3: pw.FlexColumnWidth(2.35),
+          },
+          children: [
+            _metaRow(
+              'Project Name',
+              request.projectName,
+              'Request No.',
+              request.requestNumber ?? request.id,
+            ),
+            _metaRow(
+              'Project Ref. No.',
+              request.projectReference,
+              'Requested By',
+              requestedBy.isEmpty ? '—' : requestedBy,
+            ),
+            _metaRow(
+              'Delivery Type',
+              yorksV1MaterialRequestTimingCopy(request.timing).primary,
+              'Scheduled Date',
+              scheduledDate,
+            ),
+            _metaRow(
+              'Building / Other',
+              request.scopeName,
+              'Project Engineers',
+              '—',
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 3 * _mm),
+      ],
+    );
+  }
+
+  static pw.Widget _companyHeader(pw.MemoryImage? logo) => pw.Container(
+    width: double.infinity,
+    padding: pw.EdgeInsets.symmetric(horizontal: 4.5 * _mm, vertical: 3 * _mm),
+    decoration: pw.BoxDecoration(
+      border: pw.Border.all(color: _documentGrid, width: .8),
     ),
     child: pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
         pw.Expanded(
-          flex: 3,
+          flex: 10,
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
+            mainAxisSize: pw.MainAxisSize.min,
             children: [
               pw.Text(
                 YorksV1MaterialRequestStrings.companyLegalName.primary,
                 style: pw.TextStyle(
-                  fontSize: 9,
+                  fontSize: 10.2,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
+              pw.SizedBox(height: 1.2 * _mm),
               pw.Text(
-                YorksV1MaterialRequestStrings.materialRequest.primary,
-                style: const pw.TextStyle(fontSize: 8),
+                'SINCE 1984',
+                style: pw.TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ],
           ),
         ),
+        pw.SizedBox(width: 3 * _mm),
         pw.SizedBox(
-          width: 56,
+          width: 20 * _mm,
+          height: 20 * _mm,
           child: logo == null
               ? pw.SizedBox()
-              : pw.Center(child: pw.Image(logo, width: 42, height: 42)),
+              : pw.Image(logo, fit: pw.BoxFit.contain),
         ),
+        pw.SizedBox(width: 3 * _mm),
         pw.Expanded(
-          flex: 3,
-          child: pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Text(
-              YorksV1MaterialRequestStrings.companyName.ar,
-              textAlign: pw.TextAlign.right,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
+          flex: 10,
+          child: pw.Text(
+            YorksV1MaterialRequestStrings.companyLegalName.ar,
+            textDirection: pw.TextDirection.rtl,
+            textAlign: pw.TextAlign.right,
+            style: const pw.TextStyle(fontSize: 7.4),
           ),
         ),
       ],
     ),
   );
 
-  static pw.Widget _meta(String label, String value) => pw.RichText(
-    text: pw.TextSpan(
+  static pw.TableRow _metaRow(
+    String leftLabel,
+    String leftValue,
+    String rightLabel,
+    String rightValue,
+  ) => pw.TableRow(
+    verticalAlignment: pw.TableCellVerticalAlignment.top,
+    children: [
+      _metaLabel(leftLabel),
+      _metaValue(leftValue),
+      _metaLabel(rightLabel),
+      _metaValue(rightValue),
+    ],
+  );
+
+  static pw.Widget _metaLabel(String value) => pw.Padding(
+    padding: pw.EdgeInsets.only(right: 1.5 * _mm, bottom: 1.8 * _mm),
+    child: pw.Text(
+      '$value:',
+      style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+    ),
+  );
+
+  static pw.Widget _metaValue(String value) => pw.Padding(
+    padding: pw.EdgeInsets.only(right: 3 * _mm, bottom: 1.8 * _mm),
+    child: pw.Text(
+      value.trim().isEmpty ? '—' : value.trim(),
+      style: const pw.TextStyle(fontSize: 7.4),
+    ),
+  );
+
+  static pw.Widget _materialTable(
+    YorksV1MaterialRequest request, {
+    required bool commercial,
+  }) {
+    final headers = [
+      'R No',
+      'Item Description',
+      'Brand/Origin',
+      'Qty.',
+      'Unit',
+      if (commercial) 'Unit Cost',
+      if (commercial) 'Total Cost',
+    ];
+    final widths = commercial
+        ? const <int, pw.TableColumnWidth>{
+            0: pw.FlexColumnWidth(.55),
+            1: pw.FlexColumnWidth(3.9),
+            2: pw.FlexColumnWidth(1.8),
+            3: pw.FlexColumnWidth(.85),
+            4: pw.FlexColumnWidth(.85),
+            5: pw.FlexColumnWidth(1.35),
+            6: pw.FlexColumnWidth(1.45),
+          }
+        : const <int, pw.TableColumnWidth>{
+            0: pw.FlexColumnWidth(.7),
+            1: pw.FlexColumnWidth(5.1),
+            2: pw.FlexColumnWidth(2.2),
+            3: pw.FlexColumnWidth(1),
+            4: pw.FlexColumnWidth(1),
+          };
+    return pw.Table(
+      border: pw.TableBorder.all(color: _documentGrid, width: .65),
+      columnWidths: widths,
+      defaultVerticalAlignment: pw.TableCellVerticalAlignment.top,
       children: [
-        pw.TextSpan(
-          text: '$label: ',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+        pw.TableRow(
+          repeat: true,
+          decoration: pw.BoxDecoration(color: _headerFill),
+          verticalAlignment: pw.TableCellVerticalAlignment.middle,
+          children: [for (final header in headers) _tableHeader(header)],
         ),
-        pw.TextSpan(text: value, style: const pw.TextStyle(fontSize: 9)),
+        for (var index = 0; index < request.lines.length; index++)
+          _materialRow(request.lines[index], index + 1, commercial: commercial),
+      ],
+    );
+  }
+
+  static pw.TableRow _materialRow(
+    YorksV1MaterialRequestLine line,
+    int number, {
+    required bool commercial,
+  }) => pw.TableRow(
+    children: [
+      _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
+      _descriptionCell(line),
+      _tableCell(line.brandOrigin ?? ''),
+      _tableCell(line.quantity, alignment: pw.Alignment.topRight),
+      _tableCell(line.unit),
+      if (commercial)
+        _tableCell(line.unitCost ?? '', alignment: pw.Alignment.topRight),
+      if (commercial)
+        _tableCell(
+          _calculatedTotal(line) ?? line.totalCost ?? '',
+          alignment: pw.Alignment.topRight,
+        ),
+    ],
+  );
+
+  static pw.Widget _tableHeader(String value) => pw.Padding(
+    padding: pw.EdgeInsets.symmetric(
+      horizontal: 1.2 * _mm,
+      vertical: 2.2 * _mm,
+    ),
+    child: pw.Text(
+      value,
+      style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold),
+    ),
+  );
+
+  static pw.Widget _tableCell(
+    String value, {
+    bool bold = false,
+    pw.Alignment alignment = pw.Alignment.topLeft,
+  }) => pw.Container(
+    alignment: alignment,
+    padding: pw.EdgeInsets.symmetric(
+      horizontal: 1.2 * _mm,
+      vertical: 2.1 * _mm,
+    ),
+    child: pw.Text(
+      value,
+      style: pw.TextStyle(
+        fontSize: 7.1,
+        fontWeight: bold ? pw.FontWeight.bold : null,
+      ),
+    ),
+  );
+
+  static pw.Widget _descriptionCell(YorksV1MaterialRequestLine line) {
+    final details = <String>[
+      if (line.size?.trim().isNotEmpty ?? false) 'Size: ${line.size!.trim()}',
+      if (line.planningModelTag?.trim().isNotEmpty ?? false)
+        'Model/Serial: ${line.planningModelTag!.trim()}',
+    ];
+    return pw.Padding(
+      padding: pw.EdgeInsets.symmetric(
+        horizontal: 1.2 * _mm,
+        vertical: 2 * _mm,
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.Text(line.description, style: const pw.TextStyle(fontSize: 7.2)),
+          if (details.isNotEmpty) ...[
+            pw.SizedBox(height: .5 * _mm),
+            pw.Text(
+              details.join(' · '),
+              style: pw.TextStyle(fontSize: 6.4, color: _documentMuted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _approvalClosingBlock(YorksV1MaterialRequest request) =>
+      pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.Table(
+            border: pw.TableBorder.all(color: _documentGrid, width: .65),
+            children: [
+              pw.TableRow(
+                children: [
+                  _approvalCell(
+                    'Requested by (Site / Project Engineer)',
+                    request.requesterDisplayName ?? '',
+                    request.requesterProjectRole ?? '',
+                    request.submittedAt ?? request.createdAt,
+                  ),
+                  _approvalCell('Approved by (Project Engineer)', '', '', null),
+                  _approvalCell(
+                    'Ordered / Dispatched by (Procurement)',
+                    '',
+                    '',
+                    null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 2 * _mm),
+          _companyContact(),
+        ],
+      );
+
+  static pw.Widget _approvalCell(
+    String title,
+    String name,
+    String detail,
+    DateTime? date,
+  ) => pw.Container(
+    height: 31 * _mm,
+    padding: pw.EdgeInsets.all(2.5 * _mm),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 3.7 * _mm),
+        _approvalText('Name', name),
+        pw.SizedBox(height: 2.4 * _mm),
+        _approvalText(detail.isEmpty ? 'Reference' : 'Role', detail),
+        pw.SizedBox(height: 2.4 * _mm),
+        _approvalText(
+          'Date',
+          date == null
+              ? ''
+              : DateFormat('dd MMM yyyy, hh:mm a').format(date.toLocal()),
+        ),
       ],
     ),
   );
+
+  static pw.Widget _approvalText(String label, String value) =>
+      pw.Text('$label: $value', style: const pw.TextStyle(fontSize: 6.6));
+
+  static pw.Widget _companyContact() => pw.Container(
+    width: double.infinity,
+    padding: pw.EdgeInsets.only(top: 1.5 * _mm),
+    decoration: pw.BoxDecoration(
+      border: pw.Border(top: pw.BorderSide(color: _documentGrid, width: .45)),
+    ),
+    child: pw.Text(
+      'Tel.: 02-5509788 · Fax: 02-5509688 · P.O. Box: 4757 · Abu Dhabi · United Arab Emirates · yorks_sk@yorks.ae',
+      textAlign: pw.TextAlign.center,
+      style: const pw.TextStyle(fontSize: 6.2),
+    ),
+  );
+
+  static pw.Widget _pageNumber(pw.Context context) => pw.Align(
+    alignment: pw.Alignment.centerRight,
+    child: pw.Text(
+      'Page ${context.pageNumber} of ${context.pagesCount}',
+      style: pw.TextStyle(fontSize: 6.2, color: _documentMuted),
+    ),
+  );
+
+  static void _validatePdfRequest(YorksV1MaterialRequest request) {
+    if (request.lines.isEmpty) {
+      throw StateError('The Material Request has no material lines.');
+    }
+    for (var index = 0; index < request.lines.length; index++) {
+      final line = request.lines[index];
+      if (line.description.trim().isEmpty ||
+          line.unit.trim().isEmpty ||
+          double.tryParse(line.quantity.trim()) == null ||
+          double.parse(line.quantity.trim()) <= 0) {
+        throw StateError(
+          'Material Request row ${index + 1} has incomplete controlled values.',
+        );
+      }
+    }
+  }
 
   static String _displayDescription(YorksV1MaterialRequestLine line) {
     final details = <String>[
