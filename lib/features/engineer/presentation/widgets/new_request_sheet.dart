@@ -291,7 +291,7 @@ class _PrioritySelector extends StatelessWidget {
               onTap: () => onChanged(p),
               borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: Duration.zero,
                 curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md,

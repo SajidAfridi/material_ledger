@@ -344,65 +344,50 @@ class _BottomBarItem extends StatefulWidget {
 }
 
 class _BottomBarItemState extends State<_BottomBarItem> {
-  bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     final isActive = widget.isActive;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      // Press dip-and-pop — same feel as the hero +; the tab stays in place.
-      child: AnimatedScale(
-        scale: _pressed ? 0.86 : 1.0,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutBack,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // ─── Icon with optional indicator pill ──────────
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(
-                horizontal: isActive ? AppSpacing.lg : 0,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.onPrimary.withValues(alpha: 0.18)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-              ),
-              child: Icon(
-                isActive ? item.activeIcon : item.icon,
-                size: 22,
-                color: isActive
-                    ? AppColors.onPrimary
-                    : AppColors.onPrimary.withValues(alpha: 0.7),
-              ),
+      onTap: widget.onTap,
+      // Yorks uses a stable, immediate navigation affordance.
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // ─── Icon with optional indicator pill ──────────
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isActive ? AppSpacing.lg : 0,
+              vertical: AppSpacing.xs,
             ),
-            const SizedBox(height: AppSpacing.xxs),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive
-                    ? AppColors.onPrimary
-                    : AppColors.onPrimary.withValues(alpha: 0.75),
-                letterSpacing: 0.2,
-              ),
-              child: Text(item.translatable.primary),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.onPrimary.withValues(alpha: 0.18)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
             ),
-          ],
-        ),
+            child: Icon(
+              isActive ? item.activeIcon : item.icon,
+              size: 22,
+              color: isActive
+                  ? AppColors.onPrimary
+                  : AppColors.onPrimary.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          DefaultTextStyle(
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              color: isActive
+                  ? AppColors.onPrimary
+                  : AppColors.onPrimary.withValues(alpha: 0.75),
+              letterSpacing: 0.2,
+            ),
+            child: Text(item.translatable.primary),
+          ),
+        ],
       ),
     );
   }
@@ -410,71 +395,53 @@ class _BottomBarItemState extends State<_BottomBarItem> {
 
 // ─── Centred, popped-out "New Request" button (docked in the bottom bar) ──
 
-class _CenterAddButton extends StatefulWidget {
+class _CenterAddButton extends StatelessWidget {
   const _CenterAddButton({required this.onTap, required this.isActive});
 
   final VoidCallback onTap;
   final bool isActive;
 
   @override
-  State<_CenterAddButton> createState() => _CenterAddButtonState();
-}
-
-class _CenterAddButtonState extends State<_CenterAddButton> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       // Opaque + the full 72px square is the hit area → easy to tap.
       behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      child: AnimatedScale(
-        // Press dips it, release springs it back past 1.0 — an elegant pop.
-        scale: _pressed ? 0.86 : 1.0,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutBack,
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            // Top-lit → bottom-shaded gradient gives the disc a 3D sphere look.
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.primaryContainer,
-                AppColors.primary,
-                AppColors.onPrimaryFixed,
-              ],
-              stops: [0.0, 0.55, 1.0],
-            ),
-            border: Border.all(color: AppColors.surface, width: 4),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.45),
-                blurRadius: 18,
-                spreadRadius: 1,
-                offset: const Offset(0, 8),
-              ),
-              BoxShadow(
-                color: AppColors.scrim.withValues(alpha: 0.22),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
+      onTap: onTap,
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          // Top-lit → bottom-shaded gradient gives the disc a 3D sphere look.
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.primaryContainer,
+              AppColors.primary,
+              AppColors.onPrimaryFixed,
             ],
+            stops: [0.0, 0.55, 1.0],
           ),
-          child: Icon(
-            Icons.add_rounded,
-            size: widget.isActive ? 36 : 34,
-            color: AppColors.onPrimary,
-          ),
+          border: Border.all(color: AppColors.surface, width: 4),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.45),
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: AppColors.scrim.withValues(alpha: 0.22),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Icon(
+          Icons.add_rounded,
+          size: isActive ? 36 : 34,
+          color: AppColors.onPrimary,
         ),
       ),
     );
@@ -669,9 +636,7 @@ class _RailItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
+          child: Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.md,
@@ -763,9 +728,7 @@ class _RailItem extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOutCubic,
+                Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: isActive ? AppSpacing.lg : AppSpacing.sm,
                     vertical: AppSpacing.xxs,

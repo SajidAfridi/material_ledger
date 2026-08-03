@@ -1413,7 +1413,7 @@ class _RoleChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
+          duration: Duration.zero,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
             vertical: AppSpacing.sm,

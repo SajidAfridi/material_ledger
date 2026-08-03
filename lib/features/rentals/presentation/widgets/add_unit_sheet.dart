@@ -126,7 +126,9 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
         detail: '${updated.unitName} · ${updated.status.label}',
       );
     } else {
-      final unit = await ref.read(rentalUnitsProvider.notifier).addUnit(
+      final unit = await ref
+          .read(rentalUnitsProvider.notifier)
+          .addUnit(
             unitName: name,
             type: _type,
             location: location,
@@ -281,9 +283,10 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
                                 controller: _depositController,
                                 label: 'Security deposit AED',
                                 hintText: AppStrings.optional.primary,
-                                keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 validator: (v) {
                                   final t = (v ?? '').trim();
                                   if (t.isEmpty) return null;
@@ -301,9 +304,10 @@ class _AddUnitSheetState extends ConsumerState<AddUnitSheet> {
                                 controller: _vatRateController,
                                 label: 'VAT rate %',
                                 hintText: '5',
-                                keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 validator: (v) {
                                   final t = (v ?? '').trim();
                                   if (t.isEmpty) return null;
@@ -506,7 +510,7 @@ class _Chip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: Duration.zero,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,

@@ -34,8 +34,17 @@ const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 /// self-hosted) instance explicitly:
 ///   --dart-define=SUPABASE_URL=https://your-uae-instance
 ///   --dart-define=SUPABASE_ANON_KEY=…
-const _envSupabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const _envSupabaseKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+// Yorks production demo defaults.  Build-time defines still override these
+// values for CI, staging or another Supabase project, but normal `flutter run`
+// and release builds no longer need a long command line.
+const _envSupabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://czykuksmlwswjsgotrpo.supabase.co',
+);
+const _envSupabaseKey = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: 'sb_publishable_10ZCSxRXuNhS6x-hYOudpg_hMK3VtY6',
+);
 const _allowLocalDevelopment = bool.fromEnvironment('ALLOW_LOCAL_DEVELOPMENT');
 const _localDemoPassword = String.fromEnvironment('LOCAL_DEMO_PASSWORD');
 

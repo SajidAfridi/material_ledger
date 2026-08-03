@@ -69,16 +69,9 @@ class SyncStatusBanner extends ConsumerWidget {
         );
     }
 
-    // Smoothly grow/shrink as the state changes so it never jumps the layout.
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        child: bar,
-      ),
-    );
+    // Status is operational feedback; it should appear/disappear immediately
+    // so it never delays the workspace or suggests an uncommitted transition.
+    return bar;
   }
 
   static String _n(int count) => count == 1 ? '1 change' : '$count changes';
@@ -136,7 +129,11 @@ class _Bar extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.refresh_rounded, size: 15, color: foreground),
+                        Icon(
+                          Icons.refresh_rounded,
+                          size: 15,
+                          color: foreground,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           action!,

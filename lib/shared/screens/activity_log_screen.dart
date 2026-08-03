@@ -95,7 +95,9 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                     hintText: AppStrings.searchAudit.primary,
                     prefixIcon: const Icon(Icons.search_rounded, size: 20),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusFull,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -181,9 +183,9 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     }
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.auditCopied.primary)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(AppStrings.auditCopied.primary)));
   }
 }
 
@@ -288,7 +290,10 @@ class _AuditTile extends StatelessWidget {
 
   (IconData, Color) _moduleStyle(AuditModule module) => switch (module) {
     AuditModule.materials => (Icons.inventory_2_outlined, AppColors.primary),
-    AuditModule.rentals => (Icons.store_mall_directory_outlined, AppColors.tertiary),
+    AuditModule.rentals => (
+      Icons.store_mall_directory_outlined,
+      AppColors.tertiary,
+    ),
     AuditModule.people => (Icons.groups_outlined, AppColors.success),
     AuditModule.leave => (Icons.event_busy_outlined, AppColors.warning),
     AuditModule.platform => (Icons.shield_outlined, AppColors.onSurfaceVariant),
@@ -321,7 +326,7 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: Duration.zero,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,

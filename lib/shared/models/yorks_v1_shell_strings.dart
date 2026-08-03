@@ -173,6 +173,18 @@ abstract final class YorksV1ShellStrings {
     ur: 'فوری نیویگیشن',
     hi: 'त्वरित नेविगेशन',
   );
+  static const collapsePanel = TranslatableString(
+    en: 'Collapse panel',
+    ar: 'طي اللوحة',
+    ur: 'پینل سکیڑیں',
+    hi: 'पैनल संक्षिप्त करें',
+  );
+  static const expandPanel = TranslatableString(
+    en: 'Expand panel',
+    ar: 'توسيع اللوحة',
+    ur: 'پینل پھیلائیں',
+    hi: 'पैनल विस्तृत करें',
+  );
   static const searchWorkspace = TranslatableString(
     en: 'Search workspace',
     ar: 'البحث في مساحة العمل',

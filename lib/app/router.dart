@@ -193,6 +193,7 @@ abstract final class RoutePaths {
       queryParameters: {'project_id': trimmed},
     ).toString();
   }
+
   static String yorksV1MaterialRequestArrangementPath(String requestId) =>
       '/yorks/material-requests/$requestId/arrangement';
   static String yorksV1MaterialRequestLogisticsPath(String requestId) =>
@@ -242,31 +243,14 @@ abstract final class RoutePaths {
 }
 
 // ─── Page transition helpers (keep route definitions terse) ──────────
-Page<void> _fade(LocalKey key, Widget child, {int ms = 300}) =>
-    CustomTransitionPage<void>(
-      key: key,
-      child: child,
-      transitionsBuilder: (context, animation, _, c) =>
-          FadeTransition(opacity: animation, child: c),
-      transitionDuration: Duration(milliseconds: ms),
-    );
+Page<void> _fade(LocalKey key, Widget child, {int ms = 0}) =>
+    NoTransitionPage<void>(key: key, child: child);
 
 Page<void> _slide(
   LocalKey key,
   Widget child, {
   Offset begin = const Offset(1, 0),
-}) => CustomTransitionPage<void>(
-  key: key,
-  child: child,
-  transitionsBuilder: (context, animation, _, c) => SlideTransition(
-    position: Tween(
-      begin: begin,
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-    child: c,
-  ),
-  transitionDuration: const Duration(milliseconds: 300),
-);
+}) => NoTransitionPage<void>(key: key, child: child);
 
 /// V1 record routes retain their feature-local scaffold and controllers while
 /// sharing the approved R35 Yorks navigation chrome. The wrapper is deliberately
@@ -421,8 +405,9 @@ GoRouter createAppRouter({
   RolePermissions Function()? rolePermissions,
   Listenable? refreshListenable,
 }) {
-  // Engineers keep their original mobile shell; office roles use the new hub
-  // shell. The router is rebuilt whenever the role changes.
+  // Retained engineers keep their original shell. Once the normalized Yorks
+  // rollout is active, engineers use the same R35 workspace shell as the
+  // connected project routes so the desktop rail does not disappear at Home.
   final useEngineerShell = !role.usesAdminPanel;
   return GoRouter(
     initialLocation: RoutePaths.splash,
@@ -590,7 +575,9 @@ GoRouter createAppRouter({
         // typed input survives tab switches (IndexedStack keeps branches alive).
         StatefulShellRoute.indexedStack(
           builder: (context, state, navigationShell) =>
-              EngineerShellScreen(navigationShell: navigationShell),
+              yorksV1ProjectsEnabled && yorksV1Role != null
+              ? YorksV1WorkspaceShell(child: navigationShell)
+              : EngineerShellScreen(navigationShell: navigationShell),
           branches: [
             StatefulShellBranch(
               routes: [
@@ -773,13 +760,12 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequests,
-        pageBuilder: (context, state) =>
-            _yorksV1Slide(
-              state.pageKey,
-              YorksV1MaterialRequestsScreen(
-                projectId: state.uri.queryParameters['project_id'],
-              ),
-            ),
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1MaterialRequestsScreen(
+            projectId: state.uri.queryParameters['project_id'],
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MaterialRequestDraft,

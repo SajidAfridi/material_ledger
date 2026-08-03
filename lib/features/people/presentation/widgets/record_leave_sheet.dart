@@ -167,8 +167,10 @@ class _RecordLeaveSheetState extends ConsumerState<RecordLeaveSheet> {
                       sickLeaveTierProvider((widget.employee.id, _days)),
                     );
                     final parts = [
-                      if (split.fullPayDays > 0) '${split.fullPayDays}d full pay',
-                      if (split.halfPayDays > 0) '${split.halfPayDays}d half pay',
+                      if (split.fullPayDays > 0)
+                        '${split.fullPayDays}d full pay',
+                      if (split.halfPayDays > 0)
+                        '${split.halfPayDays}d half pay',
                       if (split.unpaidDays > 0) '${split.unpaidDays}d unpaid',
                     ];
                     if (parts.isEmpty) return const SizedBox.shrink();
@@ -178,8 +180,12 @@ class _RecordLeaveSheetState extends ConsumerState<RecordLeaveSheet> {
                         vertical: AppSpacing.sm,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryContainer.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                        color: AppColors.primaryContainer.withValues(
+                          alpha: 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
                       ),
                       child: Text(
                         'UAE sick-leave pay tiers: ${parts.join(' · ')}'
@@ -227,7 +233,7 @@ class _Chip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: Duration.zero,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,

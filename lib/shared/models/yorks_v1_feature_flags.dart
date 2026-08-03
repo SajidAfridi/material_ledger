@@ -29,17 +29,36 @@ class YorksV1FeatureFlags {
        _documents = documents;
 
   const YorksV1FeatureFlags.fromEnvironment()
-    : _foundation = const bool.fromEnvironment('YORKS_V1_FOUNDATION'),
-      _projects = const bool.fromEnvironment('YORKS_V1_PROJECTS'),
-      _boq = const bool.fromEnvironment('YORKS_V1_BOQ'),
-      _excel = const bool.fromEnvironment('YORKS_V1_EXCEL'),
-      _requests = const bool.fromEnvironment('YORKS_V1_REQUESTS'),
-      _arrangement = const bool.fromEnvironment('YORKS_V1_ARRANGEMENT'),
-      _logistics = const bool.fromEnvironment('YORKS_V1_LOGISTICS'),
+    : _foundation = const bool.fromEnvironment(
+        'YORKS_V1_FOUNDATION',
+        defaultValue: true,
+      ),
+      _projects = const bool.fromEnvironment(
+        'YORKS_V1_PROJECTS',
+        defaultValue: true,
+      ),
+      _boq = const bool.fromEnvironment('YORKS_V1_BOQ', defaultValue: true),
+      _excel = const bool.fromEnvironment('YORKS_V1_EXCEL', defaultValue: true),
+      _requests = const bool.fromEnvironment(
+        'YORKS_V1_REQUESTS',
+        defaultValue: true,
+      ),
+      _arrangement = const bool.fromEnvironment(
+        'YORKS_V1_ARRANGEMENT',
+        defaultValue: true,
+      ),
+      _logistics = const bool.fromEnvironment(
+        'YORKS_V1_LOGISTICS',
+        defaultValue: true,
+      ),
       _returnsDocuments = const bool.fromEnvironment(
         'YORKS_V1_RETURNS_DOCUMENTS',
+        defaultValue: true,
       ),
-      _documents = const bool.fromEnvironment('YORKS_V1_DOCUMENTS');
+      _documents = const bool.fromEnvironment(
+        'YORKS_V1_DOCUMENTS',
+        defaultValue: true,
+      );
 
   final bool _foundation;
   final bool _projects;

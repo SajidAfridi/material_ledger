@@ -90,7 +90,7 @@ class LanguagePickerSheet extends StatelessWidget {
                   onTap: () => onSelected(lang),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                    duration: Duration.zero,
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xl,
                       vertical: AppSpacing.lg,

@@ -19,6 +19,8 @@ import 'package:material_ledger/shared/providers/project_creation_draft_provider
 import 'package:material_ledger/shared/providers/project_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/users_provider.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/services/observability_service.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:material_ledger/shared/sync/outbox.dart';
@@ -57,6 +59,11 @@ void main() {
         localDemoPasswordProvider.overrideWithValue(_password),
         nexusFeatureFlagsProvider.overrideWithValue(
           NexusFeatureFlags(projects: projectsEnabled),
+        ),
+        // This file intentionally exercises the retained V7/legacy project
+        // flow; the Yorks V1 flow is covered by its own widget tests.
+        yorksV1FeatureFlagsProvider.overrideWithValue(
+          const YorksV1FeatureFlags(),
         ),
         observabilityProvider.overrideWithValue(const NoopObservability()),
         syncEngineProvider.overrideWith((ref) {

@@ -40,6 +40,7 @@ abstract final class AppSpacing {
   static const double minTapTarget = 44;
 
   static const double compactBreakpoint = 720;
+
   /// Effective R35 desktop boundary. Yorks V1 office routes retain a full
   /// navigation/worksheet layout from this width upward; narrower layouts
   /// switch to the focused tablet/mobile presentation.
@@ -49,5 +50,6 @@ abstract final class AppSpacing {
   static const double pageMaxWidth = 1740;
   static const double inspectorWidth = 330;
   static const double sidebarWidth = 246;
+  static const double sidebarCollapsedWidth = 84;
   static const double topBarHeight = 64;
 }

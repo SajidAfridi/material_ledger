@@ -83,6 +83,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('desktop sidebar contracts immediately and can be reopened', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1366, 768));
+    addTearDown(() => _resetViewport(tester));
+
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      _ShellTestApp(role: YorksV1Role.procurement, preferences: preferences),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byTooltip(YorksV1ShellStrings.collapsePanel.primary),
+      findsOneWidget,
+    );
+    expect(
+      find.text(YorksV1ShellStrings.browseInventory.primary),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip(YorksV1ShellStrings.collapsePanel.primary));
+    await tester.pump();
+
+    expect(
+      find.byTooltip(YorksV1ShellStrings.expandPanel.primary),
+      findsOneWidget,
+    );
+    expect(
+      find.text(YorksV1ShellStrings.browseInventory.primary),
+      findsNothing,
+    );
+
+    await tester.tap(find.byTooltip(YorksV1ShellStrings.expandPanel.primary));
+    await tester.pump();
+    expect(
+      find.text(YorksV1ShellStrings.browseInventory.primary),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Yorks R35 sign-in remains usable at mobile and desktop widths', (
     tester,
   ) async {

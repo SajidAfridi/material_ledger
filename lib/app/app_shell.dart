@@ -287,73 +287,59 @@ class _BottomBarItem extends StatefulWidget {
 }
 
 class _BottomBarItemState extends State<_BottomBarItem> {
-  bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
     final destination = widget.destination;
     final isActive = widget.isActive;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.onTap();
-      },
-      // Press dip-and-pop — same feel as the hero +; the tab stays in place.
-      child: AnimatedScale(
-        scale: _pressed ? 0.86 : 1.0,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutBack,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(
-                horizontal: isActive ? AppSpacing.lg : 0,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.primaryFixed.withValues(alpha: 0.55)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                // The active pill lifts off the bar with a soft tinted shadow.
-                boxShadow: isActive
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.22),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Icon(
-                isActive ? destination.activeIcon : destination.icon,
-                size: 24,
-                color: isActive
-                    ? AppColors.primary
-                    : AppColors.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
+      onTap: widget.onTap,
+      // Yorks uses a stable, immediate navigation affordance.
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isActive ? AppSpacing.lg : 0,
+              vertical: AppSpacing.xs,
             ),
-            const SizedBox(height: AppSpacing.xxs),
-            Text(
-              destination.label.primary,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive
-                    ? AppColors.primary
-                    : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
-                letterSpacing: 0.1,
-              ),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primaryFixed.withValues(alpha: 0.55)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              // The active pill lifts off the bar with a soft tinted shadow.
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.22),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
             ),
-          ],
-        ),
+            child: Icon(
+              isActive ? destination.activeIcon : destination.icon,
+              size: 24,
+              color: isActive
+                  ? AppColors.primary
+                  : AppColors.onSurfaceVariant.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            destination.label.primary,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              color: isActive
+                  ? AppColors.primary
+                  : AppColors.onSurfaceVariant.withValues(alpha: 0.6),
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -527,9 +513,7 @@ class _RailItem extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
+          child: Container(
             padding: EdgeInsets.symmetric(
               horizontal: isExtended ? AppSpacing.lg : 0,
               vertical: AppSpacing.md,
