@@ -282,8 +282,10 @@ replacement eligibility before commit.
 ## 11. Delivery Order and returns
 
 DO preview is available only after receipt review and clearly identifies its
-dispatch and review revision. It contains only S.No, Description, Qty and Unit
-for good-received quantities.
+dispatch and review revision. On the Material Request detail, the assigned
+receiving Project/Site Engineer sees **Generate Delivery Order** only once the
+receipt state is confirmed; Procurement/Admin retain the same action. It
+contains only S.No, Description, Qty and Unit for good-received quantities.
 
 Return creation uses project/scope first, then autocomplete restricted to
 eligible received material. Each row shows available-to-return quantity. Return

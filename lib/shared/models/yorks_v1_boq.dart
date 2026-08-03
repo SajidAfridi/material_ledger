@@ -5,9 +5,15 @@ import 'yorks_v1_domain_error.dart';
 /// turning it into a fixed visible BOQ column.
 enum YorksV1BoqCanonicalField {
   description('description'),
+  size('size'),
+  model('model'),
+  equipmentTag('equipment_tag'),
   brandOrigin('brand_origin'),
   quantity('quantity'),
   unit('unit'),
+
+  /// Legacy combined mapping retained so previously imported worksheets keep
+  /// their meaning while new imports preserve model and tag separately.
   planningModelTag('planning_model_tag');
 
   const YorksV1BoqCanonicalField(this.wireValue);

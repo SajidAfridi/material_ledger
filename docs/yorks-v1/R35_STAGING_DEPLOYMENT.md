@@ -31,13 +31,19 @@ R35_STAGING_CONFIG_FILE=.r35.staging.env ./tool/r35-staging.sh deploy
 The deployment is accepted only when `verify` shows:
 
 1. every tracked migration through
-   `20260803211633_yorks_v1_document_replacement_version_link`;
+   `20260803224536_yorks_v1_p0_boq_document_delivery_order`;
 2. `header_hierarchy_supported = true` for
    `v1_import_boq_worksheet(jsonb, uuid)`;
 3. a deployed `finalize-document-upload` function with JWT verification still
    enabled; and
 4. no migration is pushed to or function is deployed on the historic shared
    project.
+
+`preflight` also runs `supabase db push --dry-run`. A real `deploy` requires
+the explicit confirmation value
+`R35_STAGING_DEPLOY_CONFIRM=<the-dedicated-staging-project-ref>` in the
+ignored staging configuration. This prevents a linked-project command from
+being treated as a harmless inspection.
 
 Run the complete staging database suite only after deployment against this
 dedicated non-production target:

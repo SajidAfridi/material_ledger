@@ -2761,6 +2761,9 @@ Future<bool?> _confirm({
 TranslatableString _canonicalCopy(YorksV1BoqCanonicalField field) =>
     switch (field) {
       YorksV1BoqCanonicalField.description => YorksV1BoqStrings.description,
+      YorksV1BoqCanonicalField.size => YorksV1BoqStrings.size,
+      YorksV1BoqCanonicalField.model => YorksV1BoqStrings.model,
+      YorksV1BoqCanonicalField.equipmentTag => YorksV1BoqStrings.equipmentTag,
       YorksV1BoqCanonicalField.brandOrigin => YorksV1BoqStrings.brandOrigin,
       YorksV1BoqCanonicalField.quantity => YorksV1BoqStrings.quantity,
       YorksV1BoqCanonicalField.unit => YorksV1BoqStrings.unit,

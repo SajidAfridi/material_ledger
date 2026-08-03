@@ -7,6 +7,7 @@ import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
 import 'package:material_ledger/shared/repositories/collection_store.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
@@ -598,11 +599,13 @@ void main() {
             column.canonicalField!: column.sourceIndex,
       };
 
-      expect(mapped[YorksV1BoqCanonicalField.planningModelTag], isNotNull);
+      expect(mapped[YorksV1BoqCanonicalField.equipmentTag], isNotNull);
+      expect(mapped[YorksV1BoqCanonicalField.size], isNotNull);
+      expect(mapped[YorksV1BoqCanonicalField.brandOrigin], isNotNull);
       expect(mapped[YorksV1BoqCanonicalField.quantity], isNotNull);
       expect(
         preview.rows.single.valueFor(
-          mapped[YorksV1BoqCanonicalField.planningModelTag]!,
+          mapped[YorksV1BoqCanonicalField.equipmentTag]!,
         ),
         'VF-01',
       );
@@ -614,6 +617,93 @@ void main() {
       );
     },
   );
+
+  test('maps a tagged BOQ row into a complete reviewable MR line', () async {
+    final controller = YorksV1MaterialRequestDraftController(
+      ownerAuthUserId: _siteEngineer,
+      draftId: _draftId,
+      store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+      repository: _FakeRequestRepository(),
+      uuidFactory: _Ids().next,
+    );
+    addTearDown(controller.dispose);
+    final worksheet = YorksV1BoqWorksheet(
+      group: YorksV1BoqGroup(
+        id: _boqGroupId,
+        projectId: _projectId,
+        name: 'Ventilation Fans',
+        worksheetTitle: 'VENT.FAN',
+        displayOrder: 1,
+        isCustom: false,
+        isArchived: false,
+        version: 1,
+        rowCount: 1,
+        columnCount: 5,
+        updatedAt: DateTime.utc(2026, 8, 4),
+      ),
+      columns: const [
+        YorksV1BoqColumn(
+          id: 'tag',
+          heading: 'Fan Tag#',
+          displayOrder: 1,
+          canonicalField: YorksV1BoqCanonicalField.equipmentTag,
+        ),
+        YorksV1BoqColumn(id: 'area', heading: 'Serving Area', displayOrder: 2),
+        YorksV1BoqColumn(
+          id: 'model',
+          heading: 'Model',
+          displayOrder: 3,
+          canonicalField: YorksV1BoqCanonicalField.model,
+        ),
+        YorksV1BoqColumn(
+          id: 'make',
+          heading: 'Fan Make',
+          displayOrder: 4,
+          canonicalField: YorksV1BoqCanonicalField.brandOrigin,
+        ),
+        YorksV1BoqColumn(
+          id: 'size',
+          heading: 'Dimension',
+          displayOrder: 5,
+          canonicalField: YorksV1BoqCanonicalField.size,
+        ),
+      ],
+      rows: [
+        YorksV1BoqRow(
+          id: 'boq-row',
+          displayOrder: 1,
+          values: const {
+            'tag': 'VF-01',
+            'area': 'Generator room',
+            'model': 'TA-HT-560',
+            'make': 'DYNAIR',
+            'size': '560 mm',
+          },
+          canonicalValues: const {
+            'equipment_tag': 'VF-01',
+            'model': 'TA-HT-560',
+            'brand_origin': 'DYNAIR',
+            'size': '560 mm',
+          },
+        ),
+      ],
+    );
+
+    await controller.addBoqRows(
+      worksheet: worksheet,
+      rowIds: const ['boq-row'],
+    );
+
+    final line = controller.state.draft.lines.single;
+    expect(line.description, 'VF-01 — Generator room');
+    expect(line.size, '560 mm');
+    expect(line.model, 'TA-HT-560');
+    expect(line.equipmentTag, 'VF-01');
+    expect(line.brandOrigin, 'DYNAIR');
+    expect(line.quantity, '1');
+    expect(line.quantityIsSuggested, isTrue);
+    expect(line.unit, 'Nos');
+  });
 
   test('non-commercial response has no commercial client state', () {
     final request = YorksV1MaterialRequest.fromRpcJson({
@@ -655,6 +745,9 @@ void main() {
         'item_description': 'Fire damper',
         'technical_attributes': {
           'size': '600 x 600',
+          'model': 'MSD-600',
+          'equipment_tag': 'MSD-01A',
+          'quantity_suggested': 'true',
           'planning_model_tag': 'MSD-01A',
         },
         'requested_qty': '2',
@@ -662,10 +755,16 @@ void main() {
       });
 
       expect(line.size, '600 x 600');
+      expect(line.model, 'MSD-600');
+      expect(line.equipmentTag, 'MSD-01A');
+      expect(line.quantityIsSuggested, isTrue);
       expect(line.planningModelTag, 'MSD-01A');
       expect(line.unitCost, isNull);
       expect(line.toRpcJson()['technical_attributes'], {
         'size': '600 x 600',
+        'model': 'MSD-600',
+        'equipment_tag': 'MSD-01A',
+        'quantity_suggested': 'true',
         'planning_model_tag': 'MSD-01A',
       });
     },
@@ -782,6 +881,13 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async =>
       _request(requestId: requestId, version: 2, number: 'B5-TEST-MR001');
+
+  @override
+  Future<YorksV1MaterialRequestDocumentModel> getDocumentModel(
+    String requestId,
+  ) async => YorksV1MaterialRequestDocumentModel.fromRequest(
+    _request(requestId: requestId, version: 2, number: 'B5-TEST-MR001'),
+  );
 
   @override
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects() async =>

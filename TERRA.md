@@ -81,3 +81,11 @@ flutter test
 
 Do not claim a production release from a local debug run. Report files changed,
 tests, build evidence, migration/rollback impact and any release-owner blocker.
+
+## Release control
+
+`flutter.yml` is verification only. It must never deploy a push to `main`.
+Use `release-production.yml` only after a dedicated Supabase staging witness
+has been recorded. The deployment job runs in the protected GitHub
+`production` environment and requires the release-owner evidence inputs; its
+rollback is a redeploy of the previous approved complete-R35 build.

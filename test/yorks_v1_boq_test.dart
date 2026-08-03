@@ -37,6 +37,114 @@ void main() {
     );
 
     test(
+      'Similar Row keeps reusable context and clears unique equipment data',
+      () async {
+        final source = _worksheet().copyWith(
+          columns: const [
+            YorksV1BoqColumn(
+              id: 'description',
+              heading: 'Description',
+              displayOrder: 1,
+              canonicalField: YorksV1BoqCanonicalField.description,
+            ),
+            YorksV1BoqColumn(
+              id: 'size',
+              heading: 'Size',
+              displayOrder: 2,
+              canonicalField: YorksV1BoqCanonicalField.size,
+            ),
+            YorksV1BoqColumn(
+              id: 'make',
+              heading: 'Make',
+              displayOrder: 3,
+              canonicalField: YorksV1BoqCanonicalField.brandOrigin,
+            ),
+            YorksV1BoqColumn(
+              id: 'unit',
+              heading: 'Unit',
+              displayOrder: 4,
+              canonicalField: YorksV1BoqCanonicalField.unit,
+            ),
+            YorksV1BoqColumn(
+              id: 'tag',
+              heading: 'Tag No.',
+              displayOrder: 5,
+              canonicalField: YorksV1BoqCanonicalField.equipmentTag,
+            ),
+            YorksV1BoqColumn(
+              id: 'model',
+              heading: 'Model',
+              displayOrder: 6,
+              canonicalField: YorksV1BoqCanonicalField.model,
+            ),
+            YorksV1BoqColumn(
+              id: 'qty',
+              heading: 'Qty',
+              displayOrder: 7,
+              canonicalField: YorksV1BoqCanonicalField.quantity,
+            ),
+            YorksV1BoqColumn(id: 'mass', heading: 'MASS', displayOrder: 8),
+            YorksV1BoqColumn(id: 'status', heading: 'STATUS', displayOrder: 9),
+            YorksV1BoqColumn(
+              id: 'cost',
+              heading: 'Unit Cost',
+              displayOrder: 10,
+            ),
+          ],
+          rows: [
+            YorksV1BoqRow(
+              id: _rowId,
+              displayOrder: 1,
+              values: const {
+                'description': 'Smoke damper',
+                'size': '600 x 600',
+                'make': 'Yorks',
+                'unit': 'Nos',
+                'tag': 'MSD-01',
+                'model': 'M-600',
+                'qty': '1',
+                'mass': 'MTS-1',
+                'status': 'AP',
+                'cost': '100',
+              },
+              canonicalValues: const {
+                'description': 'Smoke damper',
+                'size': '600 x 600',
+                'brand_origin': 'Yorks',
+                'unit': 'Nos',
+                'equipment_tag': 'MSD-01',
+                'model': 'M-600',
+                'quantity': '1',
+              },
+            ),
+          ],
+        );
+        final controller = YorksV1BoqWorksheetController(
+          groupId: _groupId,
+          repository: _FakeBoqRepository(source),
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.load();
+        final similar = controller.addSimilarRow(sourceRowId: _rowId);
+
+        expect(similar.values, {
+          'description': 'Smoke damper',
+          'size': '600 x 600',
+          'make': 'Yorks',
+          'unit': 'Nos',
+        });
+        expect(similar.canonicalValues, {
+          'description': 'Smoke damper',
+          'size': '600 x 600',
+          'brand_origin': 'Yorks',
+          'unit': 'Nos',
+        });
+      },
+    );
+
+    test(
       'keeps raw arbitrary values while saving a version-checked snapshot',
       () async {
         final repository = _FakeBoqRepository(_worksheet());

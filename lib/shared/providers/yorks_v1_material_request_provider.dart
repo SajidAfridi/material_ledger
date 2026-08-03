@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../controllers/yorks_v1_material_request_draft_controller.dart';
 import '../models/yorks_v1_material_request.dart';
+import '../models/yorks_v1_material_request_document.dart';
 import '../repositories/storage.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 
@@ -79,4 +80,11 @@ final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .getRequest(requestId);
+    });
+
+final yorksV1MaterialRequestDocumentProvider = FutureProvider.autoDispose
+    .family<YorksV1MaterialRequestDocumentModel, String>((ref, requestId) {
+      return ref
+          .watch(yorksV1MaterialRequestRepositoryProvider)
+          .getDocumentModel(requestId);
     });

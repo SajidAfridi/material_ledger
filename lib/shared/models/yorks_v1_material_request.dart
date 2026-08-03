@@ -140,7 +140,10 @@ class YorksV1MaterialRequestLine {
     required this.unit,
     this.brandOrigin,
     this.size,
+    this.model,
+    this.equipmentTag,
     this.planningModelTag,
+    this.quantityIsSuggested = false,
     this.sourceBoqGroupId,
     this.sourceBoqRowId,
     this.unitCost,
@@ -158,7 +161,13 @@ class YorksV1MaterialRequestLine {
   /// equipment tag is intentionally separate from the manufacturer serial
   /// captured during receipt/asset registration.
   final String? size;
+  final String? model;
+  final String? equipmentTag;
+
+  /// Compatibility field for pre-R35-size/model/tag records. New records use
+  /// [model] and [equipmentTag] so source semantics are not collapsed.
   final String? planningModelTag;
+  final bool quantityIsSuggested;
   final String quantity;
   final String unit;
   final String? sourceBoqGroupId;
@@ -174,9 +183,12 @@ class YorksV1MaterialRequestLine {
     String? description,
     Object? brandOrigin = _keep,
     Object? size = _keep,
+    Object? model = _keep,
+    Object? equipmentTag = _keep,
     Object? planningModelTag = _keep,
     String? quantity,
     String? unit,
+    bool? quantityIsSuggested,
   }) => YorksV1MaterialRequestLine(
     id: id,
     displayOrder: displayOrder,
@@ -186,11 +198,20 @@ class YorksV1MaterialRequestLine {
         ? this.brandOrigin
         : brandOrigin as String?,
     size: identical(size, _keep) ? this.size : size as String?,
+    model: identical(model, _keep) ? this.model : model as String?,
+    equipmentTag: identical(equipmentTag, _keep)
+        ? this.equipmentTag
+        : equipmentTag as String?,
     planningModelTag: identical(planningModelTag, _keep)
         ? this.planningModelTag
         : planningModelTag as String?,
     quantity: quantity ?? this.quantity,
     unit: unit ?? this.unit,
+    quantityIsSuggested:
+        quantityIsSuggested ??
+        (quantity != null && quantity.trim() != this.quantity.trim()
+            ? false
+            : this.quantityIsSuggested),
     sourceBoqGroupId: sourceBoqGroupId,
     sourceBoqRowId: sourceBoqRowId,
     unitCost: unitCost,
@@ -210,7 +231,10 @@ class YorksV1MaterialRequestLine {
     'description': description,
     'brandOrigin': _trimToNull(brandOrigin),
     'size': _trimToNull(size),
+    'model': _trimToNull(model),
+    'equipmentTag': _trimToNull(equipmentTag),
     'planningModelTag': _trimToNull(planningModelTag),
+    'quantityIsSuggested': quantityIsSuggested,
     'quantity': quantity,
     'unit': unit,
     'sourceBoqGroupId': sourceBoqGroupId,
@@ -220,8 +244,12 @@ class YorksV1MaterialRequestLine {
   Map<String, dynamic> toRpcJson() {
     final technicalAttributes = <String, String>{
       if (_trimToNull(size) != null) 'size': _trimToNull(size)!,
+      if (_trimToNull(model) != null) 'model': _trimToNull(model)!,
+      if (_trimToNull(equipmentTag) != null)
+        'equipment_tag': _trimToNull(equipmentTag)!,
       if (_trimToNull(planningModelTag) != null)
         'planning_model_tag': _trimToNull(planningModelTag)!,
+      if (quantityIsSuggested) 'quantity_suggested': 'true',
     };
     return {
       'id': id.trim(),
@@ -250,9 +278,20 @@ class YorksV1MaterialRequestLine {
       size:
           _technicalText(json['technical_attributes'], 'size') ??
           _trimToNull(json['size']),
+      model:
+          _technicalText(json['technical_attributes'], 'model') ??
+          _trimToNull(json['model']),
+      equipmentTag:
+          _technicalText(json['technical_attributes'], 'equipment_tag') ??
+          _trimToNull(json['equipmentTag'] ?? json['equipment_tag']),
       planningModelTag:
           _technicalText(json['technical_attributes'], 'planning_model_tag') ??
           _trimToNull(json['planningModelTag'] ?? json['planning_model_tag']),
+      quantityIsSuggested:
+          _technicalText(json['technical_attributes'], 'quantity_suggested') ==
+              'true' ||
+          json['quantityIsSuggested'] == true ||
+          json['quantity_suggested'] == true,
       quantity: _string(json['quantity'] ?? json['requested_qty']),
       unit: _string(json['unit']),
       sourceBoqGroupId: _trimToNull(
@@ -274,10 +313,18 @@ class YorksV1MaterialRequestLine {
       description: _requiredString(json, 'item_description'),
       brandOrigin: _trimToNull(json['brand_origin']),
       size: _technicalText(json['technical_attributes'], 'size'),
+      model: _technicalText(json['technical_attributes'], 'model'),
+      equipmentTag: _technicalText(
+        json['technical_attributes'],
+        'equipment_tag',
+      ),
       planningModelTag: _technicalText(
         json['technical_attributes'],
         'planning_model_tag',
       ),
+      quantityIsSuggested:
+          _technicalText(json['technical_attributes'], 'quantity_suggested') ==
+          'true',
       quantity: _string(json['requested_qty']),
       unit: _requiredString(json, 'unit'),
       sourceBoqGroupId: _trimToNull(json['source_boq_group_id']),

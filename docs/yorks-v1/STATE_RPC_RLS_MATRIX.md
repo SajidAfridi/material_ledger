@@ -91,7 +91,7 @@ tables/functions.
 | `v1_decide_arrangement` | Assigned Project Engineer/Admin | MR/current arrangement/version | yes | approval or return decision, approved snapshots/state, audit/notification |
 | `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
 | `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, good/exception totals, state, audit/notification |
-| `v1_generate_delivery_order` | Procurement/Admin after review | dispatch/review/current DO revision | yes | immutable snapshot/revision, document link, audit |
+| `v1_generate_delivery_order` | Assigned Project/Site Engineer, Procurement/Admin after confirmed receipt review | dispatch/review/current DO revision | yes | immutable snapshot/revision, document link, audit |
 | `v1_submit_material_return` | Assigned Project/Site Engineer/Admin | source receipt/return/version/counter | yes | frozen return lines, number, submitted state, audit/notification |
 | `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
 | `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
@@ -127,7 +127,7 @@ membership.
 | Reservations/movements | related non-commercial summary | related non-commercial summary | R; write only via RPC | R; write only via RPC |
 | Dispatches | R assigned | R assigned | R/RPC create | R/RPC |
 | Receipt reviews | R/RPC assigned | R/RPC assigned | R, no confirm | R/RPC |
-| Delivery Orders | R assigned projection | R assigned projection | R/RPC generate | R/RPC |
+| Delivery Orders | R/RPC generate after own assigned receipt review | R/RPC generate after own assigned receipt review | R/RPC generate | R/RPC |
 | Returns | R/RPC create assigned | R/RPC create assigned | R/RPC confirm/reject | R/RPC |
 | Operational documents | R/C through authorized links | R/C through authorized links | R/C through authorized links | R/C |
 | Commercial documents | capability plus link | capability plus link | capability plus link | capability plus link |

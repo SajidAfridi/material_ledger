@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 
 import '../models/yorks_v1_boq.dart';
 import '../models/yorks_v1_material_request.dart';
+import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_material_request_strings.dart';
 import 'yorks_v1_boq_workbook_service.dart';
 
@@ -141,9 +142,26 @@ class YorksV1MaterialRequestDocumentService {
     await Printing.layoutPdf(onLayout: (_) async => bytes);
   }
 
+  Future<void> printDocumentPdf(
+    YorksV1MaterialRequestDocumentModel model,
+  ) async {
+    final bytes = await buildDocumentPdf(model, PdfPageFormat.a4);
+    await Printing.layoutPdf(onLayout: (_) async => bytes);
+  }
+
   Future<void> sharePdf(YorksV1MaterialRequest request) async {
     final bytes = await buildPdf(request, PdfPageFormat.a4);
     await Printing.sharePdf(bytes: bytes, filename: suggestedPdfName(request));
+  }
+
+  Future<void> shareDocumentPdf(
+    YorksV1MaterialRequestDocumentModel model,
+  ) async {
+    final bytes = await buildDocumentPdf(model, PdfPageFormat.a4);
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: suggestedPdfName(model.request),
+    );
   }
 
   String suggestedPdfName(YorksV1MaterialRequest request) =>
@@ -152,7 +170,16 @@ class YorksV1MaterialRequestDocumentService {
   Future<Uint8List> buildPdf(
     YorksV1MaterialRequest request,
     PdfPageFormat format,
+  ) => buildDocumentPdf(
+    YorksV1MaterialRequestDocumentModel.fromRequest(request),
+    format,
+  );
+
+  Future<Uint8List> buildDocumentPdf(
+    YorksV1MaterialRequestDocumentModel model,
+    PdfPageFormat format,
   ) async {
+    final request = model.request;
     _validatePdfRequest(request);
     final commercial = request.lines.any((line) => line.unitCost != null);
     final theme = await _buildTheme();
@@ -172,15 +199,15 @@ class YorksV1MaterialRequestDocumentService {
         pageFormat: PdfPageFormat.a4,
         maxPages: 200,
         margin: pw.EdgeInsets.fromLTRB(12 * _mm, 9 * _mm, 12 * _mm, 8 * _mm),
-        header: (_) => _formalHeader(logo, request),
+        header: (_) => _formalHeader(logo, model),
         footer: _pageNumber,
         build: (_) => [
-          _materialTable(request, commercial: commercial),
+          _materialTable(model, commercial: commercial),
           // Keep all three approval areas together near the bottom of the
           // final page without reserving their space on every preceding page.
           pw.NewPage(freeSpace: 52 * _mm),
           pw.Spacer(),
-          _approvalClosingBlock(request),
+          _approvalClosingBlock(model),
         ],
       ),
     );
@@ -222,8 +249,9 @@ class YorksV1MaterialRequestDocumentService {
 
   static pw.Widget _formalHeader(
     pw.MemoryImage? logo,
-    YorksV1MaterialRequest request,
+    YorksV1MaterialRequestDocumentModel model,
   ) {
+    final request = model.request;
     final requestedBy = [
       request.requesterDisplayName?.trim(),
       request.requesterProjectRole?.trim(),
@@ -277,7 +305,9 @@ class YorksV1MaterialRequestDocumentService {
               'Building / Other',
               request.scopeName,
               'Project Engineers',
-              '—',
+              model.projectEngineerNames.isEmpty
+                  ? '—'
+                  : model.projectEngineerNames.join(', '),
             ),
           ],
         ),
@@ -373,27 +403,31 @@ class YorksV1MaterialRequestDocumentService {
   );
 
   static pw.Widget _materialTable(
-    YorksV1MaterialRequest request, {
+    YorksV1MaterialRequestDocumentModel model, {
     required bool commercial,
   }) {
+    final request = model.request;
+    final hasReceiptStatus = model.receiptStatuses.isNotEmpty;
     final headers = [
       'R No',
       'Item Description',
       'Brand/Origin',
       'Qty.',
       'Unit',
+      if (hasReceiptStatus) 'Receipt Status',
       if (commercial) 'Unit Cost',
       if (commercial) 'Total Cost',
     ];
-    final widths = commercial
+    final widths = commercial || hasReceiptStatus
         ? const <int, pw.TableColumnWidth>{
             0: pw.FlexColumnWidth(.55),
-            1: pw.FlexColumnWidth(3.9),
-            2: pw.FlexColumnWidth(1.8),
+            1: pw.FlexColumnWidth(3.25),
+            2: pw.FlexColumnWidth(1.55),
             3: pw.FlexColumnWidth(.85),
             4: pw.FlexColumnWidth(.85),
-            5: pw.FlexColumnWidth(1.35),
-            6: pw.FlexColumnWidth(1.45),
+            5: pw.FlexColumnWidth(1.15),
+            6: pw.FlexColumnWidth(1.2),
+            7: pw.FlexColumnWidth(1.3),
           }
         : const <int, pw.TableColumnWidth>{
             0: pw.FlexColumnWidth(.7),
@@ -414,7 +448,12 @@ class YorksV1MaterialRequestDocumentService {
           children: [for (final header in headers) _tableHeader(header)],
         ),
         for (var index = 0; index < request.lines.length; index++)
-          _materialRow(request.lines[index], index + 1, commercial: commercial),
+          _materialRow(
+            request.lines[index],
+            index + 1,
+            commercial: commercial,
+            receiptStatus: model.receiptStatuses[request.lines[index].id],
+          ),
       ],
     );
   }
@@ -423,6 +462,7 @@ class YorksV1MaterialRequestDocumentService {
     YorksV1MaterialRequestLine line,
     int number, {
     required bool commercial,
+    String? receiptStatus,
   }) => pw.TableRow(
     children: [
       _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
@@ -430,6 +470,7 @@ class YorksV1MaterialRequestDocumentService {
       _tableCell(line.brandOrigin ?? ''),
       _tableCell(line.quantity, alignment: pw.Alignment.topRight),
       _tableCell(line.unit),
+      if (receiptStatus != null) _tableCell(receiptStatus),
       if (commercial)
         _tableCell(line.unitCost ?? '', alignment: pw.Alignment.topRight),
       if (commercial)
@@ -473,6 +514,10 @@ class YorksV1MaterialRequestDocumentService {
   static pw.Widget _descriptionCell(YorksV1MaterialRequestLine line) {
     final details = <String>[
       if (line.size?.trim().isNotEmpty ?? false) 'Size: ${line.size!.trim()}',
+      if (line.model?.trim().isNotEmpty ?? false)
+        'Model: ${line.model!.trim()}',
+      if (line.equipmentTag?.trim().isNotEmpty ?? false)
+        'Tag: ${line.equipmentTag!.trim()}',
       if (line.planningModelTag?.trim().isNotEmpty ?? false)
         'Model/Serial: ${line.planningModelTag!.trim()}',
     ];
@@ -498,34 +543,45 @@ class YorksV1MaterialRequestDocumentService {
     );
   }
 
-  static pw.Widget _approvalClosingBlock(YorksV1MaterialRequest request) =>
-      pw.Column(
-        mainAxisSize: pw.MainAxisSize.min,
-        children: [
-          pw.Table(
-            border: pw.TableBorder.all(color: _documentGrid, width: .65),
-            children: [
-              pw.TableRow(
-                children: [
-                  _approvalCell(
-                    'Requested by (Site / Project Engineer)',
-                    request.requesterDisplayName ?? '',
-                    request.requesterProjectRole ?? '',
-                    request.submittedAt ?? request.createdAt,
-                  ),
-                  _approvalCell('Approved by (Project Engineer)', '', '', null),
-                  _approvalCell(
-                    'Ordered / Dispatched by (Procurement)',
-                    '',
-                    '',
-                    null,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      );
+  static pw.Widget _approvalClosingBlock(
+    YorksV1MaterialRequestDocumentModel model,
+  ) {
+    final request = model.request;
+    final approval = model.approval;
+    final dispatch = model.dispatch;
+    return pw.Column(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        pw.Table(
+          border: pw.TableBorder.all(color: _documentGrid, width: .65),
+          children: [
+            pw.TableRow(
+              children: [
+                _approvalCell(
+                  'Requested by (Site / Project Engineer)',
+                  request.requesterDisplayName ?? '',
+                  request.requesterProjectRole ?? '',
+                  request.submittedAt ?? request.createdAt,
+                ),
+                _approvalCell(
+                  'Approved by (Project Engineer)',
+                  approval?.displayName ?? '',
+                  approval?.reference ?? approval?.role ?? '',
+                  approval?.actedAt,
+                ),
+                _approvalCell(
+                  'Ordered / Dispatched by (Procurement)',
+                  dispatch?.displayName ?? '',
+                  dispatch?.reference ?? dispatch?.role ?? '',
+                  dispatch?.actedAt,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
   static pw.Widget _approvalCell(
     String title,
@@ -588,6 +644,8 @@ class YorksV1MaterialRequestDocumentService {
   static String _displayDescription(YorksV1MaterialRequestLine line) {
     final details = <String>[
       if (line.size?.trim().isNotEmpty ?? false) 'Size: ${line.size!.trim()}',
+      if (line.model?.trim().isNotEmpty ?? false)
+        'Model / Tag: ${line.model!.trim()}',
       if (line.planningModelTag?.trim().isNotEmpty ?? false)
         'Model / Tag: ${line.planningModelTag!.trim()}',
     ];

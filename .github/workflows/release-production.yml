@@ -1,0 +1,58 @@
+name: Controlled R35 production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_acceptance_evidence:
+        description: 'Required staging acceptance record, ticket, or signed test reference'
+        required: true
+        type: string
+      release_note:
+        description: 'Release-owner note and approved rollback build/reference'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-production:
+    name: Deploy approved R35 web release
+    # The GitHub production environment is intentionally protected. Its
+    # required reviewer must approve before the scoped deployment secrets are
+    # exposed to this job.
+    environment:
+      name: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      R35_ENVIRONMENT: production
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL_PRODUCTION }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Require staging evidence
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test -n "${{ inputs.staging_acceptance_evidence }}"
+          test -n "${{ inputs.release_note }}"
+
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build R35 web release
+        run: ./tool/r35.sh build-web
+
+      - name: Deploy prebuilt web bundle to Vercel production
+        run: npx vercel deploy build/web --prod --yes --token "$VERCEL_TOKEN"

@@ -34,6 +34,7 @@ source "$config_file"
 staging_ref="${R35_STAGING_PROJECT_REF:-}"
 staging_password="${R35_STAGING_DB_PASSWORD:-}"
 staging_environment="${R35_ENVIRONMENT:-}"
+deploy_confirmation="${R35_STAGING_DEPLOY_CONFIRM:-}"
 shared_ref='czykuksmlwswjsgotrpo'
 
 if [[ "$staging_environment" != 'staging' ]]; then
@@ -64,13 +65,28 @@ verify_staging() {
   npx supabase functions list --project-ref "$staging_ref"
 }
 
+preflight_staging() {
+  link_staging
+  npx supabase migration list --linked
+  # This prints the exact tracked migrations that the dedicated target would
+  # receive without mutating it. An operator must review this before deploy.
+  npx supabase db push --linked --dry-run
+}
+
+require_deploy_confirmation() {
+  if [[ "$deploy_confirmation" != "$staging_ref" ]]; then
+    echo "Set R35_STAGING_DEPLOY_CONFIRM to the dedicated staging project ref before deploy." >&2
+    exit 64
+  fi
+}
+
 case "$1" in
   preflight)
-    link_staging
-    npx supabase migration list --linked
+    preflight_staging
     ;;
   deploy)
-    link_staging
+    require_deploy_confirmation
+    preflight_staging
     # A dedicated staging project begins with no application migrations. Do
     # not use this against an existing or shared environment with divergent
     # migration history.

@@ -314,11 +314,14 @@ The review must reconcile to the dispatched quantity. Only good quantity
 increments `good_received_qty`. Missing/damaged quantity remains replacement
 eligible within the approved cap.
 
-A Delivery Order snapshot is created only after receipt review. Cardinality is
-one current DO revision per dispatch; regeneration creates an immutable new
-revision and supersedes, never overwrites, the prior snapshot. It includes only
-good-received quantities and the approved four columns: S.No, Description, Qty
-and Unit.
+A Delivery Order snapshot is created only after receipt review. The assigned
+Project Engineer or Site Engineer who can see that confirmed receipt may
+generate it; Procurement/Admin retain the same document authority. This
+document-only command does not permit an Engineer to dispatch stock, arrange a
+request or confirm a material return. Cardinality is one current DO revision
+per dispatch; regeneration creates an immutable new revision and supersedes,
+never overwrites, the prior snapshot. It includes only good-received quantities
+and the approved four columns: S.No, Description, Qty and Unit.
 
 ## 13. Material Returns
 

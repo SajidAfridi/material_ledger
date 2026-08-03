@@ -210,8 +210,9 @@ class YorksV1MaterialRequestDraftController
             description: source.description,
             brandOrigin: source.brandOrigin,
             size: source.size,
-            planningModelTag: source.planningModelTag,
-            quantity: source.quantity,
+            // Model/tag and quantity identify the original equipment; a
+            // Similar MR row must not accidentally request a second unit.
+            quantity: '',
             unit: source.unit,
           ),
         ],
@@ -229,6 +230,30 @@ class YorksV1MaterialRequestDraftController
     final additions = <YorksV1MaterialRequestLine>[];
     for (final row in worksheet.rows) {
       if (!selected.contains(row.id)) continue;
+      final tag = _boqValue(
+        worksheet,
+        row,
+        YorksV1BoqCanonicalField.equipmentTag,
+        headingPattern: r'tag|equipment\s*tag|fan\s*tag',
+      );
+      final description = _boqValue(
+        worksheet,
+        row,
+        YorksV1BoqCanonicalField.description,
+        headingPattern: r'description|serving\s*area|location|equipment|item',
+      );
+      final explicitQuantity = _canonicalValue(
+        worksheet,
+        row,
+        YorksV1BoqCanonicalField.quantity,
+      );
+      final hasSuggestedQuantity = explicitQuantity.isEmpty && tag.isNotEmpty;
+      final rawModel = _boqValue(
+        worksheet,
+        row,
+        YorksV1BoqCanonicalField.model,
+        headingPattern: r'(^|\b)(model|fan\s*model)(\b|$)',
+      );
       additions.add(
         YorksV1MaterialRequestLine(
           id: _uuidFactory(),
@@ -236,28 +261,29 @@ class YorksV1MaterialRequestDraftController
           source: YorksV1MaterialRequestLineSource.boq,
           sourceBoqGroupId: worksheet.group.id,
           sourceBoqRowId: row.id,
-          description: _canonicalValue(
-            worksheet,
-            row,
-            YorksV1BoqCanonicalField.description,
-          ),
-          brandOrigin: _canonicalValue(
+          description: _composeDescription(tag: tag, context: description),
+          brandOrigin: _boqValue(
             worksheet,
             row,
             YorksV1BoqCanonicalField.brandOrigin,
-            nullable: true,
+            headingPattern: r'brand|make|manufacturer|origin',
           ),
+          size: _boqValue(
+            worksheet,
+            row,
+            YorksV1BoqCanonicalField.size,
+            headingPattern: r'size|dimension',
+          ),
+          model: rawModel.isNotEmpty ? rawModel : (tag.isEmpty ? null : tag),
+          equipmentTag: tag.isEmpty ? null : tag,
           planningModelTag: _canonicalValue(
             worksheet,
             row,
             YorksV1BoqCanonicalField.planningModelTag,
             nullable: true,
           ),
-          quantity: _canonicalValue(
-            worksheet,
-            row,
-            YorksV1BoqCanonicalField.quantity,
-          ),
+          quantity: hasSuggestedQuantity ? '1' : explicitQuantity,
+          quantityIsSuggested: hasSuggestedQuantity,
           unit:
               _canonicalValue(
                 worksheet,
@@ -287,7 +313,10 @@ class YorksV1MaterialRequestDraftController
           description: importedLines[index].description,
           brandOrigin: importedLines[index].brandOrigin,
           size: importedLines[index].size,
+          model: importedLines[index].model,
+          equipmentTag: importedLines[index].equipmentTag,
           planningModelTag: importedLines[index].planningModelTag,
+          quantityIsSuggested: importedLines[index].quantityIsSuggested,
           quantity: importedLines[index].quantity,
           unit: importedLines[index].unit,
         ),
@@ -327,7 +356,10 @@ class YorksV1MaterialRequestDraftController
               description: remaining[index].description,
               brandOrigin: remaining[index].brandOrigin,
               size: remaining[index].size,
+              model: remaining[index].model,
+              equipmentTag: remaining[index].equipmentTag,
               planningModelTag: remaining[index].planningModelTag,
+              quantityIsSuggested: remaining[index].quantityIsSuggested,
               quantity: remaining[index].quantity,
               unit: remaining[index].unit,
               sourceBoqGroupId: remaining[index].sourceBoqGroupId,
@@ -543,5 +575,33 @@ class YorksV1MaterialRequestDraftController
     final fallback = column == null ? null : row.valueFor(column.id);
     final text = fallback?.toString().trim() ?? '';
     return nullable && text.isEmpty ? '' : text;
+  }
+
+  static String _boqValue(
+    YorksV1BoqWorksheet worksheet,
+    YorksV1BoqRow row,
+    YorksV1BoqCanonicalField field, {
+    required String headingPattern,
+  }) {
+    final canonical = _canonicalValue(worksheet, row, field, nullable: true);
+    if (canonical.isNotEmpty) return canonical;
+    final matcher = RegExp(headingPattern, caseSensitive: false);
+    for (final column in worksheet.columns) {
+      if (!matcher.hasMatch(column.heading)) continue;
+      final value = row.valueFor(column.id)?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  static String _composeDescription({
+    required String tag,
+    required String context,
+  }) {
+    if (tag.isEmpty) return context;
+    if (context.isEmpty || context.toLowerCase() == tag.toLowerCase()) {
+      return tag;
+    }
+    return '$tag — $context';
   }
 }

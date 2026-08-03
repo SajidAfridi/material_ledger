@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(26);
+select plan(29);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -108,6 +108,9 @@ select jsonb_build_object(
     'brand_origin', 'UAE',
     'technical_attributes', jsonb_build_object(
       'size', '600 x 600',
+      'model', 'MSD-600',
+      'equipment_tag', 'MSD-01A',
+      'quantity_suggested', 'true',
       'planning_model_tag', 'MSD-01A'
     ),
     'requested_qty', '4',
@@ -163,6 +166,30 @@ select is(
   ) #>> '{lines,0,technical_attributes,planning_model_tag}'),
   'MSD-01A',
   'Draft preserves the planning model tag separately from receipt serial data'
+);
+
+select is(
+  (select public.v1_material_request_projection(
+    '52000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{lines,0,technical_attributes,model}'),
+  'MSD-600',
+  'Draft preserves the BOQ model separately from equipment tag data'
+);
+
+select is(
+  (select public.v1_material_request_projection(
+    '52000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{lines,0,technical_attributes,equipment_tag}'),
+  'MSD-01A',
+  'Draft preserves a searchable equipment tag without treating it as serial data'
+);
+
+select is(
+  (select public.v1_material_request_projection(
+    '52000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{lines,0,technical_attributes,quantity_suggested}'),
+  'true',
+  'Draft preserves the explicit review marker for an inferred quantity'
 );
 
 set local role authenticated;

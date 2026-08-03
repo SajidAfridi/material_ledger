@@ -9,6 +9,7 @@ import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
@@ -186,7 +187,7 @@ void main() {
         projectName: 'Yorks Tower',
         scopeId: 'common',
         scopeName: 'Common / All Buildings',
-        state: YorksV1MaterialRequestState.submitted,
+        state: YorksV1MaterialRequestState.received,
         recordVersion: 1,
         createdAt: DateTime.utc(2026, 8, 3),
         updatedAt: DateTime.utc(2026, 8, 3),
@@ -245,13 +246,24 @@ void main() {
               yorksV1MaterialRequestDetailProvider(
                 'layout-detail',
               ).overrideWith((ref) async => request),
+              yorksV1MaterialRequestDocumentProvider(
+                'layout-detail',
+              ).overrideWith(
+                (ref) async =>
+                    YorksV1MaterialRequestDocumentModel.fromRequest(request),
+              ),
             ],
             child: MaterialApp.router(routerConfig: router),
           ),
         );
-        await tester.pumpAndSettle();
+        // The controlled PDF preview renders asynchronously. A finite pump
+        // verifies the route layout without treating the platform preview's
+        // background raster work as an application animation.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
 
         expect(find.text('Request Status'), findsOneWidget);
+        expect(find.text('Generate Delivery Order'), findsOneWidget);
         expect(
           find.byKey(
             const ValueKey('yorks-v1-controlled-material-request-preview'),

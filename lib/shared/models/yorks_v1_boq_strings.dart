@@ -278,6 +278,24 @@ abstract final class YorksV1BoqStrings {
     ur: 'آئٹم کی تفصیل',
     hi: 'आइटम विवरण',
   );
+  static const size = TranslatableString(
+    en: 'Size / dimension',
+    ar: 'المقاس / الأبعاد',
+    ur: 'سائز / ڈائمینشن',
+    hi: 'आकार / आयाम',
+  );
+  static const model = TranslatableString(
+    en: 'Model',
+    ar: 'الطراز',
+    ur: 'ماڈل',
+    hi: 'मॉडल',
+  );
+  static const equipmentTag = TranslatableString(
+    en: 'Equipment tag',
+    ar: 'وسم المعدة',
+    ur: 'آلاتی ٹیگ',
+    hi: 'उपकरण टैग',
+  );
   static const brandOrigin = TranslatableString(
     en: 'Brand / origin',
     ar: 'العلامة التجارية / المنشأ',

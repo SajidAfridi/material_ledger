@@ -581,6 +581,9 @@ class YorksV1BoqWorkbookCodec {
 
   static YorksV1BoqCanonicalField? _suggestCanonicalField(String heading) {
     final normalized = _normalizedHeader(heading);
+    if (normalized.startsWith('size') || normalized.startsWith('dimension')) {
+      return YorksV1BoqCanonicalField.size;
+    }
     return switch (normalized) {
       'itemdescription' ||
       'description' ||
@@ -597,8 +600,13 @@ class YorksV1BoqWorkbookCodec {
       'makeorigin' ||
       'brand' ||
       'make' ||
+      'fanmake' ||
       'manufacturer' ||
       'manufacturerorigin' => YorksV1BoqCanonicalField.brandOrigin,
+      'size' ||
+      'dimension' ||
+      'dimensions' ||
+      'equipmentsize' => YorksV1BoqCanonicalField.size,
       'qty' ||
       'quantity' ||
       'qnty' ||
@@ -613,18 +621,23 @@ class YorksV1BoqWorkbookCodec {
       'units' ||
       'uom' ||
       'unitofmeasure' => YorksV1BoqCanonicalField.unit,
-      'modelserialno' ||
-      'modelserialnumber' ||
-      'modeltag' ||
-      'modeltagno' ||
+      'model' ||
+      'fanmodel' ||
+      'equipmentmodel' => YorksV1BoqCanonicalField.model,
       'equipmenttag' ||
       'equipmenttagno' ||
       'tag' ||
       'tagno' ||
+      'fantag' ||
+      'fantagno' ||
+      'putag' ||
+      'putagno' => YorksV1BoqCanonicalField.equipmentTag,
+      'modelserialno' ||
+      'modelserialnumber' ||
+      'modeltag' ||
+      'modeltagno' ||
       'serialno' ||
       'serialnumber' ||
-      'fantag' ||
-      'putag' ||
       'planningmodeltag' => YorksV1BoqCanonicalField.planningModelTag,
       _ => null,
     };

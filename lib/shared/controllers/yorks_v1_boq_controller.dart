@@ -169,11 +169,23 @@ class YorksV1BoqWorksheetController
     );
     if (sourceIndex < 0) return addBlankRow(afterRowId: sourceRowId);
     final source = worksheet.rows[sourceIndex];
+    final carriedValues = <String, Object?>{};
+    final carriedCanonicalValues = <String, Object?>{};
+    for (final column in worksheet.columns) {
+      if (!_copiesToSimilarRow(column)) continue;
+      final value = source.valueFor(column.id);
+      if (value == null || value.toString().trim().isEmpty) continue;
+      carriedValues[column.id] = value;
+      final canonical = column.canonicalField;
+      if (canonical != null) {
+        carriedCanonicalValues[canonical.wireValue] = value;
+      }
+    }
     final row = YorksV1BoqRow(
       id: _uuidFactory(),
       displayOrder: sourceIndex + 2,
-      values: source.values,
-      canonicalValues: source.canonicalValues,
+      values: carriedValues,
+      canonicalValues: carriedCanonicalValues,
     );
     _replace(
       worksheet.copyWith(
@@ -181,6 +193,32 @@ class YorksV1BoqWorksheetController
       ),
     );
     return row;
+  }
+
+  /// R35 Similar Row deliberately carries only reusable material context.
+  /// Tag/model, quantities, commercial values and arbitrary technical/status
+  /// data are unique to the original equipment and must be reviewed again.
+  static bool _copiesToSimilarRow(YorksV1BoqColumn column) {
+    switch (column.canonicalField) {
+      case YorksV1BoqCanonicalField.description:
+      case YorksV1BoqCanonicalField.size:
+      case YorksV1BoqCanonicalField.brandOrigin:
+      case YorksV1BoqCanonicalField.unit:
+        return true;
+      case YorksV1BoqCanonicalField.model:
+      case YorksV1BoqCanonicalField.equipmentTag:
+      case YorksV1BoqCanonicalField.quantity:
+      case YorksV1BoqCanonicalField.planningModelTag:
+      case null:
+        break;
+    }
+    final heading = column.heading.toLowerCase();
+    return RegExp(
+          r'(^|[^a-z])(description|item|size|dimension|make|brand|origin|unit)([^a-z]|$)',
+        ).hasMatch(heading) &&
+        !RegExp(
+          r'tag|model|serial|qty|quantity|cost|price|mass|status|approval|amount',
+        ).hasMatch(heading);
   }
 
   void updateCell({

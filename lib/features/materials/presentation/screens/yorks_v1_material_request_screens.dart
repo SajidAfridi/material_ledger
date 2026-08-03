@@ -21,6 +21,7 @@ import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
+import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
@@ -1721,26 +1722,61 @@ class _RequestLinesEditor extends ConsumerWidget {
       );
     }
     final showCommercial = ref.watch(canViewCommercialsProvider);
-    return LayoutBuilder(
-      builder: (context, constraints) => constraints.maxWidth >= 760
-          ? _DesktopLinesTable(
-              lines: lines,
-              controller: controller,
-              enabled: enabled,
-              showCommercial: showCommercial,
-            )
-          : Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (lines.any((line) => line.quantityIsSuggested)) ...[
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.warningContainer,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            ),
+            child: Row(
               children: [
-                for (final line in lines) ...[
-                  _FocusedLineEditor(
-                    line: line,
-                    controller: controller,
-                    enabled: enabled,
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: AppColors.warning,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    YorksV1MaterialRequestStrings
+                        .suggestedQuantityReview
+                        .primary,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.ink,
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                ],
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        LayoutBuilder(
+          builder: (context, constraints) => constraints.maxWidth >= 760
+              ? _DesktopLinesTable(
+                  lines: lines,
+                  controller: controller,
+                  enabled: enabled,
+                  showCommercial: showCommercial,
+                )
+              : Column(
+                  children: [
+                    for (final line in lines) ...[
+                      _FocusedLineEditor(
+                        line: line,
+                        controller: controller,
+                        enabled: enabled,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+                  ],
+                ),
+        ),
+      ],
     );
   }
 }
@@ -1795,7 +1831,7 @@ class _DesktopLinesTable extends StatelessWidget {
           ),
           _MrTableCell(
             child: Text(
-              YorksV1MaterialRequestStrings.modelSerialNumber.primary
+              YorksV1MaterialRequestStrings.planningModelTag.primary
                   .toUpperCase(),
               style: headerStyle,
             ),
@@ -1875,14 +1911,14 @@ class _DesktopLinesTable extends StatelessWidget {
             _MrTableCell(
               child: _LineTextField(
                 fieldKey: ValueKey('${line.id}-planning-model-tag'),
-                initialValue: line.planningModelTag ?? '',
+                initialValue: line.model ?? line.planningModelTag ?? '',
                 enabled: enabled,
                 hintText:
-                    YorksV1MaterialRequestStrings.modelSerialNumber.primary,
+                    YorksV1MaterialRequestStrings.planningModelTag.primary,
                 onChanged: (value) => controller.updateLine(
                   line.id,
                   (current) => current.copyWith(
-                    planningModelTag: value.trim().isEmpty ? null : value,
+                    model: value.trim().isEmpty ? null : value,
                   ),
                 ),
               ),
@@ -2140,14 +2176,13 @@ class _FocusedLineEditor extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         _LineLabeledField(
           fieldKey: ValueKey('${line.id}-planning-model-tag'),
-          label: YorksV1MaterialRequestStrings.modelSerialNumber.primary,
-          initialValue: line.planningModelTag ?? '',
+          label: YorksV1MaterialRequestStrings.planningModelTag.primary,
+          initialValue: line.model ?? line.planningModelTag ?? '',
           enabled: enabled,
           onChanged: (value) => controller.updateLine(
             line.id,
-            (current) => current.copyWith(
-              planningModelTag: value.trim().isEmpty ? null : value,
-            ),
+            (current) =>
+                current.copyWith(model: value.trim().isEmpty ? null : value),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -2597,6 +2632,9 @@ class _RequestDetailBody extends ConsumerWidget {
         arrangementEnabled
         ? ref.watch(yorksV1ArrangementWorkspaceProvider(request.id))
         : const AsyncData(null);
+    final documentModel = ref.watch(
+      yorksV1MaterialRequestDocumentProvider(request.id),
+    );
     final desktop =
         MediaQuery.sizeOf(context).width >= AppSpacing.yorksV1DesktopBreakpoint;
     final canArrange =
@@ -2660,8 +2698,16 @@ class _RequestDetailBody extends ConsumerWidget {
                       );
                     }
                   },
-                  onPdf: () => documentService.sharePdf(request),
-                  onPrint: () => documentService.printPdf(request),
+                  onPdf: documentModel.valueOrNull == null
+                      ? null
+                      : () => documentService.shareDocumentPdf(
+                          documentModel.valueOrNull!,
+                        ),
+                  onPrint: documentModel.valueOrNull == null
+                      ? null
+                      : () => documentService.printDocumentPdf(
+                          documentModel.valueOrNull!,
+                        ),
                   onCancel: canCancel
                       ? () => _cancel(context, ref, request)
                       : null,
@@ -2688,6 +2734,7 @@ class _RequestDetailBody extends ConsumerWidget {
                               request: request,
                               language: language,
                               arrangement: arrangement,
+                              documentModel: documentModel,
                               documentsEnabled: documentsEnabled,
                               canOpenLogistics: canOpenLogistics,
                               canOpenReturnsDocuments: canOpenReturnsDocuments,
@@ -2708,12 +2755,15 @@ class _RequestDetailBody extends ConsumerWidget {
                                   entityId: request.id,
                                 ),
                               ),
-                              onStoreDocument: documentsEnabled
+                              onStoreDocument:
+                                  documentsEnabled &&
+                                      documentModel.valueOrNull != null
                                   ? () => _storePdfSnapshot(
                                       context,
                                       ref,
                                       request,
                                       documentService,
+                                      documentModel.valueOrNull!,
                                     )
                                   : null,
                             ),
@@ -2734,6 +2784,7 @@ class _RequestDetailBody extends ConsumerWidget {
                             request: request,
                             language: language,
                             arrangement: arrangement,
+                            documentModel: documentModel,
                             documentsEnabled: documentsEnabled,
                             canOpenLogistics: canOpenLogistics,
                             canOpenReturnsDocuments: canOpenReturnsDocuments,
@@ -2754,12 +2805,15 @@ class _RequestDetailBody extends ConsumerWidget {
                                 entityId: request.id,
                               ),
                             ),
-                            onStoreDocument: documentsEnabled
+                            onStoreDocument:
+                                documentsEnabled &&
+                                    documentModel.valueOrNull != null
                                 ? () => _storePdfSnapshot(
                                     context,
                                     ref,
                                     request,
                                     documentService,
+                                    documentModel.valueOrNull!,
                                   )
                                 : null,
                           ),
@@ -2850,9 +2904,13 @@ class _RequestDetailBody extends ConsumerWidget {
     WidgetRef ref,
     YorksV1MaterialRequest request,
     YorksV1MaterialRequestDocumentService documentService,
+    YorksV1MaterialRequestDocumentModel documentModel,
   ) async {
     try {
-      final bytes = await documentService.buildPdf(request, PdfPageFormat.a4);
+      final bytes = await documentService.buildDocumentPdf(
+        documentModel,
+        PdfPageFormat.a4,
+      );
       await ref
           .read(yorksV1DocumentsRepositoryProvider)
           .upload(
@@ -2911,8 +2969,8 @@ class _RequestRecordHeader extends StatelessWidget {
   final VoidCallback? onOpenArrangement;
   final bool canArrange;
   final VoidCallback onExport;
-  final VoidCallback onPdf;
-  final VoidCallback onPrint;
+  final VoidCallback? onPdf;
+  final VoidCallback? onPrint;
   final VoidCallback? onCancel;
 
   @override
@@ -2975,16 +3033,18 @@ class _RequestRecordHeader extends StatelessWidget {
             icon: Icons.download_outlined,
             onPressed: onExport,
           ),
-          _RecordActionButton(
-            label: YorksV1MaterialRequestStrings.pdf.primary,
-            icon: Icons.picture_as_pdf_outlined,
-            onPressed: onPdf,
-          ),
-          _RecordActionButton(
-            label: YorksV1MaterialRequestStrings.print.primary,
-            icon: Icons.print_outlined,
-            onPressed: onPrint,
-          ),
+          if (onPdf != null)
+            _RecordActionButton(
+              label: YorksV1MaterialRequestStrings.pdf.primary,
+              icon: Icons.picture_as_pdf_outlined,
+              onPressed: onPdf!,
+            ),
+          if (onPrint != null)
+            _RecordActionButton(
+              label: YorksV1MaterialRequestStrings.print.primary,
+              icon: Icons.print_outlined,
+              onPressed: onPrint!,
+            ),
           if (onCancel != null)
             _RecordActionButton(
               label: YorksV1MaterialRequestStrings.cancelRequest.primary,
@@ -3063,6 +3123,7 @@ class _RequestRecordContent extends StatelessWidget {
     required this.request,
     required this.language,
     required this.arrangement,
+    required this.documentModel,
     required this.documentsEnabled,
     required this.canOpenLogistics,
     required this.canOpenReturnsDocuments,
@@ -3075,6 +3136,7 @@ class _RequestRecordContent extends StatelessWidget {
   final YorksV1MaterialRequest request;
   final AppLanguage language;
   final AsyncValue<YorksV1ArrangementWorkspace?> arrangement;
+  final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
   final bool documentsEnabled;
   final bool canOpenLogistics;
   final bool canOpenReturnsDocuments;
@@ -3095,7 +3157,7 @@ class _RequestRecordContent extends StatelessWidget {
             YorksV1MaterialRequestStrings.controlledTableDescription.primary,
       ),
       const SizedBox(height: AppSpacing.sm),
-      _ControlledRequestPreview(request: request),
+      _ControlledRequestPreview(request: request, documentModel: documentModel),
       if (documentsEnabled) ...[
         const SizedBox(height: AppSpacing.sm),
         Wrap(
@@ -3165,13 +3227,23 @@ class _RequestRecordContent extends StatelessWidget {
       ),
       const SizedBox(height: AppSpacing.sm),
       _PendingWorkflowSurface(
-        icon: Icons.assignment_return_outlined,
-        title: YorksV1MaterialRequestStrings.noReturnedMaterial.primary,
-        description: YorksV1MaterialRequestStrings.returnAfterReceipt.primary,
+        icon: _receiptReviewed(request)
+            ? Icons.receipt_long_outlined
+            : Icons.assignment_return_outlined,
+        title: _receiptReviewed(request)
+            ? YorksV1LogisticsStrings.deliveryOrderTitle.primary
+            : YorksV1MaterialRequestStrings.noReturnedMaterial.primary,
+        description: _receiptReviewed(request)
+            ? YorksV1MaterialRequestStrings.deliveryOrderAfterReceipt.primary
+            : YorksV1MaterialRequestStrings.returnAfterReceipt.primary,
         action: canOpenReturnsDocuments
             ? _RecordActionButton(
-                label: YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-                icon: Icons.assignment_return_outlined,
+                label: _receiptReviewed(request)
+                    ? YorksV1LogisticsStrings.generateDeliveryOrder.primary
+                    : YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+                icon: _receiptReviewed(request)
+                    ? Icons.receipt_long_outlined
+                    : Icons.assignment_return_outlined,
                 onPressed: onOpenReturns,
               )
             : null,
@@ -3196,6 +3268,11 @@ class _RequestRecordContent extends StatelessWidget {
         ? YorksV1MaterialRequestStrings.dispatchReadyDescription.primary
         : YorksV1MaterialRequestStrings.dispatchPendingDescription.primary;
   }
+
+  bool _receiptReviewed(YorksV1MaterialRequest value) =>
+      value.state == YorksV1MaterialRequestState.partiallyReceived ||
+      value.state == YorksV1MaterialRequestState.received ||
+      value.state == YorksV1MaterialRequestState.closed;
 }
 
 class _R35RecordSectionHeading extends StatelessWidget {
@@ -3579,9 +3656,13 @@ class _RequestRailFact extends StatelessWidget {
 }
 
 class _ControlledRequestPreview extends StatelessWidget {
-  const _ControlledRequestPreview({required this.request});
+  const _ControlledRequestPreview({
+    required this.request,
+    required this.documentModel,
+  });
 
   final YorksV1MaterialRequest request;
+  final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
 
   @override
   Widget build(BuildContext context) => _R35RecordSurface(
@@ -3592,18 +3673,53 @@ class _ControlledRequestPreview extends StatelessWidget {
           MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint
           ? 620
           : 900,
-      child: PdfPreview(
-        build: (_) => YorksV1MaterialRequestDocumentService().buildPdf(
-          request,
-          PdfPageFormat.a4,
+      child: documentModel.when(
+        data: (model) => PdfPreview(
+          build: (_) => YorksV1MaterialRequestDocumentService()
+              .buildDocumentPdf(model, PdfPageFormat.a4),
+          allowPrinting: false,
+          allowSharing: false,
+          canChangeOrientation: false,
+          canChangePageFormat: false,
+          initialPageFormat: PdfPageFormat.a4,
+          useActions: false,
         ),
-        allowPrinting: false,
-        allowSharing: false,
-        canChangeOrientation: false,
-        canChangePageFormat: false,
-        initialPageFormat: PdfPageFormat.a4,
-        useActions: false,
-        loadingWidget: const Center(child: CircularProgressIndicator()),
+        loading: () => const _ControlledDocumentAvailability(loading: true),
+        error: (_, _) => const _ControlledDocumentAvailability(),
+      ),
+    ),
+  );
+}
+
+class _ControlledDocumentAvailability extends StatelessWidget {
+  const _ControlledDocumentAvailability({this.loading = false});
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            loading ? Icons.description_outlined : Icons.sync_problem_rounded,
+            color: loading ? AppColors.muted : AppColors.error,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            loading
+                ? YorksV1MaterialRequestStrings
+                      .controlledDocumentLoading
+                      .primary
+                : YorksV1MaterialRequestStrings
+                      .controlledDocumentUnavailable
+                      .primary,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+          ),
+        ],
       ),
     ),
   );
@@ -4101,9 +4217,6 @@ Future<void> _importExcel(
       fallbackTitle: selected.fileName,
     );
     final fields = <YorksV1BoqCanonicalField, int>{};
-    // Keep the first recognized planning/tag column. Equipment schedules
-    // often expose both a tag and a model; the tag is the stable planning
-    // reference that belongs in the Model / Serial No. MR column.
     for (final column in preview.columns) {
       final canonical = column.canonicalField;
       if (canonical != null) {
@@ -4119,16 +4232,20 @@ Future<void> _importExcel(
       throw StateError('required columns');
     }
     final brand = fields[YorksV1BoqCanonicalField.brandOrigin];
+    final model = fields[YorksV1BoqCanonicalField.model];
+    final equipmentTag = fields[YorksV1BoqCanonicalField.equipmentTag];
     final planningModelTag = fields[YorksV1BoqCanonicalField.planningModelTag];
-    final size = preview.columns
-        .where(
-          (column) => RegExp(
-            r'(^|\b)(size|dimension|dimensions)(\b|$)',
-            caseSensitive: false,
-          ).hasMatch(column.heading.trim()),
-        )
-        .map((column) => column.sourceIndex)
-        .firstOrNull;
+    final size =
+        fields[YorksV1BoqCanonicalField.size] ??
+        preview.columns
+            .where(
+              (column) => RegExp(
+                r'(^|\b)(size|dimension|dimensions)(\b|$)',
+                caseSensitive: false,
+              ).hasMatch(column.heading.trim()),
+            )
+            .map((column) => column.sourceIndex)
+            .firstOrNull;
     final unitCost = _mrHeaderIndex(
       preview,
       RegExp(r'unit\s*cost|cost\s*per\s*unit', caseSensitive: false),
@@ -4158,32 +4275,46 @@ Future<void> _importExcel(
           final technical = _splitExportedDescription(
             preview.rows[index].valueFor(description),
           );
+          final tag = equipmentTag == null
+              ? ''
+              : preview.rows[index].valueFor(equipmentTag).trim();
+          final explicitQuantity = quantity == null
+              ? ''
+              : preview.rows[index].valueFor(quantity);
+          final rawModel = model == null
+              ? ''
+              : preview.rows[index].valueFor(model).trim();
+          final contextualDescription = technical.$1.trim();
           return YorksV1MaterialRequestLine(
             id: const Uuid().v4(),
             displayOrder: index + 1,
             source: YorksV1MaterialRequestLineSource.excel,
-            description: technical.$1.trim().isEmpty
-                ? 'Imported equipment'
-                : technical.$1,
+            description: contextualDescription.isEmpty
+                ? (tag.isEmpty ? 'Imported equipment' : tag)
+                : _composeImportedMrDescription(tag, contextualDescription),
             brandOrigin: brand == null
                 ? _mrFallbackBrandValue(preview, preview.rows[index])
                 : preview.rows[index].valueFor(brand),
             size: size == null
                 ? technical.$2
                 : preview.rows[index].valueFor(size),
+            model: rawModel.isNotEmpty
+                ? rawModel
+                : (tag.isNotEmpty
+                      ? tag
+                      : (_mrFallbackModelValue(preview, preview.rows[index]) ??
+                            technical.$3)),
+            equipmentTag: tag.isEmpty ? null : tag,
             planningModelTag: planningModelTag == null
-                ? _mrFallbackModelValue(preview, preview.rows[index]) ??
-                      technical.$3
+                ? null
                 : preview.rows[index].valueFor(planningModelTag),
             quantity: _mrInferredQuantity(
-              rawQuantity: quantity == null
-                  ? ''
-                  : preview.rows[index].valueFor(quantity),
-              description: technical.$1,
-              model: planningModelTag == null
-                  ? _mrFallbackModelValue(preview, preview.rows[index])
-                  : preview.rows[index].valueFor(planningModelTag),
+              rawQuantity: explicitQuantity,
+              description: contextualDescription,
+              model: rawModel.isNotEmpty ? rawModel : tag,
             ),
+            quantityIsSuggested:
+                explicitQuantity.trim().isEmpty && tag.isNotEmpty,
             unit: _mrInferredUnit(
               rawUnit: unit == null ? '' : preview.rows[index].valueFor(unit),
               description: technical.$1,
@@ -4197,6 +4328,11 @@ Future<void> _importExcel(
       _snack(context, YorksV1MaterialRequestStrings.importFailed.primary);
     }
   }
+}
+
+String _composeImportedMrDescription(String tag, String context) {
+  if (tag.isEmpty || context.toLowerCase() == tag.toLowerCase()) return context;
+  return '$tag — $context';
 }
 
 int? _mrFallbackDescriptionIndex(YorksV1BoqImportPreview preview) {

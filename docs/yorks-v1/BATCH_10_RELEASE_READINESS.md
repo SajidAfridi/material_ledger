@@ -3,6 +3,12 @@
 Status: **local release remediation passed; dedicated staging and production
 cutover remain blocked pending release-owner authority.**
 
+> **P0 corrective follow-up — 4 August 2026.** The following worktree adds a
+> staging-first production-release gate, complete BOQ-to-MR technical mapping,
+> safe Similar Row copying, a single role-safe MR document projection and the
+> post-receipt engineer Delivery Order action. It is not a production release
+> candidate until its local gates and dedicated staging witness are recorded.
+
 ## Audit baseline and release decision
 
 This audit began from baseline commit
@@ -32,15 +38,20 @@ documentation-only follow-up to that implementation commit.
 | P0-5 — release/rollback agreement | **Passed** | This record, `TERRA.md`, `README.md`, `AGENTS.md`, launcher and CI describe complete-R35-only releases. Historical batch documents remain historical evidence, not a release rollout instruction. |
 | P0-6 — prescribed gates | **Passed locally** | Exact results and hashes below. |
 
-## Exact local evidence — 4 August 2026
+## Exact local evidence — P0 corrective worktree, 4 August 2026
+
+These checks cover the uncommitted corrective worktree on top of
+`17413c0`. A tagged/immutable release candidate must repeat them after the
+release-owner commits the corrective change; no production deployment has been
+made from this evidence.
 
 | Command | Result |
 |---|---|
 | `flutter pub get` | Passed. |
 | `flutter analyze` | Passed — no issues. |
-| `flutter test` | Passed — **500 tests**. |
-| `npx supabase db reset --local` | Passed — **22 tracked migrations** replayed and deterministic local seed applied. (`npx` is equivalent here because the Supabase CLI is not globally installed on this workstation.) |
-| `npx supabase test db --local` | Passed — **12 files, 359 tests**. |
+| `flutter test` | Passed — **502 tests**. |
+| `npx supabase db reset --local` | Passed — **23 tracked migrations** replayed and deterministic local seed applied. (`npx` is equivalent here because the Supabase CLI is not globally installed on this workstation.) |
+| `npx supabase test db --local` | Passed — **12 files, 363 tests**. |
 | `R35_ENVIRONMENT=ci SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key ./tool/r35.sh build-web` | Passed. |
 | `CI=true YORKS_CI_EPHEMERAL_SIGNING=true R35_ENVIRONMENT=ci SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key ./tool/r35.sh build-apk` | Passed. |
 
@@ -56,8 +67,8 @@ production releases.
 
 | Artifact | SHA-256 | Notes |
 |---|---|---|
-| `build/web/main.dart.js` | `34debb6ce84ca189fc88e24a6e3818aebb7960535ebaaedc7ec65c0281c1de2c` | 48 MiB generated web directory. |
-| `build/app/outputs/flutter-apk/app-release.apk` | `07659059cef3c9577b2af6a9788f2ce2adc783561667ed74f72258ce65f642a9` | 77 MiB; CI-only signing lane. |
+| `build/web/main.dart.js` | `4127a230ae3dd00f29f33c7a2a09c2a9cabb6e1d7d42dcdee37a329335a2bd34` | 5.3 MiB generated web entrypoint. |
+| `build/app/outputs/flutter-apk/app-release.apk` | `6fa812184a34a122d51c698c2894593b2324a26ad5e70c343e91a2f27dff99c5` | 77 MiB; CI-only signing lane. |
 
 No new product-screen screenshot was captured for this audit because no screen
 was redesigned or changed. Existing desktop/360px golden and widget coverage
@@ -82,6 +93,23 @@ staging ref, applies tracked migrations to the empty staging target, deploys
 `finalize-document-upload` with JWT verification intact, and verifies both the
 function and header-hierarchy RPC afterwards.
 
+## P0 corrective release controls — 4 August 2026
+
+- `.github/workflows/flutter.yml` is a quality gate only. A push to `main`
+  cannot publish to Vercel.
+- `.github/workflows/release-production.yml` is manual-only and requires both
+  a staging-acceptance evidence reference and a release/rollback note.
+- Its deployment job targets GitHub's protected `production` environment, so
+  the configured reviewer must approve before its scoped secrets are exposed.
+- The release workflow is intentionally not a substitute for the dedicated
+  Supabase staging deployment and live document witness above.
+
+The P0 corrective migration is additive. It extends only non-commercial BOQ/MR
+technical mappings, adds a role-safe document projection and permits the
+assigned receiving Engineer to generate an already-reviewed Delivery Order.
+It does not rewrite historical material rows, inventory, reservations,
+dispatches, receipts, returns, document revisions or audit events.
+
 ## Remaining staging and production blockers
 
 1. A release owner must explicitly approve creation of a dedicated empty
@@ -96,6 +124,10 @@ function and header-hierarchy RPC afterwards.
 4. Obtain production target/backup authority, a protected production signing
    lane and web-hosting authority. No production credentials, service-role key
    or signing material belongs in the app, Git or this document.
+5. Restore GitHub Actions billing before relying on the repository quality gate
+   or the protected manual release workflow. The last observed hosted jobs were
+   not started because the account was billing-locked; that external condition
+   is not evidence of a successful staging or production release.
 
 ## Migration, rollback and scope notes
 

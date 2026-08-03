@@ -7,10 +7,18 @@ Status: **passed** on 2 August 2026.
 
 ## Delivered
 
+> **CURRENT-AUTHORITY ERRATUM — 4 August 2026.** The historical delivery note
+> below predates the approved post-receipt receiver action. The current R35
+> contract in `PRODUCT_DECISIONS.md` and `STATE_RPC_RLS_MATRIX.md` allows an
+> assigned Project/Site Engineer to generate the immutable Delivery Order only
+> after receipt review. It does not broaden stock, arrangement or return
+> confirmation authority.
+
 - A protected Delivery Order model with one current revision pointer per
-  dispatch and append-only revision/line snapshots. Procurement/Admin can
-  create a DO only after receipt review; every snapshot contains only good
-  received quantity and exactly `S:No`, `Item Description`, `Qty` and `Unit`.
+  dispatch and append-only revision/line snapshots. An assigned receiving
+  Engineer, Procurement or Admin can create a DO only after receipt review;
+  every snapshot contains only good received quantity and exactly `S:No`,
+  `Item Description`, `Qty` and `Unit`.
 - A protected material-return state machine:
   `draft -> submitted -> confirmed | rejected`. Return eligibility is derived
   from receipt good quantity minus earlier confirmed returns, with no client

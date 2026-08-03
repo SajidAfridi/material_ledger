@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_material_request.dart';
+import '../models/yorks_v1_material_request_document.dart';
 import '../sync/connectivity_service.dart';
 
 /// Narrow RPC boundary for V1 requests. It prevents widgets and local draft
@@ -37,6 +38,10 @@ abstract interface class YorksV1MaterialRequestRepository {
   Future<List<YorksV1MaterialRequest>> listRequests({String? projectId});
 
   Future<YorksV1MaterialRequest> getRequest(String requestId);
+
+  Future<YorksV1MaterialRequestDocumentModel> getDocumentModel(
+    String requestId,
+  );
 
   Future<YorksV1MaterialRequest> saveDraft(
     YorksV1SaveMaterialRequestDraftInput input,
@@ -119,6 +124,24 @@ class YorksV1SupabaseMaterialRequestRepository
       parameters: {'p_request_id': requestId},
     );
     return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequestDocumentModel> getDocumentModel(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_material_request_document_projection',
+      parameters: {'p_request_id': requestId},
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestDocumentModel.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
   }
 
   @override

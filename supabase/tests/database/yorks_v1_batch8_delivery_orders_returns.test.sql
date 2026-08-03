@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(32);
+select plan(33);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -198,6 +198,19 @@ select set_config(
   true
 );
 
+select ok(
+  jsonb_array_length(public.v1_material_request_document_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) -> 'project_engineers') = 1
+  and (public.v1_material_request_document_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{dispatch,reference}') = 'B8-RET-001-DSP001'
+  and (public.v1_material_request_document_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) -> 'receipt_statuses') @> '[{"status":"Received"}]'::jsonb,
+  'The controlled MR document projection includes Project Engineers, dispatch and receipt facts'
+);
+
 select throws_ok(
   $$insert into public.v1_delivery_orders (
     request_id, dispatch_id, project_id, delivery_order_reference,
@@ -315,7 +328,7 @@ select set_config(
   true
 );
 
-select throws_ok(
+select lives_ok(
   $$select public.v1_generate_delivery_order(
     jsonb_build_object(
       'request_id', '81000000-0000-4000-8000-000000000001',
@@ -324,8 +337,7 @@ select throws_ok(
       'delivery_order_reference', 'B8-DO-001'
     ), '82000000-0000-4000-8000-000000000004'::uuid
   )$$,
-  '42501', 'V1_DELIVERY_ORDER_GENERATE_DENIED',
-  'Engineers can read Delivery Orders but cannot generate them'
+  'An assigned Site Engineer can generate the post-receipt Delivery Order revision'
 );
 
 select lives_ok(

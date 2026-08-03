@@ -418,6 +418,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'مقدار',
     hi: 'मात्रा',
   );
+  static const suggestedQuantityReview = TranslatableString(
+    en: 'Suggested quantity: 1. Please review before submission.',
+    ar: 'الكمية المقترحة: 1. يرجى مراجعتها قبل الإرسال.',
+    ur: 'تجویز کردہ مقدار: 1۔ جمع کرانے سے پہلے براہ کرم جائزہ لیں۔',
+    hi: 'सुझाई गई मात्रा: 1। सबमिट करने से पहले कृपया जाँच लें।',
+  );
   static const unit = TranslatableString(
     en: 'Unit',
     ar: 'الوحدة',
@@ -849,6 +855,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'يمكن إرجاع بند مستلم مؤهل من هذا الطلب عند عدم الحاجة إليه.',
     ur: 'جب وصول شدہ میٹیریل کی ضرورت نہ رہے تو اسے اس درخواست سے واپس کیا جا سکتا ہے۔',
     hi: 'जब प्राप्त वस्तु की आवश्यकता न हो तो इसे इस अनुरोध से लौटाया जा सकता है।',
+  );
+  static const deliveryOrderAfterReceipt = TranslatableString(
+    en: 'The confirmed receipt is ready for its immutable Delivery Order.',
+    ar: 'الاستلام المؤكد جاهز لأمر التسليم غير القابل للتعديل.',
+    ur: 'تصدیق شدہ وصولی اپنے ناقابلِ ترمیم ڈیلیوری آرڈر کے لیے تیار ہے۔',
+    hi: 'पुष्ट प्राप्ति अपने अपरिवर्तनीय डिलीवरी ऑर्डर के लिए तैयार है।',
+  );
+  static const controlledDocumentLoading = TranslatableString(
+    en: 'Preparing the controlled document…',
+    ar: 'جارٍ إعداد المستند المراقب…',
+    ur: 'کنٹرولڈ دستاویز تیار کی جا رہی ہے…',
+    hi: 'नियंत्रित दस्तावेज़ तैयार किया जा रहा है…',
+  );
+  static const controlledDocumentUnavailable = TranslatableString(
+    en: 'The controlled document details are unavailable. Refresh and try again.',
+    ar: 'تفاصيل المستند المراقب غير متاحة. حدّث الصفحة وحاول مرة أخرى.',
+    ur: 'کنٹرولڈ دستاویز کی تفصیلات دستیاب نہیں ہیں۔ ریفریش کر کے دوبارہ کوشش کریں۔',
+    hi: 'नियंत्रित दस्तावेज़ विवरण उपलब्ध नहीं हैं। रीफ़्रेश करके फिर प्रयास करें।',
   );
   static const item = TranslatableString(
     en: 'Item',
