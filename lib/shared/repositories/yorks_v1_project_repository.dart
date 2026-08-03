@@ -213,6 +213,7 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
     final domainCode = switch (code) {
       '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
       '23505' || '40001' => YorksV1DomainErrorCode.conflict,
+      'PGRST002' || 'PGRST003' => YorksV1DomainErrorCode.backendUnavailable,
       '22023' ||
       '22007' ||
       '22P02' ||

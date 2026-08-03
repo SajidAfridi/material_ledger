@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_material_request_draft_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
@@ -119,6 +121,41 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('does not send overlapping connected draft commands', () async {
+      final blocker = Completer<void>();
+      final repository = _FakeRequestRepository()..saveDelay = blocker.future;
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: repository,
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.setProject(_projectId);
+      await controller.setScope(_scopeId);
+      await controller.addCustomLine();
+      final line = controller.state.draft.lines.single;
+      await controller.updateLine(
+        line.id,
+        (current) => current.copyWith(
+          description: 'Motorized Smoke Damper',
+          quantity: '1',
+          unit: 'Nos',
+        ),
+      );
+
+      final first = controller.saveConnected();
+      await Future<void>.delayed(Duration.zero);
+      final second = controller.saveConnected();
+
+      expect(await second, isNull);
+      blocker.complete();
+      expect(await first, isNotNull);
+      expect(repository.saveInputs, hasLength(1));
     });
 
     test(
@@ -684,6 +721,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   final List<YorksV1SubmitMaterialRequestInput> submitInputs = [];
   Object? saveFailure;
   Object? submitFailure;
+  Future<void>? saveDelay;
 
   @override
   Future<YorksV1MaterialRequest> cancel(
@@ -721,6 +759,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   ) async {
     final failure = saveFailure;
     if (failure != null) throw failure;
+    await saveDelay;
     saveInputs.add(input);
     return _request(requestId: input.draft.id, version: 1);
   }

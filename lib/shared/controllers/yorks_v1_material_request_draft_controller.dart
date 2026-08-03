@@ -62,6 +62,7 @@ class YorksV1MaterialRequestDraftController
   final YorksV1MaterialRequestRepository _repository;
   final String Function() _uuidFactory;
   Future<void> _persistQueue = Future<void>.value();
+  bool _connectedCommandInFlight = false;
 
   /// Read-only snapshot for UI callbacks that need to guard a deferred
   /// default (for example the Common scope) against a newer project choice.
@@ -355,6 +356,16 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<YorksV1MaterialRequest?> saveConnected() async {
+    if (_connectedCommandInFlight) return null;
+    _connectedCommandInFlight = true;
+    try {
+      return await _saveConnected();
+    } finally {
+      _connectedCommandInFlight = false;
+    }
+  }
+
+  Future<YorksV1MaterialRequest?> _saveConnected() async {
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
       state = YorksV1MaterialRequestDraftState(
@@ -400,6 +411,16 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<YorksV1MaterialRequest?> submit() async {
+    if (_connectedCommandInFlight) return null;
+    _connectedCommandInFlight = true;
+    try {
+      return await _submitConnected();
+    } finally {
+      _connectedCommandInFlight = false;
+    }
+  }
+
+  Future<YorksV1MaterialRequest?> _submitConnected() async {
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
       state = YorksV1MaterialRequestDraftState(
