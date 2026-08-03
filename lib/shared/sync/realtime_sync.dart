@@ -59,10 +59,6 @@ List<_Synced> _synced() => [
   _Synced('returns', 'material_returns_list_v2', returnsProvider),
   _Synced('rentalUnits', 'rental_units_v2', rentalUnitsProvider),
   _Synced('rentPayments', 'rent_payments_v2', rentPaymentsProvider),
-  _Synced('employees', 'employees_v3', employeesProvider, [
-    'salaryAED',
-    'basicWageAED',
-  ]),
   _Synced('attendance', 'attendance_v2', attendanceProvider),
   _Synced('leaveRecords', 'leave_records_v2', leaveRecordsProvider),
 ];

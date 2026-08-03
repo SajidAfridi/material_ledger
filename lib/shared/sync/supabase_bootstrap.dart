@@ -36,7 +36,10 @@ class SupabaseBootstrap {
     'rentPayments': 'rent_payments_v2',
     'goodsReceipts': 'goods_receipts_v2',
     'returns': 'material_returns_list_v2',
-    'employees': 'employees_v3',
+    // Employee records are administered through the protected People/HR
+    // boundary.  Do not seed the legacy snapshot table at app launch: project
+    // engineers are intentionally denied that write by RLS, and attempting it
+    // created a noisy 403 alongside otherwise unrelated R35 workflows.
     'attendance': 'attendance_v2',
     'leaveRecords': 'leave_records_v2',
   };
