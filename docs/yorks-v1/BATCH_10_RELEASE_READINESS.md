@@ -16,8 +16,10 @@ strategy is **complete-R35-only**:
 - rollback means redeploying the prior approved complete-R35 app/function
   build, preserving all additive schema, documents and audit history.
 
-The remediation commit SHA is recorded after the implementation commit is
-created. It is intentionally not guessed in this document.
+The remediation implementation commit is
+`883d004336e7945be49b8c4a8854d39bc80acbcf`
+(`fix(yorks): close R35 release blockers`). This evidence-record update is a
+documentation-only follow-up to that implementation commit.
 
 ## P0 remediation record
 
