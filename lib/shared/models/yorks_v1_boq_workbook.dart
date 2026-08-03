@@ -58,6 +58,32 @@ class YorksV1BoqImportColumn {
   );
 }
 
+/// One source-column header path preserved from an imported worksheet.
+///
+/// A one-level workbook has one label. A two-level schedule (for example the
+/// Package Unit "Calculated / Selected" columns) retains both labels so the
+/// reviewed heading is explainable after the import without keeping workbook
+/// bytes in local or server caches.
+class YorksV1BoqHeaderPath {
+  YorksV1BoqHeaderPath({
+    required this.sourceIndex,
+    required List<String> labels,
+  }) : labels = List.unmodifiable([
+         for (final label in labels)
+           if (label.trim().isNotEmpty) label.trim(),
+       ]);
+
+  final int sourceIndex;
+  final List<String> labels;
+
+  String get combinedLabel => labels.join(' — ');
+
+  Map<String, Object?> toJson() => {
+    'source_index': sourceIndex,
+    'labels': labels,
+  };
+}
+
 /// A non-empty source data row keyed by its source-column coordinate.
 class YorksV1BoqImportRow {
   YorksV1BoqImportRow({
@@ -100,10 +126,25 @@ class YorksV1BoqImportPreview {
     required this.worksheetName,
     required this.title,
     required this.headerRowIndex,
+    List<int>? headerRowIndexes,
+    List<YorksV1BoqHeaderPath>? headerHierarchy,
     required List<YorksV1BoqImportColumn> columns,
     required List<YorksV1BoqImportRow> rows,
     required List<YorksV1BoqImportValidationIssue> validationIssues,
-  }) : columns = List.unmodifiable(columns),
+  }) : headerRowIndexes = List.unmodifiable(
+         headerRowIndexes ?? [headerRowIndex],
+       ),
+       headerHierarchy = List.unmodifiable(
+         headerHierarchy ??
+             [
+               for (final column in columns)
+                 YorksV1BoqHeaderPath(
+                   sourceIndex: column.sourceIndex,
+                   labels: [column.heading],
+                 ),
+             ],
+       ),
+       columns = List.unmodifiable(columns),
        rows = List.unmodifiable(rows),
        validationIssues = List.unmodifiable(validationIssues);
 
@@ -113,11 +154,20 @@ class YorksV1BoqImportPreview {
 
   /// Zero-based index used only while editing this local preview.
   final int headerRowIndex;
+
+  /// One or two zero-based source rows used to form the visible headings.
+  final List<int> headerRowIndexes;
+
+  /// Lossless parent/child header labels keyed by source column.
+  final List<YorksV1BoqHeaderPath> headerHierarchy;
   final List<YorksV1BoqImportColumn> columns;
   final List<YorksV1BoqImportRow> rows;
   final List<YorksV1BoqImportValidationIssue> validationIssues;
 
   int get headerRowNumber => headerRowIndex + 1;
+  List<int> get headerRowNumbers => [
+    for (final index in headerRowIndexes) index + 1,
+  ];
   bool get isValid => validationIssues.isEmpty && columns.isNotEmpty;
 
   YorksV1BoqImportPreview copyWith({
@@ -129,6 +179,8 @@ class YorksV1BoqImportPreview {
     worksheetName: worksheetName,
     title: title ?? this.title,
     headerRowIndex: headerRowIndex,
+    headerRowIndexes: headerRowIndexes,
+    headerHierarchy: headerHierarchy,
     columns: columns ?? this.columns,
     rows: rows,
     validationIssues: validationIssues ?? this.validationIssues,
@@ -147,7 +199,14 @@ class YorksV1ImportBoqWorksheetInput {
     required this.sourceFileName,
     required this.sourceWorksheetName,
     required this.sourceHeaderRowNumber,
-  });
+    List<int>? sourceHeaderRowNumbers,
+    List<YorksV1BoqHeaderPath>? sourceHeaderHierarchy,
+  }) : sourceHeaderRowNumbers = List.unmodifiable(
+         sourceHeaderRowNumbers ?? [sourceHeaderRowNumber],
+       ),
+       sourceHeaderHierarchy = List.unmodifiable(
+         sourceHeaderHierarchy ?? const [],
+       );
 
   final YorksV1BoqWorksheet worksheet;
   final String worksheetTitle;
@@ -156,6 +215,8 @@ class YorksV1ImportBoqWorksheetInput {
   final String sourceFileName;
   final String sourceWorksheetName;
   final int sourceHeaderRowNumber;
+  final List<int> sourceHeaderRowNumbers;
+  final List<YorksV1BoqHeaderPath> sourceHeaderHierarchy;
 
   Map<String, Object?> toRpcPayload() => {
     'group_id': worksheet.group.id,
@@ -167,6 +228,10 @@ class YorksV1ImportBoqWorksheetInput {
       'file_name': sourceFileName.trim(),
       'worksheet_name': sourceWorksheetName.trim(),
       'header_row_number': sourceHeaderRowNumber,
+      'header_row_numbers': sourceHeaderRowNumbers,
+      'header_hierarchy': [
+        for (final path in sourceHeaderHierarchy) path.toJson(),
+      ],
     },
   };
 }

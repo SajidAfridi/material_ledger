@@ -1,5 +1,8 @@
 # Yorks V1 R35 — Batch 1 Delivery Record
 
+> **HISTORICAL BATCH EVIDENCE — NOT CURRENT BUILD CONFIGURATION.** Read the
+> canonical build section in `README.md` and `TERRA.md` for current defaults.
+
 Implementation delivered: 1 August 2026
 Acceptance state: **passed — 1 August 2026**
 

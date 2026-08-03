@@ -153,13 +153,17 @@ class YorksV1BoqWorkbookCodec {
     required String fallbackTitle,
     int? headerRowIndex,
   }) {
-    final resolvedHeaderIndex = headerRowIndex ?? _detectHeaderRow(sheet);
-    if (resolvedHeaderIndex < 0 || resolvedHeaderIndex >= sheet.rows.length) {
+    final headerRowIndexes = _resolveHeaderRows(
+      sheet,
+      requestedHeaderRowIndex: headerRowIndex,
+    );
+    if (headerRowIndexes.isEmpty) {
       return YorksV1BoqImportPreview(
         fileName: workbook.fileName,
         worksheetName: sheet.name,
         title: fallbackTitle,
         headerRowIndex: 0,
+        headerRowIndexes: const [],
         columns: const [],
         rows: const [],
         validationIssues: const [
@@ -169,32 +173,36 @@ class YorksV1BoqWorkbookCodec {
         ],
       );
     }
-    final maxColumns = _maxColumnsAfter(sheet.rows, resolvedHeaderIndex);
-    final header = sheet.rows[resolvedHeaderIndex];
+    final resolvedHeaderIndex = headerRowIndexes.first;
+    final lastHeaderRowIndex = headerRowIndexes.last;
+    final sourceIndexes = _sourceColumnIndexes(
+      sheet.rows,
+      firstHeaderRowIndex: resolvedHeaderIndex,
+    );
+    final headerHierarchy = _headerHierarchy(
+      sheet.rows,
+      headerRowIndexes: headerRowIndexes,
+      sourceIndexes: sourceIndexes,
+    );
     final columns = [
-      for (var index = 0; index < maxColumns; index++)
+      for (final path in headerHierarchy)
         YorksV1BoqImportColumn(
-          sourceIndex: index,
-          heading: index < header.length ? header[index].trim() : '',
-          canonicalField: _suggestCanonicalField(
-            index < header.length ? header[index] : '',
-          ),
+          sourceIndex: path.sourceIndex,
+          heading: path.combinedLabel,
+          canonicalField: _suggestCanonicalField(path.combinedLabel),
         ),
     ];
     final rows = <YorksV1BoqImportRow>[];
     for (
-      var index = resolvedHeaderIndex + 1;
+      var index = lastHeaderRowIndex + 1;
       index < sheet.rows.length;
       index++
     ) {
       final source = sheet.rows[index];
       final values = <int, String>{
-        for (
-          var column = 0;
-          column < math.min(source.length, maxColumns);
-          column++
-        )
-          if (source[column].isNotEmpty) column: source[column],
+        for (final sourceIndex in sourceIndexes)
+          if (sourceIndex < source.length && source[sourceIndex].isNotEmpty)
+            sourceIndex: source[sourceIndex],
       };
       if (values.isNotEmpty) {
         rows.add(
@@ -207,6 +215,8 @@ class YorksV1BoqWorkbookCodec {
       worksheetName: sheet.name,
       title: _detectTitle(sheet, resolvedHeaderIndex, fallbackTitle),
       headerRowIndex: resolvedHeaderIndex,
+      headerRowIndexes: headerRowIndexes,
+      headerHierarchy: headerHierarchy,
       columns: columns,
       rows: rows,
       validationIssues: validatePreviewColumns(columns),
@@ -429,14 +439,125 @@ class YorksV1BoqWorkbookCodec {
     return bestIndex;
   }
 
-  static int _maxColumnsAfter(List<List<String>> rows, int headerRowIndex) {
-    var maxColumns = headerRowIndex < rows.length
-        ? rows[headerRowIndex].length
-        : 0;
-    for (var index = headerRowIndex + 1; index < rows.length; index++) {
-      maxColumns = math.max(maxColumns, rows[index].length);
+  static List<int> _resolveHeaderRows(
+    YorksV1BoqWorkbookSheet sheet, {
+    required int? requestedHeaderRowIndex,
+  }) {
+    final primary = requestedHeaderRowIndex ?? _detectHeaderRow(sheet);
+    if (primary < 0 || primary >= sheet.rows.length) return const [];
+
+    // A reviewer can select either row of a detected parent/child pair. Keep
+    // both paths so rows begin after the child header rather than treating its
+    // "Calculated / Selected" labels as material data.
+    if (primary > 0 &&
+        _looksLikeChildHeader(
+          parent: sheet.rows[primary - 1],
+          child: sheet.rows[primary],
+        )) {
+      return [primary - 1, primary];
     }
-    return math.min(maxColumns, _maxColumnsPerSheet);
+    if (primary + 1 < sheet.rows.length &&
+        _looksLikeChildHeader(
+          parent: sheet.rows[primary],
+          child: sheet.rows[primary + 1],
+        )) {
+      return [primary, primary + 1];
+    }
+    return [primary];
+  }
+
+  static bool _looksLikeChildHeader({
+    required List<String> parent,
+    required List<String> child,
+  }) {
+    final childValues = child
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    if (childValues.length < 2) return false;
+
+    var continuationCount = 0;
+    final width = math.max(parent.length, child.length);
+    for (var index = 0; index < width; index++) {
+      final parentValue = index < parent.length ? parent[index].trim() : '';
+      final childValue = index < child.length ? child[index].trim() : '';
+      if (parentValue.isEmpty && childValue.isNotEmpty) continuationCount++;
+    }
+    if (continuationCount < 2) return false;
+
+    // Multi-level schedule children are typically short repeated labels such
+    // as "Calculated" and "Selected". The check deliberately rejects normal
+    // data rows, which are not a header continuation and commonly contain
+    // numeric/item identifiers instead.
+    final normalized = childValues.map(_normalizedHeader).toList();
+    final repeated = normalized.toSet().length < normalized.length;
+    final labelledChild = normalized.any(
+      (value) => value == 'calculated' || value == 'selected',
+    );
+    return repeated || labelledChild;
+  }
+
+  static List<int> _sourceColumnIndexes(
+    List<List<String>> rows, {
+    required int firstHeaderRowIndex,
+  }) {
+    var first = -1;
+    var last = -1;
+    for (
+      var rowIndex = firstHeaderRowIndex;
+      rowIndex < rows.length;
+      rowIndex++
+    ) {
+      final row = rows[rowIndex];
+      for (var columnIndex = 0; columnIndex < row.length; columnIndex++) {
+        if (row[columnIndex].trim().isEmpty) continue;
+        if (first < 0) first = columnIndex;
+        last = columnIndex;
+      }
+    }
+    if (first < 0 || last < first) return const [];
+    // Only fully empty *outer* columns are trimmed. Empty inner coordinates
+    // are retained so source columns and values never shift on import.
+    return [for (var index = first; index <= last; index++) index];
+  }
+
+  static List<YorksV1BoqHeaderPath> _headerHierarchy(
+    List<List<String>> rows, {
+    required List<int> headerRowIndexes,
+    required List<int> sourceIndexes,
+  }) {
+    if (headerRowIndexes.length == 1) {
+      final header = rows[headerRowIndexes.single];
+      return [
+        for (final sourceIndex in sourceIndexes)
+          YorksV1BoqHeaderPath(
+            sourceIndex: sourceIndex,
+            labels: [if (sourceIndex < header.length) header[sourceIndex]],
+          ),
+      ];
+    }
+
+    final parent = rows[headerRowIndexes.first];
+    final child = rows[headerRowIndexes.last];
+    String activeParent = '';
+    final result = <YorksV1BoqHeaderPath>[];
+    for (final sourceIndex in sourceIndexes) {
+      final parentLabel = sourceIndex < parent.length
+          ? parent[sourceIndex].trim()
+          : '';
+      if (parentLabel.isNotEmpty) activeParent = parentLabel;
+      final childLabel = sourceIndex < child.length
+          ? child[sourceIndex].trim()
+          : '';
+      final labels = <String>[
+        if (activeParent.isNotEmpty) activeParent,
+        if (childLabel.isNotEmpty && childLabel != activeParent) childLabel,
+      ];
+      result.add(
+        YorksV1BoqHeaderPath(sourceIndex: sourceIndex, labels: labels),
+      );
+    }
+    return result;
   }
 
   static String _detectTitle(

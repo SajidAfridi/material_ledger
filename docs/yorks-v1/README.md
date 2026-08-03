@@ -6,6 +6,12 @@ Current delivery stage: **Batches 0–9 complete; Batch 10 local release
 evidence passed. Staging acceptance, protected Android signing and deployment
 remain release-owner activities.**
 
+> **HISTORICAL BATCH MATERIAL — NOT THE CURRENT BUILD CONFIGURATION.** The
+> batch-completion files record the original incremental rollout and therefore
+> may say that an individual flag was default-off. The canonical R35 build
+> configuration below is current: the accepted, complete Yorks chain is on by
+> default and legacy Nexus flags are disabled.
+
 This folder is the repository-local contract for the Yorks V1 Procurement
 Control and Inventory turnaround. Rev 2.0 supersedes the overlapping Nexus V7
 product workflow. The existing V7 implementation remains valuable evidence and
@@ -56,6 +62,22 @@ explicit V7-to-V1 conflict resolution.
 - One source of truth.
 - Familiar spreadsheet behavior for engineers without weakening server rules.
 
+## Canonical R35 build configuration
+
+Yorks V1 is the production experience by default. Ordinary local and release
+builds use the complete R35 chain and the configured production Supabase
+project without any command-line defines:
+
+```bash
+flutter run -d chrome
+flutter build web --release
+flutter build apk --release
+```
+
+The tracked `../../tool/r35.sh` launcher is available when CI/staging needs
+explicit Supabase overrides. Do not add legacy `NEXUS_V7_*` flags to an R35
+command.
+
 ## Canonical operational chain
 
 `Project -> BOQ -> MR Draft -> Submit -> Arrange/Reserve -> Project Engineer Approval -> Dispatch -> Receipt Review -> Delivery Order -> Return`
@@ -70,7 +92,9 @@ place and receive regression coverage rather than redesign.
 2. Read `AGENTS.md` plus this README, source-of-truth and product decisions.
 3. Read the task-relevant architecture/UI/migration/test sections.
 4. Audit exact current files and symbols before editing.
-5. Implement only the approved slice behind a default-off rollout boundary.
+5. Implement only the approved slice. Keep new work guarded until its
+   acceptance gate passes; once accepted into the complete R35 chain, the
+   canonical build configuration controls its default state.
 6. Add migration/rollback notes, negative RLS tests and idempotency proof where
    applicable.
 7. Run narrow checks and the complete applicable gate.

@@ -79,4 +79,8 @@ class YorksV1FeatureFlags {
   bool get logistics => arrangement && _logistics;
   bool get returnsDocuments => logistics && _returnsDocuments;
   bool get documents => returnsDocuments && _documents;
+
+  /// The one supported Yorks V1 R35 operational chain. Release builds must
+  /// fail closed if a caller explicitly disables any dependency in this chain.
+  bool get isCompleteR35 => documents;
 }

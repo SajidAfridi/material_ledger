@@ -1,5 +1,10 @@
 -- =====================================================================
 
+-- LEGACY — NOT CURRENT PRODUCT AUTHORITY.
+-- This generic JSONB schema is retained for migration evidence only. Current
+-- Yorks V1 schema and workflow authority lives in supabase/migrations/ and
+-- docs/yorks-v1/.
+
 -- V7 note: after this baseline, apply every tracked file in
 -- `supabase/migrations/` in timestamp order. Batch 8's normalized Phase 1
 -- tables and workflow/activation triggers intentionally live in migrations,

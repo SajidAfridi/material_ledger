@@ -253,13 +253,18 @@ flutter pub get
 dart format --output=none --set-exit-if-changed <changed Dart files>
 flutter analyze
 flutter test
-flutter build web --release \
-  --dart-define=SUPABASE_URL=https://ci.invalid \
-  --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
-flutter build apk --release \
-  --dart-define=SUPABASE_URL=https://ci.invalid \
-  --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
+SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key \
+  ./tool/r35.sh build-web
+CI=true YORKS_CI_EPHEMERAL_SIGNING=true \
+SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key \
+  ./tool/r35.sh build-apk
 ```
+
+For local Chrome testing, `flutter run -d chrome` is sufficient: the complete
+R35 Yorks chain and production Supabase configuration are built in. The
+tracked `./tool/r35.sh` launcher remains the portable CI/staging override and
+enables the same nine `YORKS_V1_*` flags plus `use_arabic=true`; legacy
+`NEXUS_V7_*` flags remain absent from the application provider.
 
 From Batch 1 onward, after the tracked local Supabase project exists:
 
@@ -279,7 +284,9 @@ artifact.
 - One approved batch/issue and one coherent vertical slice per PR.
 - Before editing, identify exact models, repositories, RPC/RLS, routes, UI and
   tests affected.
-- Feature flags default off until the batch acceptance gate passes.
+- New feature flags default off until the batch acceptance gate passes. The
+  accepted complete R35 chain is the documented exception and is enabled by
+  default; legacy Nexus flags remain disabled.
 - Include data-preservation and rollback notes for every migration.
 - Include positive and negative permission tests for every access change.
 - Include idempotency and competing-writer tests for critical quantity changes.

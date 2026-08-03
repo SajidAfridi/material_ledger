@@ -1,5 +1,13 @@
 # GodownPro — Development & Architecture Guide
 
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** This GodownPro guide describes
+> the pre-R35 app, including legacy roles, SharedPreferences workflows and old
+> navigation. Retain it for migration/regression context only. Use
+> [`../AGENTS.md`](../AGENTS.md), [`yorks-v1/README.md`](yorks-v1/README.md),
+> [`yorks-v1/SOURCE_OF_TRUTH.md`](yorks-v1/SOURCE_OF_TRUTH.md) and
+> [`yorks-v1/PRODUCT_DECISIONS.md`](yorks-v1/PRODUCT_DECISIONS.md) for current
+> Yorks product work.
+
 > **Codename**: The Architectural Ledger  
 > **Framework**: Flutter (Dart ^3.10.4)  
 > **Last Updated**: April 2026
@@ -438,4 +446,3 @@ When language mode is English, secondary text falls back to **Arabic** so the UI
 10. **Models are pure Dart** — no Flutter imports in `shared/models/`
 11. **Providers centralized** in `shared/providers/` — features read from these, not create their own
 12. **Barrel exports** via `constants.dart` and `widgets.dart` to keep imports clean
-

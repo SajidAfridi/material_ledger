@@ -12,8 +12,10 @@ import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
+import '../shared/providers/yorks_v1_workspace_status_provider.dart';
 import 'router.dart';
 import 'yorks_v1_workspace_search.dart';
+import 'yorks_v1_workspace_status_label.dart';
 
 /// Desktop-only shell preference. It lives above individual route widgets so
 /// navigating between Yorks screens does not reopen the panel unexpectedly.
@@ -270,7 +272,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
   }
 }
 
-class _YorksWorkspaceTopBar extends StatelessWidget {
+class _YorksWorkspaceTopBar extends ConsumerWidget {
   const _YorksWorkspaceTopBar({
     required this.title,
     required this.language,
@@ -282,7 +284,8 @@ class _YorksWorkspaceTopBar extends StatelessWidget {
   final YorksV1Role? role;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
     return Material(
       color: AppColors.surfaceContainerLow,
       child: Container(
@@ -318,26 +321,7 @@ class _YorksWorkspaceTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.lg),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.success,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  YorksV1ShellStrings.savedJustNow.primary,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.muted,
-                  ),
-                ),
-              ],
-            ),
+            YorksV1WorkspaceStatusLabel(status: workspaceStatus),
           ],
         ),
       ),
@@ -345,7 +329,7 @@ class _YorksWorkspaceTopBar extends StatelessWidget {
   }
 }
 
-class _YorksDesktopSidebar extends StatelessWidget {
+class _YorksDesktopSidebar extends ConsumerWidget {
   const _YorksDesktopSidebar({
     required this.destinations,
     required this.activePath,
@@ -365,7 +349,8 @@ class _YorksDesktopSidebar extends StatelessWidget {
   final VoidCallback onToggle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
     TranslatableString? previousGroup;
     final displayName = (userName ?? '').trim();
     return Container(
@@ -519,7 +504,9 @@ class _YorksDesktopSidebar extends StatelessWidget {
                           width: 12,
                           height: 12,
                           decoration: BoxDecoration(
-                            color: AppColors.success,
+                            color: YorksV1WorkspaceStatusLabel.colorFor(
+                              workspaceStatus.state,
+                            ),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: AppColors.surfaceContainerLowest,
@@ -568,25 +555,9 @@ class _YorksDesktopSidebar extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: AppColors.success,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          YorksV1ShellStrings.workspaceSaved.primary,
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.inkSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                    YorksV1WorkspaceStatusLabel(
+                      status: workspaceStatus,
+                      compact: true,
                     ),
                     const SizedBox(height: 2),
                     Text(

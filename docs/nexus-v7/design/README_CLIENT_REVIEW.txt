@@ -1,3 +1,8 @@
+LEGACY — NOT CURRENT PRODUCT AUTHORITY
+These Nexus V7 client-review notes are retained as historical design evidence
+only. Current Yorks V1 R35 visual and interaction authority is in
+docs/yorks-v1/R35_UI_CONTRACT.md and the approved R35 HTML.
+
 YORKS NEXUS — MATERIALS & PROJECTS CLIENT DESIGN V7
 Yorks Air Conditioning and Refrigeration LLC-SPC
 

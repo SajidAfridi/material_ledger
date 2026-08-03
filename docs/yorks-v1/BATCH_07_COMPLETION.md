@@ -1,5 +1,8 @@
 # Yorks AC. & Ref. V1 R35 — Batch 7 Completion
 
+> **HISTORICAL BATCH EVIDENCE — NOT CURRENT BUILD CONFIGURATION.** Read the
+> canonical build section in `README.md` and `TERRA.md` for current defaults.
+
 Status: **passed** on 2 August 2026.
 
 ## Delivered

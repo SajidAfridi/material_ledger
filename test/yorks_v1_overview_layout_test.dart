@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -47,6 +49,9 @@ void main() {
               yorksV1MaterialRequestListProvider(
                 null,
               ).overrideWith((ref) async => []),
+              yorksV1InventoryWorkspaceProvider(null).overrideWith(
+                (ref) async => YorksV1InventoryWorkspace(items: const []),
+              ),
             ],
             child: MaterialApp.router(routerConfig: router),
           ),
@@ -92,6 +97,9 @@ void main() {
               yorksV1MaterialRequestListProvider(
                 null,
               ).overrideWith((ref) async => []),
+              yorksV1InventoryWorkspaceProvider(null).overrideWith(
+                (ref) async => YorksV1InventoryWorkspace(items: const []),
+              ),
             ],
             child: MaterialApp.router(routerConfig: router),
           ),

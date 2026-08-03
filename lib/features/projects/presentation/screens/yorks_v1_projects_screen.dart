@@ -16,6 +16,7 @@ import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
+import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -24,6 +25,7 @@ import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_provider.dart';
+import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 
@@ -58,6 +60,11 @@ class YorksV1OverviewScreen extends ConsumerWidget {
     final canCreateProject = role?.canCreateProject == true;
     final canCreateRequest = role?.canCreateMaterialRequest == true;
     final procurement = role == YorksV1Role.procurement;
+    final AsyncValue<YorksV1InventoryWorkspace?> inventory = procurement
+        ? ref
+              .watch(yorksV1InventoryWorkspaceProvider(null))
+              .whenData<YorksV1InventoryWorkspace?>((value) => value)
+        : const AsyncData<YorksV1InventoryWorkspace?>(null);
 
     final projectItems =
         projects.valueOrNull ?? const <YorksV1ProjectPortfolioItem>[];
@@ -90,6 +97,7 @@ class YorksV1OverviewScreen extends ConsumerWidget {
       canCreateProject: canCreateProject,
       canCreateRequest: canCreateRequest,
       procurement: procurement,
+      inventory: inventory,
       onCreateProject: () => context.push(RoutePaths.engineerCreateProject),
       onCreateRequest: () => context.push(
         RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
@@ -113,6 +121,7 @@ class _R35OverviewPage extends StatelessWidget {
     required this.canCreateProject,
     required this.canCreateRequest,
     required this.procurement,
+    required this.inventory,
     required this.onCreateProject,
     required this.onCreateRequest,
     required this.onOpenProjects,
@@ -130,6 +139,7 @@ class _R35OverviewPage extends StatelessWidget {
   final bool canCreateProject;
   final bool canCreateRequest;
   final bool procurement;
+  final AsyncValue<YorksV1InventoryWorkspace?> inventory;
   final VoidCallback onCreateProject;
   final VoidCallback onCreateRequest;
   final VoidCallback onOpenProjects;
@@ -142,6 +152,7 @@ class _R35OverviewPage extends StatelessWidget {
     if (procurement) {
       return _R35ProcurementOverview(
         requests: requests,
+        inventory: inventory,
         onOpenRequests: onOpenRequests,
         onOpenProjects: onOpenProjects,
       );
@@ -226,11 +237,13 @@ class _R35OverviewPage extends StatelessWidget {
 class _R35ProcurementOverview extends StatelessWidget {
   const _R35ProcurementOverview({
     required this.requests,
+    required this.inventory,
     required this.onOpenRequests,
     required this.onOpenProjects,
   });
 
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final AsyncValue<YorksV1InventoryWorkspace?> inventory;
   final VoidCallback onOpenRequests;
   final VoidCallback onOpenProjects;
 
@@ -368,7 +381,13 @@ class _R35ProcurementOverview extends StatelessWidget {
                             const SizedBox(height: AppSpacing.md),
                             _R35SnapshotTile(
                               label: YorksV1ShellStrings.lowOutOfStock.primary,
-                              value: '0',
+                              value: inventory.when(
+                                data: (workspace) => workspace == null
+                                    ? '—'
+                                    : '${workspace.summary.attentionCount}',
+                                loading: () => '…',
+                                error: (_, _) => '—',
+                              ),
                             ),
                           ],
                         ),

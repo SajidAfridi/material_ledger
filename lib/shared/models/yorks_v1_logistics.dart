@@ -420,9 +420,12 @@ class YorksV1LogisticsWorkspace {
 class YorksV1InventoryWorkspace {
   YorksV1InventoryWorkspace({
     required List<YorksV1LogisticsInventoryItem> items,
-  }) : items = List.unmodifiable(items);
+    YorksV1InventorySummary? summary,
+  }) : items = List.unmodifiable(items),
+       summary = summary ?? YorksV1InventorySummary.fromItems(items);
 
   final List<YorksV1LogisticsInventoryItem> items;
+  final YorksV1InventorySummary summary;
 
   factory YorksV1InventoryWorkspace.fromRpcJson(Map<String, dynamic> json) {
     final rawItems = json['items'];
@@ -431,16 +434,78 @@ class YorksV1InventoryWorkspace {
         YorksV1DomainErrorCode.unexpectedResponse,
       );
     }
+    final items = [
+      for (final item in rawItems)
+        if (item is Map)
+          YorksV1LogisticsInventoryItem.fromRpcJson(
+            Map<String, dynamic>.from(item),
+          ),
+    ];
+    final rawSummary = json['summary'];
     return YorksV1InventoryWorkspace(
-      items: [
-        for (final item in rawItems)
-          if (item is Map)
-            YorksV1LogisticsInventoryItem.fromRpcJson(
-              Map<String, dynamic>.from(item),
-            ),
-      ],
+      items: items,
+      summary: rawSummary is Map
+          ? YorksV1InventorySummary.fromRpcJson(
+              Map<String, dynamic>.from(rawSummary),
+            )
+          : YorksV1InventorySummary.fromItems(items),
     );
   }
+}
+
+/// Role-safe inventory counts derived only from the operational projection.
+///
+/// The server still owns availability arithmetic. The Flutter value is a
+/// display summary over the exact items that Procurement/Admin has already
+/// been authorized to read; it never exposes commercial information.
+class YorksV1InventorySummary {
+  const YorksV1InventorySummary({
+    required this.totalActiveItems,
+    required this.lowStockCount,
+    required this.outOfStockCount,
+    required this.reservedCount,
+    required this.incomingCount,
+  });
+
+  final int totalActiveItems;
+  final int lowStockCount;
+  final int outOfStockCount;
+  final int reservedCount;
+  final int incomingCount;
+
+  int get attentionCount => lowStockCount + outOfStockCount;
+
+  factory YorksV1InventorySummary.fromItems(
+    List<YorksV1LogisticsInventoryItem> items,
+  ) {
+    var totalActiveItems = 0;
+    var outOfStockCount = 0;
+    var reservedCount = 0;
+    for (final item in items) {
+      if (!item.isActive) continue;
+      totalActiveItems++;
+      if ((_decimal(item.availableQuantity) ?? 0) <= 0) outOfStockCount++;
+      if ((_decimal(item.reservedQuantity) ?? 0) > 0) reservedCount++;
+    }
+    // Yorks V1 does not yet model inbound purchase orders. Returning zero is
+    // an honest projection of that deferred capability, not a fake stock count.
+    return YorksV1InventorySummary(
+      totalActiveItems: totalActiveItems,
+      lowStockCount: 0,
+      outOfStockCount: outOfStockCount,
+      reservedCount: reservedCount,
+      incomingCount: 0,
+    );
+  }
+
+  factory YorksV1InventorySummary.fromRpcJson(Map<String, dynamic> json) =>
+      YorksV1InventorySummary(
+        totalActiveItems: _nonNegativeInt(json['total_active_items']),
+        lowStockCount: _nonNegativeInt(json['low_stock_count']),
+        outOfStockCount: _nonNegativeInt(json['out_of_stock_count']),
+        reservedCount: _nonNegativeInt(json['reserved_count']),
+        incomingCount: _nonNegativeInt(json['incoming_count']),
+      );
 }
 
 enum YorksV1MaterialReturnState {
@@ -1255,6 +1320,13 @@ int? _nullableInt(Object? value) {
     _ => null,
   };
 }
+
+int _nonNegativeInt(Object? value) {
+  final parsed = _nullableInt(value) ?? 0;
+  return parsed < 0 ? 0 : parsed;
+}
+
+num? _decimal(String value) => num.tryParse(value.trim());
 
 DateTime _requiredDate(Map<String, dynamic> json, String key) {
   final date = _nullableDate(json[key]);

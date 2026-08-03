@@ -1,6 +1,7 @@
 # Yorks Nexus V7 — Implementation Source of Truth
 
-> **Historical as of 1 August 2026.** Yorks V1 Rev 2.0 supersedes this folder
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** Historical as of 1 August 2026.
+> Yorks V1 Rev 2.0 supersedes this folder
 > for overlapping Projects, BOQ, Material Requests, Procurement, Inventory,
 > Dispatch, Receipt, Returns, Documents and retained Admin behavior. Start at
 > [`../yorks-v1/README.md`](../yorks-v1/README.md). This folder remains

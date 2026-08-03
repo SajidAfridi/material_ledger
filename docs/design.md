@@ -1,4 +1,9 @@
 # Design System Specification: The Architectural Ledger
+
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** These visual rules belong to the
+> earlier GodownPro/legacy surface. Preserve this document as historical design
+> evidence only. The current visual target is the effective R35 HTML, governed
+> by [`../AGENTS.md`](../AGENTS.md) and [`yorks-v1/R35_UI_CONTRACT.md`](yorks-v1/R35_UI_CONTRACT.md).
  
 ## 1. Overview & Creative North Star
 This design system is built for the rugged precision of construction management. Our Creative North Star is **"The Architectural Ledger"**—a visual language that balances the industrial weight of raw materials with the sophisticated clarity of a high-end editorial publication. 

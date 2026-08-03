@@ -924,6 +924,8 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
   late int _headerRowIndex;
   late bool _hasSelectedHeader;
   late String _title;
+  late List<int> _headerRowIndexes;
+  late List<YorksV1BoqHeaderPath> _headerHierarchy;
   late List<YorksV1BoqImportColumn> _columns;
   late List<YorksV1BoqImportRow> _rows;
 
@@ -941,6 +943,8 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
     worksheetName: _sheet.name,
     title: _title,
     headerRowIndex: _headerRowIndex,
+    headerRowIndexes: _headerRowIndexes,
+    headerHierarchy: _headerHierarchy,
     columns: _columns,
     rows: _rows,
     validationIssues: widget.codec.validatePreviewColumns(_columns),
@@ -954,6 +958,8 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
       headerRowIndex: _hasSelectedHeader ? _headerRowIndex : null,
     );
     _headerRowIndex = detected.headerRowIndex;
+    _headerRowIndexes = detected.headerRowIndexes;
+    _headerHierarchy = detected.headerHierarchy;
     _title = detected.title;
     _columns = detected.columns;
     _rows = detected.rows;

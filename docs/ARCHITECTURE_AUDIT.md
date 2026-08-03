@@ -1,5 +1,10 @@
 # Architecture audit — findings & fix status
 
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** This audit records the former
+> GodownPro/Nexus implementation and its legacy workflow assumptions. Keep it
+> for regression evidence only; current architecture and security decisions
+> are in [`yorks-v1/ARCHITECTURE_AND_SECURITY_CONTRACT.md`](yorks-v1/ARCHITECTURE_AND_SECURITY_CONTRACT.md).
+
 A multi-agent audit (10 subsystem maps → 7 domain-expert lenses → adversarial
 verification of every finding) produced a 19-item backlog from 39 verified
 findings. Status below. Accounting is intentionally a separate future module and

@@ -282,6 +282,141 @@ void main() {
       );
     });
 
+    test('imports a two-level Package Unit header without blank headings', () {
+      final workbook = YorksV1BoqParsedWorkbook(
+        fileName: 'Equipment Schedule.xlsx',
+        sheets: [
+          YorksV1BoqWorkbookSheet(
+            name: 'Package Unit',
+            rows: [
+              List<String>.filled(21, ''),
+              [
+                '',
+                'PACKAGE UNIT SCHEDULE',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+              ],
+              [
+                '',
+                'S: No',
+                'Unit Refrence',
+                'PU-TAG',
+                'Model',
+                'T. Cooling Capacity (KW)',
+                '',
+                'S. Cooling Capacity (KW)',
+                '',
+                'Air Flow (L/s)',
+                '',
+                'ESP',
+                '',
+                'Electrical Details',
+                'Total Power Input (Kw)',
+                'Dimension (LxWxH)',
+                'QTY',
+                'Make',
+                'Mass No',
+                'Material Status',
+                '',
+              ],
+              [
+                '',
+                '',
+                '',
+                '',
+                '',
+                'Calculated',
+                'Selected',
+                'Calculated',
+                'Selected',
+                'Calculated',
+                'Selected',
+                'Calculated',
+                'Selected',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+              ],
+              [
+                '',
+                '1',
+                'SYSTEM-01',
+                'PU-01A',
+                'AMPR52052AM',
+                '148.8',
+                '148.8',
+                '106.9',
+                '108.3',
+                '4972',
+                '4972',
+                '500',
+                '500',
+                '415/3/50',
+                '75.4',
+                '4406 x 2235 x 3630',
+                '3',
+                'SKM/UAE',
+                'MTS-CS-0220',
+                'AP',
+                '',
+              ],
+            ],
+          ),
+        ],
+      );
+
+      final preview = codec.preview(
+        workbook: workbook,
+        sheet: workbook.sheets.single,
+        fallbackTitle: 'Fallback',
+      );
+
+      expect(preview.title, 'PACKAGE UNIT SCHEDULE');
+      expect(preview.headerRowIndexes, [2, 3]);
+      expect(preview.headerRowNumber, 3);
+      expect(preview.headerRowNumbers, [3, 4]);
+      expect(preview.columns, hasLength(19));
+      expect(
+        preview.columns.map((column) => column.heading),
+        containsAll([
+          'T. Cooling Capacity (KW) — Calculated',
+          'T. Cooling Capacity (KW) — Selected',
+          'Air Flow (L/s) — Calculated',
+          'Air Flow (L/s) — Selected',
+        ]),
+      );
+      expect(
+        preview.columns.map((column) => column.heading),
+        isNot(contains('')),
+      );
+      expect(preview.headerHierarchy, hasLength(preview.columns.length));
+      expect(preview.rows.single.sourceRowNumber, 5);
+      expect(preview.rows.single.valueFor(6), '148.8');
+      expect(preview.isValid, isTrue);
+    });
+
     test('rejects malformed non-XLSX bytes', () {
       expect(
         () => codec.decode(

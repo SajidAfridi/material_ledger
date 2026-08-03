@@ -1,10 +1,9 @@
 # GodownPro — Architecture & Backend Portability
 
-> **Legacy reference (pre–Nexus V7).** This document is retained only to
-> explain the original repository. It is not implementation authority for the
-> transformation. Use [`nexus-v7/README.md`](nexus-v7/README.md), the frozen
-> product decisions and ADR-001. Nexus V7 uses Supabase Auth/Postgres as its
-> system of record; Firebase is FCM transport only.
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** This document explains the
+> pre-R35 GodownPro/legacy SharedPreferences architecture and is retained only
+> as migration evidence. Use [`../AGENTS.md`](../AGENTS.md),
+> [`yorks-v1/README.md`](yorks-v1/README.md) and the Yorks V1 contract instead.
 
 This document explains how the app is layered and **exactly how to move it off
 local storage onto a real backend (Firebase, or a custom ASP.NET / Node / etc.

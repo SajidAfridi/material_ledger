@@ -8,11 +8,18 @@
 
 ---
 
+## Authority and R35 build
+
+`AGENTS.md`, `docs/yorks-v1/` and the Rev 2.0/R35 source artifacts are the
+current product authority. Legacy GodownPro/Nexus documents and workflows are
+retained only as migration and regression evidence. Yorks V1 R35 and the
+production Supabase project are the ordinary build defaults.
+
 ## Overview
 
 Yorks AC. & Ref. is a Flutter-based controlled workspace for projects,
 materials, procurement and documents. It helps engineers, procurement and
-management coordinate traceable work across projects through a bilingual,
+management coordinate traceable work across projects through a localized,
 responsive interface.
 
 ## Features
@@ -21,7 +28,7 @@ responsive interface.
 - **📦 Inventory** — Add, view, and delete materials with category/unit/price tracking
 - **🔄 Transactions** — Record incoming/outgoing stock movements with audit trail
 - **⚙️ Settings** — Language, currency, appearance, and account management
-- **🌐 Bilingual** — English primary + Arabic, Urdu, or Hindi secondary text on every label
+- **🌐 Localization** — English, Arabic, Urdu, or Hindi can be selected; the UI shows the configured language cleanly
 - **💱 Multi-Currency** — AED, PKR, INR, USD with formatted display
 - **📱 Responsive** — Mobile-first with tablet/desktop adaptive layouts
 
@@ -32,7 +39,7 @@ responsive interface.
 | Framework | Flutter (Dart ^3.10.4) |
 | State Management | Riverpod (`flutter_riverpod`) |
 | Routing | GoRouter (`go_router`) |
-| Persistence | SharedPreferences (local JSON) |
+| Persistence | Supabase/Postgres authority; SharedPreferences for drafts/cache only |
 | Typography | Google Fonts (Inter) |
 | Design System | Material Design 3 — custom tonal tokens |
 
@@ -44,9 +51,11 @@ git clone <repo-url>
 cd material_ledger
 flutter pub get
 
-# Run the active Yorks V1 experience (Supabase + all V1 routes are the
-# repository defaults; command-line defines are optional overrides).
+# Run the Yorks V1 R35 experience — no dart-defines required.
 flutter run -d chrome
+
+# The equivalent portable launcher is available for CI/staging overrides.
+# ./tool/r35.sh run
 ```
 
 ### Controlled PDF and print builds
@@ -57,25 +66,21 @@ bytes for download, printing and document storage. Build release artifacts with
 correctly shaped:
 
 ```bash
-flutter build web --release --dart-define=use_arabic=true
+flutter build web --release
 ```
 
 ### Requirements
 - Flutter SDK ^3.10.4
 - iOS 12+ / Android API 23+
 
-## Design Philosophy
+## Current R35 UI direction
 
-This app follows **"The Architectural Ledger"** design system:
-
-- **No borders** — depth via tonal surface layering, not 1px lines
-- **No black** — all dark text uses `#191C1E`, never `#000000`
-- **No shadows** — hierarchy through background color shifts
-- **Bilingual everything** — every label shows English + secondary language
-- **Generous whitespace** — "If you think there's enough padding, add 8px more"
-- **48px min tap targets** — designed for industrial environments
-
-See [`docs/design.md`](docs/design.md) for the full design specification.
+The current Yorks surface follows the effective R35 prototype and
+`docs/yorks-v1/R35_UI_CONTRACT.md`: a persistent desktop workspace sidebar,
+responsive spreadsheet behavior, focused mobile editors, single-language labels
+per user preference, short non-blocking motion and accessible tap targets.
+The historical Architectural Ledger rules remain in `docs/design.md` only as
+legacy evidence and are not a current UI authority.
 
 ## Project Structure
 
@@ -93,8 +98,9 @@ See [`docs/claude.md`](docs/claude.md) for the full architecture guide.
 
 | Document | Contents |
 |---|---|
-| [`docs/claude.md`](docs/claude.md) | Architecture, state management, routing, conventions, implementation status |
-| [`docs/design.md`](docs/design.md) | Visual design system — colors, typography, spacing, components, do's & don'ts |
+| [`TERRA.md`](TERRA.md) | Current Yorks V1/R35 reading order and canonical build launcher |
+| [`docs/claude.md`](docs/claude.md) | Legacy architecture reference — not current product authority |
+| [`docs/design.md`](docs/design.md) | Legacy visual reference — not current product authority |
 
 ## License
 

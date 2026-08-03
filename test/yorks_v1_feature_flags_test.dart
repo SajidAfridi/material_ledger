@@ -89,38 +89,50 @@ void main() {
       expect(flags.logistics, true);
       expect(flags.returnsDocuments, true);
       expect(flags.documents, true);
+      expect(flags.isCompleteR35, true);
     });
 
-    test(
-      'the active build defaults remain enabled regardless of legacy flags',
-      () {
-        final container = ProviderContainer(
-          overrides: [
-            nexusFeatureFlagsProvider.overrideWithValue(
-              const NexusFeatureFlags(
-                projects: true,
-                browseMaterials: true,
-                phase1Planning: true,
-                procurementReview: true,
-                phase2Requests: true,
-              ),
+    test('production defaults enable the complete Yorks chain', () {
+      final container = ProviderContainer(
+        overrides: [
+          nexusFeatureFlagsProvider.overrideWithValue(
+            const NexusFeatureFlags(
+              projects: true,
+              browseMaterials: true,
+              phase1Planning: true,
+              procurementReview: true,
+              phase2Requests: true,
             ),
-          ],
-        );
-        addTearDown(container.dispose);
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-        final flags = container.read(yorksV1FeatureFlagsProvider);
+      final flags = container.read(yorksV1FeatureFlagsProvider);
 
-        expect(flags.foundation, true);
-        expect(flags.projects, true);
-        expect(flags.boq, true);
-        expect(flags.excel, true);
-        expect(flags.requests, true);
-        expect(flags.arrangement, true);
-        expect(flags.logistics, true);
-        expect(flags.returnsDocuments, true);
-        expect(flags.documents, true);
-      },
-    );
+      expect(flags.foundation, true);
+      expect(flags.projects, true);
+      expect(flags.boq, true);
+      expect(flags.excel, true);
+      expect(flags.requests, true);
+      expect(flags.arrangement, true);
+      expect(flags.logistics, true);
+      expect(flags.returnsDocuments, true);
+      expect(flags.documents, true);
+      expect(flags.isCompleteR35, true);
+    });
+
+    test('legacy Nexus provider is disabled by default', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final flags = container.read(nexusFeatureFlagsProvider);
+
+      expect(flags.projects, false);
+      expect(flags.browseMaterials, false);
+      expect(flags.phase1Planning, false);
+      expect(flags.procurementReview, false);
+      expect(flags.phase2Requests, false);
+    });
   });
 }

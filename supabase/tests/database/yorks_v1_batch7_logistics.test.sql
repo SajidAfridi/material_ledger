@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(29);
+select plan(30);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -222,6 +222,12 @@ select is(
   (public.v1_inventory_workspace_projection('vav') -> 'items' -> 0 ->> 'available_qty')::numeric,
   0::numeric,
   'Procurement inventory workspace reports the active reservation as unavailable stock'
+);
+
+select is(
+  (public.v1_inventory_workspace_projection('vav') -> 'summary' ->> 'out_of_stock_count')::integer,
+  1,
+  'Procurement overview reads a real out-of-stock count from the authorized inventory projection'
 );
 
 select lives_ok(

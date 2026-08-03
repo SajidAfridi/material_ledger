@@ -55,11 +55,10 @@ jobs:
         run: flutter test
 
       - name: Build web release
-        run: >-
-          flutter build web --release
-          --dart-define=SUPABASE_URL=https://ci.invalid
-          --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
-          --dart-define=use_arabic=true
+        env:
+          SUPABASE_URL: https://ci.invalid
+          SUPABASE_ANON_KEY: ci-publishable-key
+        run: ./tool/r35.sh build-web
 
   database:
     name: Supabase database
@@ -113,11 +112,9 @@ jobs:
         # certificates stay outside the repository and this job.
         env:
           YORKS_CI_EPHEMERAL_SIGNING: 'true'
-        run: >-
-          flutter build apk --release
-          --dart-define=SUPABASE_URL=https://ci.invalid
-          --dart-define=SUPABASE_ANON_KEY=ci-publishable-key
-          --dart-define=use_arabic=true
+          SUPABASE_URL: https://ci.invalid
+          SUPABASE_ANON_KEY: ci-publishable-key
+        run: ./tool/r35.sh build-apk
 
       - name: Verify release APK uses the CI certificate
         shell: bash

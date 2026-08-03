@@ -71,6 +71,48 @@ abstract final class YorksV1ShellStrings {
     ur: 'ابھی محفوظ ہوا',
     hi: 'अभी सहेजा गया',
   );
+  static const workspaceConnected = TranslatableString(
+    en: 'Connected',
+    ar: 'متصل',
+    ur: 'منسلک',
+    hi: 'कनेक्टेड',
+  );
+  static const workspaceSyncing = TranslatableString(
+    en: 'Syncing changes',
+    ar: 'جارٍ مزامنة التغييرات',
+    ur: 'تبدیلیاں ہم آہنگ ہو رہی ہیں',
+    hi: 'बदलाव सिंक हो रहे हैं',
+  );
+  static const workspaceOffline = TranslatableString(
+    en: 'Offline',
+    ar: 'غير متصل',
+    ur: 'آف لائن',
+    hi: 'ऑफ़लाइन',
+  );
+  static const workspaceReconnecting = TranslatableString(
+    en: 'Reconnecting',
+    ar: 'جارٍ إعادة الاتصال',
+    ur: 'دوبارہ منسلک ہو رہا ہے',
+    hi: 'फिर से कनेक्ट हो रहा है',
+  );
+  static const workspaceFailed = TranslatableString(
+    en: 'Changes need attention',
+    ar: 'التغييرات تحتاج إلى مراجعة',
+    ur: 'تبدیلیاں توجہ چاہتی ہیں',
+    hi: 'बदलावों पर ध्यान चाहिए',
+  );
+  static const workspaceLocalDraft = TranslatableString(
+    en: 'Local draft',
+    ar: 'مسودة محلية',
+    ur: 'مقامی مسودہ',
+    hi: 'स्थानीय ड्राफ़्ट',
+  );
+  static const workspaceConflict = TranslatableString(
+    en: 'Conflict needs review',
+    ar: 'التعارض يحتاج إلى مراجعة',
+    ur: 'تنازع کا جائزہ درکار ہے',
+    hi: 'संघर्ष की समीक्षा चाहिए',
+  );
   static const goodAfternoon = TranslatableString(
     en: 'Good afternoon',
     ar: 'مساء الخير',

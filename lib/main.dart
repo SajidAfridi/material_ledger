@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app/app.dart';
 import 'shared/models/backend_configuration.dart';
 import 'shared/models/backend_failure_copy.dart';
+import 'shared/models/yorks_v1_feature_flags.dart';
 import 'shared/providers/language_provider.dart';
 import 'shared/services/app_config_service.dart';
 import 'shared/services/observability_service.dart';
@@ -30,13 +32,11 @@ const _appVersion = String.fromEnvironment(
 );
 const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 
-/// Backend connection. Production builds MUST be pointed at the real (UAE
-/// self-hosted) instance explicitly:
+/// Backend connection. These are the Yorks production demo values so ordinary
+/// `flutter run -d chrome` and release builds use the approved R35 Supabase
+/// project. CI/staging can override them with explicit dart-defines.
 ///   --dart-define=SUPABASE_URL=https://your-uae-instance
 ///   --dart-define=SUPABASE_ANON_KEY=…
-// Yorks production demo defaults.  Build-time defines still override these
-// values for CI, staging or another Supabase project, but normal `flutter run`
-// and release builds no longer need a long command line.
 const _envSupabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
   defaultValue: 'https://czykuksmlwswjsgotrpo.supabase.co',
@@ -47,6 +47,7 @@ const _envSupabaseKey = String.fromEnvironment(
 );
 const _allowLocalDevelopment = bool.fromEnvironment('ALLOW_LOCAL_DEVELOPMENT');
 const _localDemoPassword = String.fromEnvironment('LOCAL_DEMO_PASSWORD');
+const _buildDiagnostic = bool.fromEnvironment('YORKS_BUILD_DIAGNOSTIC');
 
 void main() {
   // No DSN configured → boot with the no-op reporter (unchanged behaviour).
@@ -109,6 +110,28 @@ void _bootstrap(ObservabilityService observability) {
       if (backend.mode == BackendStartupMode.blocked) {
         runApp(_BackendConfigurationFailure(reason: backend.failureReason));
         return;
+      }
+      const r35Flags = YorksV1FeatureFlags.fromEnvironment();
+      if (kReleaseMode && !r35Flags.isCompleteR35) {
+        runApp(
+          const _BackendConfigurationFailure(
+            reason: 'The complete Yorks V1 R35 feature chain is required.',
+          ),
+        );
+        return;
+      }
+      if (kDebugMode || _buildDiagnostic) {
+        final backendHost = backend.usesSupabase
+            ? Uri.tryParse(backend.supabaseUrl)?.host ?? 'configured'
+            : 'local development';
+        debugPrint(
+          'Yorks V1 build profile: '
+          '${r35Flags.isCompleteR35 ? 'R35 COMPLETE' : 'INCOMPLETE'}\n'
+          'Backend: $backendHost\n'
+          'Feature chain: '
+          '${r35Flags.isCompleteR35 ? '9/9 enabled' : 'not complete'}\n'
+          'Legacy operational routes: disabled',
+        );
       }
 
       // Installed version/build — drives the force-update gate + version footers.
@@ -184,6 +207,10 @@ class _BackendConfigurationFailure extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      // This fallback is a plain MaterialApp, not GoRouter. Force its own
+      // root route so a stale browser hash such as /login cannot trigger the
+      // "Could not navigate to initial route" white screen.
+      initialRoute: '/',
       home: Scaffold(
         backgroundColor: const Color(0xFFF7F9FB),
         body: Center(

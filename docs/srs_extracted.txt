@@ -1,3 +1,9 @@
+LEGACY — NOT CURRENT PRODUCT AUTHORITY
+This extracted GodownPro SRS v1.0 is retained for migration and historical
+traceability only. It is superseded by the approved Yorks V1 Rev 2.0 SRS and
+effective R35 HTML. Current implementation must follow AGENTS.md and
+docs/yorks-v1/.
+
 GodownPro
 Software Requirements Specification (SRS)
 Yorks Airconditioning and Refrigeration LLC SPC  —  Abu Dhabi, UAE

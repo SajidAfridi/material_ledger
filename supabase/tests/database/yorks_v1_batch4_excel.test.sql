@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(22);
+select plan(23);
 
 select ok(
   has_function_privilege(
@@ -125,7 +125,14 @@ select jsonb_build_object(
   'source', jsonb_build_object(
     'file_name', 'MSD Equipment Schedule.xlsx',
     'worksheet_name', 'MSD Schedule',
-    'header_row_number', 3
+    'header_row_number', 3,
+    'header_row_numbers', jsonb_build_array(3),
+    'header_hierarchy', jsonb_build_array(
+      jsonb_build_object('source_index', 0, 'labels', jsonb_build_array('Item Description')),
+      jsonb_build_object('source_index', 1, 'labels', jsonb_build_array('Brand / Origin')),
+      jsonb_build_object('source_index', 2, 'labels', jsonb_build_array('Model / Tag')),
+      jsonb_build_object('source_index', 3, 'labels', jsonb_build_array('Air flow (L/s)'))
+    )
   )
 ) as payload
 from v1_b4_targets;
@@ -191,6 +198,15 @@ select is(
   ),
   'MSD Schedule',
   'Reviewed workbook source metadata is retained without workbook bytes'
+);
+
+select is(
+  (
+    select last_import_source #>> '{header_hierarchy,3,labels,0}'
+    from public.v1_boq_groups where id = (select worksheet_group_id from v1_b4_targets)
+  ),
+  'Air flow (L/s)',
+  'Reviewed header hierarchy is retained as import provenance'
 );
 
 select is(
@@ -270,20 +286,27 @@ select throws_ok(
   $$select public.v1_import_boq_worksheet(
     jsonb_set(
       jsonb_set(
-        (select payload from v1_b4_import_payloads),
-        '{expected_version}', '3'::jsonb
-      ),
-      '{columns}', jsonb_build_array(
-        jsonb_build_object(
-          'id', '41000000-0000-4000-8000-000000000010',
-          'heading', 'Duplicate', 'display_order', 1,
-          'canonical_field', 'description', 'is_commercial', false
+        jsonb_set(
+          (select payload from v1_b4_import_payloads),
+          '{expected_version}', '3'::jsonb
         ),
-        jsonb_build_object(
-          'id', '41000000-0000-4000-8000-000000000011',
-          'heading', 'duplicate', 'display_order', 2,
-          'canonical_field', 'description', 'is_commercial', false
+        '{columns}', jsonb_build_array(
+          jsonb_build_object(
+            'id', '41000000-0000-4000-8000-000000000010',
+            'heading', 'Duplicate', 'display_order', 1,
+            'canonical_field', 'description', 'is_commercial', false
+          ),
+          jsonb_build_object(
+            'id', '41000000-0000-4000-8000-000000000011',
+            'heading', 'duplicate', 'display_order', 2,
+            'canonical_field', 'description', 'is_commercial', false
+          )
         )
+      ),
+      '{source,header_hierarchy}',
+      jsonb_build_array(
+        jsonb_build_object('source_index', 0, 'labels', jsonb_build_array('Duplicate')),
+        jsonb_build_object('source_index', 1, 'labels', jsonb_build_array('duplicate'))
       )
     ),
     '40000000-0000-4000-8000-000000000005'::uuid

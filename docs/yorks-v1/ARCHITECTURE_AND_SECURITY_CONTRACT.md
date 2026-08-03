@@ -165,7 +165,11 @@ trusted command; it does not apply a local success retroactively.
 
 ## 11. Feature rollout
 
-V1 rollout flags are independent and default off. Suggested dependency order:
+During incremental delivery, V1 flags were independently enabled in this
+order. That historical rollout is complete: the canonical R35 build now
+enables the complete chain by default, while an explicit disabled dependency
+fails closed. The flags remain available only for controlled CI/staging
+rollback.
 
 1. `YORKS_V1_FOUNDATION`
 2. `YORKS_V1_PROJECTS`

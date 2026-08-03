@@ -6,7 +6,10 @@ deployment require release-owner authority.
 
 ## Delivery strategy
 
-- Preserve the working application and add V1 behind default-off flags.
+- Preserve the working application and introduce each V1 slice behind a
+  guarded rollout while it is under development. This plan is historical:
+  accepted R35 slices are enabled by default under the current canonical build
+  configuration in `README.md` and `TERRA.md`.
 - Build normalized server authority before exposing dependent UI.
 - Keep unrelated modules stable and test them continuously.
 - Use web and Android evidence in every UI batch, not only at release.

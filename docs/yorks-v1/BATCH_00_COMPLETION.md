@@ -1,5 +1,8 @@
 # Yorks V1 R35 — Batch 0 Completion
 
+> **HISTORICAL BATCH EVIDENCE — NOT CURRENT BUILD CONFIGURATION.** Read the
+> canonical build section in `README.md` and `TERRA.md` for current defaults.
+
 Completed: 1 August 2026
 Scope: governance, product contract, repository audit and baseline verification
 Feature/database changes: none

@@ -1,5 +1,11 @@
 # Backend decision — Firebase vs Supabase (Yorks GodownPro)
 
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** This memo predates the approved
+> Yorks V1 R35 Supabase/Postgres contract and contains superseded Firebase,
+> GodownPro and residency recommendations. Keep it only as decision history.
+> Use [`yorks-v1/README.md`](yorks-v1/README.md) and its linked authority
+> documents for implementation.
+
 > **Superseded decision record.** Do not use this memo to choose or implement
 > the Nexus V7 backend. The approved decision is Supabase Auth/Postgres, recorded
 > in [`nexus-v7/ADR-001-SUPABASE-POSTGRES-SOURCE-OF-TRUTH.md`](nexus-v7/ADR-001-SUPABASE-POSTGRES-SOURCE-OF-TRUTH.md).

@@ -4,6 +4,11 @@ Audit date: 1 August 2026
 Audited branch: `agent/nexus-v7-implementation`
 Audit type: read-only product/code/schema review before Batch 0 documentation
 
+> **HISTORICAL BASELINE — NOT CURRENT BUILD CONFIGURATION.** This 1 August
+> audit explains the original migration strategy and may refer to default-off
+> slices. For the accepted operational configuration, use `README.md`,
+> `TERRA.md` and `BATCH_10_RELEASE_READINESS.md`.
+
 ## 1. Executive conclusion
 
 The repository is a healthy Flutter foundation and should not be rewritten.
@@ -15,7 +20,7 @@ existing UI, sync, security and compatibility mechanics.
 The implementation strategy is additive coexistence:
 
 - keep unrelated modules and legacy decoders working;
-- add normalized V1 schema/repositories behind default-off flags;
+- add normalized V1 schema/repositories behind guarded rollout flags;
 - adapt proven widgets to V1 contracts;
 - migrate/reconcile data explicitly;
 - switch routes only after role/RLS and acceptance gates pass;

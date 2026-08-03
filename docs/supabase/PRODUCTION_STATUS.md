@@ -1,5 +1,10 @@
 # Production auth + RLS — status & runbook
 
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** This status snapshot records an
+> earlier managed-project rollout and legacy identities. It is operational
+> history only; use the tracked Yorks V1 migrations, RLS matrix and release
+> readiness documents for current work.
+
 _Applied to the current managed project `czykuksmlwswjsgotrpo` (Frankfurt).
 Data residency is NOT yet UAE — see "Remaining" below._
 

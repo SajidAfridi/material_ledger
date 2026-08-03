@@ -370,6 +370,8 @@ class YorksV1BoqWorksheetController
           sourceFileName: preview.fileName,
           sourceWorksheetName: preview.worksheetName,
           sourceHeaderRowNumber: preview.headerRowNumber,
+          sourceHeaderRowNumbers: preview.headerRowNumbers,
+          sourceHeaderHierarchy: preview.headerHierarchy,
         ),
       );
       state = YorksV1BoqWorksheetState(

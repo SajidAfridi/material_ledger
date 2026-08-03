@@ -1,6 +1,7 @@
 # Backend setup — self-hosted Supabase (UAE region)
 
-> **Historical generic-sync note.** Yorks V1 authority is now
+> **LEGACY — NOT CURRENT PRODUCT AUTHORITY.** This historical generic-sync note
+> is retained as migration evidence. Yorks V1 authority is now
 > [`../yorks-v1/README.md`](../yorks-v1/README.md). This document and its
 > `schema.sql` preserve the pre-V1 JSONB generation as migration evidence;
 > they are not the source of truth for Yorks V1 behavior, security or rollout.
