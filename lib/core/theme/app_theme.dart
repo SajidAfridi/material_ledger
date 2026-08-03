@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/constants.dart';
 
-/// Constructs the shared Yorks Nexus V7 light theme from design tokens.
+/// Constructs the shared Yorks V1 light theme from design tokens.
 abstract final class AppTheme {
   static ThemeData get light {
     final textTheme = AppTypography.textTheme;
@@ -16,6 +16,21 @@ abstract final class AppTheme {
       focusColor: AppColors.blue.withValues(alpha: 0.10),
       hoverColor: AppColors.surfaceContainer,
       splashColor: AppColors.blue.withValues(alpha: 0.08),
+      // Yorks V1 is an operational workspace: route changes and state
+      // updates should be immediate, not theatrical.  Keeping this at the
+      // theme boundary also covers Material routes that are not owned by the
+      // Yorks workspace shell.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          TargetPlatform.android: _YorksNoPageTransitionBuilder(),
+          TargetPlatform.iOS: _YorksNoPageTransitionBuilder(),
+          TargetPlatform.macOS: _YorksNoPageTransitionBuilder(),
+          TargetPlatform.windows: _YorksNoPageTransitionBuilder(),
+          TargetPlatform.linux: _YorksNoPageTransitionBuilder(),
+          TargetPlatform.fuchsia: _YorksNoPageTransitionBuilder(),
+        },
+      ),
+      splashFactory: NoSplash.splashFactory,
 
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surfaceContainerLow,
@@ -260,4 +275,22 @@ abstract final class AppTheme {
     scrim: AppColors.scrim,
     shadow: AppColors.shadow,
   );
+}
+
+/// A deliberate no-motion transition for the Yorks operational shell.
+///
+/// The prototype uses stable panels and immediate navigation. Returning the
+/// destination directly avoids a route-level animation even for retained
+/// screens that still use a standard Material route.
+final class _YorksNoPageTransitionBuilder extends PageTransitionsBuilder {
+  const _YorksNoPageTransitionBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    Route<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => child;
 }

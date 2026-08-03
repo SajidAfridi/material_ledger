@@ -616,6 +616,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
       );
       final preview = await showDialog<YorksV1BoqImportPreview>(
         context: context,
+        animationStyle: AnimationStyle.noAnimation,
         builder: (_) => _BoqWorkbookImportDialog(
           workbook: workbook,
           codec: codec,
@@ -1848,6 +1849,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
   Future<void> _openMobileEditor(int rowIndex) async {
     await showModalBottomSheet<void>(
       context: context,
+      sheetAnimationStyle: AnimationStyle.noAnimation,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,

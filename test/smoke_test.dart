@@ -15,6 +15,8 @@ import 'package:material_ledger/shared/providers/rentals_provider.dart';
 import 'package:material_ledger/shared/providers/role_permissions_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/users_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/services/observability_service.dart';
 import 'package:material_ledger/shared/services/app_config_service.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
@@ -51,6 +53,11 @@ Future<ProviderContainer> _container({String? email}) async {
         const AppVersionInfo(version: '1.0.0', build: 1),
       ),
       localDemoPasswordProvider.overrideWithValue(_testLocalPassword),
+      // Smoke tests cover the retained legacy shells explicitly. Production
+      // and debug builds use the active Yorks defaults from the environment.
+      yorksV1FeatureFlagsProvider.overrideWithValue(
+        const YorksV1FeatureFlags(),
+      ),
       observabilityProvider.overrideWithValue(const NoopObservability()),
       // Construct the sync engine WITHOUT start() so no periodic timer leaks
       // into the widget test when a screen triggers a write (enqueueSync).

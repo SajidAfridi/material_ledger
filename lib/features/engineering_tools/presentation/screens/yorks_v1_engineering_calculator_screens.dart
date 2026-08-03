@@ -837,6 +837,7 @@ class _YorksV1EspCalculatorScreenState
 
   Future<void> _showFittings() => showDialog<void>(
     context: context,
+    animationStyle: AnimationStyle.noAnimation,
     builder: (context) => AlertDialog(
       title: const Text('ESP Fitting Library'),
       content: SizedBox(

@@ -15,6 +15,10 @@ import '../shared/providers/yorks_v1_identity_provider.dart';
 import 'router.dart';
 import 'yorks_v1_workspace_search.dart';
 
+/// Desktop-only shell preference. It lives above individual route widgets so
+/// navigating between Yorks screens does not reopen the panel unexpectedly.
+final yorksV1SidebarExpandedProvider = StateProvider<bool>((ref) => true);
+
 /// R35 workspace chrome for every connected Yorks V1 operational route.
 ///
 /// This widget is intentionally presentation-only. It does not widen routes,
@@ -35,6 +39,9 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final current = _currentDestination(destinations, location);
     final desktop =
         MediaQuery.sizeOf(context).width >= AppSpacing.yorksV1DesktopBreakpoint;
+    final sidebarExpanded = desktop
+        ? ref.watch(yorksV1SidebarExpandedProvider)
+        : true;
 
     void openSearch() {
       showYorksV1WorkspaceSearch(
@@ -70,6 +77,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                 language: language,
                 role: role,
                 userName: user?.fullName,
+                expanded: sidebarExpanded,
+                onToggle: () =>
+                    ref.read(yorksV1SidebarExpandedProvider.notifier).state =
+                        !sidebarExpanded,
               ),
             Expanded(
               child: Column(
@@ -341,6 +352,8 @@ class _YorksDesktopSidebar extends StatelessWidget {
     required this.language,
     required this.role,
     required this.userName,
+    required this.expanded,
+    required this.onToggle,
   });
 
   final List<_YorksDestination> destinations;
@@ -348,13 +361,17 @@ class _YorksDesktopSidebar extends StatelessWidget {
   final AppLanguage language;
   final YorksV1Role? role;
   final String? userName;
+  final bool expanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     TranslatableString? previousGroup;
     final displayName = (userName ?? '').trim();
     return Container(
-      width: AppSpacing.sidebarWidth,
+      width: expanded
+          ? AppSpacing.sidebarWidth
+          : AppSpacing.sidebarCollapsedWidth,
       decoration: const BoxDecoration(
         color: AppColors.surfaceContainerLow,
         border: Border(right: BorderSide(color: AppColors.line)),
@@ -363,49 +380,75 @@ class _YorksDesktopSidebar extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
+                expanded ? AppSpacing.lg : AppSpacing.xs,
                 AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
+                expanded ? AppSpacing.lg : AppSpacing.xs,
                 AppSpacing.lg,
               ),
               child: Row(
+                mainAxisAlignment: expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
-                  const BrandLogo(size: 52, shadow: true),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          YorksV1ShellStrings.companyName.primary,
-                          style: AppTypography.titleLarge.copyWith(
-                            color: AppColors.navy,
-                            fontWeight: FontWeight.w800,
+                  if (expanded) ...[
+                    const BrandLogo(size: 44, shadow: true),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            YorksV1ShellStrings.companyName.primary,
+                            style: AppTypography.titleLarge.copyWith(
+                              color: AppColors.navy,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          YorksV1ShellStrings.companyLegalName.primary,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.muted,
+                          const SizedBox(height: 2),
+                          Text(
+                            YorksV1ShellStrings.companyLegalName.primary,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.muted,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: AppSpacing.xs),
+                    IconButton(
+                      onPressed: onToggle,
+                      icon: const Icon(Icons.chevron_left_rounded),
+                      tooltip: YorksV1ShellStrings.collapsePanel.primary,
+                      constraints: const BoxConstraints.tightFor(
+                        width: AppSpacing.minTapTarget,
+                        height: AppSpacing.minTapTarget,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ] else
+                    IconButton(
+                      onPressed: onToggle,
+                      icon: const Icon(Icons.chevron_right_rounded),
+                      tooltip: YorksV1ShellStrings.expandPanel.primary,
+                      constraints: const BoxConstraints.tightFor(
+                        width: AppSpacing.minTapTarget,
+                        height: AppSpacing.minTapTarget,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
                 ],
               ),
             ),
             const Divider(height: 1, color: AppColors.line),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
+                padding: EdgeInsets.fromLTRB(
+                  expanded ? AppSpacing.md : AppSpacing.xs,
                   AppSpacing.lg,
-                  AppSpacing.md,
+                  expanded ? AppSpacing.md : AppSpacing.xs,
                   AppSpacing.sm,
                 ),
                 children: [
@@ -414,21 +457,22 @@ class _YorksDesktopSidebar extends StatelessWidget {
                         destination.group != previousGroup) ...[
                       if (previousGroup != null)
                         const SizedBox(height: AppSpacing.md),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.sm,
-                          AppSpacing.lg,
-                          AppSpacing.sm,
-                          AppSpacing.sm,
-                        ),
-                        child: Text(
-                          destination.group!.primary.toUpperCase(),
-                          style: AppTypography.labelSmall.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
+                      if (expanded)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.sm,
+                            AppSpacing.lg,
+                            AppSpacing.sm,
+                            AppSpacing.sm,
+                          ),
+                          child: Text(
+                            destination.group!.primary.toUpperCase(),
+                            style: AppTypography.labelSmall.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                     _YorksNavigationTile(
                       destination: destination,
@@ -436,6 +480,7 @@ class _YorksDesktopSidebar extends StatelessWidget {
                           destination.path != null &&
                           destination.path == activePath,
                       language: language,
+                      compact: !expanded,
                     ),
                     () {
                       previousGroup = destination.group;
@@ -446,10 +491,10 @@ class _YorksDesktopSidebar extends StatelessWidget {
               ),
             ),
             Container(
-              margin: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
+              margin: EdgeInsets.fromLTRB(
+                expanded ? AppSpacing.md : AppSpacing.xs,
                 AppSpacing.sm,
-                AppSpacing.md,
+                expanded ? AppSpacing.md : AppSpacing.xs,
                 AppSpacing.md,
               ),
               padding: const EdgeInsets.all(AppSpacing.sm + 1),
@@ -459,6 +504,9 @@ class _YorksDesktopSidebar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
               child: Row(
+                mainAxisAlignment: expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
                   Stack(
                     clipBehavior: Clip.none,
@@ -482,71 +530,74 @@ class _YorksDesktopSidebar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          displayName.isEmpty
-                              ? YorksV1ShellStrings.account.primary
-                              : displayName,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.labelLarge.copyWith(
-                            color: AppColors.ink,
+                  if (expanded) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayName.isEmpty
+                                ? YorksV1ShellStrings.account.primary
+                                : displayName,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.labelLarge.copyWith(
+                              color: AppColors.ink,
+                            ),
                           ),
-                        ),
-                        Text(
-                          _roleCopy(role).primary,
-                          style: AppTypography.labelSmall,
-                        ),
-                      ],
+                          Text(
+                            _roleCopy(role).primary,
+                            style: AppTypography.labelSmall,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
             const Divider(height: 1, color: AppColors.line),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.md,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          color: AppColors.success,
-                          shape: BoxShape.circle,
+            if (expanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: AppColors.success,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        YorksV1ShellStrings.workspaceSaved.primary,
-                        style: AppTypography.labelSmall.copyWith(
-                          color: AppColors.inkSecondary,
-                          fontWeight: FontWeight.w700,
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          YorksV1ShellStrings.workspaceSaved.primary,
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.inkSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    YorksV1ShellStrings.connectedProjectControl.primary,
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.muted,
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      YorksV1ShellStrings.connectedProjectControl.primary,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -611,11 +662,13 @@ class _YorksNavigationTile extends StatelessWidget {
     required this.destination,
     required this.selected,
     required this.language,
+    this.compact = false,
   });
 
   final _YorksDestination destination;
   final bool selected;
   final AppLanguage language;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -640,6 +693,9 @@ class _YorksNavigationTile extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Row(
+                  mainAxisAlignment: compact
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
                   children: [
                     Icon(
                       selected ? destination.selectedIcon : destination.icon,
@@ -650,28 +706,30 @@ class _YorksNavigationTile extends StatelessWidget {
                           ? AppColors.blue
                           : AppColors.inkSecondary,
                     ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Text(
-                        destination.label.primary,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: disabled
-                              ? AppColors.mutedLight
-                              : selected
-                              ? AppColors.navy
-                              : AppColors.inkSecondary,
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
+                    if (!compact) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          destination.label.primary,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: disabled
+                                ? AppColors.mutedLight
+                                : selected
+                                ? AppColors.navy
+                                : AppColors.inkSecondary,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                    if (destination.suffix != null)
-                      Text(
-                        destination.suffix!.primary,
-                        style: AppTypography.labelSmall,
-                      ),
+                      if (destination.suffix != null)
+                        Text(
+                          destination.suffix!.primary,
+                          style: AppTypography.labelSmall,
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -751,6 +809,7 @@ class _YorksMobileMoreItem extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       onTap: () => showModalBottomSheet<void>(
         context: context,
+        sheetAnimationStyle: AnimationStyle.noAnimation,
         showDragHandle: true,
         backgroundColor: AppColors.surfaceContainerLowest,
         builder: (sheetContext) => SafeArea(

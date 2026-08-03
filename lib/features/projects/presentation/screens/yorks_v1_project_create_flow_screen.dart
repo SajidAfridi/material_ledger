@@ -445,11 +445,7 @@ class _YorksV1ProjectCreateFlowScreenState
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-        );
+        _scrollController.jumpTo(0);
       }
     });
   }

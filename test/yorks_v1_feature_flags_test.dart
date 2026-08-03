@@ -91,33 +91,36 @@ void main() {
       expect(flags.documents, true);
     });
 
-    test('legacy Nexus overrides cannot enable Yorks V1', () {
-      final container = ProviderContainer(
-        overrides: [
-          nexusFeatureFlagsProvider.overrideWithValue(
-            const NexusFeatureFlags(
-              projects: true,
-              browseMaterials: true,
-              phase1Planning: true,
-              procurementReview: true,
-              phase2Requests: true,
+    test(
+      'the active build defaults remain enabled regardless of legacy flags',
+      () {
+        final container = ProviderContainer(
+          overrides: [
+            nexusFeatureFlagsProvider.overrideWithValue(
+              const NexusFeatureFlags(
+                projects: true,
+                browseMaterials: true,
+                phase1Planning: true,
+                procurementReview: true,
+                phase2Requests: true,
+              ),
             ),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
+          ],
+        );
+        addTearDown(container.dispose);
 
-      final flags = container.read(yorksV1FeatureFlagsProvider);
+        final flags = container.read(yorksV1FeatureFlagsProvider);
 
-      expect(flags.foundation, false);
-      expect(flags.projects, false);
-      expect(flags.boq, false);
-      expect(flags.excel, false);
-      expect(flags.requests, false);
-      expect(flags.arrangement, false);
-      expect(flags.logistics, false);
-      expect(flags.returnsDocuments, false);
-      expect(flags.documents, false);
-    });
+        expect(flags.foundation, true);
+        expect(flags.projects, true);
+        expect(flags.boq, true);
+        expect(flags.excel, true);
+        expect(flags.requests, true);
+        expect(flags.arrangement, true);
+        expect(flags.logistics, true);
+        expect(flags.returnsDocuments, true);
+        expect(flags.documents, true);
+      },
+    );
   });
 }

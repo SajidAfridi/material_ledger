@@ -44,8 +44,9 @@ git clone <repo-url>
 cd material_ledger
 flutter pub get
 
-# Run on connected device or simulator
-flutter run
+# Run the active Yorks V1 experience (Supabase + all V1 routes are the
+# repository defaults; command-line defines are optional overrides).
+flutter run -d chrome
 ```
 
 ### Controlled PDF and print builds
@@ -56,10 +57,7 @@ bytes for download, printing and document storage. Build release artifacts with
 correctly shaped:
 
 ```bash
-flutter build web --release \
-  --dart-define=SUPABASE_URL=<your-project-url> \
-  --dart-define=SUPABASE_ANON_KEY=<your-publishable-key> \
-  --dart-define=use_arabic=true
+flutter build web --release --dart-define=use_arabic=true
 ```
 
 ### Requirements

@@ -677,7 +677,7 @@ class _CategoryChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: Duration.zero,
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.symmetric(
             horizontal: isCompact ? AppSpacing.md : AppSpacing.xl,

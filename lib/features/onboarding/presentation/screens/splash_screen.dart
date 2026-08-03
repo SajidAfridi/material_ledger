@@ -23,9 +23,7 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _progressController;
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   Timer? _continueTimer;
 
   @override
@@ -39,11 +37,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-    _progressController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1250),
-    )..forward();
-    _continueTimer = Timer(const Duration(milliseconds: 1250), () async {
+    _continueTimer = Timer(Duration.zero, () async {
       if (!mounted) return;
       // The approved R35 prototype goes directly from splash to sign-in. The
       // old first-run language gate could redirect that hand-off back to
@@ -59,7 +53,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   void dispose() {
     _continueTimer?.cancel();
-    _progressController.dispose();
     super.dispose();
   }
 
@@ -89,25 +82,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ),
             ),
           ),
-          SafeArea(
-            child: Center(
-              child: FadeTransition(
-                opacity: CurvedAnimation(
-                  parent: _progressController,
-                  curve: const Interval(0, 0.5, curve: Curves.easeOut),
-                ),
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.96, end: 1).animate(
-                    CurvedAnimation(
-                      parent: _progressController,
-                      curve: Curves.easeOutCubic,
-                    ),
-                  ),
-                  child: _SplashContent(progress: _progressController),
-                ),
-              ),
-            ),
-          ),
+          SafeArea(child: Center(child: _SplashContent())),
         ],
       ),
     ),
@@ -115,9 +90,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 }
 
 class _SplashContent extends StatelessWidget {
-  const _SplashContent({required this.progress});
-
-  final Animation<double> progress;
+  const _SplashContent();
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
@@ -171,28 +144,25 @@ class _SplashContent extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.colossal),
-          AnimatedBuilder(
-            animation: progress,
-            builder: (context, _) => Column(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-                  child: LinearProgressIndicator(
-                    value: 0.1 + (progress.value * 0.9),
-                    minHeight: 5,
-                    backgroundColor: Colors.white.withValues(alpha: 0.18),
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFF55A9FF)),
-                  ),
+          Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                child: LinearProgressIndicator(
+                  value: 1,
+                  minHeight: 5,
+                  backgroundColor: Colors.white.withValues(alpha: 0.18),
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF55A9FF)),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  YorksV1ShellStrings.preparingWorkspace.primary,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: Colors.white.withValues(alpha: 0.75),
-                  ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                YorksV1ShellStrings.preparingWorkspace.primary,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: Colors.white.withValues(alpha: 0.75),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.xxxl),
           Row(

@@ -2780,6 +2780,7 @@ class _RequestDetailBody extends ConsumerWidget {
     }
     await showDialog<void>(
       context: context,
+      animationStyle: AnimationStyle.noAnimation,
       barrierColor: AppColors.scrim.withValues(alpha: .42),
       builder: (dialogContext) {
         final size = MediaQuery.sizeOf(dialogContext);
@@ -4292,6 +4293,7 @@ Future<void> _addBoqRows(
     if (!context.mounted) return;
     final selected = await showModalBottomSheet<_BoqSourceSelection>(
       context: context,
+      sheetAnimationStyle: AnimationStyle.noAnimation,
       showDragHandle: true,
       builder: (context) => ListView(
         children: [
@@ -4351,6 +4353,7 @@ Future<Set<String>?> _pickRows(
   final selected = <String>{};
   return showDialog<Set<String>>(
     context: context,
+    animationStyle: AnimationStyle.noAnimation,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
         title: Text(YorksV1MaterialRequestStrings.addFromBoq.primary),
@@ -4708,6 +4711,7 @@ Future<bool> _previewMaterialRequestImport(
   ];
   return await showDialog<bool>(
         context: context,
+        animationStyle: AnimationStyle.noAnimation,
         builder: (context) => Dialog(
           insetPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
@@ -4963,6 +4967,7 @@ Future<YorksV1BoqWorkbookSheet?> _chooseWorkbookSheet(
   YorksV1BoqParsedWorkbook workbook,
 ) => showDialog<YorksV1BoqWorkbookSheet>(
   context: context,
+  animationStyle: AnimationStyle.noAnimation,
   builder: (context) {
     final maxHeight = MediaQuery.sizeOf(context).height * 0.68;
     return Dialog(
@@ -5121,6 +5126,7 @@ Future<String?> _cancelReason(BuildContext context) async {
   final text = TextEditingController();
   final result = await showDialog<String>(
     context: context,
+    animationStyle: AnimationStyle.noAnimation,
     builder: (context) => AlertDialog(
       title: Text(YorksV1MaterialRequestStrings.cancelRequest.primary),
       content: TextField(

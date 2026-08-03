@@ -90,7 +90,7 @@ class CurrencyPickerSheet extends StatelessWidget {
                   onTap: () => onSelected(c),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                    duration: Duration.zero,
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xl,
                       vertical: AppSpacing.lg,

@@ -53,16 +53,20 @@ class _MaterialPickerScreenState extends ConsumerState<MaterialPickerScreen> {
     final PlanItem? item = await CustomItemSheet.show(context);
     if (item == null || !mounted) return;
     AppFeedback.confirm();
-    ref.read(draftLineItemsProvider.notifier).addItem(
+    ref
+        .read(draftLineItemsProvider.notifier)
+        .addItem(
           RequestLineItem(
             materialId: 'custom-${item.id}',
             materialName: item.description,
             materialNameSecondary: item.descriptionSecondary,
             quantity: item.quantity,
             unitSymbol: item.unitSymbol,
-            spec: [item.size, item.brand, item.ralColour]
-                .where((s) => s.isNotEmpty)
-                .join(' · '),
+            spec: [
+              item.size,
+              item.brand,
+              item.ralColour,
+            ].where((s) => s.isNotEmpty).join(' · '),
           ),
         );
   }
@@ -79,13 +83,13 @@ class _MaterialPickerScreenState extends ConsumerState<MaterialPickerScreen> {
     final filtered = q.isEmpty
         ? materials
         : materials
-            .where(
-              (m) =>
-                  m.name.toLowerCase().contains(q) ||
-                  m.urduName.toLowerCase().contains(q) ||
-                  m.category.label.toLowerCase().contains(q),
-            )
-            .toList();
+              .where(
+                (m) =>
+                    m.name.toLowerCase().contains(q) ||
+                    m.urduName.toLowerCase().contains(q) ||
+                    m.category.label.toLowerCase().contains(q),
+              )
+              .toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -283,7 +287,7 @@ class _PickRow extends StatelessWidget {
           const Gap(AppSpacing.md),
           // Add / Added toggle.
           AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: Duration.zero,
             padding: EdgeInsets.symmetric(
               horizontal: isAdded ? AppSpacing.md : AppSpacing.sm,
               vertical: AppSpacing.xs,
@@ -304,7 +308,9 @@ class _PickRow extends StatelessWidget {
                 ),
                 const Gap(4),
                 Text(
-                  isAdded ? AppStrings.added.primary : AppStrings.addLabel.primary,
+                  isAdded
+                      ? AppStrings.added.primary
+                      : AppStrings.addLabel.primary,
                   style: AppTypography.labelMedium.copyWith(
                     color: isAdded ? AppColors.success : AppColors.primary,
                     fontWeight: FontWeight.w700,

@@ -50,8 +50,7 @@ class _AdminRequestsScreenState extends ConsumerState<AdminRequestsScreen> {
   }
 
   static bool _isOpen(MaterialRequest r) =>
-      r.status != RequestStatus.received &&
-      r.status != RequestStatus.cancelled;
+      r.status != RequestStatus.received && r.status != RequestStatus.cancelled;
 
   static bool _isUrgentOpen(MaterialRequest r) =>
       r.priority == RequestPriority.urgent && _isOpen(r);
@@ -140,7 +139,9 @@ class _AdminRequestsScreenState extends ConsumerState<AdminRequestsScreen> {
                             },
                           ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.radiusFull,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -172,20 +173,20 @@ class _AdminRequestsScreenState extends ConsumerState<AdminRequestsScreen> {
                 child: all.isEmpty
                     ? _EmptyState(text: AppStrings.noRequestsYet.primary)
                     : visible.isEmpty
-                        ? _EmptyState(text: 'No matching requests')
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.screenHorizontal,
-                              AppSpacing.sm,
-                              AppSpacing.screenHorizontal,
-                              AppSpacing.huge,
-                            ),
-                            itemCount: visible.length,
-                            separatorBuilder: (_, _) =>
-                                const Gap(AppSpacing.listItemGap),
-                            itemBuilder: (context, i) =>
-                                _RequestRow(request: visible[i]),
-                          ),
+                    ? _EmptyState(text: 'No matching requests')
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.screenHorizontal,
+                          AppSpacing.sm,
+                          AppSpacing.screenHorizontal,
+                          AppSpacing.huge,
+                        ),
+                        itemCount: visible.length,
+                        separatorBuilder: (_, _) =>
+                            const Gap(AppSpacing.listItemGap),
+                        itemBuilder: (context, i) =>
+                            _RequestRow(request: visible[i]),
+                      ),
               ),
             ],
           ),
@@ -221,9 +222,7 @@ class _RequestRow extends ConsumerWidget {
       detail: request.projectName,
     );
     AppFeedback.confirm();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Request rejected')),
-    );
+    messenger.showSnackBar(const SnackBar(content: Text('Request rejected')));
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
@@ -264,10 +263,7 @@ class _RequestRow extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              title,
-              style: const TextStyle(color: AppColors.error),
-            ),
+            child: Text(title, style: const TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -278,8 +274,7 @@ class _RequestRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return LedgerCard(
-      onTap: () =>
-          context.push(RoutePaths.requestDetailPath(request.id)),
+      onTap: () => context.push(RoutePaths.requestDetailPath(request.id)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -358,7 +353,7 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: Duration.zero,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,

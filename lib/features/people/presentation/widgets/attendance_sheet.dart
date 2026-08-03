@@ -83,7 +83,9 @@ class AttendanceSheet extends ConsumerWidget {
                       _StatusChip(
                         label: s.label,
                         selected: statusFor(e.id) == s,
-                        onTap: () => ref.read(attendanceProvider.notifier).markToday(
+                        onTap: () => ref
+                            .read(attendanceProvider.notifier)
+                            .markToday(
                               employeeId: e.id,
                               status: s,
                               recordedBy: ref.read(actorNameProvider),
@@ -118,7 +120,7 @@ class _StatusChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
+        duration: Duration.zero,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.sm,

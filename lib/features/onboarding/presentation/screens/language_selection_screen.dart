@@ -50,7 +50,10 @@ class _LanguageSelectionScreenState
 
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      // The Yorks V1 onboarding surface is static and immediate. Keep the
+      // controller seam for compatibility with the existing composition, but
+      // resolve it in the same frame rather than animating every section in.
+      duration: Duration.zero,
     );
 
     _headerOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -575,9 +578,7 @@ class _LanguageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
+    return Container(
       decoration: BoxDecoration(
         color: isSelected
             ? AppColors.surfaceContainerLowest
@@ -644,32 +645,27 @@ class _LanguageCard extends StatelessWidget {
                 ),
 
                 // Trailing icon
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: isSelected
-                      ? Container(
-                          key: const ValueKey('selected'),
-                          width: 28,
-                          height: 28,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check_rounded,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Icon(
-                          key: const ValueKey('unselected'),
-                          Icons.language_rounded,
-                          size: 22,
-                          color: AppColors.onSurfaceVariant.withValues(
-                            alpha: 0.4,
-                          ),
+                isSelected
+                    ? Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
                         ),
-                ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        Icons.language_rounded,
+                        size: 22,
+                        color: AppColors.onSurfaceVariant.withValues(
+                          alpha: 0.4,
+                        ),
+                      ),
               ],
             ),
           ),

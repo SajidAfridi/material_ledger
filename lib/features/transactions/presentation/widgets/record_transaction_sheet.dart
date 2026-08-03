@@ -313,7 +313,7 @@ class _TypeToggle extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onChanged(t),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: Duration.zero,
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 decoration: BoxDecoration(
                   color: isSelected

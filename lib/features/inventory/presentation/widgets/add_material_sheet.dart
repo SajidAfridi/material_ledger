@@ -616,7 +616,7 @@ class _CategorySelector extends StatelessWidget {
           onTap: () => onChanged(cat),
           borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: Duration.zero,
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: AppSpacing.sm,
@@ -679,7 +679,7 @@ class _UnitSelector extends StatelessWidget {
           onTap: () => onChanged(unit),
           borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: Duration.zero,
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: AppSpacing.sm,

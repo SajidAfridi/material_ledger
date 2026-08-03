@@ -615,7 +615,7 @@ class _FilterPill extends StatelessWidget {
         onTap: onTap,
         borderRadius: radius,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: Duration.zero,
           curve: Curves.easeOutCubic,
           constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
           padding: const EdgeInsets.symmetric(
