@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
@@ -3583,251 +3584,26 @@ class _ControlledRequestPreview extends StatelessWidget {
   final YorksV1MaterialRequest request;
 
   @override
-  Widget build(BuildContext context) {
-    final commercial = request.lines.any((line) => line.unitCost != null);
-    return _R35RecordSurface(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Container(
-        key: const ValueKey('yorks-v1-controlled-material-request-preview'),
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.inkSecondary),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _FormalDocumentHeader(),
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              YorksV1MaterialRequestStrings.materialRequestForm.primary,
-              textAlign: TextAlign.center,
-              style: AppTypography.headlineSmall.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: .45,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _FormalRequestInformation(request: request),
-            const SizedBox(height: AppSpacing.lg),
-            _FormalRequestLines(lines: request.lines, commercial: commercial),
-            const SizedBox(height: AppSpacing.huge),
-            _FormalSignatureRow(request: request),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FormalDocumentHeader extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => _R35RecordSurface(
     padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
-      border: Border.all(color: AppColors.inkSecondary),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            YorksV1MaterialRequestStrings.companyLegalName.primary,
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+    child: SizedBox(
+      key: const ValueKey('yorks-v1-controlled-material-request-preview'),
+      height:
+          MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint
+          ? 620
+          : 900,
+      child: PdfPreview(
+        build: (_) => YorksV1MaterialRequestDocumentService().buildPdf(
+          request,
+          PdfPageFormat.a4,
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: BrandLogo(size: 58),
-        ),
-        Expanded(
-          child: Text(
-            YorksV1MaterialRequestStrings.formalCompanyArabic.primary,
-            textAlign: TextAlign.end,
-            style: AppTypography.titleSmall.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _FormalRequestInformation extends StatelessWidget {
-  const _FormalRequestInformation({required this.request});
-
-  final YorksV1MaterialRequest request;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final first = [
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.projectName.primary,
-          value: request.projectName,
-        ),
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.projectReference.primary,
-          value: request.projectReference,
-        ),
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.deliveryType.primary,
-          value: yorksV1MaterialRequestTimingCopy(request.timing).primary,
-        ),
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.buildingOther.primary,
-          value: request.scopeName,
-        ),
-      ];
-      final second = [
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.requestNumber.primary,
-          value: request.requestNumber ?? '—',
-        ),
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.requestedBy.primary,
-          value: request.requesterDisplayName ?? '—',
-        ),
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.scheduledDate.primary,
-          value: request.scheduledDate == null
-              ? '—'
-              : MaterialLocalizations.of(
-                  context,
-                ).formatMediumDate(request.scheduledDate!),
-        ),
-        _FormalFact(
-          label: YorksV1MaterialRequestStrings.projectEngineers.primary,
-          value: request.requesterProjectRole ?? '—',
-        ),
-      ];
-      final grid = constraints.maxWidth < 620
-          ? Column(children: [...first, ...second])
-          : Row(
-              children: [
-                Expanded(child: Column(children: first)),
-                const SizedBox(width: AppSpacing.xxl),
-                Expanded(child: Column(children: second)),
-              ],
-            );
-      return grid;
-    },
-  );
-}
-
-class _FormalFact extends StatelessWidget {
-  const _FormalFact({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: AppColors.lineStrong)),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text(
-            '$label:',
-            style: AppTypography.labelLarge.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        Expanded(flex: 3, child: Text(value, style: AppTypography.bodyMedium)),
-      ],
-    ),
-  );
-}
-
-class _FormalRequestLines extends StatelessWidget {
-  const _FormalRequestLines({required this.lines, required this.commercial});
-
-  final List<YorksV1MaterialRequestLine> lines;
-  final bool commercial;
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: ConstrainedBox(
-      constraints: BoxConstraints(minWidth: commercial ? 850 : 620),
-      child: Table(
-        border: TableBorder.all(color: AppColors.inkSecondary),
-        columnWidths: {
-          0: const FixedColumnWidth(52),
-          1: const FlexColumnWidth(3.4),
-          2: const FlexColumnWidth(1.5),
-          3: const FixedColumnWidth(68),
-          4: const FixedColumnWidth(72),
-          if (commercial) 5: const FixedColumnWidth(104),
-          if (commercial) 6: const FixedColumnWidth(112),
-        },
-        children: [
-          TableRow(
-            decoration: const BoxDecoration(
-              color: AppColors.surfaceContainerHighest,
-            ),
-            children: [
-              _FormalCell(
-                YorksV1MaterialRequestStrings.rowNumber.primary,
-                header: true,
-              ),
-              _FormalCell(
-                YorksV1MaterialRequestStrings.itemDescription.primary,
-                header: true,
-              ),
-              _FormalCell(
-                YorksV1MaterialRequestStrings.brandOrigin.primary,
-                header: true,
-              ),
-              _FormalCell(
-                YorksV1MaterialRequestStrings.quantity.primary,
-                header: true,
-              ),
-              _FormalCell(
-                YorksV1MaterialRequestStrings.unit.primary,
-                header: true,
-              ),
-              if (commercial)
-                _FormalCell(
-                  YorksV1MaterialRequestStrings.unitCost.primary,
-                  header: true,
-                ),
-              if (commercial)
-                _FormalCell(
-                  YorksV1MaterialRequestStrings.totalCost.primary,
-                  header: true,
-                ),
-            ],
-          ),
-          for (final line in lines)
-            TableRow(
-              children: [
-                _FormalCell(line.displayOrder.toString()),
-                _FormalCell(
-                  line.description,
-                  supporting: [
-                    if (line.size?.trim().isNotEmpty == true)
-                      '${YorksV1MaterialRequestStrings.size.primary}: ${line.size}',
-                    if (line.planningModelTag?.trim().isNotEmpty == true)
-                      '${YorksV1MaterialRequestStrings.planningModelTag.primary}: ${line.planningModelTag}',
-                  ].join(' · '),
-                ),
-                _FormalCell(line.brandOrigin ?? '—'),
-                _FormalCell(line.quantity, alignEnd: true),
-                _FormalCell(line.unit),
-                if (commercial)
-                  _FormalCell(line.unitCost ?? '—', alignEnd: true),
-                if (commercial)
-                  _FormalCell(line.totalCost ?? '—', alignEnd: true),
-              ],
-            ),
-        ],
+        allowPrinting: false,
+        allowSharing: false,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        initialPageFormat: PdfPageFormat.a4,
+        useActions: false,
+        loadingWidget: const Center(child: CircularProgressIndicator()),
       ),
     ),
   );
@@ -3867,124 +3643,6 @@ class _FormalCell extends StatelessWidget {
             style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
           ),
         ],
-      ],
-    ),
-  );
-}
-
-class _FormalSignatureRow extends StatelessWidget {
-  const _FormalSignatureRow({required this.request});
-
-  final YorksV1MaterialRequest request;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final items = [
-        _FormalSignatureBlock(
-          title: YorksV1MaterialRequestStrings.requestedByEngineer.primary,
-          name: request.requesterDisplayName ?? '—',
-          role: request.requesterProjectRole ?? '—',
-          date: request.submittedAt == null
-              ? '—'
-              : MaterialLocalizations.of(
-                  context,
-                ).formatMediumDate(request.submittedAt!.toLocal()),
-        ),
-        _FormalSignatureBlock(
-          title: YorksV1MaterialRequestStrings.approvedByEngineer.primary,
-          name: '',
-          role: '',
-          date: '',
-        ),
-        _FormalSignatureBlock(
-          title: YorksV1MaterialRequestStrings.dispatchedByProcurement.primary,
-          name: '',
-          role: '',
-          date: '',
-        ),
-      ];
-      return constraints.maxWidth < 700
-          ? Column(children: items)
-          : Row(children: [for (final item in items) Expanded(child: item)]);
-    },
-  );
-}
-
-class _FormalSignatureBlock extends StatelessWidget {
-  const _FormalSignatureBlock({
-    required this.title,
-    required this.name,
-    required this.role,
-    required this.date,
-  });
-
-  final String title;
-  final String name;
-  final String role;
-  final String date;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 138),
-    padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
-      border: Border.all(color: AppColors.inkSecondary),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _SignatureLine(
-          label: YorksV1MaterialRequestStrings.name.primary,
-          value: name,
-        ),
-        _SignatureLine(
-          label: YorksV1MaterialRequestStrings.role.primary,
-          value: role,
-        ),
-        _SignatureLine(
-          label: YorksV1MaterialRequestStrings.date.primary,
-          value: date,
-        ),
-      ],
-    ),
-  );
-}
-
-class _SignatureLine extends StatelessWidget {
-  const _SignatureLine({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-    child: Row(
-      children: [
-        SizedBox(
-          width: 60,
-          child: Text(
-            '$label:',
-            style: AppTypography.labelSmall.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.only(bottom: 2),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.lineStrong)),
-            ),
-            child: Text(value, style: AppTypography.labelSmall),
-          ),
-        ),
       ],
     ),
   );

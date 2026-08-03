@@ -176,18 +176,6 @@ class YorksV1MaterialRequestDocumentService {
         footer: _pageNumber,
         build: (_) => [
           _materialTable(request, commercial: commercial),
-          if (request.deliveryNote != null) ...[
-            pw.SizedBox(height: 4 * _mm),
-            pw.Text(
-              YorksV1MaterialRequestStrings.deliveryNoteLabel.primary,
-              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-            ),
-            pw.SizedBox(height: 1 * _mm),
-            pw.Text(
-              request.deliveryNote!,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          ],
           // Keep all three approval areas together near the bottom of the
           // final page without reserving their space on every preceding page.
           pw.NewPage(freeSpace: 52 * _mm),
@@ -206,7 +194,9 @@ class YorksV1MaterialRequestDocumentService {
       _logoFuture ??= _loadLogoUncached();
 
   static Future<pw.MemoryImage> _loadLogoUncached() async {
-    final data = await rootBundle.load('assets/branding/source_emblem.png');
+    final data = await rootBundle.load(
+      'assets/branding/yorks_emblem_black.png',
+    );
     return pw.MemoryImage(data.buffer.asUint8List());
   }
 
@@ -534,8 +524,6 @@ class YorksV1MaterialRequestDocumentService {
               ),
             ],
           ),
-          pw.SizedBox(height: 2 * _mm),
-          _companyContact(),
         ],
       );
 
@@ -571,19 +559,6 @@ class YorksV1MaterialRequestDocumentService {
 
   static pw.Widget _approvalText(String label, String value) =>
       pw.Text('$label: $value', style: const pw.TextStyle(fontSize: 6.6));
-
-  static pw.Widget _companyContact() => pw.Container(
-    width: double.infinity,
-    padding: pw.EdgeInsets.only(top: 1.5 * _mm),
-    decoration: pw.BoxDecoration(
-      border: pw.Border(top: pw.BorderSide(color: _documentGrid, width: .45)),
-    ),
-    child: pw.Text(
-      'Tel.: 02-5509788 · Fax: 02-5509688 · P.O. Box: 4757 · Abu Dhabi · United Arab Emirates · yorks_sk@yorks.ae',
-      textAlign: pw.TextAlign.center,
-      style: const pw.TextStyle(fontSize: 6.2),
-    ),
-  );
 
   static pw.Widget _pageNumber(pw.Context context) => pw.Align(
     alignment: pw.Alignment.centerRight,
