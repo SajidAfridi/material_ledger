@@ -127,3 +127,36 @@ jobs:
           test -n "$apksigner_path"
           "$apksigner_path" verify --verbose --print-certs "$apk_path"
           "$apksigner_path" verify --print-certs "$apk_path" | grep -F 'CN=Yorks CI Ephemeral'
+
+  deploy-production:
+    name: Deploy R35 web production
+    needs: [verify, database, android-release]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      R35_ENVIRONMENT: production
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL_PRODUCTION }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build R35 web release
+        run: ./tool/r35.sh build-web
+
+      - name: Deploy prebuilt web bundle to Vercel production
+        run: npx vercel deploy build/web --prod --yes --token "$VERCEL_TOKEN"

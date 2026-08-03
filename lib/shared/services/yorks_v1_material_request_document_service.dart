@@ -238,7 +238,7 @@ class YorksV1MaterialRequestDocumentService {
         pw.SizedBox(height: 2.5 * _mm),
         pw.Center(
           child: pw.Text(
-            'MATERIAL REQUEST FORM',
+            'MATERIAL REQUEST',
             style: pw.TextStyle(
               fontSize: 14,
               fontWeight: pw.FontWeight.bold,

@@ -179,7 +179,7 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'सामग्री आइटम',
   );
   static const materialItemsDescription = TranslatableString(
-    en: 'Remarks are removed. The item order matches the familiar Yorks Material Request form.',
+    en: 'Remarks are removed. The item order matches the familiar Yorks Material Request layout.',
     ar: 'تمت إزالة الملاحظات. يطابق ترتيب البنود نموذج طلب مواد Yorks المعتاد.',
     ur: 'ریمارکس ہٹا دیے گئے ہیں۔ آئٹم کی ترتیب Yorks کے مانوس مواد درخواست فارم کے مطابق ہے۔',
     hi: 'टिप्पणियाँ हटा दी गई हैं। आइटम क्रम परिचित Yorks सामग्री अनुरोध फॉर्म से मेल खाता है।',
@@ -701,10 +701,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'औपचारिक अनुरोध जमा की गई पंक्तियों का केवल-पढ़ने योग्य स्नैपशॉट है।',
   );
   static const materialRequestForm = TranslatableString(
-    en: 'MATERIAL REQUEST FORM',
-    ar: 'نموذج طلب المواد',
-    ur: 'میٹیریل ریکویسٹ فارم',
-    hi: 'सामग्री अनुरोध फॉर्म',
+    en: 'MATERIAL REQUEST',
+    ar: 'طلب المواد',
+    ur: 'میٹیریل ریکویسٹ',
+    hi: 'सामग्री अनुरोध',
   );
   static const formalCompanyArabic = TranslatableString(
     en: 'Yorks AC. & Ref.',
