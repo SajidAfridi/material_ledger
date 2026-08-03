@@ -10,6 +10,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'یارکس اے سی اینڈ ریف',
     hi: 'यॉर्क्स एसी एंड रेफ.',
   );
+  static const companyLegalName = TranslatableString(
+    en: 'Yorks Air Conditioning and Refrigeration LLC-SPC',
+    ar: 'يوركس للتكييف والتبريد ذ.م.م - ش.ش.و',
+    ur: 'یارکس ایئر کنڈیشننگ اینڈ ریفریجریشن ایل ایل سی-ایس پی سی',
+    hi: 'यॉर्क्स एयर कंडीशनिंग एंड रेफ्रिजरेशन LLC-SPC',
+  );
   static const materialRequest = TranslatableString(
     en: 'Material Request',
     ar: 'طلب مواد',
@@ -304,6 +310,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'کسٹم آئٹم شامل کریں',
     hi: 'कस्टम आइटम जोड़ें',
   );
+  static const addBlankRow = TranslatableString(
+    en: 'Add Blank Row',
+    ar: 'إضافة صف فارغ',
+    ur: 'خالی قطار شامل کریں',
+    hi: 'खाली पंक्ति जोड़ें',
+  );
+  static const addSimilarRow = TranslatableString(
+    en: 'Add Similar Row',
+    ar: 'إضافة صف مماثل',
+    ur: 'ملتا جلتا قطار شامل کریں',
+    hi: 'समान पंक्ति जोड़ें',
+  );
   static const addFromBoq = TranslatableString(
     en: 'Add from BOQ',
     ar: 'إضافة من جدول الكميات',
@@ -334,6 +352,42 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'اس میٹیریل فہرست میں درآمد کرنے کے لیے ورک شیٹ منتخب کریں۔',
     hi: 'इस सामग्री सूची में आयात करने के लिए वर्कशीट चुनें।',
   );
+  static const previewImport = TranslatableString(
+    en: 'Preview import',
+    ar: 'معاينة الاستيراد',
+    ur: 'درآمد کا پیش نظارہ',
+    hi: 'आयात का पूर्वावलोकन',
+  );
+  static const addImportedRows = TranslatableString(
+    en: 'Add rows to draft',
+    ar: 'إضافة الصفوف إلى المسودة',
+    ur: 'قطار مسودے میں شامل کریں',
+    hi: 'ड्राफ़्ट में पंक्तियाँ जोड़ें',
+  );
+  static const rows = TranslatableString(
+    en: 'rows',
+    ar: 'صفوف',
+    ur: 'قطار',
+    hi: 'पंक्तियाँ',
+  );
+  static const importPreviewLimit = TranslatableString(
+    en: 'Preview shows the first 25 rows; all rows will be added.',
+    ar: 'تُظهر المعاينة أول 25 صفًا؛ ستتم إضافة جميع الصفوف.',
+    ur: 'پیش نظارہ پہلی 25 قطاریں دکھاتا ہے؛ تمام قطاریں شامل کی جائیں گی۔',
+    hi: 'पूर्वावलोकन पहली 25 पंक्तियाँ दिखाता है; सभी पंक्तियाँ जोड़ दी जाएँगी।',
+  );
+  static const importCostMismatch = TranslatableString(
+    en: 'Some imported totals do not match Qty × Unit Cost. Totals will be recalculated when the controlled document is generated.',
+    ar: 'بعض الإجماليات المستوردة لا تطابق الكمية × تكلفة الوحدة. ستتم إعادة حساب الإجماليات عند إنشاء المستند المضبوط.',
+    ur: 'کچھ درآمد شدہ ٹوٹل مقدار × فی یونٹ لاگت سے مطابقت نہیں رکھتے۔ کنٹرول شدہ دستاویز بناتے وقت ٹوٹل دوبارہ حساب ہوگا۔',
+    hi: 'कुछ आयातित कुल Qty × Unit Cost से मेल नहीं खाते। नियंत्रित दस्तावेज़ बनाते समय कुल की पुनर्गणना होगी।',
+  );
+  static const cancelImport = TranslatableString(
+    en: 'Cancel import',
+    ar: 'إلغاء الاستيراد',
+    ur: 'درآمد منسوخ کریں',
+    hi: 'आयात रद्द करें',
+  );
   static const itemDescription = TranslatableString(
     en: 'Item Description',
     ar: 'وصف الصنف',
@@ -357,6 +411,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'النموذج / الوسم',
     ur: 'ماڈل / ٹیگ',
     hi: 'मॉडल / टैग',
+  );
+  static const modelSerialNumber = TranslatableString(
+    en: 'Model / Serial No.',
+    ar: 'رقم الطراز / الرقم التسلسلي',
+    ur: 'ماڈل / سیریل نمبر',
+    hi: 'मॉडल / सीरियल नं.',
   );
   static const quantity = TranslatableString(
     en: 'Qty',
@@ -405,6 +465,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'تم حفظ المسودة',
     ur: 'مسودہ محفوظ ہو گیا',
     hi: 'ड्राफ़्ट सहेजा गया',
+  );
+  static const savedLocally = TranslatableString(
+    en: 'Draft saved on this device. Complete the request to sync it.',
+    ar: 'تم حفظ المسودة على هذا الجهاز. أكمل الطلب لمزامنته.',
+    ur: 'مسودہ اس ڈیوائس پر محفوظ ہو گیا۔ اسے ہم وقت کرنے کے لیے درخواست مکمل کریں۔',
+    hi: 'ड्राफ़्ट इस डिवाइस पर सहेजा गया। सिंक करने के लिए अनुरोध पूरा करें।',
   );
   static const saveFailed = TranslatableString(
     en: 'Could not save this draft.',

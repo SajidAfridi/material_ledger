@@ -14,6 +14,7 @@ import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_boq_workbook.dart';
 import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
+import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
@@ -34,6 +35,22 @@ import '../../../../shared/services/yorks_v1_material_request_document_service.d
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
+
+const _mrUnitOptions = <String>[
+  'Nos',
+  'Each',
+  'Meter',
+  'Cm',
+  'Length',
+  'Set',
+  'Pairs',
+  'Roll',
+  'Box',
+  'Kg',
+  'Litre',
+  'Pack',
+  'Lot',
+];
 
 /// V1 material request overview. It reads only the server projection; drafts
 /// are returned only to their creator by the database contract.
@@ -746,6 +763,17 @@ class _DraftForm extends ConsumerWidget {
                   onPressed: isBusy ? null : controller.addCustomLine,
                 ),
                 _R35RequestAction(
+                  label: YorksV1MaterialRequestStrings.addBlankRow.primary,
+                  icon: Icons.table_rows_outlined,
+                  onPressed: isBusy ? null : controller.addBlankLine,
+                ),
+                if (draft.lines.isNotEmpty)
+                  _R35RequestAction(
+                    label: YorksV1MaterialRequestStrings.addSimilarRow.primary,
+                    icon: Icons.copy_outlined,
+                    onPressed: isBusy ? null : controller.addSimilarLine,
+                  ),
+                _R35RequestAction(
                   label: YorksV1MaterialRequestStrings.addFromBoq.primary,
                   icon: Icons.folder_outlined,
                   onPressed: isBusy || draft.projectId == null
@@ -907,10 +935,16 @@ class _DraftForm extends ConsumerWidget {
     YorksV1MaterialRequestDraftController controller,
     YorksV1MaterialRequestDraft draft,
   ) async {
-    final saved = await controller.saveConnected();
+    final wasServerReady = controller.currentDraft.canSubmitLocally;
+    final saved = await controller.saveDraft();
     if (!context.mounted) return;
     if (saved == null) {
-      _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      _snack(
+        context,
+        wasServerReady
+            ? YorksV1MaterialRequestStrings.saveFailed.primary
+            : YorksV1MaterialRequestStrings.savedLocally.primary,
+      );
       return;
     }
     _snack(context, YorksV1MaterialRequestStrings.saved.primary);
@@ -925,7 +959,10 @@ class _DraftForm extends ConsumerWidget {
     final submitted = await controller.submit();
     if (!context.mounted) return;
     if (submitted == null) {
-      _snack(context, YorksV1MaterialRequestStrings.submitFailed.primary);
+      final message = controller.lastErrorCode == YorksV1DomainErrorCode.offline
+          ? YorksV1MaterialRequestStrings.offlineSubmit.primary
+          : YorksV1MaterialRequestStrings.submitFailed.primary;
+      _snack(context, message);
       return;
     }
     ref.invalidate(yorksV1MaterialRequestListProvider);
@@ -1103,7 +1140,13 @@ class _R35RequestCard extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           children: actions,
         );
-        final compact = constraints.maxWidth < 760;
+        // The action row is intentionally stacked until there is enough room
+        // for the title to retain a readable width.  Without this guard the
+        // Material Items heading is squeezed into one character per line on
+        // medium desktop windows when the review panel shares the row.  The
+        // card threshold is intentionally wider than the app breakpoint
+        // because this card has its own constrained column.
+        final compact = constraints.maxWidth < 1320;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1703,7 +1746,11 @@ class _DesktopLinesTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tableWidth = showCommercial ? 1310.0 : 1080.0;
+    // The UI intentionally mirrors the familiar Yorks material form.  The
+    // controlled Excel/PDF contract remains role-safe, but the editable web
+    // grid keeps size and model/tag visible as first-class columns so an
+    // engineer can scan and correct a row without opening a secondary editor.
+    final tableWidth = 1360.0;
     final headerStyle = AppTypography.labelSmall.copyWith(
       color: AppColors.muted,
       fontWeight: FontWeight.w800,
@@ -1734,7 +1781,7 @@ class _DesktopLinesTable extends StatelessWidget {
           ),
           _MrTableCell(
             child: Text(
-              YorksV1MaterialRequestStrings.planningModelTag.primary
+              YorksV1MaterialRequestStrings.modelSerialNumber.primary
                   .toUpperCase(),
               style: headerStyle,
             ),
@@ -1757,20 +1804,18 @@ class _DesktopLinesTable extends StatelessWidget {
               style: headerStyle,
             ),
           ),
-          if (showCommercial)
-            _MrTableCell(
-              child: Text(
-                YorksV1MaterialRequestStrings.unitCost.primary.toUpperCase(),
-                style: headerStyle,
-              ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.unitCost.primary.toUpperCase(),
+              style: headerStyle,
             ),
-          if (showCommercial)
-            _MrTableCell(
-              child: Text(
-                YorksV1MaterialRequestStrings.totalCost.primary.toUpperCase(),
-                style: headerStyle,
-              ),
+          ),
+          _MrTableCell(
+            child: Text(
+              YorksV1MaterialRequestStrings.totalCost.primary.toUpperCase(),
+              style: headerStyle,
             ),
+          ),
           _MrTableCell(child: const SizedBox.shrink()),
         ],
       ),
@@ -1804,6 +1849,7 @@ class _DesktopLinesTable extends StatelessWidget {
                 fieldKey: ValueKey('${line.id}-size'),
                 initialValue: line.size ?? '',
                 enabled: enabled,
+                hintText: YorksV1MaterialRequestStrings.size.primary,
                 onChanged: (value) => controller.updateLine(
                   line.id,
                   (current) => current.copyWith(
@@ -1817,6 +1863,8 @@ class _DesktopLinesTable extends StatelessWidget {
                 fieldKey: ValueKey('${line.id}-planning-model-tag'),
                 initialValue: line.planningModelTag ?? '',
                 enabled: enabled,
+                hintText:
+                    YorksV1MaterialRequestStrings.modelSerialNumber.primary,
                 onChanged: (value) => controller.updateLine(
                   line.id,
                   (current) => current.copyWith(
@@ -1853,7 +1901,7 @@ class _DesktopLinesTable extends StatelessWidget {
               ),
             ),
             _MrTableCell(
-              child: _LineTextField(
+              child: _LineUnitDropdown(
                 fieldKey: ValueKey('${line.id}-unit'),
                 initialValue: line.unit,
                 enabled: enabled,
@@ -1863,31 +1911,26 @@ class _DesktopLinesTable extends StatelessWidget {
                 ),
               ),
             ),
-            if (showCommercial)
-              _MrTableCell(
-                child: Text(
-                  line.unitCost ?? '—',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
-                ),
-              ),
-            if (showCommercial)
-              _MrTableCell(
-                child: Text(
-                  line.totalCost ?? '—',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
-                ),
-              ),
             _MrTableCell(
-              child: IconButton(
-                tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: enabled
-                    ? () => controller.removeLine(line.id)
-                    : null,
+              child: Text(
+                showCommercial ? (line.unitCost ?? '—') : '—',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: Text(
+                showCommercial ? (line.totalCost ?? '—') : '—',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ),
+            _MrTableCell(
+              child: _MrDeleteButton(
+                enabled: enabled,
+                onPressed: () => controller.removeLine(line.id),
               ),
             ),
           ],
@@ -1908,15 +1951,15 @@ class _DesktopLinesTable extends StatelessWidget {
             child: Table(
               columnWidths: {
                 0: const FixedColumnWidth(64),
-                1: const FixedColumnWidth(260),
+                1: const FixedColumnWidth(270),
                 2: const FixedColumnWidth(150),
-                3: const FixedColumnWidth(190),
-                4: const FixedColumnWidth(180),
+                3: const FixedColumnWidth(180),
+                4: const FixedColumnWidth(170),
                 5: const FixedColumnWidth(90),
-                6: const FixedColumnWidth(90),
-                if (showCommercial) 7: const FixedColumnWidth(110),
-                if (showCommercial) 8: const FixedColumnWidth(120),
-                showCommercial ? 9 : 7: const FixedColumnWidth(58),
+                6: const FixedColumnWidth(110),
+                7: const FixedColumnWidth(110),
+                8: const FixedColumnWidth(125),
+                9: const FixedColumnWidth(58),
               },
               border: TableBorder(
                 horizontalInside: BorderSide(color: AppColors.line),
@@ -1951,6 +1994,69 @@ class _MrTableCell extends StatelessWidget {
   );
 }
 
+class _MrDeleteButton extends StatelessWidget {
+  const _MrDeleteButton({required this.enabled, required this.onPressed});
+
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+    icon: const Icon(Icons.close_rounded, color: AppColors.error),
+    style: IconButton.styleFrom(
+      side: const BorderSide(color: AppColors.error),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      minimumSize: const Size(44, 44),
+    ),
+    onPressed: enabled ? onPressed : null,
+  );
+}
+
+class _LineUnitDropdown extends StatelessWidget {
+  const _LineUnitDropdown({
+    required this.fieldKey,
+    required this.initialValue,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final Key fieldKey;
+  final String initialValue;
+  final bool enabled;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = initialValue.trim();
+    final options = <String>{
+      if (value.isNotEmpty && !_mrUnitOptions.contains(value)) value,
+      ..._mrUnitOptions,
+    }.toList(growable: false);
+    return DropdownButtonFormField<String>(
+      key: fieldKey,
+      initialValue: options.contains(value) && value.isNotEmpty ? value : 'Nos',
+      isExpanded: true,
+      style: AppTypography.bodySmall.copyWith(color: AppColors.ink),
+      decoration: const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      ),
+      items: [
+        for (final option in options)
+          DropdownMenuItem(value: option, child: Text(option)),
+      ],
+      onChanged: enabled
+          ? (next) {
+              if (next != null) onChanged(next);
+            }
+          : null,
+    );
+  }
+}
+
 class _FocusedLineEditor extends StatelessWidget {
   const _FocusedLineEditor({
     required this.line,
@@ -1976,10 +2082,9 @@ class _FocusedLineEditor extends StatelessWidget {
           children: [
             Text('${line.displayOrder}', style: AppTypography.titleSmall),
             const Spacer(),
-            IconButton(
-              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
-              icon: const Icon(Icons.delete_outline_rounded),
-              onPressed: enabled ? () => controller.removeLine(line.id) : null,
+            _MrDeleteButton(
+              enabled: enabled,
+              onPressed: () => controller.removeLine(line.id),
             ),
           ],
         ),
@@ -2021,7 +2126,7 @@ class _FocusedLineEditor extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         _LineLabeledField(
           fieldKey: ValueKey('${line.id}-planning-model-tag'),
-          label: YorksV1MaterialRequestStrings.planningModelTag.primary,
+          label: YorksV1MaterialRequestStrings.modelSerialNumber.primary,
           initialValue: line.planningModelTag ?? '',
           enabled: enabled,
           onChanged: (value) => controller.updateLine(
@@ -2051,7 +2156,7 @@ class _FocusedLineEditor extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: _LineLabeledField(
+              child: _LineLabeledUnitDropdown(
                 fieldKey: ValueKey('${line.id}-unit'),
                 label: YorksV1MaterialRequestStrings.unit.primary,
                 initialValue: line.unit,
@@ -2076,6 +2181,7 @@ class _LineTextField extends StatelessWidget {
     required this.onChanged,
     required this.enabled,
     this.keyboardType,
+    this.hintText,
   });
 
   final Key fieldKey;
@@ -2083,6 +2189,7 @@ class _LineTextField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final bool enabled;
   final TextInputType? keyboardType;
+  final String? hintText;
 
   @override
   Widget build(BuildContext context) => TextFormField(
@@ -2094,8 +2201,48 @@ class _LineTextField extends StatelessWidget {
     decoration: const InputDecoration(
       isDense: true,
       contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-    ),
+    ).copyWith(hintText: hintText),
   );
+}
+
+class _LineLabeledUnitDropdown extends StatelessWidget {
+  const _LineLabeledUnitDropdown({
+    required this.fieldKey,
+    required this.label,
+    required this.initialValue,
+    required this.onChanged,
+    required this.enabled,
+  });
+
+  final Key fieldKey;
+  final String label;
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = initialValue.trim();
+    final options = <String>{
+      if (value.isNotEmpty && !_mrUnitOptions.contains(value)) value,
+      ..._mrUnitOptions,
+    }.toList(growable: false);
+    return DropdownButtonFormField<String>(
+      key: fieldKey,
+      initialValue: options.contains(value) && value.isNotEmpty ? value : 'Nos',
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: [
+        for (final option in options)
+          DropdownMenuItem(value: option, child: Text(option)),
+      ],
+      onChanged: enabled
+          ? (next) {
+              if (next != null) onChanged(next);
+            }
+          : null,
+    );
+  }
 }
 
 class _LineLabeledField extends StatelessWidget {
@@ -3009,20 +3156,28 @@ Future<void> _importExcel(
     if (!context.mounted) return;
     final sheet = await _chooseWorkbookSheet(context, workbook);
     if (sheet == null) return;
+    if (!context.mounted) return;
     final preview = codec.preview(
       workbook: workbook,
       sheet: sheet,
       fallbackTitle: selected.fileName,
     );
-    final fields = <YorksV1BoqCanonicalField, int>{
-      for (final column in preview.columns)
-        if (column.canonicalField != null)
-          column.canonicalField!: column.sourceIndex,
-    };
-    final description = fields[YorksV1BoqCanonicalField.description];
+    final fields = <YorksV1BoqCanonicalField, int>{};
+    // Keep the first recognized planning/tag column. Equipment schedules
+    // often expose both a tag and a model; the tag is the stable planning
+    // reference that belongs in the Model / Serial No. MR column.
+    for (final column in preview.columns) {
+      final canonical = column.canonicalField;
+      if (canonical != null) {
+        fields.putIfAbsent(canonical, () => column.sourceIndex);
+      }
+    }
+    final description =
+        fields[YorksV1BoqCanonicalField.description] ??
+        _mrFallbackDescriptionIndex(preview);
     final quantity = fields[YorksV1BoqCanonicalField.quantity];
     final unit = fields[YorksV1BoqCanonicalField.unit];
-    if (description == null || quantity == null || unit == null) {
+    if (description == null) {
       throw StateError('required columns');
     }
     final brand = fields[YorksV1BoqCanonicalField.brandOrigin];
@@ -3036,27 +3191,67 @@ Future<void> _importExcel(
         )
         .map((column) => column.sourceIndex)
         .firstOrNull;
+    final unitCost = _mrHeaderIndex(
+      preview,
+      RegExp(r'unit\s*cost|cost\s*per\s*unit', caseSensitive: false),
+    );
+    final totalCost = _mrHeaderIndex(
+      preview,
+      RegExp(r'total\s*cost|amount', caseSensitive: false),
+    );
+    final addRows = await _previewMaterialRequestImport(
+      context,
+      preview: preview,
+      descriptionIndex: description,
+      brandIndex: brand,
+      quantityIndex: quantity,
+      unitIndex: unit,
+      unitCostIndex: unitCost,
+      totalCostIndex: totalCost,
+    );
+    if (!addRows || !context.mounted) return;
     // Import is an editing operation, not a submit operation. Preserve rows
     // that are incomplete (for example a draft export with an empty Qty) so
     // the engineer can correct them in the same spreadsheet editor instead
     // of silently losing the row during round-trip.
     final lines = [
       for (var index = 0; index < preview.rows.length; index++)
-        YorksV1MaterialRequestLine(
-          id: const Uuid().v4(),
-          displayOrder: index + 1,
-          source: YorksV1MaterialRequestLineSource.excel,
-          description: preview.rows[index].valueFor(description),
-          brandOrigin: brand == null
-              ? null
-              : preview.rows[index].valueFor(brand),
-          size: size == null ? null : preview.rows[index].valueFor(size),
-          planningModelTag: planningModelTag == null
-              ? null
-              : preview.rows[index].valueFor(planningModelTag),
-          quantity: preview.rows[index].valueFor(quantity),
-          unit: preview.rows[index].valueFor(unit),
-        ),
+        (() {
+          final technical = _splitExportedDescription(
+            preview.rows[index].valueFor(description),
+          );
+          return YorksV1MaterialRequestLine(
+            id: const Uuid().v4(),
+            displayOrder: index + 1,
+            source: YorksV1MaterialRequestLineSource.excel,
+            description: technical.$1.trim().isEmpty
+                ? 'Imported equipment'
+                : technical.$1,
+            brandOrigin: brand == null
+                ? _mrFallbackBrandValue(preview, preview.rows[index])
+                : preview.rows[index].valueFor(brand),
+            size: size == null
+                ? technical.$2
+                : preview.rows[index].valueFor(size),
+            planningModelTag: planningModelTag == null
+                ? _mrFallbackModelValue(preview, preview.rows[index]) ??
+                      technical.$3
+                : preview.rows[index].valueFor(planningModelTag),
+            quantity: _mrInferredQuantity(
+              rawQuantity: quantity == null
+                  ? ''
+                  : preview.rows[index].valueFor(quantity),
+              description: technical.$1,
+              model: planningModelTag == null
+                  ? _mrFallbackModelValue(preview, preview.rows[index])
+                  : preview.rows[index].valueFor(planningModelTag),
+            ),
+            unit: _mrInferredUnit(
+              rawUnit: unit == null ? '' : preview.rows[index].valueFor(unit),
+              description: technical.$1,
+            ),
+          );
+        })(),
     ];
     await controller.addExcelLines(lines);
   } catch (_) {
@@ -3064,6 +3259,426 @@ Future<void> _importExcel(
       _snack(context, YorksV1MaterialRequestStrings.importFailed.primary);
     }
   }
+}
+
+int? _mrFallbackDescriptionIndex(YorksV1BoqImportPreview preview) {
+  final preferred = RegExp(
+    r'description|item|equipment|serving\s*area|location|interlock\s*with|unit\s*ref',
+    caseSensitive: false,
+  );
+  for (final column in preview.columns) {
+    if (!preferred.hasMatch(column.heading)) continue;
+    if (preview.rows.any(
+      (row) => row.valueFor(column.sourceIndex).isNotEmpty,
+    )) {
+      return column.sourceIndex;
+    }
+  }
+  for (final column in preview.columns) {
+    if (column.canonicalField == YorksV1BoqCanonicalField.planningModelTag ||
+        RegExp(
+          r'tag|model|serial|qty|unit|make|brand',
+          caseSensitive: false,
+        ).hasMatch(column.heading)) {
+      continue;
+    }
+    if (preview.rows.any(
+      (row) => row.valueFor(column.sourceIndex).isNotEmpty,
+    )) {
+      return column.sourceIndex;
+    }
+  }
+  return null;
+}
+
+String? _mrFallbackModelValue(
+  YorksV1BoqImportPreview preview,
+  YorksV1BoqImportRow row,
+) {
+  final pattern = RegExp(
+    r'(^|\b)(tag|tag\s*no|equipment\s*tag|model|serial|reference|ref|s\s*no)(\b|#)',
+    caseSensitive: false,
+  );
+  for (final column in preview.columns) {
+    if (!pattern.hasMatch(column.heading)) continue;
+    final value = row.valueFor(column.sourceIndex).trim();
+    if (value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+String? _mrFallbackBrandValue(
+  YorksV1BoqImportPreview preview,
+  YorksV1BoqImportRow row,
+) {
+  final pattern = RegExp(r'brand|make|manufacturer', caseSensitive: false);
+  for (final column in preview.columns) {
+    if (!pattern.hasMatch(column.heading)) continue;
+    final value = row.valueFor(column.sourceIndex).trim();
+    if (value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+String _mrInferredQuantity({
+  required String rawQuantity,
+  required String description,
+  required String? model,
+}) {
+  final value = rawQuantity.trim();
+  if (value.isNotEmpty) return value;
+  // Equipment schedules commonly encode grouped quantities in the item
+  // description (for example "Supply Air Register - 4 Nos"). Preserve that
+  // quantity instead of importing every grouped row as one.
+  final embedded = RegExp(
+    r'(\d+(?:\.\d+)?)\s*(?:nos?|each|pcs?|pieces?|sets?|pairs?)\b',
+    caseSensitive: false,
+  ).firstMatch(description);
+  if (embedded != null) return embedded.group(1)!;
+  // A tagged equipment row is an individually requestable item.  A blank
+  // quantity is therefore safely initialised to one and remains editable.
+  return model?.trim().isNotEmpty == true ? '1' : '';
+}
+
+String _mrInferredUnit({required String rawUnit, required String description}) {
+  final value = rawUnit.trim();
+  if (value.isNotEmpty) return _mrNormaliseUnit(value);
+  final embedded = RegExp(
+    r'\b(nos?|each|pcs?|pieces?|meter|metre|cm|length|sets?|pairs?|rolls?|boxes?|kg|lit(?:re|er)s?|packs?|lots?)\b',
+    caseSensitive: false,
+  ).firstMatch(description);
+  return embedded == null ? 'Nos' : _mrNormaliseUnit(embedded.group(1)!);
+}
+
+String _mrNormaliseUnit(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'no':
+    case 'nos':
+    case 'number':
+    case 'numbers':
+    case 'pc':
+    case 'pcs':
+    case 'piece':
+    case 'pieces':
+      return 'Nos';
+    case 'each':
+      return 'Each';
+    case 'm':
+    case 'meter':
+    case 'metre':
+    case 'meters':
+    case 'metres':
+      return 'Meter';
+    case 'cm':
+      return 'Cm';
+    case 'length':
+      return 'Length';
+    case 'set':
+    case 'sets':
+      return 'Set';
+    case 'pair':
+    case 'pairs':
+      return 'Pairs';
+    case 'roll':
+    case 'rolls':
+      return 'Roll';
+    case 'box':
+    case 'boxes':
+      return 'Box';
+    case 'kg':
+      return 'Kg';
+    case 'litre':
+    case 'litres':
+    case 'liter':
+    case 'liters':
+      return 'Litre';
+    case 'pack':
+    case 'packs':
+      return 'Pack';
+    case 'lot':
+    case 'lots':
+      return 'Lot';
+    default:
+      return value;
+  }
+}
+
+Future<bool> _previewMaterialRequestImport(
+  BuildContext context, {
+  required YorksV1BoqImportPreview preview,
+  required int descriptionIndex,
+  required int? brandIndex,
+  required int? quantityIndex,
+  required int? unitIndex,
+  required int? unitCostIndex,
+  required int? totalCostIndex,
+}) async {
+  final visibleRows = preview.rows.take(25).toList(growable: false);
+  final mismatchedTotals = _mrTotalMismatchCount(
+    preview.rows,
+    quantityIndex,
+    unitCostIndex,
+    totalCostIndex,
+  );
+  final headings = [
+    YorksV1MaterialRequestStrings.rowNumber.primary,
+    YorksV1MaterialRequestStrings.itemDescription.primary,
+    YorksV1MaterialRequestStrings.brandOrigin.primary,
+    YorksV1MaterialRequestStrings.quantity.primary,
+    YorksV1MaterialRequestStrings.unit.primary,
+    YorksV1MaterialRequestStrings.unitCost.primary,
+    YorksV1MaterialRequestStrings.totalCost.primary,
+  ];
+  return await showDialog<bool>(
+        context: context,
+        builder: (context) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.xl,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 680),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          YorksV1MaterialRequestStrings.previewImport.primary,
+                          style: AppTypography.titleLarge.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).closeButtonTooltip,
+                        onPressed: () => Navigator.of(context).pop(false),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${preview.worksheetName} · ${preview.rows.length} ${YorksV1MaterialRequestStrings.rows.primary}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  if (mismatchedTotals > 0) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          size: 17,
+                          color: AppColors.warning,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            YorksV1MaterialRequestStrings
+                                .importCostMismatch
+                                .primary,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.warning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.line),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SingleChildScrollView(
+                          child: DataTable(
+                            headingRowColor: WidgetStatePropertyAll(
+                              AppColors.surfaceContainerLow,
+                            ),
+                            columns: [
+                              for (final heading in headings)
+                                DataColumn(
+                                  label: Text(
+                                    heading.toUpperCase(),
+                                    style: AppTypography.labelSmall.copyWith(
+                                      color: AppColors.muted,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                            rows: [
+                              for (
+                                var rowIndex = 0;
+                                rowIndex < visibleRows.length;
+                                rowIndex++
+                              )
+                                DataRow(
+                                  cells: [
+                                    DataCell(Text('${rowIndex + 1}')),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 360,
+                                        child: Text(
+                                          visibleRows[rowIndex].valueFor(
+                                            descriptionIndex,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        brandIndex == null
+                                            ? ''
+                                            : visibleRows[rowIndex].valueFor(
+                                                brandIndex,
+                                              ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        quantityIndex == null
+                                            ? '1'
+                                            : visibleRows[rowIndex].valueFor(
+                                                quantityIndex,
+                                              ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        unitIndex == null
+                                            ? 'Nos'
+                                            : visibleRows[rowIndex].valueFor(
+                                                unitIndex,
+                                              ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        unitCostIndex == null
+                                            ? ''
+                                            : visibleRows[rowIndex].valueFor(
+                                                unitCostIndex,
+                                              ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      Text(
+                                        totalCostIndex == null
+                                            ? ''
+                                            : visibleRows[rowIndex].valueFor(
+                                                totalCostIndex,
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (preview.rows.length > visibleRows.length) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      YorksV1MaterialRequestStrings.importPreviewLimit.primary,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(
+                          YorksV1MaterialRequestStrings.cancelImport.primary,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      FilledButton.icon(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        icon: const Icon(Icons.add_rounded),
+                        label: Text(
+                          YorksV1MaterialRequestStrings.addImportedRows.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ) ??
+      false;
+}
+
+int? _mrHeaderIndex(YorksV1BoqImportPreview preview, RegExp pattern) => preview
+    .columns
+    .where((column) => pattern.hasMatch(column.heading.trim()))
+    .map((column) => column.sourceIndex)
+    .firstOrNull;
+
+int _mrTotalMismatchCount(
+  List<YorksV1BoqImportRow> rows,
+  int? quantityIndex,
+  int? unitCostIndex,
+  int? totalCostIndex,
+) {
+  if (quantityIndex == null ||
+      unitCostIndex == null ||
+      totalCostIndex == null) {
+    return 0;
+  }
+  var count = 0;
+  for (final row in rows) {
+    final qty = double.tryParse(row.valueFor(quantityIndex));
+    final unitCost = double.tryParse(row.valueFor(unitCostIndex));
+    final total = double.tryParse(row.valueFor(totalCostIndex));
+    if (qty == null || unitCost == null || total == null) continue;
+    if ((qty * unitCost - total).abs() > 0.01) count++;
+  }
+  return count;
+}
+
+/// Material Request workbooks keep BOQ-only technical context in the
+/// description cell. Parse that stable, human-readable suffix on re-import so
+/// an exported MR can be edited and round-tripped without losing the context.
+(String, String?, String?) _splitExportedDescription(String raw) {
+  final lines = raw.split(RegExp(r'\r?\n'));
+  if (lines.length == 1) return (raw.trim(), null, null);
+  String? size;
+  String? model;
+  final description = <String>[];
+  for (final line in lines) {
+    final value = line.trim();
+    if (value.toLowerCase().startsWith('size:')) {
+      size = value.substring(5).trim();
+    } else if (value.toLowerCase().startsWith('model / tag:')) {
+      model = value.substring('model / tag:'.length).trim();
+    } else if (value.isNotEmpty) {
+      description.add(value);
+    }
+  }
+  return (description.join('\n').trim(), size, model);
 }
 
 Future<YorksV1BoqWorkbookSheet?> _chooseWorkbookSheet(

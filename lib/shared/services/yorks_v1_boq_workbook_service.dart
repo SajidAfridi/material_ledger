@@ -461,7 +461,12 @@ class YorksV1BoqWorkbookCodec {
       'item' ||
       'materialdescription' ||
       'materialitem' ||
-      'itemname' => YorksV1BoqCanonicalField.description,
+      'itemname' ||
+      'equipmentdescription' ||
+      'equipmentname' ||
+      'unitreference' ||
+      // A common spelling in the supplied Package Unit worksheet.
+      'unitrefrence' => YorksV1BoqCanonicalField.description,
       'brandorigin' ||
       'makeorigin' ||
       'brand' ||
@@ -471,17 +476,29 @@ class YorksV1BoqWorkbookCodec {
       'qty' ||
       'quantity' ||
       'qnty' ||
+      'fanqty' ||
+      'unitqty' ||
+      'equipmentqty' ||
       'requestedqty' ||
       'quantityrequested' ||
       'requestedquantity' ||
       'qtyrequested' => YorksV1BoqCanonicalField.quantity,
-      'unit' || 'units' || 'uom' || 'unitofmeasure' =>
-        YorksV1BoqCanonicalField.unit,
+      'unit' ||
+      'units' ||
+      'uom' ||
+      'unitofmeasure' => YorksV1BoqCanonicalField.unit,
       'modelserialno' ||
       'modelserialnumber' ||
       'modeltag' ||
       'modeltagno' ||
       'equipmenttag' ||
+      'equipmenttagno' ||
+      'tag' ||
+      'tagno' ||
+      'serialno' ||
+      'serialnumber' ||
+      'fantag' ||
+      'putag' ||
       'planningmodeltag' => YorksV1BoqCanonicalField.planningModelTag,
       _ => null,
     };

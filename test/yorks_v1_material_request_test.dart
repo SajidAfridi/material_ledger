@@ -1,11 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_material_request_draft_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/repositories/collection_store.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
 import 'package:material_ledger/shared/services/yorks_v1_material_request_document_service.dart';
+import 'package:material_ledger/shared/sync/connectivity_service.dart';
 
 void main() {
   group('Yorks V1 Material Request draft controller', () {
@@ -50,6 +53,73 @@ void main() {
         );
       },
     );
+
+    test(
+      'does not leave the draft in submitting after an unexpected error',
+      () async {
+        final repository = _FakeRequestRepository()
+          ..submitFailure = StateError('simulated backend failure');
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
+        await controller.addCustomLine();
+        final line = controller.state.draft.lines.single;
+        await controller.updateLine(
+          line.id,
+          (current) => current.copyWith(
+            description: 'Motorized Smoke Damper',
+            quantity: '1',
+            unit: 'Nos',
+          ),
+        );
+
+        expect(await controller.submit(), isNull);
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.failed,
+        );
+        expect(
+          controller.state.errorCode,
+          YorksV1DomainErrorCode.backendUnavailable,
+        );
+      },
+    );
+
+    test('maps a stalled RPC to a bounded backend failure', () async {
+      final connectivity = DefaultConnectivity();
+      addTearDown(connectivity.dispose);
+      final repository = YorksV1SupabaseMaterialRequestRepository(
+        featureFlags: const YorksV1FeatureFlags(
+          foundation: true,
+          projects: true,
+          boq: true,
+          excel: true,
+          requests: true,
+        ),
+        connectivity: connectivity,
+        rpcClient: _DelayedRpcClient(),
+        rpcTimeout: const Duration(milliseconds: 1),
+      );
+
+      await expectLater(
+        repository.listDraftProjects(),
+        throwsA(
+          isA<YorksV1DomainException>().having(
+            (error) => error.code,
+            'code',
+            YorksV1DomainErrorCode.backendUnavailable,
+          ),
+        ),
+      );
+    });
 
     test(
       'uses a one-pass Excel iterable without losing imported lines',
@@ -112,6 +182,33 @@ void main() {
       expect(controller.state.draft.canSubmitLocally, isFalse);
       await pending;
     });
+
+    test(
+      'Save Draft keeps incomplete input locally without a remote write',
+      () async {
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final repository = _FakeRequestRepository();
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.addCustomLine();
+        final saved = await controller.saveDraft();
+
+        expect(saved, isNull);
+        expect(repository.saveInputs, isEmpty);
+        expect(store.readAll().single.lines.single.description, isEmpty);
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.local,
+        );
+      },
+    );
 
     test(
       'copies an entire BOQ folder into an editable private draft',
@@ -276,12 +373,12 @@ void main() {
     expect(fields[YorksV1BoqCanonicalField.description], isNotNull);
     expect(fields[YorksV1BoqCanonicalField.quantity], isNotNull);
     expect(fields[YorksV1BoqCanonicalField.unit], isNotNull);
-    expect(
-      preview.rows.single.valueFor(
-        fields[YorksV1BoqCanonicalField.description]!,
-      ),
-      'Motorized Smoke Damper',
+    final exportedDescription = preview.rows.single.valueFor(
+      fields[YorksV1BoqCanonicalField.description]!,
     );
+    expect(exportedDescription, startsWith('Motorized Smoke Damper'));
+    expect(exportedDescription, contains('Size: 600 x 600'));
+    expect(exportedDescription, contains('Model / Tag: MSD-01A'));
     expect(
       preview.rows.single.valueFor(fields[YorksV1BoqCanonicalField.quantity]!),
       '1',
@@ -351,16 +448,8 @@ void main() {
       ),
       columns: const [
         YorksV1BoqColumn(id: 'a', heading: 'S:No', displayOrder: 1),
-        YorksV1BoqColumn(
-          id: 'b',
-          heading: 'Item Description',
-          displayOrder: 2,
-        ),
-        YorksV1BoqColumn(
-          id: 'c',
-          heading: 'Model/Serial No.',
-          displayOrder: 3,
-        ),
+        YorksV1BoqColumn(id: 'b', heading: 'Item Description', displayOrder: 2),
+        YorksV1BoqColumn(id: 'c', heading: 'Model/Serial No.', displayOrder: 3),
         YorksV1BoqColumn(id: 'd', heading: 'Make/Origin', displayOrder: 4),
         YorksV1BoqColumn(id: 'e', heading: 'Qty.', displayOrder: 5),
         YorksV1BoqColumn(id: 'f', heading: 'Unit', displayOrder: 6),
@@ -405,6 +494,86 @@ void main() {
     expect(mapped[YorksV1BoqCanonicalField.planningModelTag], isNotNull);
     expect(mapped[YorksV1BoqCanonicalField.brandOrigin], isNotNull);
   });
+
+  test(
+    'recognizes equipment schedule tag, description, make and quantity headings',
+    () {
+      final worksheet = YorksV1BoqWorksheet(
+        group: YorksV1BoqGroup(
+          id: _boqGroupId,
+          projectId: _projectId,
+          name: 'Equipment schedule',
+          worksheetTitle: 'VENT.FAN',
+          displayOrder: 1,
+          isCustom: false,
+          isArchived: false,
+          version: 1,
+          rowCount: 1,
+          columnCount: 5,
+          updatedAt: DateTime.utc(2026, 8, 2),
+        ),
+        columns: const [
+          YorksV1BoqColumn(id: 'tag', heading: 'Fan Tag#', displayOrder: 1),
+          YorksV1BoqColumn(
+            id: 'size',
+            heading: 'Size (mm x mm)',
+            displayOrder: 2,
+          ),
+          YorksV1BoqColumn(
+            id: 'description',
+            heading: 'Serving Area',
+            displayOrder: 3,
+          ),
+          YorksV1BoqColumn(id: 'make', heading: 'Fan Make', displayOrder: 4),
+          YorksV1BoqColumn(id: 'qty', heading: 'Fan Qty', displayOrder: 5),
+        ],
+        rows: [
+          YorksV1BoqRow(
+            id: 'equipment-row',
+            displayOrder: 1,
+            values: const {
+              'tag': 'VF-01',
+              'size': '600 x 600',
+              'description': 'Substation room',
+              'make': 'Yorks',
+              'qty': '2',
+            },
+            canonicalValues: const {},
+          ),
+        ],
+      );
+      const codec = YorksV1BoqWorkbookCodec();
+      final workbook = codec.decode(
+        bytes: codec.encodeWorksheet(worksheet),
+        fileName: 'equipment_schedule.xlsx',
+      );
+      final preview = codec.preview(
+        workbook: workbook,
+        sheet: workbook.sheets.single,
+        fallbackTitle: 'Equipment schedule',
+      );
+      final mapped = {
+        for (final column in preview.columns)
+          if (column.canonicalField != null)
+            column.canonicalField!: column.sourceIndex,
+      };
+
+      expect(mapped[YorksV1BoqCanonicalField.planningModelTag], isNotNull);
+      expect(mapped[YorksV1BoqCanonicalField.quantity], isNotNull);
+      expect(
+        preview.rows.single.valueFor(
+          mapped[YorksV1BoqCanonicalField.planningModelTag]!,
+        ),
+        'VF-01',
+      );
+      expect(
+        preview.rows.single.valueFor(
+          mapped[YorksV1BoqCanonicalField.quantity]!,
+        ),
+        '2',
+      );
+    },
+  );
 
   test('non-commercial response has no commercial client state', () {
     final request = YorksV1MaterialRequest.fromRpcJson({
@@ -513,6 +682,8 @@ class _Ids {
 class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   final List<YorksV1SaveMaterialRequestDraftInput> saveInputs = [];
   final List<YorksV1SubmitMaterialRequestInput> submitInputs = [];
+  Object? saveFailure;
+  Object? submitFailure;
 
   @override
   Future<YorksV1MaterialRequest> cancel(
@@ -548,6 +719,8 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> saveDraft(
     YorksV1SaveMaterialRequestDraftInput input,
   ) async {
+    final failure = saveFailure;
+    if (failure != null) throw failure;
     saveInputs.add(input);
     return _request(requestId: input.draft.id, version: 1);
   }
@@ -556,12 +729,25 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> submit(
     YorksV1SubmitMaterialRequestInput input,
   ) async {
+    final failure = submitFailure;
+    if (failure != null) throw failure;
     submitInputs.add(input);
     return _request(
       requestId: input.requestId,
       version: 2,
       number: 'B5-TEST-MR001',
     );
+  }
+}
+
+class _DelayedRpcClient implements YorksV1MaterialRequestRpcClient {
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    return const [];
   }
 }
 

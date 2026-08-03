@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_domain_error.dart';
@@ -60,13 +62,16 @@ class YorksV1SupabaseMaterialRequestRepository
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
     YorksV1MaterialRequestRpcClient? rpcClient,
+    Duration rpcTimeout = const Duration(seconds: 20),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
-       _rpcClient = rpcClient;
+       _rpcClient = rpcClient,
+       _rpcTimeout = rpcTimeout;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
+  final Duration _rpcTimeout;
 
   @override
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects() async {
@@ -182,14 +187,18 @@ class YorksV1SupabaseMaterialRequestRepository
       );
     }
     try {
-      return await rpc.invoke(
-        functionName: functionName,
-        parameters: parameters,
-      );
+      return await rpc
+          .invoke(functionName: functionName, parameters: parameters)
+          .timeout(_rpcTimeout);
     } on YorksV1DomainException {
       rethrow;
     } on PostgrestException catch (error) {
       throw _mapPostgrestException(error);
+    } on TimeoutException catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: error,
+      );
     } catch (error) {
       throw YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,

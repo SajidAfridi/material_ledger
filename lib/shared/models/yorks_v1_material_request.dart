@@ -479,6 +479,12 @@ class YorksV1MaterialRequestDraft {
       lines.isNotEmpty &&
       lines.every((line) => line.hasValidOperationalValues);
 
+  /// A draft is recoverable even before the server has enough information to
+  /// accept it.  Save Draft therefore never uses submission validation as its
+  /// gate; the controller persists this model locally and only sends it to
+  /// the server once the server-side draft contract can be satisfied.
+  bool get canSaveLocally => true;
+
   YorksV1SaveMaterialRequestDraftInput toSaveInput() =>
       YorksV1SaveMaterialRequestDraftInput(draft: this);
 

@@ -67,6 +67,10 @@ class YorksV1MaterialRequestDraftController
   /// default (for example the Common scope) against a newer project choice.
   YorksV1MaterialRequestDraft get currentDraft => state.draft;
 
+  /// Last connected-operation error exposed without making widgets reach into
+  /// StateNotifier's protected [state] member.
+  YorksV1DomainErrorCode? get lastErrorCode => state.errorCode;
+
   static YorksV1MaterialRequestDraft _restoreOrEmpty({
     required String ownerAuthUserId,
     required String draftId,
@@ -175,7 +179,39 @@ class YorksV1MaterialRequestDraftController
             source: YorksV1MaterialRequestLineSource.custom,
             description: '',
             quantity: '',
-            unit: '',
+            // Keep the editor immediately usable.  Engineers can still pick
+            // another controlled unit from the row dropdown.
+            unit: 'Nos',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> addBlankLine() => addCustomLine();
+
+  /// Inserts a directly editable copy of the last line without retaining a
+  /// BOQ source pointer. This keeps a Similar Row useful for repeated items
+  /// while preventing an accidental second request against the same source
+  /// snapshot.
+  Future<void> addSimilarLine() async {
+    final draft = state.draft;
+    final source = draft.lines.lastOrNull;
+    if (source == null) return addBlankLine();
+    await _replace(
+      draft.copyWith(
+        lines: [
+          ...draft.lines,
+          YorksV1MaterialRequestLine(
+            id: _uuidFactory(),
+            displayOrder: draft.lines.length + 1,
+            source: YorksV1MaterialRequestLineSource.custom,
+            description: source.description,
+            brandOrigin: source.brandOrigin,
+            size: source.size,
+            planningModelTag: source.planningModelTag,
+            quantity: source.quantity,
+            unit: source.unit,
           ),
         ],
       ),
@@ -221,7 +257,14 @@ class YorksV1MaterialRequestDraftController
             row,
             YorksV1BoqCanonicalField.quantity,
           ),
-          unit: _canonicalValue(worksheet, row, YorksV1BoqCanonicalField.unit),
+          unit:
+              _canonicalValue(
+                worksheet,
+                row,
+                YorksV1BoqCanonicalField.unit,
+              ).trim().isEmpty
+              ? 'Nos'
+              : _canonicalValue(worksheet, row, YorksV1BoqCanonicalField.unit),
         ),
       );
     }
@@ -294,6 +337,23 @@ class YorksV1MaterialRequestDraftController
     );
   }
 
+  /// Saves the current draft without pretending that an incomplete draft was
+  /// accepted by the server.  Incomplete input is still durable on this
+  /// device and can be reopened and edited later; complete input is synced
+  /// through the versioned draft RPC.
+  Future<YorksV1MaterialRequest?> saveDraft() async {
+    final draft = state.draft;
+    if (!draft.canSubmitLocally) {
+      await _persist(draft);
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.local,
+      );
+      return null;
+    }
+    return saveConnected();
+  }
+
   Future<YorksV1MaterialRequest?> saveConnected() async {
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
@@ -329,6 +389,13 @@ class YorksV1MaterialRequestDraftController
         errorCode: error.code,
       );
       return null;
+    } catch (error) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.failed,
+        errorCode: YorksV1DomainErrorCode.backendUnavailable,
+      );
+      return null;
     }
   }
 
@@ -346,23 +413,18 @@ class YorksV1MaterialRequestDraftController
       draft: draft,
       status: YorksV1MaterialRequestDraftSyncStatus.submitting,
     );
+    YorksV1MaterialRequest? submitted;
     try {
       // A connected draft save supplies the exact version that the submit RPC
       // locks. No client-side transition is shown before this second command.
       final saved = await _repository.saveDraft(draft.toSaveInput());
-      final submitted = await _repository.submit(
+      submitted = await _repository.submit(
         YorksV1SubmitMaterialRequestInput(
           requestId: draft.id,
           expectedVersion: saved.recordVersion,
           idempotencyKey: draft.submissionIdempotencyKey,
         ),
       );
-      await discardLocal();
-      state = YorksV1MaterialRequestDraftState(
-        draft: state.draft,
-        status: YorksV1MaterialRequestDraftSyncStatus.submitted,
-      );
-      return submitted;
     } on YorksV1DomainException catch (error) {
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
@@ -372,7 +434,30 @@ class YorksV1MaterialRequestDraftController
         errorCode: error.code,
       );
       return null;
+    } catch (error) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.failed,
+        errorCode: YorksV1DomainErrorCode.backendUnavailable,
+      );
+      return null;
     }
+
+    // The server transition has succeeded. Local cleanup is best effort and
+    // must never turn an authoritative submission into a false failure state
+    // (for example when browser storage is unavailable or a late draft write
+    // is still draining).
+    try {
+      await discardLocal();
+    } catch (_) {
+      // The submitted server record remains authoritative; the next refresh
+      // can safely reconcile any stale local recovery copy.
+    }
+    state = YorksV1MaterialRequestDraftState(
+      draft: state.draft,
+      status: YorksV1MaterialRequestDraftSyncStatus.submitted,
+    );
+    return submitted;
   }
 
   Future<void> discardLocal() async {
