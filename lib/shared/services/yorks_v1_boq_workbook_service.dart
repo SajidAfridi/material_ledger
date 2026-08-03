@@ -512,7 +512,12 @@ class YorksV1BoqWorkbookCodec {
       for (var columnIndex = 0; columnIndex < row.length; columnIndex++) {
         if (row[columnIndex].trim().isEmpty) continue;
         if (first < 0) first = columnIndex;
-        last = columnIndex;
+        // Rows in equipment schedules are commonly sparse at the right edge:
+        // the first record may contain MASS/STATUS while later records leave
+        // those cells blank. Keep the furthest coordinate seen anywhere in
+        // the header/data region rather than letting a later sparse row pull
+        // the import boundary left and silently drop source columns.
+        last = math.max(last, columnIndex);
       }
     }
     if (first < 0 || last < first) return const [];

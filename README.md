@@ -12,8 +12,8 @@
 
 `AGENTS.md`, `docs/yorks-v1/` and the Rev 2.0/R35 source artifacts are the
 current product authority. Legacy GodownPro/Nexus documents and workflows are
-retained only as migration and regression evidence. Yorks V1 R35 and the
-production Supabase project are the ordinary build defaults.
+retained only as migration and regression evidence. Yorks V1 R35 is the
+ordinary build experience, while every Supabase target is explicit.
 
 ## Overview
 
@@ -51,11 +51,11 @@ git clone <repo-url>
 cd material_ledger
 flutter pub get
 
-# Run the Yorks V1 R35 experience — no dart-defines required.
-flutter run -d chrome
-
-# The equivalent portable launcher is available for CI/staging overrides.
-# ./tool/r35.sh run
+# Configure the backend once. This file is ignored by Git and must contain the
+# URL and publishable key for the intended local, staging or production target.
+cp tool/r35.env.example .r35.env
+# Edit .r35.env, then run the complete Yorks V1 R35 experience.
+./tool/r35.sh run
 ```
 
 ### Controlled PDF and print builds

@@ -253,18 +253,18 @@ flutter pub get
 dart format --output=none --set-exit-if-changed <changed Dart files>
 flutter analyze
 flutter test
-SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key \
+R35_ENVIRONMENT=ci SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key \
   ./tool/r35.sh build-web
 CI=true YORKS_CI_EPHEMERAL_SIGNING=true \
-SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key \
+R35_ENVIRONMENT=ci SUPABASE_URL=https://ci.invalid SUPABASE_ANON_KEY=ci-publishable-key \
   ./tool/r35.sh build-apk
 ```
 
-For local Chrome testing, `flutter run -d chrome` is sufficient: the complete
-R35 Yorks chain and production Supabase configuration are built in. The
-tracked `./tool/r35.sh` launcher remains the portable CI/staging override and
-enables the same nine `YORKS_V1_*` flags plus `use_arabic=true`; legacy
-`NEXUS_V7_*` flags remain absent from the application provider.
+For local Chrome testing, create the ignored `.r35.env` from
+`tool/r35.env.example` once, then use `./tool/r35.sh run`. The launcher enables
+the complete R35 Yorks chain and requires an explicit backend; it never falls
+back to a shared remote project. Legacy `NEXUS_V7_*` flags remain absent from
+the application provider.
 
 From Batch 1 onward, after the tracked local Supabase project exists:
 

@@ -56,6 +56,7 @@ jobs:
 
       - name: Build web release
         env:
+          R35_ENVIRONMENT: ci
           SUPABASE_URL: https://ci.invalid
           SUPABASE_ANON_KEY: ci-publishable-key
         run: ./tool/r35.sh build-web
@@ -112,6 +113,7 @@ jobs:
         # certificates stay outside the repository and this job.
         env:
           YORKS_CI_EPHEMERAL_SIGNING: 'true'
+          R35_ENVIRONMENT: ci
           SUPABASE_URL: https://ci.invalid
           SUPABASE_ANON_KEY: ci-publishable-key
         run: ./tool/r35.sh build-apk

@@ -289,7 +289,7 @@ void main() {
           YorksV1BoqWorkbookSheet(
             name: 'Package Unit',
             rows: [
-              List<String>.filled(21, ''),
+              List<String>.filled(22, ''),
               [
                 '',
                 'PACKAGE UNIT SCHEDULE',
@@ -334,7 +334,7 @@ void main() {
                 'Make',
                 'Mass No',
                 'Material Status',
-                '',
+                'Remarks',
               ],
               [
                 '',
@@ -380,7 +380,7 @@ void main() {
                 'SKM/UAE',
                 'MTS-CS-0220',
                 'AP',
-                '',
+                '2 duty / 1 standby',
               ],
             ],
           ),
@@ -397,7 +397,7 @@ void main() {
       expect(preview.headerRowIndexes, [2, 3]);
       expect(preview.headerRowNumber, 3);
       expect(preview.headerRowNumbers, [3, 4]);
-      expect(preview.columns, hasLength(19));
+      expect(preview.columns, hasLength(20));
       expect(
         preview.columns.map((column) => column.heading),
         containsAll([
@@ -416,6 +416,227 @@ void main() {
       expect(preview.rows.single.valueFor(6), '148.8');
       expect(preview.isValid, isTrue);
     });
+
+    test(
+      'retains the widest source boundary for sparse equipment schedules',
+      () {
+        final workbook = YorksV1BoqParsedWorkbook(
+          fileName: 'Equipment Schedule.xlsx',
+          sheets: [
+            _equipmentScheduleSheet(
+              name: 'MSD',
+              title: 'MOTORIZED SMOKE DAMPER-(MSD)',
+              headings: const [
+                'TAG NO',
+                'SIZE (mm x mm)',
+                'SLAB/WALL',
+                'DESCRIPTION',
+                'MAKE',
+                'MASS',
+                'STATUS',
+              ],
+              dataRows: [
+                const [
+                  'MSD-01A',
+                  '600 x 600',
+                  'Slab-GF',
+                  'Stair-5',
+                  'BeteccadUAE',
+                  'MTS-0190',
+                  'AP',
+                ],
+                for (var index = 2; index <= 22; index++)
+                  [
+                    'MSD-${index.toString().padLeft(2, '0')}',
+                    '450x450',
+                    'Slab-FF',
+                    'Smoke damper $index',
+                    'BeteccadUAE',
+                    '',
+                    '',
+                  ],
+              ],
+            ),
+            _equipmentScheduleSheet(
+              name: 'VCD',
+              title: 'VOLUME CONTROL DAMPER - (VCD)',
+              headings: const [
+                'TAG NO',
+                'SIZE (mm x mm)',
+                'LOCATION',
+                'DESCRIPTION',
+                'MAKE',
+                'REMARKS',
+                'MASS',
+                'STATUS',
+              ],
+              dataRows: const [
+                [
+                  'VCD-01',
+                  '1100c450',
+                  'Basement',
+                  'Fresh-air damper',
+                  'LEMINAR',
+                  'FIRE RATED',
+                  'MTS-0210',
+                  'AP',
+                ],
+                [
+                  'VCD-02',
+                  '1200 x 600',
+                  'Basement',
+                  'Extract-air damper',
+                  'LEMINAR',
+                  '',
+                  '',
+                  '',
+                ],
+              ],
+            ),
+            _equipmentScheduleSheet(
+              name: 'SAR',
+              title: 'SUPPLY AIR REGISTER - (SAR)',
+              headings: const [
+                'TAG NO',
+                'SIZE (mm x mm)',
+                'LOCATION',
+                'DESCRIPTION',
+                'AIR FLOW (L/S)',
+                'MAKE',
+                'MASS',
+                'STATUS',
+              ],
+              dataRows: const [
+                [
+                  'SAR-01-04',
+                  '1000 x 350',
+                  'Basement',
+                  'Supply Air Register',
+                  '708',
+                  'BETA/UAE',
+                  'MTS-0063',
+                  'AP',
+                ],
+                [
+                  'SAR-05-08',
+                  '900 x 300',
+                  'Basement',
+                  'Supply Air Register',
+                  '502',
+                  'BETA/UAE',
+                  '',
+                  '',
+                ],
+              ],
+            ),
+            _equipmentScheduleSheet(
+              name: 'VENT.FAN',
+              title: 'VENTILATION/EXTRACT FAN SCHEDULE',
+              headings: const [
+                'Fan Tag#',
+                'Specified Air Flow (L/s)',
+                'Specified ESP (Pa)',
+                'Serving Area',
+                'Model',
+                'Offered Air Flow (L/s)',
+                'Offered ESP (Pa)',
+                'Fan RPM',
+                'Motor Power',
+                'Full Load Amps',
+                'Voltage',
+                'Phase',
+                'Hz',
+                'Motor Enclosure/Class',
+                'Fan Make',
+                'Sound dB(A)',
+                'Fan Qty',
+                'MASS',
+                'STATUS',
+              ],
+              dataRows: const [
+                [
+                  'BSEF-1A & 1B',
+                  '3329',
+                  '226',
+                  'Basement Zone-1',
+                  'TA-HT-560',
+                  '3395',
+                  '235',
+                  '2880',
+                  '3 kW',
+                  '5.57 A',
+                  '415',
+                  '3',
+                  '50',
+                  'IP55/H',
+                  'DYNAIR',
+                  '76',
+                  '2',
+                  'MTS-0254',
+                  'AEN',
+                ],
+                [
+                  'FPR-EF-02',
+                  '413',
+                  '140',
+                  'Fire Pump Room',
+                  'TA-HT-450',
+                  '511',
+                  '233',
+                  '2880',
+                  '0.55 kW',
+                  '1.29 A',
+                  '415',
+                  '3',
+                  '50',
+                  'IP55/F',
+                  'DYNAIR',
+                  '68',
+                  '1',
+                  '',
+                  '',
+                ],
+              ],
+            ),
+            _packageUnitScheduleSheet(),
+          ],
+        );
+
+        final previews = {
+          for (final sheet in workbook.sheets)
+            sheet.name: codec.preview(
+              workbook: workbook,
+              sheet: sheet,
+              fallbackTitle: sheet.name,
+            ),
+        };
+
+        final msd = previews['MSD']!;
+        expect(msd.columns, hasLength(7));
+        expect(msd.rows, hasLength(22));
+        expect(
+          msd.columns.map((column) => column.heading).toList().sublist(5),
+          ['MASS', 'STATUS'],
+        );
+        expect(msd.rows.first.valueFor(5), 'MTS-0190');
+        expect(msd.rows.first.valueFor(6), 'AP');
+
+        final vcd = previews['VCD']!;
+        expect(vcd.columns, hasLength(8));
+        expect(vcd.rows.first.valueFor(1), '1100c450');
+
+        expect(previews['SAR']!.columns, hasLength(8));
+        expect(previews['VENT.FAN']!.columns, hasLength(19));
+
+        final packageUnit = previews['Package Unit']!;
+        expect(packageUnit.headerRowNumbers, [3, 4]);
+        expect(packageUnit.columns, hasLength(20));
+        expect(
+          packageUnit.columns.map((column) => column.heading),
+          contains('ESP — Selected'),
+        );
+      },
+    );
 
     test('rejects malformed non-XLSX bytes', () {
       expect(
@@ -563,6 +784,116 @@ YorksV1BoqWorksheet _worksheet() {
     ],
   );
 }
+
+YorksV1BoqWorkbookSheet _equipmentScheduleSheet({
+  required String name,
+  required String title,
+  required List<String> headings,
+  required List<List<String>> dataRows,
+}) => YorksV1BoqWorkbookSheet(
+  name: name,
+  rows: [title.split('|'), headings, ...dataRows],
+);
+
+YorksV1BoqWorkbookSheet _packageUnitScheduleSheet() => YorksV1BoqWorkbookSheet(
+  name: 'Package Unit',
+  rows: const [
+    [],
+    ['', 'PACKAGE UNIT SCHEDULE'],
+    [
+      '',
+      'S: No',
+      'Unit Refrence',
+      'PU-TAG',
+      'Model',
+      'T. Cooling Capacity (KW)',
+      '',
+      'S. Cooling Capacity (KW)',
+      '',
+      'Air Flow (L/s)',
+      '',
+      'ESP',
+      '',
+      'Electrical Details',
+      'Total Power Input (Kw)',
+      'Dimension (LxWxH)',
+      'QTY',
+      'Make',
+      'Mass No',
+      'Material Status',
+      'Remarks',
+    ],
+    [
+      '',
+      '',
+      '',
+      '',
+      '',
+      'Calculated',
+      'Selected',
+      'Calculated',
+      'Selected',
+      'Calculated',
+      'Selected',
+      'Calculated',
+      'Selected',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+    ],
+    [
+      '',
+      '1',
+      'SYSTEM-01',
+      'PU-01A',
+      'AMPR52052AM',
+      '148.8',
+      '148.8',
+      '106.9',
+      '108.3',
+      '4972',
+      '4972',
+      '500',
+      '500',
+      '415/3/50',
+      '75.4',
+      '4406 x 2235 x 3630',
+      '3',
+      'SKM/UAE',
+      'MTS-CS-0220',
+      'AP',
+      '2 duty / 1 standby',
+    ],
+    [
+      '',
+      '2',
+      'SYSTEM-01',
+      'PU-02A',
+      'AMPR52052AM',
+      '151.5',
+      '158',
+      '119.3',
+      '122.4',
+      '6698',
+      '6698',
+      '578',
+      '600',
+      '415/3/50',
+      '80',
+      '4406 x 2235 x 3630',
+      '3',
+      '',
+      '',
+      '',
+      '2 duty / 1 standby',
+    ],
+  ],
+);
 
 Widget _spreadsheetHarness({
   YorksV1BoqWorksheet? worksheet,

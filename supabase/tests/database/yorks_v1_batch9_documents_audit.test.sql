@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(26);
+select plan(30);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -190,6 +190,81 @@ select throws_ok(
     where id = (select version_id from v1_b9_document)$$,
   '55000', 'V1_DOCUMENT_VERSION_IMMUTABLE',
   'An immutable document version cannot be rewritten even by a trusted direct session'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+
+select lives_ok(
+  $$select public.v1_prepare_document_upload(
+    jsonb_build_object(
+      'project_id', (select project_id from v1_b9_targets),
+      'entity_type', 'project',
+      'entity_id', (select project_id from v1_b9_targets),
+      'document_id', (select document_id from v1_b9_document),
+      'classification', 'operational',
+      'file_name', 'approved_layout_rev2.pdf',
+      'mime_type', 'application/pdf',
+      'byte_size', 12,
+      'sha256', repeat('e', 64),
+      'origin', 'uploaded',
+      'source_entity_type', null,
+      'source_entity_id', null,
+      'source_revision', null
+    ), '90000000-0000-4000-8000-000000000013'::uuid
+  )$$,
+  'A Project Engineer can prepare a replacement version for the same document'
+);
+
+set local role postgres;
+create temporary table v1_b9_replacement_intent as
+select id as upload_intent_id, object_path
+from public.v1_document_upload_intents
+where idempotency_key = '90000000-0000-4000-8000-000000000013'::uuid;
+grant select on table v1_b9_replacement_intent to authenticated, service_role;
+
+set local role authenticated;
+select lives_ok(
+  $$insert into storage.objects (
+    bucket_id, name, owner_id, metadata
+  ) values (
+    'yorks-documents', (select object_path from v1_b9_replacement_intent), auth.uid()::text,
+    '{"size":12,"mimetype":"application/pdf"}'::jsonb
+  )$$,
+  'Storage accepts the replacement object only through its scoped intent'
+);
+
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select lives_ok(
+  $$select public.v1_create_document_version(
+    (select upload_intent_id from v1_b9_replacement_intent), repeat('e', 64), 12, 'application/pdf'
+  )$$,
+  'The trusted finalizer creates the replacement document version'
+);
+
+set local role postgres;
+select ok(
+  (select count(*) = 2 from public.v1_document_versions
+   where document_id = (select document_id from v1_b9_document))
+  and (select revision_number = 2 from public.v1_document_versions
+       where id = (select finalized_version_id from public.v1_document_upload_intents
+                   where id = (select upload_intent_id from v1_b9_replacement_intent)))
+  and (select current_version_id = finalized_version_id
+       from public.v1_documents document_record
+       join public.v1_document_upload_intents intent
+         on intent.finalized_document_id = document_record.id
+       where intent.id = (select upload_intent_id from v1_b9_replacement_intent))
+  and (select count(*) = 1 from public.v1_document_links
+       where document_id = (select document_id from v1_b9_document)
+         and removed_at is null)
+  and (select count(*) = 1 from public.v1_audit_events
+       where event_type = 'document_version_superseded'),
+  'Replacement advances one document to revision 2 without duplicating its active link'
 );
 
 set local role authenticated;

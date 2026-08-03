@@ -149,23 +149,28 @@ Site Engineer, Procurement and Admin identities after every relevant phase.
 
 ## 7. Application rollout
 
-1. Deploy additive schema/RLS/RPC with all V1 flags off.
-2. Backfill/reconcile a non-production snapshot.
-3. Enable read-only V1 projections for Admin comparison.
-4. Enable Projects, then BOQ, then MR draft/submit for a pilot group.
-5. Enable arrangement/approval only after reservation concurrency tests pass.
-6. Enable dispatch/receipt only after opening stock is signed off.
-7. Enable return/documents after their idempotency/Storage gates pass.
-8. Retain the legacy experience read-only during the agreed validation window.
+The numbered feature-flag sequence below is **historical implementation
+evidence**, not a current production release procedure. The accepted R35
+release is complete-R35-only: staging and production receive the whole Yorks
+chain, and the previous approved complete build is the rollback artifact.
 
-Do not dual-write critical stock/workflow state from two authorities.
+1. Deploy additive schema/RLS/RPC to an isolated staging project.
+2. Backfill/reconcile a non-production snapshot and run the full database,
+   RLS, document and operational witness suite.
+3. Deploy the complete R35 app/function build to a named pilot group only after
+   staging acceptance and signed opening-stock/reconciliation evidence.
+4. Retain legacy data read-only during the agreed validation window without
+   dual-writing critical stock or workflow state from two authorities.
+
+The individual flags remain test/development controls only. They are not a
+production partial-rollout or rollback mechanism.
 
 ## 8. Rollback strategy
 
-Schema migrations are additive; rollback normally means:
+Schema migrations are additive; the complete-R35 rollback normally means:
 
-- turn off the affected V1 flag/routes;
-- stop V1 command grants or deployment at a documented cutoff;
+- stop new traffic/deployment at a documented cutoff and redeploy the prior
+  approved complete-R35 app/function build;
 - preserve every committed V1 record and audit event;
 - return users to the last safe read/write authority only if doing so cannot
   create conflicting stock/workflow writes;
@@ -175,8 +180,8 @@ Schema migrations are additive; rollback normally means:
 Never roll back by dropping V1 tables that contain committed activity or by
 copying stale legacy snapshots over normalized state.
 
-If logistics has accepted a V1 command, legacy stock write paths remain disabled
-even when the UI flag is rolled back. Operators use an audited correction or a
+If logistics has accepted a V1 command, legacy stock write paths remain
+disabled after a build rollback. Operators use an audited correction or a
 controlled server runbook.
 
 ## 9. Migration stop conditions
@@ -202,5 +207,5 @@ Every migration PR includes:
 - idempotency/re-run behavior;
 - counts and verification queries;
 - positive and negative RLS tests;
-- rollback/feature-disable procedure;
+- complete-build redeploy/rollback procedure;
 - known quarantine cases and operator action.

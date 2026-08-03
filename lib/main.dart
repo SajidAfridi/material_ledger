@@ -32,19 +32,13 @@ const _appVersion = String.fromEnvironment(
 );
 const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 
-/// Backend connection. These are the Yorks production demo values so ordinary
-/// `flutter run -d chrome` and release builds use the approved R35 Supabase
-/// project. CI/staging can override them with explicit dart-defines.
+/// Backend connection. Every environment supplies its own explicit values.
+/// There is deliberately no shared remote fallback: a release with forgotten
+/// configuration must fail closed rather than write to another environment.
 ///   --dart-define=SUPABASE_URL=https://your-uae-instance
 ///   --dart-define=SUPABASE_ANON_KEY=…
-const _envSupabaseUrl = String.fromEnvironment(
-  'SUPABASE_URL',
-  defaultValue: 'https://czykuksmlwswjsgotrpo.supabase.co',
-);
-const _envSupabaseKey = String.fromEnvironment(
-  'SUPABASE_ANON_KEY',
-  defaultValue: 'sb_publishable_10ZCSxRXuNhS6x-hYOudpg_hMK3VtY6',
-);
+const _envSupabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const _envSupabaseKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 const _allowLocalDevelopment = bool.fromEnvironment('ALLOW_LOCAL_DEVELOPMENT');
 const _localDemoPassword = String.fromEnvironment('LOCAL_DEMO_PASSWORD');
 const _buildDiagnostic = bool.fromEnvironment('YORKS_BUILD_DIAGNOSTIC');

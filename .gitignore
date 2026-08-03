@@ -51,6 +51,11 @@ app.*.map.json
 /android/*.jks
 /android/*.keystore
 
+# Explicit, per-environment R35 client configuration. The template at
+# tool/r35.env.example is tracked; actual target URLs/keys are not.
+/.r35.env
+/.r35.*.env
+
 # Supabase CLI runtime data is machine-local. The tracked config, migrations,
 # tests and non-secret seed remain the reproducible source of truth.
 /supabase/.temp/

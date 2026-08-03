@@ -50,6 +50,7 @@ explicit V7-to-V1 conflict resolution.
 | [`BATCH_08_COMPLETION.md`](BATCH_08_COMPLETION.md) | Delivery Orders, returns and verification |
 | [`BATCH_09_COMPLETION.md`](BATCH_09_COMPLETION.md) | Controlled documents, audit and retained-module coverage |
 | [`BATCH_10_RELEASE_READINESS.md`](BATCH_10_RELEASE_READINESS.md) | Local release evidence, staging matrix and controlled-cutover runbook |
+| [`R35_STAGING_DEPLOYMENT.md`](R35_STAGING_DEPLOYMENT.md) | Dedicated staging deployment and controlled-document witness |
 | [`RELEASE_NOTES_DRAFT.md`](RELEASE_NOTES_DRAFT.md) | Release content and conditions for the staging sign-off |
 
 ## Product north star
@@ -64,19 +65,23 @@ explicit V7-to-V1 conflict resolution.
 
 ## Canonical R35 build configuration
 
-Yorks V1 is the production experience by default. Ordinary local and release
-builds use the complete R35 chain and the configured production Supabase
-project without any command-line defines:
+Yorks V1 is the production experience by default. Supabase targets are
+explicit: an unconfigured build stops rather than falling back to a shared
+remote project. Configure the intended local, staging or production backend
+once in an ignored file, then use the launcher without manual dart-defines:
 
 ```bash
-flutter run -d chrome
-flutter build web --release
-flutter build apk --release
+cp tool/r35.env.example .r35.env
+# Edit .r35.env with the chosen target's HTTPS URL and publishable key.
+./tool/r35.sh run
+./tool/r35.sh build-web
+./tool/r35.sh build-apk
 ```
 
-The tracked `../../tool/r35.sh` launcher is available when CI/staging needs
-explicit Supabase overrides. Do not add legacy `NEXUS_V7_*` flags to an R35
-command.
+Use a separately named ignored configuration file for staging/production via
+`R35_CONFIG_FILE=.r35.staging.env` or `.r35.production.env`. The tracked
+`../../tool/r35.sh` launcher always supplies the complete R35 flags; do not add
+legacy `NEXUS_V7_*` flags to an R35 command.
 
 ## Canonical operational chain
 

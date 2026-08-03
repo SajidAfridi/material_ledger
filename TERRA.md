@@ -20,20 +20,23 @@ those artifacts changes, stop and treat it as a new product input.
 
 ## Canonical R35 build
 
-Yorks V1 and the production Supabase project are enabled by default in Dart.
-No command-line defines are required for normal local or release testing:
+Yorks V1 is enabled by default in Dart. Supabase targets are never embedded as
+defaults: create an ignored explicit configuration once, then use the launcher
+without typing dart-defines:
 
 ```bash
-flutter run -d chrome
-flutter build web --release
-flutter build apk --release
+cp tool/r35.env.example .r35.env
+# Edit .r35.env with local, staging or production values.
+./tool/r35.sh run
+./tool/r35.sh build-web
+./tool/r35.sh build-apk
 ```
 
-The tracked `./tool/r35.sh` launcher is the portable CI/staging override: it
-enables all nine `YORKS_V1_*` flags and `use_arabic=true`, supplies the
-publishable Supabase configuration, and deliberately enables no `NEXUS_V7_*`
-flag. Never add V7 project, planning, browse or procurement flags to an R35
-command. CI may override Supabase values through that launcher.
+The tracked `./tool/r35.sh` launcher enables all nine `YORKS_V1_*` flags and
+`use_arabic=true`, reads only the explicitly configured publishable Supabase
+pair, and deliberately enables no `NEXUS_V7_*` flag. Never add V7 project,
+planning, browse or procurement flags to an R35 command. CI supplies its own
+placeholder values and `R35_ENVIRONMENT=ci`.
 
 ## Current product boundaries
 

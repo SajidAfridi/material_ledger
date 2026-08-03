@@ -168,8 +168,8 @@ trusted command; it does not apply a local success retroactively.
 During incremental delivery, V1 flags were independently enabled in this
 order. That historical rollout is complete: the canonical R35 build now
 enables the complete chain by default, while an explicit disabled dependency
-fails closed. The flags remain available only for controlled CI/staging
-rollback.
+fails closed. The flags remain available only for non-release test/development
+coverage; they are not a production partial-rollout or rollback switch.
 
 1. `YORKS_V1_FOUNDATION`
 2. `YORKS_V1_PROJECTS`

@@ -10,9 +10,11 @@ usage() {
 Usage: ./tool/r35.sh <run|build-web|build-apk> [additional Flutter arguments]
 
 Examples:
+  cp tool/r35.env.example .r35.env
+  # Edit .r35.env once with the explicit local/staging/production backend.
   ./tool/r35.sh run
   ./tool/r35.sh build-web
-  ./tool/r35.sh build-apk
+  R35_CONFIG_FILE=.r35.staging.env ./tool/r35.sh build-web
 USAGE
 }
 
@@ -24,8 +26,37 @@ fi
 command="$1"
 shift
 
-supabase_url="${SUPABASE_URL:-https://czykuksmlwswjsgotrpo.supabase.co}"
-supabase_key="${SUPABASE_ANON_KEY:-sb_publishable_10ZCSxRXuNhS6x-hYOudpg_hMK3VtY6}"
+# Configuration is deliberately explicit. A missing file is acceptable only
+# when CI/operator environment variables already provide the complete pair.
+# Never add a shared remote URL/key as a fallback here.
+r35_config_file="${R35_CONFIG_FILE:-.r35.env}"
+if [[ -f "$r35_config_file" ]]; then
+  # This is an operator-owned, ignored key=value file. Its values are passed
+  # only as Flutter dart-defines and are never committed or printed.
+  # shellcheck disable=SC1090
+  source "$r35_config_file"
+fi
+
+supabase_url="${SUPABASE_URL:-}"
+supabase_key="${SUPABASE_ANON_KEY:-}"
+r35_environment="${R35_ENVIRONMENT:-}"
+
+if [[ -z "$r35_environment" ]]; then
+  echo "R35_ENVIRONMENT must be local, staging, production, or ci." >&2
+  exit 64
+fi
+case "$r35_environment" in
+  local|staging|production|ci) ;;
+  *)
+    echo "R35_ENVIRONMENT must be local, staging, production, or ci." >&2
+    exit 64
+    ;;
+esac
+if [[ -z "$supabase_url" || -z "$supabase_key" ]]; then
+  echo "Missing explicit Supabase configuration. Create .r35.env from" >&2
+  echo "tool/r35.env.example or set SUPABASE_URL and SUPABASE_ANON_KEY." >&2
+  exit 64
+fi
 
 r35_defines=(
   "--dart-define=SUPABASE_URL=${supabase_url}"
