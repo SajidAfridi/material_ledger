@@ -29,6 +29,7 @@ void main() {
         requestId: 'request-1',
         expectedRequestVersion: 5,
         dispatchDate: DateTime.utc(2026, 8, 2),
+        deliveryReference: 'DN-2026-008',
         driverName: 'Yorks Driver',
         vehicleReference: 'Van 7',
         idempotencyKey: '11111111-1111-4111-8111-111111111111',
@@ -44,6 +45,7 @@ void main() {
         'request_id': 'request-1',
         'expected_version': 5,
         'dispatch_date': '2026-08-02',
+        'delivery_reference': 'DN-2026-008',
         'driver_name': 'Yorks Driver',
         'vehicle_reference': 'Van 7',
         'lines': [

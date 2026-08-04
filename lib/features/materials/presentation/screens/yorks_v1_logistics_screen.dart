@@ -195,15 +195,18 @@ class _DispatchEditor extends ConsumerStatefulWidget {
 }
 
 class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
+  final _deliveryReference = TextEditingController();
   final _driver = TextEditingController();
   final _vehicle = TextEditingController();
   final Map<String, TextEditingController> _quantities = {};
+  late final String _commandIdempotencyKey;
   DateTime _dispatchDate = DateTime.now();
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    _commandIdempotencyKey = const Uuid().v4();
     _syncControllers();
   }
 
@@ -218,6 +221,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
 
   @override
   void dispose() {
+    _deliveryReference.dispose();
     _driver.dispose();
     _vehicle.dispose();
     for (final controller in _quantities.values) {
@@ -258,6 +262,13 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.md,
           children: [
+            SizedBox(
+              width: 240,
+              child: _TextInput(
+                controller: _deliveryReference,
+                label: YorksV1LogisticsStrings.deliveryReference.primary,
+              ),
+            ),
             SizedBox(
               width: 220,
               child: SecondaryButton(
@@ -320,6 +331,10 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
   }
 
   Future<void> _dispatch() async {
+    if (_deliveryReference.text.trim().isEmpty) {
+      _showError(YorksV1LogisticsStrings.deliveryReferenceRequired.primary);
+      return;
+    }
     final lines = <YorksV1DispatchLineInput>[];
     for (final candidate in widget.workspace.dispatchCandidates) {
       final quantity = _quantities[candidate.requestLineId]?.text.trim() ?? '';
@@ -349,10 +364,11 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
               requestId: widget.workspace.requestId,
               expectedRequestVersion: widget.workspace.requestRecordVersion,
               dispatchDate: _dispatchDate,
+              deliveryReference: _deliveryReference.text,
               driverName: _driver.text,
               vehicleReference: _vehicle.text,
               lines: lines,
-              idempotencyKey: const Uuid().v4(),
+              idempotencyKey: _commandIdempotencyKey,
             ),
           );
       if (!mounted) return;

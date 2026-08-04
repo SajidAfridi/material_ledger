@@ -117,6 +117,24 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'وجہ / نوٹ',
     hi: 'कारण / नोट',
   );
+  static const unitCost = TranslatableString(
+    en: 'Unit cost',
+    ar: 'تكلفة الوحدة',
+    ur: 'فی یونٹ لاگت',
+    hi: 'इकाई लागत',
+  );
+  static const procurementNote = TranslatableString(
+    en: 'Procurement note',
+    ar: 'ملاحظة المشتريات',
+    ur: 'پروکیورمنٹ نوٹ',
+    hi: 'खरीद टिप्पणी',
+  );
+  static const noSourceRequired = TranslatableString(
+    en: 'No source required',
+    ar: 'لا يلزم مصدر',
+    ur: 'ماخذ درکار نہیں',
+    hi: 'स्रोत आवश्यक नहीं',
+  );
   static const reviewSummary = TranslatableString(
     en: 'Review summary',
     ar: 'ملخص المراجعة',

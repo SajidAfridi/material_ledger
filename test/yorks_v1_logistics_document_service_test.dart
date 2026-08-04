@@ -53,6 +53,7 @@ void main() {
     requestState: 'received',
     requestRecordVersion: 1,
     projectName: 'Yorks Project',
+    projectReference: 'Y-001',
     scopeName: 'Building A',
     canGenerateDeliveryOrder: true,
     canSubmitMaterialReturn: true,

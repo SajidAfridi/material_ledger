@@ -301,6 +301,7 @@ class YorksV1MaterialDispatch {
     required List<YorksV1DispatchLine> lines,
     this.driverName,
     this.vehicleReference,
+    this.deliveryReference,
     this.receiptReview,
   }) : lines = List.unmodifiable(lines);
 
@@ -314,6 +315,7 @@ class YorksV1MaterialDispatch {
   final bool canConfirmReceipt;
   final String? driverName;
   final String? vehicleReference;
+  final String? deliveryReference;
   final YorksV1ReceiptReview? receiptReview;
   final List<YorksV1DispatchLine> lines;
 
@@ -340,6 +342,7 @@ class YorksV1MaterialDispatch {
       canConfirmReceipt: json['can_confirm_receipt'] == true,
       driverName: _trimToNull(json['driver_name']),
       vehicleReference: _trimToNull(json['vehicle_reference']),
+      deliveryReference: _trimToNull(json['delivery_reference']),
       receiptReview: rawReview is Map
           ? YorksV1ReceiptReview.fromRpcJson(
               Map<String, dynamic>.from(rawReview),
@@ -879,6 +882,7 @@ class YorksV1ReturnsDocumentsWorkspace {
     required this.requestState,
     required this.requestRecordVersion,
     required this.projectName,
+    required this.projectReference,
     required this.scopeName,
     required this.canGenerateDeliveryOrder,
     required this.canSubmitMaterialReturn,
@@ -888,6 +892,9 @@ class YorksV1ReturnsDocumentsWorkspace {
     required List<YorksV1MaterialReturn> materialReturns,
     required List<YorksV1ReturnInventoryItem> returnInventoryItems,
     this.requestNumber,
+    this.mainContractorName,
+    this.deliveryAddress,
+    this.materialContext,
   }) : deliveryOrderDispatches = List.unmodifiable(deliveryOrderDispatches),
        returnCandidates = List.unmodifiable(returnCandidates),
        materialReturns = List.unmodifiable(materialReturns),
@@ -899,7 +906,11 @@ class YorksV1ReturnsDocumentsWorkspace {
   final String requestState;
   final int requestRecordVersion;
   final String projectName;
+  final String projectReference;
   final String scopeName;
+  final String? mainContractorName;
+  final String? deliveryAddress;
+  final String? materialContext;
   final bool canGenerateDeliveryOrder;
   final bool canSubmitMaterialReturn;
   final bool canConfirmMaterialReturn;
@@ -930,7 +941,11 @@ class YorksV1ReturnsDocumentsWorkspace {
       requestState: _requiredString(json, 'request_state'),
       requestRecordVersion: _positiveInt(json['request_record_version']),
       projectName: _requiredString(json, 'project_name'),
+      projectReference: _requiredString(json, 'project_ref'),
       scopeName: _requiredString(json, 'scope_name'),
+      mainContractorName: _trimToNull(json['main_contractor_name']),
+      deliveryAddress: _trimToNull(json['delivery_address']),
+      materialContext: _trimToNull(json['material_context']),
       canGenerateDeliveryOrder: json['can_generate_delivery_order'] == true,
       canSubmitMaterialReturn: json['can_submit_material_return'] == true,
       canConfirmMaterialReturn: json['can_confirm_material_return'] == true,
@@ -1038,6 +1053,7 @@ class YorksV1DispatchInput {
     required this.requestId,
     required this.expectedRequestVersion,
     required this.dispatchDate,
+    required this.deliveryReference,
     required List<YorksV1DispatchLineInput> lines,
     required this.idempotencyKey,
     this.driverName,
@@ -1047,6 +1063,7 @@ class YorksV1DispatchInput {
   final String requestId;
   final int expectedRequestVersion;
   final DateTime dispatchDate;
+  final String deliveryReference;
   final List<YorksV1DispatchLineInput> lines;
   final String idempotencyKey;
   final String? driverName;
@@ -1056,6 +1073,7 @@ class YorksV1DispatchInput {
     'request_id': requestId,
     'expected_version': expectedRequestVersion,
     'dispatch_date': _dateOnly(dispatchDate),
+    'delivery_reference': _trimToNull(deliveryReference),
     'driver_name': _trimToNull(driverName),
     'vehicle_reference': _trimToNull(vehicleReference),
     'lines': [for (final line in lines) line.toRpcJson()],

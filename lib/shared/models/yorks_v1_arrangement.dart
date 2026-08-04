@@ -112,6 +112,7 @@ class YorksV1ArrangementLine {
     this.decision,
     this.arrangedQuantity,
     this.reason,
+    this.unitCost,
     this.inventoryItemId,
     this.inventoryItemDescription,
     this.warehouseAvailableAtSave,
@@ -131,6 +132,10 @@ class YorksV1ArrangementLine {
   final YorksV1ArrangementDecision? decision;
   final String? arrangedQuantity;
   final String? reason;
+
+  /// Procurement-only commercial input. The database deliberately omits this
+  /// field from non-commercial arrangement projections.
+  final String? unitCost;
   final String? inventoryItemId;
   final String? inventoryItemDescription;
   final String? warehouseAvailableAtSave;
@@ -151,6 +156,7 @@ class YorksV1ArrangementLine {
       decision: YorksV1ArrangementDecision.fromWireValue(json['decision']),
       arrangedQuantity: _trimToNull(json['arranged_qty']),
       reason: _trimToNull(json['reason']),
+      unitCost: _trimToNull(json['unit_cost']),
       inventoryItemId: _trimToNull(json['inventory_item_id']),
       inventoryItemDescription: _trimToNull(json['inventory_item_description']),
       warehouseAvailableAtSave: _trimToNull(
@@ -176,6 +182,7 @@ class YorksV1ProcurementArrangement {
     this.savedByDisplayName,
     this.reviewDecision,
     this.reviewReason,
+    this.procurementNote,
   }) : lines = List.unmodifiable(lines);
 
   final String id;
@@ -189,6 +196,9 @@ class YorksV1ProcurementArrangement {
   final String? savedByDisplayName;
   final YorksV1ArrangementReviewDecision? reviewDecision;
   final String? reviewReason;
+
+  /// Procurement-only overall arrangement context; never inferred from lines.
+  final String? procurementNote;
   final List<YorksV1ArrangementLine> lines;
 
   factory YorksV1ProcurementArrangement.fromRpcJson(Map<String, dynamic> json) {
@@ -215,6 +225,7 @@ class YorksV1ProcurementArrangement {
       savedByDisplayName: _trimToNull(json['saved_by_display_name']),
       reviewDecision: reviewDecision,
       reviewReason: _trimToNull(json['decision_reason']),
+      procurementNote: _trimToNull(json['procurement_note']),
       lines: [
         for (final line in json['lines'] as List)
           if (line is Map)
@@ -297,6 +308,7 @@ class YorksV1ArrangementLineInput {
     this.externalSupplier,
     this.inventoryItemId,
     this.reason,
+    this.unitCost,
   });
 
   final String arrangementLineId;
@@ -306,6 +318,7 @@ class YorksV1ArrangementLineInput {
   final String? externalSupplier;
   final String? inventoryItemId;
   final String? reason;
+  final String? unitCost;
 
   Map<String, Object?> toRpcJson() => {
     'arrangement_line_id': arrangementLineId,
@@ -315,6 +328,7 @@ class YorksV1ArrangementLineInput {
     'decision': decision.wireValue,
     'arranged_qty': arrangedQuantity.trim(),
     'reason': _trimToNull(reason),
+    'unit_cost': _trimToNull(unitCost),
   };
 }
 
@@ -343,6 +357,7 @@ class YorksV1SaveArrangementInput {
     required this.expectedArrangementVersion,
     required List<YorksV1ArrangementLineInput> lines,
     required this.idempotencyKey,
+    this.procurementNote,
   }) : lines = List.unmodifiable(lines);
 
   final String requestId;
@@ -351,12 +366,14 @@ class YorksV1SaveArrangementInput {
   final int expectedArrangementVersion;
   final List<YorksV1ArrangementLineInput> lines;
   final String idempotencyKey;
+  final String? procurementNote;
 
   Map<String, Object?> toRpcPayload() => {
     'request_id': requestId,
     'arrangement_id': arrangementId,
     'expected_request_version': expectedRequestVersion,
     'expected_arrangement_version': expectedArrangementVersion,
+    'procurement_note': _trimToNull(procurementNote),
     'lines': [for (final line in lines) line.toRpcJson()],
   };
 }

@@ -27,6 +27,7 @@ void main() {
       expectedRequestVersion: 4,
       expectedArrangementVersion: 1,
       idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      procurementNote: 'Supplier allocation checked',
       lines: const [
         YorksV1ArrangementLineInput(
           arrangementLineId: 'line-1',
@@ -35,6 +36,7 @@ void main() {
           arrangedQuantity: '2.5',
           inventoryItemId: 'item-1',
           reason: 'Balance is held for another project',
+          unitCost: '125.50',
         ),
       ],
     );
@@ -44,6 +46,7 @@ void main() {
       'arrangement_id': 'arrangement-1',
       'expected_request_version': 4,
       'expected_arrangement_version': 1,
+      'procurement_note': 'Supplier allocation checked',
       'lines': [
         {
           'arrangement_line_id': 'line-1',
@@ -53,6 +56,7 @@ void main() {
           'decision': 'partial',
           'arranged_qty': '2.5',
           'reason': 'Balance is held for another project',
+          'unit_cost': '125.50',
         },
       ],
     });

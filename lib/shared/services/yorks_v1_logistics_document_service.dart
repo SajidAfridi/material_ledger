@@ -313,7 +313,9 @@ class YorksV1LogisticsDocumentService {
       _logoFuture ??= _loadLogoUncached();
 
   static Future<pw.MemoryImage> _loadLogoUncached() async {
-    final data = await rootBundle.load('assets/branding/source_emblem.png');
+    final data = await rootBundle.load(
+      'assets/branding/yorks_emblem_black.png',
+    );
     return pw.MemoryImage(data.buffer.asUint8List());
   }
 
@@ -371,13 +373,18 @@ class YorksV1LogisticsDocumentService {
         children: [
           pw.TableRow(
             children: [
-              _deliveryTopText('M/s. ${workspace.projectName}', bold: true),
+              _deliveryTopText(
+                'M/s. ${workspace.mainContractorName ?? workspace.projectName}',
+                bold: true,
+              ),
               _deliveryTopText('Ref: ${deliveryOrder.reference}', bold: true),
             ],
           ),
           pw.TableRow(
             children: [
-              _deliveryTopText(workspace.scopeName),
+              _deliveryTopText(
+                workspace.deliveryAddress ?? workspace.scopeName,
+              ),
               _deliveryTopText(
                 'Date: ${DateFormat('dd/MM/yyyy').format(dispatch.dispatchDate.toLocal())}',
               ),
@@ -388,11 +395,15 @@ class YorksV1LogisticsDocumentService {
       pw.SizedBox(height: 3 * PdfPageFormat.mm),
       _deliveryLabelValue(
         'Project',
-        '${workspace.requestNumber ?? workspace.requestId} - ${workspace.projectName}',
+        '${workspace.projectReference} - ${workspace.projectName}',
         valueBold: true,
       ),
       pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
-      _deliveryLabelValue('Materials', 'Material delivery', valueBold: true),
+      _deliveryLabelValue(
+        'Materials',
+        workspace.materialContext ?? 'Material delivery',
+        valueBold: true,
+      ),
       pw.SizedBox(height: 4 * PdfPageFormat.mm),
     ],
   );

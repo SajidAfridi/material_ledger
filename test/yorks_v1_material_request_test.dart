@@ -49,9 +49,12 @@ void main() {
         final submitted = await controller.submit();
 
         expect(submitted?.requestNumber, 'B5-TEST-MR001');
-        expect(repository.saveInputs, hasLength(1));
-        expect(repository.submitInputs.single.expectedVersion, 1);
-        expect(repository.submitInputs.single.requestId, _draftId);
+        expect(repository.saveAndSubmitInputs, hasLength(1));
+        expect(repository.saveAndSubmitInputs.single.id, _draftId);
+        expect(
+          repository.saveAndSubmitInputs.single.submissionIdempotencyKey,
+          isNotEmpty,
+        );
         expect(store.readAll(), isEmpty);
         expect(
           controller.state.status,
@@ -862,6 +865,7 @@ class _Ids {
 class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   final List<YorksV1SaveMaterialRequestDraftInput> saveInputs = [];
   final List<YorksV1SubmitMaterialRequestInput> submitInputs = [];
+  final List<YorksV1MaterialRequestDraft> saveAndSubmitInputs = [];
   Object? saveFailure;
   Object? submitFailure;
   Future<void>? saveDelay;
@@ -912,6 +916,16 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
     await saveDelay;
     saveInputs.add(input);
     return _request(requestId: input.draft.id, version: 1);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveAndSubmit(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    final failure = submitFailure;
+    if (failure != null) throw failure;
+    saveAndSubmitInputs.add(draft);
+    return _request(requestId: draft.id, version: 2, number: 'B5-TEST-MR001');
   }
 
   @override

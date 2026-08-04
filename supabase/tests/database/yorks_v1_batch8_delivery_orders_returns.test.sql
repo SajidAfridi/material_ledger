@@ -78,13 +78,15 @@ grant select on table v1_b8_targets to authenticated;
 insert into public.v1_material_requests (
   id, project_id, scope_id, request_number, title, timing, state, record_version,
   created_by_auth_user_id, requester_display_name, requester_project_role,
-  current_action_owner_role, current_action_code, submitted_at
+  current_action_owner_role, current_action_code, submitted_at,
+  project_engineer_snapshot
 ) values (
   '81000000-0000-4000-8000-000000000001',
   (select project_id from v1_b8_targets), (select scope_id from v1_b8_targets),
   'B8-RET-001-MR001', 'Receipt reviewed materials', 'normal', 'received', 1,
   '10000000-0000-4000-8000-000000000002', 'Local Site Engineer', 'site_engineer',
-  'project_engineer', 'material_request_close_review', clock_timestamp()
+  'project_engineer', 'material_request_close_review', clock_timestamp(),
+  '[{"display_name":"Local Project Engineer"}]'::jsonb
 );
 insert into public.v1_material_request_lines (
   id, request_id, display_order, source_kind, item_description, brand_origin,
@@ -140,17 +142,17 @@ insert into public.v1_material_request_line_approvals (
   '10000000-0000-4000-8000-000000000001'
 );
 insert into public.v1_material_dispatches (
-  id, request_id, project_id, dispatch_number, dispatch_date, state,
+  id, request_id, project_id, dispatch_number, dispatch_date, delivery_reference, state,
   dispatched_by_auth_user_id, dispatched_by_role
 ) values (
   '81500000-0000-4000-8000-000000000001',
   '81000000-0000-4000-8000-000000000001',
-  (select project_id from v1_b8_targets), 'B8-RET-001-DSP001', current_date,
+  (select project_id from v1_b8_targets), 'B8-RET-001-DSP001', current_date, 'DN-B8-001',
   'received', '10000000-0000-4000-8000-000000000003', 'procurement'
 ), (
   '81500000-0000-4000-8000-000000000002',
   '81000000-0000-4000-8000-000000000001',
-  (select project_id from v1_b8_targets), 'B8-RET-001-DSP002', current_date,
+  (select project_id from v1_b8_targets), 'B8-RET-001-DSP002', current_date, 'DN-B8-002',
   'receipt_pending', '10000000-0000-4000-8000-000000000003', 'procurement'
 );
 insert into public.v1_material_dispatch_lines (
@@ -204,7 +206,7 @@ select ok(
   ) -> 'project_engineers') = 1
   and (public.v1_material_request_document_projection(
     '81000000-0000-4000-8000-000000000001'::uuid
-  ) #>> '{dispatch,reference}') = 'B8-RET-001-DSP001'
+  ) #>> '{dispatch,reference}') = 'DN-B8-001'
   and (public.v1_material_request_document_projection(
     '81000000-0000-4000-8000-000000000001'::uuid
   ) -> 'receipt_statuses') @> '[{"status":"Received"}]'::jsonb,

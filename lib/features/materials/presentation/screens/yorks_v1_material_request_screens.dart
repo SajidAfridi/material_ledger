@@ -988,11 +988,8 @@ class _DraftForm extends ConsumerWidget {
 /// Display-only preview matching the R35 prototype. The server assigns the
 /// authoritative request number during Submit; this value must never be used
 /// as an identifier for a write or workflow transition.
-String _previewRequestNumber(YorksV1MaterialRequestProjectOption? project) {
-  final reference = project?.reference.trim();
-  final prefix = reference == null || reference.isEmpty ? 'YRA' : reference;
-  return '$prefix-MR101';
-}
+String _previewRequestNumber(YorksV1MaterialRequestProjectOption? project) =>
+    YorksV1MaterialRequestStrings.assignedOnSubmit.primary;
 
 class _R35RequestHero extends StatelessWidget {
   const _R35RequestHero({
@@ -1492,7 +1489,48 @@ class _RequestFormFields extends StatelessWidget {
         _ProjectDropdown(
           value: draft.projectId,
           projects: projects,
-          onChanged: controller.setProject,
+          onChanged: (projectId) async {
+            final requiresConfirmation =
+                controller.currentDraft.lines.isNotEmpty &&
+                projectId != controller.currentDraft.projectId;
+            if (requiresConfirmation) {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                animationStyle: AnimationStyle.noAnimation,
+                builder: (dialogContext) => AlertDialog(
+                  title: Text(
+                    YorksV1MaterialRequestStrings.changeProject.primary,
+                  ),
+                  content: Text(
+                    YorksV1MaterialRequestStrings
+                        .changeProjectDiscardLines
+                        .primary
+                        .replaceFirst(
+                          '{count}',
+                          controller.currentDraft.lines.length.toString(),
+                        ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: Text(YorksV1MaterialRequestStrings.cancel.primary),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: Text(
+                        YorksV1MaterialRequestStrings.changeProject.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true) return;
+            }
+            await controller.setProject(
+              projectId,
+              discardExistingLines: requiresConfirmation,
+            );
+          },
         ),
         _ScopeDropdown(
           value: draft.scopeId,

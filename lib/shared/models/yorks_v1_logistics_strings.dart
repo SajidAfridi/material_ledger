@@ -213,6 +213,18 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ڈسپیچ تاریخ',
     hi: 'डिस्पैच तारीख',
   );
+  static const deliveryReference = TranslatableString(
+    en: 'Delivery Note / Dispatch Ref.',
+    ar: 'مرجع إذن التسليم / الإرسال',
+    ur: 'ڈیلیوری نوٹ / ڈسپیچ حوالہ',
+    hi: 'डिलीवरी नोट / डिस्पैच रेफ़रेंस',
+  );
+  static const deliveryReferenceRequired = TranslatableString(
+    en: 'Enter the Delivery Note / Dispatch Reference before dispatching.',
+    ar: 'أدخل مرجع إذن التسليم / الإرسال قبل الإرسال.',
+    ur: 'ڈسپیچ سے پہلے ڈیلیوری نوٹ / ڈسپیچ حوالہ درج کریں۔',
+    hi: 'डिस्पैच करने से पहले डिलीवरी नोट / डिस्पैच रेफ़रेंस दर्ज करें।',
+  );
   static const driver = TranslatableString(
     en: 'Driver (optional)',
     ar: 'السائق (اختياري)',
@@ -380,6 +392,12 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'طباعة / PDF',
     ur: 'پرنٹ / PDF',
     hi: 'प्रिंट / PDF',
+  );
+  static const downloadPdf = TranslatableString(
+    en: 'Download PDF',
+    ar: 'تنزيل PDF',
+    ur: 'PDF ڈاؤن لوڈ کریں',
+    hi: 'PDF डाउनलोड करें',
   );
   static const materialReturns = TranslatableString(
     en: 'Material returns',

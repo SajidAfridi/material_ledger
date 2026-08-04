@@ -318,6 +318,8 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
 
 class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   late Map<String, _EditableArrangementLine> _lines;
+  late final TextEditingController _procurementNote;
+  late String _saveIdempotencyKey;
   bool _busy = false;
 
   @override
@@ -327,6 +329,10 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       for (final line in widget.arrangement.lines)
         line.id: _EditableArrangementLine.fromLine(line, widget.inventoryItems),
     };
+    _procurementNote = TextEditingController(
+      text: widget.arrangement.procurementNote ?? '',
+    );
+    _saveIdempotencyKey = const Uuid().v4();
   }
 
   @override
@@ -340,7 +346,15 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
             widget.inventoryItems,
           ),
       };
+      _procurementNote.text = widget.arrangement.procurementNote ?? '';
+      _saveIdempotencyKey = const Uuid().v4();
     }
+  }
+
+  @override
+  void dispose() {
+    _procurementNote.dispose();
+    super.dispose();
   }
 
   @override
@@ -370,6 +384,16 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                   ],
                 ],
               ),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      TextFormField(
+        controller: _procurementNote,
+        enabled: !_busy,
+        minLines: 2,
+        maxLines: 4,
+        decoration: InputDecoration(
+          labelText: YorksV1ArrangementStrings.procurementNote.primary,
+        ),
       ),
       const SizedBox(height: AppSpacing.lg),
       PrimaryButton(
@@ -402,7 +426,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
               expectedRequestVersion: widget.workspace.requestRecordVersion,
               expectedArrangementVersion: widget.arrangement.recordVersion,
               lines: inputs,
-              idempotencyKey: const Uuid().v4(),
+              procurementNote: _procurementNote.text,
+              idempotencyKey: _saveIdempotencyKey,
             ),
           );
       ref.invalidate(
@@ -412,6 +437,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
       );
       ref.invalidate(yorksV1MaterialRequestListProvider);
+      _saveIdempotencyKey = const Uuid().v4();
     } catch (_) {
       if (mounted) _showFailure(context);
     } finally {
@@ -423,6 +449,14 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     for (final line in lines) {
       final quantity = num.tryParse(line.arrangedQuantity.trim());
       if (quantity == null || quantity < 0) return false;
+      if (line.decision == YorksV1ArrangementDecision.unavailable) {
+        if (quantity != 0 ||
+            line.reason == null ||
+            line.reason!.trim().isEmpty) {
+          return false;
+        }
+        continue;
+      }
       if (line.source == YorksV1ArrangementSource.warehouse &&
           (line.inventoryItemId == null ||
               line.inventoryItemId!.trim().isEmpty)) {
@@ -469,6 +503,7 @@ class _DesktopArrangementEditor extends StatelessWidget {
         DataColumn(label: Text(YorksV1ArrangementStrings.decision.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.source.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.arranged.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.unitCost.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.availability.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.reason.primary)),
       ],
@@ -501,6 +536,13 @@ class _DesktopArrangementEditor extends StatelessWidget {
               ),
               DataCell(
                 _QuantityField(
+                  value: drafts[line.id]!,
+                  enabled: enabled,
+                  onChanged: onChanged,
+                ),
+              ),
+              DataCell(
+                _UnitCostField(
                   value: drafts[line.id]!,
                   enabled: enabled,
                   onChanged: onChanged,
@@ -568,6 +610,8 @@ class _MobileArrangementEditor extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         _QuantityField(value: draft, enabled: enabled, onChanged: onChanged),
         const SizedBox(height: AppSpacing.md),
+        _UnitCostField(value: draft, enabled: enabled, onChanged: onChanged),
+        const SizedBox(height: AppSpacing.md),
         _InventoryOrSupplierField(
           value: draft,
           inventoryItems: inventoryItems,
@@ -618,6 +662,14 @@ class _DecisionPicker extends StatelessWidget {
                         decision == YorksV1ArrangementDecision.unavailable
                         ? '0'
                         : value.arrangedQuantity,
+                    inventoryItemId:
+                        decision == YorksV1ArrangementDecision.unavailable
+                        ? null
+                        : _keep,
+                    externalSupplier:
+                        decision == YorksV1ArrangementDecision.unavailable
+                        ? null
+                        : _keep,
                   ),
                 );
               },
@@ -636,39 +688,48 @@ class _SourcePicker extends StatelessWidget {
   final ValueChanged<_EditableArrangementLine> onChanged;
 
   @override
-  Widget build(BuildContext context) =>
-      DropdownButtonFormField<YorksV1ArrangementSource>(
-        initialValue: value.source,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: YorksV1ArrangementStrings.source.primary,
+  Widget build(BuildContext context) {
+    if (value.decision == YorksV1ArrangementDecision.unavailable) {
+      return SizedBox(
+        width: 150,
+        child: Text(
+          YorksV1ArrangementStrings.noSourceRequired.primary,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
         ),
-        items: [
-          for (final source in YorksV1ArrangementSource.values)
-            DropdownMenuItem(
-              value: source,
-              child: Text(yorksV1ArrangementSourceCopy(source).primary),
-            ),
-        ],
-        onChanged: !enabled
-            ? null
-            : (source) {
-                if (source == null) return;
-                onChanged(
-                  value.copyWith(
-                    source: source,
-                    inventoryItemId:
-                        source == YorksV1ArrangementSource.warehouse
-                        ? value.inventoryItemId
-                        : null,
-                    externalSupplier:
-                        source == YorksV1ArrangementSource.externalSupplier
-                        ? value.externalSupplier
-                        : null,
-                  ),
-                );
-              },
       );
+    }
+    return DropdownButtonFormField<YorksV1ArrangementSource>(
+      initialValue: value.source,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: YorksV1ArrangementStrings.source.primary,
+      ),
+      items: [
+        for (final source in YorksV1ArrangementSource.values)
+          DropdownMenuItem(
+            value: source,
+            child: Text(yorksV1ArrangementSourceCopy(source).primary),
+          ),
+      ],
+      onChanged: !enabled
+          ? null
+          : (source) {
+              if (source == null) return;
+              onChanged(
+                value.copyWith(
+                  source: source,
+                  inventoryItemId: source == YorksV1ArrangementSource.warehouse
+                      ? value.inventoryItemId
+                      : null,
+                  externalSupplier:
+                      source == YorksV1ArrangementSource.externalSupplier
+                      ? value.externalSupplier
+                      : null,
+                ),
+              );
+            },
+    );
+  }
 }
 
 class _QuantityField extends StatelessWidget {
@@ -690,12 +751,41 @@ class _QuantityField extends StatelessWidget {
         'arranged-${value.arrangementLineId}-${value.arrangedQuantity}',
       ),
       initialValue: value.arrangedQuantity,
-      enabled: enabled,
+      enabled:
+          enabled && value.decision != YorksV1ArrangementDecision.unavailable,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (quantity) =>
           onChanged(value.copyWith(arrangedQuantity: quantity)),
       decoration: InputDecoration(
         labelText: YorksV1ArrangementStrings.arranged.primary,
+      ),
+    ),
+  );
+}
+
+class _UnitCostField extends StatelessWidget {
+  const _UnitCostField({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 116,
+    child: TextFormField(
+      key: ValueKey('unit-cost-${value.arrangementLineId}-${value.unitCost}'),
+      initialValue: value.unitCost ?? '',
+      enabled:
+          enabled && value.decision != YorksV1ArrangementDecision.unavailable,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (unitCost) => onChanged(value.copyWith(unitCost: unitCost)),
+      decoration: InputDecoration(
+        labelText: YorksV1ArrangementStrings.unitCost.primary,
       ),
     ),
   );
@@ -716,6 +806,12 @@ class _InventoryOrSupplierField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (value.decision == YorksV1ArrangementDecision.unavailable) {
+      return Text(
+        YorksV1ArrangementStrings.noSourceRequired.primary,
+        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+      );
+    }
     if (value.source == YorksV1ArrangementSource.externalSupplier) {
       return SizedBox(
         width: 180,
@@ -854,6 +950,7 @@ class _ReadOnlyDesktopTable extends StatelessWidget {
         DataColumn(label: Text(YorksV1ArrangementStrings.decision.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.source.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.arranged.primary)),
+        DataColumn(label: Text(YorksV1ArrangementStrings.unitCost.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.availability.primary)),
         DataColumn(label: Text(YorksV1ArrangementStrings.reason.primary)),
       ],
@@ -877,6 +974,7 @@ class _ReadOnlyDesktopTable extends StatelessWidget {
               ),
               DataCell(Text(yorksV1ArrangementSourceCopy(line.source).primary)),
               DataCell(Text(line.arrangedQuantity ?? '')),
+              DataCell(Text(line.unitCost ?? '')),
               DataCell(
                 Text(
                   line.source == YorksV1ArrangementSource.warehouse
@@ -918,6 +1016,10 @@ class _ReadOnlyLineCard extends StatelessWidget {
         Text(
           '${YorksV1ArrangementStrings.arranged.primary}: ${line.arrangedQuantity ?? ''}',
         ),
+        if (line.unitCost != null)
+          Text(
+            '${YorksV1ArrangementStrings.unitCost.primary}: ${line.unitCost}',
+          ),
         Text(
           '${YorksV1ArrangementStrings.source.primary}: ${yorksV1ArrangementSourceCopy(line.source).primary}',
         ),
@@ -1099,6 +1201,7 @@ class _EditableArrangementLine {
     this.externalSupplier,
     this.inventoryItemId,
     this.reason,
+    this.unitCost,
   });
 
   final String arrangementLineId;
@@ -1108,6 +1211,7 @@ class _EditableArrangementLine {
   final String? externalSupplier;
   final String? inventoryItemId;
   final String? reason;
+  final String? unitCost;
 
   factory _EditableArrangementLine.fromLine(
     YorksV1ArrangementLine line,
@@ -1126,6 +1230,7 @@ class _EditableArrangementLine {
           line.inventoryItemId ??
           (matchingItem.isEmpty ? null : matchingItem.first.id),
       reason: line.reason,
+      unitCost: line.unitCost,
     );
   }
 
@@ -1136,6 +1241,7 @@ class _EditableArrangementLine {
     Object? externalSupplier = _keep,
     Object? inventoryItemId = _keep,
     Object? reason = _keep,
+    Object? unitCost = _keep,
   }) => _EditableArrangementLine(
     arrangementLineId: arrangementLineId,
     source: source ?? this.source,
@@ -1148,6 +1254,7 @@ class _EditableArrangementLine {
         ? this.inventoryItemId
         : inventoryItemId as String?,
     reason: identical(reason, _keep) ? this.reason : reason as String?,
+    unitCost: identical(unitCost, _keep) ? this.unitCost : unitCost as String?,
   );
 
   YorksV1ArrangementLineInput toInput() => YorksV1ArrangementLineInput(
@@ -1158,6 +1265,7 @@ class _EditableArrangementLine {
     externalSupplier: externalSupplier,
     inventoryItemId: inventoryItemId,
     reason: reason,
+    unitCost: unitCost,
   );
 }
 

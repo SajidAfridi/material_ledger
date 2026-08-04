@@ -109,10 +109,25 @@ class YorksV1MaterialRequestDraftController
     transform,
   ) => _replace(transform(state.draft));
 
-  Future<void> setProject(String? projectId) => update(
-    (draft) =>
-        draft.copyWith(projectId: projectId, scopeId: null, lines: const []),
-  );
+  /// Changes the project only when the caller has explicitly confirmed that
+  /// existing BOQ, Excel and custom rows may be removed.  This makes the
+  /// destructive project/scope reset visible to the presentation layer.
+  Future<bool> setProject(
+    String? projectId, {
+    bool discardExistingLines = false,
+  }) async {
+    final draft = state.draft;
+    if (projectId == draft.projectId) return true;
+    if (draft.lines.isNotEmpty && !discardExistingLines) return false;
+    await update(
+      (current) => current.copyWith(
+        projectId: projectId,
+        scopeId: null,
+        lines: const [],
+      ),
+    );
+    return true;
+  }
 
   Future<void> setScope(String? scopeId) =>
       update((draft) => draft.copyWith(scopeId: scopeId));
@@ -227,9 +242,16 @@ class YorksV1MaterialRequestDraftController
     final selected = rowIds.toSet();
     if (selected.isEmpty) return;
     final draft = state.draft;
+    final existingSourceRows = draft.lines
+        .map((line) => line.sourceBoqRowId)
+        .whereType<String>()
+        .toSet();
     final additions = <YorksV1MaterialRequestLine>[];
     for (final row in worksheet.rows) {
       if (!selected.contains(row.id)) continue;
+      // A BOQ row is a controlled source. Adding it twice must not silently
+      // create a second request line or inflate the requested quantity.
+      if (existingSourceRows.contains(row.id)) continue;
       final tag = _boqValue(
         worksheet,
         row,
@@ -274,7 +296,10 @@ class YorksV1MaterialRequestDraftController
             YorksV1BoqCanonicalField.size,
             headingPattern: r'size|dimension',
           ),
-          model: rawModel.isNotEmpty ? rawModel : (tag.isEmpty ? null : tag),
+          // A tag identifies equipment but is not a manufacturer model. Keep
+          // it separate so PDFs and Procurement screens do not render the
+          // same value twice as both Model and Tag.
+          model: rawModel.isNotEmpty ? rawModel : null,
           equipmentTag: tag.isEmpty ? null : tag,
           planningModelTag: _canonicalValue(
             worksheet,
@@ -468,16 +493,7 @@ class YorksV1MaterialRequestDraftController
     );
     YorksV1MaterialRequest? submitted;
     try {
-      // A connected draft save supplies the exact version that the submit RPC
-      // locks. No client-side transition is shown before this second command.
-      final saved = await _repository.saveDraft(draft.toSaveInput());
-      submitted = await _repository.submit(
-        YorksV1SubmitMaterialRequestInput(
-          requestId: draft.id,
-          expectedVersion: saved.recordVersion,
-          idempotencyKey: draft.submissionIdempotencyKey,
-        ),
-      );
+      submitted = await _repository.saveAndSubmit(draft);
     } on YorksV1DomainException catch (error) {
       state = YorksV1MaterialRequestDraftState(
         draft: draft,

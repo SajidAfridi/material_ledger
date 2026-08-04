@@ -463,6 +463,13 @@ class _DeliveryOrderCard extends ConsumerStatefulWidget {
 
 class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
   bool _working = false;
+  late String _generationIdempotencyKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _generationIdempotencyKey = const Uuid().v4();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -547,6 +554,16 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
                       onPressed: _working ? null : () => _print(order, current),
                     ),
                   ),
+                  SizedBox(
+                    width: 165,
+                    child: SecondaryButton(
+                      label: YorksV1LogisticsStrings.downloadPdf.primary,
+                      icon: Icons.download_outlined,
+                      onPressed: _working
+                          ? null
+                          : () => _downloadPdf(order, current),
+                    ),
+                  ),
                   if (documentsEnabled)
                     SizedBox(
                       width: 160,
@@ -603,10 +620,14 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
               expectedRequestVersion: widget.workspace.requestRecordVersion,
               expectedDispatchVersion: widget.dispatch.dispatchRecordVersion,
               deliveryOrderReference: reference,
-              idempotencyKey: const Uuid().v4(),
+              idempotencyKey: _generationIdempotencyKey,
             ),
           );
       if (!mounted) return;
+      // A successful command has a new immutable revision. A deliberate
+      // regenerate action must receive a fresh command identity, while a
+      // failed/ambiguous response retains this key for a safe retry.
+      _generationIdempotencyKey = const Uuid().v4();
       widget.onChanged();
     } catch (_) {
       if (mounted) _failure(context);
@@ -639,6 +660,15 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
     YorksV1DeliveryOrder order,
     YorksV1DeliveryOrderRevision revision,
   ) => widget.documents.printDeliveryOrder(
+    workspace: widget.workspace,
+    dispatch: widget.dispatch,
+    revision: revision,
+  );
+
+  Future<void> _downloadPdf(
+    YorksV1DeliveryOrder order,
+    YorksV1DeliveryOrderRevision revision,
+  ) => widget.documents.shareDeliveryOrderPdf(
     workspace: widget.workspace,
     dispatch: widget.dispatch,
     revision: revision,

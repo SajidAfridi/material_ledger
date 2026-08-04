@@ -197,6 +197,7 @@ YorksV1ReturnsDocumentsWorkspace _returnsWorkspace(String requestId) =>
       requestState: 'received',
       requestRecordVersion: 1,
       projectName: 'Yorks Project',
+      projectReference: 'Y-001',
       scopeName: 'Building A',
       canGenerateDeliveryOrder: false,
       canSubmitMaterialReturn: true,

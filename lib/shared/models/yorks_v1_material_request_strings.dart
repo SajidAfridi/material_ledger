@@ -202,6 +202,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'درخواست نمبر پروجیکٹ ریفرنس + MR نمبر سے تیار ہوتا ہے۔',
     hi: 'अनुरोध संख्या प्रोजेक्ट संदर्भ + MR संख्या से बनती है।',
   );
+  static const assignedOnSubmit = TranslatableString(
+    en: 'Assigned on submit',
+    ar: 'يُعيّن عند الإرسال',
+    ur: 'جمع کرانے پر تفویض کیا جائے گا',
+    hi: 'सबमिट करने पर असाइन किया जाएगा',
+  );
+  static const changeProject = TranslatableString(
+    en: 'Change project',
+    ar: 'تغيير المشروع',
+    ur: 'پروجیکٹ تبدیل کریں',
+    hi: 'प्रोजेक्ट बदलें',
+  );
+  static const changeProjectDiscardLines = TranslatableString(
+    en: 'Changing the project removes {count} material item(s) from this draft. Continue?',
+    ar: 'سيؤدي تغيير المشروع إلى إزالة {count} من بنود المواد من هذه المسودة. هل تريد المتابعة؟',
+    ur: 'پروجیکٹ تبدیل کرنے سے اس ڈرافٹ سے {count} میٹیریل آئٹمز ہٹ جائیں گی۔ جاری رکھیں؟',
+    hi: 'प्रोजेक्ट बदलने से इस ड्राफ़्ट से {count} सामग्री आइटम हट जाएंगे। जारी रखें?',
+  );
   static const review = TranslatableString(
     en: 'Review',
     ar: 'مراجعة',

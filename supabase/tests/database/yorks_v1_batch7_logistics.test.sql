@@ -235,6 +235,7 @@ select lives_ok(
     jsonb_build_object(
       'request_id', '71000000-0000-4000-8000-000000000001',
       'expected_version', 5, 'dispatch_date', current_date::text,
+      'delivery_reference', 'DN-B7-001',
       'driver_name', 'Yorks Driver', 'vehicle_reference', 'Van 7',
       'lines', jsonb_build_array(jsonb_build_object(
         'request_line_id', '71100000-0000-4000-8000-000000000001',
@@ -250,6 +251,7 @@ select lives_ok(
     jsonb_build_object(
       'request_id', '71000000-0000-4000-8000-000000000001',
       'expected_version', 5, 'dispatch_date', current_date::text,
+      'delivery_reference', 'DN-B7-001',
       'driver_name', 'Yorks Driver', 'vehicle_reference', 'Van 7',
       'lines', jsonb_build_array(jsonb_build_object(
         'request_line_id', '71100000-0000-4000-8000-000000000001',
@@ -294,6 +296,7 @@ select throws_ok(
     jsonb_build_object(
       'request_id', '71000000-0000-4000-8000-000000000001',
       'expected_version', 6, 'dispatch_date', current_date::text,
+      'delivery_reference', 'DN-B7-002',
       'driver_name', null, 'vehicle_reference', null,
       'lines', jsonb_build_array(jsonb_build_object(
         'request_line_id', '71100000-0000-4000-8000-000000000001',
@@ -382,6 +385,7 @@ select throws_ok(
     jsonb_build_object(
       'request_id', '71000000-0000-4000-8000-000000000001',
       'expected_version', 7, 'dispatch_date', current_date::text,
+      'delivery_reference', 'DN-B7-003',
       'driver_name', null, 'vehicle_reference', null,
       'lines', jsonb_build_array(jsonb_build_object(
         'request_line_id', '71100000-0000-4000-8000-000000000001',
@@ -398,6 +402,7 @@ select lives_ok(
     jsonb_build_object(
       'request_id', '71000000-0000-4000-8000-000000000001',
       'expected_version', 7, 'dispatch_date', current_date::text,
+      'delivery_reference', 'DN-B7-004',
       'driver_name', null, 'vehicle_reference', null,
       'lines', jsonb_build_array(jsonb_build_object(
         'request_line_id', '71100000-0000-4000-8000-000000000001',
@@ -463,6 +468,7 @@ select lives_ok(
     jsonb_build_object(
       'request_id', '71000000-0000-4000-8000-000000000001',
       'expected_version', 9, 'dispatch_date', current_date::text,
+      'delivery_reference', 'DN-B7-005',
       'driver_name', null, 'vehicle_reference', null,
       'lines', jsonb_build_array(jsonb_build_object(
         'request_line_id', '71100000-0000-4000-8000-000000000001',

@@ -47,6 +47,13 @@ abstract interface class YorksV1MaterialRequestRepository {
     YorksV1SaveMaterialRequestDraftInput input,
   );
 
+  /// Atomically persists the current draft snapshot and submits it.  A
+  /// workflow transition must never depend on a second client request after a
+  /// draft version has changed on the server.
+  Future<YorksV1MaterialRequest> saveAndSubmit(
+    YorksV1MaterialRequestDraft draft,
+  );
+
   Future<void> deleteDraft(String requestId);
 
   Future<YorksV1MaterialRequest> submit(
@@ -151,6 +158,20 @@ class YorksV1SupabaseMaterialRequestRepository
     final response = await _invoke(
       functionName: 'v1_save_material_request_draft',
       parameters: {'p_payload': input.toRpcPayload()},
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveAndSubmit(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_save_and_submit_material_request',
+      parameters: {
+        'p_payload': draft.toSaveInput().toRpcPayload(),
+        'p_idempotency_key': draft.submissionIdempotencyKey,
+      },
     );
     return _single(response);
   }
