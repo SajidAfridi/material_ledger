@@ -171,6 +171,79 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'ہر سطر مکمل کریں۔ جزوی اور غیر دستیاب فیصلوں کے لیے وجہ ضروری ہے۔',
     hi: 'हर पंक्ति पूरी करें। आंशिक और अनुपलब्ध निर्णयों के लिए कारण चाहिए।',
   );
+
+  static TranslatableString invalidQuantityFor(String line) =>
+      TranslatableString(
+        en: '$line needs a valid arranged quantity.',
+        ar: 'يحتاج $line إلى كمية مرتبة صالحة.',
+        ur: '$line کے لیے درست ترتیب شدہ مقدار درکار ہے۔',
+        hi: '$line के लिए मान्य व्यवस्थित मात्रा आवश्यक है।',
+      );
+
+  static TranslatableString unavailableReasonFor(
+    String line,
+  ) => TranslatableString(
+    en: '$line must have quantity 0 and a reason when it cannot be provided.',
+    ar: 'يجب أن تكون كمية $line صفرًا مع سبب عند تعذر التوفير.',
+    ur: 'فراہم نہ ہونے کی صورت میں $line کی مقدار 0 اور وجہ ضروری ہے۔',
+    hi: 'उपलब्ध न होने पर $line की मात्रा 0 और कारण आवश्यक है।',
+  );
+
+  static TranslatableString warehouseItemRequiredFor(String line) =>
+      TranslatableString(
+        en: '$line needs a warehouse item before it can be reserved.',
+        ar: 'يحتاج $line إلى صنف مستودع قبل حجزه.',
+        ur: '$line کو ریزرو کرنے سے پہلے گودام کی آئٹم درکار ہے۔',
+        hi: '$line को आरक्षित करने से पहले वेयरहाउस आइटम चाहिए।',
+      );
+
+  static TranslatableString emptyWarehouseFor(
+    String line,
+  ) => TranslatableString(
+    en: 'Warehouse inventory is empty. Select External supplier and enter a supplier for $line.',
+    ar: 'مخزون المستودع فارغ. اختر موردًا خارجيًا وأدخل المورد لـ $line.',
+    ur: 'گودام کا ذخیرہ خالی ہے۔ بیرونی سپلائر منتخب کریں اور $line کے لیے سپلائر درج کریں۔',
+    hi: 'वेयरहाउस इन्वेंट्री खाली है। बाहरी सप्लायर चुनें और $line के लिए सप्लायर दर्ज करें।',
+  );
+
+  static TranslatableString supplierRequiredFor(String line) =>
+      TranslatableString(
+        en: '$line needs an external supplier name.',
+        ar: 'يحتاج $line إلى اسم المورد الخارجي.',
+        ur: '$line کے لیے بیرونی سپلائر کا نام درکار ہے۔',
+        hi: '$line के लिए बाहरी सप्लायर नाम चाहिए।',
+      );
+
+  static TranslatableString partialReasonFor(String line) => TranslatableString(
+    en: '$line needs a reason for a partial decision.',
+    ar: 'يحتاج $line إلى سبب للقرار الجزئي.',
+    ur: '$line کے جزوی فیصلے کے لیے وجہ درکار ہے۔',
+    hi: '$line के आंशिक निर्णय के लिए कारण चाहिए।',
+  );
+
+  static TranslatableString fullQuantityFor(String line) => TranslatableString(
+    en: '$line must match the requested quantity when marked Full.',
+    ar: 'يجب أن تطابق كمية $line الكمية المطلوبة عند اختيار كامل.',
+    ur: 'مکمل منتخب ہونے پر $line کی مقدار مطلوبہ مقدار کے برابر ہونی چاہیے۔',
+    hi: 'Full चुनने पर $line की मात्रा अनुरोधित मात्रा के बराबर होनी चाहिए।',
+  );
+
+  static TranslatableString partialQuantityFor(
+    String line,
+  ) => TranslatableString(
+    en: '$line must be greater than zero and less than the requested quantity when marked Partial.',
+    ar: 'يجب أن تكون كمية $line أكبر من صفر وأقل من المطلوبة عند اختيار جزئي.',
+    ur: 'جزوی منتخب ہونے پر $line کی مقدار صفر سے زیادہ اور مطلوبہ مقدار سے کم ہونی چاہیے۔',
+    hi: 'Partial चुनने पर $line की मात्रा शून्य से अधिक और अनुरोधित मात्रा से कम होनी चाहिए।',
+  );
+
+  static TranslatableString invalidUnitCostFor(String line) =>
+      TranslatableString(
+        en: '$line needs a valid non-negative unit cost, or leave it blank.',
+        ar: 'يحتاج $line إلى تكلفة وحدة صالحة غير سالبة أو اتركها فارغة.',
+        ur: '$line کے لیے درست غیر منفی یونٹ لاگت درج کریں یا خالی چھوڑ دیں۔',
+        hi: '$line के लिए वैध गैर-नकारात्मक यूनिट लागत दें या खाली छोड़ दें।',
+      );
 }
 
 TranslatableString yorksV1ArrangementSourceCopy(

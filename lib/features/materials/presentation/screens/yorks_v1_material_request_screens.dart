@@ -2697,6 +2697,13 @@ class _RequestDetailBody extends ConsumerWidget {
         returnsDocumentsEnabled &&
         request.state != YorksV1MaterialRequestState.draft &&
         request.state != YorksV1MaterialRequestState.cancelled;
+    final canGenerateDeliveryOrder =
+        canOpenReturnsDocuments &&
+        _receiptReviewed(request) &&
+        (role == YorksV1Role.projectEngineer ||
+            role == YorksV1Role.siteEngineer ||
+            role == YorksV1Role.procurement ||
+            role == YorksV1Role.admin);
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
@@ -2746,6 +2753,13 @@ class _RequestDetailBody extends ConsumerWidget {
                       : () => documentService.printDocumentPdf(
                           documentModel.valueOrNull!,
                         ),
+                  onGenerateDeliveryOrder: canGenerateDeliveryOrder
+                      ? () => context.push(
+                          RoutePaths.yorksV1MaterialRequestReturnsDocumentsPath(
+                            request.id,
+                          ),
+                        )
+                      : null,
                   onCancel: canCancel
                       ? () => _cancel(context, ref, request)
                       : null,
@@ -2908,6 +2922,11 @@ class _RequestDetailBody extends ConsumerWidget {
     );
   }
 
+  bool _receiptReviewed(YorksV1MaterialRequest value) =>
+      value.state == YorksV1MaterialRequestState.partiallyReceived ||
+      value.state == YorksV1MaterialRequestState.received ||
+      value.state == YorksV1MaterialRequestState.closed;
+
   Future<void> _cancel(
     BuildContext context,
     WidgetRef ref,
@@ -2998,6 +3017,7 @@ class _RequestRecordHeader extends StatelessWidget {
     required this.onExport,
     required this.onPdf,
     required this.onPrint,
+    required this.onGenerateDeliveryOrder,
     required this.onCancel,
   });
 
@@ -3009,6 +3029,7 @@ class _RequestRecordHeader extends StatelessWidget {
   final VoidCallback onExport;
   final VoidCallback? onPdf;
   final VoidCallback? onPrint;
+  final VoidCallback? onGenerateDeliveryOrder;
   final VoidCallback? onCancel;
 
   @override
@@ -3082,6 +3103,12 @@ class _RequestRecordHeader extends StatelessWidget {
               label: YorksV1MaterialRequestStrings.print.primary,
               icon: Icons.print_outlined,
               onPressed: onPrint!,
+            ),
+          if (onGenerateDeliveryOrder != null)
+            _RecordActionButton(
+              label: YorksV1LogisticsStrings.generateDeliveryOrder.primary,
+              icon: Icons.receipt_long_outlined,
+              onPressed: onGenerateDeliveryOrder!,
             ),
           if (onCancel != null)
             _RecordActionButton(

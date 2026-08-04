@@ -318,6 +318,10 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
 
 class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   late Map<String, _EditableArrangementLine> _lines;
+  final Map<String, TextEditingController> _arrangedQuantities = {};
+  final Map<String, TextEditingController> _unitCosts = {};
+  final Map<String, TextEditingController> _suppliers = {};
+  final Map<String, TextEditingController> _reasons = {};
   late final TextEditingController _procurementNote;
   late String _saveIdempotencyKey;
   bool _busy = false;
@@ -329,6 +333,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       for (final line in widget.arrangement.lines)
         line.id: _EditableArrangementLine.fromLine(line, widget.inventoryItems),
     };
+    _initializeLineControllers();
     _procurementNote = TextEditingController(
       text: widget.arrangement.procurementNote ?? '',
     );
@@ -346,6 +351,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
             widget.inventoryItems,
           ),
       };
+      _disposeLineControllers();
+      _initializeLineControllers();
       _procurementNote.text = widget.arrangement.procurementNote ?? '';
       _saveIdempotencyKey = const Uuid().v4();
     }
@@ -353,6 +360,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
 
   @override
   void dispose() {
+    _disposeLineControllers();
     _procurementNote.dispose();
     super.dispose();
   }
@@ -366,6 +374,10 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
             ? _DesktopArrangementEditor(
                 lines: widget.arrangement.lines,
                 drafts: _lines,
+                arrangedQuantities: _arrangedQuantities,
+                unitCosts: _unitCosts,
+                suppliers: _suppliers,
+                reasons: _reasons,
                 inventoryItems: widget.inventoryItems,
                 enabled: !_busy,
                 onChanged: _replace,
@@ -376,6 +388,10 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                     _MobileArrangementEditor(
                       line: line,
                       draft: _lines[line.id]!,
+                      arrangedQuantity: _arrangedQuantities[line.id]!,
+                      unitCost: _unitCosts[line.id]!,
+                      supplier: _suppliers[line.id]!,
+                      reason: _reasons[line.id]!,
                       inventoryItems: widget.inventoryItems,
                       enabled: !_busy,
                       onChanged: _replace,
@@ -406,13 +422,30 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   );
 
   void _replace(_EditableArrangementLine value) {
+    final previous = _lines[value.arrangementLineId];
+    if (value.decision == YorksV1ArrangementDecision.unavailable &&
+        previous?.decision != YorksV1ArrangementDecision.unavailable) {
+      _arrangedQuantities[value.arrangementLineId]?.text = '0';
+    }
     setState(() => _lines = {..._lines, value.arrangementLineId: value});
   }
 
   Future<void> _save() async {
-    final inputs = _lines.values.map((line) => line.toInput()).toList();
-    if (!_valid(inputs)) {
-      _showMessage(context, YorksV1ArrangementStrings.invalidLines.primary);
+    final inputs = [
+      for (final line in _lines.values)
+        line
+            .copyWith(
+              arrangedQuantity:
+                  _arrangedQuantities[line.arrangementLineId]!.text,
+              externalSupplier: _suppliers[line.arrangementLineId]!.text,
+              reason: _reasons[line.arrangementLineId]!.text,
+              unitCost: _unitCosts[line.arrangementLineId]!.text,
+            )
+            .toInput(),
+    ];
+    final validationMessage = _validationMessage(inputs);
+    if (validationMessage != null) {
+      _showMessage(context, validationMessage);
       return;
     }
     setState(() => _busy = true);
@@ -445,35 +478,118 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     }
   }
 
-  bool _valid(List<YorksV1ArrangementLineInput> lines) {
-    for (final line in lines) {
+  void _initializeLineControllers() {
+    for (final line in _lines.values) {
+      _arrangedQuantities[line.arrangementLineId] = TextEditingController(
+        text: line.arrangedQuantity,
+      );
+      _unitCosts[line.arrangementLineId] = TextEditingController(
+        text: line.unitCost ?? '',
+      );
+      _suppliers[line.arrangementLineId] = TextEditingController(
+        text: line.externalSupplier ?? '',
+      );
+      _reasons[line.arrangementLineId] = TextEditingController(
+        text: line.reason ?? '',
+      );
+    }
+  }
+
+  void _disposeLineControllers() {
+    for (final controller in _arrangedQuantities.values) {
+      controller.dispose();
+    }
+    for (final controller in _unitCosts.values) {
+      controller.dispose();
+    }
+    for (final controller in _suppliers.values) {
+      controller.dispose();
+    }
+    for (final controller in _reasons.values) {
+      controller.dispose();
+    }
+    _arrangedQuantities.clear();
+    _unitCosts.clear();
+    _suppliers.clear();
+    _reasons.clear();
+  }
+
+  String? _validationMessage(List<YorksV1ArrangementLineInput> lines) {
+    for (var index = 0; index < lines.length; index++) {
+      final line = lines[index];
+      final arrangedLine = widget.arrangement.lines.firstWhere(
+        (value) => value.id == line.arrangementLineId,
+      );
+      final label =
+          '${YorksV1ArrangementStrings.rowNumber.primary} ${arrangedLine.displayOrder}';
       final quantity = num.tryParse(line.arrangedQuantity.trim());
-      if (quantity == null || quantity < 0) return false;
+      if (quantity == null || quantity < 0) {
+        return YorksV1ArrangementStrings.invalidQuantityFor(
+          label,
+        ).active(widget.language);
+      }
       if (line.decision == YorksV1ArrangementDecision.unavailable) {
         if (quantity != 0 ||
             line.reason == null ||
             line.reason!.trim().isEmpty) {
-          return false;
+          return YorksV1ArrangementStrings.unavailableReasonFor(
+            label,
+          ).active(widget.language);
         }
         continue;
+      }
+      final requestedQuantity = num.tryParse(arrangedLine.requestedQuantity);
+      if (requestedQuantity == null) {
+        return YorksV1ArrangementStrings.invalidQuantityFor(
+          label,
+        ).active(widget.language);
+      }
+      if (line.decision == YorksV1ArrangementDecision.full &&
+          quantity != requestedQuantity) {
+        return YorksV1ArrangementStrings.fullQuantityFor(
+          label,
+        ).active(widget.language);
+      }
+      if (line.decision == YorksV1ArrangementDecision.partial &&
+          (quantity <= 0 || quantity >= requestedQuantity)) {
+        return YorksV1ArrangementStrings.partialQuantityFor(
+          label,
+        ).active(widget.language);
+      }
+      final unitCost = line.unitCost?.trim() ?? '';
+      if (unitCost.isNotEmpty &&
+          (num.tryParse(unitCost) == null || num.parse(unitCost) < 0)) {
+        return YorksV1ArrangementStrings.invalidUnitCostFor(
+          label,
+        ).active(widget.language);
       }
       if (line.source == YorksV1ArrangementSource.warehouse &&
           (line.inventoryItemId == null ||
               line.inventoryItemId!.trim().isEmpty)) {
-        return false;
+        return widget.inventoryItems.isEmpty
+            ? YorksV1ArrangementStrings.emptyWarehouseFor(
+                label,
+              ).active(widget.language)
+            : YorksV1ArrangementStrings.warehouseItemRequiredFor(
+                label,
+              ).active(widget.language);
       }
       if (line.source == YorksV1ArrangementSource.externalSupplier &&
           (line.externalSupplier == null ||
               line.externalSupplier!.trim().isEmpty)) {
-        return false;
+        return YorksV1ArrangementStrings.supplierRequiredFor(
+          label,
+        ).active(widget.language);
       }
       if ((line.decision == YorksV1ArrangementDecision.partial ||
               line.decision == YorksV1ArrangementDecision.unavailable) &&
           (line.reason == null || line.reason!.trim().isEmpty)) {
-        return false;
+        return YorksV1ArrangementStrings.partialReasonFor(
+          label,
+        ).active(widget.language);
       }
     }
-    return true;
+    return null;
   }
 }
 
@@ -481,6 +597,10 @@ class _DesktopArrangementEditor extends StatelessWidget {
   const _DesktopArrangementEditor({
     required this.lines,
     required this.drafts,
+    required this.arrangedQuantities,
+    required this.unitCosts,
+    required this.suppliers,
+    required this.reasons,
     required this.inventoryItems,
     required this.enabled,
     required this.onChanged,
@@ -488,6 +608,10 @@ class _DesktopArrangementEditor extends StatelessWidget {
 
   final List<YorksV1ArrangementLine> lines;
   final Map<String, _EditableArrangementLine> drafts;
+  final Map<String, TextEditingController> arrangedQuantities;
+  final Map<String, TextEditingController> unitCosts;
+  final Map<String, TextEditingController> suppliers;
+  final Map<String, TextEditingController> reasons;
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
@@ -537,20 +661,21 @@ class _DesktopArrangementEditor extends StatelessWidget {
               DataCell(
                 _QuantityField(
                   value: drafts[line.id]!,
+                  controller: arrangedQuantities[line.id]!,
                   enabled: enabled,
-                  onChanged: onChanged,
                 ),
               ),
               DataCell(
                 _UnitCostField(
                   value: drafts[line.id]!,
+                  controller: unitCosts[line.id]!,
                   enabled: enabled,
-                  onChanged: onChanged,
                 ),
               ),
               DataCell(
                 _InventoryOrSupplierField(
                   value: drafts[line.id]!,
+                  supplier: suppliers[line.id]!,
                   inventoryItems: inventoryItems,
                   enabled: enabled,
                   onChanged: onChanged,
@@ -559,8 +684,8 @@ class _DesktopArrangementEditor extends StatelessWidget {
               DataCell(
                 _ReasonField(
                   value: drafts[line.id]!,
+                  controller: reasons[line.id]!,
                   enabled: enabled,
-                  onChanged: onChanged,
                 ),
               ),
             ],
@@ -574,6 +699,10 @@ class _MobileArrangementEditor extends StatelessWidget {
   const _MobileArrangementEditor({
     required this.line,
     required this.draft,
+    required this.arrangedQuantity,
+    required this.unitCost,
+    required this.supplier,
+    required this.reason,
     required this.inventoryItems,
     required this.enabled,
     required this.onChanged,
@@ -581,6 +710,10 @@ class _MobileArrangementEditor extends StatelessWidget {
 
   final YorksV1ArrangementLine line;
   final _EditableArrangementLine draft;
+  final TextEditingController arrangedQuantity;
+  final TextEditingController unitCost;
+  final TextEditingController supplier;
+  final TextEditingController reason;
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
@@ -608,18 +741,23 @@ class _MobileArrangementEditor extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         _SourcePicker(value: draft, enabled: enabled, onChanged: onChanged),
         const SizedBox(height: AppSpacing.md),
-        _QuantityField(value: draft, enabled: enabled, onChanged: onChanged),
+        _QuantityField(
+          value: draft,
+          controller: arrangedQuantity,
+          enabled: enabled,
+        ),
         const SizedBox(height: AppSpacing.md),
-        _UnitCostField(value: draft, enabled: enabled, onChanged: onChanged),
+        _UnitCostField(value: draft, controller: unitCost, enabled: enabled),
         const SizedBox(height: AppSpacing.md),
         _InventoryOrSupplierField(
           value: draft,
+          supplier: supplier,
           inventoryItems: inventoryItems,
           enabled: enabled,
           onChanged: onChanged,
         ),
         const SizedBox(height: AppSpacing.md),
-        _ReasonField(value: draft, enabled: enabled, onChanged: onChanged),
+        _ReasonField(value: draft, controller: reason, enabled: enabled),
       ],
     ),
   );
@@ -735,27 +873,25 @@ class _SourcePicker extends StatelessWidget {
 class _QuantityField extends StatelessWidget {
   const _QuantityField({
     required this.value,
+    required this.controller,
     required this.enabled,
-    required this.onChanged,
   });
 
   final _EditableArrangementLine value;
+  final TextEditingController controller;
   final bool enabled;
-  final ValueChanged<_EditableArrangementLine> onChanged;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: 112,
     child: TextFormField(
       key: ValueKey(
-        'arranged-${value.arrangementLineId}-${value.arrangedQuantity}',
+        'arranged-${value.arrangementLineId}-${value.decision.wireValue}',
       ),
-      initialValue: value.arrangedQuantity,
+      controller: controller,
       enabled:
           enabled && value.decision != YorksV1ArrangementDecision.unavailable,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      onChanged: (quantity) =>
-          onChanged(value.copyWith(arrangedQuantity: quantity)),
       decoration: InputDecoration(
         labelText: YorksV1ArrangementStrings.arranged.primary,
       ),
@@ -766,24 +902,25 @@ class _QuantityField extends StatelessWidget {
 class _UnitCostField extends StatelessWidget {
   const _UnitCostField({
     required this.value,
+    required this.controller,
     required this.enabled,
-    required this.onChanged,
   });
 
   final _EditableArrangementLine value;
+  final TextEditingController controller;
   final bool enabled;
-  final ValueChanged<_EditableArrangementLine> onChanged;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: 116,
     child: TextFormField(
-      key: ValueKey('unit-cost-${value.arrangementLineId}-${value.unitCost}'),
-      initialValue: value.unitCost ?? '',
+      key: ValueKey(
+        'unit-cost-${value.arrangementLineId}-${value.decision.wireValue}',
+      ),
+      controller: controller,
       enabled:
           enabled && value.decision != YorksV1ArrangementDecision.unavailable,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      onChanged: (unitCost) => onChanged(value.copyWith(unitCost: unitCost)),
       decoration: InputDecoration(
         labelText: YorksV1ArrangementStrings.unitCost.primary,
       ),
@@ -794,12 +931,14 @@ class _UnitCostField extends StatelessWidget {
 class _InventoryOrSupplierField extends StatelessWidget {
   const _InventoryOrSupplierField({
     required this.value,
+    required this.supplier,
     required this.inventoryItems,
     required this.enabled,
     required this.onChanged,
   });
 
   final _EditableArrangementLine value;
+  final TextEditingController supplier;
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
@@ -817,12 +956,10 @@ class _InventoryOrSupplierField extends StatelessWidget {
         width: 180,
         child: TextFormField(
           key: ValueKey(
-            'supplier-${value.arrangementLineId}-${value.externalSupplier}',
+            'supplier-${value.arrangementLineId}-${value.source.wireValue}-${value.decision.wireValue}',
           ),
-          initialValue: value.externalSupplier ?? '',
+          controller: supplier,
           enabled: enabled,
-          onChanged: (supplier) =>
-              onChanged(value.copyWith(externalSupplier: supplier)),
           decoration: InputDecoration(
             labelText: YorksV1ArrangementStrings.supplierName.primary,
           ),
@@ -861,22 +998,23 @@ class _InventoryOrSupplierField extends StatelessWidget {
 class _ReasonField extends StatelessWidget {
   const _ReasonField({
     required this.value,
+    required this.controller,
     required this.enabled,
-    required this.onChanged,
   });
 
   final _EditableArrangementLine value;
+  final TextEditingController controller;
   final bool enabled;
-  final ValueChanged<_EditableArrangementLine> onChanged;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: 180,
     child: TextFormField(
-      key: ValueKey('reason-${value.arrangementLineId}-${value.reason}'),
-      initialValue: value.reason ?? '',
+      key: ValueKey(
+        'reason-${value.arrangementLineId}-${value.decision.wireValue}',
+      ),
+      controller: controller,
       enabled: enabled,
-      onChanged: (reason) => onChanged(value.copyWith(reason: reason)),
       decoration: InputDecoration(
         labelText: YorksV1ArrangementStrings.reason.primary,
       ),
@@ -1222,7 +1360,14 @@ class _EditableArrangementLine {
     );
     return _EditableArrangementLine(
       arrangementLineId: line.id,
-      source: line.source,
+      // A fresh deployment may not have warehouse opening stock yet. Choosing
+      // Warehouse in that state makes a valid arrangement impossible because
+      // every non-unavailable line must reserve a real item. Default to the
+      // explicit external-supplier route instead; Procurement still has to
+      // enter the supplier and the server validates every line.
+      source: line.inventoryItemId == null && inventory.isEmpty
+          ? YorksV1ArrangementSource.externalSupplier
+          : line.source,
       decision: line.decision ?? YorksV1ArrangementDecision.full,
       arrangedQuantity: line.arrangedQuantity ?? line.requestedQuantity,
       externalSupplier: line.externalSupplier,
