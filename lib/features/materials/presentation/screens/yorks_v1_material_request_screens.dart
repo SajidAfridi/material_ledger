@@ -35,6 +35,7 @@ import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
+import '../../../../shared/providers/yorks_v1_arrangement_repository_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
 import '../../../../shared/providers/session_provider.dart';
@@ -2704,6 +2705,8 @@ class _RequestDetailBody extends ConsumerWidget {
             role == YorksV1Role.siteEngineer ||
             role == YorksV1Role.procurement ||
             role == YorksV1Role.admin);
+    final arrangementWorkspace = arrangement.valueOrNull;
+    final arrangementForApproval = arrangementWorkspace?.currentArrangement;
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
@@ -2758,6 +2761,14 @@ class _RequestDetailBody extends ConsumerWidget {
                           RoutePaths.yorksV1MaterialRequestReturnsDocumentsPath(
                             request.id,
                           ),
+                        )
+                      : null,
+                  approvalActions:
+                      arrangementWorkspace?.canDecide == true &&
+                          arrangementForApproval != null
+                      ? _RequestArrangementApprovalActions(
+                          workspace: arrangementWorkspace!,
+                          arrangement: arrangementForApproval,
                         )
                       : null,
                   onCancel: canCancel
@@ -3018,6 +3029,7 @@ class _RequestRecordHeader extends StatelessWidget {
     required this.onPdf,
     required this.onPrint,
     required this.onGenerateDeliveryOrder,
+    required this.approvalActions,
     required this.onCancel,
   });
 
@@ -3030,6 +3042,7 @@ class _RequestRecordHeader extends StatelessWidget {
   final VoidCallback? onPdf;
   final VoidCallback? onPrint;
   final VoidCallback? onGenerateDeliveryOrder;
+  final Widget? approvalActions;
   final VoidCallback? onCancel;
 
   @override
@@ -3087,6 +3100,7 @@ class _RequestRecordHeader extends StatelessWidget {
               primary: canArrange,
               onPressed: onOpenArrangement!,
             ),
+          ?approvalActions,
           _RecordActionButton(
             label: YorksV1MaterialRequestStrings.exportExcel.primary,
             icon: Icons.download_outlined,
@@ -3181,6 +3195,107 @@ class _RecordActionButton extends StatelessWidget {
             label: Text(label),
           ),
   );
+}
+
+/// The primary project engineer reviews the same immutable arrangement shown
+/// in the request record. This keeps the next action visible without making
+/// the procurement editor writable by an engineer.
+class _RequestArrangementApprovalActions extends ConsumerStatefulWidget {
+  const _RequestArrangementApprovalActions({
+    required this.workspace,
+    required this.arrangement,
+  });
+
+  final YorksV1ArrangementWorkspace workspace;
+  final YorksV1ProcurementArrangement arrangement;
+
+  @override
+  ConsumerState<_RequestArrangementApprovalActions> createState() =>
+      _RequestArrangementApprovalActionsState();
+}
+
+class _RequestArrangementApprovalActionsState
+    extends ConsumerState<_RequestArrangementApprovalActions> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: AppSpacing.sm,
+    runSpacing: AppSpacing.sm,
+    children: [
+      SizedBox(
+        height: AppSpacing.minTapTarget,
+        child: FilledButton.icon(
+          onPressed: _busy
+              ? null
+              : () => _decide(YorksV1ArrangementReviewDecision.approved),
+          icon: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.verified_rounded, size: 19),
+          label: Text(YorksV1ArrangementStrings.approveArrangement.primary),
+        ),
+      ),
+      SizedBox(
+        height: AppSpacing.minTapTarget,
+        child: OutlinedButton.icon(
+          onPressed: _busy
+              ? null
+              : () => _decide(YorksV1ArrangementReviewDecision.returned),
+          icon: const Icon(Icons.reply_rounded, size: 19),
+          label: Text(YorksV1ArrangementStrings.returnToProcurement.primary),
+        ),
+      ),
+    ],
+  );
+
+  Future<void> _decide(YorksV1ArrangementReviewDecision decision) async {
+    String? reason;
+    if (decision == YorksV1ArrangementReviewDecision.returned) {
+      reason = await _arrangementReturnReason(context);
+      if (reason == null || reason.trim().isEmpty) return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(yorksV1ArrangementRepositoryProvider)
+          .decide(
+            YorksV1DecideArrangementInput(
+              requestId: widget.workspace.requestId,
+              arrangementId: widget.arrangement.id,
+              expectedRequestVersion: widget.workspace.requestRecordVersion,
+              expectedArrangementVersion: widget.arrangement.recordVersion,
+              decision: decision,
+              reason: reason,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      ref.invalidate(
+        yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(
+        yorksV1MaterialRequestDetailProvider(widget.workspace.requestId),
+      );
+      ref.invalidate(yorksV1MaterialRequestListProvider);
+      if (mounted) {
+        _snack(
+          context,
+          decision == YorksV1ArrangementReviewDecision.approved
+              ? YorksV1ArrangementStrings.approveArrangement.primary
+              : YorksV1ArrangementStrings.returnToProcurement.primary,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _snack(context, YorksV1ArrangementStrings.savingFailed.primary);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 }
 
 class _RequestRecordContent extends StatelessWidget {
@@ -5003,6 +5118,37 @@ Future<String?> _cancelReason(BuildContext context) async {
         TextButton(
           onPressed: () => Navigator.of(context).pop(text.text),
           child: Text(YorksV1MaterialRequestStrings.cancelRequest.primary),
+        ),
+      ],
+    ),
+  );
+  text.dispose();
+  return result;
+}
+
+Future<String?> _arrangementReturnReason(BuildContext context) async {
+  final text = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    animationStyle: AnimationStyle.noAnimation,
+    builder: (context) => AlertDialog(
+      title: Text(YorksV1ArrangementStrings.returnToProcurement.primary),
+      content: TextField(
+        controller: text,
+        autofocus: true,
+        maxLines: 3,
+        decoration: InputDecoration(
+          labelText: YorksV1ArrangementStrings.returnReason.primary,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(YorksV1MaterialRequestStrings.cancel.primary),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(text.text),
+          child: Text(YorksV1ArrangementStrings.returnToProcurement.primary),
         ),
       ],
     ),

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(29);
+select plan(30);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -280,6 +280,35 @@ select throws_ok(
   )$$,
   '42501', 'V1_ARRANGEMENT_DECISION_DENIED',
   'A Site Engineer without Project Engineer membership cannot decide an arrangement'
+);
+
+-- A legacy or mistaken membership label must not grant a Site Engineer the
+-- Project Engineer approval command. This is the real production boundary:
+-- Site may create the MR, but the Project Engineer reviews Procurement's work.
+set local role postgres;
+update public.v1_project_members
+   set project_role = 'project_engineer'
+ where project_id = (select project_id from v1_b6_targets)
+   and member_auth_user_id = '10000000-0000-4000-8000-000000000002'::uuid
+   and effective_to is null;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select throws_ok(
+  $$select public.v1_decide_arrangement(
+    jsonb_build_object(
+      'request_id', '61000000-0000-4000-8000-000000000001',
+      'arrangement_id', (select arrangement_id from v1_b6_arrangement_one),
+      'expected_request_version', 4, 'expected_arrangement_version', 2,
+      'decision', 'returned', 'reason', 'Site Engineer must not approve'
+    ), '65000000-0000-4000-8000-000000000010'::uuid
+  )$$,
+  '42501', 'V1_ARRANGEMENT_DECISION_DENIED',
+  'A Site Engineer cannot approve even when a legacy membership says Project Engineer'
 );
 
 set local role authenticated;

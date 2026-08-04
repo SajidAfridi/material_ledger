@@ -39,10 +39,11 @@ Canonical Auth role claims are:
 Claims come from server-controlled `app_metadata.role`. A protected profile may
 mirror the claim for display and query convenience but cannot grant privilege.
 
-A person may hold a project-specific Project Engineer membership even if their
-base profile is Site Engineer. Approval authority is the intersection of an
-active project membership and the command policy; a title label alone is never
-enough.
+A Project Engineer approves a Procurement arrangement only when they also hold
+an active Project Engineer membership for that project. A Site Engineer may
+create and submit an MR, but cannot approve or return its arrangement; an old
+or incorrect `project_engineer` membership label must not elevate a Site
+Engineer account into approval authority. Admin retains its audited override.
 
 Legacy `engineer` identities are not automatically promoted. Migration creates
 a reconciliation entry and blocks privileged Project Engineer actions until an
