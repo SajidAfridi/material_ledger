@@ -242,15 +242,18 @@ class YorksV1MaterialRequestLine {
   };
 
   Map<String, dynamic> toRpcJson() {
-    final technicalAttributes = <String, String>{
-      if (_trimToNull(size) != null) 'size': _trimToNull(size)!,
-      if (_trimToNull(model) != null) 'model': _trimToNull(model)!,
-      if (_trimToNull(equipmentTag) != null)
-        'equipment_tag': _trimToNull(equipmentTag)!,
-      if (_trimToNull(planningModelTag) != null)
-        'planning_model_tag': _trimToNull(planningModelTag)!,
-      if (quantityIsSuggested) 'quantity_suggested': 'true',
-    };
+    final safeSize = _trimToNull(size);
+    final safePlanningModelTag = _trimToNull(planningModelTag);
+
+    // Keep payload compatible with older deployed R35 RPC contracts that only
+    // accept `size` and `planning_model_tag` in technical attributes.
+    final technicalAttributes = <String, String>{};
+    if (safeSize != null) {
+      technicalAttributes['size'] = safeSize;
+    }
+    if (safePlanningModelTag != null) {
+      technicalAttributes['planning_model_tag'] = safePlanningModelTag;
+    }
     return {
       'id': id.trim(),
       'display_order': displayOrder,
@@ -259,10 +262,9 @@ class YorksV1MaterialRequestLine {
       'source_boq_row_id': _trimToNull(sourceBoqRowId),
       'item_description': description.trim(),
       'brand_origin': _trimToNull(brandOrigin),
-      // Omit the additive object when empty so an older deployed V1 function
-      // can continue saving existing drafts until the migration is applied.
-      if (technicalAttributes.isNotEmpty)
-        'technical_attributes': technicalAttributes,
+      // Always send the object because the deployed function validates that it
+      // exists even when empty.
+      'technical_attributes': technicalAttributes,
       'requested_qty': quantity.trim(),
       'unit': unit.trim(),
     };
@@ -492,6 +494,7 @@ class YorksV1MaterialRequestDraft {
     Object? projectId = _keep,
     Object? scopeId = _keep,
     Object? title = _keep,
+    Object? submissionIdempotencyKey = _keep,
     YorksV1MaterialRequestTiming? timing,
     Object? scheduledDate = _keep,
     Object? deliveryNote = _keep,
@@ -500,7 +503,9 @@ class YorksV1MaterialRequestDraft {
   }) => YorksV1MaterialRequestDraft(
     id: id,
     ownerAuthUserId: ownerAuthUserId,
-    submissionIdempotencyKey: submissionIdempotencyKey,
+    submissionIdempotencyKey: identical(submissionIdempotencyKey, _keep)
+        ? this.submissionIdempotencyKey
+        : submissionIdempotencyKey as String,
     serverRecordVersion: serverRecordVersion ?? this.serverRecordVersion,
     projectId: identical(projectId, _keep)
         ? this.projectId

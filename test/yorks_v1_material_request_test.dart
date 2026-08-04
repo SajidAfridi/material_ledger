@@ -765,9 +765,6 @@ void main() {
       expect(line.unitCost, isNull);
       expect(line.toRpcJson()['technical_attributes'], {
         'size': '600 x 600',
-        'model': 'MSD-600',
-        'equipment_tag': 'MSD-01A',
-        'quantity_suggested': 'true',
         'planning_model_tag': 'MSD-01A',
       });
     },
