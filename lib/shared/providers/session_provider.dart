@@ -139,6 +139,10 @@ class AuthController {
     final yorksV1Role = YorksV1Role.fromServerClaim(
       authUser.appMetadata['role'],
     );
+    final yorksV1Roles = ((authUser.appMetadata['roles'] as List?) ?? const [])
+        .map(YorksV1Role.fromServerClaim)
+        .whereType<YorksV1Role>()
+        .toList(growable: false);
     if (resolvedRole == null) {
       await client.auth.signOut();
       return SignInResult.invalidCredentials;
@@ -152,8 +156,23 @@ class AuthController {
           fullName: (authUser.userMetadata?['full_name'] as String?) ?? '',
           role: resolvedRole,
           yorksV1Role: yorksV1Role,
+          yorksV1Roles: yorksV1Roles.isEmpty && yorksV1Role != null
+              ? [yorksV1Role]
+              : yorksV1Roles,
           mustChangePassword: mustChange,
         );
+
+    if (resolvedRole == UserRole.admin) {
+      // User Management must show the live Auth directory, including accounts
+      // provisioned from another device. A failed directory refresh never
+      // blocks sign-in because the signed-in account is already materialised.
+      try {
+        await _ref.read(usersProvider.notifier).refreshFromServer();
+      } catch (_) {
+        // Keep the cached roster and let the screen surface its last-known
+        // state; retrying is available from the Admin screen.
+      }
+    }
 
     // A banned user is already rejected by GoTrue above; this is the roster-side
     // backstop for the same intent.

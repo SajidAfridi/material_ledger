@@ -59,6 +59,21 @@ function provisionableRole(value: unknown): string | null {
   return value
 }
 
+function provisionableRoles(value: unknown, primary: string): string[] | null {
+  const requested = Array.isArray(value) ? value : [primary]
+  const roles = requested
+    .filter((role): role is string => typeof role === 'string')
+    .filter((role, index, all) => all.indexOf(role) === index)
+  if (roles.length === 0 || roles.some((role) => !PROVISIONABLE_ROLES.has(role))) {
+    return null
+  }
+  return [primary, ...roles.filter((role) => role !== primary)]
+}
+
+function defaultCapsForRoles(roles: readonly string[]): string[] {
+  return [...new Set(roles.flatMap((role) => DEFAULT_CAPS[role] ?? []))]
+}
+
 // A deliberately quarantined compatibility role. It is never accepted by the
 // normal V1 command path and the V1 auth-profile trigger leaves it without a
 // V1 profile or authority until an Admin explicitly maps it through the exact
@@ -221,6 +236,46 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
+      case 'list': {
+        // The Admin directory is sourced from Supabase Auth, not a device-local
+        // Flutter roster. Return only the stable identity and server-owned
+        // access projection needed by User Management.
+        const users = await listAuthUsers()
+        return json({
+          ok: true,
+          users: users.map((user) => {
+            const authRecord = user as AuthUserForAdminGuard & {
+              email?: string
+              created_at?: string
+              user_metadata?: Record<string, unknown> | null
+            }
+            const metadata = authRecord.user_metadata ?? {}
+            const appMetadata = user.app_metadata ?? {}
+            const rawRoles = Array.isArray(appMetadata.roles)
+              ? appMetadata.roles.filter((role: unknown) => typeof role === 'string')
+              : []
+            const primaryRole = typeof appMetadata.role === 'string'
+              ? appMetadata.role
+              : null
+            const roles = primaryRole != null && !rawRoles.includes(primaryRole)
+              ? [primaryRole, ...rawRoles]
+              : rawRoles
+            return {
+              appUserId: validAppUserId(appMetadata.app_user_id)
+                ? appMetadata.app_user_id
+                : user.id,
+              authUserId: user.id,
+              fullName: typeof metadata.full_name === 'string' ? metadata.full_name : '',
+              email: authRecord.email ?? '',
+              active: isActiveAuthUser(user),
+              createdAt: authRecord.created_at ?? new Date().toISOString(),
+              role: primaryRole,
+              roles,
+            }
+          }),
+        })
+      }
+
       case 'getV1CommercialCapabilities': {
         // The stable app-user key is the only target identifier accepted from
         // Flutter. Resolve it against the live Auth directory, then invoke the
@@ -280,11 +335,13 @@ Deno.serve(async (req) => {
           email: string; password: string; fullName: string; appUserId: string
         }
         const role = provisionableRole(body.role)
+        const roles = role == null ? null : provisionableRoles(body.roles, role)
         const idempotencyKey = body.idempotencyKey
         if (
           !email ||
           !password ||
           !role ||
+          roles == null ||
           !validAppUserId(appUserId) ||
           !isV1AdminAuditIdempotencyKey(idempotencyKey)
         ) {
@@ -293,7 +350,7 @@ Deno.serve(async (req) => {
             400,
           )
         }
-        const caps = legacyShellCaps(body, DEFAULT_CAPS[role])
+        const caps = legacyShellCaps(body, defaultCapsForRoles(roles))
         const requestHash = await v1AdminAuditRequestHash(serviceKey, {
           version: 1,
           action: 'create',
@@ -302,6 +359,7 @@ Deno.serve(async (req) => {
           password,
           full_name: fullName ?? '',
           role,
+          roles,
           caps,
           email_confirm: true,
           must_change_password: true,
@@ -318,6 +376,10 @@ Deno.serve(async (req) => {
         if (await uidForAppUser(appUserId)) {
           return json({ error: 'appUserId already exists' }, 409)
         }
+        // GoTrue may perform a follow-up metadata update as part of
+        // createUser.  Create the identity without a canonical role first so
+        // that update is quarantined safely; the explicit role assignment
+        // below is then performed through the audited role-mapping path.
         const { data, error } = await admin.auth.admin.createUser({
           email,
           password,
@@ -328,13 +390,7 @@ Deno.serve(async (req) => {
           // the user across devices (unlike the old device-local roster flag).
           user_metadata: { full_name: fullName ?? '', must_change_password: true },
           app_metadata: {
-            ...withV1AdminAuditContext(
-              { role, app_user_id: appUserId, caps },
-              actorAuthUserId,
-              'created',
-              idempotencyKey,
-              requestHash,
-            ),
+            app_user_id: appUserId,
           },
         })
         if (error) {
@@ -356,6 +412,19 @@ Deno.serve(async (req) => {
           if (completedReplay.kind === 'conflict') return authIdempotencyConflict()
           return authMutationError(error)
         }
+        const { error: roleError } = await admin.auth.admin.updateUserById(
+          data.user!.id,
+          {
+            app_metadata: withV1AdminAuditContext(
+              { role, roles, app_user_id: appUserId, caps },
+              actorAuthUserId,
+              'role_changed',
+              idempotencyKey,
+              requestHash,
+            ),
+          },
+        )
+        if (roleError) return authMutationError(roleError)
         return json({ ok: true, authUserId: data.user!.id, appUserId })
       }
 
@@ -453,9 +522,11 @@ Deno.serve(async (req) => {
       case 'updateClaims': {
         const { appUserId } = body as { appUserId: string }
         const role = provisionableRole(body.role)
+        const roles = role == null ? null : provisionableRoles(body.roles, role)
         const idempotencyKey = body.idempotencyKey
         if (
           !role ||
+          roles == null ||
           !validAppUserId(appUserId) ||
           !isV1AdminAuditIdempotencyKey(idempotencyKey)
         ) {
@@ -473,19 +544,20 @@ Deno.serve(async (req) => {
             409,
           )
         }
-        const caps = legacyShellCaps(body, DEFAULT_CAPS[role])
+        const caps = legacyShellCaps(body, defaultCapsForRoles(roles))
         const requestHash = await v1AdminAuditRequestHash(serviceKey, {
           version: 1,
           action: 'updateClaims',
           app_user_id: appUserId,
           target_auth_user_id: target.id,
           role,
+          roles,
           caps,
         })
         const { error } = await admin.auth.admin.updateUserById(target.id, {
           app_metadata: {
             ...withV1AdminAuditContext(
-              { role, app_user_id: appUserId, caps },
+              { role, roles, app_user_id: appUserId, caps },
               actorAuthUserId,
               'role_changed',
               idempotencyKey,

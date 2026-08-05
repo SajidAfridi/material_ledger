@@ -1796,19 +1796,6 @@ class _InitialTeamAccessEditor extends StatelessWidget {
         onRemoveMember: onRemoveMember,
       ),
       data: (members) {
-        final memberByAuthUserId = {
-          for (final member in members) member.authUserId: member,
-        };
-        final selectedAuthUserIds = draft.initialMembers
-            .map((member) => member.authUserId)
-            .toSet();
-        final availableMembers = members
-            .where(
-              (member) =>
-                  member.authUserId != creatorAuthUserId &&
-                  !selectedAuthUserIds.contains(member.authUserId),
-            )
-            .toList(growable: false);
         final initialProjectEngineerCount = draft.initialMembers
             .where(
               (member) =>
@@ -1817,62 +1804,48 @@ class _InitialTeamAccessEditor extends StatelessWidget {
             )
             .length;
         final siteCreator = creatorRole == YorksV1Role.siteEngineer;
-        final projectEngineerChoices = siteCreator
-            ? availableMembers
-                  .where(
-                    (member) =>
-                        initialProjectEngineerCount == 0 &&
-                        member.eligibleRole == YorksV1Role.projectEngineer,
-                  )
-                  .toList(growable: false)
-            : availableMembers;
-        final siteEngineerChoices = siteCreator
-            ? const <YorksV1ProjectTeamDirectoryMember>[]
-            : availableMembers;
+        final choices = members
+            .where(
+              (member) =>
+                  member.authUserId != creatorAuthUserId &&
+                  (!siteCreator ||
+                      member.eligibleRole == YorksV1Role.projectEngineer),
+            )
+            .toList(growable: false);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LocalizedCopy(
-              copy: YorksV1ProjectStrings.initialProjectEngineerHint,
+            _InitialTeamResponsibilityBanner(
               language: language,
-              englishStyle: AppTypography.bodyMedium,
+              siteCreator: siteCreator,
             ),
             const SizedBox(height: AppSpacing.lg),
-            _InitialTeamRolePicker(
-              projectRole: YorksV1ProjectMembershipRole.projectEngineer,
-              label: YorksV1ProjectStrings.projectEngineers,
-              selectLabel: YorksV1ProjectStrings.selectProjectEngineer,
+            _InitialTeamCardPicker(
+              choices: choices,
+              initialMembers: draft.initialMembers,
               language: language,
-              choices: projectEngineerChoices,
-              selectedCount: selectedAuthUserIds.length,
-              onAdd: (member) => onAddMember(
-                member,
-                YorksV1ProjectMembershipRole.projectEngineer,
-              ),
+              siteCreator: siteCreator,
+              canAddProjectEngineer:
+                  !siteCreator || initialProjectEngineerCount == 0,
+              onAdd: onAddMember,
+              onRemove: (authUserId) {
+                final index = draft.initialMembers.indexWhere(
+                  (member) => member.authUserId == authUserId,
+                );
+                if (index >= 0) onRemoveMember(index);
+              },
             ),
-            if (!siteCreator) ...[
-              const SizedBox(height: AppSpacing.lg),
-              _InitialTeamRolePicker(
-                projectRole: YorksV1ProjectMembershipRole.siteEngineer,
-                label: YorksV1ProjectStrings.siteEngineers,
-                selectLabel: YorksV1ProjectStrings.selectSiteEngineer,
+            if (choices.isEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _LocalizedCopy(
+                copy: YorksV1ProjectStrings.noEligibleTeamMembers,
                 language: language,
-                choices: siteEngineerChoices,
-                selectedCount: selectedAuthUserIds.length,
-                onAdd: (member) => onAddMember(
-                  member,
-                  YorksV1ProjectMembershipRole.siteEngineer,
+                englishStyle: AppTypography.bodySmall.copyWith(
+                  color: AppColors.onSurfaceVariant,
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.lg),
-            _InitialTeamMemberChips(
-              initialMembers: draft.initialMembers,
-              memberByAuthUserId: memberByAuthUserId,
-              language: language,
-              onRemove: onRemoveMember,
-            ),
           ],
         );
       },
@@ -1880,79 +1853,195 @@ class _InitialTeamAccessEditor extends StatelessWidget {
   }
 }
 
-class _InitialTeamRolePicker extends StatelessWidget {
-  const _InitialTeamRolePicker({
-    required this.projectRole,
-    required this.label,
-    required this.selectLabel,
+class _InitialTeamResponsibilityBanner extends StatelessWidget {
+  const _InitialTeamResponsibilityBanner({
     required this.language,
-    required this.choices,
-    required this.selectedCount,
-    required this.onAdd,
+    required this.siteCreator,
   });
 
-  final YorksV1ProjectMembershipRole projectRole;
-  final TranslatableString label;
-  final TranslatableString selectLabel;
   final AppLanguage language;
-  final List<YorksV1ProjectTeamDirectoryMember> choices;
-  final int selectedCount;
-  final ValueChanged<YorksV1ProjectTeamDirectoryMember> onAdd;
+  final bool siteCreator;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer.withValues(alpha: .48),
+      border: Border.all(color: AppColors.blueContainerStrong),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _LocalizedCopy(
-          copy: label,
+          copy: YorksV1ProjectStrings.projectTeamPermissionRule,
           language: language,
-          englishStyle: AppTypography.titleSmall,
-          secondaryStyle: AppTypography.labelSmall,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        DropdownButtonFormField<String>(
-          key: ValueKey(
-            'yorks-v1-project-team-picker-${projectRole.name}-$selectedCount',
+          englishStyle: AppTypography.titleSmall.copyWith(
+            fontWeight: FontWeight.w800,
           ),
-          isExpanded: true,
-          decoration: InputDecoration(labelText: selectLabel.active(language)),
-          hint: Text(selectLabel.active(language)),
-          items: [
-            for (final member in choices)
-              DropdownMenuItem(
-                value: member.authUserId,
-                child: Text(
-                  _safeMemberDisplayName(member),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-          onChanged: choices.isEmpty
-              ? null
-              : (authUserId) {
-                  if (authUserId == null) return;
-                  for (final member in choices) {
-                    if (member.authUserId == authUserId) {
-                      onAdd(member);
-                      return;
-                    }
-                  }
-                },
         ),
-        if (choices.isEmpty) ...[
-          const SizedBox(height: AppSpacing.xs),
-          _LocalizedCopy(
-            copy: YorksV1ProjectStrings.noEligibleTeamMembers,
-            language: language,
-            englishStyle: AppTypography.bodySmall.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
+        const SizedBox(height: AppSpacing.xs),
+        _LocalizedCopy(
+          copy: siteCreator
+              ? YorksV1ProjectStrings.initialProjectEngineerHint
+              : YorksV1ProjectStrings.projectTeamPermissionDescription,
+          language: language,
+          englishStyle: AppTypography.bodyMedium.copyWith(
+            color: AppColors.onSurfaceVariant,
           ),
-        ],
+        ),
       ],
-    );
-  }
+    ),
+  );
+}
+
+class _InitialTeamCardPicker extends StatelessWidget {
+  const _InitialTeamCardPicker({
+    required this.choices,
+    required this.initialMembers,
+    required this.language,
+    required this.siteCreator,
+    required this.canAddProjectEngineer,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<YorksV1ProjectTeamDirectoryMember> choices;
+  final List<YorksV1InitialProjectMemberInput> initialMembers;
+  final AppLanguage language;
+  final bool siteCreator;
+  final bool canAddProjectEngineer;
+  final void Function(
+    YorksV1ProjectTeamDirectoryMember member,
+    YorksV1ProjectMembershipRole projectRole,
+  )
+  onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final count = constraints.maxWidth >= 940
+          ? 3
+          : constraints.maxWidth >= 600
+          ? 2
+          : 1;
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: count,
+          crossAxisSpacing: AppSpacing.md,
+          mainAxisSpacing: AppSpacing.md,
+          childAspectRatio: count == 1 ? 3.8 : 2.8,
+        ),
+        itemCount: choices.length,
+        itemBuilder: (context, index) {
+          final member = choices[index];
+          final existing = initialMembers
+              .where((entry) => entry.authUserId == member.authUserId)
+              .firstOrNull;
+          final suggestedRole =
+              member.eligibleRole == YorksV1Role.projectEngineer
+              ? YorksV1ProjectMembershipRole.projectEngineer
+              : YorksV1ProjectMembershipRole.siteEngineer;
+          final enabled =
+              existing != null ||
+              !siteCreator ||
+              (suggestedRole == YorksV1ProjectMembershipRole.projectEngineer &&
+                  canAddProjectEngineer);
+          return _InitialTeamCard(
+            member: member,
+            role: existing?.projectRole ?? suggestedRole,
+            selected: existing != null,
+            enabled: enabled,
+            onPressed: () {
+              if (existing != null) {
+                onRemove(member.authUserId);
+              } else if (enabled) {
+                onAdd(member, suggestedRole);
+              }
+            },
+          );
+        },
+      );
+    },
+  );
+}
+
+class _InitialTeamCard extends StatelessWidget {
+  const _InitialTeamCard({
+    required this.member,
+    required this.role,
+    required this.selected,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final YorksV1ProjectTeamDirectoryMember member;
+  final YorksV1ProjectMembershipRole role;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceContainerLowest,
+    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    child: InkWell(
+      onTap: enabled ? onPressed : null,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? AppColors.blue : AppColors.line,
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.surfaceContainerLow,
+              foregroundColor: AppColors.navy,
+              child: Text(_safeMemberDisplayName(member).substring(0, 1)),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _safeMemberDisplayName(member),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    YorksV1ProjectStrings.roleLabel(role.wireValue).primary,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              selected
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              color: selected ? AppColors.blue : AppColors.muted,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _InitialTeamMemberChips extends StatelessWidget {

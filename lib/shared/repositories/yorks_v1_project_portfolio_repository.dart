@@ -75,7 +75,10 @@ class SupabaseYorksV1ProjectPortfolioDataClient
     if (projectIds.isEmpty) return const [];
     final rows = await _client
         .from('v1_project_members')
-        .select('project_id, project_role, effective_from, effective_to')
+        .select(
+          'id, project_id, member_auth_user_id, project_role, '
+          'effective_from, effective_to, created_at',
+        )
         .inFilter('project_id', projectIds);
     return _rows(rows);
   }
@@ -144,6 +147,7 @@ class YorksV1SupabaseProjectPortfolioRepository
       final clients = _clientNames(results[0]);
       final buildingCounts = _buildingCounts(results[1]);
       final memberCounts = _memberCounts(results[2]);
+      final activeMembers = _activeMembers(results[2]);
 
       return [
         for (final project in projects)
@@ -155,6 +159,7 @@ class YorksV1SupabaseProjectPortfolioRepository
                 memberCounts[project.id]?.projectEngineers ?? 0,
             activeSiteEngineerCount:
                 memberCounts[project.id]?.siteEngineers ?? 0,
+            activeMembers: activeMembers[project.id] ?? const [],
           ),
       ];
     } on YorksV1DomainException {
@@ -216,6 +221,29 @@ class YorksV1SupabaseProjectPortfolioRepository
       };
     }
     return counts;
+  }
+
+  Map<String, List<YorksV1ProjectMember>> _activeMembers(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final members = <String, List<YorksV1ProjectMember>>{};
+    final now = DateTime.now().toUtc();
+    for (final row in rows) {
+      final projectId = _string(row['project_id']);
+      if (projectId == null || !_isCurrentMembership(row, now)) continue;
+      try {
+        final member = YorksV1ProjectMember.fromRpcJson(row);
+        members.putIfAbsent(projectId, () => []).add(member);
+      } on YorksV1DomainException {
+        // This is a typed non-commercial display projection. Ignore one
+        // malformed historical row rather than preventing the project list
+        // from rendering; commands still re-read and validate server state.
+      }
+    }
+    return {
+      for (final entry in members.entries)
+        entry.key: List.unmodifiable(entry.value),
+    };
   }
 
   bool _isCurrentMembership(Map<String, dynamic> row, DateTime now) {

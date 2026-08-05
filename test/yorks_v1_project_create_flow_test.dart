@@ -327,12 +327,6 @@ void main() {
           );
 
       await _pumpScreen(tester, container);
-      final picker = find.byKey(
-        const ValueKey('yorks-v1-project-team-picker-projectEngineer-0'),
-      );
-      await tester.ensureVisible(picker);
-      await tester.tap(picker);
-      await tester.pumpAndSettle();
 
       expect(find.text(fallbackAuthUserId), findsNothing);
       expect(find.text(YorksV1ProjectStrings.profileId.primary), findsWidgets);
@@ -368,12 +362,6 @@ void main() {
           );
 
       await _pumpScreen(tester, container);
-      final picker = find.byKey(
-        const ValueKey('yorks-v1-project-team-picker-projectEngineer-0'),
-      );
-      await tester.ensureVisible(picker);
-      await tester.tap(picker);
-      await tester.pumpAndSettle();
 
       expect(find.text(emailLikeDisplayName), findsNothing);
       expect(find.textContaining('amina@example.test'), findsNothing);
@@ -414,22 +402,11 @@ void main() {
 
       await _pumpScreen(tester, container);
 
-      expect(
-        find.byKey(
-          const ValueKey('yorks-v1-project-team-picker-siteEngineer-0'),
-        ),
-        findsNothing,
-      );
-      final projectEngineerPicker = find.byKey(
-        const ValueKey('yorks-v1-project-team-picker-projectEngineer-0'),
-      );
-      await tester.ensureVisible(projectEngineerPicker);
-      await tester.tap(projectEngineerPicker);
-      await tester.pumpAndSettle();
-
       expect(find.text('Amina Project Engineer'), findsOneWidget);
       expect(find.text('Bilal Site Engineer'), findsNothing);
-      await tester.tap(find.text('Amina Project Engineer'));
+      final candidate = find.text('Amina Project Engineer');
+      await tester.ensureVisible(candidate);
+      await tester.tap(candidate);
       await tester.pumpAndSettle();
 
       final initialMembers = container
@@ -440,12 +417,6 @@ void main() {
       expect(
         initialMembers.single.projectRole,
         YorksV1ProjectMembershipRole.projectEngineer,
-      );
-      expect(
-        find.byKey(
-          const ValueKey('yorks-v1-project-team-picker-projectEngineer-1'),
-        ),
-        findsOneWidget,
       );
       expect(
         find.byKey(

@@ -495,8 +495,25 @@ class YorksV1MaterialRequestDraftController
     try {
       submitted = await _repository.saveAndSubmit(draft);
     } on YorksV1DomainException catch (error) {
+      var nextDraft = draft;
+      final shouldRefreshIdempotency =
+          error.code != YorksV1DomainErrorCode.conflict &&
+          error.serverCode != null &&
+          (error.serverCode == '22023' || error.serverCode == '55P03');
+      if (shouldRefreshIdempotency) {
+        nextDraft = draft.copyWith(
+          submissionIdempotencyKey: _uuidFactory(),
+          updatedAt: DateTime.now().toUtc(),
+        );
+        state = YorksV1MaterialRequestDraftState(
+          draft: nextDraft,
+          status: YorksV1MaterialRequestDraftSyncStatus.failed,
+          errorCode: error.code,
+        );
+        await _persist(nextDraft);
+      }
       state = YorksV1MaterialRequestDraftState(
-        draft: draft,
+        draft: nextDraft,
         status: error.code == YorksV1DomainErrorCode.conflict
             ? YorksV1MaterialRequestDraftSyncStatus.conflict
             : YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -545,7 +562,10 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<void> _replace(YorksV1MaterialRequestDraft draft) async {
-    final updated = draft.copyWith(updatedAt: DateTime.now().toUtc());
+    final updated = draft.copyWith(
+      submissionIdempotencyKey: _uuidFactory(),
+      updatedAt: DateTime.now().toUtc(),
+    );
     // Update the in-memory state before awaiting device storage. Text-field
     // callbacks are intentionally fire-and-forget; waiting here made the
     // submit button observe the previous line values when a user typed and

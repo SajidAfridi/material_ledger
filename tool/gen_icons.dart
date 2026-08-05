@@ -37,13 +37,16 @@ void main() {
       }
     }
   }
-  final domKey =
-      counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
-  final blue = img.ColorRgb8(
-    ((domKey >> 10) & 31) << 3,
-    ((domKey >> 5) & 31) << 3,
-    (domKey & 31) << 3,
-  );
+  final domKey = counts.isEmpty
+      ? null
+      : counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  final blue = domKey == null
+      ? img.ColorRgb8(0, 56, 184) // Yorks brand blue fallback.
+      : img.ColorRgb8(
+          ((domKey >> 10) & 31) << 3,
+          ((domKey >> 5) & 31) << 3,
+          (domKey & 31) << 3,
+        );
   String hex(int v) => v.toRadixString(16).padLeft(2, '0');
   stdout.writeln(
     'Brand blue: #${hex(blue.r.toInt())}${hex(blue.g.toInt())}'

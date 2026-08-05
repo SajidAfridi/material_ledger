@@ -11,6 +11,9 @@ import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/employee_provider.dart';
+import '../shared/providers/yorks_v1_material_request_provider.dart';
+import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/providers/yorks_v1_workspace_status_provider.dart';
 import 'router.dart';
@@ -488,59 +491,74 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                 border: Border.all(color: AppColors.line),
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
-              child: Row(
-                mainAxisAlignment: expanded
-                    ? MainAxisAlignment.start
-                    : MainAxisAlignment.center,
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _Avatar(name: displayName, size: 42),
-                      Positioned(
-                        right: -1,
-                        bottom: -1,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: YorksV1WorkspaceStatusLabel.colorFor(
-                              workspaceStatus.state,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  onTap: () => _showYorksProfileDialog(context),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    child: Row(
+                      mainAxisAlignment: expanded
+                          ? MainAxisAlignment.start
+                          : MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            _Avatar(name: displayName, size: 42),
+                            Positioned(
+                              right: -1,
+                              bottom: -1,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: YorksV1WorkspaceStatusLabel.colorFor(
+                                    workspaceStatus.state,
+                                  ),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.surfaceContainerLowest,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
                             ),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.surfaceContainerLowest,
-                              width: 2,
-                            ),
-                          ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  if (expanded) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName.isEmpty
-                                ? YorksV1ShellStrings.account.primary
-                                : displayName,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.labelLarge.copyWith(
-                              color: AppColors.ink,
+                        if (expanded) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  displayName.isEmpty
+                                      ? YorksV1ShellStrings.account.primary
+                                      : displayName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.labelLarge.copyWith(
+                                    color: AppColors.ink,
+                                  ),
+                                ),
+                                Text(
+                                  _roleCopy(role).primary,
+                                  style: AppTypography.labelSmall,
+                                ),
+                              ],
                             ),
                           ),
-                          Text(
-                            _roleCopy(role).primary,
-                            style: AppTypography.labelSmall,
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: AppColors.muted,
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
             const Divider(height: 1, color: AppColors.line),
@@ -574,6 +592,284 @@ class _YorksDesktopSidebar extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _showYorksProfileDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    barrierColor: AppColors.scrim.withValues(alpha: 0.38),
+    builder: (_) => const _YorksProfileDialog(),
+  );
+}
+
+class _YorksProfileDialog extends ConsumerWidget {
+  const _YorksProfileDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final profile = ref.watch(employeeProvider);
+    final projects = ref.watch(yorksV1ProjectPortfolioProvider);
+    final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
+    final name = profile.name == '—'
+        ? (user?.fullName ?? 'Yorks user')
+        : profile.name;
+    final email = profile.email == '—' ? (user?.email ?? '—') : profile.email;
+
+    return Dialog(
+      backgroundColor: AppColors.surfaceContainerLowest,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 704),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Profile', style: AppTypography.headlineSmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Account, project assignments and workspace access.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const Divider(height: AppSpacing.xl),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.blueContainer.withValues(alpha: 0.24),
+                  border: Border.all(color: AppColors.blueContainerStrong),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                ),
+                child: Row(
+                  children: [
+                    _Avatar(name: name, size: 64),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name, style: AppTypography.titleLarge),
+                          const SizedBox(height: 2),
+                          Text(
+                            _roleCopy(role).primary,
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.xs,
+                            children: [
+                              _ProfileStatusChip(
+                                label: 'Active',
+                                color: AppColors.success,
+                              ),
+                              _ProfileStatusChip(
+                                label:
+                                    '${projects.valueOrNull?.length ?? 0} assigned projects',
+                                color: AppColors.blue,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ProfileStat(
+                      label: 'Assigned projects',
+                      value: '${projects.valueOrNull?.length ?? 0}',
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: _ProfileStat(
+                      label: 'Open requests',
+                      value: '${requests.valueOrNull?.length ?? 0}',
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Expanded(
+                    child: _ProfileStat(
+                      label: 'Workspace',
+                      value: 'BOQ · MR · Docs',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.successContainer.withValues(alpha: 0.55),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.25),
+                  ),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.verified_user_outlined,
+                      color: AppColors.success,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            const TextSpan(
+                              text: 'Signed in securely\n',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            TextSpan(
+                              text:
+                                  '$email · Every request, approval, dispatch and receipt is attributed to this account.',
+                            ),
+                          ],
+                        ),
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: AppSpacing.xl),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _signOut(context, ref),
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Sign Out'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (confirmContext) => AlertDialog(
+        title: const Text('Sign Out?'),
+        content: const Text('You will need to sign in again to access Yorks.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(confirmContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(confirmContext, true),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+    if (shouldSignOut != true) return;
+    await ref.read(authSessionProvider.notifier).logout();
+    if (!context.mounted) return;
+    Navigator.pop(context);
+    context.go(RoutePaths.login);
+  }
+}
+
+class _ProfileStatusChip extends StatelessWidget {
+  const _ProfileStatusChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Text(label, style: AppTypography.labelMedium.copyWith(color: color)),
+  );
+}
+
+class _ProfileStat extends StatelessWidget {
+  const _ProfileStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 74),
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.labelSmall.copyWith(letterSpacing: 0.6),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.titleMedium,
+        ),
+      ],
+    ),
+  );
 }
 
 class _YorksMobileNavigation extends StatelessWidget {

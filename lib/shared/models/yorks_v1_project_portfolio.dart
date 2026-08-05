@@ -12,6 +12,7 @@ class YorksV1ProjectPortfolioItem {
     required this.activeBuildingCount,
     required this.activeProjectEngineerCount,
     required this.activeSiteEngineerCount,
+    this.activeMembers = const [],
     this.clientName,
   });
 
@@ -20,6 +21,7 @@ class YorksV1ProjectPortfolioItem {
   final int activeBuildingCount;
   final int activeProjectEngineerCount;
   final int activeSiteEngineerCount;
+  final List<YorksV1ProjectMember> activeMembers;
 
   int get activeTeamCount =>
       activeProjectEngineerCount + activeSiteEngineerCount;

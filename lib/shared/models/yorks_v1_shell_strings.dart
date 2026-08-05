@@ -180,10 +180,10 @@ abstract final class YorksV1ShellStrings {
     hi: 'सभी देखें',
   );
   static const connectedProjectControl = TranslatableString(
-    en: 'R35 · Procurement Control & Inventory',
-    ar: 'R35 · ضبط المشتريات والمخزون',
-    ur: 'R35 · پروکیورمنٹ کنٹرول اور انوینٹری',
-    hi: 'R35 · खरीद नियंत्रण और इन्वेंट्री',
+    en: 'Procurement Control & Inventory',
+    ar: 'ضبط المشتريات والمخزون',
+    ur: 'پروکیورمنٹ کنٹرول اور انوینٹری',
+    hi: 'खरीद नियंत्रण और इन्वेंट्री',
   );
   static const engineerWorkspace = TranslatableString(
     en: 'Engineer Workspace',

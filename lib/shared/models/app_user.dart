@@ -27,6 +27,7 @@ class AppUser {
     this.canAccessPeopleOverride,
     this.canReceiveGoodsOverride,
     this.yorksV1RoleCache,
+    this.yorksV1Roles = const [],
   });
 
   final String id;
@@ -44,6 +45,17 @@ class AppUser {
   /// either V1 engineering role and must remain unmapped until an Admin makes
   /// that explicit server-side change.
   final YorksV1Role? yorksV1RoleCache;
+
+  /// Server-owned role assignments returned by the connected Admin directory.
+  /// The legacy [role] and [yorksV1RoleCache] fields remain the compatibility
+  /// primary role while the multi-role authorization rollout is completed.
+  final List<YorksV1Role> yorksV1Roles;
+
+  List<YorksV1Role> get effectiveYorksV1Roles => yorksV1Roles.isNotEmpty
+      ? List.unmodifiable(yorksV1Roles)
+      : yorksV1RoleCache == null
+      ? const []
+      : [yorksV1RoleCache!];
 
   /// A deactivated user is denied access on their next request (FR-095).
   final bool active;
@@ -117,6 +129,7 @@ class AppUser {
     Object? canAccessPeopleOverride = _keep,
     Object? canReceiveGoodsOverride = _keep,
     Object? yorksV1RoleCache = _keep,
+    Object? yorksV1Roles = _keep,
   }) => AppUser(
     id: id,
     fullName: fullName ?? this.fullName,
@@ -150,6 +163,11 @@ class AppUser {
     yorksV1RoleCache: yorksV1RoleCache == _keep
         ? this.yorksV1RoleCache
         : yorksV1RoleCache as YorksV1Role?,
+    yorksV1Roles: yorksV1Roles == _keep
+        ? this.yorksV1Roles
+        : List<YorksV1Role>.unmodifiable(
+            (yorksV1Roles as Iterable<YorksV1Role>?) ?? const [],
+          ),
   );
 
   Map<String, dynamic> toJson() => {
@@ -171,6 +189,7 @@ class AppUser {
     'canAccessPeopleOverride': canAccessPeopleOverride,
     'canReceiveGoodsOverride': canReceiveGoodsOverride,
     'yorksV1RoleCache': yorksV1RoleCache?.claimValue,
+    'yorksV1Roles': [for (final role in yorksV1Roles) role.claimValue],
   };
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -192,6 +211,10 @@ class AppUser {
     canAccessPeopleOverride: json['canAccessPeopleOverride'] as bool?,
     canReceiveGoodsOverride: json['canReceiveGoodsOverride'] as bool?,
     yorksV1RoleCache: YorksV1Role.fromServerClaim(json['yorksV1RoleCache']),
+    yorksV1Roles: ((json['yorksV1Roles'] as List?) ?? const [])
+        .map(YorksV1Role.fromServerClaim)
+        .whereType<YorksV1Role>()
+        .toList(growable: false),
   );
 
   static String encodeList(List<AppUser> items) =>

@@ -14,6 +14,7 @@ import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
@@ -28,6 +29,8 @@ import '../../../../shared/providers/yorks_v1_documents_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
+import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
+import 'yorks_v1_boq_screens.dart';
 
 /// The normalized, R35-aligned project portfolio.
 ///
@@ -53,6 +56,7 @@ class YorksV1OverviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(yorksV1MaterialRequestLiveRefreshProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
     final projects = ref.watch(yorksV1ProjectPortfolioProvider);
@@ -79,6 +83,9 @@ class YorksV1OverviewScreen extends ConsumerWidget {
               item.state != YorksV1MaterialRequestState.cancelled,
         )
         .length;
+    final needsAction = requestItems
+        .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
+        .length;
     final dispatchReady = requestItems
         .where(
           (item) =>
@@ -88,11 +95,13 @@ class YorksV1OverviewScreen extends ConsumerWidget {
         .length;
 
     return _R35OverviewPage(
+      role: role,
       displayName: user?.fullName,
       projects: projects,
       requests: requests,
       projectCount: projectItems.length,
       openRequests: openRequests,
+      needsAction: needsAction,
       dispatchReady: dispatchReady,
       canCreateProject: canCreateProject,
       canCreateRequest: canCreateRequest,
@@ -112,11 +121,13 @@ class YorksV1OverviewScreen extends ConsumerWidget {
 
 class _R35OverviewPage extends StatelessWidget {
   const _R35OverviewPage({
+    required this.role,
     required this.displayName,
     required this.projects,
     required this.requests,
     required this.projectCount,
     required this.openRequests,
+    required this.needsAction,
     required this.dispatchReady,
     required this.canCreateProject,
     required this.canCreateRequest,
@@ -130,11 +141,13 @@ class _R35OverviewPage extends StatelessWidget {
     required this.onRetryRequests,
   });
 
+  final YorksV1Role? role;
   final String? displayName;
   final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
   final int projectCount;
   final int openRequests;
+  final int needsAction;
   final int dispatchReady;
   final bool canCreateProject;
   final bool canCreateRequest;
@@ -202,9 +215,14 @@ class _R35OverviewPage extends StatelessWidget {
                     title: YorksV1ShellStrings.needsYourAction.primary,
                     description:
                         YorksV1ShellStrings.roleActionDescription.primary,
+                    attentionCount: needsAction,
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  _R35ActionCard(requests: requests, onRetry: onRetryRequests),
+                  _R35ActionCard(
+                    requests: requests,
+                    role: role,
+                    onRetry: onRetryRequests,
+                  ),
                   const SizedBox(height: AppSpacing.xxxl),
                   _R35SectionHeading(
                     title: YorksV1ProjectStrings.projects.primary,
@@ -257,6 +275,12 @@ class _R35ProcurementOverview extends StatelessWidget {
               item.state == YorksV1MaterialRequestState.arranging,
         )
         .toList();
+    final needsAction = records
+        .where(
+          (item) =>
+              yorksV1MaterialRequestNeedsAction(item, YorksV1Role.procurement),
+        )
+        .length;
     final awaitingApproval = records
         .where(
           (item) => item.state == YorksV1MaterialRequestState.awaitingApproval,
@@ -432,6 +456,7 @@ class _R35ProcurementOverview extends StatelessWidget {
                           description: YorksV1ShellStrings
                               .procurementActionDescription
                               .primary,
+                          attentionCount: needsAction,
                         ),
                       ),
                       SizedBox(
@@ -1040,12 +1065,14 @@ class _R35SectionHeading extends StatelessWidget {
     this.description,
     this.action,
     this.onAction,
+    this.attentionCount = 0,
   });
 
   final String title;
   final String? description;
   final String? action;
   final VoidCallback? onAction;
+  final int attentionCount;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1072,6 +1099,10 @@ class _R35SectionHeading extends StatelessWidget {
           ],
         ),
       ),
+      if (attentionCount > 0) ...[
+        const SizedBox(width: AppSpacing.sm),
+        _NeedsActionBadge(count: attentionCount),
+      ],
       if (action != null && onAction != null)
         SizedBox(
           height: AppSpacing.minTapTarget,
@@ -1082,9 +1113,14 @@ class _R35SectionHeading extends StatelessWidget {
 }
 
 class _R35ActionCard extends StatelessWidget {
-  const _R35ActionCard({required this.requests, required this.onRetry});
+  const _R35ActionCard({
+    required this.requests,
+    required this.role,
+    required this.onRetry,
+  });
 
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final YorksV1Role? role;
   final VoidCallback onRetry;
 
   @override
@@ -1095,7 +1131,7 @@ class _R35ActionCard extends StatelessWidget {
       error: (_, _) => _OverviewRetry(onRetry: onRetry),
       data: (items) {
         final actionable = items
-            .where((item) => item.state != YorksV1MaterialRequestState.draft)
+            .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
             .take(5)
             .toList();
         if (actionable.isEmpty) {
@@ -1133,6 +1169,47 @@ class _R35ActionCard extends StatelessWidget {
           ],
         );
       },
+    ),
+  );
+}
+
+class _NeedsActionBadge extends StatelessWidget {
+  const _NeedsActionBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '$count records need your action',
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: .10),
+        border: Border.all(color: AppColors.error.withValues(alpha: .32)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppColors.error,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$count',
+            style: AppTypography.labelMedium.copyWith(
+              color: AppColors.error,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -1452,10 +1529,17 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
   }
 }
 
+enum YorksV1ProjectWorkspaceTab { overview, boq, requests, documents }
+
 class YorksV1ProjectWorkspaceScreen extends ConsumerStatefulWidget {
-  const YorksV1ProjectWorkspaceScreen({super.key, required this.projectId});
+  const YorksV1ProjectWorkspaceScreen({
+    super.key,
+    required this.projectId,
+    this.initialTab = YorksV1ProjectWorkspaceTab.overview,
+  });
 
   final String projectId;
+  final YorksV1ProjectWorkspaceTab initialTab;
 
   @override
   ConsumerState<YorksV1ProjectWorkspaceScreen> createState() =>
@@ -1464,7 +1548,21 @@ class YorksV1ProjectWorkspaceScreen extends ConsumerStatefulWidget {
 
 class _YorksV1ProjectWorkspaceScreenState
     extends ConsumerState<YorksV1ProjectWorkspaceScreen> {
-  _ProjectWorkspaceTab _tab = _ProjectWorkspaceTab.overview;
+  late YorksV1ProjectWorkspaceTab _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = widget.initialTab;
+  }
+
+  @override
+  void didUpdateWidget(covariant YorksV1ProjectWorkspaceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _tab = widget.initialTab;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1473,6 +1571,9 @@ class _YorksV1ProjectWorkspaceScreenState
     final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
     final requests = ref.watch(
       yorksV1MaterialRequestListProvider(widget.projectId),
+    );
+    final scopes = ref.watch(
+      yorksV1MaterialRequestScopesProvider(widget.projectId),
     );
     final groups = ref.watch(yorksV1BoqGroupsProvider(widget.projectId));
     final documents = ref.watch(
@@ -1523,6 +1624,7 @@ class _YorksV1ProjectWorkspaceScreenState
               tab: _tab,
               language: language,
               requests: requests,
+              scopes: scopes,
               groups: groups,
               documents: documents,
               onActivate:
@@ -1538,15 +1640,6 @@ class _YorksV1ProjectWorkspaceScreenState
                     )
                   : null,
               onTabChanged: (value) {
-                // The R35 workspace treats BOQ as a full-screen worksheet
-                // workspace. Open it directly from the project tab instead of
-                // rendering a second "Open BOQ" card inside the page.
-                if (value == _ProjectWorkspaceTab.boq) {
-                  context.push(
-                    RoutePaths.yorksV1BoqGroupsPath(widget.projectId),
-                  );
-                  return;
-                }
                 setState(() => _tab = value);
               },
             );
@@ -2214,14 +2307,13 @@ class _PortfolioError extends StatelessWidget {
   );
 }
 
-enum _ProjectWorkspaceTab { overview, boq, requests, documents }
-
 class _ProjectWorkspaceBody extends StatelessWidget {
   const _ProjectWorkspaceBody({
     required this.item,
     required this.tab,
     required this.language,
     required this.requests,
+    required this.scopes,
     required this.groups,
     required this.documents,
     required this.onActivate,
@@ -2230,14 +2322,15 @@ class _ProjectWorkspaceBody extends StatelessWidget {
   });
 
   final YorksV1ProjectPortfolioItem item;
-  final _ProjectWorkspaceTab tab;
+  final YorksV1ProjectWorkspaceTab tab;
   final AppLanguage language;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
   final AsyncValue<List<YorksV1BoqGroup>> groups;
   final AsyncValue<YorksV1DocumentWorkspace> documents;
   final VoidCallback? onActivate;
   final VoidCallback? onNewRequest;
-  final ValueChanged<_ProjectWorkspaceTab> onTabChanged;
+  final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2275,32 +2368,29 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                       maxWidth: AppSpacing.pageMaxWidth,
                     ),
                     child: switch (tab) {
-                      _ProjectWorkspaceTab.overview => _ProjectR35Overview(
-                        item: item,
-                        groups: groups,
-                        requests: requests,
-                        documents: documents,
-                        onOpenBoq: () => context.push(
-                          RoutePaths.yorksV1BoqGroupsPath(project.id),
-                        ),
-                        onOpenRequests: () => context.push(
-                          RoutePaths.yorksV1MaterialRequestsPath(
-                            projectId: project.id,
+                      YorksV1ProjectWorkspaceTab.overview =>
+                        _ProjectR35Overview(
+                          item: item,
+                          groups: groups,
+                          requests: requests,
+                          scopes: scopes,
+                          documents: documents,
+                          onOpenBoq: () =>
+                              onTabChanged(YorksV1ProjectWorkspaceTab.boq),
+                          onOpenRequests: () => context.push(
+                            RoutePaths.yorksV1MaterialRequestsPath(
+                              projectId: project.id,
+                            ),
+                          ),
+                          onOpenDocuments: () => context.push(
+                            RoutePaths.yorksV1ProjectDocumentsPath(project.id),
                           ),
                         ),
-                        onOpenDocuments: () => context.push(
-                          RoutePaths.yorksV1ProjectDocumentsPath(project.id),
-                        ),
+                      YorksV1ProjectWorkspaceTab.boq => YorksV1BoqGroupsScreen(
+                        projectId: project.id,
+                        embedded: true,
                       ),
-                      _ProjectWorkspaceTab.boq => _LinkedRecordCard(
-                        icon: Icons.table_chart_outlined,
-                        title: YorksV1ProjectStrings.boq,
-                        action: YorksV1ProjectStrings.openBoq,
-                        onOpen: () => context.push(
-                          RoutePaths.yorksV1BoqGroupsPath(project.id),
-                        ),
-                      ),
-                      _ProjectWorkspaceTab.requests => _LinkedRecordCard(
+                      YorksV1ProjectWorkspaceTab.requests => _LinkedRecordCard(
                         icon: Icons.assignment_outlined,
                         title: YorksV1ProjectStrings.materialRequests,
                         action: YorksV1ProjectStrings.openRequests,
@@ -2310,7 +2400,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _ProjectWorkspaceTab.documents => _LinkedRecordCard(
+                      YorksV1ProjectWorkspaceTab.documents => _LinkedRecordCard(
                         icon: Icons.folder_open_outlined,
                         title: YorksV1ProjectStrings.documents,
                         action: YorksV1ProjectStrings.openDocuments,
@@ -2340,8 +2430,8 @@ class _ProjectR35Hero extends StatelessWidget {
   });
 
   final YorksV1Project project;
-  final _ProjectWorkspaceTab selected;
-  final ValueChanged<_ProjectWorkspaceTab> onSelected;
+  final YorksV1ProjectWorkspaceTab selected;
+  final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
   final VoidCallback? onActivate;
   final VoidCallback? onNewRequest;
 
@@ -2457,15 +2547,15 @@ class _ProjectWorkspaceTabs extends StatelessWidget {
     required this.onSelected,
   });
 
-  final _ProjectWorkspaceTab selected;
-  final ValueChanged<_ProjectWorkspaceTab> onSelected;
+  final YorksV1ProjectWorkspaceTab selected;
+  final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
     child: Row(
       children: [
-        for (final tab in _ProjectWorkspaceTab.values)
+        for (final tab in YorksV1ProjectWorkspaceTab.values)
           _ProjectWorkspaceTabButton(
             label: _tabCopy(tab).primary,
             selected: selected == tab,
@@ -2475,12 +2565,13 @@ class _ProjectWorkspaceTabs extends StatelessWidget {
     ),
   );
 
-  TranslatableString _tabCopy(_ProjectWorkspaceTab tab) {
+  TranslatableString _tabCopy(YorksV1ProjectWorkspaceTab tab) {
     return switch (tab) {
-      _ProjectWorkspaceTab.overview => YorksV1ProjectStrings.overview,
-      _ProjectWorkspaceTab.boq => YorksV1ProjectStrings.boq,
-      _ProjectWorkspaceTab.requests => YorksV1ProjectStrings.materialRequests,
-      _ProjectWorkspaceTab.documents => YorksV1ProjectStrings.documents,
+      YorksV1ProjectWorkspaceTab.overview => YorksV1ProjectStrings.overview,
+      YorksV1ProjectWorkspaceTab.boq => YorksV1ProjectStrings.boq,
+      YorksV1ProjectWorkspaceTab.requests =>
+        YorksV1ProjectStrings.materialRequests,
+      YorksV1ProjectWorkspaceTab.documents => YorksV1ProjectStrings.documents,
     };
   }
 }
@@ -2532,6 +2623,7 @@ class _ProjectR35Overview extends StatelessWidget {
     required this.item,
     required this.groups,
     required this.requests,
+    required this.scopes,
     required this.documents,
     required this.onOpenBoq,
     required this.onOpenRequests,
@@ -2541,6 +2633,7 @@ class _ProjectR35Overview extends StatelessWidget {
   final YorksV1ProjectPortfolioItem item;
   final AsyncValue<List<YorksV1BoqGroup>> groups;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
   final AsyncValue<YorksV1DocumentWorkspace> documents;
   final VoidCallback onOpenBoq;
   final VoidCallback onOpenRequests;
@@ -2565,6 +2658,9 @@ class _ProjectR35Overview extends StatelessWidget {
               request.state != YorksV1MaterialRequestState.cancelled,
         )
         .length;
+    final buildingItems = (scopes.valueOrNull ?? const [])
+        .where((scope) => !scope.isCommon)
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2710,9 +2806,685 @@ class _ProjectR35Overview extends StatelessWidget {
           requests: requests,
           onOpenRequests: onOpenRequests,
         ),
+        const SizedBox(height: AppSpacing.xxxl),
+        _ProjectInformationSection(item: item, buildings: buildingItems),
       ],
     );
   }
+}
+
+class _ProjectInformationSection extends StatelessWidget {
+  const _ProjectInformationSection({
+    required this.item,
+    required this.buildings,
+  });
+
+  final YorksV1ProjectPortfolioItem item;
+  final List<YorksV1MaterialRequestScopeOption> buildings;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        final team = _ProjectTeamCard(item: item);
+        final buildingCard = _ProjectBuildingsCard(
+          buildings: buildings,
+          count: item.activeBuildingCount,
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              YorksV1ProjectStrings.projectInformation.primary,
+              style: AppTypography.titleLarge.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (wide)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: team),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(child: buildingCard),
+                ],
+              )
+            else ...[
+              team,
+              const SizedBox(height: AppSpacing.md),
+              buildingCard,
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProjectTeamCard extends ConsumerWidget {
+  const _ProjectTeamCard({required this.item});
+
+  final YorksV1ProjectPortfolioItem item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final canManage = role?.canManageProjectMembers == true;
+    final directory = canManage
+        ? ref.watch(yorksV1ActiveProjectTeamDirectoryProvider)
+        : null;
+    final names = {
+      for (final member in directory?.valueOrNull ?? const [])
+        member.authUserId: member.displayName,
+    };
+    String namesFor(YorksV1ProjectMembershipRole projectRole, int fallback) {
+      final selected = item.activeMembers
+          .where((member) => member.projectRole == projectRole)
+          .map(
+            (member) =>
+                names[member.memberAuthUserId] ??
+                YorksV1ProjectStrings.notAssigned.primary,
+          )
+          .toList(growable: false);
+      return selected.isEmpty ? '$fallback' : selected.join(', ');
+    }
+
+    return _ProjectInfoCard(
+      title: YorksV1ProjectStrings.projectTeam.primary,
+      subtitle: YorksV1ProjectStrings.projectTeamDescription.primary,
+      action: canManage
+          ? OutlinedButton.icon(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => _ProjectTeamAssignmentDialog(item: item),
+              ),
+              icon: const Icon(Icons.groups_outlined),
+              label: Text(YorksV1ProjectStrings.manageTeam.primary),
+            )
+          : null,
+      children: [
+        _ProjectInfoRow(
+          label: YorksV1ProjectStrings.yorksReference.primary,
+          value: item.project.reference,
+        ),
+        _ProjectInfoRow(
+          label: YorksV1ProjectStrings.projectEngineers.primary,
+          value: namesFor(
+            YorksV1ProjectMembershipRole.projectEngineer,
+            item.activeProjectEngineerCount,
+          ),
+        ),
+        _ProjectInfoRow(
+          label: YorksV1ProjectStrings.siteEngineers.primary,
+          value: namesFor(
+            YorksV1ProjectMembershipRole.siteEngineer,
+            item.activeSiteEngineerCount,
+          ),
+        ),
+        _ProjectInfoRow(
+          label: YorksV1ProjectStrings.procurementOwner.primary,
+          value: YorksV1ProjectStrings.notAssigned.primary,
+        ),
+      ],
+    );
+  }
+}
+
+class _ProjectTeamAssignmentDialog extends ConsumerStatefulWidget {
+  const _ProjectTeamAssignmentDialog({required this.item});
+
+  final YorksV1ProjectPortfolioItem item;
+
+  @override
+  ConsumerState<_ProjectTeamAssignmentDialog> createState() =>
+      _ProjectTeamAssignmentDialogState();
+}
+
+class _ProjectTeamAssignmentDialogState
+    extends ConsumerState<_ProjectTeamAssignmentDialog> {
+  Map<String, YorksV1ProjectMembershipRole?> _selectedRoles = const {};
+  bool _seeded = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    final directory = ref.watch(yorksV1ActiveProjectTeamDirectoryProvider);
+    return Dialog(
+      insetPadding: const EdgeInsets.all(AppSpacing.lg),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.lg,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          YorksV1ProjectStrings.manageProjectTeamTitle.primary,
+                          style: AppTypography.titleLarge.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          '${widget.item.project.reference} · ${YorksV1ProjectStrings.teamChangesAudited.primary}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.line),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: directory.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (_, _) => Text(
+                    YorksV1ProjectStrings.teamDirectoryUnavailable.primary,
+                  ),
+                  data: (members) {
+                    final current = {
+                      for (final member in widget.item.activeMembers)
+                        member.memberAuthUserId: member.projectRole,
+                    };
+                    if (!_seeded) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() {
+                            _selectedRoles = current;
+                            _seeded = true;
+                          });
+                        }
+                      });
+                    }
+                    final selected = _seeded ? _selectedRoles : current;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _ProjectTeamPermissionBanner(),
+                        const SizedBox(height: AppSpacing.lg),
+                        for (final member in members) ...[
+                          _ProjectTeamRoleRow(
+                            member: member,
+                            value: selected[member.authUserId],
+                            enabled: !_saving,
+                            onChanged: (value) => setState(() {
+                              _selectedRoles = {
+                                ...selected,
+                                member.authUserId: value,
+                              };
+                              _error = null;
+                            }),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                        ],
+                        if (members.isEmpty)
+                          Text(
+                            YorksV1ProjectStrings.noEligibleTeamMembers.primary,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        if (_error != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _error!,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.error,
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.line),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: _saving ? null : () => Navigator.pop(context),
+                    child: Text(YorksV1ProjectStrings.cancel.primary),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(YorksV1ProjectStrings.saveProjectTeam.primary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    final current = {
+      for (final member in widget.item.activeMembers)
+        member.memberAuthUserId: member.projectRole,
+    };
+    if (widget.item.project.state == YorksV1ProjectLifecycle.active &&
+        !_selectedRoles.values.contains(
+          YorksV1ProjectMembershipRole.projectEngineer,
+        )) {
+      setState(
+        () => _error = YorksV1ProjectStrings.initialProjectEngineerHint.primary,
+      );
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      var version = widget.item.project.recordVersion;
+      final controller = ref.read(
+        yorksV1ProjectCommandControllerProvider.notifier,
+      );
+      for (final entry in _selectedRoles.entries) {
+        final targetRole = entry.value;
+        if (targetRole == null || current[entry.key] == targetRole) continue;
+        final result = await controller.assignProjectMember(
+          YorksV1AssignProjectMemberInput(
+            idempotencyKey: const Uuid().v4(),
+            projectId: widget.item.project.id,
+            memberAuthUserId: entry.key,
+            projectRole: targetRole,
+            expectedProjectVersion: version,
+            reason: YorksV1ProjectStrings.projectTeamChangeReason.primary,
+          ),
+        );
+        version = result.project.recordVersion;
+      }
+      for (final entry in current.entries) {
+        if (_selectedRoles[entry.key] != null) continue;
+        final result = await controller.revokeProjectMember(
+          YorksV1RevokeProjectMemberInput(
+            idempotencyKey: const Uuid().v4(),
+            projectId: widget.item.project.id,
+            memberAuthUserId: entry.key,
+            projectRole: entry.value,
+            expectedProjectVersion: version,
+            reason: YorksV1ProjectStrings.projectTeamChangeReason.primary,
+          ),
+        );
+        version = result.project.recordVersion;
+      }
+      ref.invalidate(yorksV1ProjectPortfolioProvider);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(YorksV1ProjectStrings.projectTeamUpdated.primary),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = YorksV1ProjectStrings.teamDirectoryUnavailable.primary;
+        });
+      }
+    }
+  }
+}
+
+class _ProjectTeamPermissionBanner extends StatelessWidget {
+  const _ProjectTeamPermissionBanner();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer.withValues(alpha: .48),
+      border: Border.all(color: AppColors.blueContainerStrong),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.verified_user_outlined, color: AppColors.blue),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                YorksV1ProjectStrings.projectTeamPermissionRule.primary,
+                style: AppTypography.labelLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                YorksV1ProjectStrings.projectTeamPermissionDescription.primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProjectTeamRoleRow extends StatelessWidget {
+  const _ProjectTeamRoleRow({
+    required this.member,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final YorksV1ProjectTeamDirectoryMember member;
+  final YorksV1ProjectMembershipRole? value;
+  final bool enabled;
+  final ValueChanged<YorksV1ProjectMembershipRole?> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final identity = Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.blueContainer,
+              foregroundColor: AppColors.blue,
+              child: Text(_memberInitials(member.displayName)),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    member.displayName,
+                    style: AppTypography.labelLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    YorksV1ProjectStrings.roleLabel(
+                      member.eligibleRole.claimValue,
+                    ).primary,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+        final selector = DropdownButtonFormField<YorksV1ProjectMembershipRole?>(
+          key: ValueKey('${member.authUserId}-${value?.wireValue ?? 'none'}'),
+          initialValue: value,
+          decoration: const InputDecoration(isDense: true),
+          items: [
+            DropdownMenuItem(
+              value: null,
+              child: Text(YorksV1ProjectStrings.noProjectAccess.primary),
+            ),
+            DropdownMenuItem(
+              value: YorksV1ProjectMembershipRole.projectEngineer,
+              child: Text(YorksV1ProjectStrings.projectEngineerRole.primary),
+            ),
+            DropdownMenuItem(
+              value: YorksV1ProjectMembershipRole.siteEngineer,
+              child: Text(YorksV1ProjectStrings.siteEngineerRole.primary),
+            ),
+          ],
+          onChanged: enabled ? onChanged : null,
+        );
+        if (constraints.maxWidth < 620) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity,
+              const SizedBox(height: AppSpacing.md),
+              selector,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: identity),
+            const SizedBox(width: AppSpacing.lg),
+            SizedBox(width: 290, child: selector),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+String _memberInitials(String displayName) {
+  final parts = displayName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) return '?';
+  return parts.take(2).map((part) => part[0].toUpperCase()).join();
+}
+
+class _ProjectBuildingsCard extends StatelessWidget {
+  const _ProjectBuildingsCard({required this.buildings, required this.count});
+
+  final List<YorksV1MaterialRequestScopeOption> buildings;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => _ProjectInfoCard(
+    title: YorksV1ProjectStrings.buildings.primary,
+    subtitle: YorksV1ProjectStrings.buildingsDescription.primary,
+    badge: '$count ${YorksV1ProjectStrings.buildings.primary.toLowerCase()}',
+    children: [
+      if (buildings.isEmpty)
+        Text(
+          YorksV1ProjectStrings.noBuildingsAdded.primary,
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+        )
+      else
+        for (final building in buildings.take(6))
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.line),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.business_outlined, color: AppColors.blue),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    building.name,
+                    style: AppTypography.labelLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (building.deliveryAddress?.isNotEmpty == true)
+                  Text(
+                    'FRP',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.success,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+    ],
+  );
+}
+
+class _ProjectInfoCard extends StatelessWidget {
+  const _ProjectInfoCard({
+    required this.title,
+    required this.subtitle,
+    required this.children,
+    this.action,
+    this.badge,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<Widget> children;
+  final Widget? action;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      boxShadow: const [
+        BoxShadow(
+          color: AppColors.shadow,
+          blurRadius: 16,
+          offset: Offset(0, 7),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (badge case final value?) _ProjectBadge(label: value),
+            if (action case final Widget value) value,
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          subtitle,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ...children,
+      ],
+    ),
+  );
+}
+
+class _ProjectInfoRow extends StatelessWidget {
+  const _ProjectInfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.muted,
+            letterSpacing: .75,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          value,
+          style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProjectBadge extends StatelessWidget {
+  const _ProjectBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(left: AppSpacing.sm),
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Text(
+      label,
+      style: AppTypography.labelSmall.copyWith(
+        color: AppColors.blue,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 }
 
 class _ProjectMetric {

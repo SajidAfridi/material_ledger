@@ -723,8 +723,9 @@ GoRouter createAppRouter({
         path: RoutePaths.yorksV1BoqGroups,
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
-          YorksV1BoqGroupsScreen(
+          YorksV1ProjectWorkspaceScreen(
             projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksV1ProjectWorkspaceTab.boq,
           ),
         ),
       ),
@@ -962,7 +963,7 @@ GoRouter createAppRouter({
       GoRoute(
         path: RoutePaths.users,
         pageBuilder: (context, state) =>
-            _slide(state.pageKey, const UserManagementScreen()),
+            _yorksV1Slide(state.pageKey, const UserManagementScreen()),
       ),
       GoRoute(
         path: RoutePaths.accessRoles,

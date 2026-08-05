@@ -243,9 +243,21 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
       }
     }
     for (final candidate in widget.workspace.dispatchCandidates) {
-      _quantities.putIfAbsent(
-        candidate.requestLineId,
-        TextEditingController.new,
+      if (_quantities.containsKey(candidate.requestLineId)) continue;
+      // An approved request already has an outstanding quantity.  Seed the
+      // editor with the dispatchable amount so Procurement can dispatch the
+      // approved line immediately, while still allowing a partial dispatch.
+      // For warehouse lines, never suggest more than what is currently
+      // available at the warehouse; the server remains the final authority.
+      var suggested = _number(candidate.stillNeededQuantity);
+      final available = _number(candidate.warehouseAvailableQuantity ?? '');
+      if (candidate.source == YorksV1LogisticsSource.warehouse) {
+        suggested = available > 0 && suggested > 0
+            ? (suggested < available ? suggested : available)
+            : 0;
+      }
+      _quantities[candidate.requestLineId] = TextEditingController(
+        text: suggested > 0 ? _quantityText(suggested) : '',
       );
     }
   }
@@ -470,25 +482,25 @@ class _DispatchCandidateDesktopRow extends StatelessWidget {
         Expanded(flex: 4, child: _CandidateName(candidate: candidate)),
         Expanded(
           child: _Quantity(
-            value: candidate.approvedQuantity,
+            value: _displayQuantity(candidate.approvedQuantity),
             unit: candidate.unit,
           ),
         ),
         Expanded(
           child: _Quantity(
-            value: candidate.goodReceivedQuantity,
+            value: _displayQuantity(candidate.goodReceivedQuantity),
             unit: candidate.unit,
           ),
         ),
         Expanded(
           child: _Quantity(
-            value: candidate.inTransitQuantity,
+            value: _displayQuantity(candidate.inTransitQuantity),
             unit: candidate.unit,
           ),
         ),
         Expanded(
           child: _Quantity(
-            value: candidate.stillNeededQuantity,
+            value: _displayQuantity(candidate.stillNeededQuantity),
             unit: candidate.unit,
           ),
         ),
@@ -531,19 +543,19 @@ class _DispatchCandidateMobileCard extends StatelessWidget {
           children: [
             _Fact(
               label: YorksV1LogisticsStrings.approved.primary,
-              value: candidate.approvedQuantity,
+              value: _displayQuantity(candidate.approvedQuantity),
             ),
             _Fact(
               label: YorksV1LogisticsStrings.goodReceived.primary,
-              value: candidate.goodReceivedQuantity,
+              value: _displayQuantity(candidate.goodReceivedQuantity),
             ),
             _Fact(
               label: YorksV1LogisticsStrings.inTransit.primary,
-              value: candidate.inTransitQuantity,
+              value: _displayQuantity(candidate.inTransitQuantity),
             ),
             _Fact(
               label: YorksV1LogisticsStrings.stillNeeded.primary,
-              value: candidate.stillNeededQuantity,
+              value: _displayQuantity(candidate.stillNeededQuantity),
             ),
           ],
         ),
@@ -670,7 +682,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
     for (final line in widget.dispatch.lines) {
       _outcomes[line.id] = YorksV1ReceiptOutcome.received;
       _goodQuantities[line.id] = TextEditingController(
-        text: line.dispatchedQuantity,
+        text: _displayQuantity(line.dispatchedQuantity),
       );
       _notes[line.id] = TextEditingController();
     }
@@ -719,10 +731,12 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
                 onOutcomeChanged: (outcome) => setState(() {
                   _outcomes[line.id] = outcome;
                   if (outcome == YorksV1ReceiptOutcome.received) {
-                    _goodQuantities[line.id]!.text = line.dispatchedQuantity;
+                    _goodQuantities[line.id]!.text = _displayQuantity(
+                      line.dispatchedQuantity,
+                    );
                     _notes[line.id]!.clear();
                   } else if (_goodQuantities[line.id]!.text ==
-                      line.dispatchedQuantity) {
+                      _displayQuantity(line.dispatchedQuantity)) {
                     _goodQuantities[line.id]!.text = '0';
                   }
                 }),
@@ -829,7 +843,7 @@ class _ReceiptLineEditor extends StatelessWidget {
       children: [
         Text(line.description, style: AppTypography.titleSmall),
         Text(
-          '${line.dispatchedQuantity} ${line.unit}',
+          '${_displayQuantity(line.dispatchedQuantity)} ${line.unit}',
           style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -879,7 +893,7 @@ class _DispatchLineRow extends StatelessWidget {
         Expanded(
           child: Text(line.description, style: AppTypography.bodyMedium),
         ),
-        Text('${line.dispatchedQuantity} ${line.unit}'),
+        Text('${_displayQuantity(line.dispatchedQuantity)} ${line.unit}'),
         if (line.receiptOutcome != null) ...[
           const SizedBox(width: AppSpacing.md),
           Text(
@@ -1044,6 +1058,15 @@ class _ActiveText extends StatelessWidget {
 }
 
 double _number(String text) => double.tryParse(text) ?? 0;
+
+String _quantityText(double value) => value == value.truncateToDouble()
+    ? value.toInt().toString()
+    : value.toString();
+
+String _displayQuantity(String raw) {
+  final parsed = double.tryParse(raw.trim());
+  return parsed == null ? raw : _quantityText(parsed);
+}
 
 String _dateLabel(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';

@@ -7,6 +7,7 @@ import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
@@ -37,10 +38,40 @@ String _friendlyErr(Object e) {
 /// this cache; server commands and route guards read the current exact claim.
 String _roleLabel(AppUser user, {required bool yorksV1Provisioning}) {
   if (!yorksV1Provisioning) return user.role.label;
-  final role = user.yorksV1RoleCache;
-  return role == null
+  final roles = user.effectiveYorksV1Roles;
+  return roles.isEmpty
       ? AppStrings.yorksV1RoleMappingRequired.primary
-      : _yorksV1RoleText(role).primary;
+      : roles.map((role) => _yorksV1RoleText(role).primary).join(' · ');
+}
+
+String _roleFamilyLabel(AppUser user, {required bool yorksV1Provisioning}) {
+  if (!yorksV1Provisioning) return user.role.label;
+  final roles = user.effectiveYorksV1Roles;
+  if (roles.any(
+    (role) =>
+        role == YorksV1Role.projectEngineer || role == YorksV1Role.siteEngineer,
+  )) {
+    return 'Engineer';
+  }
+  if (roles.contains(YorksV1Role.procurement)) return 'Procurement';
+  if (roles.contains(YorksV1Role.admin)) return 'Admin';
+  return 'Unassigned';
+}
+
+String _roleTitleLabel(AppUser user, {required bool yorksV1Provisioning}) {
+  if (!yorksV1Provisioning) return user.role.label;
+  final roles = user.effectiveYorksV1Roles;
+  if (roles.isEmpty) return 'Unassigned';
+  return roles
+      .map((role) {
+        return switch (role) {
+          YorksV1Role.projectEngineer => 'Project Engineer',
+          YorksV1Role.siteEngineer => 'Site Engineer',
+          YorksV1Role.procurement => 'Procurement Engineer',
+          YorksV1Role.admin => 'Operations Admin',
+        };
+      })
+      .join(' · ');
 }
 
 TranslatableString _yorksV1RoleText(YorksV1Role role) => switch (role) {
@@ -77,6 +108,7 @@ class UserManagementScreen extends ConsumerStatefulWidget {
 class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  _AdminManagementTab _tab = _AdminManagementTab.users;
 
   @override
   void dispose() {
@@ -95,9 +127,63 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         ).toLowerCase().contains(q);
   }
 
+  Future<void> _deleteUser(AppUser user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        title: const Text('Delete user?'),
+        content: Text('Permanently remove ${user.fullName}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppStrings.cancel.primary),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              AppStrings.delete.primary,
+              style: const TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final deleted = await ref
+          .read(usersProvider.notifier)
+          .deleteUser(user.id, idempotencyKey: const Uuid().v4());
+      if (!deleted) {
+        throw StateError(
+          "Can't delete the only active admin — assign another admin first.",
+        );
+      }
+      await ref.logAudit(
+        action: 'User deleted',
+        module: AuditModule.platform,
+        refId: user.id,
+        detail: user.fullName,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('${user.fullName} deleted')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_friendlyErr(error)),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final lang = ref.watch(languageProvider);
     final all = ref.watch(usersProvider);
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
@@ -108,152 +194,579 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         )
         .toList();
 
+    final activeUsers = all.where((user) => user.active).length;
+    final engineers = all
+        .where(
+          (user) => user.effectiveYorksV1Roles.any(
+            (role) =>
+                role == YorksV1Role.projectEngineer ||
+                role == YorksV1Role.siteEngineer,
+          ),
+        )
+        .length;
+    final deactivated = all.length - activeUsers;
+
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-        ),
-        title: BilingualText(
-          english: AppStrings.userManagement.primary,
-          secondary: AppStrings.userManagement.secondary(lang),
-          englishStyle: AppTypography.titleLarge.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-          secondaryStyle: AppTypography.labelSmall.copyWith(
-            color: AppColors.onSurfaceVariant,
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _AddUserSheet.show(context),
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
-        icon: const Icon(Icons.person_add_alt_1_rounded),
-        label: Text(AppStrings.addUser.primary),
-      ),
+      floatingActionButton: MediaQuery.sizeOf(context).width < 820
+          ? FloatingActionButton.extended(
+              onPressed: () => _AddUserSheet.show(context),
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Add user'),
+            )
+          : null,
       body: SafeArea(
-        top: false,
-        child: ResponsiveCenter(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.screenHorizontal,
-                  AppSpacing.md,
-                  AppSpacing.screenHorizontal,
-                  AppSpacing.sm,
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (v) => setState(() => _query = v),
-                  style: AppTypography.bodyMedium,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: true,
-                    fillColor: AppColors.surfaceContainerHighest,
-                    hintText: 'Search name, email, role',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _query = '');
-                            },
-                          ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppSpacing.radiusFull,
-                      ),
-                      borderSide: BorderSide.none,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 820;
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                compact ? AppSpacing.lg : AppSpacing.xxxl,
+                compact ? AppSpacing.lg : AppSpacing.xxxl,
+                compact ? AppSpacing.lg : AppSpacing.xxxl,
+                AppSpacing.huge,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _AdminPageHeader(
+                      compact: compact,
+                      onCreate: () => _AddUserSheet.show(context),
+                      onRefresh: () async {
+                        try {
+                          await ref
+                              .read(usersProvider.notifier)
+                              .refreshFromServer();
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(_friendlyErr(error))),
+                            );
+                          }
+                        }
+                      },
                     ),
-                  ),
+                    const Gap(AppSpacing.xl),
+                    _AdminTabBar(
+                      selected: _tab,
+                      onChanged: (tab) => setState(() => _tab = tab),
+                    ),
+                    const Gap(AppSpacing.lg),
+                    switch (_tab) {
+                      _AdminManagementTab.users => _UsersTab(
+                        allUsers: all,
+                        users: users,
+                        activeUsers: activeUsers,
+                        engineers: engineers,
+                        deactivated: deactivated,
+                        queryController: _searchController,
+                        query: _query,
+                        yorksV1Provisioning: yorksV1Provisioning,
+                        onQueryChanged: (query) =>
+                            setState(() => _query = query),
+                        onCreate: () => _AddUserSheet.show(context),
+                        onDelete: _deleteUser,
+                      ),
+                      _AdminManagementTab.projectAccess =>
+                        const _ProjectAccessTab(),
+                      _AdminManagementTab.accessHistory => _AccessHistoryTab(
+                        entries: ref.watch(auditLogProvider),
+                      ),
+                    },
+                  ],
                 ),
               ),
-              Expanded(
-                child: users.isEmpty
-                    ? Center(
-                        child: Text(
-                          all.isEmpty ? 'No users yet' : 'No matching users',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.screenHorizontal,
-                          AppSpacing.sm,
-                          AppSpacing.screenHorizontal,
-                          AppSpacing.huge,
-                        ),
-                        itemCount: users.length,
-                        separatorBuilder: (_, _) =>
-                            const Gap(AppSpacing.listItemGap),
-                        itemBuilder: (context, i) => _UserCard(
-                          user: users[i],
-                          yorksV1Provisioning: yorksV1Provisioning,
-                        ),
-                      ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _UserCard extends StatelessWidget {
-  const _UserCard({required this.user, required this.yorksV1Provisioning});
-  final AppUser user;
+enum _AdminManagementTab { users, projectAccess, accessHistory }
+
+class _AdminPageHeader extends StatelessWidget {
+  const _AdminPageHeader({
+    required this.compact,
+    required this.onCreate,
+    required this.onRefresh,
+  });
+
+  final bool compact;
+  final VoidCallback onCreate;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (compact)
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.sm),
+          child: IconButton(
+            onPressed: () => context.pop(),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+        ),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ADMINISTRATION',
+              style: AppTypography.eyebrow.copyWith(
+                color: AppColors.blue,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const Gap(AppSpacing.xs),
+            Text(
+              'User Access',
+              style: AppTypography.displaySmall.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.2,
+              ),
+            ),
+            const Gap(AppSpacing.xs),
+            Text(
+              'Complete control of users, roles, project assignments and recoverable access removal.',
+              style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
+            ),
+          ],
+        ),
+      ),
+      const Gap(AppSpacing.lg),
+      if (!compact)
+        _AdminPrimaryButton(
+          label: 'Create User',
+          icon: Icons.add_rounded,
+          onPressed: onCreate,
+        )
+      else
+        IconButton(
+          tooltip: 'Refresh users',
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+    ],
+  );
+}
+
+class _AdminTabBar extends StatelessWidget {
+  const _AdminTabBar({required this.selected, required this.onChanged});
+
+  final _AdminManagementTab selected;
+  final ValueChanged<_AdminManagementTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Wrap(
+          spacing: 4,
+          children: [
+            _tab('Users', _AdminManagementTab.users),
+            _tab('Project Access', _AdminManagementTab.projectAccess),
+            _tab('Access History', _AdminManagementTab.accessHistory),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _tab(String label, _AdminManagementTab value) => TextButton(
+    onPressed: () => onChanged(value),
+    style: TextButton.styleFrom(
+      backgroundColor: selected == value
+          ? AppColors.surfaceContainerLowest
+          : Colors.transparent,
+      foregroundColor: selected == value ? AppColors.blue : AppColors.muted,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+    ),
+    child: Text(label, style: AppTypography.labelLarge),
+  );
+}
+
+class _UsersTab extends StatelessWidget {
+  const _UsersTab({
+    required this.allUsers,
+    required this.users,
+    required this.activeUsers,
+    required this.engineers,
+    required this.deactivated,
+    required this.queryController,
+    required this.query,
+    required this.yorksV1Provisioning,
+    required this.onQueryChanged,
+    required this.onCreate,
+    required this.onDelete,
+  });
+
+  final List<AppUser> allUsers;
+  final List<AppUser> users;
+  final int activeUsers;
+  final int engineers;
+  final int deactivated;
+  final TextEditingController queryController;
+  final String query;
   final bool yorksV1Provisioning;
+  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onCreate;
+  final ValueChanged<AppUser> onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return LedgerCard(
-      onTap: () => _ManageUserSheet.show(context, user),
-      child: Row(
+    final compact = MediaQuery.sizeOf(context).width < 820;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AdminMetricGrid(
+          metrics: [
+            (
+              'ACTIVE USERS',
+              '$activeUsers',
+              'Across Engineer, Procurement and Admin',
+            ),
+            ('ENGINEERS', '$engineers', 'Project delivery and site coverage'),
+            (
+              'ASSIGNED PROJECTS',
+              '0',
+              'Primary and supporting access controlled',
+            ),
+            (
+              'DEACTIVATED',
+              '$deactivated',
+              'Recoverable accounts with history retained',
+            ),
+          ],
+        ),
+        const Gap(AppSpacing.lg),
+        _AdminSurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'User Directory',
+                          style: AppTypography.headlineSmall,
+                        ),
+                        const Gap(AppSpacing.xs),
+                        Text(
+                          'Create, edit, safely delete and restore company accounts.',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!compact)
+                    _AdminPrimaryButton(
+                      label: 'Create User',
+                      icon: Icons.add_rounded,
+                      onPressed: onCreate,
+                    ),
+                ],
+              ),
+              const Gap(AppSpacing.lg),
+              TextField(
+                controller: queryController,
+                onChanged: onQueryChanged,
+                style: AppTypography.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: 'Search name, email, role',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            queryController.clear();
+                            onQueryChanged('');
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+              ),
+              const Gap(AppSpacing.md),
+              if (compact)
+                _CompactUserList(
+                  users: users,
+                  yorksV1Provisioning: yorksV1Provisioning,
+                  allUsersEmpty: allUsers.isEmpty,
+                  onDelete: onDelete,
+                )
+              else
+                _DesktopUserTable(
+                  users: users,
+                  yorksV1Provisioning: yorksV1Provisioning,
+                  allUsersEmpty: allUsers.isEmpty,
+                  onDelete: onDelete,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminMetricGrid extends StatelessWidget {
+  const _AdminMetricGrid({required this.metrics});
+  final List<(String, String, String)> metrics;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = constraints.maxWidth >= 1100
+          ? 4
+          : constraints.maxWidth >= 620
+          ? 2
+          : 1;
+      return GridView.count(
+        crossAxisCount: columns,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: AppSpacing.md,
+        mainAxisSpacing: AppSpacing.md,
+        mainAxisExtent: columns == 1 ? 110 : 136,
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: user.active
-                ? AppColors.primaryContainer.withValues(alpha: 0.15)
-                : AppColors.surfaceContainerHigh,
-            child: Text(
-              user.initials,
-              style: AppTypography.labelLarge.copyWith(
-                color: user.active
-                    ? AppColors.primary
-                    : AppColors.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
+          for (final metric in metrics)
+            _AdminSurfaceCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    metric.$1,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
+                      letterSpacing: 1,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Gap(AppSpacing.xs),
+                  Text(metric.$2, style: AppTypography.headlineMedium),
+                  const Gap(AppSpacing.xxs),
+                  Text(
+                    metric.$3,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
               ),
             ),
+        ],
+      );
+    },
+  );
+}
+
+class _DesktopUserTable extends StatelessWidget {
+  const _DesktopUserTable({
+    required this.users,
+    required this.yorksV1Provisioning,
+    required this.allUsersEmpty,
+    required this.onDelete,
+  });
+
+  final List<AppUser> users;
+  final bool yorksV1Provisioning;
+  final bool allUsersEmpty;
+  final ValueChanged<AppUser> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    if (users.isEmpty) {
+      return _EmptyDirectory(allUsersEmpty: allUsersEmpty);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            color: AppColors.surfaceContainerLow,
+            child: const Row(
+              children: [
+                Expanded(flex: 3, child: Text('USER')),
+                Expanded(flex: 2, child: Text('ROLE / TITLE')),
+                Expanded(flex: 2, child: Text('PROJECT ACCESS')),
+                Expanded(flex: 2, child: Text('COMMERCIAL')),
+                Expanded(flex: 2, child: Text('LAST ACTIVE')),
+                Expanded(flex: 2, child: Text('STATUS')),
+                SizedBox(width: 260, child: Text('')),
+              ],
+            ),
           ),
-          const Gap(AppSpacing.md),
+          for (final user in users)
+            _UserTableRow(
+              user: user,
+              yorksV1Provisioning: yorksV1Provisioning,
+              onDelete: onDelete,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserTableRow extends StatelessWidget {
+  const _UserTableRow({
+    required this.user,
+    required this.yorksV1Provisioning,
+    required this.onDelete,
+  });
+
+  final AppUser user;
+  final bool yorksV1Provisioning;
+  final ValueChanged<AppUser> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: _UserIdentity(user: user)),
           Expanded(
+            flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(user.fullName, style: AppTypography.titleSmall),
-                const Gap(AppSpacing.xxs),
                 Text(
-                  user.email,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                  _roleFamilyLabel(
+                    user,
+                    yorksV1Provisioning: yorksV1Provisioning,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelLarge.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  _roleTitleLabel(
+                    user,
+                    yorksV1Provisioning: yorksV1Provisioning,
+                  ),
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.muted,
+                  ),
                 ),
               ],
             ),
           ),
+          const Expanded(flex: 2, child: Text('0 projects')),
+          const Expanded(flex: 2, child: _PermittedChip()),
+          const Expanded(flex: 2, child: Text('—')),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: user.active
+                  ? StatusChip.success(AppStrings.userActive.primary)
+                  : StatusChip.error(AppStrings.userInactive.primary),
+            ),
+          ),
+          SizedBox(
+            width: 260,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _ManageUserSheet.show(context, user),
+                  icon: const Icon(Icons.edit_outlined, size: 17),
+                  label: const Text('Edit'),
+                ),
+                const SizedBox(width: 6),
+                TextButton(
+                  onPressed: () => onDelete(user),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactUserList extends StatelessWidget {
+  const _CompactUserList({
+    required this.users,
+    required this.yorksV1Provisioning,
+    required this.allUsersEmpty,
+    required this.onDelete,
+  });
+  final List<AppUser> users;
+  final bool yorksV1Provisioning;
+  final bool allUsersEmpty;
+  final ValueChanged<AppUser> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    if (users.isEmpty) return _EmptyDirectory(allUsersEmpty: allUsersEmpty);
+    return Column(
+      children: [
+        for (final user in users) ...[
+          _MobileUserCard(
+            user: user,
+            yorksV1Provisioning: yorksV1Provisioning,
+            onDelete: onDelete,
+          ),
+          const Gap(AppSpacing.sm),
+        ],
+      ],
+    );
+  }
+}
+
+class _MobileUserCard extends StatelessWidget {
+  const _MobileUserCard({
+    required this.user,
+    required this.yorksV1Provisioning,
+    required this.onDelete,
+  });
+  final AppUser user;
+  final bool yorksV1Provisioning;
+  final ValueChanged<AppUser> onDelete;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: () => _ManageUserSheet.show(context, user),
+    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    child: _AdminSurfaceCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        children: [
+          _UserAvatar(user: user),
+          const Gap(AppSpacing.md),
+          Expanded(child: _UserIdentity(user: user)),
           const Gap(AppSpacing.sm),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -269,8 +782,314 @@ class _UserCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
+  );
+}
+
+class _UserIdentity extends StatelessWidget {
+  const _UserIdentity({required this.user});
+  final AppUser user;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      _UserAvatar(user: user),
+      const Gap(AppSpacing.sm),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(user.fullName, style: AppTypography.labelLarge),
+            const Gap(AppSpacing.xxs),
+            Text(
+              user.email,
+              style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _UserAvatar extends StatelessWidget {
+  const _UserAvatar({required this.user});
+  final AppUser user;
+
+  @override
+  Widget build(BuildContext context) => CircleAvatar(
+    radius: 23,
+    backgroundColor: AppColors.blueContainer.withValues(alpha: .6),
+    child: Text(
+      user.initials,
+      style: AppTypography.labelLarge.copyWith(
+        color: AppColors.blue,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
+class _PermittedChip extends StatelessWidget {
+  const _PermittedChip();
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: .10),
+        border: Border.all(color: AppColors.success.withValues(alpha: .25)),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        'Permitted',
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.success,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+  );
+}
+
+class _EmptyDirectory extends StatelessWidget {
+  const _EmptyDirectory({required this.allUsersEmpty});
+  final bool allUsersEmpty;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.xxl),
+    child: Center(
+      child: Text(
+        allUsersEmpty ? 'No users yet' : 'No matching users',
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+      ),
+    ),
+  );
+}
+
+class _ProjectAccessTab extends StatelessWidget {
+  const _ProjectAccessTab();
+
+  @override
+  Widget build(BuildContext context) => _AdminSurfaceCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Primary & Supporting Engineer Access',
+          style: AppTypography.headlineSmall,
+        ),
+        const Gap(AppSpacing.xs),
+        Text(
+          'Management controls who can maintain each project.',
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+        ),
+        const Gap(AppSpacing.lg),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.blueContainer.withValues(alpha: .35),
+            border: Border.all(color: AppColors.blueContainerStrong),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: AppColors.blue),
+              const Gap(AppSpacing.md),
+              Expanded(
+                child: Text(
+                  'Project access and request coverage are intentionally different. Assigned Engineers may edit a project; active Engineers may raise a Material Request when covering a site.',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.navy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Gap(AppSpacing.xl),
+        Text(
+          'No project assignments yet',
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+        ),
+        const Gap(AppSpacing.lg),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => context.go(RoutePaths.yorksV1Projects),
+            icon: const Icon(Icons.account_tree_outlined),
+            label: const Text('Open Projects'),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AccessHistoryTab extends StatelessWidget {
+  const _AccessHistoryTab({required this.entries});
+  final List<AuditEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final relevant = entries
+        .where(
+          (entry) =>
+              entry.module == AuditModule.platform ||
+              entry.action.toLowerCase().contains('access'),
+        )
+        .take(20)
+        .toList();
+    return _AdminSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Access History', style: AppTypography.headlineSmall),
+          const Gap(AppSpacing.xs),
+          Text(
+            'Creation, deletion, restoration and project access changes remain traceable.',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+          ),
+          const Gap(AppSpacing.lg),
+          if (relevant.isEmpty)
+            Text(
+              'No access changes recorded yet.',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+            )
+          else
+            for (final entry in relevant) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.blueContainer,
+                  foregroundColor: AppColors.blue,
+                  child: const Icon(Icons.people_outline),
+                ),
+                title: Text(entry.action),
+                subtitle: Text(
+                  '${entry.detail ?? ''} · ${entry.actorName}\n${entry.timestamp}',
+                ),
+              ),
+              const Divider(height: 1),
+            ],
+        ],
+      ),
     );
   }
+}
+
+class _AdminSurfaceCard extends StatelessWidget {
+  const _AdminSurfaceCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(AppSpacing.xl),
+  });
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: padding,
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0A18324B),
+          blurRadius: 18,
+          offset: Offset(0, 6),
+        ),
+      ],
+    ),
+    child: child,
+  );
+}
+
+class _AdminPrimaryButton extends StatelessWidget {
+  const _AdminPrimaryButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+    onPressed: onPressed,
+    icon: Icon(icon),
+    label: Text(label),
+    style: FilledButton.styleFrom(
+      backgroundColor: AppColors.navy,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+    ),
+  );
+}
+
+class _YorksRoleAssignmentEditor extends StatelessWidget {
+  const _YorksRoleAssignmentEditor({
+    required this.primary,
+    required this.additional,
+    required this.onPrimaryChanged,
+    required this.onAdditionalChanged,
+  });
+
+  final YorksV1Role primary;
+  final Set<YorksV1Role> additional;
+  final ValueChanged<YorksV1Role> onPrimaryChanged;
+  final void Function(YorksV1Role role, bool selected) onAdditionalChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('Role', style: AppTypography.titleSmall),
+      const Gap(AppSpacing.sm),
+      DropdownButtonFormField<YorksV1Role>(
+        initialValue: primary,
+        decoration: const InputDecoration(),
+        items: [
+          for (final role in YorksV1Role.values)
+            DropdownMenuItem(
+              value: role,
+              child: Text(_yorksV1RoleText(role).primary),
+            ),
+        ],
+        onChanged: (role) {
+          if (role != null) onPrimaryChanged(role);
+        },
+      ),
+      const Gap(AppSpacing.sm),
+      Text(
+        'Additional roles (optional)',
+        style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
+      ),
+      const Gap(AppSpacing.xs),
+      Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.xs,
+        children: [
+          for (final role in YorksV1Role.values)
+            if (role != primary)
+              FilterChip(
+                label: Text(_yorksV1RoleText(role).primary),
+                selected: additional.contains(role),
+                onSelected: (selected) => onAdditionalChanged(role, selected),
+              ),
+        ],
+      ),
+    ],
+  );
 }
 
 // ─── Add user ────────────────────────────────────────────────────
@@ -278,12 +1097,20 @@ class _AddUserSheet extends ConsumerStatefulWidget {
   const _AddUserSheet();
 
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet<void>(
+    return showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _AddUserSheet(),
+      barrierColor: AppColors.scrim.withValues(alpha: .38),
+      builder: (_) => Dialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 704),
+          child: _AddUserSheet(),
+        ),
+      ),
     );
   }
 
@@ -298,6 +1125,7 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
   final _passwordController = TextEditingController();
   UserRole _legacyRole = UserRole.engineer;
   YorksV1Role _yorksV1Role = YorksV1Role.siteEngineer;
+  final _additionalYorksRoles = <YorksV1Role>{};
   bool _busy = false;
   String? _createCommandFingerprint;
   String? _createIdempotencyKey;
@@ -342,6 +1170,8 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
           email,
           password,
           yorksV1Provisioning ? _yorksV1Role.name : _legacyRole.name,
+          if (yorksV1Provisioning)
+            _additionalYorksRoles.map((role) => role.name).join(','),
         ].join('\u0000'),
       );
       // When Supabase is configured this provisions the account in the identity
@@ -353,6 +1183,7 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
               fullName: fullName,
               email: email,
               role: _yorksV1Role,
+              roles: [_yorksV1Role, ..._additionalYorksRoles],
               password: password,
               idempotencyKey: command.idempotencyKey,
               appUserId: command.appUserId,
@@ -399,11 +1230,9 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
       yorksV1UserProvisioningEnabledProvider,
     );
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.radiusXl),
-        ),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
       ),
       child: SafeArea(
         top: false,
@@ -420,66 +1249,117 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          AppStrings.addUser.primary,
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Create User',
+                              style: AppTypography.headlineSmall.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Gap(AppSpacing.xxs),
+                            Text(
+                              'Accounts are controlled by Admin. Historical activity remains attributed to the original user.',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusMd,
+                          ),
+                        ),
+                        child: IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
                       ),
                     ],
                   ),
+                  const Divider(height: AppSpacing.xxl),
                   const Gap(AppSpacing.lg),
-                  LedgerTextField(
-                    controller: _nameController,
-                    label: AppStrings.fullName.primary,
-                    validator: (v) => (v ?? '').trim().isEmpty
-                        ? AppStrings.fieldRequired.primary
-                        : null,
-                  ),
-                  const Gap(AppSpacing.lg),
-                  LedgerTextField(
-                    controller: _emailController,
-                    label: AppStrings.emailAddress.primary,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) {
-                      final t = (v ?? '').trim();
-                      if (t.isEmpty) return AppStrings.fieldRequired.primary;
-                      if (!t.contains('@')) {
-                        return AppStrings.emailAddress.primary;
-                      }
-                      return null;
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final stacked = constraints.maxWidth < 560;
+                      final fields = [
+                        LedgerTextField(
+                          controller: _nameController,
+                          label: 'Full Name',
+                          validator: (v) => (v ?? '').trim().isEmpty
+                              ? AppStrings.fieldRequired.primary
+                              : null,
+                        ),
+                        LedgerTextField(
+                          controller: _emailController,
+                          label: 'Email Address',
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (v) {
+                            final t = (v ?? '').trim();
+                            if (t.isEmpty) {
+                              return AppStrings.fieldRequired.primary;
+                            }
+                            if (!t.contains('@')) {
+                              return AppStrings.emailAddress.primary;
+                            }
+                            return null;
+                          },
+                        ),
+                      ];
+                      return stacked
+                          ? Column(
+                              children: [
+                                fields[0],
+                                const Gap(AppSpacing.lg),
+                                fields[1],
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(child: fields[0]),
+                                const Gap(AppSpacing.lg),
+                                Expanded(child: fields[1]),
+                              ],
+                            );
                     },
                   ),
                   const Gap(AppSpacing.lg),
-                  Text(
-                    AppStrings.roleLabel.primary,
-                    style: AppTypography.titleSmall,
-                  ),
-                  const Gap(AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    children: [
-                      if (yorksV1Provisioning)
-                        for (final role in YorksV1Role.values)
-                          _RoleChip(
-                            label: _yorksV1RoleText(role).primary,
-                            selected: _yorksV1Role == role,
-                            onTap: () => setState(() => _yorksV1Role = role),
-                          )
-                      else
+                  if (yorksV1Provisioning)
+                    _YorksRoleAssignmentEditor(
+                      primary: _yorksV1Role,
+                      additional: _additionalYorksRoles,
+                      onPrimaryChanged: (role) => setState(() {
+                        _additionalYorksRoles.remove(role);
+                        _yorksV1Role = role;
+                      }),
+                      onAdditionalChanged: (role, selected) => setState(() {
+                        if (selected) {
+                          _additionalYorksRoles.add(role);
+                        } else {
+                          _additionalYorksRoles.remove(role);
+                        }
+                      }),
+                    )
+                  else ...[
+                    Text('Role', style: AppTypography.titleSmall),
+                    const Gap(AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      children: [
                         for (final role in UserRole.values)
                           _RoleChip(
                             label: role.label,
                             selected: _legacyRole == role,
                             onTap: () => setState(() => _legacyRole = role),
                           ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                   const Gap(AppSpacing.lg),
                   LedgerTextField(
                     controller: _passwordController,
@@ -514,11 +1394,20 @@ class _ManageUserSheet extends ConsumerStatefulWidget {
   final String userId;
 
   static Future<void> show(BuildContext context, AppUser user) {
-    return showModalBottomSheet<void>(
+    return showDialog<void>(
       context: context,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ManageUserSheet(userId: user.id),
+      barrierColor: AppColors.scrim.withValues(alpha: .38),
+      builder: (_) => Dialog(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 704),
+          child: _ManageUserSheet(userId: user.id),
+        ),
+      ),
     );
   }
 
@@ -533,6 +1422,8 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
   bool _busy = false;
   final Map<String, String> _idempotencyKeys = {};
   String? _pendingResetPassword;
+  String? _rolesUserId;
+  Set<YorksV1Role> _selectedYorksRoles = {};
 
   String _idempotencyKeyFor(String command) =>
       _idempotencyKeys.putIfAbsent(command, () => const Uuid().v4());
@@ -551,6 +1442,13 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
     );
+    if (_rolesUserId != user.id) {
+      _rolesUserId = user.id;
+      _selectedYorksRoles = user.effectiveYorksV1Roles.toSet();
+      if (_selectedYorksRoles.isEmpty && user.yorksV1RoleCache != null) {
+        _selectedYorksRoles.add(user.yorksV1RoleCache!);
+      }
+    }
 
     // The app-level messenger outlives this sheet, so success toasts shown after
     // Navigator.pop still appear.
@@ -750,20 +1648,36 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       }
     });
 
-    Future<void> setYorksV1Role(YorksV1Role role) => run(() async {
-      if (role == user.yorksV1RoleCache) return;
-      final command = 'set-v1-role:${user.id}:${role.claimValue}';
+    Future<void> setYorksV1Roles(
+      YorksV1Role primary,
+      Iterable<YorksV1Role> selected,
+    ) => run(() async {
+      final roles = <YorksV1Role>[];
+      for (final role in [primary, ...selected]) {
+        if (!roles.contains(role)) roles.add(role);
+      }
+      final previous = user.effectiveYorksV1Roles;
+      if (primary == user.yorksV1RoleCache &&
+          roles.length == previous.length &&
+          roles.every(previous.contains)) {
+        return;
+      }
+      final command =
+          'set-v1-roles:${user.id}:${roles.map((r) => r.claimValue).join(',')}';
       try {
         final allowed = await ref
             .read(usersProvider.notifier)
             .setYorksV1Role(
               user.id,
-              role,
+              primary,
+              roles: roles,
               idempotencyKey: _idempotencyKeyFor(command),
             );
         if (!allowed) return warn("Can't change the only active admin's role.");
         _completeCommand(command);
-        final label = _yorksV1RoleText(role).primary;
+        final label = roles
+            .map((role) => _yorksV1RoleText(role).primary)
+            .join(' · ');
         await ref.logAudit(
           action: 'User role changed',
           module: AuditModule.platform,
@@ -771,6 +1685,7 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
           detail: '${user.fullName} → $label',
         );
         success('Role changed to $label');
+        _selectedYorksRoles = roles.toSet();
       } catch (e) {
         warn(_friendlyErr(e));
       }
@@ -940,11 +1855,9 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
     }
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppSpacing.radiusXl),
-        ),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
       ),
       child: SafeArea(
         top: false,
@@ -954,13 +1867,47 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Edit User',
+                          style: AppTypography.headlineSmall.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Gap(AppSpacing.xxs),
+                        Text(
+                          'Accounts are controlled by Admin. Historical activity remains attributed to the original user.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                    ),
+                    child: IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: AppSpacing.xxl),
               Text(
                 user.fullName,
                 style: AppTypography.titleMedium.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              const Gap(AppSpacing.xxs),
               Text(
                 '${user.email} · ${_roleLabel(user, yorksV1Provisioning: yorksV1Provisioning)}',
                 style: AppTypography.bodySmall.copyWith(
@@ -1009,28 +1956,54 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
 
               // ─── Role ────────────────────────────────────────
               const Gap(AppSpacing.lg),
-              Text('Role', style: AppTypography.titleSmall),
-              const Gap(AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  if (yorksV1Provisioning)
-                    for (final role in YorksV1Role.values)
-                      _RoleChip(
-                        label: _yorksV1RoleText(role).primary,
-                        selected: role == user.yorksV1RoleCache,
-                        onTap: _busy ? null : () => setYorksV1Role(role),
+              if (yorksV1Provisioning && _selectedYorksRoles.isNotEmpty)
+                _YorksRoleAssignmentEditor(
+                  primary: user.yorksV1RoleCache ?? _selectedYorksRoles.first,
+                  additional: _selectedYorksRoles
+                      .where(
+                        (role) =>
+                            role !=
+                            (user.yorksV1RoleCache ??
+                                _selectedYorksRoles.first),
                       )
-                  else
-                    for (final role in UserRole.values)
-                      _RoleChip(
-                        label: role.label,
-                        selected: role == user.role,
-                        onTap: _busy ? null : () => setLegacyRole(role),
-                      ),
-                ],
-              ),
+                      .toSet(),
+                  onPrimaryChanged: _busy
+                      ? (_) {}
+                      : (role) => setYorksV1Roles(role, _selectedYorksRoles),
+                  onAdditionalChanged: _busy
+                      ? (_, _) {}
+                      : (role, selected) {
+                          final next = {..._selectedYorksRoles};
+                          if (selected) {
+                            next.add(role);
+                          } else {
+                            next.remove(role);
+                          }
+                          final primary = user.yorksV1RoleCache ?? next.first;
+                          if (next.isEmpty) next.add(primary);
+                          setYorksV1Roles(primary, next);
+                        },
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Role', style: AppTypography.titleSmall),
+                    const Gap(AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        for (final role in UserRole.values)
+                          _RoleChip(
+                            label: role.label,
+                            selected: role == user.role,
+                            onTap: _busy ? null : () => setLegacyRole(role),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
 
               // V1 commercial authority is deliberately not backed by the
               // retained local permission overrides below. The child fetches a

@@ -347,6 +347,90 @@ abstract final class YorksV1ProjectStrings {
     ur: 'پراجیکٹ ٹیم',
     hi: 'परियोजना टीम',
   );
+  static const manageTeam = TranslatableString(
+    en: 'Manage Team',
+    ar: 'إدارة الفريق',
+    ur: 'ٹیم منظم کریں',
+    hi: 'टीम प्रबंधित करें',
+  );
+  static const projectInformation = TranslatableString(
+    en: 'Project Information',
+    ar: 'معلومات المشروع',
+    ur: 'پراجیکٹ کی معلومات',
+    hi: 'परियोजना जानकारी',
+  );
+  static const procurementOwner = TranslatableString(
+    en: 'Procurement Owner',
+    ar: 'مسؤول المشتريات',
+    ur: 'پروکیورمنٹ اونر',
+    hi: 'खरीद स्वामी',
+  );
+  static const notAssigned = TranslatableString(
+    en: 'Not assigned',
+    ar: 'غير معيّن',
+    ur: 'تفویض نہیں ہوا',
+    hi: 'असाइन नहीं किया गया',
+  );
+  static const projectTeamDescription = TranslatableString(
+    en: 'Project Engineers approve arrangements and manage Site Engineer access.',
+    ar: 'يعتمد مهندسو المشروع الترتيبات ويديرون وصول مهندسي الموقع.',
+    ur: 'پراجیکٹ انجینئر انتظامات منظور کرتے اور سائٹ انجینئر کی رسائی سنبھالتے ہیں۔',
+    hi: 'प्रोजेक्ट इंजीनियर व्यवस्थाओं को मंज़ूर करते और साइट इंजीनियर की पहुँच प्रबंधित करते हैं।',
+  );
+  static const buildingsDescription = TranslatableString(
+    en: 'A request can be for one building or Common / All Buildings.',
+    ar: 'يمكن أن يكون الطلب لمبنى واحد أو مشترك / كل المباني.',
+    ur: 'درخواست ایک عمارت یا کامن / تمام عمارتوں کے لیے ہو سکتی ہے۔',
+    hi: 'अनुरोध एक भवन या कॉमन / सभी भवनों के लिए हो सकता है।',
+  );
+  static const teamChangesAudited = TranslatableString(
+    en: 'Team changes are server-audited and available to the assigned Project Engineer.',
+    ar: 'تغييرات الفريق مدققة على الخادم ومتاحة لمهندس المشروع المعيّن.',
+    ur: 'ٹیم کی تبدیلیاں سرور پر آڈٹ ہوتی ہیں اور مقررہ پراجیکٹ انجینئر کے لیے دستیاب ہیں۔',
+    hi: 'टीम परिवर्तन सर्वर पर ऑडिट होते हैं और नियुक्त प्रोजेक्ट इंजीनियर के लिए उपलब्ध हैं।',
+  );
+  static const projectTeamUpdated = TranslatableString(
+    en: 'Project team updated',
+    ar: 'تم تحديث فريق المشروع',
+    ur: 'پراجیکٹ ٹیم اپ ڈیٹ ہو گئی',
+    hi: 'प्रोजेक्ट टीम अपडेट की गई',
+  );
+  static const projectTeamChangeReason = TranslatableString(
+    en: 'Updated project team assignment',
+    ar: 'تم تحديث تعيين فريق المشروع',
+    ur: 'پراجیکٹ ٹیم کی تفویض اپ ڈیٹ کی گئی',
+    hi: 'प्रोजेक्ट टीम असाइनमेंट अपडेट किया गया',
+  );
+  static const manageProjectTeamTitle = TranslatableString(
+    en: 'Manage Project Engineers & Site Engineers',
+    ar: 'إدارة مهندسي المشروع والموقع',
+    ur: 'پراجیکٹ اور سائٹ انجینئرز کا انتظام',
+    hi: 'प्रोजेक्ट और साइट इंजीनियर प्रबंधित करें',
+  );
+  static const projectTeamPermissionRule = TranslatableString(
+    en: 'Permission rule',
+    ar: 'قاعدة الصلاحية',
+    ur: 'اجازت کا اصول',
+    hi: 'अनुमति नियम',
+  );
+  static const projectTeamPermissionDescription = TranslatableString(
+    en: 'Project Engineers approve procurement arrangements and manage the team. Assigned Site Engineers may prepare BOQ items, raise requests and confirm site receipt.',
+    ar: 'يعتمد مهندسو المشروع ترتيبات المشتريات ويديرون الفريق. يمكن لمهندسي الموقع المعيّنين إعداد عناصر جدول الكميات ورفع الطلبات وتأكيد استلام الموقع.',
+    ur: 'پراجیکٹ انجینئر پروکیورمنٹ انتظامات منظور کرتے اور ٹیم منظم کرتے ہیں۔ تفویض شدہ سائٹ انجینئر BOQ آئٹمز تیار، درخواستیں اور سائٹ وصولی کی تصدیق کر سکتے ہیں۔',
+    hi: 'प्रोजेक्ट इंजीनियर खरीद व्यवस्थाओं को मंज़ूर और टीम को प्रबंधित करते हैं। असाइन साइट इंजीनियर BOQ आइटम तैयार, अनुरोध और साइट प्राप्ति की पुष्टि कर सकते हैं।',
+  );
+  static const noProjectAccess = TranslatableString(
+    en: 'No project access',
+    ar: 'لا توجد صلاحية للمشروع',
+    ur: 'پراجیکٹ تک رسائی نہیں',
+    hi: 'कोई परियोजना पहुँच नहीं',
+  );
+  static const saveProjectTeam = TranslatableString(
+    en: 'Save Project Team',
+    ar: 'حفظ فريق المشروع',
+    ur: 'پراجیکٹ ٹیم محفوظ کریں',
+    hi: 'प्रोजेक्ट टीम सहेजें',
+  );
   static const siteEngineers = TranslatableString(
     en: 'Site Engineers',
     ar: 'مهندسو الموقع',

@@ -25,13 +25,21 @@ import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
 
-/// Ordered BOQ folder view.  It is intentionally separate from the retained
-/// V7 project workspace so normalized V1 data never falls back to a legacy
-/// local project store.
+/// Ordered BOQ folder view for the normalized R35 project workspace.
+///
+/// [embedded] lets the project workspace keep its own project header, tabs and
+/// persistent office shell while showing the same connected BOQ folders. It is
+/// not a second data path: create, export and worksheet navigation still use
+/// the same protected repositories and routes.
 class YorksV1BoqGroupsScreen extends ConsumerWidget {
-  const YorksV1BoqGroupsScreen({super.key, required this.projectId});
+  const YorksV1BoqGroupsScreen({
+    super.key,
+    required this.projectId,
+    this.embedded = false,
+  });
 
   final String projectId;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,6 +52,19 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
     final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+
+    if (embedded) {
+      return _EmbeddedBoqGroupsWorkspace(
+        projectId: projectId,
+        language: language,
+        groups: groups,
+        editable: editable,
+        excelEnabled: excelEnabled,
+        onCreateGroup: () => _createGroup(context, ref),
+        onExport: () => _exportProjectWorkbook(context, ref),
+        onRetry: () => ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -261,6 +282,7 @@ class _GroupsBody extends StatelessWidget {
     required this.projectId,
     required this.editable,
     required this.onAddGroup,
+    this.embedded = false,
   });
 
   final List<YorksV1BoqGroup> groups;
@@ -268,6 +290,7 @@ class _GroupsBody extends StatelessWidget {
   final String projectId;
   final bool editable;
   final VoidCallback onAddGroup;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -321,8 +344,10 @@ class _GroupsBody extends StatelessWidget {
               style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Expanded(
-              child: GridView.builder(
+            if (embedded)
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: count,
                   crossAxisSpacing: AppSpacing.md,
@@ -340,13 +365,123 @@ class _GroupsBody extends StatelessWidget {
                     ),
                   );
                 },
+              )
+            else
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: count,
+                    crossAxisSpacing: AppSpacing.md,
+                    mainAxisSpacing: AppSpacing.md,
+                    childAspectRatio: count == 1 ? 2.75 : 1.85,
+                  ),
+                  itemCount: groups.length,
+                  itemBuilder: (context, index) {
+                    final group = groups[index];
+                    return _BoqGroupCard(
+                      group: group,
+                      language: language,
+                      onOpen: () => context.push(
+                        RoutePaths.yorksV1BoqWorksheetPath(projectId, group.id),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
           ],
         );
       },
     );
   }
+}
+
+class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
+  const _EmbeddedBoqGroupsWorkspace({
+    required this.projectId,
+    required this.language,
+    required this.groups,
+    required this.editable,
+    required this.excelEnabled,
+    required this.onCreateGroup,
+    required this.onExport,
+    required this.onRetry,
+  });
+
+  final String projectId;
+  final AppLanguage language;
+  final AsyncValue<List<YorksV1BoqGroup>> groups;
+  final bool editable;
+  final bool excelEnabled;
+  final VoidCallback onCreateGroup;
+  final VoidCallback onExport;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  YorksV1BoqStrings.worksheets.primary,
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  YorksV1BoqStrings.boqDescription.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              if (excelEnabled)
+                OutlinedButton.icon(
+                  onPressed: onExport,
+                  icon: const Icon(Icons.file_download_outlined, size: 18),
+                  label: Text(YorksV1BoqStrings.exportWorkbook.primary),
+                ),
+              if (editable)
+                FilledButton.icon(
+                  onPressed: onCreateGroup,
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                  label: Text(YorksV1BoqStrings.newGroup.primary),
+                ),
+            ],
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      groups.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppSpacing.xxxl),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (_, _) => _ErrorState(language: language, onRetry: onRetry),
+        data: (items) => _GroupsBody(
+          groups: items,
+          language: language,
+          projectId: projectId,
+          editable: editable,
+          onAddGroup: onCreateGroup,
+          embedded: true,
+        ),
+      ),
+    ],
+  );
 }
 
 class _BoqGroupCard extends StatelessWidget {
