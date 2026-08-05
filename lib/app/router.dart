@@ -53,6 +53,7 @@ import '../features/procurement/presentation/screens/procurement_plan_review_scr
 import '../features/procurement/presentation/screens/procurement_workspace_screen.dart';
 import '../features/projects/presentation/screens/project_workspace_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_boq_screens.dart';
+import '../features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_documents_screen.dart';
 import '../features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
@@ -98,6 +99,7 @@ abstract final class RoutePaths {
   static const String projectWorkspace = '/projects/:id';
   static const String yorksV1Projects = '/yorks/projects';
   static const String yorksV1Project = '/yorks/projects/:projectId';
+  static const String yorksV1ProjectEdit = '/yorks/projects/:projectId/edit';
   static const String yorksV1BoqGroups = '/yorks/projects/:projectId/boq';
   static const String yorksV1BoqWorksheet =
       '/yorks/projects/:projectId/boq/:groupId';
@@ -143,6 +145,8 @@ abstract final class RoutePaths {
       '/projects/$projectId';
   static String yorksV1ProjectPath(String projectId) =>
       '/yorks/projects/$projectId';
+  static String yorksV1ProjectEditPath(String projectId) =>
+      '/yorks/projects/$projectId/edit';
   static String yorksV1BoqGroupsPath(String projectId) =>
       '/yorks/projects/$projectId/boq';
   static String yorksV1BoqWorksheetPath(String projectId, String groupId) =>
@@ -726,6 +730,15 @@ GoRouter createAppRouter({
           YorksV1ProjectWorkspaceScreen(
             projectId: state.pathParameters['projectId'] ?? '',
             initialTab: YorksV1ProjectWorkspaceTab.boq,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectEdit,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1ProjectEditFlowScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
           ),
         ),
       ),

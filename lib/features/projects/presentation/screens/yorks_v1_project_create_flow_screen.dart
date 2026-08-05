@@ -15,6 +15,7 @@ import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
+import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_creation_draft.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
@@ -27,6 +28,7 @@ import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
+import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../../../../shared/services/yorks_v1_document_file_service.dart';
 
 /// The normalized Yorks V1 R35 project creation experience.
@@ -35,16 +37,65 @@ import '../../../../shared/services/yorks_v1_document_file_service.dart';
 /// delegates the committed create command to [YorksV1ProjectCommandController].
 /// It never writes projects, scopes, memberships or BOQ groups locally.
 class YorksV1ProjectCreateFlowScreen extends ConsumerStatefulWidget {
-  const YorksV1ProjectCreateFlowScreen({super.key, this.onProjectCreated});
+  const YorksV1ProjectCreateFlowScreen({
+    super.key,
+    this.onProjectCreated,
+    this.editItem,
+    this.onProjectUpdated,
+  });
 
   /// Lets route composition move to the authoritative project workspace after
   /// the server has committed the project. It is deliberately called only
   /// after the local creation draft was discarded.
   final ValueChanged<YorksV1Project>? onProjectCreated;
 
+  /// Supplying an authorized portfolio item changes this five-stage surface
+  /// into an edit flow. The server is still the authority for every update.
+  final YorksV1ProjectPortfolioItem? editItem;
+  final ValueChanged<YorksV1Project>? onProjectUpdated;
+
+  bool get isEditing => editItem != null;
+
   @override
   ConsumerState<YorksV1ProjectCreateFlowScreen> createState() =>
       _YorksV1ProjectCreateFlowScreenState();
+}
+
+/// Resolves the current authorized project projection before presenting the
+/// same five-stage R35 setup form in update mode.
+class YorksV1ProjectEditFlowScreen extends ConsumerWidget {
+  const YorksV1ProjectEditFlowScreen({super.key, required this.projectId});
+
+  final String projectId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
+    return portfolio.when(
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (_, _) => _AccessState(
+        title: YorksV1ProjectStrings.noPermission,
+        description: YorksV1ProjectStrings.projectUpdateFailed,
+        language: ref.watch(languageProvider),
+      ),
+      data: (items) {
+        final item = items.where((value) => value.project.id == projectId);
+        if (item.isEmpty) {
+          return _AccessState(
+            title: YorksV1ProjectStrings.noPermission,
+            description: YorksV1ProjectStrings.noPermissionDescription,
+            language: ref.watch(languageProvider),
+          );
+        }
+        return YorksV1ProjectCreateFlowScreen(
+          editItem: item.first,
+          onProjectUpdated: (_) =>
+              context.go(RoutePaths.yorksV1ProjectPath(projectId)),
+        );
+      },
+    );
+  }
 }
 
 class _YorksV1ProjectCreateFlowScreenState
@@ -69,6 +120,7 @@ class _YorksV1ProjectCreateFlowScreenState
 
   Timer? _draftSaveTimer;
   YorksV1ProjectCreationDraft? _pendingDraft;
+  YorksV1ProjectCreationDraft? _editDraft;
   String? _activeAuthUserId;
   Set<YorksV1ProjectValidationCode> _validationErrors = const {};
   YorksV1Project? _createdProject;
@@ -92,6 +144,40 @@ class _YorksV1ProjectCreateFlowScreenState
     _buildingFloorsController,
     _buildingDeliveryAddressController,
   ];
+
+  bool get _isEditing => widget.isEditing;
+
+  void _seedEditDraft(String authUserId) {
+    final item = widget.editItem;
+    if (item == null || _editDraft != null) return;
+    YorksV1ProjectPartyInput? partyFor(YorksV1ProjectPartyKind kind) {
+      for (final party in item.parties) {
+        if (party.kind == kind) return party;
+      }
+      return null;
+    }
+
+    final client = partyFor(YorksV1ProjectPartyKind.client);
+    _editDraft = YorksV1ProjectCreationDraft(
+      ownerAuthUserId: authUserId,
+      currentStage: YorksV1ProjectCreationStage.projectDetails,
+      creationIdempotencyKey: const Uuid().v4(),
+      reference: item.project.reference,
+      name: item.project.name,
+      clientName: client?.name ?? item.clientName,
+      jobOrContractReference: item.project.jobOrContractReference,
+      siteLocation: item.project.siteLocation,
+      startDate: item.project.startDate,
+      endDate: item.project.endDate,
+      notes: item.project.notes,
+      parties: [
+        for (final party in item.parties)
+          if (party.kind != YorksV1ProjectPartyKind.client) party,
+      ],
+      buildings: item.buildings,
+      updatedAt: DateTime.now().toUtc(),
+    );
+  }
 
   @override
   void dispose() {
@@ -131,9 +217,13 @@ class _YorksV1ProjectCreateFlowScreenState
       _createdProject = null;
       _validationErrors = const {};
       _selectedAttachmentFiles = const [];
+      _editDraft = null;
     }
 
-    final draft = ref.watch(yorksV1ProjectCreationDraftProvider(authUserId));
+    _seedEditDraft(authUserId);
+    final draft = _isEditing
+        ? _editDraft!
+        : ref.watch(yorksV1ProjectCreationDraftProvider(authUserId));
     _synchronizeControllers(_pendingDraft ?? draft);
     final commandState = ref.watch(yorksV1ProjectCommandControllerProvider);
 
@@ -153,8 +243,10 @@ class _YorksV1ProjectCreateFlowScreenState
 
     final saving =
         _isCreating ||
-        (commandState.operation ==
-                YorksV1ProjectCommandOperation.createProject &&
+        ((commandState.operation ==
+                    YorksV1ProjectCommandOperation.createProject ||
+                commandState.operation ==
+                    YorksV1ProjectCommandOperation.updateProject) &&
             commandState.status == YorksV1ProjectCommandStatus.saving);
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -199,20 +291,30 @@ class _YorksV1ProjectCreateFlowScreenState
                     YorksR35PageHeader(
                       eyebrow:
                           YorksV1ProjectStrings.projectCreationEyebrow.primary,
-                      title: YorksV1ProjectStrings.createProject.primary,
-                      description: YorksV1ProjectStrings
-                          .createProjectDescription
-                          .primary,
+                      title:
+                          (_isEditing
+                                  ? YorksV1ProjectStrings.editProject
+                                  : YorksV1ProjectStrings.createProject)
+                              .primary,
+                      description:
+                          (_isEditing
+                                  ? YorksV1ProjectStrings.editProjectDescription
+                                  : YorksV1ProjectStrings
+                                        .createProjectDescription)
+                              .primary,
                       actions: [
-                        SizedBox(
-                          height: AppSpacing.minTapTarget,
-                          child: OutlinedButton(
-                            onPressed: saving ? null : () => _saveDraft(draft),
-                            child: Text(
-                              YorksV1ProjectStrings.saveDraft.primary,
+                        if (!_isEditing)
+                          SizedBox(
+                            height: AppSpacing.minTapTarget,
+                            child: OutlinedButton(
+                              onPressed: saving
+                                  ? null
+                                  : () => _saveDraft(draft),
+                              child: Text(
+                                YorksV1ProjectStrings.saveDraft.primary,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.xxxl),
@@ -304,6 +406,7 @@ class _YorksV1ProjectCreateFlowScreenState
         onRemoveParty: _removePartyAt,
         onAddInitialMember: _addInitialMember,
         onRemoveInitialMember: _removeInitialMemberAt,
+        showTeam: !_isEditing,
       ),
       YorksV1ProjectCreationStage.buildings => _BuildingsStage(
         draft: draft,
@@ -347,6 +450,9 @@ class _YorksV1ProjectCreateFlowScreenState
           onContinue: _continue,
           onSkip: _skipAttachments,
           onCreate: _createProject,
+          primaryLabel: _isEditing
+              ? YorksV1ProjectStrings.updateProject
+              : YorksV1ProjectStrings.createAndView,
         ),
       ],
     );
@@ -381,6 +487,10 @@ class _YorksV1ProjectCreateFlowScreenState
   }
 
   YorksV1ProjectCreationDraft _currentDraft() {
+    if (_isEditing) {
+      final draft = _pendingDraft ?? _editDraft;
+      if (draft != null) return draft;
+    }
     final authUserId = _activeAuthUserId;
     if (authUserId == null) {
       throw const YorksV1DomainException(
@@ -409,6 +519,10 @@ class _YorksV1ProjectCreateFlowScreenState
     final authUserId = _activeAuthUserId;
     if (pending == null || authUserId == null) return;
     _pendingDraft = null;
+    if (_isEditing) {
+      if (mounted) setState(() => _editDraft = pending);
+      return;
+    }
     await ref
         .read(yorksV1ProjectCreationDraftProvider(authUserId).notifier)
         .save(pending);
@@ -419,6 +533,10 @@ class _YorksV1ProjectCreateFlowScreenState
     _pendingDraft = null;
     final authUserId = _activeAuthUserId;
     if (authUserId == null) return;
+    if (_isEditing) {
+      if (mounted) setState(() => _editDraft = draft);
+      return;
+    }
     await ref
         .read(yorksV1ProjectCreationDraftProvider(authUserId).notifier)
         .save(draft);
@@ -437,6 +555,16 @@ class _YorksV1ProjectCreateFlowScreenState
     final current = _currentDraft();
     _draftSaveTimer?.cancel();
     _pendingDraft = null;
+    if (_isEditing) {
+      _editDraft = current.copyWith(currentStage: stage);
+      if (!mounted) return;
+      _validationErrors = const {};
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      });
+      return;
+    }
     await ref
         .read(yorksV1ProjectCreationDraftProvider(authUserId).notifier)
         .save(current.copyWith(currentStage: stage));
@@ -817,7 +945,8 @@ class _YorksV1ProjectCreateFlowScreenState
         .read(yorksV1ActiveProjectTeamDirectoryProvider)
         .asData
         ?.value;
-    if (loadedDirectory != null &&
+    if (!_isEditing &&
+        loadedDirectory != null &&
         _hasUnavailableInitialMember(draft, loadedDirectory)) {
       _showMessage(
         YorksV1ProjectStrings.teamMemberNoLongerAvailable,
@@ -838,6 +967,31 @@ class _YorksV1ProjectCreateFlowScreenState
 
     setState(() => _isCreating = true);
     try {
+      if (_isEditing) {
+        final item = widget.editItem!;
+        final updatedProject = await ref
+            .read(yorksV1ProjectCommandControllerProvider.notifier)
+            .updateProject(
+              YorksV1ProjectUpdateInput(
+                idempotencyKey: draft.creationIdempotencyKey,
+                projectId: item.project.id,
+                expectedProjectVersion: item.project.recordVersion,
+                project: draft.toCreationInput(),
+              ),
+            );
+        final failedAttachmentUploads = await _uploadSelectedAttachments(
+          updatedProject,
+        );
+        ref.invalidate(yorksV1ProjectPortfolioProvider);
+        if (!mounted) return;
+        setState(() => _isCreating = false);
+        if (failedAttachmentUploads > 0) {
+          _showMessage(YorksV1ProjectStrings.attachmentUploadFailed);
+        }
+        widget.onProjectUpdated?.call(updatedProject);
+        return;
+      }
+
       final result = await ref
           .read(yorksV1ProjectCommandControllerProvider.notifier)
           .createProject(draft.toCreationInput());
@@ -1604,6 +1758,7 @@ class _PartiesAndAccessStage extends StatelessWidget {
     required this.onRemoveParty,
     required this.onAddInitialMember,
     required this.onRemoveInitialMember,
+    this.showTeam = true,
   });
 
   final YorksV1ProjectCreationDraft draft;
@@ -1627,6 +1782,7 @@ class _PartiesAndAccessStage extends StatelessWidget {
   )
   onAddInitialMember;
   final ValueChanged<int> onRemoveInitialMember;
+  final bool showTeam;
 
   @override
   Widget build(BuildContext context) {
@@ -1728,20 +1884,22 @@ class _PartiesAndAccessStage extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.lg),
-        NexusSectionCard(
-          title: YorksV1ProjectStrings.projectTeam.primary,
-          description: YorksV1ProjectStrings.accessDescription.primary,
-          child: _InitialTeamAccessEditor(
-            draft: draft,
-            language: language,
-            creatorRole: creatorRole,
-            creatorAuthUserId: creatorAuthUserId,
-            teamDirectory: teamDirectory,
-            onAddMember: onAddInitialMember,
-            onRemoveMember: onRemoveInitialMember,
+        if (showTeam) ...[
+          const SizedBox(height: AppSpacing.lg),
+          NexusSectionCard(
+            title: YorksV1ProjectStrings.projectTeam.primary,
+            description: YorksV1ProjectStrings.accessDescription.primary,
+            child: _InitialTeamAccessEditor(
+              draft: draft,
+              language: language,
+              creatorRole: creatorRole,
+              creatorAuthUserId: creatorAuthUserId,
+              teamDirectory: teamDirectory,
+              onAddMember: onAddInitialMember,
+              onRemoveMember: onRemoveInitialMember,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -2989,6 +3147,7 @@ class _StageActions extends StatelessWidget {
     required this.onContinue,
     required this.onSkip,
     required this.onCreate,
+    required this.primaryLabel,
   });
 
   final YorksV1ProjectCreationStage stage;
@@ -2998,6 +3157,7 @@ class _StageActions extends StatelessWidget {
   final VoidCallback onContinue;
   final VoidCallback onSkip;
   final VoidCallback onCreate;
+  final TranslatableString primaryLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -3015,7 +3175,7 @@ class _StageActions extends StatelessWidget {
         final primary = PrimaryButton(
           key: ValueKey('yorks-v1-project-${isReview ? 'create' : 'continue'}'),
           label: isReview
-              ? YorksV1ProjectStrings.createAndView.primary
+              ? primaryLabel.primary
               : YorksV1ProjectStrings.next.primary,
           onPressed: saving ? null : (isReview ? onCreate : onContinue),
           icon: isReview ? Icons.add_business_outlined : Icons.arrow_forward,

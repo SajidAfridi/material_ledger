@@ -527,6 +527,18 @@ class _FakeProjectRepository implements YorksV1ProjectRepository {
   ) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<YorksV1Project> archiveProject(
+    YorksV1ArchiveProjectInput input,
+  ) async {
+    throw UnimplementedError();
+  }
 }
 
 class _FakeTeamDirectoryRepository

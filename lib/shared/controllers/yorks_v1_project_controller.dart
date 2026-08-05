@@ -8,6 +8,8 @@ import '../repositories/yorks_v1_project_repository.dart';
 enum YorksV1ProjectCommandOperation {
   none,
   createProject,
+  updateProject,
+  archiveProject,
   assignProjectMember,
   revokeProjectMember,
   setProjectState,
@@ -180,6 +182,66 @@ class YorksV1ProjectCommandController
       return project;
     } on YorksV1DomainException catch (error) {
       _failed(YorksV1ProjectCommandOperation.setProjectState, error.code);
+      rethrow;
+    }
+  }
+
+  Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
+    _requireRole(
+      YorksV1ProjectCommandOperation.updateProject,
+      (role) =>
+          role == YorksV1Role.projectEngineer ||
+          role == YorksV1Role.siteEngineer ||
+          role == YorksV1Role.admin,
+    );
+    final validationErrors = input.validate();
+    if (validationErrors.isNotEmpty) {
+      _invalid(YorksV1ProjectCommandOperation.updateProject, validationErrors);
+    }
+    _saving(YorksV1ProjectCommandOperation.updateProject);
+    try {
+      final project = await _repository.updateProject(input);
+      state = YorksV1ProjectCommandState(
+        operation: YorksV1ProjectCommandOperation.updateProject,
+        status: YorksV1ProjectCommandStatus.succeeded,
+        latestProject: project,
+      );
+      return project;
+    } on YorksV1DomainException catch (error) {
+      _failed(YorksV1ProjectCommandOperation.updateProject, error.code);
+      rethrow;
+    }
+  }
+
+  Future<YorksV1Project> archiveProject(
+    YorksV1ArchiveProjectInput input,
+  ) async {
+    final role = _requireRole(
+      YorksV1ProjectCommandOperation.archiveProject,
+      (role) => role == YorksV1Role.admin,
+    );
+    if (role != YorksV1Role.admin) {
+      _failed(
+        YorksV1ProjectCommandOperation.archiveProject,
+        YorksV1DomainErrorCode.unauthorized,
+      );
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
+    final validationErrors = input.validate();
+    if (validationErrors.isNotEmpty) {
+      _invalid(YorksV1ProjectCommandOperation.archiveProject, validationErrors);
+    }
+    _saving(YorksV1ProjectCommandOperation.archiveProject);
+    try {
+      final project = await _repository.archiveProject(input);
+      state = YorksV1ProjectCommandState(
+        operation: YorksV1ProjectCommandOperation.archiveProject,
+        status: YorksV1ProjectCommandStatus.succeeded,
+        latestProject: project,
+      );
+      return project;
+    } on YorksV1DomainException catch (error) {
+      _failed(YorksV1ProjectCommandOperation.archiveProject, error.code);
       rethrow;
     }
   }

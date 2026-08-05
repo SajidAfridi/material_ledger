@@ -12,6 +12,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
+import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
@@ -1568,6 +1569,7 @@ class _YorksV1ProjectWorkspaceScreenState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final authUserId = ref.watch(yorksV1AuthUserIdProvider);
     final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
     final requests = ref.watch(
       yorksV1MaterialRequestListProvider(widget.projectId),
@@ -1619,6 +1621,21 @@ class _YorksV1ProjectWorkspaceScreenState
               );
             }
             final selectedProject = project;
+            final projectStateIsEditable =
+                selectedProject.project.state ==
+                    YorksV1ProjectLifecycle.draft ||
+                selectedProject.project.state == YorksV1ProjectLifecycle.active;
+            final activeMember =
+                authUserId != null &&
+                selectedProject.activeMembers.any(
+                  (member) => member.memberAuthUserId == authUserId,
+                );
+            final isCreator =
+                authUserId != null &&
+                selectedProject.project.createdByAuthUserId == authUserId;
+            final canEdit =
+                projectStateIsEditable &&
+                (role == YorksV1Role.admin || activeMember || isCreator);
             return _ProjectWorkspaceBody(
               item: selectedProject,
               tab: _tab,
@@ -1638,6 +1655,19 @@ class _YorksV1ProjectWorkspaceScreenState
                         projectId: selectedProject.project.id,
                       ),
                     )
+                  : null,
+              onEdit: canEdit
+                  ? () => context.push(
+                      RoutePaths.yorksV1ProjectEditPath(
+                        selectedProject.project.id,
+                      ),
+                    )
+                  : null,
+              onArchive:
+                  role == YorksV1Role.admin &&
+                      selectedProject.project.state !=
+                          YorksV1ProjectLifecycle.archived
+                  ? () => _confirmSafeArchive(selectedProject.project)
                   : null,
               onTabChanged: (value) {
                 setState(() => _tab = value);
@@ -1672,6 +1702,65 @@ class _YorksV1ProjectWorkspaceScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(YorksV1ProjectStrings.projectActivationFailed.primary),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmSafeArchive(YorksV1Project project) async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(YorksV1ProjectStrings.safeDeleteProject.primary),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(YorksV1ProjectStrings.safeDeleteProjectDescription.primary),
+            const SizedBox(height: AppSpacing.lg),
+            LedgerTextField(
+              controller: reasonController,
+              label: YorksV1ProjectStrings.archiveReason.primary,
+              hintText: YorksV1ProjectStrings.archiveReason.primary,
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(YorksV1ProjectStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(reasonController.text.trim()),
+            child: Text(YorksV1ProjectStrings.confirmArchive.primary),
+          ),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null || reason.trim().isEmpty) return;
+    try {
+      await ref
+          .read(yorksV1ProjectCommandControllerProvider.notifier)
+          .archiveProject(
+            YorksV1ArchiveProjectInput(
+              idempotencyKey: const Uuid().v4(),
+              projectId: project.id,
+              expectedProjectVersion: project.recordVersion,
+              reason: reason,
+            ),
+          );
+      ref.invalidate(yorksV1ProjectPortfolioProvider);
+      if (!mounted) return;
+      context.go(RoutePaths.yorksV1Projects);
+    } on YorksV1DomainException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(YorksV1ProjectStrings.errorFor(error.code).primary),
         ),
       );
     }
@@ -2318,6 +2407,8 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     required this.documents,
     required this.onActivate,
     required this.onNewRequest,
+    required this.onEdit,
+    required this.onArchive,
     required this.onTabChanged,
   });
 
@@ -2330,6 +2421,8 @@ class _ProjectWorkspaceBody extends StatelessWidget {
   final AsyncValue<YorksV1DocumentWorkspace> documents;
   final VoidCallback? onActivate;
   final VoidCallback? onNewRequest;
+  final VoidCallback? onEdit;
+  final VoidCallback? onArchive;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
 
   @override
@@ -2355,6 +2448,8 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                   onSelected: onTabChanged,
                   onActivate: onActivate,
                   onNewRequest: onNewRequest,
+                  onEdit: onEdit,
+                  onArchive: onArchive,
                 ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -2427,6 +2522,8 @@ class _ProjectR35Hero extends StatelessWidget {
     required this.onSelected,
     required this.onActivate,
     required this.onNewRequest,
+    required this.onEdit,
+    required this.onArchive,
   });
 
   final YorksV1Project project;
@@ -2434,6 +2531,8 @@ class _ProjectR35Hero extends StatelessWidget {
   final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
   final VoidCallback? onActivate;
   final VoidCallback? onNewRequest;
+  final VoidCallback? onEdit;
+  final VoidCallback? onArchive;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -2511,6 +2610,33 @@ class _ProjectR35Hero extends StatelessWidget {
                       icon: const Icon(Icons.add_rounded),
                       label: Text(
                         YorksV1MaterialRequestStrings.newRequest.primary,
+                      ),
+                    ),
+                  ),
+                if (onEdit != null)
+                  SizedBox(
+                    height: AppSpacing.minTapTarget,
+                    child: OutlinedButton.icon(
+                      onPressed: onEdit,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.onPrimary,
+                        side: const BorderSide(color: AppColors.lineStrong),
+                      ),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: Text(YorksV1ProjectStrings.editProject.primary),
+                    ),
+                  ),
+                if (onArchive != null)
+                  SizedBox(
+                    height: AppSpacing.minTapTarget,
+                    child: TextButton.icon(
+                      onPressed: onArchive,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.errorContainer,
+                      ),
+                      icon: const Icon(Icons.archive_outlined),
+                      label: Text(
+                        YorksV1ProjectStrings.safeDeleteProject.primary,
                       ),
                     ),
                   ),

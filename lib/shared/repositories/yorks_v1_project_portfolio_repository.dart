@@ -34,7 +34,8 @@ class SupabaseYorksV1ProjectPortfolioDataClient
         .select(
           'id, project_ref, name, job_contract_reference, project_site, '
           'start_date, target_completion_date, notes, state, '
-          'current_action_owner_role, record_version, created_at, updated_at',
+          'current_action_owner_role, record_version, created_by_auth_user_id, '
+          'created_at, updated_at',
         )
         .order('updated_at', ascending: false);
     return _rows(rows);
@@ -47,9 +48,12 @@ class SupabaseYorksV1ProjectPortfolioDataClient
     if (projectIds.isEmpty) return const [];
     final rows = await _client
         .from('v1_project_parties')
-        .select('project_id, party_kind, party_order, party_name')
+        .select(
+          'project_id, party_kind, party_order, party_name, contact_name, '
+          'contact_phone, contact_email, address',
+        )
         .inFilter('project_id', projectIds)
-        .eq('party_kind', YorksV1ProjectPartyKind.client.wireValue)
+        .order('party_kind')
         .order('party_order');
     return _rows(rows);
   }
@@ -61,10 +65,14 @@ class SupabaseYorksV1ProjectPortfolioDataClient
     if (projectIds.isEmpty) return const [];
     final rows = await _client
         .from('v1_project_scopes')
-        .select('project_id, scope_kind, is_active')
+        .select(
+          'id, project_id, scope_kind, scope_code, name, floors_levels, '
+          'scope_flags, delivery_address, is_active',
+        )
         .inFilter('project_id', projectIds)
         .eq('scope_kind', YorksV1ProjectScopeKind.building.wireValue)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .order('scope_code');
     return _rows(rows);
   }
 
@@ -148,6 +156,8 @@ class YorksV1SupabaseProjectPortfolioRepository
       final buildingCounts = _buildingCounts(results[1]);
       final memberCounts = _memberCounts(results[2]);
       final activeMembers = _activeMembers(results[2]);
+      final parties = _parties(results[0]);
+      final buildings = _buildings(results[1]);
 
       return [
         for (final project in projects)
@@ -160,6 +170,8 @@ class YorksV1SupabaseProjectPortfolioRepository
             activeSiteEngineerCount:
                 memberCounts[project.id]?.siteEngineers ?? 0,
             activeMembers: activeMembers[project.id] ?? const [],
+            parties: parties[project.id] ?? const [],
+            buildings: buildings[project.id] ?? const [],
           ),
       ];
     } on YorksV1DomainException {
@@ -178,6 +190,9 @@ class YorksV1SupabaseProjectPortfolioRepository
     final names = <String, String>{};
     for (final row in rows) {
       final projectId = _string(row['project_id']);
+      if (row['party_kind'] != YorksV1ProjectPartyKind.client.wireValue) {
+        continue;
+      }
       final name = _string(row['party_name']);
       if (projectId == null || name == null || names.containsKey(projectId)) {
         continue;
@@ -185,6 +200,73 @@ class YorksV1SupabaseProjectPortfolioRepository
       names[projectId] = name;
     }
     return names;
+  }
+
+  Map<String, List<YorksV1ProjectPartyInput>> _parties(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final values = <String, List<YorksV1ProjectPartyInput>>{};
+    for (final row in rows) {
+      final projectId = _string(row['project_id']);
+      final kind = YorksV1ProjectPartyKind.fromWireValue(row['party_kind']);
+      final name = _string(row['party_name']);
+      if (projectId == null || kind == null || name == null) continue;
+      values
+          .putIfAbsent(projectId, () => [])
+          .add(
+            YorksV1ProjectPartyInput(
+              kind: kind,
+              name: name,
+              contactName: _string(row['contact_name']),
+              contactPhone: _string(row['contact_phone']),
+              contactEmail: _string(row['contact_email']),
+              address: _string(row['address']),
+            ),
+          );
+    }
+    return {
+      for (final entry in values.entries)
+        entry.key: List.unmodifiable(entry.value),
+    };
+  }
+
+  Map<String, List<YorksV1ProjectBuildingInput>> _buildings(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final values = <String, List<YorksV1ProjectBuildingInput>>{};
+    for (final row in rows) {
+      final projectId = _string(row['project_id']);
+      final id = _string(row['id']);
+      final code = _string(row['scope_code']);
+      final name = _string(row['name']);
+      if (projectId == null || id == null || name == null) continue;
+      final flags = row['scope_flags'] is Map
+          ? Map<String, dynamic>.from(row['scope_flags'] as Map)
+          : const <String, dynamic>{};
+      final floors = row['floors_levels'] is List
+          ? [
+              for (final value in row['floors_levels'] as List)
+                if (value is String && value.trim().isNotEmpty) value.trim(),
+            ]
+          : const <String>[];
+      values
+          .putIfAbsent(projectId, () => [])
+          .add(
+            YorksV1ProjectBuildingInput(
+              sourceScopeId: id,
+              code: code ?? '',
+              name: name,
+              deliveryAddress: _string(row['delivery_address']),
+              floorsOrLevels: floors,
+              hasFrpRoom: flags['has_frp_room'] == true,
+              flags: flags,
+            ),
+          );
+    }
+    return {
+      for (final entry in values.entries)
+        entry.key: List.unmodifiable(entry.value),
+    };
   }
 
   Map<String, int> _buildingCounts(List<Map<String, dynamic>> rows) {

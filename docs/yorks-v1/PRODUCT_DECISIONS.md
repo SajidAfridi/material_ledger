@@ -86,11 +86,18 @@ Project lifecycle:
 
 - Draft and Active project information may be edited by an authorized Project
   or Site Engineer, subject to membership rules.
+- The project creator receives an initial active project membership at creation,
+  so they may edit their Draft or Active project while that membership remains
+  active. Revocation removes that future authority; it does not rewrite history.
 - On Hold blocks new MR submission and dispatch but permits authorized review,
   documents and an Admin-controlled resume.
 - Completed blocks new BOQ/MR work but permits outstanding receipt, return,
   document and closure activity.
 - Archived is read-only except for audited Admin correction metadata.
+- “Delete project” is an Admin-only safe archive, never a physical delete. It
+  requires an auditable reason and is blocked while any Material Request is
+  operationally open; requests, documents, scopes, memberships and audit
+  history are retained.
 - Procurement may read Active and On Hold projects. It may also read Completed
   projects while an authorized receipt, return or document action remains open.
   Archived access is search/audit-only.

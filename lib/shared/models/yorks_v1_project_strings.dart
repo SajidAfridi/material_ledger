@@ -170,6 +170,60 @@ abstract final class YorksV1ProjectStrings {
     ur: 'ترمیم کریں',
     hi: 'संपादित करें',
   );
+  static const editProject = TranslatableString(
+    en: 'Edit project',
+    ar: 'تعديل المشروع',
+    ur: 'پراجیکٹ میں ترمیم کریں',
+    hi: 'परियोजना संपादित करें',
+  );
+  static const editProjectDescription = TranslatableString(
+    en: 'Update the project setup, parties and buildings. Team access remains separately audited.',
+    ar: 'حدّث إعداد المشروع والأطراف والمباني. يظل وصول الفريق مدققاً بشكل منفصل.',
+    ur: 'پراجیکٹ سیٹ اپ، فریقین اور عمارتیں اپ ڈیٹ کریں۔ ٹیم کی رسائی الگ سے آڈٹ ہوتی ہے۔',
+    hi: 'प्रोजेक्ट सेटअप, पक्षों और भवनों को अपडेट करें। टीम एक्सेस अलग से ऑडिट होता है।',
+  );
+  static const updateProject = TranslatableString(
+    en: 'Update project',
+    ar: 'تحديث المشروع',
+    ur: 'پراجیکٹ اپ ڈیٹ کریں',
+    hi: 'परियोजना अपडेट करें',
+  );
+  static const projectUpdated = TranslatableString(
+    en: 'Project updated',
+    ar: 'تم تحديث المشروع',
+    ur: 'پراجیکٹ اپ ڈیٹ ہو گیا',
+    hi: 'परियोजना अपडेट हुई',
+  );
+  static const projectUpdateFailed = TranslatableString(
+    en: 'Project could not be updated',
+    ar: 'تعذر تحديث المشروع',
+    ur: 'پراجیکٹ اپ ڈیٹ نہیں ہو سکا',
+    hi: 'परियोजना अपडेट नहीं हो सकी',
+  );
+  static const safeDeleteProject = TranslatableString(
+    en: 'Archive project',
+    ar: 'أرشفة المشروع',
+    ur: 'پراجیکٹ آرکائیو کریں',
+    hi: 'परियोजना संग्रहित करें',
+  );
+  static const safeDeleteProjectDescription = TranslatableString(
+    en: 'This safely archives the project. Requests, documents and audit history are kept and it cannot be used while work is still open.',
+    ar: 'يؤرشف هذا المشروع بأمان. تُحفظ الطلبات والمستندات وسجل التدقيق ولا يمكن استخدامه أثناء وجود عمل مفتوح.',
+    ur: 'یہ پراجیکٹ کو محفوظ طور پر آرکائیو کرتا ہے۔ درخواستیں، دستاویزات اور آڈٹ ہسٹری محفوظ رہتی ہے اور کھلا کام ہونے پر استعمال نہیں ہو سکتا۔',
+    hi: 'यह परियोजना को सुरक्षित रूप से संग्रहित करता है। अनुरोध, दस्तावेज़ और ऑडिट इतिहास सुरक्षित रहते हैं और खुले काम के दौरान इसका उपयोग नहीं हो सकता।',
+  );
+  static const archiveReason = TranslatableString(
+    en: 'Archive reason',
+    ar: 'سبب الأرشفة',
+    ur: 'آرکائیو کرنے کی وجہ',
+    hi: 'संग्रह कारण',
+  );
+  static const confirmArchive = TranslatableString(
+    en: 'Archive safely',
+    ar: 'أرشفة بأمان',
+    ur: 'محفوظ طریقے سے آرکائیو کریں',
+    hi: 'सुरक्षित रूप से संग्रहित करें',
+  );
   static const cancel = TranslatableString(
     en: 'Cancel',
     ar: 'إلغاء',

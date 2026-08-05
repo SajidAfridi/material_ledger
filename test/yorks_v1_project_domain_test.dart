@@ -354,6 +354,60 @@ void main() {
         'reason': null,
       });
     });
+
+    test(
+      'builds a versioned project update without changing team authority',
+      () {
+        final input = _validCreationInput();
+        final update = YorksV1ProjectUpdateInput(
+          idempotencyKey: 'update-project-100',
+          projectId: 'project-1',
+          expectedProjectVersion: 4,
+          project: input,
+        );
+
+        expect(update.validate(), isEmpty);
+        expect(update.toRpcPayload(), {
+          'project_id': 'project-1',
+          'expected_version': 4,
+          'project_ref': 'YRK-100',
+          'name': 'Cooling Upgrade',
+          'job_contract_reference': 'JOB-7',
+          'project_site': 'Abu Dhabi',
+          'start_date': '2026-08-01',
+          'target_completion_date': '2026-10-01',
+          'notes': 'Phase one',
+          'parties': input.toRpcPayload()['parties'],
+          'buildings': [
+            {
+              'code': 'A01',
+              'name': 'Tower A',
+              'floors_levels': ['GF', 'Roof'],
+              'flags': {'has_frp_room': true, 'requires_access_badge': true},
+              'delivery_address': 'Tower A loading bay',
+            },
+          ],
+        });
+        expect(update.toRpcPayload().containsKey('initial_members'), isFalse);
+        expect(update.toRpcPayload().containsKey('attachments'), isFalse);
+      },
+    );
+
+    test('requires a reason and a current version for safe archive', () {
+      const archive = YorksV1ArchiveProjectInput(
+        idempotencyKey: 'archive-project-100',
+        projectId: 'project-1',
+        expectedProjectVersion: 4,
+        reason: 'Entered in error; no open material requests.',
+      );
+
+      expect(archive.validate(), isEmpty);
+      expect(archive.toRpcPayload(), {
+        'project_id': 'project-1',
+        'expected_version': 4,
+        'reason': 'Entered in error; no open material requests.',
+      });
+    });
   });
 
   group('Yorks V1 creation draft recovery', () {
@@ -834,6 +888,18 @@ class _FakeProjectRepository implements YorksV1ProjectRepository {
     YorksV1SetProjectStateInput input,
   ) async {
     stateCalls++;
+    return YorksV1Project.fromRpcJson(_projectJson());
+  }
+
+  @override
+  Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
+    return YorksV1Project.fromRpcJson(_projectJson());
+  }
+
+  @override
+  Future<YorksV1Project> archiveProject(
+    YorksV1ArchiveProjectInput input,
+  ) async {
     return YorksV1Project.fromRpcJson(_projectJson());
   }
 }

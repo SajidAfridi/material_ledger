@@ -16,6 +16,7 @@ records an explicit replacement.
 | `on_hold` | Resume | `active` | Project Engineer/Admin with reason |
 | `active`, `on_hold` | Complete | `completed` | Project Engineer/Admin; no unresolved new-work blocker |
 | `completed` | Archive | `archived` | Admin with reason |
+| `draft`, `active`, `on_hold`, `completed` | Safe archive | `archived` | Admin-only audited override; only when no operational Material Request remains open |
 
 ### Material Request
 
@@ -83,6 +84,8 @@ tables/functions.
 | RPC | Caller | Locks/version | Idempotent | Atomic effects |
 |---|---|---|---|---|
 | `v1_create_project` | Project Engineer, Site Engineer, Admin | reference/template rows | yes | project, Common/buildings, initial memberships, 29 BOQ groups, audit |
+| `v1_update_project` | Active assigned Project/Site Engineer or Admin | project/version, retained building scopes | yes | project setup, parties, active/retired building scopes, audit |
+| `v1_archive_project` | Admin only | project/version, open MR check | yes | irreversible safe archive state, retained history, audit |
 | `v1_set_project_state` | Project Engineer/Admin by transition | project/version | yes | state, owner/action, audit/notification |
 | `v1_assign_project_member` | Project Engineer/Admin; creation exception for Site Engineer | project/member/version | yes | close prior membership, add membership, audit/notification |
 | `v1_submit_material_request` | Assigned Engineer draft creator | draft/project/counter/version | yes | number, snapshots, state, owner, audit/notification |

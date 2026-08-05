@@ -53,6 +53,10 @@ abstract interface class YorksV1ProjectRepository {
   );
 
   Future<YorksV1Project> setProjectState(YorksV1SetProjectStateInput input);
+
+  Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input);
+
+  Future<YorksV1Project> archiveProject(YorksV1ArchiveProjectInput input);
 }
 
 /// Connected V1 implementation. There is deliberately no local project-write
@@ -183,6 +187,63 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
         cause: error,
       );
     }
+  }
+
+  @override
+  Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
+    _throwIfInvalid(input.validate());
+    final rpc = _readyRpc();
+    try {
+      final response = await rpc.invoke(
+        functionName: 'v1_update_project',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey.trim(),
+        },
+      );
+      return YorksV1Project.fromRpcJson(_projectJson(response));
+    } on YorksV1DomainException {
+      rethrow;
+    } on PostgrestException catch (error) {
+      throw _mapPostgrestException(error);
+    } catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<YorksV1Project> archiveProject(
+    YorksV1ArchiveProjectInput input,
+  ) async {
+    _throwIfInvalid(input.validate());
+    final rpc = _readyRpc();
+    try {
+      final response = await rpc.invoke(
+        functionName: 'v1_archive_project',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey.trim(),
+        },
+      );
+      return YorksV1Project.fromRpcJson(_projectJson(response));
+    } on YorksV1DomainException {
+      rethrow;
+    } on PostgrestException catch (error) {
+      throw _mapPostgrestException(error);
+    } catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: error,
+      );
+    }
+  }
+
+  Map<String, dynamic> _projectJson(Map<String, dynamic> response) {
+    final project = response['project'];
+    return project is Map ? Map<String, dynamic>.from(project) : response;
   }
 
   YorksV1ProjectRpcClient _readyRpc() {

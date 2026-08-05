@@ -155,6 +155,7 @@ class YorksV1Project {
     this.currentActionOwnerProfileId,
     this.currentActionOwnerRole,
     this.currentActionCode,
+    this.createdByAuthUserId,
   });
 
   final String id;
@@ -179,6 +180,7 @@ class YorksV1Project {
 
   /// A server-provided code, not presentation copy.
   final String? currentActionCode;
+  final String? createdByAuthUserId;
 
   /// Exact V1 database terminology. [version] remains a concise controller
   /// alias for optimistic-write input construction.
@@ -230,6 +232,9 @@ class YorksV1Project {
       ),
       currentActionCode: _nullableString(
         json['current_action_code'] ?? json['currentActionCode'],
+      ),
+      createdByAuthUserId: _nullableString(
+        json['created_by_auth_user_id'] ?? json['createdByAuthUserId'],
       ),
     );
   }
@@ -451,6 +456,7 @@ class YorksV1ProjectPartyInput {
 
 class YorksV1ProjectBuildingInput {
   const YorksV1ProjectBuildingInput({
+    this.sourceScopeId,
     this.code = '',
     required this.name,
     this.deliveryAddress,
@@ -460,6 +466,10 @@ class YorksV1ProjectBuildingInput {
   });
 
   final String code;
+
+  /// The normalized scope identity for edit mode. It is never supplied during
+  /// creation, so a project update can retain request/receipt attribution.
+  final String? sourceScopeId;
   final String name;
   final String? deliveryAddress;
   final List<String> floorsOrLevels;
@@ -481,10 +491,16 @@ class YorksV1ProjectBuildingInput {
     'delivery_address': _trimToNull(deliveryAddress),
   };
 
+  Map<String, dynamic> toUpdateRpcJson() => {
+    if (_trimToNull(sourceScopeId) != null) 'id': sourceScopeId!.trim(),
+    ...toRpcJson(),
+  };
+
   Map<String, dynamic> toDraftJson() => toRpcJson();
 
   factory YorksV1ProjectBuildingInput.fromDraftJson(Map<String, dynamic> json) {
     return YorksV1ProjectBuildingInput(
+      sourceScopeId: _nullableString(json['id'] ?? json['sourceScopeId']),
       code: json['code'] as String? ?? '',
       name: json['name'] as String? ?? '',
       deliveryAddress: _nullableString(
@@ -901,6 +917,93 @@ class YorksV1SetProjectStateInput {
     'state': targetState.wireValue,
     'expected_version': expectedProjectVersion,
     'reason': _trimToNull(reason),
+  };
+}
+
+/// Typed input for the trusted project-setup update command. It intentionally
+/// omits lifecycle and membership authority; team changes remain their own
+/// dated assignment commands and project deletion is an Admin archive command.
+class YorksV1ProjectUpdateInput {
+  const YorksV1ProjectUpdateInput({
+    required this.idempotencyKey,
+    required this.projectId,
+    required this.expectedProjectVersion,
+    required this.project,
+  });
+
+  final String idempotencyKey;
+  final String projectId;
+  final int expectedProjectVersion;
+  final YorksV1ProjectCreationInput project;
+
+  Set<YorksV1ProjectValidationCode> validate() {
+    final errors = <YorksV1ProjectValidationCode>{...project.validate()};
+    if (projectId.trim().isEmpty) {
+      errors.add(YorksV1ProjectValidationCode.missingProjectId);
+    }
+    if (expectedProjectVersion < 1) {
+      errors.add(YorksV1ProjectValidationCode.invalidVersion);
+    }
+    return errors;
+  }
+
+  Map<String, dynamic> toRpcPayload() {
+    final payload = project.toRpcPayload();
+    return {
+      'project_id': projectId.trim(),
+      'expected_version': expectedProjectVersion,
+      'project_ref': payload['project_ref'],
+      'name': payload['name'],
+      'job_contract_reference': payload['job_contract_reference'],
+      'project_site': payload['project_site'],
+      'start_date': payload['start_date'],
+      'target_completion_date': payload['target_completion_date'],
+      'notes': payload['notes'],
+      'parties': payload['parties'],
+      'buildings': [
+        for (final building in project.buildings) building.toUpdateRpcJson(),
+      ],
+    };
+  }
+}
+
+/// Typed input for Admin-only safe deletion. The server archives instead of
+/// removing the project and blocks the command while operational requests are
+/// still open.
+class YorksV1ArchiveProjectInput {
+  const YorksV1ArchiveProjectInput({
+    required this.idempotencyKey,
+    required this.projectId,
+    required this.expectedProjectVersion,
+    required this.reason,
+  });
+
+  final String idempotencyKey;
+  final String projectId;
+  final int expectedProjectVersion;
+  final String reason;
+
+  Set<YorksV1ProjectValidationCode> validate() {
+    final errors = <YorksV1ProjectValidationCode>{};
+    if (idempotencyKey.trim().isEmpty) {
+      errors.add(YorksV1ProjectValidationCode.missingIdempotencyKey);
+    }
+    if (projectId.trim().isEmpty) {
+      errors.add(YorksV1ProjectValidationCode.missingProjectId);
+    }
+    if (expectedProjectVersion < 1) {
+      errors.add(YorksV1ProjectValidationCode.invalidVersion);
+    }
+    if (reason.trim().isEmpty) {
+      errors.add(YorksV1ProjectValidationCode.missingStateReason);
+    }
+    return errors;
+  }
+
+  Map<String, dynamic> toRpcPayload() => {
+    'project_id': projectId.trim(),
+    'expected_version': expectedProjectVersion,
+    'reason': reason.trim(),
   };
 }
 
