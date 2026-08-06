@@ -47,6 +47,9 @@ dependencies:
   xml: ^7.0.1
   # Flutter-maintained native and browser XLSX selection/save dialogs.
   file_selector: ^1.1.0
+  # Browser drag-and-drop target for optional project documents. The picker
+  # remains the cross-platform path; this adds the expected desktop workflow.
+  flutter_dropzone: ^4.2.1
   # Crash & error monitoring — only active when a SENTRY_DSN is supplied at
   # build time (--dart-define); otherwise the app uses NoopObservability.
   sentry_flutter: ^9.0.0

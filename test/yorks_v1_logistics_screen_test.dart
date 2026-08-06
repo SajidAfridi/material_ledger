@@ -71,6 +71,66 @@ void main() {
     expect(find.text('Return quantity'), findsOneWidget);
     expect(find.text('Save return draft'), findsWidgets);
   });
+
+  testWidgets(
+    'focused receipt route opens the R35 receipt review dialog for its dispatch',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          child: const YorksV1LogisticsScreen(
+            requestId: 'receipt-focus',
+            focusReceiptReview: true,
+            // A stale deep link must still find the next server-authorized
+            // dispatch rather than leaving the receipt action inert.
+            focusedDispatchId: 'stale-dispatch',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Review delivered materials'), findsOneWidget);
+      expect(find.text('Focus damper'), findsOneWidget);
+      expect(find.text('Received'), findsOneWidget);
+      expect(find.text('Missing'), findsOneWidget);
+      expect(find.text('Damaged'), findsOneWidget);
+      expect(find.text('Good quantity'), findsOneWidget);
+      expect(
+        find.text('Line note (required for missing or damaged)'),
+        findsOneWidget,
+      );
+      expect(find.text('All lines reviewed'), findsNothing);
+      expect(find.text('Save receipt review'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'focused Delivery Order route opens the generation dialog without returns',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          child: const YorksV1ReturnsDocumentsScreen(
+            requestId: 'delivery-focus',
+            focusDeliveryOrder: true,
+            // Likewise, a stale dispatch focus falls back to the available
+            // Delivery Order candidate without entering Material Returns.
+            focusedDispatchId: 'stale-dispatch',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Generate Delivery Order'), findsWidgets);
+      expect(find.text('Delivery Order reference'), findsOneWidget);
+      expect(find.text('Download PDF'), findsOneWidget);
+      expect(find.text('Material returns'), findsNothing);
+    },
+  );
 }
 
 Widget _testApp({
@@ -120,8 +180,9 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
   ) async => _item;
 
   @override
-  Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId) async =>
-      YorksV1LogisticsWorkspace(
+  Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId) async {
+    if (requestId == 'receipt-focus') return _receiptFocusWorkspace;
+    return YorksV1LogisticsWorkspace(
         requestId: requestId,
         requestNumber: 'Y-001-MR001',
         requestState: 'approved',
@@ -148,6 +209,7 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
         ],
         dispatches: const [],
       );
+  }
 
   @override
   Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) =>
@@ -161,12 +223,16 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
     String requestId,
-  ) async => _returnsWorkspace(requestId);
+  ) async => requestId == 'delivery-focus'
+      ? _deliveryFocusWorkspace
+      : _returnsWorkspace(requestId);
 
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
     YorksV1DeliveryOrderGenerationInput input,
-  ) async => _returnsWorkspace(input.requestId);
+  ) async => input.requestId == 'delivery-focus'
+      ? _deliveryFocusWorkspace
+      : _returnsWorkspace(input.requestId);
 
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> saveMaterialReturnDraft(
@@ -231,4 +297,67 @@ const _item = YorksV1LogisticsInventoryItem(
   availableQuantity: '4',
   recordVersion: 2,
   movementCount: 1,
+);
+
+final _receiptFocusWorkspace = YorksV1LogisticsWorkspace(
+  requestId: 'receipt-focus',
+  requestNumber: 'Y-001-MR001',
+  requestState: 'dispatched',
+  requestRecordVersion: 5,
+  projectName: 'Yorks Project',
+  scopeName: 'Building A',
+  canDispatch: false,
+  canConfirmReceipt: true,
+  dispatchCandidates: const [],
+  dispatches: [
+    YorksV1MaterialDispatch(
+      id: 'dispatch-focus',
+      number: 'Y-001-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 5),
+      state: YorksV1DispatchState.receiptPending,
+      recordVersion: 3,
+      dispatchedByDisplayName: 'Procurement User',
+      dispatchedAt: DateTime.utc(2026, 8, 5),
+      canConfirmReceipt: true,
+      deliveryReference: 'DN-001',
+      lines: const [
+        YorksV1DispatchLine(
+          id: 'dispatch-line-focus',
+          requestLineId: 'request-line-focus',
+          description: 'Focus damper',
+          unit: 'Nos',
+          source: YorksV1LogisticsSource.warehouse,
+          dispatchedQuantity: '1',
+          approvedQuantity: '1',
+        ),
+      ],
+    ),
+  ],
+);
+
+final _deliveryFocusWorkspace = YorksV1ReturnsDocumentsWorkspace(
+  requestId: 'delivery-focus',
+  projectId: 'project-1',
+  requestNumber: 'Y-001-MR001',
+  requestState: 'received',
+  requestRecordVersion: 2,
+  projectName: 'Yorks Project',
+  projectReference: 'Y-001',
+  scopeName: 'Building A',
+  canGenerateDeliveryOrder: true,
+  canSubmitMaterialReturn: false,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: [
+    YorksV1DeliveryOrderDispatch(
+      dispatchId: 'dispatch-delivery',
+      dispatchNumber: 'Y-001-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 5),
+      dispatchRecordVersion: 3,
+      canGenerate: true,
+      receiptReviewedAt: DateTime.utc(2026, 8, 5),
+    ),
+  ],
+  returnCandidates: const [],
+  materialReturns: const [],
+  returnInventoryItems: const [],
 );

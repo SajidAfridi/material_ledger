@@ -26,6 +26,46 @@ class YorksV1SelectedDocument {
   final String fileName;
   final String mimeType;
   final Uint8List bytes;
+
+  /// Applies the exact same controlled-document boundary to browser drops as
+  /// the platform picker. The server repeats these checks before persistence.
+  factory YorksV1SelectedDocument.checked({
+    required String fileName,
+    required Uint8List bytes,
+  }) {
+    final normalizedName = _normalizedFileName(fileName);
+    final mimeType = _controlledDocumentMimeType(normalizedName);
+    if (mimeType == null || bytes.isEmpty || bytes.lengthInBytes > _maxBytes) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    return YorksV1SelectedDocument(
+      fileName: normalizedName,
+      mimeType: mimeType,
+      bytes: bytes,
+    );
+  }
+}
+
+const _maxBytes = 6 * 1024 * 1024;
+
+String _normalizedFileName(String value) {
+  final normalized = value.replaceAll('\\', '/');
+  final slash = normalized.lastIndexOf('/');
+  return slash < 0 ? normalized : normalized.substring(slash + 1);
+}
+
+String? _controlledDocumentMimeType(String name) {
+  final extension = name.split('.').last.toLowerCase();
+  return switch (extension) {
+    'pdf' => 'application/pdf',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    _ => null,
+  };
 }
 
 class YorksV1PlatformDocumentFileService implements YorksV1DocumentFileService {
@@ -47,19 +87,8 @@ class YorksV1PlatformDocumentFileService implements YorksV1DocumentFileService {
   Future<YorksV1SelectedDocument?> selectDocument() async {
     final file = await openFile(acceptedTypeGroups: const [_type]);
     if (file == null) return null;
-    final mimeType = _mimeFor(file.name);
-    if (mimeType == null) {
-      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
-    }
     final bytes = await file.readAsBytes();
-    if (bytes.isEmpty || bytes.lengthInBytes > 6 * 1024 * 1024) {
-      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
-    }
-    return YorksV1SelectedDocument(
-      fileName: _fileName(file.name),
-      mimeType: mimeType,
-      bytes: bytes,
-    );
+    return YorksV1SelectedDocument.checked(fileName: file.name, bytes: bytes);
   }
 
   @override
@@ -69,36 +98,16 @@ class YorksV1PlatformDocumentFileService implements YorksV1DocumentFileService {
     required String mimeType,
   }) async {
     final location = await getSaveLocation(
-      suggestedName: _fileName(fileName),
+      suggestedName: _normalizedFileName(fileName),
       acceptedTypeGroups: const [_type],
     );
     if (location == null) return false;
     final file = XFile.fromData(
       bytes,
-      name: _fileName(fileName),
+      name: _normalizedFileName(fileName),
       mimeType: mimeType,
     );
     await file.saveTo(location.path);
     return true;
-  }
-
-  static String _fileName(String value) {
-    final normalized = value.replaceAll('\\', '/');
-    final slash = normalized.lastIndexOf('/');
-    return slash < 0 ? normalized : normalized.substring(slash + 1);
-  }
-
-  static String? _mimeFor(String name) {
-    final extension = name.split('.').last.toLowerCase();
-    return switch (extension) {
-      'pdf' => 'application/pdf',
-      'xlsx' =>
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'docx' =>
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'jpg' || 'jpeg' => 'image/jpeg',
-      'png' => 'image/png',
-      _ => null,
-    };
   }
 }

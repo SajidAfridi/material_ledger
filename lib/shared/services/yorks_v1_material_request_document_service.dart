@@ -199,7 +199,11 @@ class YorksV1MaterialRequestDocumentService {
         pageFormat: PdfPageFormat.a4,
         maxPages: 200,
         margin: pw.EdgeInsets.fromLTRB(12 * _mm, 9 * _mm, 12 * _mm, 8 * _mm),
-        header: (_) => _formalHeader(logo, model),
+        // The controlled form identity block belongs to page one only. The
+        // table's own repeated heading still identifies continuation pages.
+        header: (context) => context.pageNumber == 1
+            ? _formalHeader(logo, model)
+            : pw.SizedBox(),
         footer: _pageNumber,
         build: (_) => [
           _materialTable(model, commercial: commercial),

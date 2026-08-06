@@ -166,14 +166,15 @@ void _bootstrap(ObservabilityService observability) {
         overrides.add(
           syncBackendProvider.overrideWithValue(SupabaseSyncBackend(client)),
         );
-        // Launch hydrate ONLY when a real session was restored: strict RLS
-        // denies anonymous reads, so pre-login hydration would fetch nothing.
-        // A returning user's session is recovered by initialize() above, so the
-        // request carries their JWT and returns exactly their permitted rows.
-        // Best-effort — never blocks launch.
-        if (client.auth.currentSession != null) {
+        // The generic snapshot bootstrap is retained only for legacy modules.
+        // R35 transactions have normalized repositories and trusted RPCs; the
+        // bootstrap's historical JSON upserts target legacy tables that strict
+        // RLS correctly rejects for Yorks roles. Do not run it in the complete
+        // Yorks workspace, where it is neither a source of truth nor a valid
+        // transport for Projects, BOQ, requests or notifications.
+        if (client.auth.currentSession != null && !r35Flags.isCompleteR35) {
           await SupabaseBootstrap(client, prefs).run();
-        } else {
+        } else if (client.auth.currentSession == null) {
           // No live Supabase session → clear any stale app session so the app
           // opens at login rather than a "ghost" signed-in state whose writes
           // RLS would silently deny.

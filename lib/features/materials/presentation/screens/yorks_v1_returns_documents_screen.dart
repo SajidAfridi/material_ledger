@@ -26,9 +26,19 @@ import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
 /// Server-provided capabilities control every committed action; the client only
 /// collects operational inputs and renders immutable snapshots.
 class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
-  const YorksV1ReturnsDocumentsScreen({super.key, required this.requestId});
+  const YorksV1ReturnsDocumentsScreen({
+    super.key,
+    required this.requestId,
+    this.focusDeliveryOrder = false,
+    this.focusedDispatchId,
+  });
 
   final String requestId;
+
+  /// Opens the Delivery Order action directly after a confirmed receipt so the
+  /// Material Request does not appear to hand the engineer over to Returns.
+  final bool focusDeliveryOrder;
+  final String? focusedDispatchId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,7 +54,10 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
           ? AppBar(
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
-              title: _ReturnsBilingualTitle(language: language),
+              title: _ReturnsBilingualTitle(
+                language: language,
+                deliveryOrderOnly: focusDeliveryOrder,
+              ),
               actions: [
                 IconButton(
                   tooltip:
@@ -68,6 +81,8 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
           workspace: value,
           onChanged: () => _refresh(ref),
           showPageHeader: !compactRoute,
+          focusDeliveryOrder: focusDeliveryOrder,
+          focusedDispatchId: focusedDispatchId,
         ),
       ),
     );
@@ -81,12 +96,19 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
 }
 
 class _ReturnsBilingualTitle extends StatelessWidget {
-  const _ReturnsBilingualTitle({required this.language});
+  const _ReturnsBilingualTitle({
+    required this.language,
+    required this.deliveryOrderOnly,
+  });
   final AppLanguage language;
+  final bool deliveryOrderOnly;
 
   @override
   Widget build(BuildContext context) => Text(
-    YorksV1LogisticsStrings.deliveryOrdersAndReturns.active(language),
+    (deliveryOrderOnly
+            ? YorksV1LogisticsStrings.deliveryOrder
+            : YorksV1LogisticsStrings.deliveryOrdersAndReturns)
+        .active(language),
     textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
     style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
   );
@@ -97,11 +119,15 @@ class _ReturnsDocumentsBody extends ConsumerStatefulWidget {
     required this.workspace,
     required this.onChanged,
     required this.showPageHeader,
+    required this.focusDeliveryOrder,
+    required this.focusedDispatchId,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final VoidCallback onChanged;
   final bool showPageHeader;
+  final bool focusDeliveryOrder;
+  final String? focusedDispatchId;
 
   @override
   ConsumerState<_ReturnsDocumentsBody> createState() =>
@@ -113,6 +139,7 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
   final Map<String, TextEditingController> _quantities = {};
   final _documents = const YorksV1LogisticsDocumentService();
   bool _saving = false;
+  bool _deliveryOrderFocusHandled = false;
 
   YorksV1MaterialReturn? get _editableDraft {
     for (final materialReturn in widget.workspace.materialReturns) {
@@ -125,12 +152,18 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
   void initState() {
     super.initState();
     _syncDraft();
+    _scheduleFocusedDeliveryOrder();
   }
 
   @override
   void didUpdateWidget(covariant _ReturnsDocumentsBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.workspace != widget.workspace) _syncDraft();
+    if (oldWidget.focusDeliveryOrder != widget.focusDeliveryOrder ||
+        oldWidget.focusedDispatchId != widget.focusedDispatchId) {
+      _deliveryOrderFocusHandled = false;
+    }
+    _scheduleFocusedDeliveryOrder();
   }
 
   @override
@@ -174,6 +207,37 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
     setState(() {});
   }
 
+  void _scheduleFocusedDeliveryOrder() {
+    if (!widget.focusDeliveryOrder || _deliveryOrderFocusHandled) return;
+    _deliveryOrderFocusHandled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      YorksV1DeliveryOrderDispatch? target;
+      for (final dispatch in widget.workspace.deliveryOrderDispatches) {
+        if (widget.focusedDispatchId == dispatch.dispatchId) {
+          target = dispatch;
+          break;
+        }
+      }
+      if (target == null || !target.canGenerate) {
+        for (final dispatch in widget.workspace.deliveryOrderDispatches) {
+          if (dispatch.canGenerate) {
+            target = dispatch;
+            break;
+          }
+        }
+      }
+      if (target == null || !target.canGenerate) return;
+      final changed = await showYorksV1DeliveryOrderGenerationDialog(
+        context,
+        workspace: widget.workspace,
+        dispatch: target,
+        documents: _documents,
+      );
+      if (changed == true && mounted) widget.onChanged();
+    });
+  }
+
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -189,8 +253,17 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
                 YorksR35PageHeader(
                   eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
                   title:
-                      YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-                  description: YorksV1LogisticsStrings.materialReturns.primary,
+                      (widget.focusDeliveryOrder
+                              ? YorksV1LogisticsStrings.deliveryOrder
+                              : YorksV1LogisticsStrings
+                                    .deliveryOrdersAndReturns)
+                          .primary,
+                  description:
+                      (widget.focusDeliveryOrder
+                              ? YorksV1LogisticsStrings
+                                    .deliveryOrderAfterReceipt
+                              : YorksV1LogisticsStrings.materialReturns)
+                          .primary,
                   actions: [
                     SizedBox(
                       height: AppSpacing.controlHeight,
@@ -205,7 +278,10 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
                 const SizedBox(height: AppSpacing.xl),
               ],
               NexusSectionCard(
-                child: _WorkspaceFacts(workspace: widget.workspace),
+                child: _WorkspaceFacts(
+                  workspace: widget.workspace,
+                  deliveryOrderOnly: widget.focusDeliveryOrder,
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
               NexusSectionCard(
@@ -216,22 +292,24 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
                   onChanged: widget.onChanged,
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              if (widget.workspace.canSubmitMaterialReturn) ...[
+              if (!widget.focusDeliveryOrder) ...[
+                const SizedBox(height: AppSpacing.lg),
+                if (widget.workspace.canSubmitMaterialReturn) ...[
+                  NexusSectionCard(
+                    title: YorksV1LogisticsStrings.materialReturns.primary,
+                    child: _buildReturnEditor(context),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 NexusSectionCard(
                   title: YorksV1LogisticsStrings.materialReturns.primary,
-                  child: _buildReturnEditor(context),
+                  child: _ReturnHistory(
+                    workspace: widget.workspace,
+                    documents: _documents,
+                    onChanged: widget.onChanged,
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.lg),
               ],
-              NexusSectionCard(
-                title: YorksV1LogisticsStrings.materialReturns.primary,
-                child: _ReturnHistory(
-                  workspace: widget.workspace,
-                  documents: _documents,
-                  onChanged: widget.onChanged,
-                ),
-              ),
             ],
           ),
         ),
@@ -371,8 +449,12 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
 }
 
 class _WorkspaceFacts extends StatelessWidget {
-  const _WorkspaceFacts({required this.workspace});
+  const _WorkspaceFacts({
+    required this.workspace,
+    this.deliveryOrderOnly = false,
+  });
   final YorksV1ReturnsDocumentsWorkspace workspace;
+  final bool deliveryOrderOnly;
 
   @override
   Widget build(BuildContext context) => Wrap(
@@ -380,7 +462,10 @@ class _WorkspaceFacts extends StatelessWidget {
     runSpacing: AppSpacing.md,
     children: [
       _Fact(
-        YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+        (deliveryOrderOnly
+                ? YorksV1LogisticsStrings.deliveryOrder
+                : YorksV1LogisticsStrings.deliveryOrdersAndReturns)
+            .primary,
         workspace.requestNumber ?? '',
       ),
       _Fact(YorksV1LogisticsStrings.project.primary, workspace.projectName),
@@ -463,13 +548,6 @@ class _DeliveryOrderCard extends ConsumerStatefulWidget {
 
 class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
   bool _working = false;
-  late String _generationIdempotencyKey;
-
-  @override
-  void initState() {
-    super.initState();
-    _generationIdempotencyKey = const Uuid().v4();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -604,36 +682,13 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
   }
 
   Future<void> _generate() async {
-    final reference = await _referenceDialog(
+    final changed = await showYorksV1DeliveryOrderGenerationDialog(
       context,
-      widget.dispatch.deliveryOrder?.reference,
+      workspace: widget.workspace,
+      dispatch: widget.dispatch,
+      documents: widget.documents,
     );
-    if (reference == null || reference.trim().isEmpty) return;
-    setState(() => _working = true);
-    try {
-      await ref
-          .read(yorksV1LogisticsRepositoryProvider)
-          .generateDeliveryOrder(
-            YorksV1DeliveryOrderGenerationInput(
-              requestId: widget.workspace.requestId,
-              dispatchId: widget.dispatch.dispatchId,
-              expectedRequestVersion: widget.workspace.requestRecordVersion,
-              expectedDispatchVersion: widget.dispatch.dispatchRecordVersion,
-              deliveryOrderReference: reference,
-              idempotencyKey: _generationIdempotencyKey,
-            ),
-          );
-      if (!mounted) return;
-      // A successful command has a new immutable revision. A deliberate
-      // regenerate action must receive a fresh command identity, while a
-      // failed/ambiguous response retains this key for a safe retry.
-      _generationIdempotencyKey = const Uuid().v4();
-      widget.onChanged();
-    } catch (_) {
-      if (mounted) _failure(context);
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
+    if (changed == true && mounted) widget.onChanged();
   }
 
   Future<void> _export(
@@ -722,6 +777,288 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
       if (mounted) setState(() => _working = false);
     }
   }
+}
+
+/// Opens Delivery Order generation on the current Material Request surface.
+/// The trusted RPC still owns eligibility and the immutable snapshot.
+Future<bool?> showYorksV1DeliveryOrderGenerationDialog(
+  BuildContext context, {
+  required YorksV1ReturnsDocumentsWorkspace workspace,
+  required YorksV1DeliveryOrderDispatch dispatch,
+  required YorksV1LogisticsDocumentService documents,
+}) => showDialog<bool>(
+  context: context,
+  animationStyle: AnimationStyle.noAnimation,
+  barrierDismissible: false,
+  builder: (_) => _DeliveryOrderGenerationDialog(
+    workspace: workspace,
+    dispatch: dispatch,
+    documents: documents,
+  ),
+);
+
+enum _DeliveryOrderOutput { print, download }
+
+class _DeliveryOrderGenerationDialog extends ConsumerStatefulWidget {
+  const _DeliveryOrderGenerationDialog({
+    required this.workspace,
+    required this.dispatch,
+    required this.documents,
+  });
+
+  final YorksV1ReturnsDocumentsWorkspace workspace;
+  final YorksV1DeliveryOrderDispatch dispatch;
+  final YorksV1LogisticsDocumentService documents;
+
+  @override
+  ConsumerState<_DeliveryOrderGenerationDialog> createState() =>
+      _DeliveryOrderGenerationDialogState();
+}
+
+class _DeliveryOrderGenerationDialogState
+    extends ConsumerState<_DeliveryOrderGenerationDialog> {
+  late final TextEditingController _reference;
+  late final String _idempotencyKey;
+  bool _working = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reference = TextEditingController(
+      text: widget.dispatch.deliveryOrder?.reference ?? '',
+    );
+    _idempotencyKey = const Uuid().v4();
+  }
+
+  @override
+  void dispose() {
+    _reference.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    return Dialog(
+      insetPadding: EdgeInsets.all(
+        screen.width < AppSpacing.yorksV1DesktopBreakpoint
+            ? AppSpacing.md
+            : AppSpacing.xxl,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 700,
+          maxHeight: screen.height * .88,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          YorksV1LogisticsStrings.generateDeliveryOrder.primary,
+                          style: AppTypography.titleLarge.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          widget.dispatch.dispatchNumber,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    onPressed: _working
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _reference,
+                      enabled: !_working,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        labelText: YorksV1LogisticsStrings
+                            .deliveryOrderReference
+                            .primary,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.blueContainer,
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: .24),
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: AppSpacing.xxs),
+                            child: Icon(
+                              Icons.description_outlined,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Text(
+                              YorksV1LogisticsStrings
+                                  .deliveryOrderAfterReceipt
+                                  .primary,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    SecondaryButton(
+                      label: MaterialLocalizations.of(
+                        context,
+                      ).cancelButtonLabel,
+                      isExpanded: false,
+                      onPressed: _working
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                    ),
+                    SecondaryButton(
+                      label: YorksV1LogisticsStrings.printDocument.primary,
+                      icon: Icons.print_outlined,
+                      isExpanded: false,
+                      onPressed: _working
+                          ? null
+                          : () => _generateAndOpen(_DeliveryOrderOutput.print),
+                    ),
+                    PrimaryButton(
+                      label: YorksV1LogisticsStrings.downloadPdf.primary,
+                      icon: Icons.download_outlined,
+                      isExpanded: false,
+                      isLoading: _working,
+                      onPressed: _working
+                          ? null
+                          : () =>
+                                _generateAndOpen(_DeliveryOrderOutput.download),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _generateAndOpen(_DeliveryOrderOutput output) async {
+    if (_reference.text.trim().isEmpty) {
+      _showFailure(
+        YorksV1LogisticsStrings.deliveryOrderReferenceRequired.primary,
+      );
+      return;
+    }
+    setState(() => _working = true);
+    try {
+      final updated = await ref
+          .read(yorksV1LogisticsRepositoryProvider)
+          .generateDeliveryOrder(
+            YorksV1DeliveryOrderGenerationInput(
+              requestId: widget.workspace.requestId,
+              dispatchId: widget.dispatch.dispatchId,
+              expectedRequestVersion: widget.workspace.requestRecordVersion,
+              expectedDispatchVersion: widget.dispatch.dispatchRecordVersion,
+              deliveryOrderReference: _reference.text,
+              idempotencyKey: _idempotencyKey,
+            ),
+          );
+      YorksV1DeliveryOrderDispatch? dispatch;
+      for (final candidate in updated.deliveryOrderDispatches) {
+        if (candidate.dispatchId == widget.dispatch.dispatchId) {
+          dispatch = candidate;
+          break;
+        }
+      }
+      final revision = dispatch?.deliveryOrder?.currentRevision;
+      if (dispatch == null || revision == null) {
+        throw StateError('Missing Delivery Order snapshot after generation.');
+      }
+      if (output == _DeliveryOrderOutput.print) {
+        await widget.documents.printDeliveryOrder(
+          workspace: updated,
+          dispatch: dispatch,
+          revision: revision,
+        );
+      } else {
+        await widget.documents.shareDeliveryOrderPdf(
+          workspace: updated,
+          dispatch: dispatch,
+          revision: revision,
+        );
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (_) {
+      if (mounted) {
+        _showFailure(YorksV1LogisticsStrings.savingFailed.primary);
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  void _showFailure(String message) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _FourColumnTable extends StatelessWidget {
@@ -1461,35 +1798,6 @@ class _ReturnStateChip extends StatelessWidget {
       style: AppTypography.labelSmall,
     ),
   );
-}
-
-Future<String?> _referenceDialog(BuildContext context, String? existing) async {
-  final controller = TextEditingController(text: existing ?? '');
-  final result = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(YorksV1LogisticsStrings.deliveryOrderReference.primary),
-      content: TextField(
-        controller: controller,
-        textCapitalization: TextCapitalization.characters,
-        decoration: InputDecoration(
-          labelText: YorksV1LogisticsStrings.deliveryOrderReference.primary,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(controller.text),
-          child: Text(YorksV1LogisticsStrings.generateDeliveryOrder.primary),
-        ),
-      ],
-    ),
-  );
-  controller.dispose();
-  return result;
 }
 
 Future<String?> _reasonDialog(BuildContext context) async {

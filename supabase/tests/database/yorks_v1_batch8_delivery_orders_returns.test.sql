@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(33);
+select plan(37);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -191,6 +191,68 @@ insert into public.v1_receipt_review_lines (
   '81800000-0000-4000-8000-000000000002',
   '81700000-0000-4000-8000-000000000001',
   '81600000-0000-4000-8000-000000000002', 'received', 1, 1, 0, null
+);
+
+-- A project may have more than one Project Engineer. The supporting Engineer
+-- must receive the same post-receipt controlled-document capability as the
+-- Engineer who created the project.
+insert into public.v1_project_members (
+  project_id, member_auth_user_id, project_role, reason,
+  assigned_by_auth_user_id, assigned_by_role
+) values (
+  (select project_id from v1_b8_targets),
+  '10000000-0000-4000-8000-000000000004',
+  'project_engineer', 'Supporting Project Engineer for Delivery Order proof',
+  '10000000-0000-4000-8000-000000000001', 'project_engineer'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select ok(
+  public.v1_can_generate_delivery_order(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'The assigned Project Engineer can generate a Delivery Order after receipt'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
+  true
+);
+select ok(
+  public.v1_can_generate_delivery_order(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'Every actively assigned Project Engineer can generate the same Delivery Order'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select ok(
+  public.v1_can_generate_delivery_order(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'The assigned Site Engineer can generate a Delivery Order after receipt'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-unassigned-site-engineer"}}',
+  true
+);
+select ok(
+  not public.v1_can_generate_delivery_order(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'An unassigned Site Engineer cannot generate the project Delivery Order'
 );
 
 set local role authenticated;

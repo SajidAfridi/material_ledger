@@ -2,9 +2,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/yorks_v1_arrangement.dart';
 import 'yorks_v1_arrangement_repository_provider.dart';
+import 'yorks_v1_material_request_provider.dart';
 
 final yorksV1ArrangementWorkspaceProvider = FutureProvider.autoDispose
     .family<YorksV1ArrangementWorkspace, String>((ref, requestId) {
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
       return ref
           .watch(yorksV1ArrangementRepositoryProvider)
           .getWorkspace(requestId);

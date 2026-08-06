@@ -48,7 +48,7 @@ void main() {
 
         final submitted = await controller.submit();
 
-        expect(submitted?.requestNumber, 'B5-TEST-MR001');
+        expect(submitted?.requestNumber, 'B5TEST-MR001');
         expect(repository.saveAndSubmitInputs, hasLength(1));
         expect(repository.saveAndSubmitInputs.single.id, _draftId);
         expect(
@@ -873,7 +873,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   ) async => _request(
     requestId: input.requestId,
     version: input.expectedVersion + 1,
-    number: 'B5-TEST-MR001',
+    number: 'B5TEST-MR001',
   );
 
   @override
@@ -881,13 +881,13 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
 
   @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async =>
-      _request(requestId: requestId, version: 2, number: 'B5-TEST-MR001');
+      _request(requestId: requestId, version: 2, number: 'B5TEST-MR001');
 
   @override
   Future<YorksV1MaterialRequestDocumentModel> getDocumentModel(
     String requestId,
   ) async => YorksV1MaterialRequestDocumentModel.fromRequest(
-    _request(requestId: requestId, version: 2, number: 'B5-TEST-MR001'),
+    _request(requestId: requestId, version: 2, number: 'B5TEST-MR001'),
   );
 
   @override
@@ -922,7 +922,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
     final failure = submitFailure;
     if (failure != null) throw failure;
     saveAndSubmitInputs.add(draft);
-    return _request(requestId: draft.id, version: 2, number: 'B5-TEST-MR001');
+    return _request(requestId: draft.id, version: 2, number: 'B5TEST-MR001');
   }
 
   @override
@@ -935,7 +935,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
     return _request(
       requestId: input.requestId,
       version: 2,
-      number: 'B5-TEST-MR001',
+      number: 'B5TEST-MR001',
     );
   }
 }

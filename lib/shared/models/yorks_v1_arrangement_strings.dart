@@ -33,6 +33,12 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'انتظام منظور کریں',
     hi: 'व्यवस्था स्वीकृत करें',
   );
+  static const reviewAndApprove = TranslatableString(
+    en: 'Review & Approve',
+    ar: 'مراجعة واعتماد',
+    ur: 'جائزہ لیں اور منظور کریں',
+    hi: 'समीक्षा करें और स्वीकृत करें',
+  );
   static const returnToProcurement = TranslatableString(
     en: 'Return to Procurement',
     ar: 'إعادة إلى المشتريات',

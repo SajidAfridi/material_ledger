@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dropzone/flutter_dropzone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -9,6 +13,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
+import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -16,6 +21,7 @@ import '../../../../shared/providers/yorks_v1_document_file_service_provider.dar
 import '../../../../shared/providers/yorks_v1_documents_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/services/yorks_v1_document_file_service.dart';
 
 /// Controlled documents are created as immutable Storage versions. The screen
 /// never receives a signed path: every read and write remains server-authorized.
@@ -109,6 +115,10 @@ class _YorksV1DocumentsScreenState
           onRemove: _remove,
           showPageHeader: !compactRoute,
           onCreateDocument: () => _uploadNewVersion(),
+          onDropDocuments: _uploadDroppedDocuments,
+          onDropError: () =>
+              _snack(context, YorksV1DocumentStrings.uploadFailed.primary),
+          onLinkExisting: () => _linkExistingDocument(value),
         ),
       ),
     );
@@ -123,6 +133,18 @@ class _YorksV1DocumentsScreenState
         .read(yorksV1DocumentFileServiceProvider)
         .selectDocument();
     if (selected == null || !mounted) return;
+    await _uploadSelectedDocument(
+      selected,
+      classification: classification,
+      document: document,
+    );
+  }
+
+  Future<void> _uploadSelectedDocument(
+    YorksV1SelectedDocument selected, {
+    required YorksV1DocumentClassification classification,
+    YorksV1Document? document,
+  }) async {
     setState(() => _working = true);
     try {
       await ref
@@ -148,6 +170,97 @@ class _YorksV1DocumentsScreenState
     } finally {
       if (mounted) setState(() => _working = false);
     }
+  }
+
+  Future<void> _uploadDroppedDocuments(
+    List<YorksV1SelectedDocument> selectedDocuments,
+  ) async {
+    if (selectedDocuments.isEmpty || _working) return;
+    final classification = await _classification(
+      ref.read(yorksV1CurrentRoleProvider),
+    );
+    if (classification == null || !mounted) return;
+    setState(() => _working = true);
+    var uploaded = 0;
+    try {
+      for (final selected in selectedDocuments) {
+        await ref
+            .read(yorksV1DocumentsRepositoryProvider)
+            .upload(
+              YorksV1DocumentUploadInput(
+                projectId: widget.projectId,
+                entityType: _targetEntityType,
+                entityId: _targetEntityId,
+                classification: classification,
+                fileName: selected.fileName,
+                mimeType: selected.mimeType,
+                bytes: selected.bytes,
+                idempotencyKey: const Uuid().v4(),
+              ),
+            );
+        uploaded++;
+      }
+      if (!mounted) return;
+      _refresh();
+      _snack(context, YorksV1DocumentStrings.uploadSucceeded.primary);
+    } catch (_) {
+      if (mounted) {
+        _refresh();
+        _snack(context, YorksV1DocumentStrings.uploadFailed.primary);
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+    // A partial browser drop is intentionally visible after refresh. Each
+    // accepted file is its own idempotent controlled-document command.
+    if (uploaded < selectedDocuments.length && mounted) _refresh();
+  }
+
+  Future<void> _linkExistingDocument(YorksV1DocumentWorkspace workspace) async {
+    final available = workspace.documents
+        .where(
+          (document) =>
+              !document.isLinkedTo(_targetEntityType, _targetEntityId),
+        )
+        .toList(growable: false);
+    if (available.isEmpty) return;
+    final selected = await showDialog<YorksV1Document>(
+      context: context,
+      animationStyle: AnimationStyle.noAnimation,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(YorksV1DocumentStrings.linkExistingDocument.primary),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620, maxHeight: 520),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: available.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final document = available[index];
+              return ListTile(
+                leading: Icon(
+                  _iconForMime(document.currentVersion.mimeType),
+                  color: AppColors.primary,
+                ),
+                title: Text(document.currentVersion.fileName),
+                subtitle: Text(
+                  '${YorksV1DocumentStrings.revision.primary} '
+                  '${document.currentVersion.revisionNumber}',
+                ),
+                onTap: () => Navigator.of(dialogContext).pop(document),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(YorksV1DocumentStrings.cancel.primary),
+          ),
+        ],
+      ),
+    );
+    if (selected != null && mounted) await _link(selected);
   }
 
   Future<YorksV1DocumentClassification?> _classification(
@@ -332,6 +445,9 @@ class _WorkspaceBody extends StatelessWidget {
     required this.onRemove,
     required this.showPageHeader,
     required this.onCreateDocument,
+    required this.onDropDocuments,
+    required this.onDropError,
+    required this.onLinkExisting,
   });
 
   final YorksV1DocumentWorkspace workspace;
@@ -346,6 +462,9 @@ class _WorkspaceBody extends StatelessWidget {
   final ValueChanged<YorksV1Document> onRemove;
   final bool showPageHeader;
   final VoidCallback onCreateDocument;
+  final Future<void> Function(List<YorksV1SelectedDocument>) onDropDocuments;
+  final VoidCallback onDropError;
+  final VoidCallback onLinkExisting;
 
   @override
   Widget build(BuildContext context) {
@@ -357,6 +476,11 @@ class _WorkspaceBody extends StatelessWidget {
               )
               .toList(growable: false)
         : workspace.documents;
+    final hasLinkableDocument =
+        focusedRecord &&
+        workspace.documents.any(
+          (document) => !document.isLinkedTo(targetEntityType, targetEntityId),
+        );
     return SafeArea(
       top: false,
       child: ListView(
@@ -382,6 +506,19 @@ class _WorkspaceBody extends StatelessWidget {
                       description:
                           YorksV1DocumentStrings.documentsDescription.primary,
                       actions: [
+                        if (hasLinkableDocument)
+                          SizedBox(
+                            height: AppSpacing.minTapTarget,
+                            child: OutlinedButton.icon(
+                              onPressed: busy ? null : onLinkExisting,
+                              icon: const Icon(Icons.link_rounded),
+                              label: Text(
+                                YorksV1DocumentStrings
+                                    .linkExistingDocument
+                                    .primary,
+                              ),
+                            ),
+                          ),
                         SizedBox(
                           height: AppSpacing.minTapTarget,
                           child: FilledButton.icon(
@@ -396,6 +533,14 @@ class _WorkspaceBody extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xl),
                   ],
+                  _DocumentDropzone(
+                    language: language,
+                    busy: busy,
+                    onPick: onCreateDocument,
+                    onDropped: onDropDocuments,
+                    onDropError: onDropError,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
                   NexusSectionCard(
                     child: _CopyText(
                       copy: YorksV1DocumentStrings.documentsDescription,
@@ -453,6 +598,199 @@ class _WorkspaceBody extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DocumentDropzone extends StatefulWidget {
+  const _DocumentDropzone({
+    required this.language,
+    required this.busy,
+    required this.onPick,
+    required this.onDropped,
+    required this.onDropError,
+  });
+
+  final AppLanguage language;
+  final bool busy;
+  final VoidCallback onPick;
+  final Future<void> Function(List<YorksV1SelectedDocument>) onDropped;
+  final VoidCallback onDropError;
+
+  @override
+  State<_DocumentDropzone> createState() => _DocumentDropzoneState();
+}
+
+class _DocumentDropzoneState extends State<_DocumentDropzone> {
+  DropzoneViewController? _controller;
+  bool _dragging = false;
+
+  static const _acceptedMimeTypes = <String>[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/jpeg',
+    'image/png',
+  ];
+
+  Future<void> _handleDrop(List<DropzoneFileInterface>? files) async {
+    final controller = _controller;
+    if (controller == null || files == null || files.isEmpty || widget.busy) {
+      return;
+    }
+    if (mounted) setState(() => _dragging = false);
+    final selected = <YorksV1SelectedDocument>[];
+    var invalid = false;
+    for (final file in files) {
+      try {
+        selected.add(
+          YorksV1SelectedDocument.checked(
+            fileName: await controller.getFilename(file),
+            bytes: await controller.getFileData(file),
+          ),
+        );
+      } on YorksV1DomainException {
+        invalid = true;
+      } catch (_) {
+        invalid = true;
+      }
+    }
+    if (selected.isNotEmpty) await widget.onDropped(selected);
+    if (invalid) widget.onDropError();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Semantics(
+      button: true,
+      label: YorksV1DocumentStrings.dropDocuments.primary,
+      child: InkWell(
+        key: const ValueKey('yorks-v1-document-dropzone'),
+        onTap: widget.busy ? null : widget.onPick,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: CustomPaint(
+          painter: _DocumentDropBorderPainter(
+            color: _dragging
+                ? AppColors.primary
+                : AppColors.primary.withValues(alpha: .48),
+            radius: AppSpacing.radiusMd,
+          ),
+          child: AnimatedContainer(
+            duration: Duration.zero,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.xl,
+            ),
+            decoration: BoxDecoration(
+              color: _dragging
+                  ? AppColors.blueContainer.withValues(alpha: .72)
+                  : AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.cloud_upload_outlined,
+                  color: AppColors.primary,
+                  size: 30,
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _dragging
+                            ? YorksV1DocumentStrings.dropDocumentsActive.primary
+                            : YorksV1DocumentStrings.dropDocuments.primary,
+                        style: AppTypography.titleSmall.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      _CopyText(
+                        copy: YorksV1DocumentStrings.dropDocumentsPrompt,
+                        language: widget.language,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (MediaQuery.sizeOf(context).width >= 600) ...[
+                  const SizedBox(width: AppSpacing.md),
+                  OutlinedButton.icon(
+                    onPressed: widget.busy ? null : widget.onPick,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(YorksV1DocumentStrings.addDocument.primary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!kIsWeb) return content;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DropzoneView(
+            mime: _acceptedMimeTypes,
+            operation: DragOperation.copy,
+            cursor: CursorType.grab,
+            onCreated: (controller) => _controller = controller,
+            onHover: () {
+              if (mounted && !widget.busy) setState(() => _dragging = true);
+            },
+            onLeave: () {
+              if (mounted) setState(() => _dragging = false);
+            },
+            onDropInvalid: (_) => widget.onDropError(),
+            onDropFiles: (files) => unawaited(_handleDrop(files)),
+          ),
+        ),
+        content,
+      ],
+    );
+  }
+}
+
+class _DocumentDropBorderPainter extends CustomPainter {
+  const _DocumentDropBorderPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dash = 7.0;
+    const gap = 5.0;
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
+      );
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        canvas.drawPath(
+          metric.extractPath(
+            distance,
+            (distance + dash).clamp(0, metric.length),
+          ),
+          paint,
+        );
+        distance += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DocumentDropBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }
 
 class _DocumentCard extends StatelessWidget {

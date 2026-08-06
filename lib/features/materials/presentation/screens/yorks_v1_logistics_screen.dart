@@ -17,9 +17,20 @@ import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 /// Role-aware request logistics. Server-derived action flags distinguish the
 /// Procurement dispatch form from Project/Site Engineer receipt review.
 class YorksV1LogisticsScreen extends ConsumerWidget {
-  const YorksV1LogisticsScreen({super.key, required this.requestId});
+  const YorksV1LogisticsScreen({
+    super.key,
+    required this.requestId,
+    this.focusReceiptReview = false,
+    this.focusedDispatchId,
+  });
 
   final String requestId;
+
+  /// Opens the supplied dispatched delivery in the R35 receipt-review dialog.
+  /// This lets the Material Request remain the primary workflow surface while
+  /// still using the protected logistics command for the receipt commit.
+  final bool focusReceiptReview;
+  final String? focusedDispatchId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,11 +63,13 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
       body: workspace.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _LogisticsError(onRetry: () => _refresh(ref)),
-        data: (value) => _LogisticsBody(
+        data: (value) => _FocusedLogisticsBody(
           workspace: value,
           language: language,
           onChanged: () => _refresh(ref),
           showPageHeader: !compactRoute,
+          focusReceiptReview: focusReceiptReview,
+          focusedDispatchId: focusedDispatchId,
         ),
       ),
     );
@@ -66,6 +79,88 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
     ref.invalidate(yorksV1LogisticsWorkspaceProvider(requestId));
     ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
   }
+}
+
+class _FocusedLogisticsBody extends StatefulWidget {
+  const _FocusedLogisticsBody({
+    required this.workspace,
+    required this.language,
+    required this.onChanged,
+    required this.showPageHeader,
+    required this.focusReceiptReview,
+    required this.focusedDispatchId,
+  });
+
+  final YorksV1LogisticsWorkspace workspace;
+  final AppLanguage language;
+  final VoidCallback onChanged;
+  final bool showPageHeader;
+  final bool focusReceiptReview;
+  final String? focusedDispatchId;
+
+  @override
+  State<_FocusedLogisticsBody> createState() => _FocusedLogisticsBodyState();
+}
+
+class _FocusedLogisticsBodyState extends State<_FocusedLogisticsBody> {
+  bool _focusHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleFocusedReceiptReview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FocusedLogisticsBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusReceiptReview != widget.focusReceiptReview ||
+        oldWidget.focusedDispatchId != widget.focusedDispatchId) {
+      _focusHandled = false;
+    }
+    _scheduleFocusedReceiptReview();
+  }
+
+  void _scheduleFocusedReceiptReview() {
+    if (!widget.focusReceiptReview || _focusHandled) return;
+    _focusHandled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      YorksV1MaterialDispatch? target;
+      for (final dispatch in widget.workspace.dispatches) {
+        if (widget.focusedDispatchId == dispatch.id) {
+          target = dispatch;
+          break;
+        }
+      }
+      if (target == null || !target.canConfirmReceipt) {
+        for (final dispatch in widget.workspace.dispatches) {
+          if (dispatch.canConfirmReceipt) {
+            target = dispatch;
+            break;
+          }
+        }
+      }
+      if (target == null || !target.canConfirmReceipt) return;
+      final confirmed = await showYorksV1ReceiptReviewDialog(
+        context,
+        workspace: widget.workspace,
+        dispatch: target,
+        onChanged: widget.onChanged,
+      );
+      if (confirmed == true && mounted) {
+        Navigator.of(context).maybePop();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => _LogisticsBody(
+    workspace: widget.workspace,
+    language: widget.language,
+    onChanged: widget.onChanged,
+    showPageHeader: widget.showPageHeader,
+  );
 }
 
 class _LogisticsBody extends StatelessWidget {
@@ -640,18 +735,33 @@ class _DispatchCard extends StatelessWidget {
   );
 
   Future<void> _openReceiptReview(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      builder: (_) => _ReceiptReviewSheet(
-        workspace: workspace,
-        dispatch: dispatch,
-        onChanged: onChanged,
-      ),
+    await showYorksV1ReceiptReviewDialog(
+      context,
+      workspace: workspace,
+      dispatch: dispatch,
+      onChanged: onChanged,
     );
   }
 }
+
+/// Opens the same protected receipt-review command from either the focused
+/// logistics route or the Material Request record. Keeping one dialog avoids
+/// route changes and guarantees both entry points validate identical inputs.
+Future<bool?> showYorksV1ReceiptReviewDialog(
+  BuildContext context, {
+  required YorksV1LogisticsWorkspace workspace,
+  required YorksV1MaterialDispatch dispatch,
+  required VoidCallback onChanged,
+}) => showDialog<bool>(
+  context: context,
+  animationStyle: AnimationStyle.noAnimation,
+  barrierDismissible: false,
+  builder: (_) => _ReceiptReviewSheet(
+    workspace: workspace,
+    dispatch: dispatch,
+    onChanged: onChanged,
+  ),
+);
 
 class _ReceiptReviewSheet extends ConsumerStatefulWidget {
   const _ReceiptReviewSheet({
@@ -673,7 +783,6 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   final Map<String, YorksV1ReceiptOutcome> _outcomes = {};
   final Map<String, TextEditingController> _goodQuantities = {};
   final Map<String, TextEditingController> _notes = {};
-  bool _allReviewed = false;
   bool _saving = false;
 
   @override
@@ -700,67 +809,105 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   }
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .9,
-      maxChildSize: .96,
-      builder: (context, scrollController) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.lg,
-          right: AppSpacing.lg,
-          bottom: MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
-          top: AppSpacing.lg,
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final isCompact = screen.width < AppSpacing.yorksV1DesktopBreakpoint;
+    return Dialog(
+      insetPadding: EdgeInsets.all(isCompact ? AppSpacing.sm : AppSpacing.xxl),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 1320,
+          maxHeight: screen.height * .92,
+          minWidth: isCompact ? 0 : 760,
         ),
-        child: ListView(
-          controller: scrollController,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              YorksV1LogisticsStrings.receiptReview.primary,
-              style: AppTypography.titleLarge,
+            _ReceiptReviewHeader(
+              dispatchNumber: widget.dispatch.number,
+              onClose: _saving ? null : () => Navigator.of(context).pop(),
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(widget.dispatch.number, style: AppTypography.bodyMedium),
-            const SizedBox(height: AppSpacing.lg),
-            for (final line in widget.dispatch.lines)
-              _ReceiptLineEditor(
-                line: line,
-                outcome: _outcomes[line.id]!,
-                goodQuantity: _goodQuantities[line.id]!,
-                note: _notes[line.id]!,
-                onOutcomeChanged: (outcome) => setState(() {
-                  _outcomes[line.id] = outcome;
-                  if (outcome == YorksV1ReceiptOutcome.received) {
-                    _goodQuantities[line.id]!.text = _displayQuantity(
-                      line.dispatchedQuantity,
-                    );
-                    _notes[line.id]!.clear();
-                  } else if (_goodQuantities[line.id]!.text ==
-                      _displayQuantity(line.dispatchedQuantity)) {
-                    _goodQuantities[line.id]!.text = '0';
-                  }
-                }),
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ReceiptDispatchBanner(dispatch: widget.dispatch),
+                    const SizedBox(height: AppSpacing.lg),
+                    for (
+                      var index = 0;
+                      index < widget.dispatch.lines.length;
+                      index++
+                    )
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: _ReceiptLineEditor(
+                          lineNumber: index + 1,
+                          line: widget.dispatch.lines[index],
+                          outcome: _outcomes[widget.dispatch.lines[index].id]!,
+                          goodQuantity:
+                              _goodQuantities[widget.dispatch.lines[index].id]!,
+                          note: _notes[widget.dispatch.lines[index].id]!,
+                          isDisabled: _saving,
+                          onOutcomeChanged: (outcome) => setState(() {
+                            final line = widget.dispatch.lines[index];
+                            _outcomes[line.id] = outcome;
+                            if (outcome == YorksV1ReceiptOutcome.received) {
+                              _goodQuantities[line.id]!.text = _displayQuantity(
+                                line.dispatchedQuantity,
+                              );
+                            } else if (_goodQuantities[line.id]!.text ==
+                                _displayQuantity(line.dispatchedQuantity)) {
+                              _goodQuantities[line.id]!.text = '0';
+                            }
+                          }),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            CheckboxListTile(
-              value: _allReviewed,
-              contentPadding: EdgeInsets.zero,
-              onChanged: _saving
-                  ? null
-                  : (value) => setState(() => _allReviewed = value ?? false),
-              title: Text(YorksV1LogisticsStrings.allLinesReviewed.primary),
             ),
-            const SizedBox(height: AppSpacing.md),
-            PrimaryButton(
-              label: YorksV1LogisticsStrings.confirmReceipt.primary,
-              icon: Icons.verified_outlined,
-              isLoading: _saving,
-              onPressed: _allReviewed && !_saving ? _confirm : null,
+            const Divider(height: 1),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    SecondaryButton(
+                      label: MaterialLocalizations.of(
+                        context,
+                      ).cancelButtonLabel,
+                      isExpanded: false,
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                    ),
+                    PrimaryButton(
+                      label: YorksV1LogisticsStrings.saveReceiptReview.primary,
+                      icon: Icons.verified_outlined,
+                      isExpanded: false,
+                      isLoading: _saving,
+                      onPressed: _saving ? null : _confirm,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Future<void> _confirm() async {
     final lines = <YorksV1ReceiptLineInput>[];
@@ -802,7 +949,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
           );
       if (!mounted) return;
       widget.onChanged();
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (_) {
       if (mounted) _showFailure(YorksV1LogisticsStrings.savingFailed.primary);
     } finally {
@@ -817,17 +964,21 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
 
 class _ReceiptLineEditor extends StatelessWidget {
   const _ReceiptLineEditor({
+    required this.lineNumber,
     required this.line,
     required this.outcome,
     required this.goodQuantity,
     required this.note,
+    required this.isDisabled,
     required this.onOutcomeChanged,
   });
 
+  final int lineNumber;
   final YorksV1DispatchLine line;
   final YorksV1ReceiptOutcome outcome;
   final TextEditingController goodQuantity;
   final TextEditingController note;
+  final bool isDisabled;
   final ValueChanged<YorksV1ReceiptOutcome> onOutcomeChanged;
 
   @override
@@ -838,46 +989,264 @@ class _ReceiptLineEditor extends StatelessWidget {
       border: Border.all(color: AppColors.line),
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(line.description, style: AppTypography.titleSmall),
-        Text(
-          '${_displayQuantity(line.dispatchedQuantity)} ${line.unit}',
-          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        DropdownButtonFormField<YorksV1ReceiptOutcome>(
-          initialValue: outcome,
-          decoration: InputDecoration(
-            labelText: YorksV1LogisticsStrings.outcome.primary,
-            border: const OutlineInputBorder(),
-          ),
-          items: [
-            for (final option in YorksV1ReceiptOutcome.values)
-              DropdownMenuItem(
-                value: option,
-                child: Text(yorksV1ReceiptOutcomeCopy(option).primary),
-              ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1180;
+        final identity = _ReceiptLineIdentity(
+          lineNumber: lineNumber,
+          line: line,
+        );
+        final decisions = _ReceiptOutcomeChoices(
+          selected: outcome,
+          disabled: isDisabled,
+          onChanged: onOutcomeChanged,
+        );
+        final inputs = _ReceiptLineInputs(
+          outcome: outcome,
+          goodQuantity: goodQuantity,
+          note: note,
+          disabled: isDisabled,
+        );
+        if (wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(flex: 5, child: identity),
+              const SizedBox(width: AppSpacing.md),
+              SizedBox(width: 360, child: decisions),
+              const SizedBox(width: AppSpacing.md),
+              SizedBox(width: 360, child: inputs),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            identity,
+            const SizedBox(height: AppSpacing.md),
+            decisions,
+            const SizedBox(height: AppSpacing.md),
+            inputs,
           ],
-          onChanged: (value) {
-            if (value != null) onOutcomeChanged(value);
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _QuantityInput(
-          controller: goodQuantity,
-          label: YorksV1LogisticsStrings.goodQuantity.primary,
-        ),
-        if (outcome != YorksV1ReceiptOutcome.received) ...[
-          const SizedBox(height: AppSpacing.md),
-          _TextInput(
-            controller: note,
-            label: YorksV1LogisticsStrings.note.primary,
+        );
+      },
+    ),
+  );
+}
+
+class _ReceiptReviewHeader extends StatelessWidget {
+  const _ReceiptReviewHeader({
+    required this.dispatchNumber,
+    required this.onClose,
+  });
+
+  final String dispatchNumber;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.lg,
+      AppSpacing.lg,
+      AppSpacing.sm,
+      AppSpacing.lg,
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                YorksV1LogisticsStrings.reviewDeliveredMaterials.primary,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                '$dispatchNumber · ${YorksV1LogisticsStrings.reviewDeliveryLineByLine.primary}',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
           ),
-        ],
+        ),
+        IconButton.filledTonal(
+          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          onPressed: onClose,
+          icon: const Icon(Icons.close_rounded),
+        ),
       ],
     ),
+  );
+}
+
+class _ReceiptDispatchBanner extends StatelessWidget {
+  const _ReceiptDispatchBanner({required this.dispatch});
+
+  final YorksV1MaterialDispatch dispatch;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer,
+      border: Border.all(color: AppColors.primary.withValues(alpha: .24)),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: AppSpacing.xxs),
+          child: Icon(Icons.local_shipping_outlined, color: AppColors.primary),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                dispatch.deliveryReference ?? dispatch.number,
+                style: AppTypography.labelLarge,
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                '${_dateLabel(dispatch.dispatchDate)} · ${dispatch.dispatchedByDisplayName}',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ReceiptLineIdentity extends StatelessWidget {
+  const _ReceiptLineIdentity({required this.lineNumber, required this.line});
+
+  final int lineNumber;
+  final YorksV1DispatchLine line;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('$lineNumber. ${line.description}', style: AppTypography.titleSmall),
+      const SizedBox(height: AppSpacing.xxs),
+      Text(
+        '${_displayQuantity(line.dispatchedQuantity)} ${line.unit} ${YorksV1LogisticsStrings.dispatched.primary}',
+        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+      ),
+    ],
+  );
+}
+
+class _ReceiptOutcomeChoices extends StatelessWidget {
+  const _ReceiptOutcomeChoices({
+    required this.selected,
+    required this.disabled,
+    required this.onChanged,
+  });
+
+  final YorksV1ReceiptOutcome selected;
+  final bool disabled;
+  final ValueChanged<YorksV1ReceiptOutcome> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: AppSpacing.sm,
+    runSpacing: AppSpacing.sm,
+    children: [
+      for (final option in YorksV1ReceiptOutcome.values)
+        _ReceiptOutcomeButton(
+          outcome: option,
+          selected: selected == option,
+          onPressed: disabled ? null : () => onChanged(option),
+        ),
+    ],
+  );
+}
+
+class _ReceiptOutcomeButton extends StatelessWidget {
+  const _ReceiptOutcomeButton({
+    required this.outcome,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final YorksV1ReceiptOutcome outcome;
+  final bool selected;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onPressed,
+    icon: Icon(
+      outcome == YorksV1ReceiptOutcome.received
+          ? Icons.check_rounded
+          : outcome == YorksV1ReceiptOutcome.missing
+          ? Icons.remove_circle_outline_rounded
+          : Icons.warning_amber_rounded,
+      size: 18,
+    ),
+    label: Text(yorksV1ReceiptOutcomeCopy(outcome).primary),
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(0, AppSpacing.minTapTarget),
+      foregroundColor: selected ? AppColors.primary : AppColors.onSurface,
+      backgroundColor: selected ? AppColors.blueContainer : null,
+      side: BorderSide(
+        color: selected ? AppColors.primary : AppColors.line,
+        width: selected ? 1.5 : 1,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+    ),
+  );
+}
+
+class _ReceiptLineInputs extends StatelessWidget {
+  const _ReceiptLineInputs({
+    required this.outcome,
+    required this.goodQuantity,
+    required this.note,
+    required this.disabled,
+  });
+
+  final YorksV1ReceiptOutcome outcome;
+  final TextEditingController goodQuantity;
+  final TextEditingController note;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final fields = [
+        SizedBox(
+          width: constraints.maxWidth >= 330 ? 150 : double.infinity,
+          child: _QuantityInput(
+            controller: goodQuantity,
+            label: YorksV1LogisticsStrings.goodQuantity.primary,
+            enabled: !disabled && outcome != YorksV1ReceiptOutcome.received,
+          ),
+        ),
+        SizedBox(
+          width: constraints.maxWidth >= 330 ? 196 : double.infinity,
+          child: _TextInput(
+            controller: note,
+            label: YorksV1LogisticsStrings.exceptionNote.primary,
+            enabled: !disabled,
+          ),
+        ),
+      ];
+      return Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: fields,
+      );
+    },
   );
 }
 
@@ -991,13 +1360,19 @@ class _Quantity extends StatelessWidget {
 }
 
 class _QuantityInput extends StatelessWidget {
-  const _QuantityInput({required this.controller, required this.label});
+  const _QuantityInput({
+    required this.controller,
+    required this.label,
+    this.enabled = true,
+  });
   final TextEditingController controller;
   final String label;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
+    enabled: enabled,
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
     decoration: InputDecoration(
       labelText: label,
@@ -1007,13 +1382,19 @@ class _QuantityInput extends StatelessWidget {
 }
 
 class _TextInput extends StatelessWidget {
-  const _TextInput({required this.controller, required this.label});
+  const _TextInput({
+    required this.controller,
+    required this.label,
+    this.enabled = true,
+  });
   final TextEditingController controller;
   final String label;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
+    enabled: enabled,
     decoration: InputDecoration(
       labelText: label,
       border: const OutlineInputBorder(),

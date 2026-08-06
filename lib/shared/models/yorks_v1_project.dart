@@ -116,6 +116,7 @@ enum YorksV1ProjectValidationCode {
   missingProjectReference,
   missingProjectName,
   invalidDateRange,
+  unsupportedProjectDate,
   invalidProjectParty,
   duplicateProjectParty,
   invalidAttachment,
@@ -129,6 +130,23 @@ enum YorksV1ProjectValidationCode {
   invalidVersion,
   missingStateReason,
   invalidStateTransition,
+}
+
+/// Project dates are calendar values.  Fifty years either side of today is a
+/// deliberately generous operational window that catches accidental
+/// century-scale selections while allowing legacy/current construction work.
+const yorksV1ProjectDateWindowYears = 50;
+
+bool yorksV1ProjectDateIsSupported(DateTime value, {DateTime? referenceDate}) {
+  final reference = referenceDate ?? DateTime.now();
+  final earliest = DateTime(reference.year - yorksV1ProjectDateWindowYears);
+  final latest = DateTime(
+    reference.year + yorksV1ProjectDateWindowYears,
+    12,
+    31,
+  );
+  final date = DateTime(value.year, value.month, value.day);
+  return !date.isBefore(earliest) && !date.isAfter(latest);
 }
 
 /// An authoritative non-commercial project projection returned by a V1 RPC or
@@ -648,6 +666,10 @@ class YorksV1ProjectCreationInput {
         endDate != null &&
         endDate!.toUtc().isBefore(startDate!.toUtc())) {
       errors.add(YorksV1ProjectValidationCode.invalidDateRange);
+    }
+    if ((startDate != null && !yorksV1ProjectDateIsSupported(startDate!)) ||
+        (endDate != null && !yorksV1ProjectDateIsSupported(endDate!))) {
+      errors.add(YorksV1ProjectValidationCode.unsupportedProjectDate);
     }
     if (buildings.isEmpty) {
       errors.add(YorksV1ProjectValidationCode.missingBuilding);

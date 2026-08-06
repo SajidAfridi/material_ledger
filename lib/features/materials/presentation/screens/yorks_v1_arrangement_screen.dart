@@ -18,16 +18,41 @@ import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 /// Server-derived action flags decide whether the current viewer can edit or
 /// decide; this screen never infers authority from a local role label.
 class YorksV1ArrangementScreen extends ConsumerWidget {
-  const YorksV1ArrangementScreen({super.key, required this.requestId});
+  const YorksV1ArrangementScreen({
+    super.key,
+    required this.requestId,
+    this.embedded = false,
+    this.onClose,
+  });
 
   final String requestId;
+
+  /// The record detail uses a bounded desktop dialog.  Its close control lives
+  /// in the dialog header rather than being stacked over the workspace, which
+  /// prevents it from drifting over the arrangement title at narrow heights.
+  final bool embedded;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final workspace = ref.watch(yorksV1ArrangementWorkspaceProvider(requestId));
     final compactRoute =
+        !embedded &&
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+    final body = workspace.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => _ArrangementError(
+        language: language,
+        onRetry: () =>
+            ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
+      ),
+      data: (value) => _ArrangementWorkspaceBody(
+        workspace: value,
+        language: language,
+        showPageHeader: !compactRoute && !embedded,
+      ),
+    );
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: compactRoute
@@ -52,21 +77,73 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
               ],
             )
           : null,
-      body: workspace.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => _ArrangementError(
-          language: language,
-          onRetry: () =>
-              ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
-        ),
-        data: (value) => _ArrangementWorkspaceBody(
-          workspace: value,
-          language: language,
-          showPageHeader: !compactRoute,
-        ),
-      ),
+      body: embedded
+          ? Column(
+              children: [
+                _EmbeddedArrangementHeader(
+                  language: language,
+                  onClose: onClose,
+                ),
+                Expanded(child: body),
+              ],
+            )
+          : body,
     );
   }
+}
+
+class _EmbeddedArrangementHeader extends StatelessWidget {
+  const _EmbeddedArrangementHeader({required this.language, this.onClose});
+
+  final AppLanguage language;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.xl,
+      AppSpacing.md,
+      AppSpacing.md,
+      AppSpacing.md,
+    ),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ActiveText(
+                copy: YorksV1ArrangementStrings.arrangement,
+                language: language,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              _ActiveText(
+                copy: YorksV1ArrangementStrings.reviewSummary,
+                language: language,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onClose != null)
+          IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+          ),
+      ],
+    ),
+  );
 }
 
 class _ArrangementWorkspaceBody extends ConsumerWidget {

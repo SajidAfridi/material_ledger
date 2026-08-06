@@ -144,12 +144,16 @@ class YorksV1LogisticsDocumentService {
           12 * PdfPageFormat.mm,
           7 * PdfPageFormat.mm,
         ),
-        header: (_) => _deliveryOrderHeader(
-          logo: logo,
-          workspace: workspace,
-          dispatch: dispatch,
-          deliveryOrder: deliveryOrder,
-        ),
+        // The company/title/metadata block is a first-page form header. The
+        // delivery table continues with its own repeated column heading.
+        header: (context) => context.pageNumber == 1
+            ? _deliveryOrderHeader(
+                logo: logo,
+                workspace: workspace,
+                dispatch: dispatch,
+                deliveryOrder: deliveryOrder,
+              )
+            : pw.SizedBox(),
         footer: _pageNumber,
         build: (_) => [
           _deliveryOrderTable(revision.lines),
@@ -382,9 +386,7 @@ class YorksV1LogisticsDocumentService {
           ),
           pw.TableRow(
             children: [
-              _deliveryTopText(
-                workspace.deliveryAddress ?? workspace.scopeName,
-              ),
+              _deliveryTopText(''),
               _deliveryTopText(
                 'Date: ${DateFormat('dd/MM/yyyy').format(dispatch.dispatchDate.toLocal())}',
               ),
@@ -576,7 +578,7 @@ class YorksV1LogisticsDocumentService {
   ) => pw.Column(
     mainAxisSize: pw.MainAxisSize.min,
     children: [
-      _writingLine('Delivery Address', workspace.scopeName),
+      _writingLine('Delivery Address', ''),
       pw.SizedBox(height: 4 * PdfPageFormat.mm),
       pw.Row(
         children: [

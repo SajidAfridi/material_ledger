@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
@@ -104,6 +105,23 @@ void main() {
     );
   });
 
+  test('browser-dropped documents use the controlled picker validation', () {
+    final selected = YorksV1SelectedDocument.checked(
+      fileName: 'plans/issued-drawing.pdf',
+      bytes: Uint8List.fromList([1, 2, 3]),
+    );
+
+    expect(selected.fileName, 'issued-drawing.pdf');
+    expect(selected.mimeType, 'application/pdf');
+    expect(
+      () => YorksV1SelectedDocument.checked(
+        fileName: 'unsafe-script.exe',
+        bytes: Uint8List.fromList([1]),
+      ),
+      throwsA(isA<YorksV1DomainException>()),
+    );
+  });
+
   testWidgets('attachments choose files directly without metadata fields', (
     tester,
   ) async {
@@ -154,6 +172,214 @@ void main() {
       3,
     );
   });
+
+  testWidgets('R35 project attachments stage — 1366×768', (tester) async {
+    final container = await createContainer(
+      role: YorksV1Role.projectEngineer,
+      repository: _FakeProjectRepository(),
+    );
+    await container
+        .read(yorksV1ProjectCreationDraftProvider(_authUserId).notifier)
+        .save(
+          container
+              .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+              .copyWith(
+                reference: 'YRA-VISUAL-001',
+                name: 'Visual evidence project',
+                currentStage: YorksV1ProjectCreationStage.attachments,
+                buildings: const [
+                  YorksV1ProjectBuildingInput(code: 'B1', name: 'Building One'),
+                ],
+              ),
+        );
+
+    await _pumpScreen(tester, container, size: const Size(1366, 768));
+
+    await expectLater(
+      find.byType(YorksV1ProjectCreateFlowScreen),
+      matchesGoldenFile('goldens/r35/project_create_attachments_desktop.png'),
+    );
+  });
+
+  testWidgets('R35 project attachments stage — 360×800', (tester) async {
+    final container = await createContainer(
+      role: YorksV1Role.projectEngineer,
+      repository: _FakeProjectRepository(),
+    );
+    await container
+        .read(yorksV1ProjectCreationDraftProvider(_authUserId).notifier)
+        .save(
+          container
+              .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+              .copyWith(
+                reference: 'YRA-VISUAL-002',
+                name: 'Mobile visual evidence project',
+                currentStage: YorksV1ProjectCreationStage.attachments,
+                buildings: const [
+                  YorksV1ProjectBuildingInput(code: 'B1', name: 'Building One'),
+                ],
+              ),
+        );
+
+    await _pumpScreen(tester, container, size: const Size(360, 800));
+
+    await expectLater(
+      find.byType(YorksV1ProjectCreateFlowScreen),
+      matchesGoldenFile('goldens/r35/project_create_attachments_mobile.png'),
+    );
+  });
+
+  testWidgets('R35 project review stage includes the creation decision data', (
+    tester,
+  ) async {
+    final container = await createContainer(
+      role: YorksV1Role.projectEngineer,
+      repository: _FakeProjectRepository(),
+    );
+    await container
+        .read(yorksV1ProjectCreationDraftProvider(_authUserId).notifier)
+        .save(
+          container
+              .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+              .copyWith(
+                reference: 'YRA-VISUAL-003',
+                name: 'Review evidence project',
+                clientName: 'Yorks Client',
+                jobOrContractReference: 'CON-1100C450',
+                siteLocation: 'Dubai South',
+                startDate: DateTime(2026, 8, 1),
+                endDate: DateTime(2027, 2, 28),
+                notes: 'Coordinate the common scope with the site team.',
+                parties: const [
+                  YorksV1ProjectPartyInput(
+                    kind: YorksV1ProjectPartyKind.consultant,
+                    name: 'Akins',
+                  ),
+                  YorksV1ProjectPartyInput(
+                    kind: YorksV1ProjectPartyKind.mainContractor,
+                    name: 'York Contracting',
+                  ),
+                  YorksV1ProjectPartyInput(
+                    kind: YorksV1ProjectPartyKind.subcontractor,
+                    name: 'MEP Specialist',
+                  ),
+                ],
+                attachments: const [
+                  YorksV1ProjectAttachmentInput(
+                    fileName: 'approved-schedule.pdf',
+                    mimeType: 'application/pdf',
+                    sizeBytes: 1200,
+                  ),
+                ],
+                currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                buildings: const [
+                  YorksV1ProjectBuildingInput(code: 'B1', name: 'Building One'),
+                ],
+              ),
+        );
+
+    await _pumpScreen(tester, container, size: const Size(1366, 768));
+
+    expect(find.text('CON-1100C450'), findsOneWidget);
+    expect(find.text('Dubai South'), findsOneWidget);
+    await expectLater(
+      find.byType(YorksV1ProjectCreateFlowScreen),
+      matchesGoldenFile('goldens/r35/project_create_review_desktop.png'),
+    );
+  });
+
+  testWidgets(
+    'copies a building form for the next building and updates an existing building in place',
+    (tester) async {
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: _FakeProjectRepository(),
+      );
+      final draftNotifier = container.read(
+        yorksV1ProjectCreationDraftProvider(_authUserId).notifier,
+      );
+      await draftNotifier.save(
+        container
+            .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+            .copyWith(
+              reference: 'YRA-BUILDING-001',
+              name: 'Building editor project',
+              currentStage: YorksV1ProjectCreationStage.buildings,
+              buildings: const [
+                YorksV1ProjectBuildingInput(
+                  sourceScopeId: 'scope-building-1',
+                  code: 'B01',
+                  name: 'Tower One',
+                  floorsOrLevels: ['GF', 'L1'],
+                  hasFrpRoom: true,
+                  deliveryAddress: 'North gate',
+                ),
+              ],
+            ),
+      );
+
+      await _pumpScreen(tester, container);
+      final editButton = find.byTooltip(
+        YorksV1ProjectStrings.editBuilding.primary,
+      );
+      await tester.ensureVisible(editButton);
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('yorks-v1-building-name')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .controller
+            .text,
+        'Tower One',
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('yorks-v1-building-name')),
+        'Tower One Updated',
+      );
+      await tester.tap(find.text(YorksV1ProjectStrings.updateBuilding.primary));
+      await tester.pumpAndSettle();
+
+      final updated = container
+          .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+          .buildings
+          .single;
+      expect(updated.name, 'Tower One Updated');
+      expect(updated.sourceScopeId, 'scope-building-1');
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('yorks-v1-building-code')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .controller
+            .text,
+        'B02',
+      );
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(
+                  const ValueKey('yorks-v1-building-delivery-address'),
+                ),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .controller
+            .text,
+        'North gate',
+      );
+    },
+  );
 
   testWidgets('creates through the V1 command controller and retries safely', (
     tester,
@@ -214,7 +440,7 @@ void main() {
     expect(createdProject?.reference, 'YRK-B2-001');
     expect(
       find.text(YorksV1ProjectStrings.projectCreated.primary),
-      findsWidgets,
+      findsNothing,
     );
     expect(
       container
@@ -267,10 +493,7 @@ void main() {
       await _pumpScreen(tester, container);
 
       expect(find.text(staleAuthUserId), findsNothing);
-      expect(
-        find.text(YorksV1ProjectStrings.profileId.primary),
-        findsOneWidget,
-      );
+      expect(find.text(YorksV1ProjectStrings.profileId.primary), findsWidgets);
 
       final createButton = find.byKey(
         const ValueKey('yorks-v1-project-create'),
@@ -290,6 +513,76 @@ void main() {
       expect(
         find.text(YorksV1ProjectStrings.teamMemberNoLongerAvailable.primary),
         findsWidgets,
+      );
+    },
+  );
+
+  testWidgets(
+    'opens the new project overview immediately after a committed create',
+    (tester) async {
+      final repository = _FakeProjectRepository();
+      final container = await createContainer(
+        role: YorksV1Role.siteEngineer,
+        repository: repository,
+      );
+      await container
+          .read(yorksV1ProjectCreationDraftProvider(_authUserId).notifier)
+          .save(
+            container
+                .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+                .copyWith(
+                  reference: 'YRK-NAV-001',
+                  name: 'Project route handoff',
+                  currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+                  buildings: const [
+                    YorksV1ProjectBuildingInput(
+                      code: 'B1',
+                      name: 'Building One',
+                    ),
+                  ],
+                ),
+          );
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const YorksV1ProjectCreateFlowScreen(),
+          ),
+          GoRoute(
+            path: '/yorks/projects/:projectId',
+            builder: (_, state) => Scaffold(
+              body: Text('Opened ${state.pathParameters['projectId']}'),
+            ),
+          ),
+        ],
+      );
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final createButton = find.byKey(
+        const ValueKey('yorks-v1-project-create'),
+      );
+      await tester.ensureVisible(createButton);
+      await tester.tap(createButton);
+      await tester.pumpAndSettle();
+
+      expect(repository.receivedCreationInputs, hasLength(1));
+      expect(find.text('Opened project-b2-001'), findsOneWidget);
+      expect(
+        find.text(YorksV1ProjectStrings.projectCreated.primary),
+        findsNothing,
       );
     },
   );

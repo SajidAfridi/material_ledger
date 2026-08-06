@@ -200,10 +200,45 @@ abstract final class RoutePaths {
 
   static String yorksV1MaterialRequestArrangementPath(String requestId) =>
       '/yorks/material-requests/$requestId/arrangement';
-  static String yorksV1MaterialRequestLogisticsPath(String requestId) =>
-      '/yorks/material-requests/$requestId/logistics';
-  static String yorksV1MaterialRequestReturnsDocumentsPath(String requestId) =>
-      '/yorks/material-requests/$requestId/returns';
+  /// Opens the protected dispatch/receipt workspace. A receipt focus simply
+  /// selects a server-authorized delivery for the review dialog; it does not
+  /// carry or mutate any receipt state through the URL.
+  static String yorksV1MaterialRequestLogisticsPath(
+    String requestId, {
+    bool focusReceiptReview = false,
+    String? dispatchId,
+  }) {
+    if (!focusReceiptReview && (dispatchId == null || dispatchId.isEmpty)) {
+      return '/yorks/material-requests/$requestId/logistics';
+    }
+    return Uri(
+      path: '/yorks/material-requests/$requestId/logistics',
+      queryParameters: {
+        if (focusReceiptReview) 'focus': 'receipt_review',
+        if (dispatchId != null && dispatchId.isNotEmpty) 'dispatch_id': dispatchId,
+      },
+    ).toString();
+  }
+  /// Opens the Delivery Order command from a received Material Request without
+  /// making the operator navigate through the Material Returns workspace.
+  /// The route still performs its normal server-authorized workspace fetch;
+  /// query parameters only select the already-authorized presentation focus.
+  static String yorksV1MaterialRequestReturnsDocumentsPath(
+    String requestId, {
+    bool focusDeliveryOrder = false,
+    String? dispatchId,
+  }) {
+    if (!focusDeliveryOrder && (dispatchId == null || dispatchId.isEmpty)) {
+      return '/yorks/material-requests/$requestId/returns';
+    }
+    return Uri(
+      path: '/yorks/material-requests/$requestId/returns',
+      queryParameters: {
+        if (focusDeliveryOrder) 'focus': 'delivery_order',
+        if (dispatchId != null && dispatchId.isNotEmpty) 'dispatch_id': dispatchId,
+      },
+    ).toString();
+  }
   static String planBuildPath(String projectId) => '/plan-build/$projectId';
   static String planDiffPath(String projectId) => '/plan-diff/$projectId';
   static String confirmReceiptPath(String requestId) => '/receipt/$requestId';
@@ -807,6 +842,9 @@ GoRouter createAppRouter({
           state.pageKey,
           YorksV1LogisticsScreen(
             requestId: state.pathParameters['requestId'] ?? '',
+            focusReceiptReview:
+                state.uri.queryParameters['focus'] == 'receipt_review',
+            focusedDispatchId: state.uri.queryParameters['dispatch_id'],
           ),
         ),
       ),
@@ -816,6 +854,9 @@ GoRouter createAppRouter({
           state.pageKey,
           YorksV1ReturnsDocumentsScreen(
             requestId: state.pathParameters['requestId'] ?? '',
+            focusDeliveryOrder:
+                state.uri.queryParameters['focus'] == 'delivery_order',
+            focusedDispatchId: state.uri.queryParameters['dispatch_id'],
           ),
         ),
       ),

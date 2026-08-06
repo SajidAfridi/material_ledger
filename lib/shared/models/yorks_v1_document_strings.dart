@@ -20,6 +20,30 @@ abstract final class YorksV1DocumentStrings {
     ur: 'دستاویز شامل کریں',
     hi: 'दस्तावेज़ जोड़ें',
   );
+  static const dropDocuments = TranslatableString(
+    en: 'Drop documents here',
+    ar: 'أفلت المستندات هنا',
+    ur: 'دستاویزات یہاں چھوڑیں',
+    hi: 'दस्तावेज़ यहाँ छोड़ें',
+  );
+  static const dropDocumentsActive = TranslatableString(
+    en: 'Release to add documents',
+    ar: 'أفلت لإضافة المستندات',
+    ur: 'دستاویزات شامل کرنے کے لیے چھوڑیں',
+    hi: 'दस्तावेज़ जोड़ने के लिए छोड़ें',
+  );
+  static const dropDocumentsPrompt = TranslatableString(
+    en: 'Drag files here or choose them from your device.',
+    ar: 'اسحب الملفات هنا أو اخترها من جهازك.',
+    ur: 'فائلیں یہاں گھسیٹیں یا اپنے آلے سے منتخب کریں۔',
+    hi: 'फ़ाइलें यहाँ खींचें या अपने डिवाइस से चुनें।',
+  );
+  static const linkExistingDocument = TranslatableString(
+    en: 'Link existing document',
+    ar: 'ربط مستند موجود',
+    ur: 'موجودہ دستاویز لنک کریں',
+    hi: 'मौजूदा दस्तावेज़ लिंक करें',
+  );
   static const uploadDocument = TranslatableString(
     en: 'Upload controlled version',
     ar: 'رفع نسخة مضبوطة',

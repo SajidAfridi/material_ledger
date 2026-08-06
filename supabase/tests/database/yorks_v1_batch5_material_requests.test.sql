@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(29);
+select plan(35);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -255,7 +255,7 @@ set local role postgres;
 select is(
   (select request_number from public.v1_material_requests
     where id = '52000000-0000-4000-8000-000000000001'::uuid),
-  'B5-MR-001-MR001',
+  'B5MR001-MR001',
   'Submit atomically assigns the first project-scoped MR reference'
 );
 
@@ -314,6 +314,64 @@ select ok(
   'Retry does not create another reference, event or stock side effect'
 );
 
+select ok(
+  not exists (
+    select 1
+    from pg_constraint constraint_record
+    where constraint_record.conrelid = 'public.v1_material_requests'::regclass
+      and constraint_record.conname = 'v1_material_requests_request_number_key'
+  ),
+  'Archived projects cannot reserve a globally unique displayed MR number'
+);
+
+select lives_ok(
+  $$select public.v1_save_material_request_draft(
+    jsonb_set(
+      jsonb_set(
+        (select first_draft_payload from v1_b5_payloads),
+        '{request_id}',
+        '"52000000-0000-4000-8000-000000000002"'::jsonb
+      ),
+      '{lines,0,id}',
+      '"53000000-0000-4000-8000-000000000002"'::jsonb
+    )
+  )$$,
+  'A second draft can be saved for the same active project'
+);
+
+select lives_ok(
+  $$select public.v1_submit_material_request(
+    jsonb_build_object(
+      'request_id', '52000000-0000-4000-8000-000000000002',
+      'expected_version', 1
+    ),
+    '54000000-0000-4000-8000-000000000002'::uuid
+  )$$,
+  'A second draft receives its own atomic project-scoped sequence'
+);
+
+set local role postgres;
+select is(
+  (select request_number from public.v1_material_requests
+    where id = '52000000-0000-4000-8000-000000000002'::uuid),
+  'B5MR001-MR002',
+  'The next Material Request increments to MR002 for the same project'
+);
+
+select ok(
+  (select next_request_sequence = 3
+     from public.v1_material_request_reference_counters
+     where project_id = (select project_id from v1_b5_targets)),
+  'Each successful Material Request consumes exactly one project sequence'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+
 set local role postgres;
 insert into public.v1_material_request_line_commercials (
   request_line_id, unit_cost, currency_code, updated_by_auth_user_id
@@ -356,11 +414,23 @@ select ok(
   'Authorized Procurement receives its controlled commercial projection'
 );
 
+select ok(
+  exists (
+    select 1
+    from jsonb_array_elements(
+      public.v1_list_material_requests((select project_id from v1_b5_targets))
+    ) request_record
+    where request_record ->> 'request_number' = 'B5MR001-MR001'
+  ),
+  'Procurement sees the first submitted request after server confirmation'
+);
+
+set local role postgres;
 select is(
-  (select public.v1_list_material_requests((select project_id from v1_b5_targets))
-    -> 0 ->> 'request_number'),
-  'B5-MR-001-MR001',
-  'Procurement sees the submitted request after server confirmation'
+  (select request_number from public.v1_material_requests
+    where id = '52000000-0000-4000-8000-000000000001'::uuid),
+  'B5MR001-MR001',
+  'Display reference removes separator punctuation and starts at MR001'
 );
 
 set local role authenticated;

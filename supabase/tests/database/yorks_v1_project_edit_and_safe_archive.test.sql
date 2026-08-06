@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(12);
+select plan(16);
 
 select ok(
   has_function_privilege(
@@ -116,6 +116,15 @@ select is(
   'The setup update leaves one immutable audit event'
 );
 
+select throws_ok(
+  $$update public.v1_projects
+      set start_date = (current_date + interval '51 years')::date
+    where project_ref = 'EDIT-001A'$$,
+  '22023',
+  'V1_PROJECT_START_DATE_OUT_OF_SUPPORTED_RANGE',
+  'A century-scale project date is rejected at the database boundary'
+);
+
 create temporary table v1_project_edit_target as
 select id from public.v1_projects where project_ref = 'EDIT-001A';
 grant select on table v1_project_edit_target to authenticated;
@@ -167,6 +176,34 @@ select ok(
       where entity_id = (select id from public.v1_projects where project_ref = 'EDIT-001A')
         and event_type = 'project_archived'),
   'Safe archive preserves the project and writes its audit trail'
+);
+
+set local role authenticated;
+select lives_ok(
+  $$select public.v1_create_project(
+    '{
+      "project_ref":"EDIT-001A",
+      "name":"Replacement project",
+      "buildings":[{"code":"replacement","name":"Replacement Building"}],
+      "attachments":[]
+    }'::jsonb,
+    '30000000-0000-4000-8000-000000000005'::uuid
+  )$$,
+  'An archived project reference can be reused by one replacement project'
+);
+
+set local role postgres;
+select is(
+  (select count(*) from public.v1_projects where project_ref = 'EDIT-001A'),
+  2::bigint,
+  'The original archived project is retained beside its replacement'
+);
+
+select is(
+  (select count(*) from public.v1_projects
+    where project_ref = 'EDIT-001A' and state <> 'archived'),
+  1::bigint,
+  'Only one non-archived project may use a reference'
 );
 
 select * from finish();

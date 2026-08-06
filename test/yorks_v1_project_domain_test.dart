@@ -289,6 +289,36 @@ void main() {
       });
     });
 
+    test('rejects accidental century-scale project dates', () {
+      final referenceDate = DateTime(2026, 8, 5);
+      expect(
+        yorksV1ProjectDateIsSupported(
+          DateTime(1976, 8, 5),
+          referenceDate: referenceDate,
+        ),
+        isTrue,
+      );
+      expect(
+        yorksV1ProjectDateIsSupported(
+          DateTime(2077, 8, 5),
+          referenceDate: referenceDate,
+        ),
+        isFalse,
+      );
+
+      final invalid = YorksV1ProjectCreationInput(
+        idempotencyKey: 'date-window',
+        reference: 'YRK-DATE-100',
+        name: 'Date window test',
+        startDate: DateTime(DateTime.now().year + 51, 1, 1),
+        buildings: const [YorksV1ProjectBuildingInput(name: 'Building A')],
+      );
+      expect(
+        invalid.validate(),
+        contains(YorksV1ProjectValidationCode.unsupportedProjectDate),
+      );
+    });
+
     test(
       'applies the Site Engineer creation-time membership exception only',
       () {

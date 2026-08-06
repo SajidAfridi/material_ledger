@@ -207,6 +207,18 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ابھی ڈسپیچ کریں',
     hi: 'अभी डिस्पैच करें',
   );
+  static const dispatchApprovedItems = TranslatableString(
+    en: 'Dispatch Approved Items',
+    ar: 'إرسال العناصر المعتمدة',
+    ur: 'منظور شدہ آئٹمز ڈسپیچ کریں',
+    hi: 'स्वीकृत वस्तुएँ भेजें',
+  );
+  static const dispatched = TranslatableString(
+    en: 'dispatched',
+    ar: 'تم إرساله',
+    ur: 'ڈسپیچ کیا گیا',
+    hi: 'भेजा गया',
+  );
   static const dispatchDate = TranslatableString(
     en: 'Dispatch date',
     ar: 'تاريخ الإرسال',
@@ -279,6 +291,30 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'وصولی کا جائزہ',
     hi: 'प्राप्ति समीक्षा',
   );
+  static const reviewAndMarkReceived = TranslatableString(
+    en: 'Review & Mark Received',
+    ar: 'مراجعة وتأكيد الاستلام',
+    ur: 'جائزہ لے کر موصول شدہ نشان زد کریں',
+    hi: 'समीक्षा करें और प्राप्त के रूप में चिह्नित करें',
+  );
+  static const reviewDeliveredMaterials = TranslatableString(
+    en: 'Review delivered materials',
+    ar: 'مراجعة المواد المسلّمة',
+    ur: 'پہنچائے گئے مواد کا جائزہ لیں',
+    hi: 'वितरित सामग्री की समीक्षा करें',
+  );
+  static const reviewDeliveryLineByLine = TranslatableString(
+    en: 'Check every line against the physical receipt.',
+    ar: 'تحقق من كل بند مقابل الاستلام الفعلي.',
+    ur: 'ہر لائن کو موصول شدہ اصل مواد کے ساتھ چیک کریں۔',
+    hi: 'हर पंक्ति को वास्तविक प्राप्ति के विरुद्ध जांचें।',
+  );
+  static const saveReceiptReview = TranslatableString(
+    en: 'Save receipt review',
+    ar: 'حفظ مراجعة الاستلام',
+    ur: 'وصولی کا جائزہ محفوظ کریں',
+    hi: 'प्राप्ति समीक्षा सहेजें',
+  );
   static const confirmReceipt = TranslatableString(
     en: 'Confirm receipt review',
     ar: 'تأكيد مراجعة الاستلام',
@@ -308,6 +344,12 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'ملاحظة',
     ur: 'نوٹ',
     hi: 'नोट',
+  );
+  static const exceptionNote = TranslatableString(
+    en: 'Line note (required for missing or damaged)',
+    ar: 'ملاحظة البند (مطلوبة للنقص أو التلف)',
+    ur: 'لائن نوٹ (گم یا خراب ہونے پر ضروری)',
+    hi: 'लाइन नोट (लापता या क्षतिग्रस्त होने पर आवश्यक)',
   );
   static const noDispatch = TranslatableString(
     en: 'No committed dispatches yet.',
@@ -356,6 +398,18 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'مرجع أمر التسليم',
     ur: 'ڈیلیوری آرڈر حوالہ',
     hi: 'डिलीवरी ऑर्डर संदर्भ',
+  );
+  static const deliveryOrderReferenceRequired = TranslatableString(
+    en: 'Enter the official Delivery Order reference.',
+    ar: 'أدخل مرجع أمر التسليم الرسمي.',
+    ur: 'سرکاری ڈیلیوری آرڈر حوالہ درج کریں۔',
+    hi: 'आधिकारिक डिलीवरी ऑर्डर संदर्भ दर्ज करें।',
+  );
+  static const deliveryOrderAfterReceipt = TranslatableString(
+    en: 'Only good received material is included after the site review.',
+    ar: 'يتم تضمين المواد المستلمة بحالة سليمة فقط بعد مراجعة الموقع.',
+    ur: 'سائٹ کے جائزے کے بعد صرف اچھی حالت میں موصول شدہ مواد شامل کیا جاتا ہے۔',
+    hi: 'साइट समीक्षा के बाद केवल अच्छी प्राप्त सामग्री शामिल की जाती है।',
   );
   static const generateDeliveryOrder = TranslatableString(
     en: 'Generate Delivery Order',

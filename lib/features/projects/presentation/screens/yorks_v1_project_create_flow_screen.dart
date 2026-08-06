@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dropzone/flutter_dropzone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
@@ -11,7 +13,6 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/controllers/yorks_v1_project_controller.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
-import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
@@ -22,7 +23,6 @@ import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
-import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
@@ -123,8 +123,8 @@ class _YorksV1ProjectCreateFlowScreenState
   YorksV1ProjectCreationDraft? _editDraft;
   String? _activeAuthUserId;
   Set<YorksV1ProjectValidationCode> _validationErrors = const {};
-  YorksV1Project? _createdProject;
   bool _hasFrpRoom = false;
+  int? _editingBuildingIndex;
   bool _isCreating = false;
   List<YorksV1SelectedDocument> _selectedAttachmentFiles = const [];
 
@@ -214,10 +214,10 @@ class _YorksV1ProjectCreateFlowScreenState
       _draftSaveTimer?.cancel();
       _pendingDraft = null;
       _activeAuthUserId = authUserId;
-      _createdProject = null;
       _validationErrors = const {};
       _selectedAttachmentFiles = const [];
       _editDraft = null;
+      _editingBuildingIndex = null;
     }
 
     _seedEditDraft(authUserId);
@@ -226,11 +226,6 @@ class _YorksV1ProjectCreateFlowScreenState
         : ref.watch(yorksV1ProjectCreationDraftProvider(authUserId));
     _synchronizeControllers(_pendingDraft ?? draft);
     final commandState = ref.watch(yorksV1ProjectCommandControllerProvider);
-
-    final createdProject = _createdProject;
-    if (createdProject != null) {
-      return _CreatedProjectState(project: createdProject, language: language);
-    }
 
     // The directory is needed only on the access and review stages. Keeping
     // the request out of the remaining creation flow both minimises the
@@ -416,9 +411,12 @@ class _YorksV1ProjectCreateFlowScreenState
         floorsController: _buildingFloorsController,
         deliveryAddressController: _buildingDeliveryAddressController,
         hasFrpRoom: _hasFrpRoom,
+        editingBuildingIndex: _editingBuildingIndex,
         validationErrors: _validationErrors,
         onHasFrpRoomChanged: (value) => setState(() => _hasFrpRoom = value),
         onAddBuilding: _addBuilding,
+        onEditBuilding: _editBuildingAt,
+        onCancelEditing: _resetBuildingEditor,
         onRemoveBuilding: _removeBuildingAt,
       ),
       YorksV1ProjectCreationStage.attachments => _AttachmentsStage(
@@ -426,6 +424,8 @@ class _YorksV1ProjectCreateFlowScreenState
         language: language,
         validationErrors: _validationErrors,
         onAddAttachment: _addAttachment,
+        onDroppedAttachments: _addSelectedAttachments,
+        onDropError: _showInvalidAttachmentMessage,
         onRemoveAttachment: _removeAttachmentAt,
         pendingFiles: _selectedAttachmentFiles,
       ),
@@ -630,7 +630,8 @@ class _YorksV1ProjectCreateFlowScreenState
                   error ==
                       YorksV1ProjectValidationCode.missingProjectReference ||
                   error == YorksV1ProjectValidationCode.missingProjectName ||
-                  error == YorksV1ProjectValidationCode.invalidDateRange,
+                  error == YorksV1ProjectValidationCode.invalidDateRange ||
+                  error == YorksV1ProjectValidationCode.unsupportedProjectDate,
             )
             .toSet(),
       YorksV1ProjectCreationStage.partiesAndAccess =>
@@ -675,6 +676,9 @@ class _YorksV1ProjectCreateFlowScreenState
     if (errors.contains(YorksV1ProjectValidationCode.invalidDateRange)) {
       return YorksV1ProjectStrings.endDateAfterStart;
     }
+    if (errors.contains(YorksV1ProjectValidationCode.unsupportedProjectDate)) {
+      return YorksV1ProjectStrings.projectDateSupportedRange;
+    }
     if (errors.contains(YorksV1ProjectValidationCode.missingBuilding) ||
         errors.contains(YorksV1ProjectValidationCode.invalidBuilding)) {
       return YorksV1ProjectStrings.atLeastOneBuilding;
@@ -710,11 +714,25 @@ class _YorksV1ProjectCreateFlowScreenState
     final draft = _currentDraft();
     final selected = isStartDate ? draft.startDate : draft.endDate;
     final today = DateUtils.dateOnly(DateTime.now());
+    final earliest = DateTime(today.year - yorksV1ProjectDateWindowYears);
+    final latest = DateTime(today.year + yorksV1ProjectDateWindowYears, 12, 31);
+    final startDate = draft.startDate == null
+        ? null
+        : DateUtils.dateOnly(draft.startDate!);
+    final firstDate =
+        !isStartDate &&
+            startDate != null &&
+            !startDate.isBefore(earliest) &&
+            !startDate.isAfter(latest)
+        ? startDate
+        : earliest;
+    final requestedInitial =
+        selected ?? (isStartDate ? today : startDate ?? today);
     final date = await showDatePicker(
       context: context,
-      initialDate: selected == null ? today : DateUtils.dateOnly(selected),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      initialDate: _clampDate(requestedInitial, firstDate, latest),
+      firstDate: firstDate,
+      lastDate: latest,
     );
     if (date == null) return;
     await _saveDraft(
@@ -830,7 +848,17 @@ class _YorksV1ProjectCreateFlowScreenState
     }
     await _flushPendingDraft();
     final current = _currentDraft();
+    final editingIndex = _editingBuildingIndex;
+    if (editingIndex != null &&
+        (editingIndex < 0 || editingIndex >= current.buildings.length)) {
+      _resetBuildingEditor();
+      return;
+    }
+    final existing = editingIndex == null
+        ? null
+        : current.buildings[editingIndex];
     final building = YorksV1ProjectBuildingInput(
+      sourceScopeId: existing?.sourceScopeId,
       code: _buildingCodeController.text,
       name: name,
       floorsOrLevels: _buildingFloorsController.text
@@ -841,14 +869,93 @@ class _YorksV1ProjectCreateFlowScreenState
       hasFrpRoom: _hasFrpRoom,
       deliveryAddress: _emptyToNull(_buildingDeliveryAddressController.text),
     );
-    await _saveDraft(
-      current.copyWith(buildings: [...current.buildings, building]),
+    final buildings = [...current.buildings];
+    if (editingIndex == null) {
+      buildings.add(building);
+    } else {
+      buildings[editingIndex] = building;
+    }
+    await _saveDraft(current.copyWith(buildings: buildings));
+    if (!mounted) return;
+    setState(() {
+      _editingBuildingIndex = null;
+      _seedNextBuildingForm(building, buildings);
+    });
+  }
+
+  Future<void> _editBuildingAt(int index) async {
+    await _flushPendingDraft();
+    final current = _currentDraft();
+    if (index < 0 || index >= current.buildings.length || !mounted) return;
+    final building = current.buildings[index];
+    setState(() {
+      _editingBuildingIndex = index;
+      _setControllerText(_buildingCodeController, building.code);
+      _setControllerText(_buildingNameController, building.name);
+      _setControllerText(
+        _buildingFloorsController,
+        building.floorsOrLevels.join(', '),
+      );
+      _setControllerText(
+        _buildingDeliveryAddressController,
+        building.deliveryAddress ?? '',
+      );
+      _hasFrpRoom = building.hasFrpRoom;
+    });
+  }
+
+  void _resetBuildingEditor() {
+    if (!mounted) return;
+    setState(() {
+      _editingBuildingIndex = null;
+      _buildingCodeController.clear();
+      _buildingNameController.clear();
+      _buildingFloorsController.clear();
+      _buildingDeliveryAddressController.clear();
+      _hasFrpRoom = false;
+    });
+  }
+
+  void _seedNextBuildingForm(
+    YorksV1ProjectBuildingInput building,
+    List<YorksV1ProjectBuildingInput> existingBuildings,
+  ) {
+    _setControllerText(
+      _buildingCodeController,
+      _nextBuildingCode(building.code, existingBuildings),
     );
-    _buildingCodeController.clear();
-    _buildingNameController.clear();
-    _buildingFloorsController.clear();
-    _buildingDeliveryAddressController.clear();
-    if (mounted) setState(() => _hasFrpRoom = false);
+    _setControllerText(_buildingNameController, building.name);
+    _setControllerText(
+      _buildingFloorsController,
+      building.floorsOrLevels.join(', '),
+    );
+    _setControllerText(
+      _buildingDeliveryAddressController,
+      building.deliveryAddress ?? '',
+    );
+    _hasFrpRoom = building.hasFrpRoom;
+  }
+
+  String _nextBuildingCode(
+    String source,
+    List<YorksV1ProjectBuildingInput> existingBuildings,
+  ) {
+    final normalized = source.trim().toUpperCase();
+    if (normalized.isEmpty) return '';
+    final match = RegExp(r'^(.*?)(\d+)$').firstMatch(normalized);
+    final prefix = match?.group(1) ?? '$normalized-';
+    final numericSuffix = match?.group(2) ?? '';
+    final minimumDigits = numericSuffix.length;
+    var number = int.tryParse(numericSuffix) ?? 1;
+    final existing = existingBuildings
+        .map((building) => building.normalizedCode)
+        .toSet();
+    String candidate;
+    do {
+      number++;
+      candidate = '$prefix${number.toString().padLeft(minimumDigits, '0')}';
+    } while (existing.contains(candidate));
+    return candidate;
   }
 
   Future<void> _removeBuildingAt(int index) async {
@@ -863,6 +970,20 @@ class _YorksV1ProjectCreateFlowScreenState
         ],
       ),
     );
+    if (!mounted) return;
+    setState(() {
+      if (_editingBuildingIndex == index) {
+        _editingBuildingIndex = null;
+        _buildingCodeController.clear();
+        _buildingNameController.clear();
+        _buildingFloorsController.clear();
+        _buildingDeliveryAddressController.clear();
+        _hasFrpRoom = false;
+      } else if (_editingBuildingIndex != null &&
+          index < _editingBuildingIndex!) {
+        _editingBuildingIndex = _editingBuildingIndex! - 1;
+      }
+    });
   }
 
   Future<void> _addAttachment() async {
@@ -871,36 +992,7 @@ class _YorksV1ProjectCreateFlowScreenState
           .read(yorksV1DocumentFileServiceProvider)
           .selectDocument();
       if (selected == null || !mounted) return;
-
-      final current = _currentDraft();
-      final alreadyAdded = current.attachments.any(
-        (attachment) =>
-            attachment.fileName.trim().toLowerCase() ==
-            selected.fileName.trim().toLowerCase(),
-      );
-      if (alreadyAdded) {
-        _showMessage(YorksV1ProjectStrings.duplicateAttachment, error: true);
-        return;
-      }
-
-      await _flushPendingDraft();
-      final refreshed = _currentDraft();
-      await _saveDraft(
-        refreshed.copyWith(
-          attachments: [
-            ...refreshed.attachments,
-            YorksV1ProjectAttachmentInput(
-              fileName: selected.fileName,
-              mimeType: selected.mimeType,
-              sizeBytes: selected.bytes.lengthInBytes,
-            ),
-          ],
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _selectedAttachmentFiles = [..._selectedAttachmentFiles, selected];
-      });
+      await _addSelectedAttachments([selected]);
     } on YorksV1DomainException catch (error) {
       _showMessage(YorksV1ProjectStrings.errorFor(error.code), error: true);
     } catch (_) {
@@ -911,6 +1003,61 @@ class _YorksV1ProjectCreateFlowScreenState
         error: true,
       );
     }
+  }
+
+  /// Adds picker and browser-drop files through one deduplicated local-draft
+  /// path. Nothing is uploaded until the create command has succeeded.
+  Future<void> _addSelectedAttachments(
+    List<YorksV1SelectedDocument> selectedFiles,
+  ) async {
+    if (selectedFiles.isEmpty) return;
+    await _flushPendingDraft();
+    final current = _currentDraft();
+    final existingNames = {
+      for (final attachment in current.attachments)
+        attachment.fileName.trim().toLowerCase(),
+    };
+    final additions = <YorksV1SelectedDocument>[];
+    var skippedDuplicate = false;
+    for (final selected in selectedFiles) {
+      final key = selected.fileName.trim().toLowerCase();
+      if (!existingNames.add(key)) {
+        skippedDuplicate = true;
+        continue;
+      }
+      additions.add(selected);
+    }
+    if (additions.isEmpty) {
+      _showMessage(YorksV1ProjectStrings.duplicateAttachment, error: true);
+      return;
+    }
+    await _saveDraft(
+      current.copyWith(
+        attachments: [
+          ...current.attachments,
+          for (final selected in additions)
+            YorksV1ProjectAttachmentInput(
+              fileName: selected.fileName,
+              mimeType: selected.mimeType,
+              sizeBytes: selected.bytes.lengthInBytes,
+            ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _selectedAttachmentFiles = [..._selectedAttachmentFiles, ...additions];
+    });
+    if (skippedDuplicate) {
+      _showMessage(YorksV1ProjectStrings.duplicateAttachment, error: true);
+    }
+  }
+
+  void _showInvalidAttachmentMessage() {
+    _showMessage(
+      YorksV1ProjectStrings.errorFor(YorksV1DomainErrorCode.invalidInput),
+      error: true,
+    );
   }
 
   Future<void> _removeAttachmentAt(int index) async {
@@ -1038,13 +1185,17 @@ class _YorksV1ProjectCreateFlowScreenState
       if (!mounted) return;
       setState(() {
         _isCreating = false;
-        _createdProject = createdProject;
         _selectedAttachmentFiles = const [];
       });
       if (failedAttachmentUploads > 0) {
         _showMessage(YorksV1ProjectStrings.attachmentUploadFailed);
       }
-      widget.onProjectCreated?.call(createdProject);
+      final onProjectCreated = widget.onProjectCreated;
+      if (onProjectCreated != null) {
+        onProjectCreated(createdProject);
+      } else if (mounted) {
+        context.go(RoutePaths.yorksV1ProjectPath(createdProject.id));
+      }
     } on YorksV1DomainException catch (error) {
       if (!mounted) return;
       setState(() => _isCreating = false);
@@ -1131,65 +1282,6 @@ class _AccessState extends StatelessWidget {
                     englishStyle: AppTypography.bodyLarge,
                   ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CreatedProjectState extends ConsumerWidget {
-  const _CreatedProjectState({required this.project, required this.language});
-
-  final YorksV1Project project;
-  final AppLanguage language;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final boqEnabled = ref.watch(yorksV1FeatureFlagsProvider).boq;
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: NexusPageShell(
-          eyebrow: YorksV1ProjectStrings.projectCreationEyebrow.primary,
-          title: YorksV1ProjectStrings.projectCreated.primary,
-          child: NexusSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.check_circle_outline,
-                  color: AppColors.success,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _LocalizedCopy(
-                  copy: YorksV1ProjectStrings.projectCreatedDescription,
-                  language: language,
-                  englishStyle: AppTypography.bodyLarge,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _ReviewValue(
-                  label: YorksV1ProjectStrings.yorksReference,
-                  value: project.reference,
-                  language: language,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _ReviewValue(
-                  label: YorksV1ProjectStrings.projectName,
-                  value: project.name,
-                  language: language,
-                ),
-                if (boqEnabled) ...[
-                  const SizedBox(height: AppSpacing.xl),
-                  PrimaryButton(
-                    label: YorksV1BoqStrings.worksheets.primary,
-                    icon: Icons.folder_open_outlined,
-                    onPressed: () =>
-                        context.go(RoutePaths.yorksV1BoqGroupsPath(project.id)),
-                  ),
-                ],
               ],
             ),
           ),
@@ -1582,6 +1674,10 @@ class _DetailsStage extends StatelessWidget {
                     YorksV1ProjectValidationCode.invalidDateRange,
                   )
                   ? YorksV1ProjectStrings.endDateAfterStart.primary
+                  : validationErrors.contains(
+                      YorksV1ProjectValidationCode.unsupportedProjectDate,
+                    )
+                  ? YorksV1ProjectStrings.projectDateSupportedRange.primary
                   : null,
             ),
           ];
@@ -2346,7 +2442,9 @@ class _NamedPartyAdder extends StatelessWidget {
             Expanded(
               child: LedgerTextField(
                 controller: controller,
-                label: label.active(language),
+                // The section heading above is the field label. Repeating it
+                // here renders two stacked headings in the R35 desktop form.
+                label: null,
                 hintText: label.active(language),
               ),
             ),
@@ -2390,9 +2488,12 @@ class _BuildingsStage extends StatelessWidget {
     required this.floorsController,
     required this.deliveryAddressController,
     required this.hasFrpRoom,
+    required this.editingBuildingIndex,
     required this.validationErrors,
     required this.onHasFrpRoomChanged,
     required this.onAddBuilding,
+    required this.onEditBuilding,
+    required this.onCancelEditing,
     required this.onRemoveBuilding,
   });
 
@@ -2403,9 +2504,12 @@ class _BuildingsStage extends StatelessWidget {
   final TextEditingController floorsController;
   final TextEditingController deliveryAddressController;
   final bool hasFrpRoom;
+  final int? editingBuildingIndex;
   final Set<YorksV1ProjectValidationCode> validationErrors;
   final ValueChanged<bool> onHasFrpRoomChanged;
   final VoidCallback onAddBuilding;
+  final ValueChanged<int> onEditBuilding;
+  final VoidCallback onCancelEditing;
   final ValueChanged<int> onRemoveBuilding;
 
   @override
@@ -2499,24 +2603,45 @@ class _BuildingsStage extends StatelessWidget {
                 maxLines: 2,
               ),
               const SizedBox(height: AppSpacing.sm),
-              CheckboxListTile(
-                value: hasFrpRoom,
-                onChanged: (value) => onHasFrpRoomChanged(value ?? false),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: _LocalizedCopy(
-                  copy: YorksV1ProjectStrings.hasFrpRoom,
-                  language: language,
-                  englishStyle: AppTypography.titleSmall,
-                  secondaryStyle: AppTypography.labelSmall,
+              Material(
+                color: Colors.transparent,
+                child: CheckboxListTile(
+                  value: hasFrpRoom,
+                  onChanged: (value) => onHasFrpRoomChanged(value ?? false),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: _LocalizedCopy(
+                    copy: YorksV1ProjectStrings.hasFrpRoom,
+                    language: language,
+                    englishStyle: AppTypography.titleSmall,
+                    secondaryStyle: AppTypography.labelSmall,
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
               SecondaryButton(
-                label: YorksV1ProjectStrings.addBuilding.primary,
+                label:
+                    (editingBuildingIndex == null
+                            ? YorksV1ProjectStrings.addBuilding
+                            : YorksV1ProjectStrings.updateBuilding)
+                        .primary,
                 onPressed: onAddBuilding,
-                icon: Icons.add_business_outlined,
+                icon: editingBuildingIndex == null
+                    ? Icons.add_business_outlined
+                    : Icons.save_outlined,
               ),
+              if (editingBuildingIndex != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: onCancelEditing,
+                    child: Text(
+                      YorksV1ProjectStrings.cancelBuildingEdit.primary,
+                    ),
+                  ),
+                ),
+              ],
               if (buildingError) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -2535,7 +2660,7 @@ class _BuildingsStage extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         NexusSectionCard(
-          title: YorksV1ProjectStrings.commonScope.primary,
+          title: YorksV1ProjectStrings.buildings.primary,
           child: draft.buildings.isEmpty
               ? _LocalizedCopy(
                   copy: YorksV1ProjectStrings.noBuildingsAdded,
@@ -2552,6 +2677,7 @@ class _BuildingsStage extends StatelessWidget {
                       _BuildingSummary(
                         building: draft.buildings[index],
                         language: language,
+                        onEdit: () => onEditBuilding(index),
                         onRemove: () => onRemoveBuilding(index),
                       ),
                       if (index != draft.buildings.length - 1)
@@ -2569,11 +2695,13 @@ class _BuildingSummary extends StatelessWidget {
   const _BuildingSummary({
     required this.building,
     required this.language,
+    required this.onEdit,
     required this.onRemove,
   });
 
   final YorksV1ProjectBuildingInput building;
   final AppLanguage language;
+  final VoidCallback onEdit;
   final VoidCallback onRemove;
 
   @override
@@ -2606,10 +2734,19 @@ class _BuildingSummary extends StatelessWidget {
             ],
           ),
         ),
-        IconButton(
-          onPressed: onRemove,
-          tooltip: YorksV1ProjectStrings.remove.primary,
-          icon: const Icon(Icons.close),
+        Column(
+          children: [
+            IconButton(
+              onPressed: onEdit,
+              tooltip: YorksV1ProjectStrings.editBuilding.primary,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+            IconButton(
+              onPressed: onRemove,
+              tooltip: YorksV1ProjectStrings.remove.primary,
+              icon: const Icon(Icons.close),
+            ),
+          ],
         ),
       ],
     );
@@ -2622,6 +2759,8 @@ class _AttachmentsStage extends StatelessWidget {
     required this.language,
     required this.validationErrors,
     required this.onAddAttachment,
+    required this.onDroppedAttachments,
+    required this.onDropError,
     required this.onRemoveAttachment,
     required this.pendingFiles,
   });
@@ -2630,6 +2769,9 @@ class _AttachmentsStage extends StatelessWidget {
   final AppLanguage language;
   final Set<YorksV1ProjectValidationCode> validationErrors;
   final VoidCallback onAddAttachment;
+  final Future<void> Function(List<YorksV1SelectedDocument>)
+  onDroppedAttachments;
+  final VoidCallback onDropError;
   final ValueChanged<int> onRemoveAttachment;
   final List<YorksV1SelectedDocument> pendingFiles;
 
@@ -2646,57 +2788,11 @@ class _AttachmentsStage extends StatelessWidget {
             englishStyle: AppTypography.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.lg),
-          Semantics(
-            button: true,
-            label: YorksV1ProjectStrings.attachmentsDropzoneTitle.primary,
-            child: InkWell(
-              key: const ValueKey('yorks-v1-attachment-dropzone'),
-              onTap: onAddAttachment,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              child: CustomPaint(
-                painter: _DashedAttachmentBorderPainter(
-                  color: AppColors.blue.withValues(alpha: 0.55),
-                  radius: AppSpacing.radiusMd,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xl,
-                    vertical: AppSpacing.xxxl,
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.file_upload_outlined,
-                        size: 30,
-                        color: AppColors.muted,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        YorksV1ProjectStrings.attachmentsDropzoneTitle.primary,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.titleMedium,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        YorksV1ProjectStrings
-                            .attachmentsDropzoneDescription
-                            .primary,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.bodySmall,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      OutlinedButton.icon(
-                        onPressed: onAddAttachment,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: Text(
-                          YorksV1ProjectStrings.addAttachment.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          _ProjectAttachmentDropzone(
+            language: language,
+            onPick: onAddAttachment,
+            onDropped: onDroppedAttachments,
+            onDropError: onDropError,
           ),
           if (validationErrors.contains(
             YorksV1ProjectValidationCode.invalidAttachment,
@@ -2758,6 +2854,157 @@ class _AttachmentsStage extends StatelessWidget {
       if (file.fileName == attachment.fileName) return file;
     }
     return null;
+  }
+}
+
+/// Uses the native picker everywhere and adds a browser drop target only on
+/// web. Both paths produce the same checked in-memory file representation.
+class _ProjectAttachmentDropzone extends StatefulWidget {
+  const _ProjectAttachmentDropzone({
+    required this.language,
+    required this.onPick,
+    required this.onDropped,
+    required this.onDropError,
+  });
+
+  final AppLanguage language;
+  final VoidCallback onPick;
+  final Future<void> Function(List<YorksV1SelectedDocument>) onDropped;
+  final VoidCallback onDropError;
+
+  @override
+  State<_ProjectAttachmentDropzone> createState() =>
+      _ProjectAttachmentDropzoneState();
+}
+
+class _ProjectAttachmentDropzoneState
+    extends State<_ProjectAttachmentDropzone> {
+  DropzoneViewController? _dropzoneController;
+  bool _dragging = false;
+
+  static const _acceptedMimeTypes = <String>[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/jpeg',
+    'image/png',
+  ];
+
+  Future<void> _handleDroppedFiles(
+    List<DropzoneFileInterface>? droppedFiles,
+  ) async {
+    final controller = _dropzoneController;
+    if (controller == null || droppedFiles == null || droppedFiles.isEmpty) {
+      return;
+    }
+    if (mounted) setState(() => _dragging = false);
+    final selectedFiles = <YorksV1SelectedDocument>[];
+    var hasInvalidFile = false;
+    for (final file in droppedFiles) {
+      try {
+        final name = await controller.getFilename(file);
+        final bytes = await controller.getFileData(file);
+        selectedFiles.add(
+          YorksV1SelectedDocument.checked(fileName: name, bytes: bytes),
+        );
+      } on YorksV1DomainException {
+        hasInvalidFile = true;
+      } catch (_) {
+        hasInvalidFile = true;
+      }
+    }
+    if (selectedFiles.isNotEmpty) {
+      await widget.onDropped(selectedFiles);
+    }
+    if (hasInvalidFile) widget.onDropError();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Semantics(
+      button: true,
+      label: YorksV1ProjectStrings.attachmentsDropzoneTitle.primary,
+      child: InkWell(
+        key: const ValueKey('yorks-v1-attachment-dropzone'),
+        onTap: widget.onPick,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: CustomPaint(
+          painter: _DashedAttachmentBorderPainter(
+            color: (_dragging ? AppColors.navy : AppColors.blue).withValues(
+              alpha: _dragging ? 0.9 : 0.55,
+            ),
+            radius: AppSpacing.radiusMd,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: _dragging
+                  ? AppColors.blue.withValues(alpha: 0.06)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.xxxl,
+            ),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.file_upload_outlined,
+                  size: 30,
+                  color: AppColors.muted,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  _dragging
+                      ? YorksV1ProjectStrings.attachmentsDropzoneActive.primary
+                      : YorksV1ProjectStrings.attachmentsDropzoneTitle.primary,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Center(
+                  child: _LocalizedCopy(
+                    copy: YorksV1ProjectStrings.attachmentsDropzonePrompt,
+                    language: widget.language,
+                    englishStyle: AppTypography.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                OutlinedButton.icon(
+                  onPressed: widget.onPick,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(YorksV1ProjectStrings.addAttachment.primary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!kIsWeb) return content;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DropzoneView(
+            mime: _acceptedMimeTypes,
+            operation: DragOperation.copy,
+            cursor: CursorType.grab,
+            onCreated: (controller) => _dropzoneController = controller,
+            onHover: () {
+              if (mounted) setState(() => _dragging = true);
+            },
+            onLeave: () {
+              if (mounted) setState(() => _dragging = false);
+            },
+            onDropInvalid: (_) => widget.onDropError(),
+            onDropFiles: (files) {
+              unawaited(_handleDroppedFiles(files));
+            },
+          ),
+        ),
+        content,
+      ],
+    );
   }
 }
 
@@ -2868,20 +3115,45 @@ class _ReviewStage extends StatelessWidget {
       for (final member in directory) member.authUserId: member,
     };
     final hasUnavailableMember = _hasUnavailableInitialMember(draft, directory);
-    String? projectEngineer;
-    for (final member in draft.initialMembers) {
-      if (member.projectRole != YorksV1ProjectMembershipRole.projectEngineer) {
-        continue;
-      }
-      final directoryMember = memberByAuthUserId[member.authUserId];
-      if (directoryMember != null) {
-        projectEngineer = _safeMemberDisplayName(directoryMember);
-        break;
-      }
+    final notProvided = YorksV1ProjectStrings.notProvided.primary;
+    String namesForRole(YorksV1ProjectMembershipRole role) {
+      final names = [
+        for (final initialMember in draft.initialMembers)
+          if (initialMember.projectRole == role)
+            _safeMemberDisplayName(
+              memberByAuthUserId[initialMember.authUserId],
+            ),
+      ];
+      return names.isEmpty ? notProvided : names.join(', ');
     }
+
+    String namesForParty(YorksV1ProjectPartyKind kind) {
+      final names = [
+        for (final party in draft.parties)
+          if (party.kind == kind) party.name.trim(),
+      ].where((name) => name.isNotEmpty).toList(growable: false);
+      return names.isEmpty ? notProvided : names.join(', ');
+    }
+
+    String buildingSummary() {
+      if (draft.buildings.isEmpty) return notProvided;
+      return draft.buildings
+          .map((building) => '${building.code} · ${building.name}')
+          .join('\n');
+    }
+
+    String attachmentSummary() {
+      if (draft.attachments.isEmpty) return notProvided;
+      final names = draft.attachments.map((attachment) => attachment.fileName);
+      return '${draft.attachments.length} · ${names.join(', ')}';
+    }
+
     final start = draft.startDate == null
-        ? YorksV1ProjectStrings.notProvided.primary
+        ? notProvided
         : MaterialLocalizations.of(context).formatMediumDate(draft.startDate!);
+    final end = draft.endDate == null
+        ? notProvided
+        : MaterialLocalizations.of(context).formatMediumDate(draft.endDate!);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2971,13 +3243,29 @@ class _ReviewStage extends StatelessWidget {
                   ),
                   _ReviewSummaryRow(
                     label: YorksV1ProjectStrings.client.primary,
+                    value: _emptyToNull(draft.clientName) ?? notProvided,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.jobOrContractReference.primary,
                     value:
-                        _emptyToNull(draft.clientName) ??
-                        YorksV1ProjectStrings.notProvided.primary,
+                        _emptyToNull(draft.jobOrContractReference) ??
+                        notProvided,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.siteLocation.primary,
+                    value: _emptyToNull(draft.siteLocation) ?? notProvided,
                   ),
                   _ReviewSummaryRow(
                     label: YorksV1ProjectStrings.startDate.primary,
                     value: start,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.endDate.primary,
+                    value: end,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.notes.primary,
+                    value: _emptyToNull(draft.notes) ?? notProvided,
                   ),
                 ],
               ),
@@ -2985,22 +3273,56 @@ class _ReviewStage extends StatelessWidget {
                 title: YorksV1ProjectStrings.accessAndBuildings.primary,
                 rows: [
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.projectTeam.primary,
-                    value: '${draft.initialMembers.length}',
+                    label: YorksV1ProjectStrings.consultant.primary,
+                    value:
+                        _emptyToNull(
+                          _partyFor(
+                            draft,
+                            YorksV1ProjectPartyKind.consultant,
+                          )?.name,
+                        ) ??
+                        notProvided,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.mainContractor.primary,
+                    value:
+                        _emptyToNull(
+                          _partyFor(
+                            draft,
+                            YorksV1ProjectPartyKind.mainContractor,
+                          )?.name,
+                        ) ??
+                        notProvided,
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.subcontractors.primary,
+                    value: namesForParty(YorksV1ProjectPartyKind.subcontractor),
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.otherContractors.primary,
+                    value: namesForParty(
+                      YorksV1ProjectPartyKind.otherContractor,
+                    ),
                   ),
                   _ReviewSummaryRow(
                     label: YorksV1ProjectStrings.projectEngineers.primary,
-                    value:
-                        projectEngineer ??
-                        YorksV1ProjectStrings.notProvided.primary,
+                    value: namesForRole(
+                      YorksV1ProjectMembershipRole.projectEngineer,
+                    ),
+                  ),
+                  _ReviewSummaryRow(
+                    label: YorksV1ProjectStrings.siteEngineers.primary,
+                    value: namesForRole(
+                      YorksV1ProjectMembershipRole.siteEngineer,
+                    ),
                   ),
                   _ReviewSummaryRow(
                     label: YorksV1ProjectStrings.buildings.primary,
-                    value: '${draft.buildings.length}',
+                    value: buildingSummary(),
                   ),
                   _ReviewSummaryRow(
                     label: YorksV1ProjectStrings.attachments.primary,
-                    value: '${draft.attachments.length}',
+                    value: attachmentSummary(),
                   ),
                 ],
               ),
@@ -3078,38 +3400,6 @@ class _ReviewSummaryCard extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _ReviewValue extends StatelessWidget {
-  const _ReviewValue({
-    required this.label,
-    required this.value,
-    required this.language,
-  });
-
-  final TranslatableString label;
-  final String value;
-  final AppLanguage language;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 180,
-          child: _LocalizedCopy(
-            copy: label,
-            language: language,
-            englishStyle: AppTypography.labelLarge,
-            secondaryStyle: AppTypography.labelSmall,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(child: Text(value, style: AppTypography.bodyMedium)),
-      ],
     );
   }
 }
@@ -3275,6 +3565,13 @@ TranslatableString _stageCopy(YorksV1ProjectCreationStage stage) {
 String? _emptyToNull(String? value) {
   if (value == null || value.trim().isEmpty) return null;
   return value.trim();
+}
+
+DateTime _clampDate(DateTime value, DateTime minimum, DateTime maximum) {
+  final date = DateUtils.dateOnly(value);
+  if (date.isBefore(minimum)) return minimum;
+  if (date.isAfter(maximum)) return maximum;
+  return date;
 }
 
 bool _hasUnavailableInitialMember(

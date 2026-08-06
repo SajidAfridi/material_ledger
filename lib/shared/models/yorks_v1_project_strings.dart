@@ -753,6 +753,18 @@ abstract final class YorksV1ProjectStrings {
     ur: 'ڈرائنگز، حسابات، شیڈولز، منظوریوں اور کمپنی کی مٹیریل لسٹیں پراجیکٹ کے ساتھ شامل کی جا سکتی ہیں۔',
     hi: 'परियोजना के साथ ड्रॉइंग, गणना, शेड्यूल, अनुमोदन और कंपनी सामग्री सूचियाँ जोड़ी जा सकती हैं।',
   );
+  static const attachmentsDropzonePrompt = TranslatableString(
+    en: 'Drag and drop files here, or select Add files.',
+    ar: 'اسحب الملفات وأفلتها هنا أو اختر إضافة ملفات.',
+    ur: 'فائلیں یہاں ڈریگ کر کے چھوڑیں یا فائلیں شامل کریں منتخب کریں۔',
+    hi: 'फ़ाइलें यहां खींचकर छोड़ें या फ़ाइलें जोड़ें चुनें।',
+  );
+  static const attachmentsDropzoneActive = TranslatableString(
+    en: 'Drop files to add them',
+    ar: 'أفلت الملفات لإضافتها',
+    ur: 'فائلیں شامل کرنے کے لیے چھوڑیں',
+    hi: 'उन्हें जोड़ने के लिए फ़ाइलें छोड़ें',
+  );
   static const attachmentsDoNotBlock = TranslatableString(
     en: 'This does not block project creation.',
     ar: 'لا يمنع ذلك إنشاء المشروع.',
@@ -790,6 +802,12 @@ abstract final class YorksV1ProjectStrings {
     ur: 'اختتامی تاریخ آغاز کی تاریخ کے برابر یا بعد ہونی چاہیے۔',
     hi: 'समाप्ति तिथि आरंभ तिथि के बराबर या उसके बाद होनी चाहिए।',
   );
+  static const projectDateSupportedRange = TranslatableString(
+    en: 'Choose a project date within 50 years of today.',
+    ar: 'اختر تاريخ مشروع ضمن 50 عاماً من اليوم.',
+    ur: 'آج سے 50 سال کے اندر پراجیکٹ کی تاریخ منتخب کریں۔',
+    hi: 'आज से 50 वर्षों के भीतर परियोजना की तारीख चुनें।',
+  );
   static const atLeastOneBuilding = TranslatableString(
     en: 'Add at least one physical building.',
     ar: 'أضف مبنى فعلياً واحداً على الأقل.',
@@ -801,6 +819,24 @@ abstract final class YorksV1ProjectStrings {
     ar: 'يجب أن يكون كل رمز مبنى فريداً.',
     ur: 'ہر عمارت کوڈ منفرد ہونا چاہیے۔',
     hi: 'हर भवन कोड अद्वितीय होना चाहिए।',
+  );
+  static const editBuilding = TranslatableString(
+    en: 'Edit building',
+    ar: 'تعديل المبنى',
+    ur: 'عمارت میں ترمیم کریں',
+    hi: 'भवन संपादित करें',
+  );
+  static const updateBuilding = TranslatableString(
+    en: 'Update building',
+    ar: 'تحديث المبنى',
+    ur: 'عمارت اپ ڈیٹ کریں',
+    hi: 'भवन अपडेट करें',
+  );
+  static const cancelBuildingEdit = TranslatableString(
+    en: 'Cancel editing',
+    ar: 'إلغاء التعديل',
+    ur: 'ترمیم منسوخ کریں',
+    hi: 'संपादन रद्द करें',
   );
   static const duplicateMember = TranslatableString(
     en: 'A team member can be added once only.',

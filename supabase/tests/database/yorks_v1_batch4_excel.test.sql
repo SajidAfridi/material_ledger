@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(23);
+select plan(24);
 
 select ok(
   has_function_privilege(
@@ -100,6 +100,21 @@ select jsonb_build_object(
       'id', '41000000-0000-4000-8000-000000000004',
       'heading', 'Air flow (L/s)', 'display_order', 4,
       'canonical_field', null, 'is_commercial', false
+    ),
+    jsonb_build_object(
+      'id', '41000000-0000-4000-8000-000000000009',
+      'heading', 'Size (mm x mm)', 'display_order', 5,
+      'canonical_field', 'size', 'is_commercial', false
+    ),
+    jsonb_build_object(
+      'id', '41000000-0000-4000-8000-000000000010',
+      'heading', 'Model', 'display_order', 6,
+      'canonical_field', 'model', 'is_commercial', false
+    ),
+    jsonb_build_object(
+      'id', '41000000-0000-4000-8000-000000000011',
+      'heading', 'Equipment tag', 'display_order', 7,
+      'canonical_field', 'equipment_tag', 'is_commercial', false
     )
   ),
   'rows', jsonb_build_array(
@@ -109,7 +124,10 @@ select jsonb_build_object(
         '41000000-0000-4000-8000-000000000001', 'Motorized Smoke Damper',
         '41000000-0000-4000-8000-000000000002', 'UAE',
         '41000000-0000-4000-8000-000000000003', 'MSD-01A',
-        '41000000-0000-4000-8000-000000000004', '708'
+        '41000000-0000-4000-8000-000000000004', '708',
+        '41000000-0000-4000-8000-000000000009', '600 x 600',
+        '41000000-0000-4000-8000-000000000010', 'MFD-600',
+        '41000000-0000-4000-8000-000000000011', 'MSD-01A'
       )
     ),
     jsonb_build_object(
@@ -118,7 +136,10 @@ select jsonb_build_object(
         '41000000-0000-4000-8000-000000000001', 'Volume Control Damper',
         '41000000-0000-4000-8000-000000000002', 'Italy',
         '41000000-0000-4000-8000-000000000003', 'VCD-02',
-        '41000000-0000-4000-8000-000000000004', '450'
+        '41000000-0000-4000-8000-000000000004', '450',
+        '41000000-0000-4000-8000-000000000009', '1100c450',
+        '41000000-0000-4000-8000-000000000010', 'VCD-1100',
+        '41000000-0000-4000-8000-000000000011', 'VCD-02'
       )
     )
   ),
@@ -131,7 +152,10 @@ select jsonb_build_object(
       jsonb_build_object('source_index', 0, 'labels', jsonb_build_array('Item Description')),
       jsonb_build_object('source_index', 1, 'labels', jsonb_build_array('Brand / Origin')),
       jsonb_build_object('source_index', 2, 'labels', jsonb_build_array('Model / Tag')),
-      jsonb_build_object('source_index', 3, 'labels', jsonb_build_array('Air flow (L/s)'))
+      jsonb_build_object('source_index', 3, 'labels', jsonb_build_array('Air flow (L/s)')),
+      jsonb_build_object('source_index', 4, 'labels', jsonb_build_array('Size (mm x mm)')),
+      jsonb_build_object('source_index', 5, 'labels', jsonb_build_array('Model')),
+      jsonb_build_object('source_index', 6, 'labels', jsonb_build_array('Equipment tag'))
     )
   )
 ) as payload
@@ -167,7 +191,7 @@ select is(
     select jsonb_array_length(public.v1_get_boq_worksheet(worksheet_group_id) -> 'columns')
     from v1_b4_targets
   ),
-  4,
+  7,
   'Imported arbitrary headings create the reviewed worksheet column set'
 );
 
@@ -202,11 +226,27 @@ select is(
 
 select is(
   (
-    select last_import_source #>> '{header_hierarchy,3,labels,0}'
+    select last_import_source #>> '{header_hierarchy,6,labels,0}'
     from public.v1_boq_groups where id = (select worksheet_group_id from v1_b4_targets)
   ),
-  'Air flow (L/s)',
+  'Equipment tag',
   'Reviewed header hierarchy is retained as import provenance'
+);
+
+select is(
+  (
+    select concat_ws(
+      '|',
+      public.v1_get_boq_worksheet(worksheet_group_id)
+        #>> '{rows,0,canonical_values,size}',
+      public.v1_get_boq_worksheet(worksheet_group_id)
+        #>> '{rows,0,canonical_values,model}',
+      public.v1_get_boq_worksheet(worksheet_group_id)
+        #>> '{rows,0,canonical_values,equipment_tag}'
+    ) from v1_b4_targets
+  ),
+  '600 x 600|MFD-600|MSD-01A',
+  'Equipment Schedule technical mappings are accepted and retained by the trusted import command'
 );
 
 select is(
