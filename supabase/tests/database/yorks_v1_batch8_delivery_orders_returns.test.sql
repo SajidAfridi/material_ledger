@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(37);
+select plan(40);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -71,6 +71,64 @@ select project.id as project_id,
     where project_id = project.id and scope_kind = 'building' limit 1) as scope_id
 from public.v1_projects project where project.project_ref = 'B8-RET-001';
 grant select on table v1_b8_targets to authenticated;
+
+-- Use real active Engineer identities for the cross-membership-label and
+-- unassigned permission proofs. Reusing the seeded Admin identity with a
+-- spoofed Engineer JWT would be rejected by v1_current_actor_is_active() and
+-- would not exercise project membership authorization.
+with personas(auth_user_id, email, display_name, app_role, app_user_id) as (
+  values
+    (
+      '10000000-0000-4000-8000-000000000005'::uuid,
+      'supporting.project.engineer@yorks.local.test',
+      'Supporting Project Engineer',
+      'project_engineer',
+      'usr-supporting-project-engineer'
+    ),
+    (
+      '10000000-0000-4000-8000-000000000006'::uuid,
+      'unassigned.site.engineer@yorks.local.test',
+      'Unassigned Site Engineer',
+      'site_engineer',
+      'usr-unassigned-site-engineer'
+    )
+)
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change
+)
+select
+  source.instance_id,
+  persona.auth_user_id,
+  source.aud,
+  source.role,
+  persona.email,
+  source.encrypted_password,
+  source.email_confirmed_at,
+  jsonb_build_object(
+    'provider', 'email',
+    'providers', jsonb_build_array('email'),
+    'role', persona.app_role,
+    'app_user_id', persona.app_user_id,
+    'caps', '[]'::jsonb
+  ),
+  jsonb_build_object(
+    'full_name', persona.display_name,
+    'must_change_password', false
+  ),
+  source.created_at,
+  source.updated_at,
+  '',
+  '',
+  '',
+  ''
+from personas persona
+cross join lateral (
+  select seed_user.*
+  from auth.users seed_user
+  where seed_user.id = '10000000-0000-4000-8000-000000000001'::uuid
+) source;
 
 -- This is committed test fixture data from the already-tested dispatch and
 -- receipt commands. Batch 8 starts after receipt review, so these rows keep
@@ -194,15 +252,15 @@ insert into public.v1_receipt_review_lines (
 );
 
 -- A project may have more than one Project Engineer. The supporting Engineer
--- must receive the same post-receipt controlled-document capability as the
--- Engineer who created the project.
+-- must receive the same post-receipt controlled-document capability even when
+-- the assignment was recorded with the other engineering membership label.
 insert into public.v1_project_members (
   project_id, member_auth_user_id, project_role, reason,
   assigned_by_auth_user_id, assigned_by_role
 ) values (
   (select project_id from v1_b8_targets),
-  '10000000-0000-4000-8000-000000000004',
-  'project_engineer', 'Supporting Project Engineer for Delivery Order proof',
+  '10000000-0000-4000-8000-000000000005',
+  'site_engineer', 'Supporting Engineer for Delivery Order proof',
   '10000000-0000-4000-8000-000000000001', 'project_engineer'
 );
 
@@ -221,7 +279,7 @@ select ok(
 
 select set_config(
   'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
+  '{"sub":"10000000-0000-4000-8000-000000000005","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
   true
 );
 select ok(
@@ -229,6 +287,13 @@ select ok(
     '81000000-0000-4000-8000-000000000001'::uuid
   ),
   'Every actively assigned Project Engineer can generate the same Delivery Order'
+);
+
+select ok(
+  (public.v1_returns_documents_workspace_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) ->> 'can_generate_delivery_order')::boolean,
+  'The assigned Engineer projection enables the Delivery Order UI action'
 );
 
 select set_config(
@@ -245,7 +310,7 @@ select ok(
 
 select set_config(
   'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-unassigned-site-engineer"}}',
+  '{"sub":"10000000-0000-4000-8000-000000000006","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-unassigned-site-engineer"}}',
   true
 );
 select ok(
@@ -253,6 +318,20 @@ select ok(
     '81000000-0000-4000-8000-000000000001'::uuid
   ),
   'An unassigned Site Engineer cannot generate the project Delivery Order'
+);
+
+select throws_ok(
+  $$select public.v1_generate_delivery_order(
+    jsonb_build_object(
+      'request_id', '81000000-0000-4000-8000-000000000001',
+      'dispatch_id', '81500000-0000-4000-8000-000000000001',
+      'expected_request_version', 1,
+      'expected_dispatch_version', 1,
+      'delivery_order_reference', 'B8-DO-UNASSIGNED'
+    ), '82000000-0000-4000-8000-000000000099'::uuid
+  )$$,
+  '42501', 'V1_DELIVERY_ORDER_GENERATE_DENIED',
+  'The trusted generation RPC rejects an unassigned Engineer'
 );
 
 set local role authenticated;
@@ -402,6 +481,30 @@ select lives_ok(
     ), '82000000-0000-4000-8000-000000000004'::uuid
   )$$,
   'An assigned Site Engineer can generate the post-receipt Delivery Order revision'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000005","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
+  true
+);
+
+select lives_ok(
+  $$select public.v1_generate_delivery_order(
+    jsonb_build_object(
+      'request_id', '81000000-0000-4000-8000-000000000001',
+      'dispatch_id', '81500000-0000-4000-8000-000000000001',
+      'expected_request_version', 1, 'expected_dispatch_version', 1,
+      'delivery_order_reference', 'B8-DO-001'
+    ), '82000000-0000-4000-8000-000000000005'::uuid
+  )$$,
+  'An assigned Project Engineer can generate without a role-label 403'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
 );
 
 select lives_ok(

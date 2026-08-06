@@ -101,7 +101,10 @@ void main() {
         find.text('Line note (required for missing or damaged)'),
         findsOneWidget,
       );
-      expect(find.text('All lines reviewed'), findsNothing);
+      expect(
+        find.text('All dispatch lines have been reviewed.'),
+        findsOneWidget,
+      );
       expect(find.text('Save receipt review'), findsOneWidget);
     },
   );
@@ -183,32 +186,32 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
   Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId) async {
     if (requestId == 'receipt-focus') return _receiptFocusWorkspace;
     return YorksV1LogisticsWorkspace(
-        requestId: requestId,
-        requestNumber: 'Y-001-MR001',
-        requestState: 'approved',
-        requestRecordVersion: 5,
-        projectName: 'Yorks Project',
-        scopeName: 'Building A',
-        canDispatch: true,
-        canConfirmReceipt: false,
-        dispatchCandidates: const [
-          YorksV1DispatchCandidate(
-            requestLineId: 'request-line-1',
-            displayOrder: 1,
-            description: 'VAV Damper',
-            unit: 'Nos',
-            approvedQuantity: '4',
-            goodReceivedQuantity: '0',
-            inTransitQuantity: '0',
-            stillNeededQuantity: '4',
-            source: YorksV1LogisticsSource.warehouse,
-            inventoryItemId: 'inventory-1',
-            reservedRemainingQuantity: '4',
-            warehouseAvailableQuantity: '4',
-          ),
-        ],
-        dispatches: const [],
-      );
+      requestId: requestId,
+      requestNumber: 'Y-001-MR001',
+      requestState: 'approved',
+      requestRecordVersion: 5,
+      projectName: 'Yorks Project',
+      scopeName: 'Building A',
+      canDispatch: true,
+      canConfirmReceipt: false,
+      dispatchCandidates: const [
+        YorksV1DispatchCandidate(
+          requestLineId: 'request-line-1',
+          displayOrder: 1,
+          description: 'VAV Damper',
+          unit: 'Nos',
+          approvedQuantity: '4',
+          goodReceivedQuantity: '0',
+          inTransitQuantity: '0',
+          stillNeededQuantity: '4',
+          source: YorksV1LogisticsSource.warehouse,
+          inventoryItemId: 'inventory-1',
+          reservedRemainingQuantity: '4',
+          warehouseAvailableQuantity: '4',
+        ),
+      ],
+      dispatches: const [],
+    );
   }
 
   @override

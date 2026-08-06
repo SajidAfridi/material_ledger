@@ -783,6 +783,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   final Map<String, YorksV1ReceiptOutcome> _outcomes = {};
   final Map<String, TextEditingController> _goodQuantities = {};
   final Map<String, TextEditingController> _notes = {};
+  bool _allReviewed = false;
   bool _saving = false;
 
   @override
@@ -880,9 +881,29 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Wrap(
                   alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: AppSpacing.md,
                   runSpacing: AppSpacing.sm,
                   children: [
+                    SizedBox(
+                      width: isCompact
+                          ? screen.width -
+                                (AppSpacing.sm * 2) -
+                                (AppSpacing.lg * 2)
+                          : 360,
+                      child: CheckboxListTile(
+                        value: _allReviewed,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        onChanged: _saving
+                            ? null
+                            : (value) =>
+                                  setState(() => _allReviewed = value ?? false),
+                        title: Text(
+                          YorksV1LogisticsStrings.allLinesReviewed.primary,
+                        ),
+                      ),
+                    ),
                     SecondaryButton(
                       label: MaterialLocalizations.of(
                         context,
@@ -897,7 +918,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
                       icon: Icons.verified_outlined,
                       isExpanded: false,
                       isLoading: _saving,
-                      onPressed: _saving ? null : _confirm,
+                      onPressed: _allReviewed && !_saving ? _confirm : null,
                     ),
                   ],
                 ),

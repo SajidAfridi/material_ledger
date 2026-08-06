@@ -3984,46 +3984,72 @@ class _DeliveryOrderSummarySurface extends StatelessWidget {
       child: Column(
         children: [
           for (var index = 0; index < dispatches.length; index++) ...[
-            Row(
-              children: [
-                const Icon(
-                  Icons.receipt_long_outlined,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final dispatch = dispatches[index];
+                final action =
+                    dispatch.canGenerate && onGenerateDeliveryOrder != null
+                    ? _RecordActionButton(
+                        label: YorksV1LogisticsStrings
+                            .generateDeliveryOrder
+                            .primary,
+                        icon: Icons.receipt_long_outlined,
+                        onPressed: onGenerateDeliveryOrder!,
+                        primary: true,
+                      )
+                    : null;
+                final summary = Row(
+                  children: [
+                    const Icon(
+                      Icons.receipt_long_outlined,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dispatch.deliveryOrder?.reference ??
+                                dispatch.dispatchNumber,
+                            style: AppTypography.titleSmall,
+                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            dispatch.deliveryOrder == null
+                                ? YorksV1MaterialRequestStrings
+                                      .deliveryOrderAfterReceipt
+                                      .primary
+                                : YorksV1LogisticsStrings.deliveryOrder.primary,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+                if (constraints.maxWidth < 560 && action != null) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        dispatches[index].deliveryOrder?.reference ??
-                            dispatches[index].dispatchNumber,
-                        style: AppTypography.titleSmall,
-                      ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        dispatches[index].deliveryOrder == null
-                            ? YorksV1MaterialRequestStrings
-                                  .deliveryOrderAfterReceipt
-                                  .primary
-                            : YorksV1LogisticsStrings.deliveryOrder.primary,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.muted,
-                        ),
-                      ),
+                      summary,
+                      const SizedBox(height: AppSpacing.md),
+                      Align(alignment: Alignment.centerLeft, child: action),
                     ],
-                  ),
-                ),
-                if (dispatches[index].canGenerate &&
-                    onGenerateDeliveryOrder != null)
-                  _RecordActionButton(
-                    label:
-                        YorksV1LogisticsStrings.generateDeliveryOrder.primary,
-                    icon: Icons.receipt_long_outlined,
-                    onPressed: onGenerateDeliveryOrder!,
-                    primary: true,
-                  ),
-              ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: summary),
+                    if (action != null) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      action,
+                    ],
+                  ],
+                );
+              },
             ),
             if (index != dispatches.length - 1)
               const Divider(height: AppSpacing.xxl),

@@ -8,12 +8,14 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
+import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_boq_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_documents_provider.dart';
@@ -252,6 +254,11 @@ void main() {
                 (ref) async =>
                     YorksV1MaterialRequestDocumentModel.fromRequest(request),
               ),
+              yorksV1ReturnsDocumentsWorkspaceProvider(
+                'layout-detail',
+              ).overrideWith(
+                (ref) async => _assignedEngineerDeliveryOrderWorkspace,
+              ),
             ],
             child: MaterialApp.router(routerConfig: router),
           ),
@@ -405,3 +412,31 @@ void main() {
     },
   );
 }
+
+final _assignedEngineerDeliveryOrderWorkspace =
+    YorksV1ReturnsDocumentsWorkspace(
+      requestId: 'layout-detail',
+      projectId: 'project-layout',
+      requestNumber: 'YRA123-MR101',
+      requestState: 'received',
+      requestRecordVersion: 1,
+      projectName: 'Yorks Tower',
+      projectReference: 'YRA-123',
+      scopeName: 'Common / All Buildings',
+      canGenerateDeliveryOrder: true,
+      canSubmitMaterialReturn: false,
+      canConfirmMaterialReturn: false,
+      deliveryOrderDispatches: [
+        YorksV1DeliveryOrderDispatch(
+          dispatchId: 'dispatch-layout',
+          dispatchNumber: 'YRA123-DSP001',
+          dispatchDate: DateTime.utc(2026, 8, 3),
+          dispatchRecordVersion: 1,
+          canGenerate: true,
+          receiptReviewedAt: DateTime.utc(2026, 8, 3),
+        ),
+      ],
+      returnCandidates: const [],
+      materialReturns: const [],
+      returnInventoryItems: const [],
+    );
