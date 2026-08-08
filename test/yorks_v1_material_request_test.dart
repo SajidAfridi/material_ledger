@@ -862,7 +862,7 @@ void main() {
         .buildDocumentPdf(
           YorksV1MaterialRequestDocumentModel(
             request: request,
-            receiptStatuses: const {'line-1': 'Cannot Provide Now'},
+            receiptStatuses: const {'line-1': 'received'},
           ),
           PdfPageFormat.a4,
         );

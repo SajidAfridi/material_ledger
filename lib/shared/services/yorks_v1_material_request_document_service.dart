@@ -133,7 +133,6 @@ class YorksV1MaterialRequestDocumentService {
   static const double _mm = PdfPageFormat.mm;
   static final PdfColor _documentInk = PdfColor.fromHex('#111111');
   static final PdfColor _documentGrid = PdfColor.fromHex('#222222');
-  static final PdfColor _headerFill = PdfColor.fromHex('#E8E8E8');
   static final PdfColor _documentMuted = PdfColor.fromHex('#5C6673');
 
   /// Print and PDF sharing intentionally use exactly the same A4 bytes.  This
@@ -205,9 +204,6 @@ class YorksV1MaterialRequestDocumentService {
         // table's own repeated heading still identifies continuation pages.
         header: (context) => context.pageNumber == 1
             ? _formalHeader(logo, model)
-            : pw.SizedBox(),
-        footer: (context) => context.pageNumber == context.pagesCount
-            ? _companyContactFooter()
             : pw.SizedBox(),
         build: (_) => [
           _materialTable(model, commercial: commercial),
@@ -428,37 +424,44 @@ class YorksV1MaterialRequestDocumentService {
       'Unit',
       if (commercial) 'Unit Cost',
       if (commercial) 'Total Cost',
+      'Status',
     ];
     final widths = commercial
         ? const <int, pw.TableColumnWidth>{
-            0: pw.FlexColumnWidth(.7),
-            1: pw.FlexColumnWidth(4.2),
-            2: pw.FlexColumnWidth(2.2),
-            3: pw.FlexColumnWidth(.95),
-            4: pw.FlexColumnWidth(1.05),
-            5: pw.FlexColumnWidth(1.5),
-            6: pw.FlexColumnWidth(1.55),
+            0: pw.FlexColumnWidth(.65),
+            1: pw.FlexColumnWidth(3.45),
+            2: pw.FlexColumnWidth(1.8),
+            3: pw.FlexColumnWidth(.8),
+            4: pw.FlexColumnWidth(.9),
+            5: pw.FlexColumnWidth(1.25),
+            6: pw.FlexColumnWidth(1.25),
+            7: pw.FlexColumnWidth(1.1),
           }
         : const <int, pw.TableColumnWidth>{
-            0: pw.FlexColumnWidth(.7),
-            1: pw.FlexColumnWidth(5.1),
-            2: pw.FlexColumnWidth(2.2),
-            3: pw.FlexColumnWidth(1),
-            4: pw.FlexColumnWidth(1),
+            0: pw.FlexColumnWidth(.65),
+            1: pw.FlexColumnWidth(4.25),
+            2: pw.FlexColumnWidth(2.05),
+            3: pw.FlexColumnWidth(.85),
+            4: pw.FlexColumnWidth(.95),
+            5: pw.FlexColumnWidth(1.25),
           };
     return pw.Table(
-      border: pw.TableBorder.all(color: _documentGrid, width: .65),
+      border: pw.TableBorder.all(color: _documentGrid, width: .8),
       columnWidths: widths,
       defaultVerticalAlignment: pw.TableCellVerticalAlignment.top,
       children: [
         pw.TableRow(
           repeat: true,
-          decoration: pw.BoxDecoration(color: _headerFill),
           verticalAlignment: pw.TableCellVerticalAlignment.middle,
           children: [for (final header in headers) _tableHeader(header)],
         ),
         for (var index = 0; index < request.lines.length; index++)
-          _materialRow(request.lines[index], index + 1, commercial: commercial),
+          _materialRow(
+            request.lines[index],
+            index + 1,
+            commercial: commercial,
+            status: model.receiptStatuses[request.lines[index].id],
+          ),
         for (var index = request.lines.length; index < 6; index++)
           _emptyMaterialRow(commercial: commercial),
       ],
@@ -469,28 +472,33 @@ class YorksV1MaterialRequestDocumentService {
     YorksV1MaterialRequestLine line,
     int number, {
     required bool commercial,
+    String? status,
   }) => pw.TableRow(
     children: [
       _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
       _descriptionCell(line),
       _tableCell(line.brandOrigin ?? ''),
-      _tableCell(line.quantity, alignment: pw.Alignment.topRight),
+      _tableCell(line.quantity, alignment: pw.Alignment.topCenter),
       _tableCell(line.unit),
       if (commercial)
-        _tableCell(line.unitCost ?? '', alignment: pw.Alignment.topRight),
-      if (commercial)
         _tableCell(
-          _calculatedTotal(line) ?? line.totalCost ?? '',
+          _dashWhenEmpty(line.unitCost),
           alignment: pw.Alignment.topRight,
         ),
+      if (commercial)
+        _tableCell(
+          _dashWhenEmpty(_calculatedTotal(line) ?? line.totalCost),
+          alignment: pw.Alignment.topRight,
+        ),
+      _tableCell(_displayStatus(status), bold: true),
     ],
   );
 
   static pw.TableRow _emptyMaterialRow({required bool commercial}) =>
       pw.TableRow(
         children: [
-          for (var index = 0; index < (commercial ? 7 : 5); index++)
-            pw.SizedBox(height: 6.6 * _mm),
+          for (var index = 0; index < (commercial ? 8 : 6); index++)
+            pw.SizedBox(height: 8.2 * _mm),
         ],
       );
 
@@ -499,9 +507,12 @@ class YorksV1MaterialRequestDocumentService {
       horizontal: 1.2 * _mm,
       vertical: 2.2 * _mm,
     ),
-    child: pw.Text(
-      value,
-      style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold),
+    child: pw.Center(
+      child: pw.Text(
+        value,
+        textAlign: pw.TextAlign.center,
+        style: pw.TextStyle(fontSize: 7.3, fontWeight: pw.FontWeight.bold),
+      ),
     ),
   );
 
@@ -513,12 +524,12 @@ class YorksV1MaterialRequestDocumentService {
     alignment: alignment,
     padding: pw.EdgeInsets.symmetric(
       horizontal: 1.2 * _mm,
-      vertical: 2.1 * _mm,
+      vertical: 2.5 * _mm,
     ),
     child: pw.Text(
       value,
       style: pw.TextStyle(
-        fontSize: 7.1,
+        fontSize: 7.2,
         fontWeight: bold ? pw.FontWeight.bold : null,
       ),
     ),
@@ -537,18 +548,18 @@ class YorksV1MaterialRequestDocumentService {
     return pw.Padding(
       padding: pw.EdgeInsets.symmetric(
         horizontal: 1.2 * _mm,
-        vertical: 2 * _mm,
+        vertical: 2.5 * _mm,
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         mainAxisSize: pw.MainAxisSize.min,
         children: [
-          pw.Text(line.description, style: const pw.TextStyle(fontSize: 7.2)),
+          pw.Text(line.description, style: const pw.TextStyle(fontSize: 7.4)),
           if (details.isNotEmpty) ...[
             pw.SizedBox(height: .5 * _mm),
             pw.Text(
               details.join(' · '),
-              style: pw.TextStyle(fontSize: 6.4, color: _documentMuted),
+              style: pw.TextStyle(fontSize: 6.5, color: _documentMuted),
             ),
           ],
         ],
@@ -629,15 +640,6 @@ class YorksV1MaterialRequestDocumentService {
   static pw.Widget _approvalText(String label, String value) =>
       pw.Text('$label: $value', style: const pw.TextStyle(fontSize: 6.6));
 
-  static pw.Widget _companyContactFooter() => pw.Center(
-    child: pw.Text(
-      '${YorksV1CompanyDocumentStrings.contactLine.en} - '
-      'E-mail: ${YorksV1CompanyDocumentStrings.email}',
-      textAlign: pw.TextAlign.center,
-      style: pw.TextStyle(fontSize: 6.4, color: _documentMuted),
-    ),
-  );
-
   static void _validatePdfRequest(YorksV1MaterialRequest request) {
     if (request.lines.isEmpty) {
       throw StateError('The Material Request has no material lines.');
@@ -672,6 +674,24 @@ class YorksV1MaterialRequestDocumentService {
     final cost = double.tryParse(line.unitCost?.trim() ?? '');
     if (qty == null || cost == null) return null;
     return (qty * cost).toStringAsFixed(2);
+  }
+
+  static String _dashWhenEmpty(String? value) {
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? '—' : normalized;
+  }
+
+  static String _displayStatus(String? value) {
+    final normalized = value?.trim().replaceAll('_', ' ') ?? '';
+    if (normalized.isEmpty) return '—';
+    return normalized
+        .split(RegExp(r'\s+'))
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+        )
+        .join(' ');
   }
 
   static String _safeName(String source) {
