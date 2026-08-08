@@ -8,7 +8,7 @@
 | Repository/controller | Draft recovery, typed RPC payload/result, connectivity, idempotent retry, conflict/error handling, notification refresh |
 | Flutter widget | Four-role navigation, action visibility, forms, dynamic grid, keyboard behavior, focused mobile editor, localization and responsive layouts |
 | Database/pgTAP | Constraints, RLS, RPC authority, locks, state transitions, audit attribution, protected commercial projections |
-| Concurrency/integration | Competing reservations/dispatches, duplicate commands, membership revocation and four-role end-to-end flow |
+| Concurrency/integration | Competing reservations/dispatches, duplicate commands, membership revocation and six-role end-to-end flow |
 | Visual/manual | Effective R35 parity, Android/web layouts, Excel round-trip, PDF/print short/multi-page output |
 
 No screen-level success substitutes for a direct database negative test.
@@ -20,12 +20,12 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | ID | Scenario | Primary automated/manual evidence |
 |---|---|---|
 | AT-01 | Site Engineer creates a project, assigns a Project Engineer and multiple buildings; Procurement cannot create/edit it. | RPC/RLS/route/widget/integration |
-| AT-02 | New project receives 29 default BOQ groups; a custom group can be added. | database/repository/widget |
+| AT-02 | New project receives 29 independent default BOQ groups for Common and each physical building; a custom group belongs to one selected scope. | database/repository/widget |
 | AT-03 | MSD worksheet imports title, seven columns and all rows into the direct-edit grid. | workbook fixture/integration |
 | AT-04 | User edits/deletes a cell, row and non-protected column; export reproduces the changed worksheet. | controller/workbook round-trip |
 | AT-05 | Similar Row inserts directly below and preserves configured fields with sequential S:No. | unit/widget |
 | AT-06 | Whole BOQ group creates an MR draft but Procurement sees nothing until explicit Submit. | RLS/repository/integration |
-| AT-07 | Engineer selects individual BOQ and custom items for Common/All Buildings and submits a Scheduled MR. | widget/RPC/integration |
+| AT-07 | Engineer selects individual BOQ and custom items only from the matching Common/building scope and submits a Scheduled MR. | widget/RPC/integration |
 | AT-08 | MR number is unique and project/requester/header data is automatic. | database concurrency/integration |
 | AT-09 | Procurement arrangement defaults Warehouse, changes one line to supplier, partially supplies one and marks one unavailable with reason. | repository/widget/RPC |
 | AT-10 | Database rejects arrangement above requested and prevents double reservation. | constraint/concurrency pgTAP |
@@ -35,7 +35,7 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | AT-14 | Engineer marks one line Received, one Missing and one Damaged; MR remains partially received. | controller/RPC/integration |
 | AT-15 | Replacement dispatch is possible only for outstanding quantity and cannot over-supply. | RPC/concurrency |
 | AT-16 | When all approved quantity is good received, MR becomes Received and dispatch action disappears. | state unit/RPC/widget |
-| AT-17 | DO reference is entered, missing/damaged quantities are excluded and PDF/print footer is correct. | RPC/snapshot/PDF visual |
+| AT-17 | DO reference is entered at dispatch stage, dispatched quantities are immutable and PDF/print identity/footer is correct. | RPC/snapshot/PDF visual |
 | AT-18 | Return autocomplete shows only eligible good-received items for the selected project/scope. | query/controller/widget |
 | AT-19 | Return over eligible quantity is blocked; Procurement confirmation adds inventory once. | RPC/idempotency/concurrency |
 | AT-20 | MR/Return/DO short and multi-page PDFs have no overlap; print opens content, not a blank tab. | render/visual/manual browser |
@@ -43,11 +43,12 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | AT-22 | MR deletion/cancel rules are enforced by state and role. | RPC/RLS matrix |
 | AT-23 | Admin Configuration, Rentals, Users and Audit still load and operate. | regression/widget/smoke |
 | AT-24 | Duct Sizer and ESP Calculator remain available. | widget/smoke |
-| AT-25 | RLS negatives prove Procurement cannot mutate project/BOQ and unrelated Engineers cannot access another project. | four-role pgTAP/API |
+| AT-25 | RLS negatives prove Procurement cannot mutate project/BOQ, unrelated assigned-role Engineers cannot access another project, and global Engineer roles receive no commercial/inventory/Admin authority. | six-role pgTAP/API |
 
-“All Buildings” in AT-07 is implemented as the explicit Common scope unless
-the user deliberately creates separate building-scoped rows; it never duplicates
-quantities silently.
+The BOQ **All** option is a read-only overview, not the Common scope and not a
+persisted scope. Common is its own real BOQ. Database coverage proves per-scope
+29-folder creation, All aggregation, custom-folder isolation, Procurement
+write denial, legacy assignment idempotency and save/submit MR scope negatives.
 
 ## 3. Additional production gates
 
@@ -73,7 +74,9 @@ Android. Add:
 ## 4. Four-role security matrix
 
 Every RLS/RPC change supplies positive and negative cases using representative
-Project Engineer, Site Engineer, Procurement and Admin JWT claims.
+Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager,
+Procurement and Admin JWT claims. Global Engineer tests must prove all-project
+MR approval/DO generation and negative commercial, inventory and Admin access.
 
 Required adversarial techniques:
 
@@ -83,6 +86,8 @@ Required adversarial techniques:
 - unrelated and revoked membership;
 - stale version and wrong state;
 - caller-provided actor/role/timestamp spoof;
+- stale JWT whose exact role no longer matches the protected Auth role,
+  including a global-engineer-to-project-engineer demotion;
 - missing/revoked commercial capability;
 - Storage path/object guessing;
 - repeated idempotency key with same and different payload;

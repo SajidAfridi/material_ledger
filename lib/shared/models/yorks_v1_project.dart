@@ -725,7 +725,9 @@ class YorksV1ProjectCreationInput {
   /// Client-side action availability for the creation-time exception. The RPC
   /// derives and enforces the same role rule from the authenticated claim.
   bool initialMembersAllowedFor(YorksV1Role role) {
-    if (role == YorksV1Role.projectEngineer || role == YorksV1Role.admin) {
+    if (role == YorksV1Role.projectEngineer ||
+        role.isGlobalProjectEngineer ||
+        role == YorksV1Role.admin) {
       return true;
     }
     if (role != YorksV1Role.siteEngineer) return false;

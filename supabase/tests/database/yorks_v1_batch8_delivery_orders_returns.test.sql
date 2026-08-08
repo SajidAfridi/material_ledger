@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(40);
+select plan(50);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -40,6 +40,7 @@ select lives_ok(
     '{
       "project_ref":"B8-RET-001",
       "name":"Delivery and return project",
+      "job_contract_reference":"N-19957.2",
       "parties":{},
       "initial_members":[{
         "auth_user_id":"10000000-0000-4000-8000-000000000002",
@@ -91,6 +92,20 @@ with personas(auth_user_id, email, display_name, app_role, app_user_id) as (
       'Unassigned Site Engineer',
       'site_engineer',
       'usr-unassigned-site-engineer'
+    ),
+    (
+      '10000000-0000-4000-8000-000000000007'::uuid,
+      'noor@yorks.ae',
+      'Noor zaman',
+      'senior_mechanical_engineer',
+      'usr-senior-mechanical-engineer'
+    ),
+    (
+      '10000000-0000-4000-8000-000000000008'::uuid,
+      'ali@yorks.ae',
+      'Ali Hadba',
+      'project_manager',
+      'usr-project-manager'
     )
 )
 insert into auth.users (
@@ -131,8 +146,8 @@ cross join lateral (
 ) source;
 
 -- This is committed test fixture data from the already-tested dispatch and
--- receipt commands. Batch 8 starts after receipt review, so these rows keep
--- the proof focused on the new state machines instead of bypassing them.
+-- receipt commands. The first dispatch is reviewed; the second remains at the
+-- dispatch stage so the controlled-document gate is exercised before receipt.
 insert into public.v1_material_requests (
   id, project_id, scope_id, request_number, title, timing, state, record_version,
   created_by_auth_user_id, requester_display_name, requester_project_role,
@@ -229,6 +244,13 @@ insert into public.v1_material_dispatch_lines (
   '81100000-0000-4000-8000-000000000002',
   '81400000-0000-4000-8000-000000000002', 'external_supplier',
   null, 'Local Supplier', 'Refrigerant valve', 'EU', 'Nos', 1, 1
+), (
+  '81600000-0000-4000-8000-000000000003',
+  '81500000-0000-4000-8000-000000000002',
+  '81100000-0000-4000-8000-000000000001',
+  '81400000-0000-4000-8000-000000000001', 'warehouse',
+  '81200000-0000-4000-8000-000000000001', null,
+  'Copper pipe', 'UAE', 'Mtr', 3, 1
 );
 insert into public.v1_receipt_reviews (
   id, dispatch_id, request_id, reviewed_by_auth_user_id, reviewed_by_role
@@ -274,7 +296,7 @@ select ok(
   public.v1_can_generate_delivery_order(
     '81000000-0000-4000-8000-000000000001'::uuid
   ),
-  'The assigned Project Engineer can generate a Delivery Order after receipt'
+  'The assigned Project Engineer can generate a Delivery Order for a committed dispatch'
 );
 
 select set_config(
@@ -305,7 +327,7 @@ select ok(
   public.v1_can_generate_delivery_order(
     '81000000-0000-4000-8000-000000000001'::uuid
   ),
-  'The assigned Site Engineer can generate a Delivery Order after receipt'
+  'The assigned Site Engineer can generate a Delivery Order for a committed dispatch'
 );
 
 select set_config(
@@ -367,17 +389,13 @@ select throws_ok(
   'Procurement cannot bypass the Delivery Order command with a direct insert'
 );
 
-select throws_ok(
-  $$select public.v1_generate_delivery_order(
-    jsonb_build_object(
-      'request_id', '81000000-0000-4000-8000-000000000001',
-      'dispatch_id', '81500000-0000-4000-8000-000000000002',
-      'expected_request_version', 1, 'expected_dispatch_version', 1,
-      'delivery_order_reference', 'B8-DO-PREVIEW'
-    ), '82000000-0000-4000-8000-000000000001'::uuid
-  )$$,
-  '22023', 'V1_DELIVERY_ORDER_RECEIPT_REVIEW_REQUIRED',
-  'Delivery Order generation is rejected until receipt review exists'
+select ok(
+  (select (candidate ->> 'can_generate')::boolean
+   from jsonb_array_elements(public.v1_returns_documents_workspace_projection(
+     '81000000-0000-4000-8000-000000000001'::uuid
+   ) -> 'delivery_orders') candidate
+   where candidate ->> 'dispatch_id' = '81500000-0000-4000-8000-000000000002'),
+  'A dispatched delivery is eligible for its Delivery Order before receipt review'
 );
 
 select lives_ok(
@@ -401,12 +419,11 @@ select is(
 select ok(
   (select count(*) = 1 from public.v1_delivery_order_revisions)
   and (select count(*) = 2 from public.v1_delivery_order_revision_lines)
-  and (select bool_and((to_jsonb(line) - 'id' - 'delivery_order_revision_id'
-    - 'receipt_review_line_id' - 'display_order') = jsonb_build_object(
-      'item_description', item_description, 'good_quantity', good_quantity,
-      'unit', unit
-    )) from public.v1_delivery_order_revision_lines line),
-  'The Delivery Order snapshot has good-received rows only and exactly four printable columns'
+  and (select bool_and(
+    dispatch_line_id is not null
+    and delivery_quantity = good_quantity
+  ) from public.v1_delivery_order_revision_lines),
+  'The legacy received Delivery Order is preserved with dispatch-linked printable quantities'
 );
 
 set local role authenticated;
@@ -784,6 +801,133 @@ select ok(
   and (select count(*) = 2 from public.v1_inventory_movements
     where source_entity_type = 'material_return_line'),
   'A rejected return records its decision without moving stock'
+);
+
+-- Organization-wide engineering roles are exact Auth claims, but every
+-- trusted command sees Project Engineer workflow authority. Neither role has
+-- a dated membership row in this project and neither receives commercial,
+-- warehouse or Admin capabilities.
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000007","role":"authenticated","app_metadata":{"role":"senior_mechanical_engineer","app_user_id":"usr-senior-mechanical-engineer"}}',
+  true
+);
+
+select ok(
+  public.v1_project_readable((select project_id from v1_b8_targets)),
+  'Senior Mechanical Engineer has server-controlled access to every project'
+);
+
+select ok(
+  public.v1_can_decide_arrangement(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'Senior Mechanical Engineer can approve an MR arrangement without assignment'
+);
+
+select ok(
+  (public.v1_get_current_commercial_capabilities()
+    #>> '{capabilities,view_commercials,effective}') = 'false'
+  and not has_table_privilege(
+    'authenticated', 'public.v1_inventory_items', 'select'
+  ),
+  'Senior Mechanical Engineer does not inherit commercial or warehouse authority'
+);
+
+select ok(
+  (public.v1_returns_documents_workspace_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) ->> 'job_contract_reference') = 'N-19957.2'
+  and (public.v1_returns_documents_workspace_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) ->> 'scope_code') = 'b8'
+  and (public.v1_material_request_document_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) #>> '{request,job_contract_reference}') = 'N-19957.2',
+  'Controlled MR and Delivery Order projections include job and building identity'
+);
+
+select lives_ok(
+  $$select public.v1_generate_delivery_order(
+    jsonb_build_object(
+      'request_id', '81000000-0000-4000-8000-000000000001',
+      'dispatch_id', '81500000-0000-4000-8000-000000000002',
+      'expected_request_version', 1,
+      'expected_dispatch_version', 1,
+      'delivery_order_reference', 'B8-DO-DISPATCH'
+    ), '82000000-0000-4000-8000-000000000010'::uuid
+  )$$,
+  'Senior Mechanical Engineer generates the dispatch-level Delivery Order'
+);
+
+set local role postgres;
+select ok(
+  (select revision.receipt_review_id is null
+     from public.v1_delivery_order_revisions revision
+     join public.v1_delivery_orders delivery_order
+       on delivery_order.id = revision.delivery_order_id
+    where delivery_order.dispatch_id = '81500000-0000-4000-8000-000000000002'
+      and revision.revision_number = 1)
+  and (select count(*) = 1
+     from public.v1_delivery_order_revision_lines revision_line
+     join public.v1_delivery_order_revisions revision
+       on revision.id = revision_line.delivery_order_revision_id
+     join public.v1_delivery_orders delivery_order
+       on delivery_order.id = revision.delivery_order_id
+    where delivery_order.dispatch_id = '81500000-0000-4000-8000-000000000002'
+      and revision_line.delivery_quantity = 1
+      and revision_line.receipt_review_line_id is null),
+  'Dispatch-level Delivery Order snapshots dispatched quantity without inventing receipt facts'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000008","role":"authenticated","app_metadata":{"role":"project_manager","app_user_id":"usr-project-manager"}}',
+  true
+);
+
+select ok(
+  public.v1_can_decide_arrangement(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'Project Manager receives Project Engineer workflow authority'
+);
+
+select ok(
+  public.v1_project_readable((select project_id from v1_b8_targets))
+  and public.v1_can_decide_arrangement(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  )
+  and public.v1_can_generate_delivery_order(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ),
+  'Project Manager can access every project, approve MRs and generate Delivery Orders'
+);
+
+select lives_ok(
+  $$select public.v1_generate_delivery_order(
+    jsonb_build_object(
+      'request_id', '81000000-0000-4000-8000-000000000001',
+      'dispatch_id', '81500000-0000-4000-8000-000000000002',
+      'expected_request_version', 1,
+      'expected_dispatch_version', 1,
+      'delivery_order_reference', 'B8-DO-DISPATCH'
+    ), '82000000-0000-4000-8000-000000000011'::uuid
+  )$$,
+  'Project Manager can append a controlled dispatch Delivery Order revision'
+);
+
+set local role postgres;
+select is(
+  (select count(*)::integer
+     from public.v1_delivery_order_revisions revision
+     join public.v1_delivery_orders delivery_order
+       on delivery_order.id = revision.delivery_order_id
+    where delivery_order.dispatch_id = '81500000-0000-4000-8000-000000000002'),
+  2,
+  'Global Engineer regeneration preserves prior immutable dispatch revisions'
 );
 
 select * from finish();

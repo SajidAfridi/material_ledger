@@ -317,7 +317,7 @@ class EngineerProfileScreen extends ConsumerWidget {
     );
 
     if (confirmed != true) return;
-    await ref.read(authSessionProvider.notifier).logout();
+    await ref.read(authControllerProvider).signOut();
     if (!context.mounted) return;
     context.go(RoutePaths.login);
   }

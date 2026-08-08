@@ -114,16 +114,19 @@ Implementation status: **passed.** See
 Deliver:
 
 - ordered BOQ groups/columns/rows and canonical-plus-raw values;
-- exactly 29 idempotent defaults in project creation plus backfill for dormant
-  V1 projects;
+- exactly 29 idempotent defaults for every new Common/building scope; dormant
+  project-level BOQs remain unassigned for explicit reconciliation rather than
+  being backfilled by inference;
 - custom groups, direct header/cell editing, archive/delete rules;
 - Blank/Similar insertion below active row;
 - desktop virtualized keyboard grid and focused mobile row editor;
-- project BOQ folder/detail pages and read-only Procurement projection;
+- scope-selectable project BOQ folder/detail pages, a read-only All overview
+  and read-only Procurement projection;
 - 500-row performance tests.
 
-Gate: 29 defaults exactly once, arbitrary values survive save/reload, keyboard
-and 360px behavior pass, Procurement direct write denied, V7 plans untouched.
+Gate: 29 defaults per real scope, All is read-only, cross-scope BOQ-to-MR
+sources fail, arbitrary values survive save/reload, keyboard and 360px behavior
+pass, Procurement direct write denied, V7 plans untouched.
 
 Rollback: BOQ/Projects flags off; rows retained.
 
@@ -212,13 +215,12 @@ Implementation status: **passed.** See
 
 Deliver:
 
-- immutable DO revision snapshot after receipt review;
-- good-quantity-only four-column DO and shared PDF/print primitives;
+- immutable four-column DO revision snapshot from committed dispatch quantity;
 - return drafts/autocomplete from net eligible received quantities;
 - return submit, Procurement confirm/reject and mapped-stock movement;
 - Return Excel/PDF/print and web/Android flows.
 
-Gate: no pre-review DO; missing/damaged excluded; over-return rejected;
+Gate: dispatch-stage DO is immutable and has no receipt side effect; over-return rejected;
 confirmation posts stock once; short/multi-page output passes visual QA.
 
 Rollback: snapshots remain; use reject/supersede/compensating events.

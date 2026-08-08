@@ -73,7 +73,14 @@ select
   (select id from public.v1_project_scopes
     where project_id = project.id and scope_kind = 'building' limit 1) as scope_id,
   (select id from public.v1_boq_groups
-    where project_id = project.id and display_order = 1 limit 1) as boq_group_id
+    where project_id = project.id
+      and scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'building'
+        limit 1
+      )
+      and display_order = 1
+    limit 1) as boq_group_id
 from public.v1_projects project
 where project.project_ref = 'B5-MR-001';
 

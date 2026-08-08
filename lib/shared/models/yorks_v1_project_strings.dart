@@ -1268,6 +1268,8 @@ abstract final class YorksV1ProjectStrings {
     return switch (role) {
       'project_engineer' => projectEngineerRole,
       'site_engineer' => siteEngineerRole,
+      'senior_mechanical_engineer' => AppStrings.seniorMechanicalEngineerRole,
+      'project_manager' => AppStrings.projectManagerRole,
       'procurement' => procurementRole,
       'admin' => adminRole,
       _ => projectTeam,

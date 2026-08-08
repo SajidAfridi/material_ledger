@@ -106,6 +106,10 @@ class MaterialLedgerApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Keep the local compatibility shell synchronized with Supabase Auth. This
+    // verifies restored sessions, clears remote sign-outs and re-reads exact
+    // role claims after token refresh before route guards run on stale state.
+    ref.watch(authSessionLifecycleProvider);
     final router = ref.watch(appRouterProvider);
     // Start the sync engine at launch (heartbeat, reconnect-flush, and resume
     // of any operations queued in a previous session).

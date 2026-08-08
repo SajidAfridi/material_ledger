@@ -46,7 +46,9 @@ The V1 domain is additive and normalized:
 
 - identity: `profiles`, `user_capabilities`
 - projects: `projects`, `project_scopes`, `project_members`
-- BOQ: `boq_groups`, `boq_columns`, `boq_rows`, optional row revisions
+- BOQ: `boq_groups(scope_id)`, `boq_columns`, `boq_rows`, optional row
+  revisions. `scope_id` references one real active Common/building scope;
+  `null` is retained only for pre-R38 reconciliation, never for a new write.
 - requests: `material_requests`, `material_request_lines`
 - arrangement: `procurement_arrangements`,
   `procurement_arrangement_lines`, `approval_decisions`
@@ -73,6 +75,16 @@ Authorization sources:
 1. exact `app_metadata.role` for platform role;
 2. protected capabilities for optional boundaries such as commercial access;
 3. active dated project membership for project-specific operations;
+
+The exact `senior_mechanical_engineer` and `project_manager` claims are the
+approved exception to item 3: trusted functions treat the current authenticated
+holder as a Project Engineer across every project while retaining the exact raw
+claim for display/audit. This exception grants no Procurement, stock,
+commercial or Admin capability.
+Before any role-dependent result is returned, the command compares that JWT
+claim with the current protected `auth.users.raw_app_meta_data.role` value and
+the active profile mirror. A stale claim is denied rather than relying on its
+normalised role alone.
 4. record state/source ownership for command eligibility.
 
 Unknown or missing roles receive no privileged application role. Email domains,
@@ -84,6 +96,9 @@ names, editable metadata and client-provided role strings are never authority.
   appropriate and return only authorized project data.
 - Procurement project/BOQ views are read-only and exclude unauthorized
   commercial fields.
+- `v1_list_boq_groups_for_scope(project, null)` is the All overview projection;
+  null is not a database scope. A non-null scope returns only that independent
+  Common/building workbook set. The compatibility list RPC returns Common only.
 - Draft MR queries are creator/Admin-only.
 - Submitted operational data uses role-specific secure views or RPC-returned
   records.

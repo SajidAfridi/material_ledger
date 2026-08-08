@@ -83,6 +83,11 @@ class YorksV1BoqWorksheetController
           rowCount: worksheet.group.rowCount,
           columnCount: worksheet.group.columnCount,
           updatedAt: worksheet.group.updatedAt,
+          scopeId: worksheet.group.scopeId,
+          scopeKind: worksheet.group.scopeKind,
+          scopeCode: worksheet.group.scopeCode,
+          scopeName: worksheet.group.scopeName,
+          isLegacyUnassigned: worksheet.group.isLegacyUnassigned,
         ),
       ),
     );
@@ -431,7 +436,9 @@ class YorksV1BoqWorksheetController
 
   YorksV1BoqWorksheet _editableWorksheet() {
     final worksheet = state.worksheet;
-    if (worksheet == null || worksheet.group.isArchived) {
+    if (worksheet == null ||
+        worksheet.group.isArchived ||
+        worksheet.group.isLegacyUnassigned) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
     return worksheet;
@@ -457,6 +464,11 @@ class YorksV1BoqWorksheetController
         rowCount: group.rowCount,
         columnCount: group.columnCount,
         updatedAt: group.updatedAt,
+        scopeId: group.scopeId,
+        scopeKind: group.scopeKind,
+        scopeCode: group.scopeCode,
+        scopeName: group.scopeName,
+        isLegacyUnassigned: group.isLegacyUnassigned,
       );
 
   static int _insertIndex(List<YorksV1BoqRow> rows, String? afterRowId) {

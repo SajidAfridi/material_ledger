@@ -33,11 +33,28 @@ Canonical Auth role claims are:
 
 - `project_engineer`
 - `site_engineer`
+- `senior_mechanical_engineer`
+- `project_manager`
 - `procurement`
 - `admin`
 
 Claims come from server-controlled `app_metadata.role`. A protected profile may
 mirror the claim for display and query convenience but cannot grant privilege.
+Every server-authorized read or command compares the exact presented claim with
+the current protected Auth record. A stale JWT fails closed even when its old
+and new exact roles both normalize to the Project Engineer workflow role.
+
+`senior_mechanical_engineer` and `project_manager` are organization-wide
+Project Engineer roles approved on 7 August 2026. Trusted commands normalize
+them to Project Engineer workflow authority and allow access to every existing
+project without inserting synthetic membership history. They can approve an MR
+arrangement and generate its Delivery Order, but they do not receive
+Procurement, inventory, commercial, capability-management or user-management
+authority. Their exact claim remains available for display and audit.
+
+New server audit events retain both the normalized workflow role and the exact
+Auth role. Historical events keep their existing canonical role and are not
+silently backfilled with an invented exact claim.
 
 A Project Engineer approves a Procurement arrangement only when they also hold
 an active Project Engineer membership for that project. A Site Engineer may
@@ -102,12 +119,20 @@ Project lifecycle:
   projects while an authorized receipt, return or document action remains open.
   Archived access is search/audit-only.
 
-Every project has Building/Other scope records plus one explicit immutable
-Common / All Buildings scope. BOQ groups and rows remain project-level as Rev
-2.0 specifies. Every submitted MR selects exactly one active scope and every
-copied/custom MR line inherits that request scope. A BOQ row may therefore be
-used in separate MRs for separate scopes; it is never silently duplicated into
-every building.
+Every project has physical Building scopes plus one explicit immutable Common
+scope. Each real scope owns its own BOQ groups, columns, rows, imports,
+documents, exports and BOQ-derived Material Request sources. The UI's **All**
+option is a read-only project overview, never a persisted scope, editable
+worksheet, export target or MR source. It summarizes every scope without
+flattening building rows into an ambiguous editable table.
+
+Existing pre-R38 project-level BOQ groups remain scope-less and visible in All
+as `legacy/unassigned`. They are not copied or inferred into Common/buildings.
+An authorized engineer must explicitly version-map one such group to one active
+real scope; submitted history or draft sources for a different scope block that
+mapping and require reconciliation. Every submitted MR selects exactly one
+active scope; a BOQ source must belong to that same scope and may never be
+silently mixed across Common/buildings.
 
 Membership records have effective-from/effective-to timestamps, actor and
 reason. Revocation prevents future actions but never removes historical access
@@ -130,16 +155,21 @@ The effective R35 five stages are approved:
 
 Draft input autosaves per user/device. Creation itself requires connectivity and
 one server transaction that creates the project, Common scope, physical
-buildings, initial membership history and 29 default BOQ groups.
+buildings, initial membership history and 29 default BOQ groups for **each**
+real scope.
 
 No weighted project-completeness percentage participates in V1 readiness or
 workflow. Existing progress data remains historical and isolated.
 
 ## 6. BOQ groups, columns and rows
 
-- A project starts with the approved 29 ordered BOQ groups. Admin-configured
-  template changes affect new projects only.
-- Engineers may add project-specific custom groups.
+- Every Common/building scope starts with its own approved 29 ordered BOQ
+  groups. Admin-configured template changes affect new scopes only.
+- Engineers may add custom groups only to the selected real scope; a custom
+  group never appears in a sibling building/Common scope.
+- All is an overview that shows per-scope folder, started-folder and material
+  counts. It does not merge rows, permit worksheet mutation or serve as an MR
+  source.
 - Columns and rows are ordered records with optimistic versions.
 - Imported arbitrary columns are preserved in raw JSON and remain editable in
   that worksheet.
@@ -198,8 +228,11 @@ rows from:
 - an MR Excel import;
 - custom rows.
 
-BOQ selection copies a snapshot into the draft. Later BOQ edits do not rewrite
-the request.
+BOQ selection copies a snapshot into the draft only when the source group's
+scope equals the selected MR scope. Later BOQ edits do not rewrite the request.
+Changing an MR scope warns before removing incompatible BOQ-derived rows;
+custom and Excel rows remain. The trusted save and submit commands enforce the
+same-scope invariant regardless of client state.
 
 Timing values are `urgent`, `normal` and `scheduled`. Scheduled requires a
 scheduled date. Destination is derived from the selected project scope and its
@@ -322,14 +355,21 @@ The review must reconcile to the dispatched quantity. Only good quantity
 increments `good_received_qty`. Missing/damaged quantity remains replacement
 eligible within the approved cap.
 
-A Delivery Order snapshot is created only after receipt review. The assigned
-Project Engineer or Site Engineer who can see that confirmed receipt may
-generate it; Procurement/Admin retain the same document authority. This
-document-only command does not permit an Engineer to dispatch stock, arrange a
-request or confirm a material return. Cardinality is one current DO revision
-per dispatch; regeneration creates an immutable new revision and supersedes,
-never overwrites, the prior snapshot. It includes only good-received quantities
-and the approved four columns: S.No, Description, Qty and Unit.
+A Delivery Order snapshot may be created as soon as its dispatch is committed.
+An assigned Project/Site Engineer, either organization-wide Project Engineer
+role, Procurement or Admin may generate it. This document-only command does not
+permit an Engineer to dispatch stock, arrange a request or confirm a material
+return. Cardinality is one current DO revision per dispatch; regeneration
+creates an immutable new revision and supersedes, never overwrites, the prior
+snapshot. It uses immutable dispatched quantities and the approved four
+columns: S.No, Description, Qty and Unit. Receipt review remains an independent
+later fact and never rewrites the dispatch document.
+
+Controlled MR and DO documents use `YORKS Airconditioning & Refrigeration
+LLC-SPC` and `يوركس للتكييف والتبريد - ذ.م.م - ش.ش.و`, show the approved Abu
+Dhabi telephone/fax/P.O. Box and `yorks_sk@yorks.ae`, include the building
+number on the DO, and render the project name as `<job/contract ref>-<project
+name>` when the project has a job/contract reference.
 
 ## 13. Material Returns
 

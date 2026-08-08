@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../models/yorks_v1_boq.dart';
+import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_logistics_strings.dart';
 import 'yorks_v1_boq_workbook_service.dart';
@@ -131,7 +132,7 @@ class YorksV1LogisticsDocumentService {
     final document = pw.Document(
       theme: theme,
       title: '${deliveryOrder.reference} - Delivery Order',
-      author: 'Yorks Air Conditioning and Refrigeration LLC-SPC',
+      author: YorksV1CompanyDocumentStrings.legalName.primary,
       creator: 'Yorks Project Management',
     );
     document.addPage(
@@ -157,8 +158,8 @@ class YorksV1LogisticsDocumentService {
         footer: _pageNumber,
         build: (_) => [
           _deliveryOrderTable(revision.lines),
-          // A revision contains the server-produced, immutable good-received
-          // snapshot.  Do not recompute its quantities from live receipts.
+          // A revision contains the server-produced, immutable dispatch
+          // snapshot. Do not recompute its quantities from later receipts.
           pw.NewPage(freeSpace: 66 * PdfPageFormat.mm),
           pw.Spacer(),
           _deliveryOrderClosingBlock(workspace),
@@ -397,7 +398,16 @@ class YorksV1LogisticsDocumentService {
       pw.SizedBox(height: 3 * PdfPageFormat.mm),
       _deliveryLabelValue(
         'Project',
-        '${workspace.projectReference} - ${workspace.projectName}',
+        YorksV1CompanyDocumentStrings.qualifiedProjectName(
+          projectName: workspace.projectName,
+          jobContractReference: workspace.jobContractReference,
+        ),
+        valueBold: true,
+      ),
+      pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+      _deliveryLabelValue(
+        'Building No.',
+        workspace.scopeCode ?? workspace.scopeName,
         valueBold: true,
       ),
       pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
@@ -429,7 +439,7 @@ class YorksV1LogisticsDocumentService {
             mainAxisSize: pw.MainAxisSize.min,
             children: [
               pw.Text(
-                'Yorks Air Conditioning and Refrigeration LLC-SPC',
+                YorksV1CompanyDocumentStrings.legalName.primary,
                 style: pw.TextStyle(
                   fontSize: 10.2,
                   fontWeight: pw.FontWeight.bold,
@@ -458,7 +468,7 @@ class YorksV1LogisticsDocumentService {
         pw.Expanded(
           flex: 10,
           child: pw.Text(
-            'يوركس للتكييف والتبريد ذ.م.م - ش.ش.و',
+            YorksV1CompanyDocumentStrings.legalName.ar,
             textDirection: pw.TextDirection.rtl,
             textAlign: pw.TextAlign.right,
             style: const pw.TextStyle(fontSize: 7.4),
@@ -655,14 +665,31 @@ class YorksV1LogisticsDocumentService {
 
   static pw.Widget _companyContact() => pw.Container(
     width: double.infinity,
-    padding: pw.EdgeInsets.only(top: 1.5 * PdfPageFormat.mm),
+    padding: pw.EdgeInsets.only(top: 2.4 * PdfPageFormat.mm),
     decoration: pw.BoxDecoration(
       border: pw.Border(top: pw.BorderSide(color: _documentGrid, width: .45)),
     ),
-    child: pw.Text(
-      'Tel.: 02-5509788 · Fax: 02-5509688 · P.O. Box: 4757 · Abu Dhabi · United Arab Emirates · yorks_sk@yorks.ae',
-      textAlign: pw.TextAlign.center,
-      style: const pw.TextStyle(fontSize: 6.2),
+    child: pw.Column(
+      children: [
+        pw.Text(
+          YorksV1CompanyDocumentStrings.contactLine.ar,
+          textDirection: pw.TextDirection.rtl,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 6.2, lineSpacing: 1.8),
+        ),
+        pw.SizedBox(height: 1.2 * PdfPageFormat.mm),
+        pw.Text(
+          YorksV1CompanyDocumentStrings.contactLine.en,
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 6.2, lineSpacing: 1.8),
+        ),
+        pw.SizedBox(height: 1.2 * PdfPageFormat.mm),
+        pw.Text(
+          'E-mail: ${YorksV1CompanyDocumentStrings.email}',
+          textAlign: pw.TextAlign.center,
+          style: const pw.TextStyle(fontSize: 6.2),
+        ),
+      ],
     ),
   );
 

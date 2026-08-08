@@ -736,7 +736,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   static UserRole _compatibilityShellRoleForYorksV1(YorksV1Role role) =>
       switch (role) {
         YorksV1Role.projectEngineer ||
-        YorksV1Role.siteEngineer => UserRole.engineer,
+        YorksV1Role.siteEngineer ||
+        YorksV1Role.seniorMechanicalEngineer ||
+        YorksV1Role.projectManager => UserRole.engineer,
         YorksV1Role.procurement => UserRole.procurement,
         YorksV1Role.admin => UserRole.admin,
       };

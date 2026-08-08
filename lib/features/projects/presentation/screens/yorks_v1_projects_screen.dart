@@ -1633,9 +1633,24 @@ class _YorksV1ProjectWorkspaceScreenState
             final isCreator =
                 authUserId != null &&
                 selectedProject.project.createdByAuthUserId == authUserId;
+            final hasProjectEngineerMembership =
+                authUserId != null &&
+                selectedProject.activeMembers.any(
+                  (member) =>
+                      member.memberAuthUserId == authUserId &&
+                      member.projectRole ==
+                          YorksV1ProjectMembershipRole.projectEngineer,
+                );
+            final canManageProject =
+                role == YorksV1Role.admin ||
+                (role?.isGlobalProjectEngineer ?? false) ||
+                hasProjectEngineerMembership;
             final canEdit =
                 projectStateIsEditable &&
-                (role == YorksV1Role.admin || activeMember || isCreator);
+                (role == YorksV1Role.admin ||
+                    (role?.isGlobalProjectEngineer ?? false) ||
+                    activeMember ||
+                    isCreator);
             return _ProjectWorkspaceBody(
               item: selectedProject,
               tab: _tab,
@@ -1645,7 +1660,9 @@ class _YorksV1ProjectWorkspaceScreenState
               groups: groups,
               documents: documents,
               onActivate:
-                  selectedProject.project.state == YorksV1ProjectLifecycle.draft
+                  selectedProject.project.state ==
+                          YorksV1ProjectLifecycle.draft &&
+                      canManageProject
                   ? () => _activateProject(selectedProject.project)
                   : null,
               onNewRequest: role?.canCreateMaterialRequest == true
@@ -2997,7 +3014,19 @@ class _ProjectTeamCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(yorksV1CurrentRoleProvider);
-    final canManage = role?.canManageProjectMembers == true;
+    final authUserId = ref.watch(yorksV1AuthUserIdProvider);
+    final hasProjectEngineerMembership =
+        authUserId != null &&
+        item.activeMembers.any(
+          (member) =>
+              member.memberAuthUserId == authUserId &&
+              member.projectRole ==
+                  YorksV1ProjectMembershipRole.projectEngineer,
+        );
+    final canManage =
+        role == YorksV1Role.admin ||
+        (role?.isGlobalProjectEngineer ?? false) ||
+        hasProjectEngineerMembership;
     final directory = canManage
         ? ref.watch(yorksV1ActiveProjectTeamDirectoryProvider)
         : null;

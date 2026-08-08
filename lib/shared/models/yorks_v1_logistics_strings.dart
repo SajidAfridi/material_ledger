@@ -1,14 +1,10 @@
 import 'app_strings.dart';
+import 'yorks_v1_company_document_strings.dart';
 import 'yorks_v1_logistics.dart';
 
 /// Centralized user-facing copy for the Batch 7 warehouse and logistics flow.
 abstract final class YorksV1LogisticsStrings {
-  static const companyName = TranslatableString(
-    en: 'Yorks AC. & Ref.',
-    ar: 'يوركس للتكييف والتبريد',
-    ur: 'یارکس اے سی اینڈ ریف۔',
-    hi: 'यॉर्क्स एसी एंड रेफ।',
-  );
+  static const companyName = YorksV1CompanyDocumentStrings.legalName;
   static const deliveryOrderTitle = TranslatableString(
     en: 'DELIVERY ORDER',
     ar: 'أمر تسليم',
@@ -406,10 +402,10 @@ abstract final class YorksV1LogisticsStrings {
     hi: 'आधिकारिक डिलीवरी ऑर्डर संदर्भ दर्ज करें।',
   );
   static const deliveryOrderAfterReceipt = TranslatableString(
-    en: 'Only good received material is included after the site review.',
-    ar: 'يتم تضمين المواد المستلمة بحالة سليمة فقط بعد مراجعة الموقع.',
-    ur: 'سائٹ کے جائزے کے بعد صرف اچھی حالت میں موصول شدہ مواد شامل کیا جاتا ہے۔',
-    hi: 'साइट समीक्षा के बाद केवल अच्छी प्राप्त सामग्री शामिल की जाती है।',
+    en: 'The immutable Delivery Order includes committed dispatched quantities.',
+    ar: 'يتضمن أمر التسليم غير القابل للتعديل كميات الإرسال المعتمدة.',
+    ur: 'ناقابلِ ترمیم ڈیلیوری آرڈر میں تصدیق شدہ ڈسپیچ مقدار شامل ہوتی ہے۔',
+    hi: 'अपरिवर्तनीय डिलीवरी ऑर्डर में पुष्ट डिस्पैच मात्राएँ शामिल होती हैं।',
   );
   static const generateDeliveryOrder = TranslatableString(
     en: 'Generate Delivery Order',

@@ -14,6 +14,7 @@ import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_boq_workbook.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
+import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
@@ -23,6 +24,7 @@ import '../../../../shared/providers/yorks_v1_boq_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
 
 /// Ordered BOQ folder view for the normalized R35 project workspace.
@@ -45,24 +47,59 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
-    final groups = ref.watch(yorksV1BoqGroupsProvider(projectId));
+    final scopeOptions = ref.watch(
+      yorksV1MaterialRequestScopesProvider(projectId),
+    );
+    final selectedScopeId = ref.watch(
+      yorksV1BoqScopeSelectionProvider(projectId),
+    );
+    final groupQuery = YorksV1BoqScopeQuery(
+      projectId: projectId,
+      scopeId: selectedScopeId,
+    );
+    final groups = ref.watch(yorksV1ScopedBoqGroupsProvider(groupQuery));
     final editable = role != null && role != YorksV1Role.procurement;
+    final isAllAggregate = selectedScopeId == null;
+    final canMutateSelectedScope = editable && !isAllAggregate;
+    final selectedRealScopeId = selectedScopeId;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+    final scopeSelector = _BoqScopeSelector(
+      scopes: scopeOptions.valueOrNull ?? const [],
+      selectedScopeId: selectedScopeId,
+      onChanged: (scopeId) =>
+          ref.read(yorksV1BoqScopeSelectionProvider(projectId).notifier).state =
+              scopeId,
+    );
+    final realScopes = scopeOptions.valueOrNull ?? const [];
+    void selectScope(String scopeId) {
+      ref.read(yorksV1BoqScopeSelectionProvider(projectId).notifier).state =
+          scopeId;
+    }
+
+    Future<void> assignLegacyScope(YorksV1BoqGroup group) =>
+        _assignLegacyScope(context, ref, group, realScopes);
+
+    final onAssignLegacyScope = editable ? assignLegacyScope : null;
 
     if (embedded) {
       return _EmbeddedBoqGroupsWorkspace(
         projectId: projectId,
         language: language,
         groups: groups,
-        editable: editable,
+        scopeSelector: scopeSelector,
+        isAllAggregate: isAllAggregate,
+        editable: canMutateSelectedScope,
         excelEnabled: excelEnabled,
-        onCreateGroup: () => _createGroup(context, ref),
-        onExport: () => _exportProjectWorkbook(context, ref),
-        onRetry: () => ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
+        onSelectScope: selectScope,
+        onAssignLegacyScope: onAssignLegacyScope,
+        onCreateGroup: () => _createGroup(context, ref, selectedRealScopeId),
+        onExport: () => _exportProjectWorkbook(context, ref, selectedScopeId),
+        onRetry: () =>
+            ref.invalidate(yorksV1ScopedBoqGroupsProvider(groupQuery)),
       );
     }
 
@@ -83,7 +120,13 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                 if (excelEnabled)
                   IconButton(
                     tooltip: YorksV1BoqStrings.exportWorkbook.primary,
-                    onPressed: () => _exportProjectWorkbook(context, ref),
+                    onPressed: isAllAggregate
+                        ? null
+                        : () => _exportProjectWorkbook(
+                            context,
+                            ref,
+                            selectedScopeId,
+                          ),
                     icon: const Icon(Icons.file_download_outlined),
                   ),
                 if (documentsEnabled)
@@ -118,9 +161,9 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
               ],
             )
           : null,
-      floatingActionButton: compactRoute && editable
+      floatingActionButton: compactRoute && canMutateSelectedScope
           ? FloatingActionButton.extended(
-              onPressed: () => _createGroup(context, ref),
+              onPressed: () => _createGroup(context, ref, selectedRealScopeId),
               icon: const Icon(Icons.create_new_folder_outlined),
               label: Text(YorksV1BoqStrings.newGroup.primary),
             )
@@ -147,7 +190,13 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                       SizedBox(
                         height: AppSpacing.controlHeight,
                         child: OutlinedButton.icon(
-                          onPressed: () => _exportProjectWorkbook(context, ref),
+                          onPressed: isAllAggregate
+                              ? null
+                              : () => _exportProjectWorkbook(
+                                  context,
+                                  ref,
+                                  selectedScopeId,
+                                ),
                           icon: const Icon(
                             Icons.file_download_outlined,
                             size: 18,
@@ -170,11 +219,12 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    if (editable)
+                    if (canMutateSelectedScope)
                       SizedBox(
                         height: AppSpacing.minTapTarget,
                         child: FilledButton.icon(
-                          onPressed: () => _createGroup(context, ref),
+                          onPressed: () =>
+                              _createGroup(context, ref, selectedRealScopeId),
                           icon: const Icon(Icons.create_new_folder_outlined),
                           label: Text(YorksV1BoqStrings.newGroup.primary),
                         ),
@@ -183,21 +233,32 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
+              scopeSelector,
+              const SizedBox(height: AppSpacing.md),
+              if (isAllAggregate) ...[
+                _ReadOnlyAggregateBanner(language: language),
+                const SizedBox(height: AppSpacing.md),
+              ],
               Expanded(
                 child: groups.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                   error: (_, _) => _ErrorState(
                     language: language,
-                    onRetry: () =>
-                        ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
+                    onRetry: () => ref.invalidate(
+                      yorksV1ScopedBoqGroupsProvider(groupQuery),
+                    ),
                   ),
                   data: (items) => _GroupsBody(
                     groups: items,
                     language: language,
                     projectId: projectId,
-                    editable: editable,
-                    onAddGroup: () => _createGroup(context, ref),
+                    editable: canMutateSelectedScope,
+                    aggregateReadOnly: isAllAggregate,
+                    onSelectScope: selectScope,
+                    onAssignLegacyScope: onAssignLegacyScope,
+                    onAddGroup: () =>
+                        _createGroup(context, ref, selectedRealScopeId),
                   ),
                 ),
               ),
@@ -208,7 +269,12 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _createGroup(BuildContext context, WidgetRef ref) async {
+  Future<void> _createGroup(
+    BuildContext context,
+    WidgetRef ref,
+    String? scopeId,
+  ) async {
+    if (scopeId == null || scopeId.trim().isEmpty) return;
     final name = await _promptForText(
       context: context,
       title: YorksV1BoqStrings.addGroup,
@@ -221,11 +287,17 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
           .createCustomGroup(
             YorksV1CreateBoqGroupInput(
               projectId: projectId,
+              scopeId: scopeId,
               name: name,
               idempotencyKey: const Uuid().v4(),
             ),
           );
       ref.invalidate(yorksV1BoqGroupsProvider(projectId));
+      ref.invalidate(
+        yorksV1ScopedBoqGroupsProvider(
+          YorksV1BoqScopeQuery(projectId: projectId, scopeId: scopeId),
+        ),
+      );
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -237,11 +309,14 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
   Future<void> _exportProjectWorkbook(
     BuildContext context,
     WidgetRef ref,
+    String? scopeId,
   ) async {
+    if (scopeId == null) return;
     try {
       final repository = ref.read(yorksV1BoqRepositoryProvider);
-      final groups = (await repository.listGroups(
+      final groups = (await repository.listGroupsForScope(
         projectId,
+        scopeId: scopeId,
       )).where((group) => !group.isArchived).toList(growable: false);
       if (groups.isEmpty) return;
       final worksheets = await Future.wait([
@@ -273,6 +348,140 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
         .replaceAll(RegExp(r'_+'), '_');
     return safe.isEmpty ? 'project' : safe;
   }
+
+  Future<void> _assignLegacyScope(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1BoqGroup group,
+    List<YorksV1MaterialRequestScopeOption> scopes,
+  ) async {
+    if (scopes.isEmpty) return;
+    final scopeId = await showDialog<String>(
+      context: context,
+      animationStyle: AnimationStyle.noAnimation,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(YorksV1BoqStrings.assignLegacyScope.primary),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(YorksV1BoqStrings.assignLegacyScopeDescription.primary),
+              const SizedBox(height: AppSpacing.md),
+              for (final scope in scopes)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(scope.name),
+                  subtitle: Text(scope.kind),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(dialogContext).pop(scope.id),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(YorksV1MaterialRequestStrings.cancel.primary),
+          ),
+        ],
+      ),
+    );
+    if (scopeId == null || !context.mounted) return;
+    try {
+      await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .assignLegacyGroupScope(
+            YorksV1AssignLegacyBoqGroupScopeInput(
+              groupId: group.id,
+              scopeId: scopeId,
+              expectedVersion: group.version,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      _invalidateGroupLists(ref, projectId, scopeId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(YorksV1BoqStrings.saved.primary)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1BoqStrings.saveFailed.primary)),
+      );
+    }
+  }
+}
+
+class _BoqScopeSelector extends StatelessWidget {
+  const _BoqScopeSelector({
+    required this.scopes,
+    required this.selectedScopeId,
+    required this.onChanged,
+  });
+
+  static const _allValue = '__all_boq_scopes__';
+
+  final List<YorksV1MaterialRequestScopeOption> scopes;
+  final String? selectedScopeId;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeScopes = scopes
+        .where((scope) => scope.id.trim().isNotEmpty)
+        .toList(growable: false);
+    final selectedValue =
+        activeScopes.any((scope) => scope.id == selectedScopeId)
+        ? selectedScopeId!
+        : _allValue;
+    return Semantics(
+      label: YorksV1BoqStrings.scope.primary,
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('boq-scope-selector:$selectedValue'),
+        initialValue: selectedValue,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: YorksV1BoqStrings.scope.primary,
+          border: const OutlineInputBorder(),
+        ),
+        items: [
+          DropdownMenuItem(
+            value: _allValue,
+            child: Text(YorksV1BoqStrings.allScopes.primary),
+          ),
+          for (final scope in activeScopes)
+            DropdownMenuItem(value: scope.id, child: Text(scope.name)),
+        ],
+        onChanged: (value) => onChanged(value == _allValue ? null : value),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyAggregateBanner extends StatelessWidget {
+  const _ReadOnlyAggregateBanner({required this.language});
+
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => NexusSectionCard(
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.visibility_outlined, color: AppColors.blue),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: _CopyText(
+            copy: YorksV1BoqStrings.allScopesDescription,
+            language: language,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _GroupsBody extends StatelessWidget {
@@ -282,7 +491,10 @@ class _GroupsBody extends StatelessWidget {
     required this.projectId,
     required this.editable,
     required this.onAddGroup,
+    this.aggregateReadOnly = false,
     this.embedded = false,
+    this.onSelectScope,
+    this.onAssignLegacyScope,
   });
 
   final List<YorksV1BoqGroup> groups;
@@ -290,10 +502,22 @@ class _GroupsBody extends StatelessWidget {
   final String projectId;
   final bool editable;
   final VoidCallback onAddGroup;
+  final bool aggregateReadOnly;
   final bool embedded;
+  final ValueChanged<String>? onSelectScope;
+  final ValueChanged<YorksV1BoqGroup>? onAssignLegacyScope;
 
   @override
   Widget build(BuildContext context) {
+    if (aggregateReadOnly) {
+      return _BoqScopeOverview(
+        groups: groups,
+        language: language,
+        embedded: embedded,
+        onSelectScope: onSelectScope,
+        onAssignLegacyScope: onAssignLegacyScope,
+      );
+    }
     if (groups.isEmpty) {
       return Center(
         child: ConstrainedBox(
@@ -360,9 +584,15 @@ class _GroupsBody extends StatelessWidget {
                   return _BoqGroupCard(
                     group: group,
                     language: language,
-                    onOpen: () => context.push(
-                      RoutePaths.yorksV1BoqWorksheetPath(projectId, group.id),
-                    ),
+                    aggregateReadOnly: aggregateReadOnly,
+                    onOpen: aggregateReadOnly
+                        ? null
+                        : () => context.push(
+                            RoutePaths.yorksV1BoqWorksheetPath(
+                              projectId,
+                              group.id,
+                            ),
+                          ),
                   );
                 },
               )
@@ -381,9 +611,15 @@ class _GroupsBody extends StatelessWidget {
                     return _BoqGroupCard(
                       group: group,
                       language: language,
-                      onOpen: () => context.push(
-                        RoutePaths.yorksV1BoqWorksheetPath(projectId, group.id),
-                      ),
+                      aggregateReadOnly: aggregateReadOnly,
+                      onOpen: aggregateReadOnly
+                          ? null
+                          : () => context.push(
+                              RoutePaths.yorksV1BoqWorksheetPath(
+                                projectId,
+                                group.id,
+                              ),
+                            ),
                     );
                   },
                 ),
@@ -395,13 +631,286 @@ class _GroupsBody extends StatelessWidget {
   }
 }
 
+/// The All selector is deliberately an overview rather than a flattened
+/// worksheet. It lets an engineer assess every independent scope at once
+/// without creating an ambiguous cross-building edit or MR source.
+class _BoqScopeOverview extends StatelessWidget {
+  const _BoqScopeOverview({
+    required this.groups,
+    required this.language,
+    required this.embedded,
+    this.onSelectScope,
+    this.onAssignLegacyScope,
+  });
+
+  final List<YorksV1BoqGroup> groups;
+  final AppLanguage language;
+  final bool embedded;
+  final ValueChanged<String>? onSelectScope;
+  final ValueChanged<YorksV1BoqGroup>? onAssignLegacyScope;
+
+  @override
+  Widget build(BuildContext context) {
+    final summaries = <String, _BoqScopeSummary>{};
+    final legacyGroups = <YorksV1BoqGroup>[];
+    for (final group in groups) {
+      final scopeId = group.scopeId;
+      if (!group.isScopeAssigned || scopeId == null) {
+        legacyGroups.add(group);
+        continue;
+      }
+      final summary = summaries.putIfAbsent(
+        scopeId,
+        () => _BoqScopeSummary(
+          scopeId: scopeId,
+          scopeName: group.scopeName ?? group.scopeCode ?? scopeId,
+        ),
+      );
+      summary.add(group);
+    }
+    final children = <Widget>[
+      _CopyText(
+        copy: YorksV1BoqStrings.overviewDescription,
+        language: language,
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = constraints.maxWidth >= 980
+              ? (constraints.maxWidth - (AppSpacing.md * 2)) / 3
+              : constraints.maxWidth >= 640
+              ? (constraints.maxWidth - AppSpacing.md) / 2
+              : constraints.maxWidth;
+          return Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              for (final summary in summaries.values)
+                SizedBox(
+                  width: cardWidth,
+                  child: _BoqScopeSummaryCard(
+                    summary: summary,
+                    language: language,
+                    onOpen: onSelectScope == null
+                        ? null
+                        : () => onSelectScope!(summary.scopeId),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    ];
+    if (legacyGroups.isNotEmpty) {
+      children.addAll([
+        const SizedBox(height: AppSpacing.xl),
+        _CopyText(
+          copy: YorksV1BoqStrings.legacyBoqs,
+          language: language,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final group in legacyGroups) ...[
+          _LegacyBoqScopeCard(
+            group: group,
+            language: language,
+            onAssign: onAssignLegacyScope == null
+                ? null
+                : () => onAssignLegacyScope!(group),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ]);
+    }
+    if (summaries.isEmpty && legacyGroups.isEmpty) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xl),
+          child: _CopyText(
+            copy: YorksV1BoqStrings.noGroups,
+            language: language,
+          ),
+        ),
+      );
+    }
+    return embedded
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          )
+        : ListView(children: children);
+  }
+}
+
+class _BoqScopeSummary {
+  _BoqScopeSummary({required this.scopeId, required this.scopeName});
+
+  final String scopeId;
+  final String scopeName;
+  int folderCount = 0;
+  int startedFolderCount = 0;
+  int materialCount = 0;
+
+  void add(YorksV1BoqGroup group) {
+    folderCount += 1;
+    if (group.rowCount > 0) startedFolderCount += 1;
+    materialCount += group.rowCount;
+  }
+}
+
+class _BoqScopeSummaryCard extends StatelessWidget {
+  const _BoqScopeSummaryCard({
+    required this.summary,
+    required this.language,
+    this.onOpen,
+  });
+
+  final _BoqScopeSummary summary;
+  final AppLanguage language;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) => NexusSectionCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          summary.scopeName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.lg,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _BoqOverviewMetric(
+              value: summary.folderCount,
+              label: YorksV1BoqStrings.folders,
+              language: language,
+            ),
+            _BoqOverviewMetric(
+              value: summary.startedFolderCount,
+              label: YorksV1BoqStrings.startedFolders,
+              language: language,
+            ),
+            _BoqOverviewMetric(
+              value: summary.materialCount,
+              label: YorksV1BoqStrings.materials,
+              language: language,
+            ),
+          ],
+        ),
+        if (onOpen != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: Text(YorksV1BoqStrings.openScope.primary),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _BoqOverviewMetric extends StatelessWidget {
+  const _BoqOverviewMetric({
+    required this.value,
+    required this.label,
+    required this.language,
+  });
+
+  final int value;
+  final TranslatableString label;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(
+        '$value',
+        style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w800),
+      ),
+      _CopyText(
+        copy: label,
+        language: language,
+        style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+      ),
+    ],
+  );
+}
+
+class _LegacyBoqScopeCard extends StatelessWidget {
+  const _LegacyBoqScopeCard({
+    required this.group,
+    required this.language,
+    this.onAssign,
+  });
+
+  final YorksV1BoqGroup group;
+  final AppLanguage language;
+  final VoidCallback? onAssign;
+
+  @override
+  Widget build(BuildContext context) => NexusSectionCard(
+    child: Row(
+      children: [
+        const Icon(Icons.warning_amber_outlined, color: AppColors.warning),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.effectiveTitle,
+                style: AppTypography.titleSmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              _CopyText(
+                copy: YorksV1BoqStrings.legacyUnassigned,
+                language: language,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+        if (onAssign != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          OutlinedButton(
+            onPressed: onAssign,
+            child: Text(YorksV1BoqStrings.assignLegacyScope.primary),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
 class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
   const _EmbeddedBoqGroupsWorkspace({
     required this.projectId,
     required this.language,
     required this.groups,
+    required this.scopeSelector,
+    required this.isAllAggregate,
     required this.editable,
     required this.excelEnabled,
+    required this.onSelectScope,
+    this.onAssignLegacyScope,
     required this.onCreateGroup,
     required this.onExport,
     required this.onRetry,
@@ -410,8 +919,12 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
   final String projectId;
   final AppLanguage language;
   final AsyncValue<List<YorksV1BoqGroup>> groups;
+  final Widget scopeSelector;
+  final bool isAllAggregate;
   final bool editable;
   final bool excelEnabled;
+  final ValueChanged<String> onSelectScope;
+  final ValueChanged<YorksV1BoqGroup>? onAssignLegacyScope;
   final VoidCallback onCreateGroup;
   final VoidCallback onExport;
   final VoidCallback onRetry;
@@ -448,7 +961,7 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: [
-              if (excelEnabled)
+              if (excelEnabled && !isAllAggregate)
                 OutlinedButton.icon(
                   onPressed: onExport,
                   icon: const Icon(Icons.file_download_outlined, size: 18),
@@ -465,6 +978,12 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
         ],
       ),
       const SizedBox(height: AppSpacing.xl),
+      scopeSelector,
+      const SizedBox(height: AppSpacing.md),
+      if (isAllAggregate) ...[
+        _ReadOnlyAggregateBanner(language: language),
+        const SizedBox(height: AppSpacing.md),
+      ],
       groups.when(
         loading: () => const Padding(
           padding: EdgeInsets.all(AppSpacing.xxxl),
@@ -476,6 +995,9 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
           language: language,
           projectId: projectId,
           editable: editable,
+          aggregateReadOnly: isAllAggregate,
+          onSelectScope: onSelectScope,
+          onAssignLegacyScope: onAssignLegacyScope,
           onAddGroup: onCreateGroup,
           embedded: true,
         ),
@@ -489,17 +1011,21 @@ class _BoqGroupCard extends StatelessWidget {
     required this.group,
     required this.language,
     required this.onOpen,
+    required this.aggregateReadOnly,
   });
 
   final YorksV1BoqGroup group;
   final AppLanguage language;
-  final VoidCallback onOpen;
+  final VoidCallback? onOpen;
+  final bool aggregateReadOnly;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      button: true,
-      label: group.effectiveTitle,
+      button: onOpen != null,
+      label: aggregateReadOnly
+          ? '${group.effectiveTitle} ${YorksV1BoqStrings.allScopes.primary}'
+          : group.effectiveTitle,
       child: Material(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
@@ -553,7 +1079,9 @@ class _BoqGroupCard extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 _CopyText(
-                  copy: group.isCustom
+                  copy: group.isLegacyUnassigned
+                      ? YorksV1BoqStrings.legacyUnassigned
+                      : group.isCustom
                       ? YorksV1BoqStrings.customGroup
                       : YorksV1BoqStrings.defaultGroup,
                   language: language,
@@ -562,6 +1090,18 @@ class _BoqGroupCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
+                if (group.scopeName != null) ...[
+                  Text(
+                    YorksV1BoqStrings.scopedWorksheet.primary.replaceFirst(
+                      '{scope}',
+                      group.scopeName!,
+                    ),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                ],
                 Text(
                   '${group.rowCount} ${YorksV1BoqStrings.rows.primary} · '
                   '${group.columnCount} ${YorksV1BoqStrings.columns.primary}',
@@ -598,7 +1138,10 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     final editable =
-        role != null && role != YorksV1Role.procurement && !state.isReadOnly;
+        role != null &&
+        role != YorksV1Role.procurement &&
+        !state.isReadOnly &&
+        !(state.worksheet?.group.isLegacyUnassigned ?? false);
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
 
@@ -673,10 +1216,16 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             language: language,
             editable: editable,
             excelEnabled: excelEnabled,
-            onSaved: () => ref.invalidate(yorksV1BoqGroupsProvider(projectId)),
+            onSaved: () => _invalidateGroupLists(
+              ref,
+              projectId,
+              state.worksheet?.group.scopeId,
+            ),
             showPageHeader: !compactRoute,
             onCreateRequestFromFolder:
-                requestsEnabled && role?.canCreateMaterialRequest == true
+                requestsEnabled &&
+                    role?.canCreateMaterialRequest == true &&
+                    state.worksheet?.group.isScopeAssigned == true
                 ? () => context.push(
                     RoutePaths.yorksV1MaterialRequestDraftPath(
                       const Uuid().v4(),
@@ -722,7 +1271,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             expectedVersion: group.version,
             idempotencyKey: const Uuid().v4(),
           );
-      ref.invalidate(yorksV1BoqGroupsProvider(projectId));
+      _invalidateGroupLists(ref, projectId, group.scopeId);
       if (context.mounted) context.pop();
     } catch (_) {
       if (!context.mounted) return;
@@ -763,7 +1312,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
       final imported = await controller.importWorkbook(preview);
       if (!context.mounted) return;
       if (imported) {
-        ref.invalidate(yorksV1BoqGroupsProvider(projectId));
+        _invalidateGroupLists(ref, projectId, worksheet.group.scopeId);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(YorksV1BoqStrings.imported.primary)),
         );
@@ -812,6 +1361,19 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
         .replaceAll(RegExp(r'_+'), '_');
     return '${safe.isEmpty ? 'Yorks_BOQ' : safe}.xlsx';
   }
+}
+
+void _invalidateGroupLists(WidgetRef ref, String projectId, String? scopeId) {
+  ref.invalidate(yorksV1BoqGroupsProvider(projectId));
+  ref.invalidate(
+    yorksV1ScopedBoqGroupsProvider(YorksV1BoqScopeQuery(projectId: projectId)),
+  );
+  if (scopeId == null) return;
+  ref.invalidate(
+    yorksV1ScopedBoqGroupsProvider(
+      YorksV1BoqScopeQuery(projectId: projectId, scopeId: scopeId),
+    ),
+  );
 }
 
 class _WorksheetBody extends StatelessWidget {

@@ -26,6 +26,13 @@ fi
 command="$1"
 shift
 
+# Explicit process environment wins over an ignored operator file. This is
+# essential for CI: a developer's local production-targeted .r35.env must not
+# silently replace CI's harmless placeholder backend during a build.
+operator_supabase_url="${SUPABASE_URL:-}"
+operator_supabase_key="${SUPABASE_ANON_KEY:-}"
+operator_r35_environment="${R35_ENVIRONMENT:-}"
+
 # Configuration is deliberately explicit. A missing file is acceptable only
 # when CI/operator environment variables already provide the complete pair.
 # Never add a shared remote URL/key as a fallback here.
@@ -37,9 +44,9 @@ if [[ -f "$r35_config_file" ]]; then
   source "$r35_config_file"
 fi
 
-supabase_url="${SUPABASE_URL:-}"
-supabase_key="${SUPABASE_ANON_KEY:-}"
-r35_environment="${R35_ENVIRONMENT:-}"
+supabase_url="${operator_supabase_url:-${SUPABASE_URL:-}}"
+supabase_key="${operator_supabase_key:-${SUPABASE_ANON_KEY:-}}"
+r35_environment="${operator_r35_environment:-${R35_ENVIRONMENT:-}}"
 
 if [[ -z "$r35_environment" ]]; then
   echo "R35_ENVIRONMENT must be local, staging, production, or ci." >&2
@@ -78,6 +85,14 @@ case "$command" in
     exec flutter run -d chrome "${r35_defines[@]}" "$@"
     ;;
   build-web)
+    # Flutter does not guarantee removal of unrelated files already present in
+    # build/web. Refuse to package a directory containing deployment metadata
+    # or dotenv files; start from `flutter clean` and rebuild instead.
+    if [[ -e build/web/.env.local || -d build/web/.vercel ]]; then
+      echo "Refusing a web build with stale build/web credentials or Vercel metadata." >&2
+      echo "Run flutter clean, then rebuild from explicit R35 configuration." >&2
+      exit 65
+    fi
     exec flutter build web --release "${r35_defines[@]}" "$@"
     ;;
   build-apk)

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_material_request_draft_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/models/yorks_v1_company_document_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
 import 'package:material_ledger/shared/repositories/collection_store.dart';
@@ -279,6 +281,9 @@ void main() {
             rowCount: 2,
             columnCount: 4,
             updatedAt: DateTime.utc(2026, 8, 2),
+            scopeId: _scopeId,
+            scopeKind: 'common',
+            scopeName: 'Common / All Buildings',
           ),
           columns: const [
             YorksV1BoqColumn(
@@ -325,6 +330,7 @@ void main() {
         );
 
         await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
         await controller.addBoqRows(
           worksheet: worksheet,
           rowIds: worksheet.rows.map((row) => row.id),
@@ -335,6 +341,45 @@ void main() {
         expect(controller.state.draft.lines.first.quantity, '4');
         await controller.removeLine(controller.state.draft.lines.first.id);
         expect(controller.state.draft.lines, hasLength(1));
+      },
+    );
+
+    test(
+      'does not mix BOQ rows when the selected request scope changes',
+      () async {
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+          repository: _FakeRequestRepository(),
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+        final worksheet = _scopedWorksheet(scopeId: _scopeId);
+
+        await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
+        await controller.addBoqRows(
+          worksheet: worksheet,
+          rowIds: worksheet.rows.map((row) => row.id),
+        );
+        await controller.addCustomLine();
+
+        expect(await controller.setScope('different-scope'), isFalse);
+        expect(controller.state.draft.scopeId, _scopeId);
+        expect(controller.state.draft.lines, hasLength(3));
+
+        expect(
+          await controller.setScope(
+            'different-scope',
+            discardIncompatibleBoqRows: true,
+          ),
+          isTrue,
+        );
+        expect(controller.state.draft.scopeId, 'different-scope');
+        expect(controller.state.draft.lines.map((line) => line.source), [
+          YorksV1MaterialRequestLineSource.custom,
+        ]);
       },
     );
 
@@ -643,6 +688,9 @@ void main() {
         rowCount: 1,
         columnCount: 5,
         updatedAt: DateTime.utc(2026, 8, 4),
+        scopeId: _scopeId,
+        scopeKind: 'common',
+        scopeName: 'Common / All Buildings',
       ),
       columns: const [
         YorksV1BoqColumn(
@@ -692,6 +740,8 @@ void main() {
       ],
     );
 
+    await controller.setProject(_projectId);
+    await controller.setScope(_scopeId);
     await controller.addBoqRows(
       worksheet: worksheet,
       rowIds: const ['boq-row'],
@@ -714,6 +764,7 @@ void main() {
       'project_id': _projectId,
       'project_ref': 'B5-TEST',
       'project_name': 'Test Project',
+      'job_contract_reference': 'N-19957.2',
       'scope_id': _scopeId,
       'scope_name': 'Common',
       'state': 'submitted',
@@ -736,6 +787,7 @@ void main() {
     expect(request.lines.single.unitCost, isNull);
     expect(request.lines.single.totalCost, isNull);
     expect(request.lines.single.currencyCode, isNull);
+    expect(request.jobContractReference, 'N-19957.2');
   });
 
   test(
@@ -776,6 +828,7 @@ void main() {
       projectId: _projectId,
       projectReference: 'YRA-123',
       projectName: 'Yorks Test Project',
+      jobContractReference: 'N-19957.2',
       scopeId: _scopeId,
       scopeName: 'Common / All Buildings',
       state: YorksV1MaterialRequestState.submitted,
@@ -809,6 +862,19 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
+      await Directory('output/pdf').create(recursive: true);
+      await File(
+        'output/pdf/r35-material-request.pdf',
+      ).writeAsBytes(bytes, flush: true);
+    }
+    expect(
+      YorksV1CompanyDocumentStrings.qualifiedProjectName(
+        projectName: request.projectName,
+        jobContractReference: request.jobContractReference,
+      ),
+      'N-19957.2-Yorks Test Project',
+    );
   });
 }
 
@@ -817,6 +883,68 @@ const _projectId = '71000000-0000-4000-8000-000000000001';
 const _scopeId = '72000000-0000-4000-8000-000000000001';
 const _draftId = '73000000-0000-4000-8000-000000000001';
 const _boqGroupId = '75000000-0000-4000-8000-000000000001';
+
+YorksV1BoqWorksheet _scopedWorksheet({required String scopeId}) =>
+    YorksV1BoqWorksheet(
+      group: YorksV1BoqGroup(
+        id: _boqGroupId,
+        projectId: _projectId,
+        name: 'Dampers',
+        worksheetTitle: 'Dampers',
+        displayOrder: 1,
+        isCustom: false,
+        isArchived: false,
+        version: 1,
+        rowCount: 2,
+        columnCount: 3,
+        updatedAt: DateTime.utc(2026, 8, 2),
+        scopeId: scopeId,
+        scopeKind: 'common',
+        scopeName: 'Common / All Buildings',
+      ),
+      columns: const [
+        YorksV1BoqColumn(
+          id: 'description-column',
+          heading: 'Description',
+          displayOrder: 1,
+          canonicalField: YorksV1BoqCanonicalField.description,
+        ),
+        YorksV1BoqColumn(
+          id: 'quantity-column',
+          heading: 'Qty',
+          displayOrder: 2,
+          canonicalField: YorksV1BoqCanonicalField.quantity,
+        ),
+        YorksV1BoqColumn(
+          id: 'unit-column',
+          heading: 'Unit',
+          displayOrder: 3,
+          canonicalField: YorksV1BoqCanonicalField.unit,
+        ),
+      ],
+      rows: [
+        YorksV1BoqRow(
+          id: 'boq-row-1',
+          displayOrder: 1,
+          values: const {
+            'description-column': 'Damper A',
+            'quantity-column': '4',
+            'unit-column': 'Nos',
+          },
+          canonicalValues: const {},
+        ),
+        YorksV1BoqRow(
+          id: 'boq-row-2',
+          displayOrder: 2,
+          values: const {
+            'description-column': 'Damper B',
+            'quantity-column': '2',
+            'unit-column': 'Nos',
+          },
+          canonicalValues: const {},
+        ),
+      ],
+    );
 
 YorksV1MaterialRequestLine _line(String id, String description) =>
     YorksV1MaterialRequestLine(

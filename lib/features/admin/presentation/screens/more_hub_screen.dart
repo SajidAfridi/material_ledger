@@ -10,6 +10,7 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/nexus_feature_flags_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/sync/sync_engine.dart';
 import '../../../../shared/widgets/notification_bell.dart';
 
@@ -170,7 +171,7 @@ class MoreHubScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    await ref.read(authSessionProvider.notifier).logout();
+    await ref.read(authControllerProvider).signOut();
     if (!context.mounted) return;
     context.go(RoutePaths.login);
   }

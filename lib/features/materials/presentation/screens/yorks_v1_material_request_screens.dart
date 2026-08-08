@@ -309,7 +309,9 @@ class YorksV1WorkflowQueueScreen extends ConsumerWidget {
         YorksV1MaterialRequestState.approved ||
         YorksV1MaterialRequestState.partiallyDispatched ||
         YorksV1MaterialRequestState.dispatched ||
-        YorksV1MaterialRequestState.partiallyReceived => true,
+        YorksV1MaterialRequestState.partiallyReceived ||
+        YorksV1MaterialRequestState.received ||
+        YorksV1MaterialRequestState.closed => true,
         _ => false,
       },
       YorksV1WorkflowQueueKind.returns => switch (request.state) {
@@ -627,9 +629,7 @@ yorksV1MaterialRequestDetailPrimaryAction({
   final isProcurement =
       role == YorksV1Role.procurement || role == YorksV1Role.admin;
   final isReceivingEngineer =
-      role == YorksV1Role.projectEngineer ||
-      role == YorksV1Role.siteEngineer ||
-      role == YorksV1Role.admin;
+      (role?.isEngineering ?? false) || role == YorksV1Role.admin;
 
   if (isProcurement &&
       canArrange &&
@@ -643,18 +643,20 @@ yorksV1MaterialRequestDetailPrimaryAction({
           state == YorksV1MaterialRequestState.partiallyDispatched)) {
     return YorksV1MaterialRequestDetailPrimaryAction.dispatch;
   }
+  if (canGenerateDeliveryOrder &&
+      (state == YorksV1MaterialRequestState.partiallyDispatched ||
+          state == YorksV1MaterialRequestState.dispatched ||
+          state == YorksV1MaterialRequestState.partiallyReceived ||
+          state == YorksV1MaterialRequestState.received ||
+          state == YorksV1MaterialRequestState.closed)) {
+    return YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder;
+  }
   if (isReceivingEngineer &&
       canConfirmReceipt &&
       (state == YorksV1MaterialRequestState.partiallyDispatched ||
           state == YorksV1MaterialRequestState.dispatched ||
           state == YorksV1MaterialRequestState.partiallyReceived)) {
     return YorksV1MaterialRequestDetailPrimaryAction.receiptReview;
-  }
-  if (canGenerateDeliveryOrder &&
-      (state == YorksV1MaterialRequestState.partiallyReceived ||
-          state == YorksV1MaterialRequestState.received ||
-          state == YorksV1MaterialRequestState.closed)) {
-    return YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder;
   }
   return null;
 }
@@ -848,7 +850,8 @@ class _DraftForm extends ConsumerWidget {
                 _R35RequestAction(
                   label: YorksV1MaterialRequestStrings.addFromBoq.primary,
                   icon: Icons.folder_outlined,
-                  onPressed: isBusy || draft.projectId == null
+                  onPressed:
+                      isBusy || draft.projectId == null || draft.scopeId == null
                       ? null
                       : () => _addBoqRows(context, ref, controller, draft),
                 ),
@@ -1601,7 +1604,49 @@ class _RequestFormFields extends StatelessWidget {
         _ScopeDropdown(
           value: draft.scopeId,
           scopes: scopes,
-          onChanged: controller.setScope,
+          onChanged: (scopeId) async {
+            final boqLineCount = controller.currentDraft.lines
+                .where(
+                  (line) => line.source == YorksV1MaterialRequestLineSource.boq,
+                )
+                .length;
+            final requiresConfirmation =
+                scopeId != controller.currentDraft.scopeId && boqLineCount > 0;
+            if (requiresConfirmation) {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                animationStyle: AnimationStyle.noAnimation,
+                builder: (dialogContext) => AlertDialog(
+                  title: Text(
+                    YorksV1MaterialRequestStrings.changeScope.primary,
+                  ),
+                  content: Text(
+                    YorksV1MaterialRequestStrings
+                        .changeScopeDiscardBoqRows
+                        .primary
+                        .replaceFirst('{count}', boqLineCount.toString()),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: Text(YorksV1MaterialRequestStrings.cancel.primary),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      child: Text(
+                        YorksV1MaterialRequestStrings.changeScope.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true) return;
+            }
+            await controller.setScope(
+              scopeId,
+              discardIncompatibleBoqRows: requiresConfirmation,
+            );
+          },
         ),
         _TimingPicker(draft: draft, controller: controller),
         if (draft.timing == YorksV1MaterialRequestTiming.scheduled)
@@ -2764,7 +2809,9 @@ class _RequestDetailBody extends ConsumerWidget {
     // but the role-safe request projection does not expose that composite
     // capability yet, so do not surface an action that can be rejected.
     final canCancel =
-        (role == YorksV1Role.projectEngineer || role == YorksV1Role.admin) &&
+        ((role?.isGlobalProjectEngineer ?? false) ||
+            role == YorksV1Role.projectEngineer ||
+            role == YorksV1Role.admin) &&
         (request.state == YorksV1MaterialRequestState.submitted ||
             request.state == YorksV1MaterialRequestState.arranging ||
             request.state == YorksV1MaterialRequestState.awaitingApproval ||
@@ -4870,9 +4917,17 @@ Future<void> _addBoqRows(
   YorksV1MaterialRequestDraft draft,
 ) async {
   try {
+    final scopeId = draft.scopeId;
+    if (scopeId == null) {
+      _snack(
+        context,
+        YorksV1MaterialRequestStrings.selectScopeToAddBoq.primary,
+      );
+      return;
+    }
     final groups = await ref
         .read(yorksV1BoqRepositoryProvider)
-        .listGroups(draft.projectId!);
+        .listGroupsForScope(draft.projectId!, scopeId: scopeId);
     if (!context.mounted) return;
     final selected = await showModalBottomSheet<_BoqSourceSelection>(
       context: context,

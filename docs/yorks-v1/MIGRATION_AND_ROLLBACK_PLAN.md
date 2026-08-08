@@ -56,6 +56,9 @@ Credentials or production access are never assumed by an implementation task.
 Legacy role handling:
 
 - canonical known claims map exactly;
+- new trusted audit rows retain the exact current Auth role alongside the
+  normalized workflow role; historical rows remain unmodified when that exact
+  value was not captured;
 - legacy `engineer` creates a reconciliation row with no Project Engineer
   approval privilege;
 - current assigned/design-engineer fields become suggested membership evidence;
@@ -66,6 +69,15 @@ Legacy role handling:
 ### M2 — BOQ
 
 - Create ordered groups/columns/rows for new V1 projects transactionally.
+- R38 adds `boq_groups.scope_id` and materialises the frozen 29 folders for
+  every newly created Common/building scope. It never creates an `All` scope.
+- Existing project-level groups remain `scope_id = null`, are visible only in
+  the All overview as legacy/unassigned, and require an explicit audited,
+  version-checked mapping to one active real scope. Do not copy, infer or
+  reinterpret rows. Mapping is blocked where submitted/differently-scoped MR
+  history would become ambiguous. An explicit default-folder mapping may only
+  supersede an empty generated placeholder; a populated/document-linked target
+  is rejected rather than merged or discarded.
 - Preserve old V7 Phase 1 plan tables as read-only historical records.
 - Offer a reviewed import tool that maps a selected historical plan/version to
   a BOQ draft with provenance; do not auto-convert it.

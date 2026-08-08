@@ -200,6 +200,7 @@ abstract final class RoutePaths {
 
   static String yorksV1MaterialRequestArrangementPath(String requestId) =>
       '/yorks/material-requests/$requestId/arrangement';
+
   /// Opens the protected dispatch/receipt workspace. A receipt focus simply
   /// selects a server-authorized delivery for the review dialog; it does not
   /// carry or mutate any receipt state through the URL.
@@ -215,11 +216,13 @@ abstract final class RoutePaths {
       path: '/yorks/material-requests/$requestId/logistics',
       queryParameters: {
         if (focusReceiptReview) 'focus': 'receipt_review',
-        if (dispatchId != null && dispatchId.isNotEmpty) 'dispatch_id': dispatchId,
+        if (dispatchId != null && dispatchId.isNotEmpty)
+          'dispatch_id': dispatchId,
       },
     ).toString();
   }
-  /// Opens the Delivery Order command from a received Material Request without
+
+  /// Opens the Delivery Order command from a committed dispatch without
   /// making the operator navigate through the Material Returns workspace.
   /// The route still performs its normal server-authorized workspace fetch;
   /// query parameters only select the already-authorized presentation focus.
@@ -235,10 +238,12 @@ abstract final class RoutePaths {
       path: '/yorks/material-requests/$requestId/returns',
       queryParameters: {
         if (focusDeliveryOrder) 'focus': 'delivery_order',
-        if (dispatchId != null && dispatchId.isNotEmpty) 'dispatch_id': dispatchId,
+        if (dispatchId != null && dispatchId.isNotEmpty)
+          'dispatch_id': dispatchId,
       },
     ).toString();
   }
+
   static String planBuildPath(String projectId) => '/plan-build/$projectId';
   static String planDiffPath(String projectId) => '/plan-diff/$projectId';
   static String confirmReceiptPath(String requestId) => '/receipt/$requestId';
@@ -418,6 +423,35 @@ bool _isAllowedForRole(
   return true;
 }
 
+/// Exact V1 experience guard for routes whose workspace visibility is narrower
+/// than the shared project/request read surface. Trusted RPCs and RLS remain
+/// authoritative; this prevents a stale link from building an inappropriate
+/// editor or organization-wide queue before the server rejects it.
+bool _isYorksV1RouteAllowedForRole(String path, YorksV1Role? role) {
+  // Engineering calculators deliberately live outside the `/yorks/` prefix,
+  // so evaluate their exact role boundary before the generic V1-path fast
+  // path below. Otherwise a Procurement deep link reaches an Engineer-only
+  // tool simply because its URL has a historical top-level prefix.
+  if (path == RoutePaths.yorksV1DuctSizer ||
+      path == RoutePaths.yorksV1EspCalculator) {
+    return role?.isEngineering ?? false;
+  }
+
+  if (!path.startsWith('/yorks/')) return true;
+  if (role == null) return false;
+
+  if (path == RoutePaths.yorksV1Inventory ||
+      path == RoutePaths.yorksV1Dispatches) {
+    return role == YorksV1Role.procurement || role == YorksV1Role.admin;
+  }
+
+  if (path.startsWith('/yorks/projects/') && path.endsWith('/edit')) {
+    return role.isEngineering || role == YorksV1Role.admin;
+  }
+
+  return true;
+}
+
 /// Creates the app [GoRouter].
 /// [isOnboarded], [isLoggedIn], [role] and [user] drive redirect / access logic.
 GoRouter createAppRouter({
@@ -544,6 +578,9 @@ GoRouter createAppRouter({
       }
       if (path.startsWith('/yorks/material-requests/draft/') &&
           (yorksV1Role == null || !yorksV1Role.canCreateMaterialRequest)) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (!_isYorksV1RouteAllowedForRole(path, yorksV1Role)) {
         return _yorksV1ProjectFallbackPath();
       }
 

@@ -30,7 +30,7 @@ void main() {
       );
     });
 
-    test('gives the receiving engineer receipt then delivery-order actions', () {
+    test('shows dispatch-level delivery order before receipt review', () {
       expect(
         yorksV1MaterialRequestDetailPrimaryAction(
           state: YorksV1MaterialRequestState.dispatched,
@@ -44,8 +44,19 @@ void main() {
       );
       expect(
         yorksV1MaterialRequestDetailPrimaryAction(
+          state: YorksV1MaterialRequestState.dispatched,
+          role: YorksV1Role.seniorMechanicalEngineer,
+          canArrange: false,
+          canDispatch: false,
+          canConfirmReceipt: true,
+          canGenerateDeliveryOrder: true,
+        ),
+        YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder,
+      );
+      expect(
+        yorksV1MaterialRequestDetailPrimaryAction(
           state: YorksV1MaterialRequestState.received,
-          role: YorksV1Role.projectEngineer,
+          role: YorksV1Role.projectManager,
           canArrange: false,
           canDispatch: false,
           canConfirmReceipt: false,

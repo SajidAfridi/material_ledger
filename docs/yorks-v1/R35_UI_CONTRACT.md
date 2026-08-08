@@ -186,7 +186,13 @@ action. Team history/change controls appear only for Project Engineer/Admin.
 
 ## 7. BOQ experience
 
-BOQ landing uses ordered folder/group cards with row/document/request counts.
+BOQ landing begins with an **All** overview followed by one explicit Common or
+building selector. All summarizes each real scope's folders, started folders
+and material count and opens a selected scope; it never flattens rows into an
+editable table or provides an MR source/export target. A scope view uses
+ordered folder/group cards with row/document/request counts. Legacy
+project-level BOQs are labelled as requiring scope assignment and can only be
+explicitly mapped to one real scope by an authorized engineer.
 Group detail provides:
 
 - editable worksheet title and headers;
@@ -223,8 +229,10 @@ New MR fields:
 - rows from BOQ, Excel or custom entry.
 
 The draft screen makes “Draft — visible only to you” explicit. Selecting BOQ
-content never submits. “Submit to Procurement” is the unambiguous connected
-primary action with validation and connectivity state.
+content never submits and shows only folders in the chosen Common/building
+scope. Changing scope confirms removal of incompatible BOQ-derived rows while
+retaining custom/Excel rows. “Submit to Procurement” is the unambiguous
+connected primary action with validation and connectivity state.
 
 MR detail shows:
 
@@ -281,11 +289,12 @@ replacement eligibility before commit.
 
 ## 11. Delivery Order and returns
 
-DO preview is available only after receipt review and clearly identifies its
-dispatch and review revision. On the Material Request detail, the assigned
-receiving Project/Site Engineer sees **Generate Delivery Order** only once the
-receipt state is confirmed; Procurement/Admin retain the same action. It
-contains only S.No, Description, Qty and Unit for good-received quantities.
+DO preview is available from the committed dispatch stage and clearly
+identifies its dispatch revision. On the Material Request detail, an authorized
+Project/Site Engineer, Senior Mechanical Engineer, Project Manager,
+Procurement or Admin sees **Generate Delivery Order** without waiting for
+receipt confirmation. It contains only S.No, Description, dispatched Qty and
+Unit; later receipt results remain separate.
 
 Return creation uses project/scope first, then autocomplete restricted to
 eligible received material. Each row shows available-to-return quantity. Return

@@ -49,7 +49,7 @@ void main() {
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentRoleProvider.overrideWithValue(
-              YorksV1Role.projectEngineer,
+              YorksV1Role.seniorMechanicalEngineer,
             ),
             yorksV1MaterialRequestDetailProvider(
               _request.id,
@@ -89,9 +89,10 @@ final _request = YorksV1MaterialRequest(
   projectId: 'project-evidence',
   projectReference: 'YRA-322',
   projectName: 'Yorks Tower HVAC',
+  jobContractReference: 'N-19957.2',
   scopeId: 'common',
   scopeName: 'Common / All Buildings',
-  state: YorksV1MaterialRequestState.received,
+  state: YorksV1MaterialRequestState.dispatched,
   recordVersion: 7,
   createdAt: DateTime.utc(2026, 8, 6),
   updatedAt: DateTime.utc(2026, 8, 6),
@@ -101,7 +102,7 @@ final _request = YorksV1MaterialRequest(
   requesterDisplayName: 'Assigned Project Engineer',
   requesterProjectRole: 'Project Engineer',
   currentActionOwnerRole: 'Project Engineer',
-  currentActionCode: 'delivery_order_generation',
+  currentActionCode: 'receipt_review',
   lines: const [
     YorksV1MaterialRequestLine(
       id: 'line-evidence',
@@ -119,11 +120,13 @@ final _workspace = YorksV1ReturnsDocumentsWorkspace(
   requestId: _request.id,
   projectId: _request.projectId,
   requestNumber: _request.requestNumber!,
-  requestState: 'received',
+  requestState: 'dispatched',
   requestRecordVersion: _request.recordVersion,
   projectName: _request.projectName,
   projectReference: _request.projectReference,
+  jobContractReference: _request.jobContractReference,
   scopeName: _request.scopeName,
+  scopeCode: 'B-01',
   canGenerateDeliveryOrder: true,
   canSubmitMaterialReturn: false,
   canConfirmMaterialReturn: false,
@@ -134,7 +137,6 @@ final _workspace = YorksV1ReturnsDocumentsWorkspace(
       dispatchDate: DateTime.utc(2026, 8, 6),
       dispatchRecordVersion: 3,
       canGenerate: true,
-      receiptReviewedAt: DateTime.utc(2026, 8, 6),
     ),
   ],
   returnCandidates: const [],

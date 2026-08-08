@@ -49,6 +49,8 @@ const DEFAULT_CAPS: Record<string, string[]> = {
                 'goods', 'approveLeave'],
   project_engineer: [],
   site_engineer: [],
+  senior_mechanical_engineer: [],
+  project_manager: [],
 }
 
 const PROVISIONABLE_ROLES = new Set(Object.keys(DEFAULT_CAPS))

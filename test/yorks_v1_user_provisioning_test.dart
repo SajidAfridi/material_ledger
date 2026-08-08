@@ -83,6 +83,42 @@ void main() {
     });
 
     test(
+      'provisions both global engineering claims without capabilities',
+      () async {
+        final commands = <Map<String, dynamic>>[];
+        final container = await connectedContainer(
+          yorksV1Foundation: true,
+          commands: commands,
+        );
+        final notifier = container.read(usersProvider.notifier);
+
+        final senior = await notifier.createYorksV1User(
+          fullName: 'Noor zaman',
+          email: 'noor@yorks.ae',
+          role: YorksV1Role.seniorMechanicalEngineer,
+          password: 'temporary-password',
+        );
+        final manager = await notifier.createYorksV1User(
+          fullName: 'Ali Hadba',
+          email: 'ali@yorks.ae',
+          role: YorksV1Role.projectManager,
+          password: 'temporary-password',
+        );
+
+        expect(commands.map((command) => command['role']), [
+          'senior_mechanical_engineer',
+          'project_manager',
+        ]);
+        expect(
+          commands.every((command) => !command.containsKey('caps')),
+          isTrue,
+        );
+        expect(senior.role, UserRole.engineer);
+        expect(manager.role, UserRole.engineer);
+      },
+    );
+
+    test(
       'maps a user to an exact role only after the server command succeeds',
       () async {
         final commands = <Map<String, dynamic>>[];

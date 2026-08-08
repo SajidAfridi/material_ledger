@@ -128,6 +128,41 @@ void main() {
   );
 
   testWidgets(
+    'Dispatches keeps completed dispatch records connected and visible',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1MaterialRequestListProvider(null).overrideWith(
+              (ref) async => [_receivedQueueRequest, _closedQueueRequest],
+            ),
+          ],
+          child: const MaterialApp(
+            home: YorksV1WorkflowQueueScreen(
+              kind: YorksV1WorkflowQueueKind.dispatches,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('YRA123-MR-RECEIVED'), findsOneWidget);
+      expect(find.text('YRA123-MR-CLOSED'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'R35 new material request draft stays laid out at desktop and mobile widths',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
@@ -440,3 +475,38 @@ final _assignedEngineerDeliveryOrderWorkspace =
       materialReturns: const [],
       returnInventoryItems: const [],
     );
+
+YorksV1MaterialRequest _queueRequest(
+  String id,
+  String number,
+  YorksV1MaterialRequestState state,
+) => YorksV1MaterialRequest(
+  id: id,
+  projectId: 'project-layout',
+  projectReference: 'YRA-123',
+  projectName: 'Yorks Tower',
+  scopeId: 'common',
+  scopeName: 'Common / All Buildings',
+  state: state,
+  recordVersion: 1,
+  createdAt: DateTime.utc(2026, 8, 3),
+  updatedAt: DateTime.utc(2026, 8, 3),
+  timing: YorksV1MaterialRequestTiming.normal,
+  requestNumber: number,
+  title: 'Completed dispatch record',
+  requesterDisplayName: 'Masaud Khan',
+  requesterProjectRole: 'Project Engineer',
+  currentActionOwnerRole: 'Project Engineer',
+  lines: const [],
+);
+
+final _receivedQueueRequest = _queueRequest(
+  'queue-received',
+  'YRA123-MR-RECEIVED',
+  YorksV1MaterialRequestState.received,
+);
+final _closedQueueRequest = _queueRequest(
+  'queue-closed',
+  'YRA123-MR-CLOSED',
+  YorksV1MaterialRequestState.closed,
+);

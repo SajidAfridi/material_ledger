@@ -51,6 +51,11 @@ select lives_ok(
   $$select public.v1_create_boq_group(
     jsonb_build_object(
       'project_id', (select id from public.v1_projects where project_ref = 'B4-XLSX-001'),
+      'scope_id', (
+        select scope.id from public.v1_project_scopes scope
+        join public.v1_projects project on project.id = scope.project_id
+        where project.project_ref = 'B4-XLSX-001' and scope.scope_kind = 'common'
+      ),
       'name', 'Workbook import test group'
     ),
     '40000000-0000-4000-8000-000000000002'::uuid
@@ -65,11 +70,19 @@ select
   (
     select group_record.id from public.v1_boq_groups group_record
     where group_record.project_id = project.id and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ) as worksheet_group_id,
   (
     select group_record.id from public.v1_boq_groups group_record
     where group_record.project_id = project.id
       and group_record.name = 'Workbook import test group'
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ) as custom_group_id
 from public.v1_projects project
 where project.project_ref = 'B4-XLSX-001';

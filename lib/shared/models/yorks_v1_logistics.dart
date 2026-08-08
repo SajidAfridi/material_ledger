@@ -892,6 +892,8 @@ class YorksV1ReturnsDocumentsWorkspace {
     required List<YorksV1MaterialReturn> materialReturns,
     required List<YorksV1ReturnInventoryItem> returnInventoryItems,
     this.requestNumber,
+    this.jobContractReference,
+    this.scopeCode,
     this.mainContractorName,
     this.deliveryAddress,
     this.materialContext,
@@ -907,7 +909,9 @@ class YorksV1ReturnsDocumentsWorkspace {
   final int requestRecordVersion;
   final String projectName;
   final String projectReference;
+  final String? jobContractReference;
   final String scopeName;
+  final String? scopeCode;
   final String? mainContractorName;
   final String? deliveryAddress;
   final String? materialContext;
@@ -942,7 +946,9 @@ class YorksV1ReturnsDocumentsWorkspace {
       requestRecordVersion: _positiveInt(json['request_record_version']),
       projectName: _requiredString(json, 'project_name'),
       projectReference: _requiredString(json, 'project_ref'),
+      jobContractReference: _trimToNull(json['job_contract_reference']),
       scopeName: _requiredString(json, 'scope_name'),
+      scopeCode: _trimToNull(json['scope_code']),
       mainContractorName: _trimToNull(json['main_contractor_name']),
       deliveryAddress: _trimToNull(json['delivery_address']),
       materialContext: _trimToNull(json['material_context']),

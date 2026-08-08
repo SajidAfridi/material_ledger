@@ -1,4 +1,5 @@
 import 'app_strings.dart';
+import 'yorks_v1_company_document_strings.dart';
 import 'yorks_v1_material_request.dart';
 
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
@@ -10,12 +11,7 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'یارکس اے سی اینڈ ریف',
     hi: 'यॉर्क्स एसी एंड रेफ.',
   );
-  static const companyLegalName = TranslatableString(
-    en: 'Yorks Air Conditioning and Refrigeration LLC-SPC',
-    ar: 'يوركس للتكييف والتبريد ذ.م.م - ش.ش.و',
-    ur: 'یارکس ایئر کنڈیشننگ اینڈ ریفریجریشن ایل ایل سی-ایس پی سی',
-    hi: 'यॉर्क्स एयर कंडीशनिंग एंड रेफ्रिजरेशन LLC-SPC',
-  );
+  static const companyLegalName = YorksV1CompanyDocumentStrings.legalName;
   static const materialRequest = TranslatableString(
     en: 'Material Request',
     ar: 'طلب مواد',
@@ -219,6 +215,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'سيؤدي تغيير المشروع إلى إزالة {count} من بنود المواد من هذه المسودة. هل تريد المتابعة؟',
     ur: 'پروجیکٹ تبدیل کرنے سے اس ڈرافٹ سے {count} میٹیریل آئٹمز ہٹ جائیں گی۔ جاری رکھیں؟',
     hi: 'प्रोजेक्ट बदलने से इस ड्राफ़्ट से {count} सामग्री आइटम हट जाएंगे। जारी रखें?',
+  );
+  static const changeScope = TranslatableString(
+    en: 'Change scope',
+    ar: 'تغيير النطاق',
+    ur: 'اسکوپ تبدیل کریں',
+    hi: 'स्कोप बदलें',
+  );
+  static const changeScopeDiscardBoqRows = TranslatableString(
+    en: 'Changing the scope removes {count} BOQ item(s) from this draft. Custom and imported rows stay. Continue?',
+    ar: 'سيؤدي تغيير النطاق إلى إزالة {count} من بنود جدول الكميات من هذه المسودة. ستبقى البنود المخصصة والمستوردة. هل تريد المتابعة؟',
+    ur: 'اسکوپ تبدیل کرنے سے اس ڈرافٹ سے {count} BOQ آئٹمز ہٹ جائیں گی۔ کسٹم اور امپورٹڈ قطاریں رہیں گی۔ جاری رکھیں؟',
+    hi: 'स्कोप बदलने से इस ड्राफ़्ट से {count} BOQ आइटम हट जाएंगे। कस्टम और आयातित पंक्तियाँ बनी रहेंगी। जारी रखें?',
+  );
+  static const selectScopeToAddBoq = TranslatableString(
+    en: 'Choose a Common or building scope before adding BOQ items.',
+    ar: 'اختر نطاقاً مشتركاً أو مبنى قبل إضافة بنود جدول الكميات.',
+    ur: 'BOQ آئٹمز شامل کرنے سے پہلے کامن یا بلڈنگ اسکوپ منتخب کریں۔',
+    hi: 'BOQ आइटम जोड़ने से पहले कॉमन या बिल्डिंग स्कोप चुनें।',
   );
   static const review = TranslatableString(
     en: 'Review',
@@ -875,10 +889,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'जब प्राप्त वस्तु की आवश्यकता न हो तो इसे इस अनुरोध से लौटाया जा सकता है।',
   );
   static const deliveryOrderAfterReceipt = TranslatableString(
-    en: 'The confirmed receipt is ready for its immutable Delivery Order.',
-    ar: 'الاستلام المؤكد جاهز لأمر التسليم غير القابل للتعديل.',
-    ur: 'تصدیق شدہ وصولی اپنے ناقابلِ ترمیم ڈیلیوری آرڈر کے لیے تیار ہے۔',
-    hi: 'पुष्ट प्राप्ति अपने अपरिवर्तनीय डिलीवरी ऑर्डर के लिए तैयार है।',
+    en: 'The committed dispatch is ready for its immutable Delivery Order.',
+    ar: 'الإرسال المعتمد جاهز لأمر التسليم غير القابل للتعديل.',
+    ur: 'تصدیق شدہ ڈسپیچ اپنے ناقابلِ ترمیم ڈیلیوری آرڈر کے لیے تیار ہے۔',
+    hi: 'पुष्ट डिस्पैच अपने अपरिवर्तनीय डिलीवरी ऑर्डर के लिए तैयार है।',
   );
   static const controlledDocumentLoading = TranslatableString(
     en: 'Preparing the controlled document…',

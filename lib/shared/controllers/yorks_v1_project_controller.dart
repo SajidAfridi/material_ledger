@@ -189,10 +189,7 @@ class YorksV1ProjectCommandController
   Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
     _requireRole(
       YorksV1ProjectCommandOperation.updateProject,
-      (role) =>
-          role == YorksV1Role.projectEngineer ||
-          role == YorksV1Role.siteEngineer ||
-          role == YorksV1Role.admin,
+      (role) => role.isEngineering || role == YorksV1Role.admin,
     );
     final validationErrors = input.validate();
     if (validationErrors.isNotEmpty) {

@@ -60,14 +60,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _handleLogin() async {
     if (_isLoading || !(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isLoading = true);
-    final result = await ref
-        .read(authControllerProvider)
-        .signIn(
-          email: _emailController.text,
-          password: _passwordController.text,
-        );
+    SignInResult result;
+    try {
+      result = await ref
+          .read(authControllerProvider)
+          .signIn(
+            email: _emailController.text,
+            password: _passwordController.text,
+          );
+    } catch (_) {
+      // AuthController classifies expected backend failures. This final guard
+      // keeps an unexpected post-auth exception from leaving the form blocked.
+      result = SignInResult.networkError;
+    }
     if (!mounted) return;
     setState(() => _isLoading = false);
+    final language = ref.read(languageProvider);
 
     switch (result) {
       case SignInResult.ok:
@@ -75,11 +83,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ref.read(sessionLockedProvider.notifier).unlock();
         context.go(RoutePaths.engineerHome);
       case SignInResult.invalidCredentials:
-        _showLoginError(YorksV1ShellStrings.invalidCredentials.primary);
+        _showLoginError(
+          YorksV1ShellStrings.invalidCredentials.secondary(language),
+        );
       case SignInResult.deactivated:
-        _showLoginError(YorksV1ShellStrings.accountDeactivated.primary);
+        _showLoginError(
+          YorksV1ShellStrings.accountDeactivated.secondary(language),
+        );
+      case SignInResult.emailNotConfirmed:
+        _showLoginError(
+          YorksV1ShellStrings.emailNotConfirmed.secondary(language),
+        );
+      case SignInResult.rateLimited:
+        _showLoginError(YorksV1ShellStrings.rateLimited.secondary(language));
+      case SignInResult.accountSetupRequired:
+        _showLoginError(
+          YorksV1ShellStrings.accountSetupRequired.secondary(language),
+        );
       case SignInResult.networkError:
-        _showLoginError(YorksV1ShellStrings.serverUnreachable.primary);
+        _showLoginError(
+          YorksV1ShellStrings.serverUnreachable.secondary(language),
+        );
     }
   }
 

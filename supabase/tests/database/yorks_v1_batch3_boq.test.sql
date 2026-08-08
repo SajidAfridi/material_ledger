@@ -56,8 +56,8 @@ select is(
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and not group_record.is_custom
   ),
-  29::bigint,
-  'AT-02: exactly 29 default groups exist once for the Batch 3 project'
+  58::bigint,
+  'AT-02: exactly 29 default groups exist independently for Common and the building'
 );
 
 select is(
@@ -75,6 +75,10 @@ select lives_ok(
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
         where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+          and group_record.scope_id = (
+            select scope.id from public.v1_project_scopes scope
+            where scope.project_id = project.id and scope.scope_kind = 'common'
+          )
       ),
       'expected_version', 1,
       'worksheet_title', 'MSD Equipment Schedule',
@@ -128,6 +132,10 @@ select is(
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ),
   'MSD Equipment Schedule',
   'Worksheet title round-trips through the role-safe projection'
@@ -139,6 +147,10 @@ select is(
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ),
   3,
   'Dynamic worksheet returns all active operational columns'
@@ -151,6 +163,10 @@ select is(
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ),
   'MSD-01A',
   'Planning model/tag maps separately from a receipt serial number'
@@ -163,6 +179,10 @@ select is(
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ),
   '708',
   'Arbitrary technical values survive the worksheet save and reload'
@@ -175,6 +195,10 @@ select lives_ok(
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
         where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+          and group_record.scope_id = (
+            select scope.id from public.v1_project_scopes scope
+            where scope.project_id = project.id and scope.scope_kind = 'common'
+          )
       ),
       'expected_version', 2,
       'worksheet_title', 'MSD Equipment Schedule',
@@ -222,6 +246,10 @@ select ok(
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ) = '708',
   'Column deletion preserves legacy row values instead of discarding them'
 );
@@ -233,6 +261,10 @@ select throws_ok(
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
         where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+          and group_record.scope_id = (
+            select scope.id from public.v1_project_scopes scope
+            where scope.project_id = project.id and scope.scope_kind = 'common'
+          )
       ),
       'expected_version', 2,
       'worksheet_title', 'Stale save', 'columns', '[]'::jsonb,
@@ -252,6 +284,10 @@ select throws_ok(
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
         where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+          and group_record.scope_id = (
+            select scope.id from public.v1_project_scopes scope
+            where scope.project_id = project.id and scope.scope_kind = 'common'
+          )
       ),
       'expected_version', 3,
       'worksheet_title', 'No cost exposure',
@@ -277,6 +313,11 @@ select lives_ok(
   $$select public.v1_create_boq_group(
     jsonb_build_object(
       'project_id', (select id from public.v1_projects where project_ref = 'B3-BOQ-001'),
+      'scope_id', (
+        select scope.id from public.v1_project_scopes scope
+        join public.v1_projects project on project.id = scope.project_id
+        where project.project_ref = 'B3-BOQ-001' and scope.scope_kind = 'common'
+      ),
       'name', 'Project-specific Dampers'
     ),
     '30000000-0000-4000-8000-000000000006'::uuid
@@ -321,8 +362,16 @@ create temporary table v1_b3_targets as
 select
   project.id as project_id,
   (
+    select scope.id from public.v1_project_scopes scope
+    where scope.project_id = project.id and scope.scope_kind = 'common'
+  ) as common_scope_id,
+  (
     select group_record.id from public.v1_boq_groups group_record
     where group_record.project_id = project.id and group_record.display_order = 3
+      and group_record.scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        where scope.project_id = project.id and scope.scope_kind = 'common'
+      )
   ) as worksheet_group_id
 from public.v1_projects project
 where project.project_ref = 'B3-BOQ-001';
@@ -338,6 +387,7 @@ select throws_ok(
   $$select public.v1_create_boq_group(
     jsonb_build_object(
       'project_id', (select project_id from v1_b3_targets),
+      'scope_id', (select common_scope_id from v1_b3_targets),
       'name', 'Procurement denied'
     ),
     '30000000-0000-4000-8000-000000000008'::uuid

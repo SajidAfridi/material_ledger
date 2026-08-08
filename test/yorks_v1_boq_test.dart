@@ -1058,6 +1058,11 @@ class _FakeBoqRepository implements YorksV1BoqRepository {
   ) async => worksheet.group;
 
   @override
+  Future<YorksV1BoqGroup> assignLegacyGroupScope(
+    YorksV1AssignLegacyBoqGroupScopeInput input,
+  ) async => worksheet.group;
+
+  @override
   Future<YorksV1BoqWorksheet> getWorksheet(String groupId) async => worksheet;
 
   @override
@@ -1076,6 +1081,12 @@ class _FakeBoqRepository implements YorksV1BoqRepository {
   Future<List<YorksV1BoqGroup>> listGroups(String projectId) async => [
     worksheet.group,
   ];
+
+  @override
+  Future<List<YorksV1BoqGroup>> listGroupsForScope(
+    String projectId, {
+    String? scopeId,
+  }) async => [worksheet.group];
 
   @override
   Future<YorksV1BoqWorksheet> saveWorksheet(

@@ -47,10 +47,7 @@ String _roleLabel(AppUser user, {required bool yorksV1Provisioning}) {
 String _roleFamilyLabel(AppUser user, {required bool yorksV1Provisioning}) {
   if (!yorksV1Provisioning) return user.role.label;
   final roles = user.effectiveYorksV1Roles;
-  if (roles.any(
-    (role) =>
-        role == YorksV1Role.projectEngineer || role == YorksV1Role.siteEngineer,
-  )) {
+  if (roles.any((role) => role.isEngineering)) {
     return 'Engineer';
   }
   if (roles.contains(YorksV1Role.procurement)) return 'Procurement';
@@ -67,6 +64,8 @@ String _roleTitleLabel(AppUser user, {required bool yorksV1Provisioning}) {
         return switch (role) {
           YorksV1Role.projectEngineer => 'Project Engineer',
           YorksV1Role.siteEngineer => 'Site Engineer',
+          YorksV1Role.seniorMechanicalEngineer => 'Senior Mechanical Engineer',
+          YorksV1Role.projectManager => 'Project Manager',
           YorksV1Role.procurement => 'Procurement Engineer',
           YorksV1Role.admin => 'Operations Admin',
         };
@@ -77,6 +76,9 @@ String _roleTitleLabel(AppUser user, {required bool yorksV1Provisioning}) {
 TranslatableString _yorksV1RoleText(YorksV1Role role) => switch (role) {
   YorksV1Role.projectEngineer => AppStrings.projectEngineerRole,
   YorksV1Role.siteEngineer => AppStrings.siteEngineerRole,
+  YorksV1Role.seniorMechanicalEngineer =>
+    AppStrings.seniorMechanicalEngineerRole,
+  YorksV1Role.projectManager => AppStrings.projectManagerRole,
   YorksV1Role.procurement => AppStrings.procurementRole,
   YorksV1Role.admin => AppStrings.adminRole,
 };
@@ -197,11 +199,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final activeUsers = all.where((user) => user.active).length;
     final engineers = all
         .where(
-          (user) => user.effectiveYorksV1Roles.any(
-            (role) =>
-                role == YorksV1Role.projectEngineer ||
-                role == YorksV1Role.siteEngineer,
-          ),
+          (user) =>
+              user.effectiveYorksV1Roles.any((role) => role.isEngineering),
         )
         .length;
     final deactivated = all.length - activeUsers;

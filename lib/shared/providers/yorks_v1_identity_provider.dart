@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/user_role.dart';
 import '../models/yorks_v1_role.dart';
-import 'language_provider.dart' show authSessionProvider, supabaseClientProvider;
-import 'session_provider.dart' show currentRoleProvider, currentUserProvider;
+import 'language_provider.dart'
+    show authSessionProvider, supabaseClientProvider;
+import 'session_provider.dart'
+    show authSessionRevisionProvider, currentRoleProvider, currentUserProvider;
 import 'users_provider.dart' show localDemoPasswordProvider;
 
 /// The immutable Supabase Auth identity for V1 local-draft isolation. In the
@@ -12,17 +14,17 @@ import 'users_provider.dart' show localDemoPasswordProvider;
 /// JWT based.
 final yorksV1AuthUserIdProvider = Provider<String?>((ref) {
   // The Supabase client instance is stable across sign-in/out. Watching the
-  // session notifier makes this projection refresh when that client's current
-  // Auth user changes, without treating the legacy app-user ID as authority.
+  // session revision makes this projection refresh on token/user updates too,
+  // without treating the legacy app-user ID as authority.
   ref.watch(authSessionProvider);
+  ref.watch(authSessionRevisionProvider);
   final client = ref.watch(supabaseClientProvider);
   final authUserId = client?.auth.currentUser?.id;
   if (authUserId != null) return authUserId;
 
   // Local-only identity for the interactive demo. Committed V1 commands still
   // stop at their repository backend guard until Supabase is configured.
-  if (client == null &&
-      ref.read(localDemoPasswordProvider).trim().isNotEmpty) {
+  if (client == null && ref.read(localDemoPasswordProvider).trim().isNotEmpty) {
     return ref.watch(currentUserProvider)?.id;
   }
   return null;
@@ -35,6 +37,7 @@ final yorksV1CurrentRoleProvider = Provider<YorksV1Role?>((ref) {
   // This is an invalidation trigger only. The exact V1 role still comes solely
   // from the current Supabase Auth user's server-controlled app metadata.
   ref.watch(authSessionProvider);
+  ref.watch(authSessionRevisionProvider);
   final appMetadata = ref
       .watch(supabaseClientProvider)
       ?.auth
@@ -50,8 +53,7 @@ final yorksV1CurrentRoleProvider = Provider<YorksV1Role?>((ref) {
   // explicitly compiled with LOCAL_DEMO_PASSWORD; Supabase builds remain
   // strictly claim-based and fail closed when a claim is absent.
   final client = ref.read(supabaseClientProvider);
-  if (client == null &&
-      ref.read(localDemoPasswordProvider).trim().isNotEmpty) {
+  if (client == null && ref.read(localDemoPasswordProvider).trim().isNotEmpty) {
     return switch (ref.watch(currentRoleProvider)) {
       // The local engineer persona is the seeded Project Engineer demo.
       // A real connected account must receive project_engineer from the JWT.

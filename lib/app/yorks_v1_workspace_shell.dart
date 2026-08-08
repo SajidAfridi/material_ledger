@@ -143,7 +143,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     ];
 
     return switch (role) {
-      YorksV1Role.projectEngineer || YorksV1Role.siteEngineer => [
+      YorksV1Role.projectEngineer ||
+      YorksV1Role.siteEngineer ||
+      YorksV1Role.seniorMechanicalEngineer ||
+      YorksV1Role.projectManager => [
         ...shared,
         _YorksDestination(
           label: YorksV1ShellStrings.materialReturns,
@@ -811,7 +814,7 @@ class _YorksProfileDialog extends ConsumerWidget {
       ),
     );
     if (shouldSignOut != true) return;
-    await ref.read(authSessionProvider.notifier).logout();
+    await ref.read(authControllerProvider).signOut();
     if (!context.mounted) return;
     Navigator.pop(context);
     context.go(RoutePaths.login);
@@ -1240,6 +1243,9 @@ class _YorksDestination {
 TranslatableString _roleCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.projectEngineer => AppStrings.projectEngineerRole,
   YorksV1Role.siteEngineer => AppStrings.siteEngineerRole,
+  YorksV1Role.seniorMechanicalEngineer =>
+    AppStrings.seniorMechanicalEngineerRole,
+  YorksV1Role.projectManager => AppStrings.projectManagerRole,
   YorksV1Role.procurement => AppStrings.procurementRole,
   YorksV1Role.admin => AppStrings.adminRole,
   null => YorksV1ShellStrings.account,
@@ -1247,7 +1253,9 @@ TranslatableString _roleCopy(YorksV1Role? role) => switch (role) {
 
 TranslatableString _workspaceCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.projectEngineer ||
-  YorksV1Role.siteEngineer => YorksV1ShellStrings.engineerWorkspace,
+  YorksV1Role.siteEngineer ||
+  YorksV1Role.seniorMechanicalEngineer ||
+  YorksV1Role.projectManager => YorksV1ShellStrings.engineerWorkspace,
   YorksV1Role.procurement => YorksV1ShellStrings.procurementWorkspace,
   YorksV1Role.admin => YorksV1ShellStrings.managementWorkspace,
   null => YorksV1ShellStrings.operationalWorkspace,

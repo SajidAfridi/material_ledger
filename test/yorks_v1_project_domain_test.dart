@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Yorks V1 role claims', () {
-    test('accepts only the four exact server-controlled role claims', () {
+    test('accepts only the six exact server-controlled role claims', () {
       expect(
         YorksV1Role.fromServerClaim('project_engineer'),
         YorksV1Role.projectEngineer,
@@ -24,10 +24,24 @@ void main() {
         YorksV1Role.siteEngineer,
       );
       expect(
+        YorksV1Role.fromServerClaim('senior_mechanical_engineer'),
+        YorksV1Role.seniorMechanicalEngineer,
+      );
+      expect(
+        YorksV1Role.fromServerClaim('project_manager'),
+        YorksV1Role.projectManager,
+      );
+      expect(
         YorksV1Role.fromServerClaim('procurement'),
         YorksV1Role.procurement,
       );
       expect(YorksV1Role.fromServerClaim('admin'), YorksV1Role.admin);
+      expect(
+        YorksV1Role.seniorMechanicalEngineer.isGlobalProjectEngineer,
+        isTrue,
+      );
+      expect(YorksV1Role.projectManager.isGlobalProjectEngineer, isTrue);
+      expect(YorksV1Role.seniorMechanicalEngineer.isEngineering, isTrue);
     });
 
     test('never promotes a legacy Engineer claim automatically', () {

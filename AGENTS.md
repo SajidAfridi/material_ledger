@@ -58,7 +58,7 @@ snapshot upserts are not permitted for critical V1 transitions.
 
 Implement:
 
-1. Authentication, profiles, four roles and project membership guards
+1. Authentication, profiles, six exact roles and project membership guards
 2. Projects, buildings/Common scope and historical team membership
 3. Twenty-nine default BOQ groups plus custom groups
 4. Dynamic BOQ columns/rows and real Excel import/export
@@ -98,6 +98,10 @@ boundaries; do not destructively remove historical records.
   its own arrangement.
 - **Admin** — controlled administration and audited overrides. Admin is not a
   substitute for missing workflow history.
+- **Senior Mechanical Engineer** and **Project Manager** — organization-wide
+  Project Engineer roles. They can access every project and perform Project
+  Engineer approvals without a per-project membership row, but do not inherit
+  Procurement, stock, commercial or user-administration authority.
 
 Authorization claims come only from exact, server-controlled
 `app_metadata.role` values. Never infer privilege from email, editable user
@@ -106,7 +110,7 @@ metadata or an unprotected profile. Project access derives from dated
 
 ## Canonical workflow
 
-`Project -> BOQ -> MR Draft -> Submit -> Arrange/Reserve -> Project Engineer Approval -> Dispatch -> Receipt Review -> Delivery Order -> Return`
+`Project -> BOQ -> MR Draft -> Submit -> Arrange/Reserve -> Project Engineer Approval -> Dispatch -> Delivery Order -> Receipt Review -> Return`
 
 - Selecting BOQ data creates a draft only. Procurement sees nothing until the
   explicit Submit command succeeds.
@@ -116,6 +120,8 @@ metadata or an unprotected profile. Project access derives from dated
   transfers ownership to assigned Project Engineers.
 - Procurement cannot self-approve.
 - Dispatch uses only approved outstanding quantity and commits stock once.
+- A Delivery Order may be generated as soon as a dispatch is committed and
+  snapshots dispatched quantities; later receipt facts remain separate.
 - Receipt review records every line as Received, Missing or Damaged. Only good
   quantity counts as received; missing/damaged quantity remains replacement
   eligible within the approved cap.

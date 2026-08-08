@@ -31,6 +31,13 @@ class SupabaseYorksV1BoqRpcClient implements YorksV1BoqRpcClient {
 abstract interface class YorksV1BoqRepository {
   Future<List<YorksV1BoqGroup>> listGroups(String projectId);
 
+  /// A non-null scope returns only that scope's worksheets. A null scope is
+  /// the read-only All aggregate and may include legacy/unassigned groups.
+  Future<List<YorksV1BoqGroup>> listGroupsForScope(
+    String projectId, {
+    String? scopeId,
+  });
+
   Future<YorksV1BoqWorksheet> getWorksheet(String groupId);
 
   Future<YorksV1BoqWorksheet> saveWorksheet(YorksV1SaveBoqWorksheetInput input);
@@ -40,6 +47,10 @@ abstract interface class YorksV1BoqRepository {
   );
 
   Future<YorksV1BoqGroup> createCustomGroup(YorksV1CreateBoqGroupInput input);
+
+  Future<YorksV1BoqGroup> assignLegacyGroupScope(
+    YorksV1AssignLegacyBoqGroupScopeInput input,
+  );
 
   Future<void> archiveGroup({
     required String groupId,
@@ -68,6 +79,28 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
     final response = await _invoke(
       functionName: 'v1_list_boq_groups',
       parameters: {'p_project_id': projectId},
+      requiresOnline: false,
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final item in response)
+        if (item is Map)
+          YorksV1BoqGroup.fromRpcJson(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<List<YorksV1BoqGroup>> listGroupsForScope(
+    String projectId, {
+    String? scopeId,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_list_boq_groups_for_scope',
+      parameters: {'p_project_id': projectId, 'p_scope_id': scopeId},
       requiresOnline: false,
     );
     if (response is! List) {
@@ -142,6 +175,25 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
   ) async {
     final response = await _invoke(
       functionName: 'v1_create_boq_group',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1BoqGroup.fromRpcJson(Map<String, dynamic>.from(response));
+  }
+
+  @override
+  Future<YorksV1BoqGroup> assignLegacyGroupScope(
+    YorksV1AssignLegacyBoqGroupScopeInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_assign_legacy_boq_group_scope',
       parameters: {
         'p_payload': input.toRpcPayload(),
         'p_idempotency_key': input.idempotencyKey,

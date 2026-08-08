@@ -808,6 +808,18 @@ abstract final class AppStrings {
     ur: 'سائٹ انجینئر',
     hi: 'साइट इंजीनियर',
   );
+  static const seniorMechanicalEngineerRole = TranslatableString(
+    en: 'Senior Mechanical Engineer',
+    ar: 'مهندس ميكانيكي أول',
+    ur: 'سینئر مکینیکل انجینئر',
+    hi: 'वरिष्ठ मैकेनिकल इंजीनियर',
+  );
+  static const projectManagerRole = TranslatableString(
+    en: 'Project Manager',
+    ar: 'مدير المشروع',
+    ur: 'پروجیکٹ مینیجر',
+    hi: 'परियोजना प्रबंधक',
+  );
   static const procurementRole = TranslatableString(
     en: 'Procurement',
     ar: 'المشتريات',

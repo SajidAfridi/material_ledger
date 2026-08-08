@@ -29,8 +29,8 @@ enum YorksV1BoqCanonicalField {
   }
 }
 
-/// A project-level BOQ folder.  The default 29 groups are server materialised;
-/// custom groups use the same ordered, versioned record shape.
+/// A BOQ folder owned by one persisted Common/building scope. The All selector
+/// is an aggregate presentation only, never a value stored in this record.
 class YorksV1BoqGroup {
   const YorksV1BoqGroup({
     required this.id,
@@ -44,6 +44,11 @@ class YorksV1BoqGroup {
     required this.rowCount,
     required this.columnCount,
     required this.updatedAt,
+    this.scopeId,
+    this.scopeKind,
+    this.scopeCode,
+    this.scopeName,
+    this.isLegacyUnassigned = false,
   });
 
   final String id;
@@ -57,6 +62,18 @@ class YorksV1BoqGroup {
   final int rowCount;
   final int columnCount;
   final DateTime updatedAt;
+  final String? scopeId;
+  final String? scopeKind;
+  final String? scopeCode;
+  final String? scopeName;
+
+  /// Pre-R38 project-level groups are retained with no inferred destination.
+  /// They can be viewed in All and require an explicit scope-assignment command
+  /// before worksheet edits, imports, exports or MR use.
+  final bool isLegacyUnassigned;
+
+  bool get isScopeAssigned =>
+      !isLegacyUnassigned && (scopeId?.trim().isNotEmpty ?? false);
 
   String get effectiveTitle =>
       worksheetTitle.trim().isEmpty ? name : worksheetTitle.trim();
@@ -74,6 +91,11 @@ class YorksV1BoqGroup {
       rowCount: _integer(json['row_count']),
       columnCount: _integer(json['column_count']),
       updatedAt: _date(json['updated_at']),
+      scopeId: _nullableString(json['scope_id']),
+      scopeKind: _nullableString(json['scope_kind']),
+      scopeCode: _nullableString(json['scope_code']),
+      scopeName: _nullableString(json['scope_name']),
+      isLegacyUnassigned: json['is_legacy_unassigned'] == true,
     );
   }
 }
@@ -257,17 +279,40 @@ class YorksV1SaveBoqWorksheetInput {
 class YorksV1CreateBoqGroupInput {
   const YorksV1CreateBoqGroupInput({
     required this.projectId,
+    required this.scopeId,
     required this.name,
     required this.idempotencyKey,
   });
 
   final String projectId;
+  final String scopeId;
   final String name;
   final String idempotencyKey;
 
   Map<String, Object?> toRpcPayload() => {
     'project_id': projectId,
+    'scope_id': scopeId,
     'name': name.trim(),
+  };
+}
+
+class YorksV1AssignLegacyBoqGroupScopeInput {
+  const YorksV1AssignLegacyBoqGroupScopeInput({
+    required this.groupId,
+    required this.scopeId,
+    required this.expectedVersion,
+    required this.idempotencyKey,
+  });
+
+  final String groupId;
+  final String scopeId;
+  final int expectedVersion;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'group_id': groupId,
+    'scope_id': scopeId,
+    'expected_version': expectedVersion,
   };
 }
 
@@ -278,6 +323,11 @@ String _requiredString(Map<String, dynamic> json, String key) {
 }
 
 String _string(Object? value) => value is String ? value : '';
+
+String? _nullableString(Object? value) {
+  if (value is! String || value.trim().isEmpty) return null;
+  return value.trim();
+}
 
 int _integer(Object? value) => switch (value) {
   int value => value,

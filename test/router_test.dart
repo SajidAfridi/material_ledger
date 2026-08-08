@@ -53,6 +53,12 @@ void main() {
           createdAt: DateTime.utc(2026, 8, 1),
         ),
         yorksV1ProjectsEnabled: true,
+        yorksV1BoqEnabled: true,
+        yorksV1RequestsEnabled: true,
+        yorksV1ArrangementEnabled: true,
+        yorksV1LogisticsEnabled: true,
+        yorksV1ReturnsDocumentsEnabled: true,
+        yorksV1DocumentsEnabled: true,
         yorksV1Role: YorksV1Role.procurement,
       );
       addTearDown(router.dispose);
@@ -96,6 +102,20 @@ void main() {
         router.routeInformationProvider.value.uri.path,
         RoutePaths.engineerHome,
       );
+
+      router.go(RoutePaths.yorksV1ProjectEditPath('project-1'));
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerHome,
+      );
+
+      router.go(RoutePaths.yorksV1DuctSizer);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerHome,
+      );
     },
   );
 
@@ -108,6 +128,8 @@ void main() {
       for (final v1Role in [
         YorksV1Role.projectEngineer,
         YorksV1Role.siteEngineer,
+        YorksV1Role.seniorMechanicalEngineer,
+        YorksV1Role.projectManager,
       ]) {
         final router = createAppRouter(
           isOnboarded: true,
@@ -121,6 +143,12 @@ void main() {
             createdAt: DateTime.utc(2026, 8, 1),
           ),
           yorksV1ProjectsEnabled: true,
+          yorksV1BoqEnabled: true,
+          yorksV1RequestsEnabled: true,
+          yorksV1ArrangementEnabled: true,
+          yorksV1LogisticsEnabled: true,
+          yorksV1ReturnsDocumentsEnabled: true,
+          yorksV1DocumentsEnabled: true,
           yorksV1Role: v1Role,
         );
 
@@ -147,6 +175,8 @@ void main() {
           RoutePaths.requestDetailPath('legacy-request'),
           RoutePaths.confirmReceiptPath('legacy-request'),
           RoutePaths.returnStore,
+          RoutePaths.yorksV1Inventory,
+          RoutePaths.yorksV1Dispatches,
         ]) {
           router.go(path);
           await tester.pumpAndSettle();

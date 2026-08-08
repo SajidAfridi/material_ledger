@@ -83,18 +83,20 @@ tables/functions.
 
 | RPC | Caller | Locks/version | Idempotent | Atomic effects |
 |---|---|---|---|---|
-| `v1_create_project` | Project Engineer, Site Engineer, Admin | reference/template rows | yes | project, Common/buildings, initial memberships, 29 BOQ groups, audit |
-| `v1_update_project` | Active assigned Project/Site Engineer or Admin | project/version, retained building scopes | yes | project setup, parties, active/retired building scopes, audit |
+| `v1_create_project` | Project Engineer, Site Engineer, Admin | reference/template rows | yes | project, Common/buildings, initial memberships, 29 BOQ groups per real scope, audit |
+| `v1_update_project` | Active assigned Project/Site Engineer or Admin | project/version, retained building scopes | yes | project setup, parties, active/retired building scopes; new real scope receives 29 groups, audit |
 | `v1_archive_project` | Admin only | project/version, open MR check | yes | irreversible safe archive state, retained history, audit |
 | `v1_set_project_state` | Project Engineer/Admin by transition | project/version | yes | state, owner/action, audit/notification |
 | `v1_assign_project_member` | Project Engineer/Admin; creation exception for Site Engineer | project/member/version | yes | close prior membership, add membership, audit/notification |
+| `v1_create_boq_group` | BOQ-authorized Engineer/Admin | project/scope/version | yes | custom group in one real Common/building scope, audit |
+| `v1_assign_legacy_boq_group_scope` | BOQ-authorized Engineer/Admin | group/version | yes | explicit legacy group-to-real-scope reconciliation, audit; submitted/conflicting history rejected |
 | `v1_submit_material_request` | Assigned Engineer draft creator | draft/project/counter/version | yes | number, snapshots, state, owner, audit/notification |
 | `v1_begin_arrangement` | Procurement/Admin | MR/version | yes | current arrangement work version, `arranging`, audit |
 | `v1_save_arrangement` | Procurement/Admin | MR, arrangement, inventory, reservations | yes | versioned lines, replacement reservations, awaiting approval, audit/notification |
 | `v1_decide_arrangement` | Assigned Project Engineer/Admin | MR/current arrangement/version | yes | approval or return decision, approved snapshots/state, audit/notification |
 | `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
 | `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, good/exception totals, state, audit/notification |
-| `v1_generate_delivery_order` | Assigned Project/Site Engineer, Procurement/Admin after confirmed receipt review | dispatch/review/current DO revision | yes | immutable snapshot/revision, document link, audit |
+| `v1_generate_delivery_order` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, Procurement/Admin after committed dispatch | dispatch/current DO revision; optional later review link | yes | immutable dispatch-quantity snapshot/revision, document link, audit |
 | `v1_submit_material_return` | Assigned Project/Site Engineer/Admin | source receipt/return/version/counter | yes | frozen return lines, number, submitted state, audit/notification |
 | `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
 | `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
@@ -105,7 +107,9 @@ tables/functions.
 | `v1_link_document` | Entity-authorized user | document/target/version | yes | classified link and audit |
 
 Every function derives actor, role and server time. User-supplied actor/role/time
-is ignored as authority.
+is ignored as authority. The exact role in the JWT must match the current
+protected Auth row before it is normalized for workflow use; stale role claims
+fail closed.
 
 ## 4. RLS capability matrix
 
@@ -138,8 +142,16 @@ membership.
 | Audit events | related read projection | related read projection | related read projection | R; no client C/U/delete |
 | Idempotency/reference counters | — | — | — | no direct client access |
 
+Senior Mechanical Engineer and Project Manager follow the Project Engineer
+column across all projects without dated membership. They remain denied the
+Procurement, inventory, commercial and Admin-only cells.
+
 Direct Procurement inserts/updates/deletes on project, scope, membership and BOQ
 tables must fail even when a route or stale client attempts them.
+
+The All BOQ overview is read-only. It cannot be represented by a `scope_id`,
+used as a mutation target or used as an MR source; BOQ-derived MR lines must
+match the request's one persisted Common/building scope at save and submit.
 
 ## 5. Storage policy matrix
 

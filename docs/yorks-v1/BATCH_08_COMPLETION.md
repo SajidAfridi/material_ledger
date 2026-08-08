@@ -7,11 +7,12 @@ Status: **passed** on 2 August 2026.
 
 ## Delivered
 
-> **CURRENT-AUTHORITY ERRATUM — 4 August 2026.** The historical delivery note
-> below predates the approved post-receipt receiver action. The current R35
-> contract in `PRODUCT_DECISIONS.md` and `STATE_RPC_RLS_MATRIX.md` allows an
-> assigned Project/Site Engineer to generate the immutable Delivery Order only
-> after receipt review. It does not broaden stock, arrangement or return
+> **CURRENT-AUTHORITY ERRATUM — 7 August 2026.** The historical delivery note
+> below predates the approved dispatch-stage document action. The current R35
+> contract in `PRODUCT_DECISIONS.md` and `STATE_RPC_RLS_MATRIX.md` snapshots
+> committed dispatched quantities and allows an authorized Engineer,
+> Procurement or Admin to generate the immutable Delivery Order without waiting
+> for receipt review. It does not broaden stock, arrangement or return
 > confirmation authority.
 
 - A protected Delivery Order model with one current revision pointer per

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
@@ -54,7 +55,9 @@ void main() {
     requestRecordVersion: 1,
     projectName: 'Yorks Project',
     projectReference: 'Y-001',
+    jobContractReference: 'N-19957.2',
     scopeName: 'Building A',
+    scopeCode: 'B-01',
     canGenerateDeliveryOrder: true,
     canSubmitMaterialReturn: true,
     canConfirmMaterialReturn: true,
@@ -99,5 +102,11 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
+      await Directory('output/pdf').create(recursive: true);
+      await File(
+        'output/pdf/r35-delivery-order-dispatch.pdf',
+      ).writeAsBytes(bytes, flush: true);
+    }
   });
 }

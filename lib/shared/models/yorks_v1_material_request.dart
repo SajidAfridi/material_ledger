@@ -361,6 +361,7 @@ class YorksV1MaterialRequest {
     required List<YorksV1MaterialRequestLine> lines,
     required this.timing,
     this.requestNumber,
+    this.jobContractReference,
     this.title,
     this.scheduledDate,
     this.deliveryNote,
@@ -377,6 +378,7 @@ class YorksV1MaterialRequest {
   final String projectId;
   final String projectReference;
   final String projectName;
+  final String? jobContractReference;
   final String scopeId;
   final String scopeName;
   final YorksV1MaterialRequestState state;
@@ -416,6 +418,7 @@ class YorksV1MaterialRequest {
       projectId: _requiredString(json, 'project_id'),
       projectReference: _requiredString(json, 'project_ref'),
       projectName: _requiredString(json, 'project_name'),
+      jobContractReference: _trimToNull(json['job_contract_reference']),
       scopeId: _requiredString(json, 'scope_id'),
       scopeName: _requiredString(json, 'scope_name'),
       state: state,

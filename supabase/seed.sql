@@ -69,6 +69,22 @@ with personas(
         "goods",
         "approveLeave"
       ]'::jsonb
+    ),
+    (
+      '10000000-0000-4000-8000-000000000009'::uuid,
+      'senior.mechanical.engineer@yorks.local.test',
+      'Local Senior Mechanical Engineer',
+      'senior_mechanical_engineer',
+      'usr-local-senior-mechanical-engineer',
+      '[]'::jsonb
+    ),
+    (
+      '10000000-0000-4000-8000-000000000010'::uuid,
+      'project.manager@yorks.local.test',
+      'Local Project Manager',
+      'project_manager',
+      'usr-local-project-manager',
+      '[]'::jsonb
     )
 )
 insert into auth.users (
@@ -139,6 +155,14 @@ with personas(auth_user_id, email) as (
     (
       '10000000-0000-4000-8000-000000000004'::uuid,
       'admin@yorks.local.test'
+    ),
+    (
+      '10000000-0000-4000-8000-000000000009'::uuid,
+      'senior.mechanical.engineer@yorks.local.test'
+    ),
+    (
+      '10000000-0000-4000-8000-000000000010'::uuid,
+      'project.manager@yorks.local.test'
     )
 )
 insert into auth.identities (

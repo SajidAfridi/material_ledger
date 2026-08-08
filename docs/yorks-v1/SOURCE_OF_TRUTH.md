@@ -2,6 +2,18 @@
 
 Status: approved on 1 August 2026.
 
+Product-owner change approval on 7 August 2026 adds the exact Senior Mechanical
+Engineer and Project Manager roles as organization-wide Project Engineers and
+makes the Delivery Order available from committed dispatch rather than waiting
+for receipt review. It also approves the controlled-document legal identity,
+contact footer, building number and job/contract-prefixed project name recorded
+in [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md).
+
+The approved R38 building-specific BOQ rule adds independent Common and
+per-building worksheets. Its All option is a read-only overview; it is never a
+persisted scope or cross-building write/MR source. The data-preserving details
+and reconciliation rule are recorded in [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md).
+
 ## Approved source artifacts
 
 The original review artifacts remain outside the repository. Their SHA-256
@@ -43,7 +55,7 @@ backward visual or workflow compatibility.
 |---|---|---|
 | Core planning structure | Phase 1 Material Plan and Phase 2 request | Dynamic BOQ groups/rows followed by an explicit MR draft and Submit |
 | Reservation timing | Phase 1 advisory; separate Phase 2 allocation | Procurement arrangement creates/replaces warehouse reservations |
-| Project roles | Generic Engineer plus Procurement/Admin | Project Engineer, Site Engineer, Procurement and Admin |
+| Project roles | Generic Engineer plus Procurement/Admin | Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager, Procurement and Admin |
 | Project wizard | Three stages | Effective R35 five stages |
 | Procurement scope | Package, RFQ, quotations and PO | Direct line arrangement, approval, dispatch and receipt; full RFQ/PO deferred |
 | Inventory | V7 multi-source/multi-warehouse direction | One warehouse in V1 |
@@ -52,6 +64,7 @@ backward visual or workflow compatibility.
 | Request exception path | Plan/over-plan/substitution approval distinction | BOQ/import/custom MR rows use one arrangement/approval path |
 | MR delivery fields | Required-on-site date and explicit destination | Project plus Building/Common scope and Urgent/Normal/Scheduled; Scheduled requires a date |
 | Standard rows | One frozen ten-column material grid | Dynamic BOQ worksheet; seven-column controlled MR output |
+| BOQ ownership | One combined editable project plan | Independent Common/building BOQs; All is read-only overview only |
 | Material events | Supplier/warehouse/site directions modeled separately | Dispatch plus site receipt review in V1; supplier-receipt/PO suite deferred |
 | Accounts | Outside V7 transformation but existing routes could remain | Explicitly unavailable in the V1 experience |
 

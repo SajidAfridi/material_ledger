@@ -108,7 +108,7 @@ class YorksV1WorkspaceSearchRepository {
     YorksV1ProjectPortfolioItem item,
   ) async {
     final groups = await _safe(
-      () => _boq.listGroups(item.project.id),
+      () => _boq.listGroupsForScope(item.project.id),
       const [],
     );
     final groupResults = <YorksV1WorkspaceSearchResult>[];
@@ -131,7 +131,7 @@ class YorksV1WorkspaceSearchRepository {
             kind: YorksV1WorkspaceSearchResultKind.boqItem,
             title: title,
             subtitle:
-                '${group.effectiveTitle} · ${item.project.reference} · Row ${row.displayOrder}',
+                '${_scopeLabel(group)} · ${group.effectiveTitle} · ${item.project.reference} · Row ${row.displayOrder}',
             route: _boqPath(item.project.id, group.id),
             projectId: item.project.id,
             entityId: row.id,
@@ -220,13 +220,16 @@ class YorksV1WorkspaceSearchRepository {
   ) => YorksV1WorkspaceSearchResult(
     kind: YorksV1WorkspaceSearchResultKind.boqGroup,
     title: group.effectiveTitle,
-    subtitle: '${item.project.reference} · ${group.rowCount} items',
+    subtitle:
+        '${_scopeLabel(group)} · ${item.project.reference} · ${group.rowCount} items',
     route: _boqPath(item.project.id, group.id),
     projectId: item.project.id,
     entityId: group.id,
     searchableText: [
       group.name,
       group.worksheetTitle,
+      group.scopeName,
+      group.scopeCode,
       'boq group',
       item.project.reference,
       item.project.name,
@@ -368,6 +371,9 @@ class YorksV1WorkspaceSearchRepository {
 
   String _boqPath(String projectId, String groupId) =>
       '/yorks/projects/$projectId/boq/$groupId';
+
+  String _scopeLabel(YorksV1BoqGroup group) =>
+      group.scopeName ?? group.scopeCode ?? group.effectiveTitle;
 
   Future<T> _safe<T>(Future<T> Function() task, T fallback) async {
     try {

@@ -26,6 +26,84 @@ abstract final class YorksV1BoqStrings {
     ur: 'BOQ ورک شیٹس',
     hi: 'BOQ वर्कशीट',
   );
+  static const scope = TranslatableString(
+    en: 'BOQ scope',
+    ar: 'نطاق جدول الكميات',
+    ur: 'BOQ اسکوپ',
+    hi: 'BOQ स्कोप',
+  );
+  static const allScopes = TranslatableString(
+    en: 'All',
+    ar: 'الكل',
+    ur: 'سب',
+    hi: 'सभी',
+  );
+  static const allScopesDescription = TranslatableString(
+    en: 'Read-only aggregate of Common and every building. Choose one scope to edit, export or create a material request source.',
+    ar: 'عرض مجمع للقراءة فقط للنطاق المشترك وجميع المباني. اختر نطاقاً واحداً للتعديل أو التصدير أو إنشاء مصدر لطلب مواد.',
+    ur: 'کامن اور ہر بلڈنگ کا صرف پڑھنے کے لیے مجموعی منظر۔ ایڈٹ، ایکسپورٹ یا میٹریل ریکویسٹ سورس کے لیے ایک اسکوپ منتخب کریں۔',
+    hi: 'कॉमन और हर बिल्डिंग का केवल-पढ़ने योग्य समेकित दृश्य। संपादन, निर्यात या सामग्री अनुरोध स्रोत के लिए एक स्कोप चुनें।',
+  );
+  static const overviewDescription = TranslatableString(
+    en: 'Project overview only. Each Common/building BOQ remains independent and keeps its own folders, rows, imports and material requests.',
+    ar: 'نظرة عامة للمشروع فقط. يظل كل جدول كميات مشترك/مبنى مستقلاً ويحتفظ بمجلداته وصفوفه ووارداته وطلبات مواده الخاصة.',
+    ur: 'صرف پراجیکٹ اوورویو۔ ہر کامن/بلڈنگ BOQ آزاد رہتا ہے اور اپنے فولڈرز، قطاریں، امپورٹس اور میٹیریل ریکویسٹس رکھتا ہے۔',
+    hi: 'केवल प्रोजेक्ट अवलोकन। प्रत्येक कॉमन/बिल्डिंग BOQ स्वतंत्र रहता है और अपने फ़ोल्डर, पंक्तियाँ, आयात और सामग्री अनुरोध रखता है।',
+  );
+  static const folders = TranslatableString(
+    en: 'Folders',
+    ar: 'المجلدات',
+    ur: 'فولڈرز',
+    hi: 'फ़ोल्डर',
+  );
+  static const startedFolders = TranslatableString(
+    en: 'Started',
+    ar: 'بدأت',
+    ur: 'شروع شدہ',
+    hi: 'प्रारंभ किए गए',
+  );
+  static const materials = TranslatableString(
+    en: 'Materials',
+    ar: 'المواد',
+    ur: 'میٹیریلز',
+    hi: 'सामग्री',
+  );
+  static const openScope = TranslatableString(
+    en: 'Open scope',
+    ar: 'فتح النطاق',
+    ur: 'اسکوپ کھولیں',
+    hi: 'स्कोप खोलें',
+  );
+  static const legacyBoqs = TranslatableString(
+    en: 'Legacy BOQs needing scope assignment',
+    ar: 'جداول كميات قديمة تحتاج تعيين النطاق',
+    ur: 'اسکوپ اسائنمنٹ کی ضرورت والے لیگیسی BOQs',
+    hi: 'स्कोप असाइनमेंट आवश्यक वाले लीगेसी BOQ',
+  );
+  static const legacyUnassigned = TranslatableString(
+    en: 'Legacy BOQ — scope assignment required',
+    ar: 'جدول كميات قديم — يلزم تعيين النطاق',
+    ur: 'لیگیسی BOQ — اسکوپ اسائنمنٹ درکار ہے',
+    hi: 'लीगेसी BOQ — स्कोप असाइनमेंट आवश्यक है',
+  );
+  static const assignLegacyScope = TranslatableString(
+    en: 'Assign BOQ scope',
+    ar: 'تعيين نطاق جدول الكميات',
+    ur: 'BOQ اسکوپ اسائن کریں',
+    hi: 'BOQ स्कोप असाइन करें',
+  );
+  static const assignLegacyScopeDescription = TranslatableString(
+    en: 'Choose the one real Common or building scope that owns this preserved BOQ. This cannot rewrite submitted request history.',
+    ar: 'اختر النطاق الحقيقي الوحيد المشترك أو المبنى الذي يملك جدول الكميات المحفوظ. لا يمكن لهذا إعادة كتابة سجل الطلبات المُرسلة.',
+    ur: 'وہ ایک اصلی کامن یا بلڈنگ اسکوپ منتخب کریں جس کا یہ محفوظ BOQ ہے۔ یہ جمع شدہ ریکویسٹ ہسٹری کو دوبارہ نہیں لکھ سکتا۔',
+    hi: 'वह एक वास्तविक कॉमन या बिल्डिंग स्कोप चुनें जिसका यह संरक्षित BOQ है। यह सबमिट किए गए अनुरोध इतिहास को नहीं बदलेगा।',
+  );
+  static const scopedWorksheet = TranslatableString(
+    en: 'Scope: {scope}',
+    ar: 'النطاق: {scope}',
+    ur: 'اسکوپ: {scope}',
+    hi: 'स्कोप: {scope}',
+  );
   static const addGroup = TranslatableString(
     en: 'Add custom group',
     ar: 'إضافة مجموعة مخصصة',

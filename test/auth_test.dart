@@ -171,9 +171,60 @@ void main() {
       expect(container.read(isLoggedInProvider), false);
       expect(container.read(currentUserProvider), isNull);
     });
+
+    test(
+      'session lifecycle increments the exact-role invalidation revision',
+      () async {
+        final before = container.read(authSessionRevisionProvider);
+        await auth().signIn(
+          email: 'owner@gmail.com',
+          password: _testLocalPassword,
+        );
+        expect(container.read(authSessionRevisionProvider), before + 1);
+
+        await auth().signOut();
+        expect(container.read(authSessionRevisionProvider), before + 2);
+      },
+    );
   });
 
   group('Security baseline', () {
+    test(
+      'sign-in Auth failures are classified without exposing server detail',
+      () {
+        expect(
+          signInResultForAuthException(
+            const AuthException('Invalid login credentials', statusCode: '400'),
+          ),
+          SignInResult.invalidCredentials,
+        );
+        expect(
+          signInResultForAuthException(
+            const AuthException(
+              'Email not confirmed',
+              code: 'email_not_confirmed',
+            ),
+          ),
+          SignInResult.emailNotConfirmed,
+        );
+        expect(
+          signInResultForAuthException(
+            const AuthException('Too many requests', statusCode: '429'),
+          ),
+          SignInResult.rateLimited,
+        );
+        expect(
+          signInResultForAuthException(
+            const AuthException(
+              'Unexpected upstream failure',
+              statusCode: '500',
+            ),
+          ),
+          SignInResult.networkError,
+        );
+      },
+    );
+
     test('roles are accepted only from exact app_metadata values', () {
       expect(userRoleFromAppMetadata({'role': 'admin'}), UserRole.admin);
       expect(
@@ -189,6 +240,14 @@ void main() {
       );
       expect(
         userRoleFromAppMetadata({'role': 'site_engineer'}),
+        UserRole.engineer,
+      );
+      expect(
+        userRoleFromAppMetadata({'role': 'senior_mechanical_engineer'}),
+        UserRole.engineer,
+      );
+      expect(
+        userRoleFromAppMetadata({'role': 'project_manager'}),
         UserRole.engineer,
       );
       expect(userRoleFromAppMetadata({'role': 'owner'}), isNull);

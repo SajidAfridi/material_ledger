@@ -129,8 +129,35 @@ class YorksV1MaterialRequestDraftController
     return true;
   }
 
-  Future<void> setScope(String? scopeId) =>
-      update((draft) => draft.copyWith(scopeId: scopeId));
+  /// Changes the request scope without permitting controlled BOQ rows to
+  /// follow it across Common/building boundaries. Custom and imported lines
+  /// stay available; the presentation layer must obtain confirmation before
+  /// asking to discard BOQ-derived rows.
+  Future<bool> setScope(
+    String? scopeId, {
+    bool discardIncompatibleBoqRows = false,
+  }) async {
+    final draft = state.draft;
+    if (scopeId == draft.scopeId) return true;
+    final hasBoqRows = draft.lines.any(
+      (line) => line.source == YorksV1MaterialRequestLineSource.boq,
+    );
+    if (hasBoqRows && !discardIncompatibleBoqRows) return false;
+    await update(
+      (current) => current.copyWith(
+        scopeId: scopeId,
+        lines: hasBoqRows
+            ? current.lines
+                  .where(
+                    (line) =>
+                        line.source != YorksV1MaterialRequestLineSource.boq,
+                  )
+                  .toList(growable: false)
+            : current.lines,
+      ),
+    );
+    return true;
+  }
 
   Future<void> setTitle(String? title) =>
       update((draft) => draft.copyWith(title: title));
@@ -242,6 +269,14 @@ class YorksV1MaterialRequestDraftController
     final selected = rowIds.toSet();
     if (selected.isEmpty) return;
     final draft = state.draft;
+    // The All BOQ view is a read-only aggregate, so a controlled BOQ source
+    // may only be copied when the worksheet is owned by the chosen MR scope.
+    // The trusted draft RPC enforces this again before persisting a line.
+    if (draft.scopeId == null ||
+        !worksheet.group.isScopeAssigned ||
+        worksheet.group.scopeId != draft.scopeId) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
     final existingSourceRows = draft.lines
         .map((line) => line.sourceBoqRowId)
         .whereType<String>()

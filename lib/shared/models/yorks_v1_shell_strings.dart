@@ -713,6 +713,24 @@ abstract final class YorksV1ShellStrings {
     ur: 'یہ اکاؤنٹ غیر فعال ہے۔ اپنے ایڈمنسٹریٹر سے رابطہ کریں۔',
     hi: 'यह खाता निष्क्रिय है। अपने व्यवस्थापक से संपर्क करें।',
   );
+  static const emailNotConfirmed = TranslatableString(
+    en: 'Confirm your company email before signing in.',
+    ar: 'أكد بريد الشركة الإلكتروني قبل تسجيل الدخول.',
+    ur: 'سائن اِن کرنے سے پہلے اپنے کمپنی ای میل کی تصدیق کریں۔',
+    hi: 'साइन इन करने से पहले अपने कंपनी ईमेल की पुष्टि करें।',
+  );
+  static const rateLimited = TranslatableString(
+    en: 'Too many sign-in attempts. Please wait a moment and try again.',
+    ar: 'تمت محاولات تسجيل دخول كثيرة. يرجى الانتظار قليلاً ثم المحاولة مرة أخرى.',
+    ur: 'سائن اِن کی بہت زیادہ کوششیں ہو چکی ہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔',
+    hi: 'बहुत अधिक साइन-इन प्रयास हुए। थोड़ा इंतजार करें और फिर कोशिश करें।',
+  );
+  static const accountSetupRequired = TranslatableString(
+    en: 'This account is not ready for the Yorks workspace. Contact your administrator.',
+    ar: 'هذا الحساب غير جاهز لمساحة عمل Yorks. اتصل بالمسؤول.',
+    ur: 'یہ اکاؤنٹ Yorks ورک اسپیس کے لیے تیار نہیں ہے۔ اپنے ایڈمنسٹریٹر سے رابطہ کریں۔',
+    hi: 'यह खाता Yorks कार्यस्थान के लिए तैयार नहीं है। अपने व्यवस्थापक से संपर्क करें।',
+  );
   static const serverUnreachable = TranslatableString(
     en: 'Cannot reach the server. Check your connection and try again.',
     ar: 'يتعذر الوصول إلى الخادم. تحقق من الاتصال وحاول مرة أخرى.',
