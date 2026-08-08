@@ -2864,7 +2864,7 @@ class _RequestDetailBody extends ConsumerWidget {
     );
     final onPrimaryAction = switch (primaryAction) {
       YorksV1MaterialRequestDetailPrimaryAction.arrange =>
-        () => _openArrangement(context, request.id),
+        () => _openArrangement(context, ref, request.id, arrangementWorkspace),
       YorksV1MaterialRequestDetailPrimaryAction.dispatch => () => context.push(
         RoutePaths.yorksV1MaterialRequestLogisticsPath(request.id),
       ),
@@ -3063,7 +3063,46 @@ class _RequestDetailBody extends ConsumerWidget {
     );
   }
 
-  Future<void> _openArrangement(BuildContext context, String requestId) async {
+  Future<void> _openArrangement(
+    BuildContext context,
+    WidgetRef ref,
+    String requestId,
+    YorksV1ArrangementWorkspace? workspace,
+  ) async {
+    // Entering an arrangement is an explicit server command.  Start the first
+    // version here so the Arrange action opens the editor directly, rather
+    // than exposing a second, visually unrelated start screen.  The trusted
+    // RPC remains the authority for the state transition and idempotency.
+    if (workspace?.canBegin == true && workspace?.workingArrangement == null) {
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+      try {
+        await ref
+            .read(yorksV1ArrangementRepositoryProvider)
+            .begin(
+              YorksV1BeginArrangementInput(
+                requestId: requestId,
+                expectedRequestVersion: workspace!.requestRecordVersion,
+                idempotencyKey: const Uuid().v4(),
+              ),
+            );
+        ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId));
+        ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
+        ref.invalidate(yorksV1MaterialRequestListProvider);
+      } catch (_) {
+        if (context.mounted) {
+          _snack(context, YorksV1ArrangementStrings.savingFailed.primary);
+        }
+        return;
+      } finally {
+        if (rootNavigator.canPop()) rootNavigator.pop();
+      }
+    }
+    if (!context.mounted) return;
     if (MediaQuery.sizeOf(context).width <
         AppSpacing.yorksV1DesktopBreakpoint) {
       context.push(RoutePaths.yorksV1MaterialRequestArrangementPath(requestId));
@@ -3090,6 +3129,7 @@ class _RequestDetailBody extends ConsumerWidget {
               requestId: requestId,
               embedded: true,
               onClose: () => Navigator.of(dialogContext).pop(),
+              onCompleted: () => Navigator.of(dialogContext).pop(),
             ),
           ),
         );

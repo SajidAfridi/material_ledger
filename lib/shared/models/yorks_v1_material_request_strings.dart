@@ -733,13 +733,13 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'अंतिम अपडेट',
   );
   static const controlledTableDescription = TranslatableString(
-    en: 'The formal request is a read-only snapshot of the submitted lines.',
-    ar: 'الطلب الرسمي لقطة للبنود المقدمة للقراءة فقط.',
-    ur: 'رسمی درخواست جمع کرائی گئی لائنوں کا صرف پڑھنے کے لیے اسنیپ شاٹ ہے۔',
-    hi: 'औपचारिक अनुरोध जमा की गई पंक्तियों का केवल-पढ़ने योग्य स्नैपशॉट है।',
+    en: 'Same column order as the Yorks paper form, without Remarks.',
+    ar: 'نفس ترتيب الأعمدة في نموذج يوركس الورقي، من دون ملاحظات.',
+    ur: 'یورکس کے کاغذی فارم جیسا ہی کالم آرڈر، بغیر ریمارکس کے۔',
+    hi: 'Yorks पेपर फॉर्म जैसा ही कॉलम क्रम, Remarks के बिना।',
   );
   static const materialRequestForm = TranslatableString(
-    en: 'MATERIAL REQUEST',
+    en: 'MATERIAL REQUEST FORM',
     ar: 'طلب المواد',
     ur: 'میٹیریل ریکویسٹ',
     hi: 'सामग्री अनुरोध',

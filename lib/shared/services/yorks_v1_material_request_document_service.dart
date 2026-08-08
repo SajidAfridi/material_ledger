@@ -200,13 +200,15 @@ class YorksV1MaterialRequestDocumentService {
         // signature for backwards-compatible callers.
         pageFormat: PdfPageFormat.a4,
         maxPages: 200,
-        margin: pw.EdgeInsets.fromLTRB(12 * _mm, 9 * _mm, 12 * _mm, 8 * _mm),
+        margin: pw.EdgeInsets.fromLTRB(7 * _mm, 7 * _mm, 7 * _mm, 7 * _mm),
         // The controlled form identity block belongs to page one only. The
         // table's own repeated heading still identifies continuation pages.
         header: (context) => context.pageNumber == 1
             ? _formalHeader(logo, model)
             : pw.SizedBox(),
-        footer: _pageNumber,
+        footer: (context) => context.pageNumber == context.pagesCount
+            ? _companyContactFooter()
+            : pw.SizedBox(),
         build: (_) => [
           _materialTable(model, commercial: commercial),
           // Keep all three approval areas together near the bottom of the
@@ -272,7 +274,7 @@ class YorksV1MaterialRequestDocumentService {
         pw.SizedBox(height: 2.5 * _mm),
         pw.Center(
           child: pw.Text(
-            'MATERIAL REQUEST',
+            YorksV1MaterialRequestStrings.materialRequestForm.primary,
             style: pw.TextStyle(
               fontSize: 14,
               fontWeight: pw.FontWeight.bold,
@@ -418,27 +420,24 @@ class YorksV1MaterialRequestDocumentService {
     required bool commercial,
   }) {
     final request = model.request;
-    final hasReceiptStatus = model.receiptStatuses.isNotEmpty;
     final headers = [
       'R No',
       'Item Description',
       'Brand/Origin',
       'Qty.',
       'Unit',
-      if (hasReceiptStatus) 'Receipt Status',
       if (commercial) 'Unit Cost',
       if (commercial) 'Total Cost',
     ];
-    final widths = commercial || hasReceiptStatus
+    final widths = commercial
         ? const <int, pw.TableColumnWidth>{
-            0: pw.FlexColumnWidth(.55),
-            1: pw.FlexColumnWidth(3.25),
-            2: pw.FlexColumnWidth(1.55),
-            3: pw.FlexColumnWidth(.85),
-            4: pw.FlexColumnWidth(.85),
-            5: pw.FlexColumnWidth(1.15),
-            6: pw.FlexColumnWidth(1.2),
-            7: pw.FlexColumnWidth(1.3),
+            0: pw.FlexColumnWidth(.7),
+            1: pw.FlexColumnWidth(4.2),
+            2: pw.FlexColumnWidth(2.2),
+            3: pw.FlexColumnWidth(.95),
+            4: pw.FlexColumnWidth(1.05),
+            5: pw.FlexColumnWidth(1.5),
+            6: pw.FlexColumnWidth(1.55),
           }
         : const <int, pw.TableColumnWidth>{
             0: pw.FlexColumnWidth(.7),
@@ -459,12 +458,9 @@ class YorksV1MaterialRequestDocumentService {
           children: [for (final header in headers) _tableHeader(header)],
         ),
         for (var index = 0; index < request.lines.length; index++)
-          _materialRow(
-            request.lines[index],
-            index + 1,
-            commercial: commercial,
-            receiptStatus: model.receiptStatuses[request.lines[index].id],
-          ),
+          _materialRow(request.lines[index], index + 1, commercial: commercial),
+        for (var index = request.lines.length; index < 6; index++)
+          _emptyMaterialRow(commercial: commercial),
       ],
     );
   }
@@ -473,7 +469,6 @@ class YorksV1MaterialRequestDocumentService {
     YorksV1MaterialRequestLine line,
     int number, {
     required bool commercial,
-    String? receiptStatus,
   }) => pw.TableRow(
     children: [
       _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
@@ -481,7 +476,6 @@ class YorksV1MaterialRequestDocumentService {
       _tableCell(line.brandOrigin ?? ''),
       _tableCell(line.quantity, alignment: pw.Alignment.topRight),
       _tableCell(line.unit),
-      if (receiptStatus != null) _tableCell(receiptStatus),
       if (commercial)
         _tableCell(line.unitCost ?? '', alignment: pw.Alignment.topRight),
       if (commercial)
@@ -491,6 +485,14 @@ class YorksV1MaterialRequestDocumentService {
         ),
     ],
   );
+
+  static pw.TableRow _emptyMaterialRow({required bool commercial}) =>
+      pw.TableRow(
+        children: [
+          for (var index = 0; index < (commercial ? 7 : 5); index++)
+            pw.SizedBox(height: 6.6 * _mm),
+        ],
+      );
 
   static pw.Widget _tableHeader(String value) => pw.Padding(
     padding: pw.EdgeInsets.symmetric(
@@ -627,11 +629,12 @@ class YorksV1MaterialRequestDocumentService {
   static pw.Widget _approvalText(String label, String value) =>
       pw.Text('$label: $value', style: const pw.TextStyle(fontSize: 6.6));
 
-  static pw.Widget _pageNumber(pw.Context context) => pw.Align(
-    alignment: pw.Alignment.centerRight,
+  static pw.Widget _companyContactFooter() => pw.Center(
     child: pw.Text(
-      'Page ${context.pageNumber} of ${context.pagesCount}',
-      style: pw.TextStyle(fontSize: 6.2, color: _documentMuted),
+      '${YorksV1CompanyDocumentStrings.contactLine.en} - '
+      'E-mail: ${YorksV1CompanyDocumentStrings.email}',
+      textAlign: pw.TextAlign.center,
+      style: pw.TextStyle(fontSize: 6.4, color: _documentMuted),
     ),
   );
 

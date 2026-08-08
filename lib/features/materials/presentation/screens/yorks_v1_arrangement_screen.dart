@@ -23,6 +23,7 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
     required this.requestId,
     this.embedded = false,
     this.onClose,
+    this.onCompleted,
   });
 
   final String requestId;
@@ -32,6 +33,12 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
   /// prevents it from drifting over the arrangement title at narrow heights.
   final bool embedded;
   final VoidCallback? onClose;
+
+  /// The record-detail modal and the compact arrangement route both leave the
+  /// editor after a successful, server-confirmed hand-off to the Project
+  /// Engineer.  This keeps the UI in sync with the workflow state rather than
+  /// leaving a stale working form on screen.
+  final VoidCallback? onCompleted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,6 +58,9 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
         workspace: value,
         language: language,
         showPageHeader: !compactRoute && !embedded,
+        directEditor: embedded || compactRoute,
+        onCompleted: onCompleted,
+        onClose: onClose,
       ),
     );
     return Scaffold(
@@ -60,8 +70,10 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
               title: _ActiveText(
-                copy: YorksV1ArrangementStrings.arrangement,
+                copy: YorksV1ArrangementStrings.arrangeMaterialRequest,
                 language: language,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppTypography.titleLarge.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -82,6 +94,8 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
               children: [
                 _EmbeddedArrangementHeader(
                   language: language,
+                  requestNumber:
+                      workspace.valueOrNull?.requestNumber ?? requestId,
                   onClose: onClose,
                 ),
                 Expanded(child: body),
@@ -93,9 +107,14 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
 }
 
 class _EmbeddedArrangementHeader extends StatelessWidget {
-  const _EmbeddedArrangementHeader({required this.language, this.onClose});
+  const _EmbeddedArrangementHeader({
+    required this.language,
+    required this.requestNumber,
+    this.onClose,
+  });
 
   final AppLanguage language;
+  final String requestNumber;
   final VoidCallback? onClose;
 
   @override
@@ -118,19 +137,16 @@ class _EmbeddedArrangementHeader extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _ActiveText(
-                copy: YorksV1ArrangementStrings.arrangement,
+                copy: YorksV1ArrangementStrings.arrangeMaterialRequest,
                 language: language,
                 style: AppTypography.titleLarge.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: AppSpacing.xxs),
-              _ActiveText(
-                copy: YorksV1ArrangementStrings.reviewSummary,
-                language: language,
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.muted,
-                ),
+              Text(
+                '$requestNumber · ${YorksV1ArrangementStrings.arrangeMaterialRequestDescription.active(language)}',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
               ),
             ],
           ),
@@ -151,11 +167,17 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
     required this.workspace,
     required this.language,
     required this.showPageHeader,
+    required this.directEditor,
+    this.onCompleted,
+    this.onClose,
   });
 
   final YorksV1ArrangementWorkspace workspace;
   final AppLanguage language;
   final bool showPageHeader;
+  final bool directEditor;
+  final VoidCallback? onCompleted;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -200,16 +222,18 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                 ],
-                _WorkspaceHeader(workspace: workspace),
-                const SizedBox(height: AppSpacing.lg),
+                if (!directEditor) ...[
+                  _WorkspaceHeader(workspace: workspace),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
                 if (workspace.canBegin && working == null)
                   _BeginArrangementAction(
                     workspace: workspace,
                     language: language,
                   ),
                 if (working != null) ...[
-                  NexusSectionCard(
-                    title: YorksV1ArrangementStrings.arrangement.primary,
+                  _ArrangementEditorSurface(
+                    directEditor: directEditor,
                     child: inventory.when(
                       loading: () => const Padding(
                         padding: EdgeInsets.all(AppSpacing.lg),
@@ -225,6 +249,8 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                         arrangement: working,
                         inventoryItems: items,
                         language: language,
+                        onCompleted: onCompleted,
+                        onClose: onClose,
                       ),
                     ),
                   ),
@@ -321,6 +347,35 @@ class _WorkspaceHeader extends StatelessWidget {
   );
 }
 
+class _ArrangementEditorSurface extends StatelessWidget {
+  const _ArrangementEditorSurface({
+    required this.directEditor,
+    required this.child,
+  });
+
+  final bool directEditor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!directEditor) {
+      return NexusSectionCard(
+        title: YorksV1ArrangementStrings.arrangement.primary,
+        child: child,
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _BeginArrangementAction extends ConsumerStatefulWidget {
   const _BeginArrangementAction({
     required this.workspace,
@@ -382,12 +437,16 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
     required this.arrangement,
     required this.inventoryItems,
     required this.language,
+    this.onCompleted,
+    this.onClose,
   });
 
   final YorksV1ArrangementWorkspace workspace;
   final YorksV1ProcurementArrangement arrangement;
   final List<YorksV1InventoryItem> inventoryItems;
   final AppLanguage language;
+  final VoidCallback? onCompleted;
+  final VoidCallback? onClose;
 
   @override
   ConsumerState<_ArrangementEditor> createState() => _ArrangementEditorState();
@@ -446,6 +505,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      const _ArrangementQuantityGuidance(),
+      const SizedBox(height: AppSpacing.md),
       LayoutBuilder(
         builder: (context, constraints) => constraints.maxWidth >= 980
             ? _DesktopArrangementEditor(
@@ -479,21 +540,43 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
               ),
       ),
       const SizedBox(height: AppSpacing.lg),
+      Text(
+        YorksV1ArrangementStrings.procurementNote.primary,
+        style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: AppSpacing.xs),
       TextFormField(
         controller: _procurementNote,
         enabled: !_busy,
         minLines: 2,
         maxLines: 4,
         decoration: InputDecoration(
-          labelText: YorksV1ArrangementStrings.procurementNote.primary,
+          hintText: YorksV1ArrangementStrings.procurementNoteHint.primary,
         ),
       ),
       const SizedBox(height: AppSpacing.lg),
-      PrimaryButton(
-        label: YorksV1ArrangementStrings.saveForApproval.primary,
-        icon: Icons.send_rounded,
-        isLoading: _busy,
-        onPressed: _busy ? null : _save,
+      const Divider(height: AppSpacing.lg),
+      Align(
+        alignment: Alignment.centerRight,
+        child: Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            if (widget.onClose != null)
+              SecondaryButton(
+                label: AppStrings.cancel.primary,
+                isExpanded: false,
+                onPressed: _busy ? null : widget.onClose,
+              ),
+            PrimaryButton(
+              label: YorksV1ArrangementStrings.saveForApproval.primary,
+              icon: Icons.send_rounded,
+              isExpanded: false,
+              isLoading: _busy,
+              onPressed: _busy ? null : _save,
+            ),
+          ],
+        ),
       ),
     ],
   );
@@ -525,6 +608,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       _showMessage(context, validationMessage);
       return;
     }
+    var saved = false;
     setState(() => _busy = true);
     try {
       await ref
@@ -548,11 +632,13 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       );
       ref.invalidate(yorksV1MaterialRequestListProvider);
       _saveIdempotencyKey = const Uuid().v4();
+      saved = true;
     } catch (_) {
       if (mounted) _showFailure(context);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+    if (saved && mounted) widget.onCompleted?.call();
   }
 
   void _initializeLineControllers() {
@@ -694,82 +780,301 @@ class _DesktopArrangementEditor extends StatelessWidget {
   final ValueChanged<_EditableArrangementLine> onChanged;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      columnSpacing: AppSpacing.md,
-      columns: [
-        DataColumn(label: Text(YorksV1ArrangementStrings.rowNumber.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.requested.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.decision.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.source.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.arranged.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.unitCost.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.availability.primary)),
-        DataColumn(label: Text(YorksV1ArrangementStrings.reason.primary)),
-      ],
-      rows: [
-        for (final line in lines)
-          DataRow(
-            cells: [
-              DataCell(Text(line.displayOrder.toString())),
-              DataCell(
-                SizedBox(
-                  width: 180,
-                  child: Text(
-                    '${line.description}\n${line.requestedQuantity} ${line.unit}',
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final tableWidth = constraints.maxWidth < 1060
+          ? 1060.0
+          : constraints.maxWidth;
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: tableWidth,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.line),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            ),
+            child: Column(
+              children: [
+                _ArrangementTableHeader(),
+                for (final line in lines)
+                  _ArrangementTableRow(
+                    line: line,
+                    draft: drafts[line.id]!,
+                    arrangedQuantity: arrangedQuantities[line.id]!,
+                    unitCost: unitCosts[line.id]!,
+                    supplier: suppliers[line.id]!,
+                    reason: reasons[line.id]!,
+                    inventoryItems: inventoryItems,
+                    enabled: enabled,
+                    onChanged: onChanged,
                   ),
-                ),
-              ),
-              DataCell(
-                _DecisionPicker(
-                  value: drafts[line.id]!,
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _ArrangementQuantityGuidance extends StatelessWidget {
+  const _ArrangementQuantityGuidance();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer.withValues(alpha: .42),
+      border: Border.all(color: AppColors.blueContainerStrong),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.verified_user_outlined,
+          color: AppColors.blue,
+          size: 21,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            YorksV1ArrangementStrings.quantityRule.primary,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ArrangementTableHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+    color: AppColors.surfaceContainerLow,
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.sm,
+    ),
+    child: const Row(
+      children: [
+        _ArrangementTableHeading(
+          YorksV1ArrangementStrings.requestedItem,
+          flex: 30,
+        ),
+        _ArrangementTableHeading(YorksV1ArrangementStrings.decision, flex: 17),
+        _ArrangementTableHeading(
+          YorksV1ArrangementStrings.supplierSource,
+          flex: 21,
+        ),
+        _ArrangementTableHeading(YorksV1ArrangementStrings.requested, flex: 10),
+        _ArrangementTableHeading(YorksV1ArrangementStrings.arranged, flex: 10),
+        _ArrangementTableHeading(YorksV1ArrangementStrings.unitCost, flex: 12),
+      ],
+    ),
+  );
+}
+
+class _ArrangementTableHeading extends StatelessWidget {
+  const _ArrangementTableHeading(this.copy, {required this.flex});
+
+  final TranslatableString copy;
+  final int flex;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    flex: flex,
+    child: Text(
+      copy.primary.toUpperCase(),
+      style: AppTypography.labelSmall.copyWith(
+        color: AppColors.muted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: .8,
+      ),
+    ),
+  );
+}
+
+class _ArrangementTableRow extends StatelessWidget {
+  const _ArrangementTableRow({
+    required this.line,
+    required this.draft,
+    required this.arrangedQuantity,
+    required this.unitCost,
+    required this.supplier,
+    required this.reason,
+    required this.inventoryItems,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final YorksV1ArrangementLine line;
+  final _EditableArrangementLine draft;
+  final TextEditingController arrangedQuantity;
+  final TextEditingController unitCost;
+  final TextEditingController supplier;
+  final TextEditingController reason;
+  final List<YorksV1InventoryItem> inventoryItems;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final reasonRequired =
+        draft.decision == YorksV1ArrangementDecision.partial ||
+        draft.decision == YorksV1ArrangementDecision.unavailable;
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.line)),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 30, child: _ArrangementRequestedItem(line: line)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 17,
+                child: _DecisionPicker(
+                  value: draft,
                   enabled: enabled,
+                  compact: true,
                   onChanged: onChanged,
                 ),
               ),
-              DataCell(
-                _SourcePicker(
-                  value: drafts[line.id]!,
-                  enabled: enabled,
-                  onChanged: onChanged,
-                ),
-              ),
-              DataCell(
-                _QuantityField(
-                  value: drafts[line.id]!,
-                  controller: arrangedQuantities[line.id]!,
-                  enabled: enabled,
-                ),
-              ),
-              DataCell(
-                _UnitCostField(
-                  value: drafts[line.id]!,
-                  controller: unitCosts[line.id]!,
-                  enabled: enabled,
-                ),
-              ),
-              DataCell(
-                _InventoryOrSupplierField(
-                  value: drafts[line.id]!,
-                  supplier: suppliers[line.id]!,
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 21,
+                child: _ArrangementSourceEditor(
+                  value: draft,
+                  supplier: supplier,
                   inventoryItems: inventoryItems,
                   enabled: enabled,
                   onChanged: onChanged,
                 ),
               ),
-              DataCell(
-                _ReasonField(
-                  value: drafts[line.id]!,
-                  controller: reasons[line.id]!,
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 10,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    '${line.requestedQuantity} ${line.unit}',
+                    style: AppTypography.labelLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 10,
+                child: _QuantityField(
+                  value: draft,
+                  controller: arrangedQuantity,
                   enabled: enabled,
+                  compact: true,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: 12,
+                child: _UnitCostField(
+                  value: draft,
+                  controller: unitCost,
+                  enabled: enabled,
+                  compact: true,
                 ),
               ),
             ],
           ),
+          if (reasonRequired) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ReasonField(value: draft, controller: reason, enabled: enabled),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ArrangementRequestedItem extends StatelessWidget {
+  const _ArrangementRequestedItem({required this.line});
+
+  final YorksV1ArrangementLine line;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: AppSpacing.xs),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          line.description,
+          style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
+        ),
+        if (line.brandOrigin?.trim().isNotEmpty ?? false) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            line.brandOrigin!,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ],
       ],
     ),
   );
+}
+
+class _ArrangementSourceEditor extends StatelessWidget {
+  const _ArrangementSourceEditor({
+    required this.value,
+    required this.supplier,
+    required this.inventoryItems,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final TextEditingController supplier;
+  final List<YorksV1InventoryItem> inventoryItems;
+  final bool enabled;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.decision == YorksV1ArrangementDecision.unavailable) {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        child: Text(
+          YorksV1ArrangementStrings.noSourceRequired.primary,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SourcePicker(
+          value: value,
+          enabled: enabled,
+          compact: true,
+          onChanged: onChanged,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _InventoryOrSupplierField(
+          value: value,
+          supplier: supplier,
+          inventoryItems: inventoryItems,
+          enabled: enabled,
+          compact: true,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
 }
 
 class _MobileArrangementEditor extends StatelessWidget {
@@ -845,11 +1150,13 @@ class _DecisionPicker extends StatelessWidget {
     required this.value,
     required this.enabled,
     required this.onChanged,
+    this.compact = false,
   });
 
   final _EditableArrangementLine value;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) =>
@@ -857,7 +1164,15 @@ class _DecisionPicker extends StatelessWidget {
         initialValue: value.decision,
         isExpanded: true,
         decoration: InputDecoration(
-          labelText: YorksV1ArrangementStrings.decision.primary,
+          labelText: compact
+              ? null
+              : YorksV1ArrangementStrings.decision.primary,
+          contentPadding: compact
+              ? const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                )
+              : null,
         ),
         items: [
           for (final decision in YorksV1ArrangementDecision.values)
@@ -896,11 +1211,13 @@ class _SourcePicker extends StatelessWidget {
     required this.value,
     required this.enabled,
     required this.onChanged,
+    this.compact = false,
   });
 
   final _EditableArrangementLine value;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -917,7 +1234,13 @@ class _SourcePicker extends StatelessWidget {
       initialValue: value.source,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: YorksV1ArrangementStrings.source.primary,
+        labelText: compact ? null : YorksV1ArrangementStrings.source.primary,
+        contentPadding: compact
+            ? const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              )
+            : null,
       ),
       items: [
         for (final source in YorksV1ArrangementSource.values)
@@ -952,11 +1275,13 @@ class _QuantityField extends StatelessWidget {
     required this.value,
     required this.controller,
     required this.enabled,
+    this.compact = false,
   });
 
   final _EditableArrangementLine value;
   final TextEditingController controller;
   final bool enabled;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -970,7 +1295,13 @@ class _QuantityField extends StatelessWidget {
           enabled && value.decision != YorksV1ArrangementDecision.unavailable,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
-        labelText: YorksV1ArrangementStrings.arranged.primary,
+        labelText: compact ? null : YorksV1ArrangementStrings.arranged.primary,
+        contentPadding: compact
+            ? const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              )
+            : null,
       ),
     ),
   );
@@ -981,11 +1312,13 @@ class _UnitCostField extends StatelessWidget {
     required this.value,
     required this.controller,
     required this.enabled,
+    this.compact = false,
   });
 
   final _EditableArrangementLine value;
   final TextEditingController controller;
   final bool enabled;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -999,7 +1332,13 @@ class _UnitCostField extends StatelessWidget {
           enabled && value.decision != YorksV1ArrangementDecision.unavailable,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
-        labelText: YorksV1ArrangementStrings.unitCost.primary,
+        labelText: compact ? null : YorksV1ArrangementStrings.unitCost.primary,
+        contentPadding: compact
+            ? const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              )
+            : null,
       ),
     ),
   );
@@ -1012,6 +1351,7 @@ class _InventoryOrSupplierField extends StatelessWidget {
     required this.inventoryItems,
     required this.enabled,
     required this.onChanged,
+    this.compact = false,
   });
 
   final _EditableArrangementLine value;
@@ -1019,6 +1359,7 @@ class _InventoryOrSupplierField extends StatelessWidget {
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1038,7 +1379,15 @@ class _InventoryOrSupplierField extends StatelessWidget {
           controller: supplier,
           enabled: enabled,
           decoration: InputDecoration(
-            labelText: YorksV1ArrangementStrings.supplierName.primary,
+            labelText: compact
+                ? null
+                : YorksV1ArrangementStrings.supplierName.primary,
+            contentPadding: compact
+                ? const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  )
+                : null,
           ),
         ),
       );
@@ -1052,7 +1401,15 @@ class _InventoryOrSupplierField extends StatelessWidget {
             : null,
         isExpanded: true,
         decoration: InputDecoration(
-          labelText: YorksV1ArrangementStrings.warehouseItem.primary,
+          labelText: compact
+              ? null
+              : YorksV1ArrangementStrings.warehouseItem.primary,
+          contentPadding: compact
+              ? const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                )
+              : null,
         ),
         items: [
           for (final item in inventoryItems)
@@ -1537,12 +1894,16 @@ class _ActiveText extends StatelessWidget {
     required this.language,
     this.style,
     this.center = false,
+    this.maxLines,
+    this.overflow,
   });
 
   final TranslatableString copy;
   final AppLanguage language;
   final TextStyle? style;
   final bool center;
+  final int? maxLines;
+  final TextOverflow? overflow;
 
   @override
   Widget build(BuildContext context) => Text(
@@ -1550,5 +1911,7 @@ class _ActiveText extends StatelessWidget {
     textAlign: center ? TextAlign.center : null,
     textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
     style: style,
+    maxLines: maxLines,
+    overflow: overflow,
   );
 }

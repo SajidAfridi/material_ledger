@@ -9,6 +9,24 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'پروکیورمنٹ انتظام',
     hi: 'खरीद व्यवस्था',
   );
+  static const arrangeMaterialRequest = TranslatableString(
+    en: 'Arrange Material Request',
+    ar: 'ترتيب طلب المواد',
+    ur: 'مواد کی درخواست ترتیب دیں',
+    hi: 'सामग्री अनुरोध व्यवस्थित करें',
+  );
+  static const arrangeMaterialRequestDescription = TranslatableString(
+    en: 'Supply available lines or clearly mark what cannot be provided.',
+    ar: 'وفّر البنود المتاحة أو وضّح بوضوح ما لا يمكن توفيره.',
+    ur: 'دستیاب لائنیں فراہم کریں یا واضح طور پر نشان زد کریں جو فراہم نہیں ہو سکتیں۔',
+    hi: 'उपलब्ध पंक्तियों की आपूर्ति करें या स्पष्ट रूप से चिह्नित करें कि क्या उपलब्ध नहीं कराया जा सकता।',
+  );
+  static const quantityRule = TranslatableString(
+    en: 'Arranged quantity can never exceed the requested quantity. Warehouse quantities are also checked against current available inventory.',
+    ar: 'لا يمكن أن تتجاوز الكمية المرتبة الكمية المطلوبة. كما يتم التحقق من كميات المستودع مقابل المخزون المتاح الحالي.',
+    ur: 'ترتیب شدہ مقدار کبھی مطلوبہ مقدار سے زیادہ نہیں ہو سکتی۔ گودام کی مقدار بھی موجودہ دستیاب انوینٹری کے خلاف چیک ہوتی ہے۔',
+    hi: 'व्यवस्थित मात्रा अनुरोधित मात्रा से अधिक नहीं हो सकती। गोदाम की मात्राओं की वर्तमान उपलब्ध इन्वेंटरी से भी जांच होती है।',
+  );
   static const arrangementHistory = TranslatableString(
     en: 'Arrangement history',
     ar: 'سجل الترتيبات',
@@ -22,7 +40,7 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'व्यवस्था शुरू करें',
   );
   static const saveForApproval = TranslatableString(
-    en: 'Send for Project Engineer approval',
+    en: 'Send to Project Engineer',
     ar: 'إرسال لموافقة مهندس المشروع',
     ur: 'پروجیکٹ انجینئر کی منظوری کے لیے بھیجیں',
     hi: 'प्रोजेक्ट इंजीनियर की मंजूरी के लिए भेजें',
@@ -56,6 +74,18 @@ abstract final class YorksV1ArrangementStrings {
     ar: 'المطلوب',
     ur: 'درخواست کردہ',
     hi: 'अनुरोधित',
+  );
+  static const requestedItem = TranslatableString(
+    en: 'Requested item',
+    ar: 'البند المطلوب',
+    ur: 'درخواست کردہ آئٹم',
+    hi: 'अनुरोधित आइटम',
+  );
+  static const supplierSource = TranslatableString(
+    en: 'Supplier / source',
+    ar: 'المورد / المصدر',
+    ur: 'سپلائر / ذریعہ',
+    hi: 'आपूर्तिकर्ता / स्रोत',
   );
   static const rowNumber = TranslatableString(
     en: 'R No',
@@ -130,10 +160,16 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'इकाई लागत',
   );
   static const procurementNote = TranslatableString(
-    en: 'Procurement note',
-    ar: 'ملاحظة المشتريات',
-    ur: 'پروکیورمنٹ نوٹ',
-    hi: 'खरीद टिप्पणी',
+    en: 'Procurement Note optional',
+    ar: 'ملاحظة المشتريات (اختياري)',
+    ur: 'پروکیورمنٹ نوٹ (اختیاری)',
+    hi: 'खरीद टिप्पणी (वैकल्पिक)',
+  );
+  static const procurementNoteHint = TranslatableString(
+    en: 'Overall availability, alternatives or expected delivery information',
+    ar: 'التوفر العام أو البدائل أو معلومات التسليم المتوقعة',
+    ur: 'مجموعی دستیابی، متبادل یا متوقع ڈیلیوری کی معلومات',
+    hi: 'कुल उपलब्धता, विकल्प या अपेक्षित डिलीवरी जानकारी',
   );
   static const noSourceRequired = TranslatableString(
     en: 'No source required',

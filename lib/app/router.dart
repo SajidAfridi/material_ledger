@@ -870,6 +870,7 @@ GoRouter createAppRouter({
           state.pageKey,
           YorksV1ArrangementScreen(
             requestId: state.pathParameters['requestId'] ?? '',
+            onCompleted: () => context.pop(),
           ),
         ),
       ),

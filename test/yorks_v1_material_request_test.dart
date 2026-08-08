@@ -851,14 +851,21 @@ void main() {
           brandOrigin: 'UAE',
           quantity: '2',
           unit: 'Nos',
+          unitCost: '110.29',
+          totalCost: '220.58',
+          currencyCode: 'AED',
         ),
       ],
     );
 
-    final bytes = await YorksV1MaterialRequestDocumentService().buildPdf(
-      request,
-      PdfPageFormat.a4,
-    );
+    final bytes = await YorksV1MaterialRequestDocumentService()
+        .buildDocumentPdf(
+          YorksV1MaterialRequestDocumentModel(
+            request: request,
+            receiptStatuses: const {'line-1': 'Cannot Provide Now'},
+          ),
+          PdfPageFormat.a4,
+        );
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
