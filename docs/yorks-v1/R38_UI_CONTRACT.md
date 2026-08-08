@@ -316,6 +316,12 @@ an MR source or direct BOQ export source.
 Common remains a real independent BOQ scope for materials genuinely shared by
 the project. Every physical building remains its own independent BOQ scope.
 
+Production behavior exception approved 8 August 2026: a custom folder name is
+created across Common and every active building so the folder structure stays
+consistent. Each resulting folder remains an independent worksheet; no row,
+quantity, import, export or MR source is copied across scopes. The folder-name
+prompt must make that consequence clear without changing the R38 layout.
+
 ### Scope rail
 
 - Container: full content width, 5px padding, 8px gap, 14px radius,

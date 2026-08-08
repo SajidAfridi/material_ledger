@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../constants/constants.dart';
 
-/// The Yorks Air Conditioning & Ref. emblem, presented as a clean white circular
-/// badge so the blue-on-white logo reads on any surface — the dark/blue splash &
-/// login panels as well as the near-white nav rail. Falls back to a brand
-/// monogram tile if the asset ever fails to load.
+/// The approved golden Yorks AC. & Ref. seal, presented as a clean white
+/// circular badge so it reads on dark/blue splash and login panels as well as
+/// the near-white navigation rail. Falls back to a brand mark if the asset
+/// ever fails to load.
 class BrandLogo extends StatelessWidget {
   const BrandLogo({super.key, this.size = 40, this.shadow = true});
 

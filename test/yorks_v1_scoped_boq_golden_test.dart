@@ -12,7 +12,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Deterministic R38 evidence: All is a project overview, while each actual
+/// Deterministic R38 evidence: Overview is project summary, while each actual
 /// Common/building BOQ remains an independent workspace behind its own scope.
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -21,9 +21,7 @@ void main() {
     (name: 'scoped_boq_overview_desktop.png', size: const Size(1366, 768)),
     (name: 'scoped_boq_overview_mobile.png', size: const Size(360, 800)),
   ]) {
-    testWidgets('R38 scoped BOQ All overview — ${evidence.size}', (
-      tester,
-    ) async {
+    testWidgets('R38 scoped BOQ Overview — ${evidence.size}', (tester) async {
       tester.view.physicalSize = evidence.size;
       tester.view.devicePixelRatio = 1;
       addTearDown(() {
@@ -55,7 +53,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
-      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Overview'), findsOneWidget);
       expect(find.text('Common / All Buildings'), findsOneWidget);
       expect(find.text('DF3W'), findsOneWidget);
       expect(find.text('DF4W'), findsOneWidget);

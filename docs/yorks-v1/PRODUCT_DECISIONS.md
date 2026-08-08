@@ -121,13 +121,17 @@ Project lifecycle:
 
 Every project has physical Building scopes plus one explicit immutable Common
 scope. Each real scope owns its own BOQ groups, columns, rows, imports,
-documents, exports and BOQ-derived Material Request sources. The UI's **All**
+documents, exports and BOQ-derived Material Request sources. The UI's
+**Overview**
 option is a read-only project overview, never a persisted scope, editable
 worksheet, export target or MR source. It summarizes every scope without
 flattening building rows into an ambiguous editable table.
 
-Existing pre-R38 project-level BOQ groups remain scope-less and visible in All
-as `legacy/unassigned`. They are not copied or inferred into Common/buildings.
+Existing pre-R38 project-level BOQ groups remain scope-less and visible in
+Overview
+as `legacy/unassigned`. Their folder name may be represented by independent
+empty folder shells in Common/buildings, but their rows and columns are not
+copied or inferred into any scope.
 An authorized engineer must explicitly version-map one such group to one active
 real scope; submitted history or draft sources for a different scope block that
 mapping and require reconciliation. Every submitted MR selects exactly one
@@ -165,9 +169,12 @@ workflow. Existing progress data remains historical and isolated.
 
 - Every Common/building scope starts with its own approved 29 ordered BOQ
   groups. Admin-configured template changes affect new scopes only.
-- Engineers may add custom groups only to the selected real scope; a custom
-  group never appears in a sibling building/Common scope.
-- All is an overview that shows per-scope folder, started-folder and material
+- A custom folder name is a project-wide structural definition. Creating it
+  from one real scope creates an independent empty group with the same name in
+  Common and every active building, and future scopes receive the name too.
+  Rows, columns, quantities, imports, exports and MR sources never copy between
+  those sibling groups.
+- Overview shows per-scope folder, started-folder and material
   counts. It does not merge rows, permit worksheet mutation or serve as an MR
   source.
 - Columns and rows are ordered records with optimistic versions.

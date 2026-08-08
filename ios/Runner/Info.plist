@@ -7,9 +7,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Yorks GodownPro</string>
+	<string>Yorks AC. &amp; Ref.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Yorks GodownPro uses Face ID to unlock the app and protect your data.</string>
+	<string>Yorks AC. &amp; Ref. uses Face ID to unlock the app and protect your data.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

@@ -33,10 +33,10 @@ abstract final class YorksV1BoqStrings {
     hi: 'BOQ स्कोप',
   );
   static const allScopes = TranslatableString(
-    en: 'All',
-    ar: 'الكل',
-    ur: 'سب',
-    hi: 'सभी',
+    en: 'Overview',
+    ar: 'نظرة عامة',
+    ur: 'جائزہ',
+    hi: 'अवलोकन',
   );
   static const allScopesDescription = TranslatableString(
     en: 'Read-only aggregate of Common and every building. Choose one scope to edit, export or create a material request source.',
@@ -117,10 +117,10 @@ abstract final class YorksV1BoqStrings {
     hi: 'नया समूह',
   );
   static const customGroupName = TranslatableString(
-    en: 'Custom group name',
-    ar: 'اسم المجموعة المخصصة',
-    ur: 'کسٹم گروپ کا نام',
-    hi: 'कस्टम समूह का नाम',
+    en: 'Folder name (created in every building)',
+    ar: 'اسم المجلد (يُنشأ في كل مبنى)',
+    ur: 'فولڈر کا نام (ہر عمارت میں بنایا جائے گا)',
+    hi: 'फ़ोल्डर का नाम (हर बिल्डिंग में बनाया जाएगा)',
   );
   static const noGroups = TranslatableString(
     en: 'No BOQ worksheets are available for this project.',

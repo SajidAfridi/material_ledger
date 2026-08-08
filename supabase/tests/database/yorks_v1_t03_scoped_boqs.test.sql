@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(23);
+select plan(26);
 
 select ok(
   has_function_privilege(
@@ -156,7 +156,7 @@ select lives_ok(
     ),
     'a3000000-0000-4000-8000-000000000003'::uuid
   )$$,
-  'Engineer creates a custom folder in exactly one selected building scope'
+  'Engineer creates one project-wide folder definition from a selected scope'
 );
 
 set local role postgres;
@@ -166,6 +166,18 @@ set custom_group_id = (
   select id from public.v1_boq_groups
   where project_id = v1_t03_targets.project_id
     and name = 'T03 DF3W custom folder'
+    and scope_id = v1_t03_targets.df3w_scope_id
+);
+
+select is(
+  (
+    select count(*) from public.v1_boq_groups
+    where project_id = (select project_id from v1_t03_targets)
+      and name = 'T03 DF3W custom folder'
+      and not is_archived
+  ),
+  3::bigint,
+  'The custom folder name is available independently in Common and every building'
 );
 
 select is(
@@ -174,7 +186,32 @@ select is(
     where id = (select custom_group_id from v1_t03_targets)
   ),
   (select df3w_scope_id from v1_t03_targets),
-  'Custom BOQ folders are owned by their selected building only'
+  'The command still returns the selected building folder for repository compatibility'
+);
+
+select is(
+  (
+    select count(*)
+    from public.v1_boq_rows row_record
+    join public.v1_boq_groups group_record on group_record.id = row_record.group_id
+    where group_record.project_id = (select project_id from v1_t03_targets)
+      and group_record.name = 'T03 DF3W custom folder'
+  ),
+  0::bigint,
+  'Project-wide folder creation never copies material rows between scopes'
+);
+
+select is(
+  public.v1_create_boq_group(
+    jsonb_build_object(
+      'project_id', (select project_id from v1_t03_targets),
+      'scope_id', (select df3w_scope_id from v1_t03_targets),
+      'name', 'T03 DF3W custom folder'
+    ),
+    'a3000000-0000-4000-8000-000000000003'::uuid
+  ) ->> 'id',
+  (select custom_group_id::text from v1_t03_targets),
+  'Project-wide custom folder creation is idempotent for a command retry'
 );
 
 set local role authenticated;

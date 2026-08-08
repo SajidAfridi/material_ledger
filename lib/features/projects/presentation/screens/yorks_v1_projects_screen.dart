@@ -2766,13 +2766,20 @@ class _ProjectWorkspaceTabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Colors.transparent,
+    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     child: InkWell(
       onTap: onPressed,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      hoverColor: AppColors.onPrimary.withValues(alpha: .07),
+      focusColor: AppColors.onPrimary.withValues(alpha: .10),
+      highlightColor: AppColors.onPrimary.withValues(alpha: .06),
+      splashColor: AppColors.onPrimary.withValues(alpha: .08),
       child: Container(
         constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         alignment: Alignment.center,
         decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           border: Border(
             bottom: BorderSide(
               color: selected

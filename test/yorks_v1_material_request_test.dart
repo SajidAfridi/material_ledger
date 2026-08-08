@@ -862,6 +862,10 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    expect(
+      YorksV1CompanyDocumentStrings.legalName.ar,
+      'يوركس للتكييف والتبريد - ذ.م.م - ش.ش.و',
+    );
     if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
       await Directory('output/pdf').create(recursive: true);
       await File(

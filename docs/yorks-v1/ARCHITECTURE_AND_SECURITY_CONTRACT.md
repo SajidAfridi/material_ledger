@@ -96,9 +96,12 @@ names, editable metadata and client-provided role strings are never authority.
   appropriate and return only authorized project data.
 - Procurement project/BOQ views are read-only and exclude unauthorized
   commercial fields.
-- `v1_list_boq_groups_for_scope(project, null)` is the All overview projection;
+- `v1_list_boq_groups_for_scope(project, null)` is the Overview projection;
   null is not a database scope. A non-null scope returns only that independent
   Common/building workbook set. The compatibility list RPC returns Common only.
+- Custom BOQ folder names are project-wide definitions materialized as one
+  independent empty group per active real scope. The read path never merges or
+  copies their rows, columns, quantities, exports or MR sources.
 - Draft MR queries are creator/Admin-only.
 - Submitted operational data uses role-specific secure views or RPC-returned
   records.

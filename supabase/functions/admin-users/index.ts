@@ -25,6 +25,11 @@ import {
 } from './commercial_capabilities.ts'
 import { legacyShellCaps } from './legacy_caps.ts'
 import {
+  defaultCapsForRoles,
+  provisionableRole,
+  provisionableRoles,
+} from './role_claims.ts'
+import {
   isActiveAuthUser,
   isLastActiveExactAdmin,
   type AuthUserForAdminGuard,
@@ -42,39 +47,7 @@ const cors = {
 // `legacy_caps.ts`; no caller-provided array is copied into Auth metadata.
 // V1 commercial authorization is separately resolved by protected database
 // capabilities, not this legacy-shell compatibility claim.
-const DEFAULT_CAPS: Record<string, string[]> = {
-  admin: ['viewCommercials', 'salary', 'finance', 'rentals', 'writeRentals', 'people',
-          'writePeople', 'goods', 'approveLeave'],
-  procurement: ['viewCommercials', 'rentals', 'writeRentals', 'people', 'writePeople',
-                'goods', 'approveLeave'],
-  project_engineer: [],
-  site_engineer: [],
-  senior_mechanical_engineer: [],
-  project_manager: [],
-}
-
-const PROVISIONABLE_ROLES = new Set(Object.keys(DEFAULT_CAPS))
 const LEGACY_ENGINEER_ROLE = 'engineer'
-
-function provisionableRole(value: unknown): string | null {
-  if (typeof value !== 'string' || !PROVISIONABLE_ROLES.has(value)) return null
-  return value
-}
-
-function provisionableRoles(value: unknown, primary: string): string[] | null {
-  const requested = Array.isArray(value) ? value : [primary]
-  const roles = requested
-    .filter((role): role is string => typeof role === 'string')
-    .filter((role, index, all) => all.indexOf(role) === index)
-  if (roles.length === 0 || roles.some((role) => !PROVISIONABLE_ROLES.has(role))) {
-    return null
-  }
-  return [primary, ...roles.filter((role) => role !== primary)]
-}
-
-function defaultCapsForRoles(roles: readonly string[]): string[] {
-  return [...new Set(roles.flatMap((role) => DEFAULT_CAPS[role] ?? []))]
-}
 
 // A deliberately quarantined compatibility role. It is never accepted by the
 // normal V1 command path and the V1 auth-profile trigger leaves it without a

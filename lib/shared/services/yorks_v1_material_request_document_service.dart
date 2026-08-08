@@ -12,6 +12,7 @@ import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_material_request_strings.dart';
 import 'yorks_v1_boq_workbook_service.dart';
+import 'yorks_v1_pdf_arabic.dart';
 
 /// Produces a controlled MR export from the role-safe projection already held
 /// by the caller. Commercial fields are included only when the server supplied
@@ -369,8 +370,10 @@ class YorksV1MaterialRequestDocumentService {
         pw.Expanded(
           flex: 10,
           child: pw.Text(
-            YorksV1MaterialRequestStrings.companyLegalName.ar,
-            textDirection: pw.TextDirection.rtl,
+            yorksV1ShapeArabicForPdf(
+              YorksV1CompanyDocumentStrings.legalName.ar,
+            ),
+            textDirection: pw.TextDirection.ltr,
             textAlign: pw.TextAlign.right,
             style: const pw.TextStyle(fontSize: 7.4),
           ),
@@ -587,8 +590,6 @@ class YorksV1MaterialRequestDocumentService {
             ),
           ],
         ),
-        pw.SizedBox(height: 5 * _mm),
-        _companyContact(),
       ],
     );
   }
@@ -625,36 +626,6 @@ class YorksV1MaterialRequestDocumentService {
 
   static pw.Widget _approvalText(String label, String value) =>
       pw.Text('$label: $value', style: const pw.TextStyle(fontSize: 6.6));
-
-  static pw.Widget _companyContact() => pw.Container(
-    width: double.infinity,
-    padding: pw.EdgeInsets.only(top: 2.4 * _mm),
-    decoration: pw.BoxDecoration(
-      border: pw.Border(top: pw.BorderSide(color: _documentGrid, width: .45)),
-    ),
-    child: pw.Column(
-      children: [
-        pw.Text(
-          YorksV1CompanyDocumentStrings.contactLine.ar,
-          textDirection: pw.TextDirection.rtl,
-          textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 6.2, lineSpacing: 1.8),
-        ),
-        pw.SizedBox(height: 1.2 * _mm),
-        pw.Text(
-          YorksV1CompanyDocumentStrings.contactLine.en,
-          textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 6.2, lineSpacing: 1.8),
-        ),
-        pw.SizedBox(height: 1.2 * _mm),
-        pw.Text(
-          'E-mail: ${YorksV1CompanyDocumentStrings.email}',
-          textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 6.2),
-        ),
-      ],
-    ),
-  );
 
   static pw.Widget _pageNumber(pw.Context context) => pw.Align(
     alignment: pw.Alignment.centerRight,

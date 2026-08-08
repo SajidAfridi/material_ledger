@@ -70,9 +70,15 @@ Legacy role handling:
 
 - Create ordered groups/columns/rows for new V1 projects transactionally.
 - R38 adds `boq_groups.scope_id` and materialises the frozen 29 folders for
-  every newly created Common/building scope. It never creates an `All` scope.
+  every newly created Common/building scope. It never creates an `Overview`
+  scope.
+- The 8 August folder-structure correction additively materialises each active
+  custom folder name as an empty sibling group in Common and every active
+  building, and seeds those names into future scopes. Existing groups and all
+  child rows/columns remain untouched; rollback disables the replacement
+  creation/seed function but does not delete the additive empty shells.
 - Existing project-level groups remain `scope_id = null`, are visible only in
-  the All overview as legacy/unassigned, and require an explicit audited,
+  the Overview summary as legacy/unassigned, and require an explicit audited,
   version-checked mapping to one active real scope. Do not copy, infer or
   reinterpret rows. Mapping is blocked where submitted/differently-scoped MR
   history would become ambiguous. An explicit default-folder mapping may only

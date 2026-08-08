@@ -88,7 +88,7 @@ tables/functions.
 | `v1_archive_project` | Admin only | project/version, open MR check | yes | irreversible safe archive state, retained history, audit |
 | `v1_set_project_state` | Project Engineer/Admin by transition | project/version | yes | state, owner/action, audit/notification |
 | `v1_assign_project_member` | Project Engineer/Admin; creation exception for Site Engineer | project/member/version | yes | close prior membership, add membership, audit/notification |
-| `v1_create_boq_group` | BOQ-authorized Engineer/Admin | project/scope/version | yes | custom group in one real Common/building scope, audit |
+| `v1_create_boq_group` | BOQ-authorized Engineer/Admin | project/origin scope/name | yes | same custom folder name materialized as independent empty groups in every active real scope; origin projection returned; one audit; no rows copied |
 | `v1_assign_legacy_boq_group_scope` | BOQ-authorized Engineer/Admin | group/version | yes | explicit legacy group-to-real-scope reconciliation, audit; submitted/conflicting history rejected |
 | `v1_submit_material_request` | Assigned Engineer draft creator | draft/project/counter/version | yes | number, snapshots, state, owner, audit/notification |
 | `v1_begin_arrangement` | Procurement/Admin | MR/version | yes | current arrangement work version, `arranging`, audit |

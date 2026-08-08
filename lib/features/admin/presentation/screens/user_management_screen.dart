@@ -1228,11 +1228,10 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
     );
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-      ),
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -1396,17 +1395,32 @@ class _ManageUserSheet extends ConsumerStatefulWidget {
     return showDialog<void>(
       context: context,
       barrierColor: AppColors.scrim.withValues(alpha: .38),
-      builder: (_) => Dialog(
-        backgroundColor: AppColors.surfaceContainerLowest,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 704),
-          child: _ManageUserSheet(userId: user.id),
-        ),
-      ),
+      builder: (dialogContext) {
+        final viewport = MediaQuery.sizeOf(dialogContext);
+        final compact = viewport.width < AppSpacing.compactBreakpoint;
+        return Dialog(
+          alignment: compact ? Alignment.bottomCenter : Alignment.center,
+          backgroundColor: AppColors.surfaceContainerLowest,
+          insetPadding: compact
+              ? const EdgeInsets.fromLTRB(8, 48, 8, 0)
+              : const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          shape: RoundedRectangleBorder(
+            borderRadius: compact
+                ? const BorderRadius.vertical(
+                    top: Radius.circular(AppSpacing.radiusXl),
+                  )
+                : BorderRadius.circular(AppSpacing.radiusXl),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 520,
+              maxHeight: viewport.height * .92,
+            ),
+            child: _ManageUserSheet(userId: user.id),
+          ),
+        );
+      },
     );
   }
 
@@ -1853,15 +1867,14 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       });
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-      ),
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xxl),
+          padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1968,7 +1981,15 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                       .toSet(),
                   onPrimaryChanged: _busy
                       ? (_) {}
-                      : (role) => setYorksV1Roles(role, _selectedYorksRoles),
+                      : (role) {
+                          final previousPrimary =
+                              user.yorksV1RoleCache ??
+                              _selectedYorksRoles.first;
+                          final next = {..._selectedYorksRoles}
+                            ..remove(previousPrimary)
+                            ..add(role);
+                          setYorksV1Roles(role, next);
+                        },
                   onAdditionalChanged: _busy
                       ? (_, _) {}
                       : (role, selected) {

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ledger/shared/models/yorks_v1_company_document_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
 import 'package:material_ledger/shared/services/yorks_v1_logistics_document_service.dart';
@@ -102,6 +103,15 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    expect(
+      YorksV1CompanyDocumentStrings.legalName.ar,
+      'يوركس للتكييف والتبريد - ذ.م.م - ش.ش.و',
+    );
+    expect(
+      YorksV1CompanyDocumentStrings.contactLine.en,
+      'Tel.: 02-5509788 - Fax: 02-5509688 - P.O. Box: 4757 - Abu Dhabi - United Arab Emirates',
+    );
+    expect(YorksV1CompanyDocumentStrings.email, 'yorks_sk@yorks.ae');
     if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
       await Directory('output/pdf').create(recursive: true);
       await File(

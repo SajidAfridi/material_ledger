@@ -10,9 +10,15 @@ contact footer, building number and job/contract-prefixed project name recorded
 in [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md).
 
 The approved R38 building-specific BOQ rule adds independent Common and
-per-building worksheets. Its All option is a read-only overview; it is never a
+per-building worksheets. Its Overview option is read-only; it is never a
 persisted scope or cross-building write/MR source. The data-preserving details
 and reconciliation rule are recorded in [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md).
+
+Product-owner change approval on 8 August 2026 makes BOQ folder names a
+project-wide structural definition: creating a custom folder makes an empty
+folder with the same name available in Common and every active building, while
+rows, columns, quantities, imports, exports and MR sources remain independent
+per real scope. Legacy rows are never cloned or inferred by this rule.
 
 ## Approved source artifacts
 
@@ -64,7 +70,7 @@ backward visual or workflow compatibility.
 | Request exception path | Plan/over-plan/substitution approval distinction | BOQ/import/custom MR rows use one arrangement/approval path |
 | MR delivery fields | Required-on-site date and explicit destination | Project plus Building/Common scope and Urgent/Normal/Scheduled; Scheduled requires a date |
 | Standard rows | One frozen ten-column material grid | Dynamic BOQ worksheet; seven-column controlled MR output |
-| BOQ ownership | One combined editable project plan | Independent Common/building BOQs; All is read-only overview only |
+| BOQ ownership | One combined editable project plan | Independent Common/building BOQs; Overview is read-only summary only |
 | Material events | Supplier/warehouse/site directions modeled separately | Dispatch plus site receipt review in V1; supplier-receipt/PO suite deferred |
 | Accounts | Outside V7 transformation but existing routes could remain | Explicitly unavailable in the V1 experience |
 

@@ -20,7 +20,7 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | ID | Scenario | Primary automated/manual evidence |
 |---|---|---|
 | AT-01 | Site Engineer creates a project, assigns a Project Engineer and multiple buildings; Procurement cannot create/edit it. | RPC/RLS/route/widget/integration |
-| AT-02 | New project receives 29 independent default BOQ groups for Common and each physical building; a custom group belongs to one selected scope. | database/repository/widget |
+| AT-02 | New project receives 29 independent default BOQ groups for Common and each physical building; creating a custom folder name materializes an independent empty sibling in every real scope without copying rows. | database/repository/widget |
 | AT-03 | MSD worksheet imports title, seven columns and all rows into the direct-edit grid. | workbook fixture/integration |
 | AT-04 | User edits/deletes a cell, row and non-protected column; export reproduces the changed worksheet. | controller/workbook round-trip |
 | AT-05 | Similar Row inserts directly below and preserves configured fields with sequential S:No. | unit/widget |
@@ -45,10 +45,11 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | AT-24 | Duct Sizer and ESP Calculator remain available. | widget/smoke |
 | AT-25 | RLS negatives prove Procurement cannot mutate project/BOQ, unrelated assigned-role Engineers cannot access another project, and global Engineer roles receive no commercial/inventory/Admin authority. | six-role pgTAP/API |
 
-The BOQ **All** option is a read-only overview, not the Common scope and not a
+The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
-29-folder creation, All aggregation, custom-folder isolation, Procurement
-write denial, legacy assignment idempotency and save/submit MR scope negatives.
+29-folder creation, Overview aggregation, project-wide custom-folder naming with
+row isolation, Procurement write denial, legacy assignment idempotency and
+save/submit MR scope negatives.
 
 ## 3. Additional production gates
 

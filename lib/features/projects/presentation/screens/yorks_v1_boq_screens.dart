@@ -293,11 +293,9 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
             ),
           );
       ref.invalidate(yorksV1BoqGroupsProvider(projectId));
-      ref.invalidate(
-        yorksV1ScopedBoqGroupsProvider(
-          YorksV1BoqScopeQuery(projectId: projectId, scopeId: scopeId),
-        ),
-      );
+      // The server creates this folder definition for every active scope, so
+      // clear all family entries rather than leaving sibling caches stale.
+      ref.invalidate(yorksV1ScopedBoqGroupsProvider);
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -631,7 +629,7 @@ class _GroupsBody extends StatelessWidget {
   }
 }
 
-/// The All selector is deliberately an overview rather than a flattened
+/// The Overview selector is deliberately a summary rather than a flattened
 /// worksheet. It lets an engineer assess every independent scope at once
 /// without creating an ambiguous cross-building edit or MR source.
 class _BoqScopeOverview extends StatelessWidget {

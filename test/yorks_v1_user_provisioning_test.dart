@@ -157,6 +157,47 @@ void main() {
       },
     );
 
+    test('sends a valid Senior Mechanical Engineer update command', () async {
+      final commands = <Map<String, dynamic>>[];
+      final container = await connectedContainer(
+        yorksV1Foundation: true,
+        commands: commands,
+      );
+      final notifier = container.read(usersProvider.notifier);
+      final user = await notifier.createYorksV1User(
+        fullName: 'Noor Zaman',
+        email: 'noor@yorks.ae',
+        role: YorksV1Role.projectEngineer,
+        password: 'temporary-password',
+      );
+      commands.clear();
+
+      final changed = await notifier.setYorksV1Role(
+        user.id,
+        YorksV1Role.seniorMechanicalEngineer,
+        roles: const [
+          YorksV1Role.seniorMechanicalEngineer,
+          YorksV1Role.projectEngineer,
+        ],
+      );
+
+      expect(changed, true);
+      expect(commands.single, containsPair('action', 'updateClaims'));
+      expect(commands.single, containsPair('appUserId', user.id));
+      expect(
+        commands.single,
+        containsPair('role', 'senior_mechanical_engineer'),
+      );
+      expect(commands.single['roles'], [
+        'senior_mechanical_engineer',
+        'project_engineer',
+      ]);
+      expect(
+        Uuid.isValidUUID(fromString: commands.single['idempotencyKey']),
+        isTrue,
+      );
+    });
+
     test(
       'reuses an exact create command after a lost response retry',
       () async {
@@ -342,6 +383,63 @@ void main() {
         expect(find.text('Procurement'), findsOneWidget);
         expect(find.text('Admin'), findsOneWidget);
         expect(find.text('Engineer'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'edit-user primary dropdown selects Senior Mechanical Engineer',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            yorksV1UserProvisioningEnabledProvider.overrideWithValue(true),
+          ],
+        );
+        addTearDown(container.dispose);
+        await container
+            .read(usersProvider.notifier)
+            .createYorksV1User(
+              fullName: 'Noor Zaman Dropdown',
+              email: 'noor.dropdown@yorks.ae',
+              role: YorksV1Role.projectEngineer,
+              password: 'temporary-password',
+            );
+        tester.view.physicalSize = const Size(700, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              theme: AppTheme.light,
+              home: const UserManagementScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Noor Zaman Dropdown'), findsOneWidget);
+        await tester.ensureVisible(find.text('Noor Zaman Dropdown'));
+        await tester.tap(find.text('Noor Zaman Dropdown'));
+        await tester.pumpAndSettle();
+        expect(find.text('Edit User'), findsOneWidget);
+
+        await tester.tap(find.byType(DropdownButtonFormField<YorksV1Role>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Senior Mechanical Engineer').last);
+        await tester.pumpAndSettle();
+
+        final updated = container
+            .read(usersProvider)
+            .singleWhere((user) => user.email == 'noor.dropdown@yorks.ae');
+        expect(updated.yorksV1RoleCache, YorksV1Role.seniorMechanicalEngineer);
+        expect(updated.yorksV1Roles, [YorksV1Role.seniorMechanicalEngineer]);
+        expect(tester.takeException(), isNull);
       },
     );
   });

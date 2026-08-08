@@ -330,6 +330,12 @@ select is(
     select display_order from public.v1_boq_groups
     where project_id = (select id from public.v1_projects where project_ref = 'B3-BOQ-001')
       and name = 'Project-specific Dampers'
+      and scope_id = (
+        select scope.id from public.v1_project_scopes scope
+        join public.v1_projects project on project.id = scope.project_id
+        where project.project_ref = 'B3-BOQ-001'
+          and scope.scope_kind = 'common'
+      )
   ),
   30,
   'Custom group is ordered after the frozen 29 defaults'
@@ -341,6 +347,12 @@ select lives_ok(
       'group_id', (
         select id from public.v1_boq_groups
         where name = 'Project-specific Dampers'
+          and scope_id = (
+            select scope.id from public.v1_project_scopes scope
+            join public.v1_projects project on project.id = scope.project_id
+            where project.project_ref = 'B3-BOQ-001'
+              and scope.scope_kind = 'common'
+          )
       ),
       'expected_version', 1
     ),
