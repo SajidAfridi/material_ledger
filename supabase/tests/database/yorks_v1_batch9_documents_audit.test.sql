@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(30);
+select plan(33);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -15,6 +15,12 @@ select ok(
   and (select relrowsecurity from pg_class
     where oid = 'public.v1_document_upload_intents'::regclass),
   'Batch 9 document, version, link and upload-intent relations enable RLS'
+);
+
+select is(
+  (select file_size_limit from storage.buckets where id = 'yorks-documents'),
+  20971520::bigint,
+  'The private document bucket accepts controlled files up to 20 MiB'
 );
 
 select ok(
@@ -111,6 +117,49 @@ select lives_ok(
     ), '90000000-0000-4000-8000-000000000003'::uuid
   )$$,
   'Project Engineer obtains a scoped operational upload intent'
+);
+
+select lives_ok(
+  $$select public.v1_prepare_document_upload(
+    jsonb_build_object(
+      'project_id', (select project_id from v1_b9_targets),
+      'entity_type', 'project',
+      'entity_id', (select project_id from v1_b9_targets),
+      'document_id', null,
+      'classification', 'operational',
+      'file_name', 'twenty-megabyte-plan.pdf',
+      'mime_type', 'application/pdf',
+      'byte_size', 20971520,
+      'sha256', repeat('b', 64),
+      'origin', 'uploaded',
+      'source_entity_type', null,
+      'source_entity_id', null,
+      'source_revision', null
+    ), '90000000-0000-4000-8000-000000000014'::uuid
+  )$$,
+  'The upload command accepts the documented 20 MiB boundary'
+);
+
+select throws_ok(
+  $$select public.v1_prepare_document_upload(
+    jsonb_build_object(
+      'project_id', (select project_id from v1_b9_targets),
+      'entity_type', 'project',
+      'entity_id', (select project_id from v1_b9_targets),
+      'document_id', null,
+      'classification', 'operational',
+      'file_name', 'oversized-plan.pdf',
+      'mime_type', 'application/pdf',
+      'byte_size', 20971521,
+      'sha256', repeat('c', 64),
+      'origin', 'uploaded',
+      'source_entity_type', null,
+      'source_entity_id', null,
+      'source_revision', null
+    ), '90000000-0000-4000-8000-000000000015'::uuid
+  )$$,
+  '22023', 'V1_DOCUMENT_UPLOAD_PAYLOAD_INVALID',
+  'The upload command rejects a file above 20 MiB'
 );
 
 set local role postgres;

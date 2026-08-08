@@ -8,6 +8,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
@@ -1465,10 +1466,7 @@ String _quantityText(double value) => value == value.truncateToDouble()
     ? value.toInt().toString()
     : value.toString();
 
-String _displayQuantity(String raw) {
-  final parsed = double.tryParse(raw.trim());
-  return parsed == null ? raw : _quantityText(parsed);
-}
+String _displayQuantity(String raw) => yorksV1DisplayQuantity(raw);
 
 String _dateLabel(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';

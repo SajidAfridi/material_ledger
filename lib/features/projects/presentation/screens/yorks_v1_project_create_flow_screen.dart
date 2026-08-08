@@ -684,6 +684,9 @@ class _YorksV1ProjectCreateFlowScreenState
         errors.contains(YorksV1ProjectValidationCode.missingProjectName)) {
       return YorksV1ProjectStrings.requiredField;
     }
+    if (errors.contains(YorksV1ProjectValidationCode.invalidAttachment)) {
+      return YorksV1ProjectStrings.invalidAttachment;
+    }
     return YorksV1ProjectStrings.stageNeedsAttention;
   }
 
@@ -985,7 +988,12 @@ class _YorksV1ProjectCreateFlowScreenState
       if (selected == null || !mounted) return;
       await _addSelectedAttachments([selected]);
     } on YorksV1DomainException catch (error) {
-      _showMessage(YorksV1ProjectStrings.errorFor(error.code), error: true);
+      _showMessage(
+        error.code == YorksV1DomainErrorCode.invalidInput
+            ? YorksV1ProjectStrings.invalidAttachment
+            : YorksV1ProjectStrings.errorFor(error.code),
+        error: true,
+      );
     } catch (_) {
       _showMessage(
         YorksV1ProjectStrings.errorFor(
@@ -1045,10 +1053,7 @@ class _YorksV1ProjectCreateFlowScreenState
   }
 
   void _showInvalidAttachmentMessage() {
-    _showMessage(
-      YorksV1ProjectStrings.errorFor(YorksV1DomainErrorCode.invalidInput),
-      error: true,
-    );
+    _showMessage(YorksV1ProjectStrings.invalidAttachment, error: true);
   }
 
   Future<void> _removeAttachmentAt(int index) async {
@@ -2883,7 +2888,7 @@ class _AttachmentsStage extends StatelessWidget {
           )) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
-              YorksV1ProjectStrings.stageNeedsAttention.primary,
+              YorksV1ProjectStrings.invalidAttachment.primary,
               style: AppTypography.bodySmall.copyWith(color: AppColors.error),
             ),
           ],

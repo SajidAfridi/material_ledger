@@ -12,6 +12,7 @@ import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
@@ -1075,7 +1076,9 @@ class _FourColumnTable extends StatelessWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(line.description),
-                subtitle: Text('${line.quantity} ${line.unit}'),
+                subtitle: Text(
+                  '${yorksV1DisplayQuantity(line.quantity)} ${line.unit}',
+                ),
                 leading: Text(line.serialNumber.toString()),
               ),
           ],
@@ -1113,7 +1116,7 @@ class _FourColumnTable extends StatelessWidget {
               children: [
                 _TableCell(line.serialNumber.toString()),
                 _TableCell(line.description),
-                _TableCell(line.quantity),
+                _TableCell(yorksV1DisplayQuantity(line.quantity)),
                 _TableCell(line.unit),
               ],
             ),

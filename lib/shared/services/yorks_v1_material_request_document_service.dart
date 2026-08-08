@@ -11,6 +11,7 @@ import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_material_request_strings.dart';
+import '../models/yorks_v1_quantity.dart';
 import 'yorks_v1_boq_workbook_service.dart';
 import 'yorks_v1_pdf_arabic.dart';
 
@@ -478,7 +479,10 @@ class YorksV1MaterialRequestDocumentService {
       _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
       _descriptionCell(line),
       _tableCell(line.brandOrigin ?? ''),
-      _tableCell(line.quantity, alignment: pw.Alignment.topCenter),
+      _tableCell(
+        yorksV1DisplayQuantity(line.quantity),
+        alignment: pw.Alignment.topCenter,
+      ),
       _tableCell(line.unit),
       if (commercial)
         _tableCell(

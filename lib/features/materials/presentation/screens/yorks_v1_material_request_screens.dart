@@ -26,6 +26,7 @@ import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -2088,7 +2089,7 @@ class _DesktopLinesTable extends StatelessWidget {
             _MrTableCell(
               child: _LineTextField(
                 fieldKey: ValueKey('${line.id}-quantity'),
-                initialValue: line.quantity,
+                initialValue: yorksV1DisplayQuantity(line.quantity),
                 enabled: enabled,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -2341,7 +2342,7 @@ class _FocusedLineEditor extends StatelessWidget {
               child: _LineLabeledField(
                 fieldKey: ValueKey('${line.id}-quantity'),
                 label: YorksV1MaterialRequestStrings.quantity.primary,
-                initialValue: line.quantity,
+                initialValue: yorksV1DisplayQuantity(line.quantity),
                 enabled: enabled,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -3748,11 +3749,11 @@ class _ArrangementApprovalReviewLine extends StatelessWidget {
           ),
           _ArrangementApprovalFact(
             YorksV1ArrangementStrings.requested.primary,
-            '${line.requestedQuantity} ${line.unit}',
+            '${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
           ),
           _ArrangementApprovalFact(
             YorksV1ArrangementStrings.arranged.primary,
-            '${line.arrangedQuantity ?? '0'} ${line.unit}',
+            '${yorksV1DisplayQuantity(line.arrangedQuantity ?? '0')} ${line.unit}',
           ),
           if (line.reason != null && line.reason!.trim().isNotEmpty)
             _ArrangementApprovalFact(
@@ -4748,11 +4749,11 @@ class _ArrangementSummarySurface extends StatelessWidget {
                                         .primary,
                         ),
                         _FormalCell(
-                          '${line.requestedQuantity} ${line.unit}',
+                          '${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
                           alignEnd: true,
                         ),
                         _FormalCell(
-                          '${line.arrangedQuantity ?? '0'} ${line.unit}',
+                          '${yorksV1DisplayQuantity(line.arrangedQuantity ?? '0')} ${line.unit}',
                           alignEnd: true,
                         ),
                       ],

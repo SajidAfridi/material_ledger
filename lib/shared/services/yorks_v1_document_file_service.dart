@@ -35,7 +35,9 @@ class YorksV1SelectedDocument {
   }) {
     final normalizedName = _normalizedFileName(fileName);
     final mimeType = _controlledDocumentMimeType(normalizedName);
-    if (mimeType == null || bytes.isEmpty || bytes.lengthInBytes > _maxBytes) {
+    if (mimeType == null ||
+        bytes.isEmpty ||
+        bytes.lengthInBytes > yorksV1MaxDocumentBytes) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
     return YorksV1SelectedDocument(
@@ -46,7 +48,8 @@ class YorksV1SelectedDocument {
   }
 }
 
-const _maxBytes = 6 * 1024 * 1024;
+/// Maximum size accepted by the client and the protected document backend.
+const yorksV1MaxDocumentBytes = 20 * 1024 * 1024;
 
 String _normalizedFileName(String value) {
   final normalized = value.replaceAll('\\', '/');

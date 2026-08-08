@@ -807,6 +807,12 @@ abstract final class YorksV1ProjectStrings {
     ur: 'اپ لوڈ کے لیے تیار',
     hi: 'अपलोड के लिए तैयार',
   );
+  static const invalidAttachment = TranslatableString(
+    en: 'Choose a PDF, XLSX, DOCX, JPG or PNG file no larger than 20 MB.',
+    ar: 'اختر ملف PDF أو XLSX أو DOCX أو JPG أو PNG لا يزيد حجمه عن 20 ميغابايت.',
+    ur: 'PDF، XLSX، DOCX، JPG یا PNG فائل منتخب کریں جس کا سائز 20 MB سے زیادہ نہ ہو۔',
+    hi: 'PDF, XLSX, DOCX, JPG या PNG फ़ाइल चुनें जिसका आकार 20 MB से अधिक न हो।',
+  );
 
   static const requiredField = TranslatableString(
     en: 'This field is required.',

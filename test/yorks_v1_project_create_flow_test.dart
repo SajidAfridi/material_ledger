@@ -131,6 +131,25 @@ void main() {
     );
   });
 
+  test(
+    'controlled project attachments accept 20 MiB and reject larger files',
+    () {
+      final selected = YorksV1SelectedDocument.checked(
+        fileName: 'issued-drawing.pdf',
+        bytes: Uint8List(yorksV1MaxDocumentBytes),
+      );
+
+      expect(selected.bytes.lengthInBytes, yorksV1MaxDocumentBytes);
+      expect(
+        () => YorksV1SelectedDocument.checked(
+          fileName: 'oversized-drawing.pdf',
+          bytes: Uint8List(yorksV1MaxDocumentBytes + 1),
+        ),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+    },
+  );
+
   testWidgets('attachments choose files directly without metadata fields', (
     tester,
   ) async {

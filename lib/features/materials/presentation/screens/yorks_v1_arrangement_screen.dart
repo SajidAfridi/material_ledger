@@ -8,6 +8,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_arrangement.dart';
 import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
+import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
@@ -644,7 +645,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   void _initializeLineControllers() {
     for (final line in _lines.values) {
       _arrangedQuantities[line.arrangementLineId] = TextEditingController(
-        text: line.arrangedQuantity,
+        text: yorksV1DisplayQuantity(line.arrangedQuantity),
       );
       _unitCosts[line.arrangementLineId] = TextEditingController(
         text: line.unitCost ?? '',
@@ -962,7 +963,7 @@ class _ArrangementTableRow extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
-                    '${line.requestedQuantity} ${line.unit}',
+                    '${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
                     style: AppTypography.labelLarge.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -1115,7 +1116,7 @@ class _MobileArrangementEditor extends StatelessWidget {
           style: AppTypography.titleSmall,
         ),
         Text(
-          '${YorksV1ArrangementStrings.requested.primary}: ${line.requestedQuantity} ${line.unit}',
+          '${YorksV1ArrangementStrings.requested.primary}: ${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
           style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -1534,7 +1535,7 @@ class _ReadOnlyDesktopTable extends StatelessWidget {
               DataCell(Text(line.displayOrder.toString())),
               DataCell(
                 Text(
-                  '${line.description}\n${line.requestedQuantity} ${line.unit}',
+                  '${line.description}\n${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
                 ),
               ),
               DataCell(
@@ -1545,7 +1546,9 @@ class _ReadOnlyDesktopTable extends StatelessWidget {
                 ),
               ),
               DataCell(Text(yorksV1ArrangementSourceCopy(line.source).primary)),
-              DataCell(Text(line.arrangedQuantity ?? '')),
+              DataCell(
+                Text(yorksV1DisplayQuantity(line.arrangedQuantity ?? '')),
+              ),
               DataCell(Text(line.unitCost ?? '')),
               DataCell(
                 Text(
@@ -1583,10 +1586,10 @@ class _ReadOnlyLineCard extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          '${YorksV1ArrangementStrings.requested.primary}: ${line.requestedQuantity} ${line.unit}',
+          '${YorksV1ArrangementStrings.requested.primary}: ${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
         ),
         Text(
-          '${YorksV1ArrangementStrings.arranged.primary}: ${line.arrangedQuantity ?? ''}',
+          '${YorksV1ArrangementStrings.arranged.primary}: ${yorksV1DisplayQuantity(line.arrangedQuantity ?? '')}',
         ),
         if (line.unitCost != null)
           Text(
@@ -1803,7 +1806,9 @@ class _EditableArrangementLine {
           ? YorksV1ArrangementSource.externalSupplier
           : line.source,
       decision: line.decision ?? YorksV1ArrangementDecision.full,
-      arrangedQuantity: line.arrangedQuantity ?? line.requestedQuantity,
+      arrangedQuantity: yorksV1DisplayQuantity(
+        line.arrangedQuantity ?? line.requestedQuantity,
+      ),
       externalSupplier: line.externalSupplier,
       inventoryItemId:
           line.inventoryItemId ??

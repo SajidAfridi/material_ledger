@@ -8,6 +8,7 @@ import '../models/yorks_v1_boq.dart';
 import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_logistics_strings.dart';
+import '../models/yorks_v1_quantity.dart';
 import 'yorks_v1_boq_workbook_service.dart';
 import 'yorks_v1_pdf_arabic.dart';
 
@@ -40,7 +41,7 @@ class YorksV1LogisticsDocumentService {
         [
           line.serialNumber.toString(),
           line.description,
-          line.quantity,
+          yorksV1DisplayQuantity(line.quantity),
           line.unit,
         ],
     ],
@@ -550,7 +551,7 @@ class YorksV1LogisticsDocumentService {
                 _deliveryCell('${index + 1}', alignment: pw.Alignment.center),
                 _deliveryCell(lines[index].description),
                 _deliveryCell(
-                  lines[index].quantity,
+                  yorksV1DisplayQuantity(lines[index].quantity),
                   alignment: pw.Alignment.center,
                 ),
                 _deliveryCell(
