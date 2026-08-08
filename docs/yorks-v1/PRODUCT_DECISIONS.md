@@ -49,8 +49,12 @@ Project Engineer roles approved on 7 August 2026. Trusted commands normalize
 them to Project Engineer workflow authority and allow access to every existing
 project without inserting synthetic membership history. They can approve an MR
 arrangement and generate its Delivery Order, but they do not receive
-Procurement, inventory, commercial, capability-management or user-management
-authority. Their exact claim remains available for display and audit.
+Procurement or inventory authority. Their exact claim remains available for
+display and audit. By product-owner approval on 9 August 2026, Senior
+Mechanical Engineer additionally receives audited User Management and user
+capability-configuration authority. This does not grant that actor direct
+commercial visibility or unrelated Admin modules. Project Manager retains no
+user-management or capability-management authority.
 
 New server audit events retain both the normalized workflow role and the exact
 Auth role. Historical events keep their existing canonical role and are not

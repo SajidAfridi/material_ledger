@@ -328,6 +328,7 @@ bool _isAllowedForRole(
   UserRole role,
   AppUser? user,
   RolePermissions perms,
+  YorksV1Role? yorksV1Role,
 ) {
   // Grantable boundaries resolve through: per-user override → editable role
   // default (Access & Roles matrix) → built-in baseline.
@@ -383,12 +384,14 @@ bool _isAllowedForRole(
   // controls remain Admin-only inside the screen.
   if (path == RoutePaths.adminProjects) return role.usesAdminPanel;
   if (path == RoutePaths.more ||
-      path == RoutePaths.users ||
       path == RoutePaths.accessRoles ||
       path == RoutePaths.dataSync ||
       path == RoutePaths.materialMasters ||
       path == RoutePaths.adminRequests) {
     return role.isAdmin;
+  }
+  if (path == RoutePaths.users) {
+    return yorksV1Role?.canConfigureUsers ?? role.isAdmin;
   }
   if (path == RoutePaths.goodsReceipt) return canReceiveGoods;
   if (path == RoutePaths.finance) {
@@ -602,7 +605,7 @@ GoRouter createAppRouter({
       // Role-based access guard for module routes → Home if not allowed.
       final perms =
           rolePermissions?.call() ?? RolePermissions.fromRoleDefaults();
-      if (!_isAllowedForRole(path, role, user, perms)) {
+      if (!_isAllowedForRole(path, role, user, perms, yorksV1Role)) {
         return RoutePaths.engineerHome;
       }
 

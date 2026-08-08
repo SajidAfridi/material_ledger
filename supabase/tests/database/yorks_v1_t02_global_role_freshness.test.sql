@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(13);
+select plan(17);
 
 select ok(
   public.v1_is_valid_role('project_engineer')
@@ -134,7 +134,55 @@ select is(
   'Senior Mechanical Engineer has no commercial capability by default'
 );
 
+select lives_ok(
+  $$select public.v1_get_user_commercial_capabilities(
+    '10000000-0000-4000-8000-000000000001'::uuid
+  )$$,
+  'Senior Mechanical Engineer can inspect a safe user capability envelope'
+);
+
+select lives_ok(
+  $$select public.v1_set_user_commercial_capability(
+    '{
+      "target_auth_user_id":"10000000-0000-4000-8000-000000000001",
+      "capability":"view_commercials",
+      "is_granted":true,
+      "reason":"Senior user-configuration authorization proof"
+    }'::jsonb,
+    '92000000-0000-4000-8000-000000000003'::uuid
+  )$$,
+  'Senior Mechanical Engineer can configure an allowed user capability'
+);
+
 set local role postgres;
+update auth.users
+   set raw_user_meta_data = raw_user_meta_data ||
+         jsonb_build_object('must_change_password', true),
+       raw_app_meta_data = raw_app_meta_data || jsonb_build_object(
+         '_v1_admin_audit_context',
+         jsonb_build_object(
+           'actor_auth_user_id', '10000000-0000-4000-8000-000000000009',
+           'action', 'password_reset',
+           'idempotency_key', '92000000-0000-4000-8000-000000000004',
+           'request_hash',
+             'abababababababababababababababababababababababababababababababab'
+         )
+       )
+ where id = '10000000-0000-4000-8000-000000000010'::uuid;
+select ok(
+  exists (
+    select 1
+    from public.v1_audit_events audit
+    where audit.event_type = 'admin_user_password_reset'
+      and audit.entity_id = '10000000-0000-4000-8000-000000000010'::uuid
+      and audit.actor_auth_user_id =
+        '10000000-0000-4000-8000-000000000009'::uuid
+      and audit.actor_role = 'project_engineer'
+      and audit.actor_exact_role = 'senior_mechanical_engineer'
+  ),
+  'Senior-authored user changes retain normalized and exact audit attribution'
+);
+
 update auth.users
    set raw_app_meta_data = jsonb_set(
      raw_app_meta_data,
@@ -179,6 +227,14 @@ select ok(
   and (public.v1_get_current_commercial_capabilities()
     #>> '{capabilities,view_commercials,effective}') = 'false',
   'Project Manager has all-project read authority and no commercial access'
+);
+
+select throws_ok(
+  $$select public.v1_get_user_commercial_capabilities(
+    '10000000-0000-4000-8000-000000000001'::uuid
+  )$$,
+  '42501', 'V1_ACTIVE_ADMIN_REQUIRED',
+  'Project Manager cannot inspect another user capability envelope'
 );
 
 select * from finish();

@@ -203,6 +203,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           path: RoutePaths.yorksV1EspCalculator,
           group: YorksV1ShellStrings.engineeringTools,
         ),
+        if (role?.canConfigureUsers ?? false)
+          _YorksDestination(
+            label: YorksV1ShellStrings.userManagement,
+            icon: Icons.manage_accounts_outlined,
+            selectedIcon: Icons.manage_accounts_rounded,
+            path: RoutePaths.users,
+            group: YorksV1ShellStrings.administration,
+          ),
       ],
       YorksV1Role.procurement => [
         shared.first,

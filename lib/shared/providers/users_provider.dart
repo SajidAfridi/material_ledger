@@ -125,7 +125,10 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     }
     if (!_store.isSeeded) _store.writeAll(state);
     if (_client != null || seedPassword.isNotEmpty) _store.writeAll(state);
-    if (_client?.auth.currentUser?.appMetadata['role'] == 'admin') {
+    final connectedRole = YorksV1Role.fromServerClaim(
+      _client?.auth.currentUser?.appMetadata['role'],
+    );
+    if (connectedRole?.canConfigureUsers ?? false) {
       Future<void>.microtask(() async {
         try {
           await refreshFromServer();

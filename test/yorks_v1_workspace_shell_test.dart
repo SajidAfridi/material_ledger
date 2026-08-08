@@ -93,6 +93,53 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+    'Senior Mechanical Engineer sees only the approved user configuration destination',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      for (final size in [const Size(1366, 768), const Size(360, 800)]) {
+        _setViewport(tester, size);
+        await tester.pumpWidget(
+          _ShellTestApp(
+            role: YorksV1Role.seniorMechanicalEngineer,
+            preferences: preferences,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        if (size.width <= 1000) {
+          await tester.tap(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is Semantics &&
+                  widget.properties.label == AppStrings.more.primary,
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(
+          find.text(YorksV1ShellStrings.userManagement.primary),
+          findsOneWidget,
+        );
+        expect(
+          find.text(YorksV1ShellStrings.configuration.primary),
+          findsNothing,
+        );
+        expect(find.text(YorksV1ShellStrings.auditTrail.primary), findsNothing);
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            size.width > 1000
+                ? 'goldens/r35/senior_user_management_nav_desktop.png'
+                : 'goldens/r35/senior_user_management_nav_mobile.png',
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      }
+      addTearDown(() => _resetViewport(tester));
+    },
+  );
+
   testWidgets('R35 workspace search opens a navigable command palette', (
     tester,
   ) async {

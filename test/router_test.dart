@@ -228,4 +228,53 @@ void main() {
       RoutePaths.engineerHome,
     );
   });
+
+  testWidgets(
+    'only Senior Mechanical Engineer among engineering roles can open User Management',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+
+      for (final v1Role in [
+        YorksV1Role.seniorMechanicalEngineer,
+        YorksV1Role.projectManager,
+      ]) {
+        final router = createAppRouter(
+          isOnboarded: true,
+          isLoggedIn: true,
+          role: UserRole.engineer,
+          user: AppUser(
+            id: v1Role.claimValue,
+            fullName: v1Role.name,
+            email: '${v1Role.claimValue}@yorks.test',
+            role: UserRole.engineer,
+            createdAt: DateTime.utc(2026, 8, 9),
+          ),
+          yorksV1ProjectsEnabled: true,
+          yorksV1Role: v1Role,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        router.go(RoutePaths.users);
+        await tester.pumpAndSettle();
+
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          v1Role == YorksV1Role.seniorMechanicalEngineer
+              ? RoutePaths.users
+              : RoutePaths.engineerHome,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        router.dispose();
+      }
+    },
+  );
 }

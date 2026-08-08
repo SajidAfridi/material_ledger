@@ -46,6 +46,11 @@ enum YorksV1Role {
   /// to the server-side intersection of base role and dated membership.
   bool get canSetProjectState => isEngineering || this == admin;
 
+  /// User Configuration is a separately approved organization-level control.
+  /// It does not imply access to unrelated Admin screens or commercial data.
+  bool get canConfigureUsers =>
+      this == admin || this == seniorMechanicalEngineer;
+
   /// Senior Mechanical Engineer and Project Manager are organization-wide
   /// Project Engineer roles. The trusted database maps both exact claims to
   /// Project Engineer workflow authority and grants project access without a

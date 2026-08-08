@@ -4,7 +4,7 @@
 // (create user, change role/claims, reset password, deactivate, delete) goes
 // through this Edge Function. It:
 //   1. requires a valid JWT (verify_jwt = true at deploy), and
-//   2. additionally checks the caller's `app_metadata.role == 'admin'`,
+//   2. checks the caller's live exact User Configuration role,
 // then performs the requested action with the service_role key.
 //
 // The app keys users by the stable `app_user_id` ('usr-*'); this function
@@ -30,10 +30,11 @@ import {
   provisionableRoles,
 } from './role_claims.ts'
 import {
+  type AuthUserForAdminGuard,
   isActiveAuthUser,
   isLastActiveExactAdmin,
-  type AuthUserForAdminGuard,
 } from './last_active_admin_guard.ts'
+import { canConfigureUsers } from './user_configuration_access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -58,7 +59,8 @@ function isLegacyEngineerRole(value: unknown): boolean {
 }
 
 function validAppUserId(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= 128
+  return typeof value === 'string' && value.trim().length > 0 &&
+    value.length <= 128
 }
 
 const json = (body: unknown, status = 200) =>
@@ -79,7 +81,9 @@ function authMutationError(
   lastAdminMessage?: string,
 ): Response {
   const message = error?.message ?? 'authentication update failed'
-  if (message.includes('V1_AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST')) {
+  if (
+    message.includes('V1_AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST')
+  ) {
     return authIdempotencyConflict()
   }
   if (
@@ -89,7 +93,10 @@ function authMutationError(
     return json({ error: lastAdminMessage }, 409)
   }
   if (message.includes('V1_ADMIN_AUDIT_CONTEXT_ACTOR_NOT_ACTIVE_ADMIN')) {
-    return json({ error: 'forbidden — inactive admin account' }, 403)
+    return json(
+      { error: 'forbidden — inactive user configuration account' },
+      403,
+    )
   }
   return json({ error: message }, 400)
 }
@@ -116,7 +123,9 @@ Deno.serve(async (req) => {
 
   // ── Authorize: caller must be a signed-in admin ──────────────────
   const authHeader = req.headers.get('Authorization') ?? ''
-  if (!authHeader.startsWith('Bearer ')) return json({ error: 'missing token' }, 401)
+  if (!authHeader.startsWith('Bearer ')) {
+    return json({ error: 'missing token' }, 401)
+  }
 
   const caller = createClient(url, anonKey, {
     global: { headers: { Authorization: authHeader } },
@@ -125,10 +134,13 @@ Deno.serve(async (req) => {
   const { data: who, error: whoErr } = await caller.auth.getUser()
   if (whoErr || !who?.user) return json({ error: 'unauthorized' }, 401)
   if (!isActiveAuthUser(who.user as AuthUserForAdminGuard)) {
-    return json({ error: 'forbidden — inactive admin account' }, 403)
+    return json(
+      { error: 'forbidden — inactive user configuration account' },
+      403,
+    )
   }
-  if (who.user.app_metadata?.role !== 'admin') {
-    return json({ error: 'forbidden — admin only' }, 403)
+  if (!canConfigureUsers(who.user.app_metadata?.role)) {
+    return json({ error: 'forbidden — user configuration role required' }, 403)
   }
   const actorAuthUserId = who.user.id
 
@@ -143,7 +155,10 @@ Deno.serve(async (req) => {
     let page = 1
     const users: AuthUserForAdminGuard[] = []
     for (;;) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+      const { data, error } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      })
       if (error) throw error
       users.push(...(data.users as AuthUserForAdminGuard[]))
       if (data.users.length < 200) return users
@@ -227,7 +242,9 @@ Deno.serve(async (req) => {
             const metadata = authRecord.user_metadata ?? {}
             const appMetadata = user.app_metadata ?? {}
             const rawRoles = Array.isArray(appMetadata.roles)
-              ? appMetadata.roles.filter((role: unknown) => typeof role === 'string')
+              ? appMetadata.roles.filter((role: unknown) =>
+                typeof role === 'string'
+              )
               : []
             const primaryRole = typeof appMetadata.role === 'string'
               ? appMetadata.role
@@ -240,7 +257,9 @@ Deno.serve(async (req) => {
                 ? appMetadata.app_user_id
                 : user.id,
               authUserId: user.id,
-              fullName: typeof metadata.full_name === 'string' ? metadata.full_name : '',
+              fullName: typeof metadata.full_name === 'string'
+                ? metadata.full_name
+                : '',
               email: authRecord.email ?? '',
               active: isActiveAuthUser(user),
               createdAt: authRecord.created_at ?? new Date().toISOString(),
@@ -269,7 +288,10 @@ Deno.serve(async (req) => {
         if (error) return commercialCapabilityRpcError(error)
         const projection = opaqueCommercialCapabilitiesResponse(data)
         if (!projection) {
-          return json({ error: 'unexpected commercial capability response' }, 502)
+          return json(
+            { error: 'unexpected commercial capability response' },
+            502,
+          )
         }
         return json({ ok: true, ...projection })
       }
@@ -300,14 +322,20 @@ Deno.serve(async (req) => {
         if (error) return commercialCapabilityRpcError(error)
         const projection = opaqueCommercialCapabilitiesResponse(data)
         if (!projection) {
-          return json({ error: 'unexpected commercial capability response' }, 502)
+          return json(
+            { error: 'unexpected commercial capability response' },
+            502,
+          )
         }
         return json({ ok: true, ...projection })
       }
 
       case 'create': {
         const { email, password, fullName, appUserId } = body as {
-          email: string; password: string; fullName: string; appUserId: string
+          email: string
+          password: string
+          fullName: string
+          appUserId: string
         }
         const role = provisionableRole(body.role)
         const roles = role == null ? null : provisionableRoles(body.roles, role)
@@ -321,7 +349,10 @@ Deno.serve(async (req) => {
           !isV1AdminAuditIdempotencyKey(idempotencyKey)
         ) {
           return json(
-            { error: 'email, password, role, appUserId and idempotencyKey required' },
+            {
+              error:
+                'email, password, role, appUserId and idempotencyKey required',
+            },
             400,
           )
         }
@@ -363,7 +394,10 @@ Deno.serve(async (req) => {
           // user can clear it themselves via the GoTrue self-update when they set
           // their own password — no admin/service-role round-trip needed. Follows
           // the user across devices (unlike the old device-local roster flag).
-          user_metadata: { full_name: fullName ?? '', must_change_password: true },
+          user_metadata: {
+            full_name: fullName ?? '',
+            must_change_password: true,
+          },
           app_metadata: {
             app_user_id: appUserId,
           },
@@ -384,7 +418,9 @@ Deno.serve(async (req) => {
               appUserId,
             })
           }
-          if (completedReplay.kind === 'conflict') return authIdempotencyConflict()
+          if (completedReplay.kind === 'conflict') {
+            return authIdempotencyConflict()
+          }
           return authMutationError(error)
         }
         const { error: roleError } = await admin.auth.admin.updateUserById(
@@ -408,7 +444,10 @@ Deno.serve(async (req) => {
         // remains flag-off. It cannot mint a V1 role, profile or protected V1
         // capability: `engineer` is intentionally not in PROVISIONABLE_ROLES.
         const { email, password, fullName, appUserId } = body as {
-          email: string; password: string; fullName: string; appUserId: string
+          email: string
+          password: string
+          fullName: string
+          appUserId: string
         }
         const idempotencyKey = body.idempotencyKey
         if (
@@ -457,7 +496,10 @@ Deno.serve(async (req) => {
           email,
           password,
           email_confirm: true,
-          user_metadata: { full_name: fullName ?? '', must_change_password: true },
+          user_metadata: {
+            full_name: fullName ?? '',
+            must_change_password: true,
+          },
           // The explicit legacy marker permits only allow-listed compatibility
           // claims. The database trigger still quarantines this role rather
           // than materialising a V1 profile or authority.
@@ -488,7 +530,9 @@ Deno.serve(async (req) => {
               appUserId,
             })
           }
-          if (completedReplay.kind === 'conflict') return authIdempotencyConflict()
+          if (completedReplay.kind === 'conflict') {
+            return authIdempotencyConflict()
+          }
           return authMutationError(error)
         }
         return json({ ok: true, authUserId: data.user!.id, appUserId })
@@ -505,7 +549,9 @@ Deno.serve(async (req) => {
           !validAppUserId(appUserId) ||
           !isV1AdminAuditIdempotencyKey(idempotencyKey)
         ) {
-          return json({ error: 'valid role, appUserId and idempotencyKey required' }, 400)
+          return json({
+            error: 'valid role, appUserId and idempotencyKey required',
+          }, 400)
         }
         const authUsers = await listAuthUsers()
         const target = authUserForAppUser(authUsers, appUserId)
@@ -541,7 +587,10 @@ Deno.serve(async (req) => {
           },
         })
         if (error) {
-          return authMutationError(error, 'Cannot demote the last active Admin.')
+          return authMutationError(
+            error,
+            'Cannot demote the last active Admin.',
+          )
         }
         return json({ ok: true })
       }
@@ -559,19 +608,25 @@ Deno.serve(async (req) => {
           !isV1AdminAuditIdempotencyKey(idempotencyKey)
         ) {
           return json(
-            { error: 'legacy engineer role, appUserId and idempotencyKey required' },
+            {
+              error:
+                'legacy engineer role, appUserId and idempotencyKey required',
+            },
             400,
           )
         }
         const authUsers = await listAuthUsers()
         const target = authUserForAppUser(authUsers, appUserId)
         if (!target) return json({ error: 'user not found' }, 404)
-        const { data: current, error: currentError } =
-          await admin.auth.admin.getUserById(target.id)
+        const { data: current, error: currentError } = await admin.auth.admin
+          .getUserById(target.id)
         if (currentError) return json({ error: currentError.message }, 400)
         if (current.user?.app_metadata?.role !== LEGACY_ENGINEER_ROLE) {
           return json(
-            { error: 'legacy role update is only allowed for legacy engineer accounts' },
+            {
+              error:
+                'legacy role update is only allowed for legacy engineer accounts',
+            },
             409,
           )
         }
@@ -609,14 +664,19 @@ Deno.serve(async (req) => {
         // (self-service change goes through GoTrue self-update, not this fn), so
         // it always forces a change on the user's next sign-in. Merge the flag
         // into existing user_metadata so full_name etc. survive.
-        const { appUserId, password } = body as { appUserId: string; password: string }
+        const { appUserId, password } = body as {
+          appUserId: string
+          password: string
+        }
         const idempotencyKey = body.idempotencyKey
         if (
           !password ||
           !validAppUserId(appUserId) ||
           !isV1AdminAuditIdempotencyKey(idempotencyKey)
         ) {
-          return json({ error: 'password, appUserId and idempotencyKey required' }, 400)
+          return json({
+            error: 'password, appUserId and idempotencyKey required',
+          }, 400)
         }
         const authUsers = await listAuthUsers()
         const target = authUserForAppUser(authUsers, appUserId)
@@ -639,7 +699,7 @@ Deno.serve(async (req) => {
           user_metadata: meta,
           app_metadata: withV1AdminAuditContext(
             (cur?.user?.app_metadata as Record<string, unknown> | undefined) ??
-                target.app_metadata,
+              target.app_metadata,
             actorAuthUserId,
             'password_reset',
             idempotencyKey,
@@ -651,7 +711,10 @@ Deno.serve(async (req) => {
       }
 
       case 'setActive': {
-        const { appUserId, active } = body as { appUserId: string; active: boolean }
+        const { appUserId, active } = body as {
+          appUserId: string
+          active: boolean
+        }
         const idempotencyKey = body.idempotencyKey
         if (
           !validAppUserId(appUserId) ||
@@ -672,8 +735,8 @@ Deno.serve(async (req) => {
             409,
           )
         }
-        const { data: current, error: currentError } =
-          await admin.auth.admin.getUserById(target.id)
+        const { data: current, error: currentError } = await admin.auth.admin
+          .getUserById(target.id)
         if (currentError) return json({ error: currentError.message }, 400)
         // Deactivate = ban far into the future; reactivate = clear the ban.
         const requestHash = await v1AdminAuditRequestHash(serviceKey, {
@@ -686,8 +749,10 @@ Deno.serve(async (req) => {
         const { error } = await admin.auth.admin.updateUserById(target.id, {
           ban_duration: active ? 'none' : '87600h',
           app_metadata: withV1AdminAuditContext(
-            (current.user?.app_metadata as Record<string, unknown> | undefined) ??
-                target.app_metadata,
+            (current.user?.app_metadata as
+              | Record<string, unknown>
+              | undefined) ??
+              target.app_metadata,
             actorAuthUserId,
             'active_changed',
             idempotencyKey,
@@ -695,7 +760,10 @@ Deno.serve(async (req) => {
           ),
         })
         if (error) {
-          return authMutationError(error, 'Cannot deactivate the last active Admin.')
+          return authMutationError(
+            error,
+            'Cannot deactivate the last active Admin.',
+          )
         }
         return json({ ok: true })
       }
@@ -705,7 +773,10 @@ Deno.serve(async (req) => {
         // valid administrative action; callers must use setActive(false), which
         // bans the account and lets the Auth-triggered profile mirror retain it.
         return json(
-          { error: 'User deletion is not supported; deactivate the user instead.' },
+          {
+            error:
+              'User deletion is not supported; deactivate the user instead.',
+          },
           409,
         )
       }

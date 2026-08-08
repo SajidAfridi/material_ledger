@@ -100,8 +100,11 @@ boundaries; do not destructively remove historical records.
   substitute for missing workflow history.
 - **Senior Mechanical Engineer** and **Project Manager** — organization-wide
   Project Engineer roles. They can access every project and perform Project
-  Engineer approvals without a per-project membership row, but do not inherit
-  Procurement, stock, commercial or user-administration authority.
+  Engineer approvals without a per-project membership row. Senior Mechanical
+  Engineer additionally has audited User Management authority, but does not
+  gain direct commercial visibility or unrelated Admin modules. Project
+  Manager does not inherit user administration. Neither role inherits
+  Procurement or stock authority.
 
 Authorization claims come only from exact, server-controlled
 `app_metadata.role` values. Never infer privilege from email, editable user

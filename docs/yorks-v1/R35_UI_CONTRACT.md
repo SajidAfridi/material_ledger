@@ -66,6 +66,10 @@ Administration:
 - User Management
 - Audit Trail
 
+Senior Mechanical Engineer navigation additionally includes User Management.
+It does not include Configuration, Access & Roles, Data Sync, Audit Trail or
+other Admin-only destinations. Project Manager navigation is unchanged.
+
 Accounts, RFQ, quotation, PO, legacy Material Plan and hidden prototype routes
 are absent from V1 navigation and command search.
 

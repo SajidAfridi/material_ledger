@@ -20,6 +20,12 @@ folder with the same name available in Common and every active building, while
 rows, columns, quantities, imports, exports and MR sources remain independent
 per real scope. Legacy rows are never cloned or inferred by this rule.
 
+Product-owner change approval on 9 August 2026 grants the exact Senior
+Mechanical Engineer role access to the audited User Management surface and its
+protected commands. Project Manager and other engineering roles remain denied;
+this grant does not provide direct commercial visibility or unrelated Admin
+modules.
+
 ## Approved source artifacts
 
 The original review artifacts remain outside the repository. Their SHA-256

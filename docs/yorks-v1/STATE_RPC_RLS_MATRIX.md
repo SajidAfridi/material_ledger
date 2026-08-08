@@ -97,6 +97,8 @@ tables/functions.
 | `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
 | `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, good/exception totals, state, audit/notification |
 | `v1_generate_delivery_order` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, Procurement/Admin after committed dispatch | dispatch/current DO revision; optional later review link | yes | immutable dispatch-quantity snapshot/revision, document link, audit |
+| `admin-users` Edge commands | Active exact Admin or Senior Mechanical Engineer | live Auth role, active actor, stable app-user target; action-specific input | yes for mutations | Auth mutation plus safe server audit; last-active-Admin invariant retained |
+| `v1_get/set_user_commercial_capability` | Active exact Admin or Senior Mechanical Engineer | live exact actor, target Auth user; reason and idempotency for writes | writes only | safe capability envelope/override plus audit; no commercial record data returned |
 | `v1_submit_material_return` | Assigned Project/Site Engineer/Admin | source receipt/return/version/counter | yes | frozen return lines, number, submitted state, audit/notification |
 | `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
 | `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
