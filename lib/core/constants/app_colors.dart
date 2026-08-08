@@ -40,9 +40,15 @@ abstract final class AppColors {
   /// Application canvas behind the workspace.
   static const Color surface = Color(0xFFEEF3F8);
 
+  /// Slightly lighter canvas used by the focused R38 mobile workspace.
+  static const Color mobileSurface = Color(0xFFF3F6FA);
+
+  /// Persistent sidebar and top-bar surface from the rendered R38 shell.
+  static const Color workspaceChrome = Color(0xFFF9FBFD);
+
   /// White records, panels and cards.
   static const Color surfaceContainerLowest = Color(0xFFFFFFFF);
-  static const Color surfaceContainerLow = Color(0xFFF7F9FC);
+  static const Color surfaceContainerLow = Color(0xFFF5F8FC);
   static const Color surfaceContainer = Color(0xFFF0F4F8);
   static const Color surfaceContainerHigh = Color(0xFFEDF1F5);
   static const Color surfaceContainerHighest = Color(0xFFE4EAF1);
@@ -53,7 +59,7 @@ abstract final class AppColors {
   static const Color onInverseSurface = Color(0xFFFFFFFF);
 
   // ─── Lines ────────────────────────────────────────────────
-  static const Color line = Color(0xFFDCE3EC);
+  static const Color line = Color(0xFFDFE6EE);
   static const Color lineStrong = Color(0xFFC8D2DF);
   static const Color outline = lineStrong;
   static const Color outlineVariant = line;

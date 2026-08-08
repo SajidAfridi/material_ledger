@@ -401,6 +401,12 @@ abstract final class YorksV1ShellStrings {
     ur: 'مواد کی درخواستیں',
     hi: 'सामग्री अनुरोध',
   );
+  static const requestsCompact = TranslatableString(
+    en: 'Requests',
+    ar: 'الطلبات',
+    ur: 'درخواستیں',
+    hi: 'अनुरोध',
+  );
   static const browseInventory = TranslatableString(
     en: 'Browse / Inventory',
     ar: 'استعراض / المخزون',
@@ -598,6 +604,24 @@ abstract final class YorksV1ShellStrings {
     ar: 'مرتجعات المواد',
     ur: 'مواد کی واپسی',
     hi: 'सामग्री वापसी',
+  );
+  static const returnsCompact = TranslatableString(
+    en: 'Returns',
+    ar: 'المرتجعات',
+    ur: 'واپسی',
+    hi: 'वापसी',
+  );
+  static const ductCompact = TranslatableString(
+    en: 'Duct',
+    ar: 'المجرى',
+    ur: 'ڈکٹ',
+    hi: 'डक्ट',
+  );
+  static const espCompact = TranslatableString(
+    en: 'ESP',
+    ar: 'ESP',
+    ur: 'ESP',
+    hi: 'ESP',
   );
   static const engineeringTools = TranslatableString(
     en: 'Engineering tools',

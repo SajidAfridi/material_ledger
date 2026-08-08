@@ -109,33 +109,32 @@ abstract final class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceContainerLowest,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
-        ),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         border: OutlineInputBorder(
           borderSide: const BorderSide(color: AppColors.line),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         enabledBorder: OutlineInputBorder(
           borderSide: const BorderSide(color: AppColors.line),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         focusedBorder: OutlineInputBorder(
           borderSide: const BorderSide(color: AppColors.blue, width: 1.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         errorBorder: OutlineInputBorder(
           borderSide: const BorderSide(color: AppColors.error),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         ),
         labelStyle: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
         hintStyle: AppTypography.bodyMedium.copyWith(
           color: AppColors.mutedLight,
+          fontSize: 11.5,
         ),
       ),
 

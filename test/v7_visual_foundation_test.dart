@@ -31,10 +31,10 @@ void main() {
       expect(AppColors.warning, const Color(0xFFAD6A00));
       expect(AppColors.error, const Color(0xFFC23737));
       expect(AppColors.surfaceContainerLowest, Colors.white);
-      expect(AppColors.line, const Color(0xFFDCE3EC));
+      expect(AppColors.line, const Color(0xFFDFE6EE));
 
       expect(AppSpacing.radiusLg, 14);
-      expect(AppSpacing.sidebarWidth, 246);
+      expect(AppSpacing.sidebarWidth, 260);
       expect(AppSpacing.topBarHeight, 64);
       expect(AppSpacing.pageMaxWidth, 1740);
       expect(AppSpacing.inspectorWidth, 330);

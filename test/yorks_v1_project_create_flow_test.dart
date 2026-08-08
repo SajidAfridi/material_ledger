@@ -57,7 +57,12 @@ void main() {
   testWidgets('renders the exact five R35 stages on desktop and mobile', (
     tester,
   ) async {
-    for (final size in [const Size(1366, 768), const Size(360, 800)]) {
+    for (final size in [
+      const Size(1366, 768),
+      const Size(1024, 768),
+      const Size(390, 844),
+      const Size(360, 800),
+    ]) {
       final container = await createContainer(
         role: YorksV1Role.projectEngineer,
         repository: _FakeProjectRepository(),
@@ -80,6 +85,10 @@ void main() {
       expect(
         find.text(YorksV1ProjectStrings.reviewAndCreate.primary),
         findsWidgets,
+      );
+      expect(
+        find.text(YorksV1ProjectStrings.dateFormatHelp.primary),
+        findsNWidgets(2),
       );
       expect(tester.takeException(), isNull);
     }

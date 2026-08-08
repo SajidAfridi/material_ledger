@@ -174,26 +174,25 @@ class _R35OverviewPage extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop =
-            constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
+            MediaQuery.sizeOf(context).width >=
+            AppSpacing.yorksV1ShellDesktopBreakpoint;
         final name = (displayName ?? '').trim().split(RegExp(r'\s+')).first;
         final safeName = name.isEmpty
             ? YorksV1ShellStrings.companyName.primary
             : name;
-        final horizontal = desktop
-            ? AppSpacing.xxxl + AppSpacing.xs
-            : AppSpacing.lg;
+        final horizontal = desktop ? 26.0 : 14.0;
         final contentWidth = (constraints.maxWidth - horizontal * 2).clamp(
           0.0,
           AppSpacing.pageMaxWidth,
         );
         return ColoredBox(
-          color: AppColors.surface,
+          color: desktop ? AppColors.surface : AppColors.mobileSurface,
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(
               horizontal,
-              AppSpacing.xxxl,
+              desktop ? 24 : 16,
               horizontal,
-              72,
+              96,
             ),
             child: SizedBox(
               width: contentWidth,
@@ -211,26 +210,26 @@ class _R35OverviewPage extends StatelessWidget {
                     onCreateRequest: onCreateRequest,
                     onOpenRequests: onOpenRequests,
                   ),
-                  const SizedBox(height: AppSpacing.xxxl),
+                  const SizedBox(height: AppSpacing.xl),
                   _R35SectionHeading(
                     title: YorksV1ShellStrings.needsYourAction.primary,
                     description:
                         YorksV1ShellStrings.roleActionDescription.primary,
                     attentionCount: needsAction,
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: 8),
                   _R35ActionCard(
                     requests: requests,
                     role: role,
                     onRetry: onRetryRequests,
                   ),
-                  const SizedBox(height: AppSpacing.xxxl),
+                  const SizedBox(height: AppSpacing.xl),
                   _R35SectionHeading(
                     title: YorksV1ProjectStrings.projects.primary,
                     action: YorksV1ShellStrings.viewAll.primary,
                     onAction: onOpenProjects,
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: 10),
                   _R35ProjectPanel(
                     projects: projects,
                     onRetry: onRetryProjects,
@@ -304,7 +303,8 @@ class _R35ProcurementOverview extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop =
-            constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
+            MediaQuery.sizeOf(context).width >=
+            AppSpacing.yorksV1ShellDesktopBreakpoint;
         final horizontal = desktop
             ? AppSpacing.xxxl + AppSpacing.xs
             : AppSpacing.lg;
@@ -826,43 +826,59 @@ class _R35OverviewHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final stacked = constraints.maxWidth < 800;
+      final stacked =
+          MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint;
       final main = _R35Card(
-        minHeight: stacked ? null : 314,
+        minHeight: stacked ? null : 234,
+        padding: const EdgeInsets.all(23),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              YorksV1ShellStrings.goodAfternoon.primary.toUpperCase(),
-              style: AppTypography.eyebrow.copyWith(
-                color: AppColors.blueContainerStrong,
-                letterSpacing: 1.5,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  YorksV1ShellStrings.goodAfternoon.primary.toUpperCase(),
+                  style: AppTypography.eyebrow.copyWith(
+                    color: const Color(0xFF85BAFA),
+                    fontSize: 9,
+                    letterSpacing: 1.17,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$name, ${YorksV1ShellStrings.workspaceReady.primary}',
+                  style: AppTypography.headlineLarge.copyWith(
+                    color: AppColors.ink,
+                    fontSize: stacked ? 24 : 29,
+                    height: stacked ? 1.08 : 1.12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: stacked ? -.72 : -.87,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  procurement
+                      ? YorksV1ShellStrings.projectCloseoutDescription.primary
+                      : YorksV1ShellStrings
+                            .overviewWorkspaceDescription
+                            .primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    height: 1.65,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '$name, ${YorksV1ShellStrings.workspaceReady.primary}',
-              style: AppTypography.headlineLarge.copyWith(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1.1,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              procurement
-                  ? YorksV1ShellStrings.projectCloseoutDescription.primary
-                  : YorksV1ShellStrings.overviewWorkspaceDescription.primary,
-              style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
-            ),
-            const SizedBox(height: AppSpacing.xxxl),
+            if (stacked) const SizedBox(height: 20) else const Spacer(),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
                 if (canCreateProject)
                   _R35PrimaryAction(
-                    label: YorksV1ProjectStrings.createProject.primary,
+                    label: YorksV1ProjectStrings.newProject.primary,
                     icon: Icons.add_rounded,
                     onPressed: onCreateProject,
                   ),
@@ -882,19 +898,20 @@ class _R35OverviewHero extends StatelessWidget {
         ),
       );
       final snapshot = _R35Card(
-        minHeight: stacked ? null : 314,
+        minHeight: stacked ? null : 234,
+        padding: const EdgeInsets.all(18),
         child: Column(
           children: [
             _R35SnapshotTile(
               label: YorksV1ProjectStrings.projects.primary,
               value: '$projectCount',
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 10),
             _R35SnapshotTile(
               label: YorksV1ShellStrings.needsYourAction.primary,
               value: '$openRequests',
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 10),
             _R35SnapshotTile(
               label: YorksV1ShellStrings.scope.primary,
               value: YorksV1ShellStrings.workspaceScope.primary,
@@ -907,21 +924,22 @@ class _R35OverviewHero extends StatelessWidget {
         return Column(
           children: [
             main,
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             snapshot,
           ],
         );
       }
-      // Let the cards grow to their content height. A fixed-height row makes
-      // the hero overflow when the headline wraps (and can cascade into the
-      // RenderBox `hasSize` assertion on narrower desktop windows).
+      final rightWidth = ((constraints.maxWidth - AppSpacing.lg) * .375).clamp(
+        280.0,
+        double.infinity,
+      );
       return IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: 3, child: main),
+            Expanded(child: main),
             const SizedBox(width: AppSpacing.lg),
-            Expanded(flex: 2, child: snapshot),
+            SizedBox(width: rightWidth, child: snapshot),
           ],
         ),
       );
@@ -933,7 +951,7 @@ class _R35Card extends StatelessWidget {
   const _R35Card({
     required this.child,
     this.minHeight,
-    this.padding = const EdgeInsets.all(AppSpacing.xxxl),
+    this.padding = const EdgeInsets.all(AppSpacing.lg),
   });
 
   final Widget child;
@@ -947,12 +965,12 @@ class _R35Card extends StatelessWidget {
     decoration: BoxDecoration(
       color: AppColors.surfaceContainerLowest,
       border: Border.all(color: AppColors.line),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      borderRadius: BorderRadius.circular(15),
       boxShadow: const [
         BoxShadow(
           color: AppColors.shadow,
-          blurRadius: 26,
-          offset: Offset(0, 10),
+          blurRadius: 24,
+          offset: Offset(0, 8),
         ),
       ],
     ),
@@ -974,7 +992,7 @@ class _R35SnapshotTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(AppSpacing.lg),
+    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
     decoration: BoxDecoration(
       color: AppColors.surfaceContainerLow,
       border: Border.all(color: AppColors.line),
@@ -988,15 +1006,20 @@ class _R35SnapshotTile extends StatelessWidget {
           style: AppTypography.labelSmall.copyWith(
             color: AppColors.muted,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1.1,
+            fontSize: 8.5,
+            height: 1.2,
+            letterSpacing: .85,
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
+        const SizedBox(height: 5),
         Text(
           value,
-          style:
-              (valueText ? AppTypography.titleSmall : AppTypography.titleLarge)
-                  .copyWith(color: AppColors.ink, fontWeight: FontWeight.w800),
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.ink,
+            fontSize: 13,
+            height: 1.35,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ],
     ),
@@ -1016,16 +1039,27 @@ class _R35PrimaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 52,
+    height: MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint
+        ? AppSpacing.minTapTarget
+        : 38,
     child: FilledButton.icon(
       onPressed: onPressed,
       icon: Icon(icon ?? Icons.arrow_forward_rounded, size: 20),
       label: Text(label),
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.navy,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+        padding: EdgeInsets.symmetric(
+          horizontal:
+              MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint
+              ? 11
+              : 13,
         ),
+        textStyle: AppTypography.labelLarge.copyWith(fontSize: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        elevation: 2,
+        shadowColor: AppColors.navy.withValues(alpha: .28),
       ),
     ),
   );
@@ -1044,7 +1078,9 @@ class _R35SecondaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 52,
+    height: MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint
+        ? AppSpacing.minTapTarget
+        : 38,
     child: OutlinedButton.icon(
       onPressed: onPressed,
       icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 19),
@@ -1052,8 +1088,15 @@ class _R35SecondaryAction extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.inkSecondary,
         side: const BorderSide(color: AppColors.line),
+        padding: EdgeInsets.symmetric(
+          horizontal:
+              MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint
+              ? 11
+              : 13,
+        ),
+        textStyle: AppTypography.labelLarge.copyWith(fontSize: 12),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusMd + 2),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
       ),
     ),
@@ -1087,6 +1130,8 @@ class _R35SectionHeading extends StatelessWidget {
               title,
               style: AppTypography.titleLarge.copyWith(
                 color: AppColors.ink,
+                fontSize: 17,
+                letterSpacing: -.255,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1094,7 +1139,10 @@ class _R35SectionHeading extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 description!,
-                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.muted,
+                  fontSize: 10,
+                ),
               ),
             ],
           ],
@@ -1106,7 +1154,10 @@ class _R35SectionHeading extends StatelessWidget {
       ],
       if (action != null && onAction != null)
         SizedBox(
-          height: AppSpacing.minTapTarget,
+          height:
+              MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint
+              ? AppSpacing.minTapTarget
+              : 32,
           child: OutlinedButton(onPressed: onAction, child: Text(action!)),
         ),
     ],
@@ -1126,7 +1177,7 @@ class _R35ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _R35Card(
-    minHeight: 300,
+    minHeight: 220,
     child: requests.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => _OverviewRetry(onRetry: onRetry),
@@ -1136,31 +1187,38 @@ class _R35ActionCard extends StatelessWidget {
             .take(5)
             .toList();
         if (actionable.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.check_rounded,
-                  color: AppColors.blueContainerStrong,
-                  size: 40,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  YorksV1ShellStrings.nothingWaiting.primary,
-                  style: AppTypography.titleMedium.copyWith(
-                    fontWeight: FontWeight.w800,
+          return Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 42),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.check_rounded,
+                    color: AppColors.blueContainerStrong,
+                    size: 34,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  YorksV1ShellStrings.nothingWaitingDescription.primary,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
+                  const SizedBox(height: 12),
+                  Text(
+                    YorksV1ShellStrings.nothingWaiting.primary,
+                    style: AppTypography.titleMedium.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 5),
+                  Text(
+                    YorksV1ShellStrings.nothingWaitingDescription.primary,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                      fontSize: 10,
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1222,25 +1280,24 @@ class _R35ProjectPanel extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => _R35Card(
-    child: projects.when(
-      loading: () => const Padding(
+  Widget build(BuildContext context) => projects.when(
+    loading: () => const _R35Card(
+      child: Padding(
         padding: EdgeInsets.all(AppSpacing.xxl),
         child: Center(child: CircularProgressIndicator()),
       ),
-      error: (_, _) => _OverviewRetry(onRetry: onRetry),
-      data: (items) => items.isEmpty
-          ? _OverviewEmpty(
-              icon: Icons.account_tree_outlined,
-              copy: YorksV1ProjectStrings.noProjects,
-            )
-          : Column(
+    ),
+    error: (_, _) => _R35Card(child: _OverviewRetry(onRetry: onRetry)),
+    data: (items) => items.isEmpty
+        ? const SizedBox.shrink()
+        : _R35Card(
+            child: Column(
               children: [
                 for (final item in items.take(5))
                   _OverviewProjectRow(item: item),
               ],
             ),
-    ),
+          ),
   );
 }
 
@@ -1396,30 +1453,6 @@ class _OverviewRetry extends StatelessWidget {
       onPressed: onRetry,
       icon: const Icon(Icons.refresh_rounded),
       label: Text(YorksV1MaterialRequestStrings.refresh.primary),
-    ),
-  );
-}
-
-class _OverviewEmpty extends StatelessWidget {
-  const _OverviewEmpty({required this.icon, required this.copy});
-
-  final IconData icon;
-  final TranslatableString copy;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(AppSpacing.xxl),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: AppColors.muted, size: 36),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          copy.primary,
-          textAlign: TextAlign.center,
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
-        ),
-      ],
     ),
   );
 }

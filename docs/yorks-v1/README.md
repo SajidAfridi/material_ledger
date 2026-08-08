@@ -40,6 +40,8 @@ explicit V7-to-V1 conflict resolution.
 | [`ARCHITECTURE_AND_SECURITY_CONTRACT.md`](ARCHITECTURE_AND_SECURITY_CONTRACT.md) | Flutter/Supabase boundary and trusted data flow |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
+| [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
+| [`V01_VISUAL_EVIDENCE.md`](V01_VISUAL_EVIDENCE.md) | Workspace shell, empty Overview and Project Creation convergence evidence |
 | [`MIGRATION_AND_ROLLBACK_PLAN.md`](MIGRATION_AND_ROLLBACK_PLAN.md) | Additive migration, reconciliation, quarantine and rollback |
 | [`TEST_AND_ACCEPTANCE_PLAN.md`](TEST_AND_ACCEPTANCE_PLAN.md) | Test layers, 25 scenarios and web/Android evidence |
 | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Dependency-ordered Batches 0–10 |
@@ -87,9 +89,10 @@ legacy `NEXUS_V7_*` flags to an R35 command.
 
 `Project -> BOQ -> MR Draft -> Submit -> Arrange/Reserve -> Project Engineer Approval -> Dispatch -> Receipt Review -> Delivery Order -> Return`
 
-Accounts and the full RFQ/quotation/PO suite are not part of V1. Configuration,
-Rentals, User Management, Audit Trail, Duct Sizer and ESP Calculator remain in
-place and receive regression coverage rather than redesign.
+Accounts is part of the current Yorks target subject to role permissions. The
+full RFQ/quotation/PO suite is not part of V1. Configuration, Rentals, User
+Management, Audit Trail, Duct Sizer and ESP Calculator remain in place and
+receive regression coverage rather than redesign.
 
 ## How to execute a batch
 

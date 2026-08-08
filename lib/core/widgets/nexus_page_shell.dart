@@ -122,54 +122,57 @@ class NexusPageHeader extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) {
-    final heading = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(eyebrow.toUpperCase(), style: AppTypography.eyebrow),
-        const SizedBox(height: 7),
-        Text(
-          title,
-          style: compact
-              ? AppTypography.headlineMedium
-              : AppTypography.headlineLarge,
-        ),
-        if (description != null) ...[
-          const SizedBox(height: 7),
-          Text(description!, style: AppTypography.bodyMedium),
-        ],
-      ],
-    );
-
-    if (compact || actions.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final heading = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          heading,
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: actions,
-            ),
+          Text(eyebrow.toUpperCase(), style: AppTypography.eyebrow),
+          const SizedBox(height: 7),
+          Text(
+            title,
+            style: compact
+                ? AppTypography.headlineMedium
+                : AppTypography.headlineLarge,
+          ),
+          if (description != null) ...[
+            const SizedBox(height: 7),
+            Text(description!, style: AppTypography.bodyMedium),
           ],
         ],
       );
-    }
+      final stackActions = compact || constraints.maxWidth < 960;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: heading),
-        const SizedBox(width: AppSpacing.xl),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          alignment: WrapAlignment.end,
-          children: actions,
-        ),
-      ],
-    );
-  }
+      if (stackActions || actions.isEmpty) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            heading,
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: actions,
+              ),
+            ],
+          ],
+        );
+      }
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: heading),
+          const SizedBox(width: AppSpacing.xl),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            alignment: WrapAlignment.end,
+            children: actions,
+          ),
+        ],
+      );
+    },
+  );
 }

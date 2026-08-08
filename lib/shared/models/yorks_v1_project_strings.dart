@@ -15,16 +15,22 @@ abstract final class YorksV1ProjectStrings {
     hi: 'परियोजनाएँ',
   );
   static const projectCreationEyebrow = TranslatableString(
-    en: 'Projects',
+    en: 'Project creation',
     ar: 'المشاريع',
     ur: 'پراجیکٹس',
     hi: 'परियोजनाएँ',
   );
   static const createProject = TranslatableString(
-    en: 'Create project',
+    en: 'Create Project',
     ar: 'إنشاء مشروع',
     ur: 'پراجیکٹ بنائیں',
     hi: 'परियोजना बनाएँ',
+  );
+  static const newProject = TranslatableString(
+    en: 'New Project',
+    ar: 'مشروع جديد',
+    ur: 'نیا پراجیکٹ',
+    hi: 'नई परियोजना',
   );
   static const createProjectDescription = TranslatableString(
     en: 'A controlled five-step setup that can be completed without entering materials.',
@@ -275,7 +281,7 @@ abstract final class YorksV1ProjectStrings {
     hi: 'यॉर्क्स संदर्भ',
   );
   static const projectName = TranslatableString(
-    en: 'Project name',
+    en: 'Project Name',
     ar: 'اسم المشروع',
     ur: 'پراجیکٹ کا نام',
     hi: 'परियोजना का नाम',
@@ -299,16 +305,22 @@ abstract final class YorksV1ProjectStrings {
     hi: 'साइट स्थान',
   );
   static const startDate = TranslatableString(
-    en: 'Start date',
+    en: 'Start Date',
     ar: 'تاريخ البدء',
     ur: 'آغاز کی تاریخ',
     hi: 'आरंभ तिथि',
   );
   static const endDate = TranslatableString(
-    en: 'Expected End Date',
-    ar: 'تاريخ الانتهاء',
-    ur: 'اختتامی تاریخ',
-    hi: 'समाप्ति तिथि',
+    en: 'Expected End Date (optional)',
+    ar: 'تاريخ الانتهاء المتوقع (اختياري)',
+    ur: 'متوقع اختتامی تاریخ (اختیاری)',
+    hi: 'अपेक्षित समाप्ति तिथि (वैकल्पिक)',
+  );
+  static const dateFormatHelp = TranslatableString(
+    en: 'DD-MM-YYYY · choose a date or use the calendar.',
+    ar: 'يوم-شهر-سنة · اختر تاريخًا أو استخدم التقويم.',
+    ur: 'دن-مہینہ-سال · تاریخ منتخب کریں یا کیلنڈر استعمال کریں۔',
+    hi: 'दिन-माह-वर्ष · तारीख चुनें या कैलेंडर का उपयोग करें।',
   );
   static const notes = TranslatableString(
     en: 'Project Notes',
@@ -333,6 +345,12 @@ abstract final class YorksV1ProjectStrings {
     ar: 'YRA-',
     ur: 'YRA-',
     hi: 'YRA-',
+  );
+  static const yorksReferenceHelp = TranslatableString(
+    en: 'Used on the project, Material Requests and related documents.',
+    ar: 'يُستخدم في المشروع وطلبات المواد والمستندات ذات الصلة.',
+    ur: 'پراجیکٹ، مٹیریل ریکوئسٹس اور متعلقہ دستاویزات پر استعمال ہوتا ہے۔',
+    hi: 'प्रोजेक्ट, सामग्री अनुरोध और संबंधित दस्तावेज़ों में उपयोग होता है।',
   );
   static const projectNameHint = TranslatableString(
     en: 'Enter project name',

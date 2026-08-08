@@ -41,15 +41,16 @@ abstract final class AppSpacing {
 
   static const double compactBreakpoint = 720;
 
-  /// Effective R35 desktop boundary. Yorks V1 office routes retain a full
-  /// navigation/worksheet layout from this width upward; narrower layouts
-  /// switch to the focused tablet/mobile presentation.
   static const double yorksV1DesktopBreakpoint = 1100;
+
+  /// R38 shell/surface boundary. It keeps 1024px in the approved office mode
+  /// while 768px and smaller receive the mobile shell and stacked surfaces.
+  static const double yorksV1ShellDesktopBreakpoint = 900;
   static const double stackedBreakpoint = 980;
   static const double wideBreakpoint = 1180;
   static const double pageMaxWidth = 1740;
   static const double inspectorWidth = 330;
-  static const double sidebarWidth = 246;
+  static const double sidebarWidth = 260;
   static const double sidebarCollapsedWidth = 84;
   static const double topBarHeight = 64;
 }

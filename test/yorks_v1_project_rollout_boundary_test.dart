@@ -36,10 +36,10 @@ void main() {
           child: const MaterialApp(home: Scaffold(body: EngineerHomeScreen())),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(
-        find.text(YorksV1ProjectStrings.createProject.primary),
+        find.text(YorksV1ProjectStrings.newProject.primary),
         findsOneWidget,
       );
       expect(find.text(AppStrings.myProjects.primary), findsNothing);
@@ -63,15 +63,13 @@ void main() {
             ),
             yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.admin),
           ],
-          child: const MaterialApp(
-            home: Scaffold(body: DashboardScreen()),
-          ),
+          child: const MaterialApp(home: Scaffold(body: DashboardScreen())),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       expect(
-        find.text(YorksV1ProjectStrings.createProject.primary),
+        find.text(YorksV1ProjectStrings.newProject.primary),
         findsOneWidget,
       );
       expect(find.text(AppStrings.activeProjects.primary), findsNothing);

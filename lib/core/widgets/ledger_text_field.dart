@@ -13,6 +13,7 @@ class LedgerTextField extends StatelessWidget {
     this.label,
     this.urduHint,
     this.hintText,
+    this.helperText,
     this.prefixIcon,
     this.suffixIcon,
     this.keyboardType,
@@ -32,6 +33,7 @@ class LedgerTextField extends StatelessWidget {
   final String? label;
   final String? urduHint;
   final String? hintText;
+  final String? helperText;
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final TextInputType? keyboardType;
@@ -48,35 +50,72 @@ class LedgerTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact =
+        MediaQuery.sizeOf(context).width < AppSpacing.compactBreakpoint;
+    final controlHeight = compact ? AppSpacing.minTapTarget : 36.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         if (label != null) ...[
-          Text(label!, style: AppTypography.titleSmall),
-          const SizedBox(height: AppSpacing.sm),
+          Text(
+            label!,
+            style: AppTypography.labelMedium.copyWith(
+              color: AppColors.inkSecondary,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
         ],
-        TextFormField(
-          controller: controller,
-          focusNode: focusNode,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          maxLines: maxLines,
-          onChanged: onChanged,
-          onFieldSubmitted: onSubmitted,
-          validator: validator,
-          enabled: enabled,
-          autofocus: autofocus,
-          readOnly: readOnly,
-          onTap: onTap,
-          style: AppTypography.bodyLarge,
-          decoration: InputDecoration(
-            hintText: urduHint ?? hintText,
-            hintTextDirection: urduHint != null ? TextDirection.rtl : null,
-            prefixIcon: prefixIcon,
-            suffixIcon: suffixIcon,
+        SizedBox(
+          height: maxLines == 1 ? controlHeight : 88,
+          child: TextFormField(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: keyboardType,
+            obscureText: obscureText,
+            maxLines: obscureText ? 1 : null,
+            expands: !obscureText,
+            textAlignVertical: maxLines == 1
+                ? TextAlignVertical.center
+                : TextAlignVertical.top,
+            onChanged: onChanged,
+            onFieldSubmitted: onSubmitted,
+            validator: validator,
+            enabled: enabled,
+            autofocus: autofocus,
+            readOnly: readOnly,
+            onTap: onTap,
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.ink,
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+            decoration: InputDecoration(
+              hintText: urduHint ?? hintText,
+              hintTextDirection: urduHint != null ? TextDirection.rtl : null,
+              prefixIcon: prefixIcon,
+              suffixIcon: suffixIcon,
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: compact ? 11 : 8,
+              ),
+            ),
           ),
         ),
+        if (helperText != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            helperText!,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.muted,
+              fontSize: 9,
+              height: 1.35,
+            ),
+          ),
+        ],
       ],
     );
   }

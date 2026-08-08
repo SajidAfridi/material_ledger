@@ -250,11 +250,13 @@ class _YorksV1ProjectCreateFlowScreenState
         child: LayoutBuilder(
           builder: (context, constraints) {
             final desktop =
-                constraints.maxWidth >= AppSpacing.yorksV1DesktopBreakpoint;
+                constraints.maxWidth >=
+                    AppSpacing.yorksV1ShellDesktopBreakpoint ||
+                MediaQuery.sizeOf(context).width >=
+                    AppSpacing.yorksV1ShellDesktopBreakpoint;
             final content = _buildStageContent(
               draft: draft,
               language: language,
-              saving: saving,
               creatorRole: role,
               creatorAuthUserId: authUserId,
               teamDirectory: teamDirectory,
@@ -265,69 +267,77 @@ class _YorksV1ProjectCreateFlowScreenState
               vertical: desktop,
               onSelect: _selectStage,
             );
-            final horizontal = desktop
-                ? AppSpacing.xxxl + AppSpacing.xs
-                : AppSpacing.lg;
-            return SingleChildScrollView(
-              controller: _scrollController,
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                AppSpacing.xxxl,
-                horizontal,
-                72,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: AppSpacing.pageMaxWidth,
+            final footer = _StageActions(
+              stage: draft.currentStage,
+              language: language,
+              saving: saving,
+              onBack: _back,
+              onContinue: _continue,
+              onSkip: _skipAttachments,
+              onCreate: _createProject,
+              primaryLabel: _isEditing
+                  ? YorksV1ProjectStrings.updateProject
+                  : YorksV1ProjectStrings.createAndView,
+            );
+            final horizontal = desktop ? 30.0 : 14.0;
+            return ColoredBox(
+              color: desktop ? AppColors.surface : AppColors.mobileSurface,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  desktop ? 26 : 18,
+                  horizontal,
+                  96,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    YorksR35PageHeader(
-                      eyebrow:
-                          YorksV1ProjectStrings.projectCreationEyebrow.primary,
-                      title:
-                          (_isEditing
-                                  ? YorksV1ProjectStrings.editProject
-                                  : YorksV1ProjectStrings.createProject)
-                              .primary,
-                      description:
-                          (_isEditing
-                                  ? YorksV1ProjectStrings.editProjectDescription
-                                  : YorksV1ProjectStrings
-                                        .createProjectDescription)
-                              .primary,
-                      actions: [
-                        if (!_isEditing)
-                          SizedBox(
-                            height: AppSpacing.minTapTarget,
-                            child: OutlinedButton(
-                              onPressed: saving
-                                  ? null
-                                  : () => _saveDraft(draft),
-                              child: Text(
-                                YorksV1ProjectStrings.saveDraft.primary,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppSpacing.pageMaxWidth,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      YorksR35PageHeader(
+                        eyebrow: YorksV1ProjectStrings
+                            .projectCreationEyebrow
+                            .primary,
+                        title:
+                            (_isEditing
+                                    ? YorksV1ProjectStrings.editProject
+                                    : YorksV1ProjectStrings.createProject)
+                                .primary,
+                        description:
+                            (_isEditing
+                                    ? YorksV1ProjectStrings
+                                          .editProjectDescription
+                                    : YorksV1ProjectStrings
+                                          .createProjectDescription)
+                                .primary,
+                        actions: [
+                          if (!_isEditing)
+                            SizedBox(
+                              height: AppSpacing.minTapTarget,
+                              child: OutlinedButton(
+                                onPressed: saving
+                                    ? null
+                                    : () => _saveDraft(draft),
+                                child: Text(
+                                  YorksV1ProjectStrings.saveDraft.primary,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xxxl),
-                    if (desktop)
+                        ],
+                      ),
+                      const SizedBox(height: 19),
                       _R35ProjectCreationFrame(
                         navigation: navigation,
+                        verticalNavigation: desktop,
                         currentStage: draft.currentStage,
                         content: content,
-                      )
-                    else ...[
-                      navigation,
-                      const SizedBox(height: AppSpacing.lg),
-                      _R35ProjectCreationFrame(
-                        currentStage: draft.currentStage,
-                        content: content,
+                        footer: footer,
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             );
@@ -340,7 +350,6 @@ class _YorksV1ProjectCreateFlowScreenState
   Widget _buildStageContent({
     required YorksV1ProjectCreationDraft draft,
     required AppLanguage language,
-    required bool saving,
     required YorksV1Role creatorRole,
     required String creatorAuthUserId,
     required AsyncValue<List<YorksV1ProjectTeamDirectoryMember>>? teamDirectory,
@@ -437,25 +446,7 @@ class _YorksV1ProjectCreateFlowScreenState
       ),
     };
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        stageBody,
-        const SizedBox(height: AppSpacing.lg),
-        _StageActions(
-          stage: stage,
-          language: language,
-          saving: saving,
-          onBack: _back,
-          onContinue: _continue,
-          onSkip: _skipAttachments,
-          onCreate: _createProject,
-          primaryLabel: _isEditing
-              ? YorksV1ProjectStrings.updateProject
-              : YorksV1ProjectStrings.createAndView,
-        ),
-      ],
-    );
+    return stageBody;
   }
 
   void _synchronizeControllers(YorksV1ProjectCreationDraft draft) {
@@ -1295,83 +1286,146 @@ class _R35ProjectCreationFrame extends StatelessWidget {
   const _R35ProjectCreationFrame({
     required this.currentStage,
     required this.content,
-    this.navigation,
+    required this.navigation,
+    required this.verticalNavigation,
+    required this.footer,
   });
 
   final YorksV1ProjectCreationStage currentStage;
   final Widget content;
-  final Widget? navigation;
+  final Widget navigation;
+  final bool verticalNavigation;
+  final Widget footer;
 
   @override
   Widget build(BuildContext context) {
-    final sidebarMinHeight = MediaQuery.sizeOf(context).height * 0.75;
-    final body = Column(
+    final mobileBody = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _R35CreationStageHeader(stage: currentStage),
         const Divider(height: 1, color: AppColors.line),
-        Padding(padding: const EdgeInsets.all(AppSpacing.xxxl), child: content),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 15, 14, 15),
+          child: content,
+        ),
+        const Divider(height: 1, color: AppColors.line),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: footer,
+        ),
       ],
     );
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 26,
-            offset: Offset(0, 10),
+    final decoration = BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(15),
+      boxShadow: const [
+        BoxShadow(
+          color: AppColors.shadow,
+          blurRadius: 16,
+          offset: Offset(0, 4),
+        ),
+      ],
+    );
+    if (!verticalNavigation) {
+      return Container(
+        decoration: decoration,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ColoredBox(
+              color: AppColors.surfaceContainerLow,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: navigation,
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.line),
+            mobileBody,
+          ],
+        ),
+      );
+    }
+
+    final frameHeight = MediaQuery.sizeOf(context).width <= 1024
+        ? 680.0
+        : 670.0;
+    final desktopBody = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _R35CreationStageHeader(stage: currentStage),
+        const Divider(height: 1, color: AppColors.line),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: content,
           ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: navigation == null
-          ? body
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 270,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: sidebarMinHeight),
-                    child: ColoredBox(
-                      color: AppColors.surfaceContainerLow,
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.xl),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              YorksV1ProjectStrings.projectSetup.primary,
-                              style: AppTypography.titleLarge.copyWith(
-                                color: AppColors.ink,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              YorksV1ProjectStrings
-                                  .projectSetupDescription
-                                  .primary,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.muted,
-                                height: 1.45,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
-                            navigation!,
-                          ],
+        ),
+        const Divider(height: 1, color: AppColors.line),
+        SizedBox(
+          height: 64,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            child: footer,
+          ),
+        ),
+      ],
+    );
+    return SizedBox(
+      height: frameHeight,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: decoration.boxShadow,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 230,
+              child: ColoredBox(
+                color: AppColors.surfaceContainerLow,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 22,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        YorksV1ProjectStrings.projectSetup.primary,
+                        style: AppTypography.titleMedium.copyWith(
+                          color: AppColors.ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 3),
+                      Text(
+                        YorksV1ProjectStrings.projectSetupDescription.primary,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.muted,
+                          fontSize: 10.5,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      navigation,
+                    ],
                   ),
                 ),
-                const VerticalDivider(width: 1, color: AppColors.line),
-                Expanded(child: body),
-              ],
+              ),
             ),
+            const VerticalDivider(width: 1, color: AppColors.line),
+            Expanded(child: desktopBody),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1389,8 +1443,12 @@ class _R35CreationStageHeader extends StatelessWidget {
           '{total}',
           '${YorksV1ProjectCreationStage.values.length}',
         );
+    final compact =
+        MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint;
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xxxl),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(14, 16, 14, 12)
+          : const EdgeInsets.fromLTRB(24, 22, 24, 15),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1401,15 +1459,15 @@ class _R35CreationStageHeader extends StatelessWidget {
               letterSpacing: 1.3,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 7),
           Text(
             _stageCopy(stage).primary,
-            style: AppTypography.headlineMedium.copyWith(
+            style: AppTypography.headlineSmall.copyWith(
               color: AppColors.ink,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 7),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1421,7 +1479,7 @@ class _R35CreationStageHeader extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: 7),
               Text(
                 YorksV1ProjectStrings.stepSaved.primary,
                 style: AppTypography.labelMedium.copyWith(
@@ -1475,9 +1533,8 @@ class _StageNavigation extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var index = 0; index < children.length; index++) ...[
-            SizedBox(width: 172, child: children[index]),
-            if (index != children.length - 1)
-              const SizedBox(width: AppSpacing.sm),
+            SizedBox(width: 134, child: children[index]),
+            if (index != children.length - 1) const SizedBox(width: 5),
           ],
         ],
       ),
@@ -1506,9 +1563,7 @@ class _StageNavigationItem extends StatelessWidget {
       button: onTap != null,
       selected: selected,
       child: Material(
-        color: selected
-            ? AppColors.blueContainer
-            : AppColors.surfaceContainerLowest,
+        color: selected ? AppColors.blueContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: InkWell(
           key: ValueKey('yorks-v1-project-stage-${stage.name}'),
@@ -1519,13 +1574,13 @@ class _StageNavigationItem extends StatelessWidget {
               minHeight: AppSpacing.minTapTarget,
             ),
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.all(7),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 26,
-                    height: 26,
+                    width: 24,
+                    height: 24,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: selected
@@ -1540,13 +1595,14 @@ class _StageNavigationItem extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _LocalizedCopy(
                       copy: copy,
                       language: language,
                       englishStyle: AppTypography.labelLarge.copyWith(
                         color: selected ? AppColors.navy : AppColors.ink,
+                        fontSize: 10.5,
                       ),
                       secondaryStyle: AppTypography.labelSmall,
                     ),
@@ -1611,13 +1667,17 @@ class _DetailsStage extends StatelessWidget {
       key: formKey,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 620;
+          final wide =
+              MediaQuery.sizeOf(context).width > AppSpacing.compactBreakpoint;
           final fields = [
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-reference'),
               controller: referenceController,
               label: YorksV1ProjectStrings.yorksReference.active(language),
               hintText: YorksV1ProjectStrings.yorksReferenceHint.active(
+                language,
+              ),
+              helperText: YorksV1ProjectStrings.yorksReferenceHelp.active(
                 language,
               ),
               onChanged: onReferenceChanged,
@@ -1651,6 +1711,11 @@ class _DetailsStage extends StatelessWidget {
               ),
               onChanged: onJobOrContractChanged,
             ),
+            if (wide)
+              // R38 places a commercial field in this cell. Engineers must
+              // not receive that value, so preserve the visual row rhythm
+              // without introducing a field or response-shape dependency.
+              const SizedBox(height: 67),
             LedgerTextField(
               key: const ValueKey('yorks-v1-project-site'),
               controller: siteController,
@@ -1686,12 +1751,12 @@ class _DetailsStage extends StatelessWidget {
             children: [
               if (wide)
                 Wrap(
-                  spacing: AppSpacing.lg,
-                  runSpacing: AppSpacing.lg,
+                  spacing: 15,
+                  runSpacing: 15,
                   children: [
                     for (final field in fields)
                       SizedBox(
-                        width: (constraints.maxWidth - AppSpacing.lg) / 2,
+                        width: (constraints.maxWidth - 15) / 2,
                         child: field,
                       ),
                   ],
@@ -1746,10 +1811,14 @@ class _DateField extends StatelessWidget {
         _LocalizedCopy(
           copy: copy,
           language: language,
-          englishStyle: AppTypography.titleSmall,
+          englishStyle: AppTypography.labelMedium.copyWith(
+            color: AppColors.inkSecondary,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+          ),
           secondaryStyle: AppTypography.labelSmall,
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: 6),
         Semantics(
           button: true,
           label: copy.primary,
@@ -1762,18 +1831,26 @@ class _DateField extends StatelessWidget {
                 final availableWidth = constraints.maxWidth.isFinite
                     ? constraints.maxWidth
                     : 300.0;
+                final compact =
+                    MediaQuery.sizeOf(context).width <
+                    AppSpacing.compactBreakpoint;
+                final controlHeight = compact ? AppSpacing.minTapTarget : 36.0;
                 final gap = availableWidth < 360
                     ? AppSpacing.xs
                     : AppSpacing.sm;
-                final boxWidth = ((availableWidth - 48 - (gap * 3)) / 3)
-                    .clamp(44.0, 74.0)
-                    .toDouble();
-                return Row(
+                final boxWidth =
+                    ((availableWidth - controlHeight - (gap * 3)) / 3)
+                        .clamp(44.0, 74.0)
+                        .toDouble();
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    for (var index = 0; index < parts.length; index++) ...[
+                    for (var index = 0; index < parts.length; index++)
                       SizedBox(
                         width: boxWidth,
-                        height: 48,
+                        height: controlHeight,
                         child: Container(
                           alignment: Alignment.center,
                           padding: EdgeInsets.symmetric(
@@ -1790,20 +1867,18 @@ class _DateField extends StatelessWidget {
                           ),
                           child: Text(
                             parts[index],
-                            style: AppTypography.bodyLarge.copyWith(
+                            style: AppTypography.bodyMedium.copyWith(
                               color: selected == null
                                   ? AppColors.mutedLight
                                   : AppColors.ink,
+                              fontSize: 11.5,
                             ),
                           ),
                         ),
                       ),
-                      if (index != parts.length - 1) SizedBox(width: gap),
-                    ],
-                    SizedBox(width: gap),
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: controlHeight,
+                      height: controlHeight,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: AppColors.surfaceContainerLowest,
@@ -1814,13 +1889,22 @@ class _DateField extends StatelessWidget {
                       ),
                       child: const Icon(
                         Icons.calendar_today_outlined,
-                        size: 20,
+                        size: 16,
                       ),
                     ),
                   ],
                 );
               },
             ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          YorksV1ProjectStrings.dateFormatHelp.active(language),
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.muted,
+            fontSize: 8.5,
+            height: 1.25,
           ),
         ),
         if (error != null) ...[
@@ -3478,6 +3562,11 @@ class _StageActions extends StatelessWidget {
           onPressed: saving ? null : onSkip,
           isExpanded: stacked,
         );
+        if (stage == YorksV1ProjectCreationStage.projectDetails) {
+          return stacked
+              ? primary
+              : Align(alignment: Alignment.centerRight, child: primary);
+        }
         if (stacked) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3494,13 +3583,10 @@ class _StageActions extends StatelessWidget {
         }
         return Row(
           children: [
-            Expanded(child: back),
-            const SizedBox(width: AppSpacing.sm),
-            if (isAttachments) ...[
-              Expanded(child: skip),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-            Expanded(flex: 2, child: primary),
+            back,
+            const Spacer(),
+            if (isAttachments) ...[skip, const SizedBox(width: AppSpacing.sm)],
+            primary,
           ],
         );
       },

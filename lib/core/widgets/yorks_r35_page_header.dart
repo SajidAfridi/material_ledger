@@ -38,17 +38,23 @@ class YorksR35PageHeader extends StatelessWidget {
         const SizedBox(height: 7),
         Text(
           title,
-          style:
-              (compact
-                      ? AppTypography.headlineMedium
-                      : AppTypography.headlineLarge)
-                  .copyWith(color: AppColors.ink),
+          style: compact
+              ? AppTypography.headlineLarge.copyWith(
+                  color: AppColors.ink,
+                  fontSize: 27,
+                  height: 1.08,
+                  letterSpacing: -0.75,
+                )
+              : AppTypography.headlineLarge.copyWith(color: AppColors.ink),
         ),
         if (description != null) ...[
           const SizedBox(height: 7),
           Text(
             description!,
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+            style: AppTypography.bodyMedium.copyWith(
+              color: AppColors.muted,
+              fontSize: compact ? 11.5 : 12.5,
+            ),
           ),
         ],
       ],

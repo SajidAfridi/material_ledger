@@ -1,0 +1,392 @@
+[
+  {
+    "surface": "workspace-shell",
+    "viewport": "1440x900",
+    "before": {
+      "mae": 1.984,
+      "rmse": 12.477,
+      "changed_percent": 3.396,
+      "changed_bbox": [
+        0,
+        0,
+        1416,
+        900
+      ]
+    },
+    "after": {
+      "mae": 1.6,
+      "rmse": 11.875,
+      "changed_percent": 2.277,
+      "changed_bbox": [
+        0,
+        13,
+        1416,
+        890
+      ]
+    }
+  },
+  {
+    "surface": "workspace-shell",
+    "viewport": "1366x768",
+    "before": {
+      "mae": 2.561,
+      "rmse": 14.588,
+      "changed_percent": 4.56,
+      "changed_bbox": [
+        0,
+        0,
+        1344,
+        768
+      ]
+    },
+    "after": {
+      "mae": 2.084,
+      "rmse": 13.527,
+      "changed_percent": 3.403,
+      "changed_bbox": [
+        0,
+        13,
+        1342,
+        760
+      ]
+    }
+  },
+  {
+    "surface": "workspace-shell",
+    "viewport": "1024x768",
+    "before": {
+      "mae": 5.901,
+      "rmse": 26.397,
+      "changed_percent": 9.069,
+      "changed_bbox": [
+        0,
+        0,
+        1024,
+        768
+      ]
+    },
+    "after": {
+      "mae": 2.698,
+      "rmse": 15.57,
+      "changed_percent": 4.513,
+      "changed_bbox": [
+        0,
+        13,
+        1000,
+        760
+      ]
+    }
+  },
+  {
+    "surface": "workspace-shell",
+    "viewport": "390x844",
+    "before": {
+      "mae": 14.213,
+      "rmse": 50.796,
+      "changed_percent": 9.748,
+      "changed_bbox": [
+        0,
+        8,
+        390,
+        844
+      ]
+    },
+    "after": {
+      "mae": 1.465,
+      "rmse": 10.026,
+      "changed_percent": 2.759,
+      "changed_bbox": [
+        0,
+        0,
+        384,
+        844
+      ]
+    }
+  },
+  {
+    "surface": "workspace-shell",
+    "viewport": "360x800",
+    "before": {
+      "mae": 14.79,
+      "rmse": 51.485,
+      "changed_percent": 10.351,
+      "changed_bbox": [
+        0,
+        8,
+        360,
+        800
+      ]
+    },
+    "after": {
+      "mae": 1.604,
+      "rmse": 10.573,
+      "changed_percent": 3.057,
+      "changed_bbox": [
+        0,
+        0,
+        352,
+        800
+      ]
+    }
+  },
+  {
+    "surface": "overview",
+    "viewport": "1440x900",
+    "before": {
+      "mae": 10.536,
+      "rmse": 28.565,
+      "changed_percent": 38.202,
+      "changed_bbox": [
+        0,
+        0,
+        1416,
+        900
+      ]
+    },
+    "after": {
+      "mae": 3.844,
+      "rmse": 19.76,
+      "changed_percent": 5.07,
+      "changed_bbox": [
+        0,
+        13,
+        1416,
+        890
+      ]
+    }
+  },
+  {
+    "surface": "overview",
+    "viewport": "1366x768",
+    "before": {
+      "mae": 11.939,
+      "rmse": 31.568,
+      "changed_percent": 40.702,
+      "changed_bbox": [
+        0,
+        0,
+        1344,
+        768
+      ]
+    },
+    "after": {
+      "mae": 4.834,
+      "rmse": 22.154,
+      "changed_percent": 6.804,
+      "changed_bbox": [
+        0,
+        13,
+        1342,
+        760
+      ]
+    }
+  },
+  {
+    "surface": "overview",
+    "viewport": "1024x768",
+    "before": {
+      "mae": 14.113,
+      "rmse": 39.747,
+      "changed_percent": 31.102,
+      "changed_bbox": [
+        0,
+        0,
+        1024,
+        768
+      ]
+    },
+    "after": {
+      "mae": 8.91,
+      "rmse": 31.666,
+      "changed_percent": 15.282,
+      "changed_bbox": [
+        0,
+        13,
+        1000,
+        760
+      ]
+    }
+  },
+  {
+    "surface": "overview",
+    "viewport": "390x844",
+    "before": {
+      "mae": 32.773,
+      "rmse": 71.698,
+      "changed_percent": 33.386,
+      "changed_bbox": [
+        0,
+        8,
+        390,
+        844
+      ]
+    },
+    "after": {
+      "mae": 9.959,
+      "rmse": 30.369,
+      "changed_percent": 18.496,
+      "changed_bbox": [
+        0,
+        0,
+        384,
+        844
+      ]
+    }
+  },
+  {
+    "surface": "overview",
+    "viewport": "360x800",
+    "before": {
+      "mae": 34.444,
+      "rmse": 73.795,
+      "changed_percent": 35.389,
+      "changed_bbox": [
+        0,
+        8,
+        360,
+        800
+      ]
+    },
+    "after": {
+      "mae": 12.268,
+      "rmse": 34.177,
+      "changed_percent": 23.235,
+      "changed_bbox": [
+        0,
+        0,
+        352,
+        800
+      ]
+    }
+  },
+  {
+    "surface": "project-create",
+    "viewport": "1440x900",
+    "before": {
+      "mae": 8.576,
+      "rmse": 29.321,
+      "changed_percent": 14.827,
+      "changed_bbox": [
+        0,
+        0,
+        1416,
+        900
+      ]
+    },
+    "after": {
+      "mae": 5.19,
+      "rmse": 21.526,
+      "changed_percent": 8.39,
+      "changed_bbox": [
+        0,
+        13,
+        1416,
+        890
+      ]
+    }
+  },
+  {
+    "surface": "project-create",
+    "viewport": "1366x768",
+    "before": {
+      "mae": 8.315,
+      "rmse": 27.707,
+      "changed_percent": 13.78,
+      "changed_bbox": [
+        0,
+        0,
+        1344,
+        768
+      ]
+    },
+    "after": {
+      "mae": 6.043,
+      "rmse": 22.932,
+      "changed_percent": 10.623,
+      "changed_bbox": [
+        0,
+        13,
+        1342,
+        768
+      ]
+    }
+  },
+  {
+    "surface": "project-create",
+    "viewport": "1024x768",
+    "before": {
+      "mae": 11.456,
+      "rmse": 31.261,
+      "changed_percent": 22.613,
+      "changed_bbox": [
+        0,
+        0,
+        1024,
+        768
+      ]
+    },
+    "after": {
+      "mae": 7.674,
+      "rmse": 26.376,
+      "changed_percent": 12.889,
+      "changed_bbox": [
+        0,
+        13,
+        1000,
+        768
+      ]
+    }
+  },
+  {
+    "surface": "project-create",
+    "viewport": "390x844",
+    "before": {
+      "mae": 25.759,
+      "rmse": 60.892,
+      "changed_percent": 28.535,
+      "changed_bbox": [
+        0,
+        8,
+        390,
+        844
+      ]
+    },
+    "after": {
+      "mae": 10.065,
+      "rmse": 29.54,
+      "changed_percent": 19.12,
+      "changed_bbox": [
+        0,
+        0,
+        383,
+        844
+      ]
+    }
+  },
+  {
+    "surface": "project-create",
+    "viewport": "360x800",
+    "before": {
+      "mae": 26.869,
+      "rmse": 62.043,
+      "changed_percent": 29.947,
+      "changed_bbox": [
+        0,
+        8,
+        360,
+        800
+      ]
+    },
+    "after": {
+      "mae": 10.854,
+      "rmse": 30.912,
+      "changed_percent": 20.308,
+      "changed_bbox": [
+        0,
+        0,
+        352,
+        800
+      ]
+    }
+  }
+]

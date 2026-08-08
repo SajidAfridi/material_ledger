@@ -43,6 +43,7 @@ void main() {
   ) async {
     _setViewport(tester, const Size(360, 800));
     addTearDown(() => _resetViewport(tester));
+    final semantics = tester.ensureSemantics();
 
     final preferences = await SharedPreferences.getInstance();
     await tester.pumpWidget(
@@ -53,8 +54,43 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel(AppStrings.more.primary), findsOneWidget);
+    final destinations = [
+      YorksV1ShellStrings.overview.primary,
+      YorksV1ShellStrings.projects.primary,
+      YorksV1ShellStrings.materialRequests.primary,
+      YorksV1ShellStrings.materialReturns.primary,
+      YorksV1ShellStrings.ductSizer.primary,
+      YorksV1ShellStrings.espCalculator.primary,
+    ];
+    final bounds = <Rect>[];
+    for (final destination in destinations) {
+      final item = find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics && widget.properties.label == destination,
+      );
+      expect(item, findsOneWidget);
+      bounds.add(tester.getRect(item));
+    }
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label == AppStrings.more.primary,
+      ),
+      findsNothing,
+    );
+    expect(bounds.map((rect) => rect.top).toSet(), hasLength(1));
+    expect(bounds.map((rect) => rect.bottom).toSet(), hasLength(1));
+    for (final rect in bounds) {
+      expect(rect.width, greaterThanOrEqualTo(44));
+      expect(rect.height, greaterThanOrEqualTo(44));
+      expect(rect.bottom, lessThanOrEqualTo(790));
+    }
+    for (var index = 1; index < bounds.length; index++) {
+      expect((bounds[index].width - bounds.first.width).abs(), lessThan(0.1));
+    }
     expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets('R35 workspace search opens a navigable command palette', (

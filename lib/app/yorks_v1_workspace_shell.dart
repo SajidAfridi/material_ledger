@@ -7,6 +7,7 @@ import '../core/constants/constants.dart';
 import '../core/widgets/brand_logo.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
+import '../shared/models/yorks_v1_project_strings.dart';
 import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/providers/language_provider.dart';
@@ -43,10 +44,12 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final destinations = _destinationsFor(role);
     final current = _currentDestination(destinations, location);
     final desktop =
-        MediaQuery.sizeOf(context).width >= AppSpacing.yorksV1DesktopBreakpoint;
+        MediaQuery.sizeOf(context).width >=
+        AppSpacing.yorksV1ShellDesktopBreakpoint;
     final sidebarExpanded = desktop
         ? ref.watch(yorksV1SidebarExpandedProvider)
         : true;
+    final breadcrumbs = _breadcrumbsFor(location, current);
 
     void openSearch() {
       showYorksV1WorkspaceSearch(
@@ -65,6 +68,17 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       );
     }
 
+    final sidebar = _YorksDesktopSidebar(
+      destinations: destinations,
+      activePath: current?.path,
+      language: language,
+      role: role,
+      userName: user?.fullName,
+      expanded: sidebarExpanded,
+      onToggle: () => ref.read(yorksV1SidebarExpandedProvider.notifier).state =
+          !sidebarExpanded,
+    );
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyK, meta: true): openSearch,
@@ -73,47 +87,64 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       },
       child: Scaffold(
         backgroundColor: AppColors.surface,
-        body: Row(
-          children: [
-            if (desktop)
-              _YorksDesktopSidebar(
-                destinations: destinations,
-                activePath: current?.path,
-                language: language,
-                role: role,
-                userName: user?.fullName,
-                expanded: sidebarExpanded,
-                onToggle: () =>
-                    ref.read(yorksV1SidebarExpandedProvider.notifier).state =
-                        !sidebarExpanded,
+        drawer: desktop
+            ? null
+            : Drawer(
+                width: 246,
+                shape: const RoundedRectangleBorder(),
+                child: _YorksDesktopSidebar(
+                  destinations: destinations,
+                  activePath: current?.path,
+                  language: language,
+                  role: role,
+                  userName: user?.fullName,
+                  expanded: true,
+                  onToggle: () => Navigator.of(context).maybePop(),
+                ),
               ),
-            Expanded(
-              child: Column(
+        body: Builder(
+          builder: (scaffoldContext) => Stack(
+            children: [
+              Row(
                 children: [
-                  // Feature screens own the compact mobile/tablet app bar. A
-                  // second global header there would crowd the focused editor
-                  // and duplicate the title; the full R35 context top bar is a
-                  // desktop office affordance.
-                  if (desktop)
-                    _YorksWorkspaceTopBar(
-                      title: current?.label ?? YorksV1ShellStrings.overview,
-                      language: language,
-                      role: role,
+                  if (desktop) sidebar,
+                  Expanded(
+                    child: Column(
+                      children: [
+                        if (desktop)
+                          _YorksWorkspaceTopBar(
+                            breadcrumbs: breadcrumbs,
+                            language: language,
+                            role: role,
+                          )
+                        else
+                          _YorksWorkspaceMobileTopBar(
+                            breadcrumbs: breadcrumbs,
+                            userName: user?.fullName,
+                            onMenu: Scaffold.of(scaffoldContext).openDrawer,
+                            onSearch: openSearch,
+                          ),
+                        Expanded(child: child),
+                      ],
                     ),
-                  Expanded(child: child),
+                  ),
                 ],
               ),
-            ),
-          ],
+              if (!desktop)
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: _YorksMobileNavigation(
+                    destinations: destinations,
+                    activePath: current?.path,
+                    language: language,
+                    role: role,
+                  ),
+                ),
+            ],
+          ),
         ),
-        bottomNavigationBar: desktop
-            ? null
-            : _YorksMobileNavigation(
-                destinations: destinations,
-                activePath: current?.path,
-                language: language,
-                role: role,
-              ),
       ),
     );
   }
@@ -136,6 +167,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       ),
       _YorksDestination(
         label: YorksV1ShellStrings.materialRequests,
+        compactLabel: YorksV1ShellStrings.requestsCompact,
         icon: Icons.assignment_outlined,
         selectedIcon: Icons.assignment_rounded,
         path: RoutePaths.yorksV1MaterialRequests,
@@ -150,12 +182,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         ...shared,
         _YorksDestination(
           label: YorksV1ShellStrings.materialReturns,
+          compactLabel: YorksV1ShellStrings.returnsCompact,
           icon: Icons.assignment_return_outlined,
           selectedIcon: Icons.assignment_return_rounded,
           path: RoutePaths.yorksV1Returns,
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.ductSizer,
+          compactLabel: YorksV1ShellStrings.ductCompact,
           icon: Icons.straighten_outlined,
           selectedIcon: Icons.straighten_rounded,
           path: RoutePaths.yorksV1DuctSizer,
@@ -163,6 +197,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         ),
         _YorksDestination(
           label: YorksV1ShellStrings.espCalculator,
+          compactLabel: YorksV1ShellStrings.espCompact,
           icon: Icons.speed_outlined,
           selectedIcon: Icons.speed_rounded,
           path: RoutePaths.yorksV1EspCalculator,
@@ -259,6 +294,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       final path = destination.path;
       if (path == null) continue;
       if (location == path ||
+          (path == RoutePaths.yorksV1Projects &&
+              location == RoutePaths.engineerCreateProject) ||
           (path == RoutePaths.yorksV1MaterialRequests &&
               location.startsWith('/yorks/material-requests')) ||
           (path == RoutePaths.yorksV1Projects &&
@@ -276,16 +313,29 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     }
     return null;
   }
+
+  List<TranslatableString> _breadcrumbsFor(
+    String location,
+    _YorksDestination? current,
+  ) {
+    if (location == RoutePaths.engineerCreateProject) {
+      return const [
+        YorksV1ProjectStrings.projects,
+        YorksV1ProjectStrings.createProject,
+      ];
+    }
+    return [current?.label ?? YorksV1ShellStrings.overview];
+  }
 }
 
 class _YorksWorkspaceTopBar extends ConsumerWidget {
   const _YorksWorkspaceTopBar({
-    required this.title,
+    required this.breadcrumbs,
     required this.language,
     required this.role,
   });
 
-  final TranslatableString title;
+  final List<TranslatableString> breadcrumbs;
   final AppLanguage language;
   final YorksV1Role? role;
 
@@ -293,7 +343,7 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
     return Material(
-      color: AppColors.surfaceContainerLow,
+      color: AppColors.workspaceChrome,
       child: Container(
         height: AppSpacing.topBarHeight,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
@@ -306,20 +356,26 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               YorksV1ShellStrings.companyName.primary,
               style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              child: Text('/', style: TextStyle(color: AppColors.lineStrong)),
-            ),
-            Text(
-              title.primary,
-              style: AppTypography.titleSmall.copyWith(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w800,
+            for (final breadcrumb in breadcrumbs) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child: Text('/', style: TextStyle(color: AppColors.lineStrong)),
               ),
-            ),
+              Flexible(
+                child: Text(
+                  breadcrumb.primary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
             const Spacer(),
             SizedBox(
-              width: 300,
+              width: 220,
               child: _YorksQuickNavigationButton(
                 destinations: _topLevelDestinationsFor(role),
                 language: language,
@@ -333,6 +389,105 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _YorksWorkspaceMobileTopBar extends StatelessWidget {
+  const _YorksWorkspaceMobileTopBar({
+    required this.breadcrumbs,
+    required this.userName,
+    required this.onMenu,
+    required this.onSearch,
+  });
+
+  final List<TranslatableString> breadcrumbs;
+  final String? userName;
+  final VoidCallback onMenu;
+  final VoidCallback onSearch;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.workspaceChrome,
+    child: Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
+      child: Row(
+        children: [
+          _MobileTopBarButton(
+            icon: Icons.menu_rounded,
+            tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+            onPressed: onMenu,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Row(
+              children: [
+                for (var index = 0; index < breadcrumbs.length; index++) ...[
+                  if (index > 0)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        '/',
+                        style: TextStyle(color: AppColors.lineStrong),
+                      ),
+                    ),
+                  Flexible(
+                    child: Text(
+                      breadcrumbs[index].primary.replaceFirst(' Project', ''),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _MobileTopBarButton(
+            icon: Icons.search_rounded,
+            tooltip: YorksV1ShellStrings.searchOrJump.primary,
+            onPressed: onSearch,
+          ),
+          const SizedBox(width: 10),
+          _Avatar(name: userName ?? '', size: 32),
+        ],
+      ),
+    ),
+  );
+}
+
+class _MobileTopBarButton extends StatelessWidget {
+  const _MobileTopBarButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    onPressed: onPressed,
+    tooltip: tooltip,
+    icon: Icon(icon, size: 19),
+    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+    padding: EdgeInsets.zero,
+    style: IconButton.styleFrom(
+      backgroundColor: AppColors.surfaceContainerLowest,
+      side: const BorderSide(color: AppColors.line),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+    ),
+  );
 }
 
 class _YorksDesktopSidebar extends ConsumerWidget {
@@ -364,7 +519,7 @@ class _YorksDesktopSidebar extends ConsumerWidget {
           ? AppSpacing.sidebarWidth
           : AppSpacing.sidebarCollapsedWidth,
       decoration: const BoxDecoration(
-        color: AppColors.surfaceContainerLow,
+        color: AppColors.workspaceChrome,
         border: Border(right: BorderSide(color: AppColors.line)),
       ),
       child: SafeArea(
@@ -372,10 +527,10 @@ class _YorksDesktopSidebar extends ConsumerWidget {
           children: [
             Padding(
               padding: EdgeInsets.fromLTRB(
-                expanded ? AppSpacing.lg : AppSpacing.xs,
-                AppSpacing.lg,
-                expanded ? AppSpacing.lg : AppSpacing.xs,
-                AppSpacing.lg,
+                expanded ? 22 : AppSpacing.xs,
+                expanded ? 24 : AppSpacing.lg,
+                expanded ? 14 : AppSpacing.xs,
+                expanded ? 24 : AppSpacing.lg,
               ),
               child: Row(
                 mainAxisAlignment: expanded
@@ -383,16 +538,18 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                     : MainAxisAlignment.center,
                 children: [
                   if (expanded) ...[
-                    const BrandLogo(size: 44, shadow: true),
-                    const SizedBox(width: AppSpacing.md),
+                    const BrandLogo(size: 48, shadow: true),
+                    const SizedBox(width: 13),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             YorksV1ShellStrings.companyName.primary,
-                            style: AppTypography.titleLarge.copyWith(
+                            style: AppTypography.titleSmall.copyWith(
                               color: AppColors.navy,
+                              fontSize: 14,
+                              height: 1.15,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -409,15 +566,9 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xs),
-                    IconButton(
+                    _HoverRevealSidebarToggle(
                       onPressed: onToggle,
-                      icon: const Icon(Icons.chevron_left_rounded),
                       tooltip: YorksV1ShellStrings.collapsePanel.primary,
-                      constraints: const BoxConstraints.tightFor(
-                        width: AppSpacing.minTapTarget,
-                        height: AppSpacing.minTapTarget,
-                      ),
-                      padding: EdgeInsets.zero,
                     ),
                   ] else
                     IconButton(
@@ -438,7 +589,7 @@ class _YorksDesktopSidebar extends ConsumerWidget {
               child: ListView(
                 padding: EdgeInsets.fromLTRB(
                   expanded ? AppSpacing.md : AppSpacing.xs,
-                  AppSpacing.lg,
+                  AppSpacing.sm,
                   expanded ? AppSpacing.md : AppSpacing.xs,
                   AppSpacing.sm,
                 ),
@@ -452,7 +603,7 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                         Padding(
                           padding: const EdgeInsets.fromLTRB(
                             AppSpacing.sm,
-                            AppSpacing.lg,
+                            AppSpacing.sm,
                             AppSpacing.sm,
                             AppSpacing.sm,
                           ),
@@ -488,9 +639,9 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                 expanded ? AppSpacing.md : AppSpacing.xs,
                 AppSpacing.md,
               ),
-              padding: const EdgeInsets.all(AppSpacing.sm + 1),
+              padding: EdgeInsets.zero,
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLow,
+                color: AppColors.surfaceContainerLowest,
                 border: Border.all(color: AppColors.line),
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
@@ -500,7 +651,10 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                   onTap: () => _showYorksProfileDialog(context),
                   child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xs),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 7,
+                    ),
                     child: Row(
                       mainAxisAlignment: expanded
                           ? MainAxisAlignment.start
@@ -509,7 +663,7 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            _Avatar(name: displayName, size: 42),
+                            _Avatar(name: displayName, size: 36),
                             Positioned(
                               right: -1,
                               bottom: -1,
@@ -595,6 +749,44 @@ class _YorksDesktopSidebar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _HoverRevealSidebarToggle extends StatefulWidget {
+  const _HoverRevealSidebarToggle({
+    required this.onPressed,
+    required this.tooltip,
+  });
+
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  @override
+  State<_HoverRevealSidebarToggle> createState() =>
+      _HoverRevealSidebarToggleState();
+}
+
+class _HoverRevealSidebarToggleState extends State<_HoverRevealSidebarToggle> {
+  bool _visible = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _visible = true),
+    onExit: (_) => setState(() => _visible = false),
+    child: Focus(
+      onFocusChange: (focused) => setState(() => _visible = focused),
+      child: AnimatedOpacity(
+        opacity: _visible ? 1 : 0,
+        duration: const Duration(milliseconds: 120),
+        child: IconButton(
+          onPressed: widget.onPressed,
+          icon: const Icon(Icons.chevron_left_rounded),
+          tooltip: widget.tooltip,
+          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          padding: EdgeInsets.zero,
+        ),
+      ),
+    ),
+  );
 }
 
 void _showYorksProfileDialog(BuildContext context) {
@@ -890,37 +1082,49 @@ class _YorksMobileNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final directCount = destinations.length <= 6 ? 6 : 5;
     final visible = destinations
         .where((item) => item.path != null)
-        .take(5)
+        .take(directCount)
         .toList();
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          border: const Border(top: BorderSide(color: AppColors.line)),
-        ),
-        child: Row(
-          children: [
-            for (final destination in visible)
-              Expanded(
-                child: _YorksMobileItem(
-                  destination: destination,
-                  selected: destination.path == activePath,
-                  language: language,
-                ),
+      minimum: EdgeInsets.zero,
+      child: SizedBox(
+        height: 62,
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: const Color(0xF00C2543),
+            borderRadius: BorderRadius.circular(17),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x470B1F35),
+                blurRadius: 50,
+                offset: Offset(0, 18),
               ),
-            if (destinations.length > visible.length)
-              Expanded(
-                child: _YorksMobileMoreItem(
-                  destinations: destinations.skip(visible.length).toList(),
-                  language: language,
-                  role: role,
+            ],
+          ),
+          child: Row(
+            children: [
+              for (final destination in visible)
+                Expanded(
+                  child: _YorksMobileItem(
+                    destination: destination,
+                    selected: destination.path == activePath,
+                    language: language,
+                  ),
                 ),
-              ),
-          ],
+              if (destinations.length > visible.length)
+                Expanded(
+                  child: _YorksMobileMoreItem(
+                    destinations: destinations.skip(visible.length).toList(),
+                    language: language,
+                    role: role,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1028,31 +1232,48 @@ class _YorksMobileItem extends StatelessWidget {
     selected: selected,
     label: destination.label.primary,
     child: InkWell(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      borderRadius: BorderRadius.circular(13),
       onTap: () => context.go(destination.path!),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                selected ? destination.selectedIcon : destination.icon,
-                size: 21,
-                color: selected ? AppColors.blue : AppColors.muted,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                destination.label.primary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelSmall.copyWith(
-                  color: selected ? AppColors.blue : AppColors.muted,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.onPrimary.withValues(alpha: .12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: AppSpacing.minTapTarget,
+            minHeight: AppSpacing.minTapTarget,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: 18,
+                  color: selected
+                      ? AppColors.onPrimary
+                      : AppColors.onPrimary.withValues(alpha: .72),
                 ),
-              ),
-            ],
+                const SizedBox(height: 3),
+                Text(
+                  (destination.compactLabel ?? destination.label).primary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: selected
+                        ? AppColors.onPrimary
+                        : AppColors.onPrimary.withValues(alpha: .72),
+                    fontSize: 6.5,
+                    height: 1.1,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1076,7 +1297,7 @@ class _YorksMobileMoreItem extends StatelessWidget {
     button: true,
     label: AppStrings.more.primary,
     child: InkWell(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      borderRadius: BorderRadius.circular(13),
       onTap: () => showModalBottomSheet<void>(
         context: context,
         sheetAnimationStyle: AnimationStyle.noAnimation,
@@ -1100,16 +1321,29 @@ class _YorksMobileMoreItem extends StatelessWidget {
         ),
       ),
       child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: AppSpacing.minTapTarget),
+        constraints: const BoxConstraints(
+          minWidth: AppSpacing.minTapTarget,
+          minHeight: AppSpacing.minTapTarget,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.more_horiz_rounded,
-              size: 21,
-              color: AppColors.blueContainerStrong,
+              size: 18,
+              color: AppColors.onPrimary.withValues(alpha: .72),
             ),
-            SizedBox(height: 2),
+            const SizedBox(height: 3),
+            Text(
+              AppStrings.more.primary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.onPrimary.withValues(alpha: .72),
+                fontSize: 6.5,
+                height: 1.1,
+              ),
+            ),
           ],
         ),
       ),
@@ -1151,7 +1385,7 @@ class _YorksQuickNavigationButton extends StatelessWidget {
           role: role,
         ),
         child: Container(
-          height: 48,
+          height: 36,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           decoration: BoxDecoration(
             color: AppColors.surfaceContainerLowest,
@@ -1175,10 +1409,7 @@ class _YorksQuickNavigationButton extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceContainer,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
@@ -1227,6 +1458,7 @@ class _YorksDestination {
     required this.label,
     required this.icon,
     required this.selectedIcon,
+    this.compactLabel,
     this.path,
     this.group,
     this.suffix,
@@ -1235,6 +1467,7 @@ class _YorksDestination {
   final TranslatableString label;
   final IconData icon;
   final IconData selectedIcon;
+  final TranslatableString? compactLabel;
   final String? path;
   final TranslatableString? group;
   final TranslatableString? suffix;
