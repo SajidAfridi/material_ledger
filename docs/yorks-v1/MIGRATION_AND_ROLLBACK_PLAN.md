@@ -210,6 +210,19 @@ batch and import-row audit records. Any committed imported quantity is reversed
 only by an authorized compensating stock movement, never by deleting the batch
 or copying an older balance.
 
+Migration `20260809174308_yorks_v1_inventory_category_families_commands.sql`
+adds one nullable parent-family link plus size/model metadata and a separate
+metadata version. It preserves every inventory, balance, reservation, movement
+and import ID. Only the four known seeded Air Terminal children are renamed and
+parented by exact stable ID; this deterministic correction is repeatable and no
+historical item is inferred or fuzzily reclassified. The migration also adds
+the standard `pg_trgm` extension for advisory category ranking and keeps every
+write behind role-checked, idempotent trusted commands. A build rollback must
+revoke the new suggestion/create-item/stock-adjust grants and redeploy the prior
+client while retaining committed categories, aliases, item metadata and stock
+movements. Physical quantity is corrected only by an authorized compensating
+movement.
+
 ## 9. Migration stop conditions
 
 Stop before production mutation when:

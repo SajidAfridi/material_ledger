@@ -191,7 +191,25 @@ class YorksV1InventoryImportPreview {
 String yorksV1InventoryCategoryDisplayName(String value) {
   final compact = value.trim().replaceAll(RegExp(r'\s+'), ' ');
   if (compact.isEmpty) return '';
-  const acronyms = {'ac', 'hvac', 'gi', 'pvc', 'sed', 'red'};
+  const acronyms = {
+    'ac',
+    'hvac',
+    'gi',
+    'pvc',
+    'sed',
+    'red',
+    'vcd',
+    'fd',
+    'fsd',
+    'msfd',
+    'mfd',
+    'msd',
+    'mvcd',
+    'ahu',
+    'fcu',
+    'fahu',
+    'vrf',
+  };
   return compact
       .split(' ')
       .map((word) {

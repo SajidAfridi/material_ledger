@@ -22,6 +22,62 @@ void main() {
     );
   });
 
+  test('create-item payload keeps metadata separate from opening stock', () {
+    const input = YorksV1InventoryAdjustmentInput(
+      description: 'Round air diffuser',
+      itemCode: 'RAD-300',
+      categoryId: 'round',
+      brandOrigin: 'Yorks / UAE',
+      sizeText: '300 mm',
+      modelReference: 'RAD-300-A',
+      unit: 'Nos',
+      minimumStock: '4',
+      locationBin: 'B-03',
+      notes: 'Keep dry',
+      quantityDelta: '12',
+      reference: 'GRN-104',
+      reason: 'Opening warehouse count',
+      idempotencyKey: '92000000-0000-4000-8000-000000000002',
+    );
+
+    expect(input.createsItem, isTrue);
+    expect(
+      input.toCreateItemRpcPayload(),
+      containsPair('opening_quantity', '12'),
+    );
+    expect(input.toCreateItemRpcPayload(), containsPair('size_text', '300 mm'));
+    expect(
+      input.toCreateItemRpcPayload(),
+      containsPair('model_reference', 'RAD-300-A'),
+    );
+    expect(input.toCreateItemRpcPayload(), isNot(contains('quantity_delta')));
+    expect(input.toCreateItemRpcPayload(), isNot(contains('expected_version')));
+  });
+
+  test('existing-item movement carries action and optimistic version only', () {
+    const input = YorksV1InventoryAdjustmentInput(
+      inventoryItemId: '93000000-0000-4000-8000-000000000001',
+      expectedVersion: 7,
+      action: 'remove',
+      quantityDelta: '3',
+      reference: 'COUNT-22',
+      reason: 'Approved count correction',
+      idempotencyKey: '92000000-0000-4000-8000-000000000003',
+    );
+
+    expect(input.createsItem, isFalse);
+    expect(input.toStockMovementRpcPayload(), containsPair('action', 'remove'));
+    expect(
+      input.toStockMovementRpcPayload(),
+      containsPair('expected_version', 7),
+    );
+    expect(
+      input.toStockMovementRpcPayload(),
+      isNot(contains('item_description')),
+    );
+    expect(input.toStockMovementRpcPayload(), isNot(contains('category_id')));
+  });
+
   test(
     'category matcher applies exact aliases but only suggests close text',
     () {

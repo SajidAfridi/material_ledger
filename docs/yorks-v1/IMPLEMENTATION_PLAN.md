@@ -214,7 +214,12 @@ Status: implemented as an additive Batch 7 refinement. The warehouse now uses
 the approved category/alias master, item code/minimum/location metadata,
 atomic reviewed workbook import, exact client download template and responsive
 Overview/Items/Movements/Reservations workspace. Procurement/Admin authority
-and the existing reservation/dispatch transaction model are unchanged.
+and the existing reservation/dispatch transaction model are unchanged. The
+R38.3 convergence follow-up adds one optional category-family level, ranked
+canonical/alias/fuzzy suggestions, explicit create-versus-adjust entry paths,
+and separate trusted item-master/opening-balance and versioned stock-movement
+commands. Fuzzy results remain advisory; a user selection is required before
+an alias or item relationship is written.
 
 ## Batch 8 — Delivery Orders and Material Returns
 

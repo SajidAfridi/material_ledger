@@ -62,7 +62,20 @@ abstract interface class YorksV1LogisticsRepository {
   );
 }
 
-class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
+/// Optional read-only smart-category boundary. Keeping this separate preserves
+/// compatibility with deterministic test repositories while production uses
+/// the server-ranked, role-checked projection.
+abstract interface class YorksV1InventoryCategorySuggestionRepository {
+  Future<List<YorksV1InventoryCategorySearchResult>> suggestInventoryCategories(
+    String query, {
+    int limit = 8,
+  });
+}
+
+class YorksV1SupabaseLogisticsRepository
+    implements
+        YorksV1LogisticsRepository,
+        YorksV1InventoryCategorySuggestionRepository {
   const YorksV1SupabaseLogisticsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -99,14 +112,46 @@ class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
   Future<YorksV1LogisticsInventoryItem> adjustInventory(
     YorksV1InventoryAdjustmentInput input,
   ) async {
+    final functionName = input.createsItem
+        ? 'v1_create_inventory_item'
+        : input.action != null
+        ? 'v1_adjust_inventory_stock'
+        : 'v1_adjust_inventory';
     final response = await _invoke(
-      functionName: 'v1_adjust_inventory',
+      functionName: functionName,
       parameters: {
-        'p_payload': input.toRpcPayload(),
+        'p_payload': input.createsItem
+            ? input.toCreateItemRpcPayload()
+            : input.action != null
+            ? input.toStockMovementRpcPayload()
+            : input.toRpcPayload(),
         'p_idempotency_key': input.idempotencyKey,
       },
     );
     return _inventoryItem(response);
+  }
+
+  @override
+  Future<List<YorksV1InventoryCategorySearchResult>> suggestInventoryCategories(
+    String query, {
+    int limit = 8,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_inventory_category_suggestions',
+      parameters: {'p_query': query.trim(), 'p_limit': limit},
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final row in response)
+        if (row is Map)
+          YorksV1InventoryCategorySearchResult.fromRpcJson(
+            Map<String, dynamic>.from(row),
+          ),
+    ];
   }
 
   @override

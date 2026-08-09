@@ -58,13 +58,79 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Warehouse'), findsOneWidget);
-      expect(find.text('Available = On hand - Reserved'), findsOneWidget);
+      expect(find.text('Warehouse Inventory'), findsOneWidget);
+      expect(find.text('Stock quantity remains controlled'), findsOneWidget);
       expect(find.text('Incoming stock'), findsNothing);
       expect(tester.takeException(), isNull);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/r35/${evidence.name}'),
+      );
+    });
+  }
+
+  for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop', size: const Size(1366, 768)),
+    (suffix: 'mobile', size: const Size(360, 800)),
+  ]) {
+    testWidgets('R38.3 stock chooser and category create — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add / Receive stock').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Create inventory item'), findsOneWidget);
+      expect(find.text('Receive or adjust existing stock'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/smart_inventory_chooser_${evidence.suffix}.png',
+        ),
+      );
+
+      await tester.tap(find.text('Create inventory item'));
+      await tester.pumpAndSettle();
+      expect(find.text('Item identity'), findsOneWidget);
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField &&
+              widget.decoration?.hintText == 'Start typing a category',
+        ),
+        'round ac terminal',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Air Terminals › Round'), findsOneWidget);
+      expect(find.textContaining('Create “Round AC Terminal”'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/smart_inventory_create_${evidence.suffix}.png',
+        ),
       );
     });
   }
@@ -116,6 +182,7 @@ final _workspace = YorksV1InventoryWorkspace(
       description: 'Round air diffuser 300 mm',
       categoryId: 'category-round',
       categoryName: 'Air Terminals - Round',
+      categoryPath: 'Air Terminals › Round',
       brandOrigin: 'Yorks',
       unit: 'Nos',
       minimumStock: '3',
@@ -144,7 +211,15 @@ final _workspace = YorksV1InventoryWorkspace(
     ),
   ],
   categories: [
-    _category('category-round', 'Air Terminals - Round', 1),
+    _category(
+      'category-round',
+      'Round',
+      1,
+      parentCategoryId: 'category-air-terminals',
+      parentName: 'Air Terminals',
+      aliases: const ['Round AC Terminal'],
+    ),
+    _category('category-air-terminals', 'Air Terminals', 0),
     _category('category-duct', 'Ductwork & Accessories', 1),
     _category('category-fan', 'Fans & Equipment', 1),
     _category('category-general', 'General & Custom', 0),
@@ -203,15 +278,23 @@ final _workspace = YorksV1InventoryWorkspace(
   ),
 );
 
-YorksV1InventoryCategory _category(String id, String name, int itemCount) =>
-    YorksV1InventoryCategory(
-      id: id,
-      name: name,
-      isSystem: true,
-      isActive: true,
-      recordVersion: 1,
-      itemCount: itemCount,
-      aliases: const [],
-      createdByDisplayName: 'Yorks standard',
-      createdAt: DateTime.utc(2026, 8, 9),
-    );
+YorksV1InventoryCategory _category(
+  String id,
+  String name,
+  int itemCount, {
+  String? parentCategoryId,
+  String? parentName,
+  List<String> aliases = const [],
+}) => YorksV1InventoryCategory(
+  id: id,
+  name: name,
+  isSystem: true,
+  isActive: true,
+  recordVersion: 1,
+  itemCount: itemCount,
+  parentCategoryId: parentCategoryId,
+  parentName: parentName,
+  aliases: aliases,
+  createdByDisplayName: 'Yorks standard',
+  createdAt: DateTime.utc(2026, 8, 9),
+);

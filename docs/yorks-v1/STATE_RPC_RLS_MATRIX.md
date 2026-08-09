@@ -105,6 +105,11 @@ tables/functions.
 | `v1_cancel_material_request` | Project Engineer/Admin per policy | MR, reservations, dispatch existence | yes | cancel/retain history, release remainder, audit/notification |
 | `v1_close_material_request` | Project Engineer/Admin | MR and all logistics rows | yes | validated closed state, audit |
 | `v1_adjust_inventory` | Procurement/Admin capability | inventory item/version | yes | append-only adjustment movement and derived balance, audit |
+| `v1_inventory_category_suggestions` | Procurement/Admin inventory capability | active category/alias library | no | ranked read-only canonical, alias and advisory fuzzy results |
+| `v1_create_inventory_category` | Procurement/Admin inventory capability | optional active parent family, canonical name | yes | stable category ID/path plus audit; no quantity effect |
+| `v1_create_inventory_item` | Procurement/Admin inventory capability | explicit category decision, metadata, optional opening quantity | yes | item master, balance, optional opening movement, approved alias and audit atomically |
+| `v1_adjust_inventory_stock` | Procurement/Admin inventory capability | active item/balance version, action, quantity | yes | locked append-only movement, derived balance and audit; reservations remain read-only |
+| `v1_import_inventory` | Procurement/Admin inventory capability | reviewed workbook/category decisions/item versions | yes | atomic items/categories/aliases/movements/import result and audit |
 | `v1_create_document_version` | Entity-authorized user | document/link target/version | yes | Storage metadata/version/link/audit after upload finalization |
 | `v1_link_document` | Entity-authorized user | document/target/version | yes | classified link and audit |
 
@@ -153,10 +158,11 @@ Direct Procurement inserts/updates/deletes on project, scope, membership and BOQ
 tables must fail even when a route or stale client attempts them.
 
 Inventory category, alias and import-batch relations also deny ordinary table
-access. `v1_create_inventory_category`, expanded `v1_adjust_inventory` and
-`v1_import_inventory` are the only smart-warehouse write boundaries; the
-import command validates the whole workbook and commits or rolls back as one
-transaction.
+access. `v1_create_inventory_category`, `v1_create_inventory_item`,
+`v1_adjust_inventory_stock`, the compatibility `v1_adjust_inventory`, and
+`v1_import_inventory` are the smart-warehouse write boundaries;
+`v1_inventory_category_suggestions` is read-only. The import command validates
+the whole workbook and commits or rolls back as one transaction.
 
 The All BOQ overview is read-only. It cannot be represented by a `scope_id`,
 used as a mutation target or used as an MR source; BOQ-derived MR lines must

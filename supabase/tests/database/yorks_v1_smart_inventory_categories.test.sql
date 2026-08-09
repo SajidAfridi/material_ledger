@@ -31,8 +31,10 @@ select is(
 );
 
 select ok(
-  exists(select 1 from public.v1_inventory_categories where name = 'Air Terminals - SED')
-  and exists(select 1 from public.v1_inventory_categories where name = 'Air Terminals - RED')
+  exists(select 1 from public.v1_inventory_categories where name = 'SED'
+    and parent_category_id = '41000000-0000-4000-8000-000000000001')
+  and exists(select 1 from public.v1_inventory_categories where name = 'RED'
+    and parent_category_id = '41000000-0000-4000-8000-000000000001')
   and not exists(select 1 from public.v1_inventory_categories where name like '%Smoke Extract%'),
   'SED and RED remain approved acronyms and are never expanded by inference'
 );
