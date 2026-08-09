@@ -397,6 +397,14 @@ declare
       raise exception 'V1_BOQ_IMPORT_COLUMN_INVALID' using errcode = '22023';
     end if;
 $old$;
+  -- pg_get_functiondef preserves the compact form installed by an earlier
+  -- production migration. Match that exact, semantically identical body as a
+  -- second fail-closed target instead of weakening this patch to a broad
+  -- regular expression.
+  v_old_validation_compact text := $old$
+    if v_heading is null or coalesce((v_column ->> 'is_commercial')::boolean, false) then raise exception 'V1_BOQ_IMPORT_COLUMN_INVALID' using errcode = '22023'; end if;
+$old$;
+  v_validation_target text;
   v_new_validation text := $new$
     if v_heading is null then
       raise exception 'V1_BOQ_IMPORT_COLUMN_INVALID' using errcode = '22023';
@@ -432,12 +440,18 @@ begin
     and position(v_new_validation in v_definition) > 0 then
     return;
   end if;
-  if position(v_old_allow_list in v_definition) = 0
-    or position(v_old_validation in v_definition) = 0 then
+  if position(v_old_allow_list in v_definition) = 0 then
+    raise exception 'V1_BOQ_COMMERCIAL_IMPORT_PATCH_TARGET_UNKNOWN';
+  end if;
+  if position(v_old_validation in v_definition) > 0 then
+    v_validation_target := v_old_validation;
+  elsif position(v_old_validation_compact in v_definition) > 0 then
+    v_validation_target := v_old_validation_compact;
+  else
     raise exception 'V1_BOQ_COMMERCIAL_IMPORT_PATCH_TARGET_UNKNOWN';
   end if;
   v_definition := replace(v_definition, v_old_allow_list, v_new_allow_list);
-  v_definition := replace(v_definition, v_old_validation, v_new_validation);
+  v_definition := replace(v_definition, v_validation_target, v_new_validation);
   execute v_definition;
 end;
 $import_patch$;
