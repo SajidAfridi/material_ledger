@@ -621,6 +621,12 @@ class YorksV1BoqWorkbookCodec {
       'units' ||
       'uom' ||
       'unitofmeasure' => YorksV1BoqCanonicalField.unit,
+      'unitcost' ||
+      'unitprice' ||
+      'unitrate' => YorksV1BoqCanonicalField.unitCost,
+      'totalcost' ||
+      'totalprice' ||
+      'totalamount' => YorksV1BoqCanonicalField.totalCost,
       'model' ||
       'fanmodel' ||
       'equipmentmodel' => YorksV1BoqCanonicalField.model,

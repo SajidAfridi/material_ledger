@@ -72,3 +72,40 @@ by the Excel slice.
 Batch 5 creates the recoverable Material Request draft/submit vertical slice.
 Its controlled exports are separate from BOQ interchange, and it must retain
 the Batch 4 rule that an imported BOQ never submits a request by itself.
+
+## 9 August 2026 commercial-import security correction
+
+`20260809143000_yorks_v1_boq_commercial_import_classification.sql` closes a
+classification gap discovered during the mobile BOQ review. Exact canonical
+`Unit Cost` and `Total Cost` mappings are now commercial columns, and the
+trusted import/save commands reject either canonical meaning if a client marks
+it non-commercial. The server also normalizes those exact headings and the
+approved Unit Price/Rate and Total Price/Amount aliases, so omitting or forging
+`canonical_field` cannot move them into operational storage. Authorized values
+are split into `commercial_values`; the ordinary `raw_values`, role-safe
+Project Engineer projection, source metadata and audit payload contain no cost
+value or commercial key. Arbitrary technical headings—including headings that
+merely contain the word “cost”—remain lossless operational columns unless
+explicitly mapped to a canonical cost.
+
+Before enabling the new command definitions, the migration idempotently repairs
+pre-existing exact recognized cost headings: it moves each stable column key
+from `raw_values` to `commercial_values`, assigns the required commercial
+canonical mapping, and increments affected row, column and group versions and
+timestamps. It preflight-aborts the entire transaction if duplicate headings
+would claim the same active canonical field or if raw and commercial maps
+already contain different values for one key. It never reclassifies broader
+technical headings such as `Operating Cost Index`.
+
+Rollback is to disable Excel import while retaining remediated protected values
+and their history; do not reverse-copy those values into `raw_values` because
+that would recreate the disclosure. Focused Dart coverage also proves an
+uncertain import retry reuses the same generated column/row IDs, payload and
+idempotency key rather than creating a second logical command.
+
+The correction was revalidated on 9 August 2026 with a clean local database
+reset, a second application of the installed migration (no-op repeatability),
+the focused 44-test pgTAP correction coverage and the full local database suite
+(15 files / 470 tests). Focused Flutter BOQ/import coverage, static analysis,
+the full 599-test Flutter suite, the CI web build and CI ephemeral-signed APK
+build also passed. No remote Supabase project was changed.

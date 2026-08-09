@@ -12,7 +12,7 @@ abstract final class YorksMobileUi {
   static const double appBarHeight = 54;
   static const double navigationHeight = 64;
   static const double horizontalPadding = 14;
-  static const double cardRadius = 14;
+  static const double cardRadius = 15;
 
   static bool isActive(BuildContext context) =>
       MediaQuery.sizeOf(context).width <= breakpoint;
@@ -63,7 +63,10 @@ class YorksMobileAppBar extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: AppTypography.titleMedium.copyWith(
                   color: AppColors.ink,
-                  fontSize: 16,
+                  fontSize: YorksMobileUi.isActive(context) ? 15 : 16,
+                  fontWeight: YorksMobileUi.isActive(context)
+                      ? FontWeight.w800
+                      : null,
                 ),
               ),
             ),
@@ -132,18 +135,37 @@ class YorksMobileCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: color,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(YorksMobileUi.cardRadius),
-      side: const BorderSide(color: AppColors.line),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: onTap,
-      child: Padding(padding: padding, child: child),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final mobile = YorksMobileUi.isActive(context);
+    final card = Material(
+      color: color,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          mobile ? YorksMobileUi.cardRadius : 14,
+        ),
+        side: const BorderSide(color: AppColors.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(padding: padding, child: child),
+      ),
+    );
+    if (!mobile) return card;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(YorksMobileUi.cardRadius),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0E143255),
+            blurRadius: 24,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: card,
+    );
+  }
 }
 
 class YorksMobileSectionHeader extends StatelessWidget {
@@ -239,26 +261,37 @@ class YorksMobilePill extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: selected ? AppColors.navy : AppColors.surfaceContainerLowest,
-    shape: StadiumBorder(
-      side: BorderSide(color: selected ? AppColors.navy : AppColors.line),
-    ),
-    child: InkWell(
-      customBorder: const StadiumBorder(),
-      onTap: onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 36),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(
-            label,
-            style: AppTypography.labelLarge.copyWith(
-              color: selected ? AppColors.onPrimary : AppColors.inkSecondary,
+  Widget build(BuildContext context) {
+    final pill = Material(
+      color: selected ? AppColors.navy : AppColors.surfaceContainerLowest,
+      shape: StadiumBorder(
+        side: BorderSide(color: selected ? AppColors.navy : AppColors.line),
+      ),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 36),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Text(
+              label,
+              style: AppTypography.labelLarge.copyWith(
+                color: selected ? AppColors.onPrimary : AppColors.inkSecondary,
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+    if (!YorksMobileUi.isActive(context)) return pill;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+        child: Center(child: pill),
+      ),
+    );
+  }
 }

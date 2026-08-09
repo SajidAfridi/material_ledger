@@ -52,11 +52,19 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+      if (evidence.size.width <= 720) {
+        expect(
+          find.byKey(const ValueKey('boq-scope-selector-mobile')),
+          findsOneWidget,
+        );
+        expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      } else {
+        expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+      }
       expect(find.text('Overview'), findsOneWidget);
-      expect(find.text('Common / All Buildings'), findsOneWidget);
-      expect(find.text('DF3W'), findsOneWidget);
-      expect(find.text('DF4W'), findsOneWidget);
+      expect(find.text('Common / All Buildings'), findsWidgets);
+      expect(find.text('DF3W'), findsWidgets);
+      expect(find.text('DF4W'), findsWidgets);
       expect(tester.takeException(), isNull);
       await expectLater(
         find.byType(MaterialApp),

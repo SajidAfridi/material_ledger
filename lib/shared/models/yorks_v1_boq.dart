@@ -11,6 +11,8 @@ enum YorksV1BoqCanonicalField {
   brandOrigin('brand_origin'),
   quantity('quantity'),
   unit('unit'),
+  unitCost('unit_cost'),
+  totalCost('total_cost'),
 
   /// Legacy combined mapping retained so previously imported worksheets keep
   /// their meaning while new imports preserve model and tag separately.
@@ -19,6 +21,13 @@ enum YorksV1BoqCanonicalField {
   const YorksV1BoqCanonicalField(this.wireValue);
 
   final String wireValue;
+
+  /// Canonical commercial meanings must never be persisted in the ordinary
+  /// operational BOQ value map. The trusted worksheet command independently
+  /// enforces the same classification.
+  bool get isCommercial =>
+      this == YorksV1BoqCanonicalField.unitCost ||
+      this == YorksV1BoqCanonicalField.totalCost;
 
   static YorksV1BoqCanonicalField? fromWireValue(Object? value) {
     if (value is! String) return null;

@@ -92,6 +92,24 @@ abstract final class YorksV1ProjectStrings {
     ur: 'بنانے سے پہلے جائزہ لیں',
     hi: 'बनाने से पहले समीक्षा करें',
   );
+  static const reviewCreationDescription = TranslatableString(
+    en: 'Check the setup before creating the project and its BOQ scopes.',
+    ar: 'تحقق من الإعداد قبل إنشاء المشروع ونطاقات جدول الكميات الخاصة به.',
+    ur: 'پراجیکٹ اور اس کے BOQ دائرے بنانے سے پہلے سیٹ اپ چیک کریں۔',
+    hi: 'परियोजना और उसके BOQ दायरे बनाने से पहले सेटअप जाँचें।',
+  );
+  static const whatHappensNext = TranslatableString(
+    en: 'What happens next',
+    ar: 'ما الذي سيحدث بعد ذلك',
+    ur: 'اس کے بعد کیا ہوگا',
+    hi: 'आगे क्या होगा',
+  );
+  static const creationScopeOutcome = TranslatableString(
+    en: 'Common and every building receive the approved BOQ folder structure. No materials are required now.',
+    ar: 'يتلقى النطاق المشترك وكل مبنى بنية مجلدات جدول الكميات المعتمدة. لا توجد مواد مطلوبة الآن.',
+    ur: 'کامن اور ہر عمارت کو منظور شدہ BOQ فولڈر اسٹرکچر ملے گا۔ ابھی کسی میٹیریل کی ضرورت نہیں۔',
+    hi: 'कॉमन और प्रत्येक भवन को स्वीकृत BOQ फ़ोल्डर संरचना मिलेगी। अभी किसी सामग्री की आवश्यकता नहीं है।',
+  );
   static const readyToCreateWorkspace = TranslatableString(
     en: 'Ready to create the project workspace',
     ar: 'المشروع جاهز لإنشاء مساحة العمل',
@@ -242,6 +260,30 @@ abstract final class YorksV1ProjectStrings {
     ar: 'تفاصيل المشروع',
     ur: 'پراجیکٹ کی تفصیلات',
     hi: 'परियोजना विवरण',
+  );
+  static const detailsStep = TranslatableString(
+    en: 'Details',
+    ar: 'التفاصيل',
+    ur: 'تفصیلات',
+    hi: 'विवरण',
+  );
+  static const accessStep = TranslatableString(
+    en: 'Access',
+    ar: 'الوصول',
+    ur: 'رسائی',
+    hi: 'पहुँच',
+  );
+  static const filesStep = TranslatableString(
+    en: 'Files',
+    ar: 'الملفات',
+    ur: 'فائلز',
+    hi: 'फ़ाइलें',
+  );
+  static const reviewStep = TranslatableString(
+    en: 'Review',
+    ar: 'المراجعة',
+    ur: 'جائزہ',
+    hi: 'समीक्षा',
   );
   static const partiesAndAccess = TranslatableString(
     en: 'Parties & access',
@@ -418,6 +460,60 @@ abstract final class YorksV1ProjectStrings {
     ar: 'فريق المشروع',
     ur: 'پراجیکٹ ٹیم',
     hi: 'परियोजना टीम',
+  );
+  static const information = TranslatableString(
+    en: 'Information',
+    ar: 'المعلومات',
+    ur: 'معلومات',
+    hi: 'जानकारी',
+  );
+  static const team = TranslatableString(
+    en: 'Team',
+    ar: 'الفريق',
+    ur: 'ٹیم',
+    hi: 'टीम',
+  );
+  static const manage = TranslatableString(
+    en: 'Manage',
+    ar: 'إدارة',
+    ur: 'منظم کریں',
+    hi: 'प्रबंधित करें',
+  );
+  static const active = TranslatableString(
+    en: 'Active',
+    ar: 'نشط',
+    ur: 'فعال',
+    hi: 'सक्रिय',
+  );
+  static const you = TranslatableString(
+    en: 'You',
+    ar: 'أنت',
+    ur: 'آپ',
+    hi: 'आप',
+  );
+  static const assigned = TranslatableString(
+    en: 'Assigned {date}',
+    ar: 'تم التعيين في {date}',
+    ur: '{date} کو تفویض ہوا',
+    hi: '{date} को असाइन किया गया',
+  );
+  static const membershipHistoryRetained = TranslatableString(
+    en: 'Removing access ends the assignment without deleting its history.',
+    ar: 'تؤدي إزالة الوصول إلى إنهاء التعيين دون حذف سجله.',
+    ur: 'رسائی ہٹانے سے تفویض ختم ہوتی ہے، اس کی ہسٹری حذف نہیں ہوتی۔',
+    hi: 'पहुँच हटाने से असाइनमेंट समाप्त होता है, उसका इतिहास नहीं मिटता।',
+  );
+  static const teamDetailsUnavailable = TranslatableString(
+    en: 'Team details are unavailable right now.',
+    ar: 'تفاصيل الفريق غير متاحة حالياً.',
+    ur: 'ٹیم کی تفصیلات فی الحال دستیاب نہیں ہیں۔',
+    hi: 'टीम का विवरण अभी उपलब्ध नहीं है।',
+  );
+  static const noActiveAssignments = TranslatableString(
+    en: 'No active assignments.',
+    ar: 'لا توجد تعيينات نشطة.',
+    ur: 'کوئی فعال تفویض نہیں ہے۔',
+    hi: 'कोई सक्रिय असाइनमेंट नहीं है।',
   );
   static const manageTeam = TranslatableString(
     en: 'Manage Team',
@@ -1007,8 +1103,56 @@ abstract final class YorksV1ProjectStrings {
     ur: 'میٹیریل ریکویسٹس',
     hi: 'सामग्री अनुरोध',
   );
+  static const approvedRequests = TranslatableString(
+    en: 'Approved',
+    ar: 'المعتمد',
+    ur: 'منظور شدہ',
+    hi: 'स्वीकृत',
+  );
+  static const pendingApproval = TranslatableString(
+    en: 'Pending approval',
+    ar: 'بانتظار الموافقة',
+    ur: 'منظوری زیر التوا',
+    hi: 'अनुमोदन लंबित',
+  );
+  static const inProgress = TranslatableString(
+    en: 'In progress',
+    ar: 'قيد التنفيذ',
+    ur: 'جاری ہے',
+    hi: 'प्रगति पर',
+  );
+  static const needsAttention = TranslatableString(
+    en: 'Needs attention',
+    ar: 'يحتاج إلى اهتمام',
+    ur: 'توجہ درکار ہے',
+    hi: 'ध्यान आवश्यक',
+  );
+  static const projectRecords = TranslatableString(
+    en: 'Project records',
+    ar: 'سجلات المشروع',
+    ur: 'پراجیکٹ ریکارڈز',
+    hi: 'परियोजना रिकॉर्ड',
+  );
+  static const recordsUnavailable = TranslatableString(
+    en: 'Some project records are unavailable right now.',
+    ar: 'بعض سجلات المشروع غير متاحة حالياً.',
+    ur: 'کچھ پراجیکٹ ریکارڈز فی الحال دستیاب نہیں ہیں۔',
+    hi: 'कुछ परियोजना रिकॉर्ड अभी उपलब्ध नहीं हैं।',
+  );
+  static const noAttentionRequired = TranslatableString(
+    en: 'No project action needs your attention.',
+    ar: 'لا يوجد إجراء في المشروع يحتاج إلى اهتمامك.',
+    ur: 'کسی پراجیکٹ کارروائی کو آپ کی توجہ درکار نہیں۔',
+    hi: 'किसी परियोजना कार्रवाई को आपके ध्यान की आवश्यकता नहीं है।',
+  );
   static const documents = TranslatableString(
     en: 'Documents',
+    ar: 'المستندات',
+    ur: 'دستاویزات',
+    hi: 'दस्तावेज़',
+  );
+  static const docs = TranslatableString(
+    en: 'Docs',
     ar: 'المستندات',
     ur: 'دستاویزات',
     hi: 'दस्तावेज़',

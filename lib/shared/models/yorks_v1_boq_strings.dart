@@ -74,6 +74,42 @@ abstract final class YorksV1BoqStrings {
     ur: 'اسکوپ کھولیں',
     hi: 'स्कोप खोलें',
   );
+  static const allFolders = TranslatableString(
+    en: 'All',
+    ar: 'الكل',
+    ur: 'تمام',
+    hi: 'सभी',
+  );
+  static const emptyFolders = TranslatableString(
+    en: 'Empty',
+    ar: 'فارغة',
+    ur: 'خالی',
+    hi: 'खाली',
+  );
+  static const materialFolders = TranslatableString(
+    en: 'Material folders',
+    ar: 'مجلدات المواد',
+    ur: 'میٹریل فولڈرز',
+    hi: 'सामग्री फ़ोल्डर',
+  );
+  static const materialFoldersDescription = TranslatableString(
+    en: 'Each folder owns its rows, imports, documents and linked requests.',
+    ar: 'يمتلك كل مجلد صفوفه ووارداته ومستنداته وطلباته المرتبطة.',
+    ur: 'ہر فولڈر اپنی قطاریں، امپورٹس، دستاویزات اور منسلک ریکوئسٹس رکھتا ہے۔',
+    hi: 'हर फ़ोल्डर अपनी पंक्तियाँ, आयात, दस्तावेज़ और जुड़े अनुरोध रखता है।',
+  );
+  static const independentBoqTitle = TranslatableString(
+    en: 'Every building has its own BOQ',
+    ar: 'لكل مبنى جدول كميات مستقل',
+    ur: 'ہر بلڈنگ کا اپنا BOQ ہے',
+    hi: 'हर बिल्डिंग का अपना BOQ है',
+  );
+  static const independentBoqDescription = TranslatableString(
+    en: 'Materials are never combined into one editable project list. Common remains genuinely shared.',
+    ar: 'لا تُدمج المواد أبداً في قائمة مشروع واحدة قابلة للتعديل. يظل النطاق المشترك مشتركاً فعلياً.',
+    ur: 'میٹریلز کو کبھی ایک قابل تدوین پراجیکٹ لسٹ میں جمع نہیں کیا جاتا۔ کامن حقیقی طور پر مشترک رہتا ہے۔',
+    hi: 'सामग्री कभी एक संपादन योग्य प्रोजेक्ट सूची में नहीं मिलती। कॉमन वास्तव में साझा रहता है।',
+  );
   static const legacyBoqs = TranslatableString(
     en: 'Legacy BOQs needing scope assignment',
     ar: 'جداول كميات قديمة تحتاج تعيين النطاق',
@@ -266,6 +302,30 @@ abstract final class YorksV1BoqStrings {
     ur: 'قطار ایڈٹ کریں',
     hi: 'पंक्ति संपादित करें',
   );
+  static const editMaterial = TranslatableString(
+    en: 'Edit material',
+    ar: 'تعديل المادة',
+    ur: 'میٹریل ایڈٹ کریں',
+    hi: 'सामग्री संपादित करें',
+  );
+  static const editorDescription = TranslatableString(
+    en: 'Technical fields stay connected to this BOQ row and its linked requests.',
+    ar: 'تبقى الحقول الفنية مرتبطة بصف جدول الكميات هذا وطلباته المرتبطة.',
+    ur: 'تکنیکی فیلڈز اس BOQ قطار اور اس کی منسلک ریکوئسٹس سے جڑے رہتے ہیں۔',
+    hi: 'तकनीकी फ़ील्ड इस BOQ पंक्ति और उससे जुड़े अनुरोधों से जुड़े रहते हैं।',
+  );
+  static const addMaterial = TranslatableString(
+    en: 'Add Material',
+    ar: 'إضافة مادة',
+    ur: 'میٹریل شامل کریں',
+    hi: 'सामग्री जोड़ें',
+  );
+  static const saveWorksheet = TranslatableString(
+    en: 'Save worksheet',
+    ar: 'حفظ ورقة العمل',
+    ur: 'ورک شیٹ محفوظ کریں',
+    hi: 'वर्कशीट सहेजें',
+  );
   static const previous = TranslatableString(
     en: 'Previous',
     ar: 'السابق',
@@ -415,6 +475,222 @@ abstract final class YorksV1BoqStrings {
     ar: 'اختر ملف XLSX',
     ur: 'XLSX فائل منتخب کریں',
     hi: 'XLSX फ़ाइल चुनें',
+  );
+  static const excelImport = TranslatableString(
+    en: 'Excel import',
+    ar: 'استيراد Excel',
+    ur: 'Excel امپورٹ',
+    hi: 'Excel आयात',
+  );
+  static const importFileStep = TranslatableString(
+    en: 'File',
+    ar: 'الملف',
+    ur: 'فائل',
+    hi: 'फ़ाइल',
+  );
+  static const importSheetStep = TranslatableString(
+    en: 'Sheet',
+    ar: 'الورقة',
+    ur: 'شیٹ',
+    hi: 'शीट',
+  );
+  static const importMapStep = TranslatableString(
+    en: 'Map',
+    ar: 'التعيين',
+    ur: 'میپ',
+    hi: 'मैप',
+  );
+  static const importReviewStep = TranslatableString(
+    en: 'Review',
+    ar: 'المراجعة',
+    ur: 'جائزہ',
+    hi: 'समीक्षा',
+  );
+  static const chooseWorkbookTitle = TranslatableString(
+    en: 'Choose a workbook',
+    ar: 'اختر مصنفاً',
+    ur: 'ورک بک منتخب کریں',
+    hi: 'वर्कबुक चुनें',
+  );
+  static const chooseWorkbookDescription = TranslatableString(
+    en: 'The file is processed as a preview. Nothing changes before confirmation.',
+    ar: 'تتم معالجة الملف كمعاينة. لا يتغير شيء قبل التأكيد.',
+    ur: 'فائل کو پری ویو کے طور پر پروسیس کیا جاتا ہے۔ تصدیق سے پہلے کچھ تبدیل نہیں ہوتا۔',
+    hi: 'फ़ाइल को पूर्वावलोकन के रूप में संसाधित किया जाता है। पुष्टि से पहले कुछ नहीं बदलता।',
+  );
+  static const uploadEquipmentSchedule = TranslatableString(
+    en: 'Upload equipment schedule',
+    ar: 'رفع جدول المعدات',
+    ur: 'آلات کا شیڈول اپ لوڈ کریں',
+    hi: 'उपकरण शेड्यूल अपलोड करें',
+  );
+  static const xlsxConfiguredLimit = TranslatableString(
+    en: '.xlsx files · up to the configured limit',
+    ar: 'ملفات .xlsx · حتى الحد المضبوط',
+    ur: '.xlsx فائلیں · مقررہ حد تک',
+    hi: '.xlsx फ़ाइलें · कॉन्फ़िगर की गई सीमा तक',
+  );
+  static const chooseFile = TranslatableString(
+    en: 'Choose File',
+    ar: 'اختر الملف',
+    ur: 'فائل منتخب کریں',
+    hi: 'फ़ाइल चुनें',
+  );
+  static const continueAction = TranslatableString(
+    en: 'Continue',
+    ar: 'متابعة',
+    ur: 'جاری رکھیں',
+    hi: 'जारी रखें',
+  );
+  static const importDestination = TranslatableString(
+    en: 'Import destination',
+    ar: 'وجهة الاستيراد',
+    ur: 'امپورٹ کی منزل',
+    hi: 'आयात गंतव्य',
+  );
+  static const importDestinationDescription = TranslatableString(
+    en: '{scope} → {folder}. Imported rows remain inside this scope and folder.',
+    ar: '{scope} ← {folder}. تبقى الصفوف المستوردة داخل هذا النطاق والمجلد.',
+    ur: '{scope} → {folder}۔ امپورٹ شدہ قطاریں اسی اسکوپ اور فولڈر میں رہتی ہیں۔',
+    hi: '{scope} → {folder}। आयातित पंक्तियाँ इसी स्कोप और फ़ोल्डर में रहती हैं।',
+  );
+  static const chooseSheetTitle = TranslatableString(
+    en: 'Choose a worksheet',
+    ar: 'اختر ورقة عمل',
+    ur: 'ورک شیٹ منتخب کریں',
+    hi: 'वर्कशीट चुनें',
+  );
+  static const chooseSheetDescription = TranslatableString(
+    en: 'Confirm the source sheet, title and header row before mapping columns.',
+    ar: 'أكد ورقة المصدر والعنوان وصف العناوين قبل تعيين الأعمدة.',
+    ur: 'کالم میپ کرنے سے پہلے سورس شیٹ، عنوان اور ہیڈر قطار کی تصدیق کریں۔',
+    hi: 'कॉलम मैप करने से पहले स्रोत शीट, शीर्षक और हेडर पंक्ति की पुष्टि करें।',
+  );
+  static const mapColumnsTitle = TranslatableString(
+    en: 'Map columns',
+    ar: 'تعيين الأعمدة',
+    ur: 'کالم میپ کریں',
+    hi: 'कॉलम मैप करें',
+  );
+  static const mapColumnsDescription = TranslatableString(
+    en: 'Confirm how workbook headings become Yorks material fields.',
+    ar: 'أكد كيفية تحويل عناوين المصنف إلى حقول مواد يوركس.',
+    ur: 'تصدیق کریں کہ ورک بک ہیڈنگز یورکس میٹریل فیلڈز کیسے بنتی ہیں۔',
+    hi: 'पुष्टि करें कि वर्कबुक शीर्षक Yorks सामग्री फ़ील्ड कैसे बनते हैं।',
+  );
+  static const mapped = TranslatableString(
+    en: 'Mapped',
+    ar: 'مُعيّن',
+    ur: 'میپ شدہ',
+    hi: 'मैप किया गया',
+  );
+  static const retainedColumn = TranslatableString(
+    en: 'Retained',
+    ar: 'محفوظ',
+    ur: 'محفوظ',
+    hi: 'सुरक्षित',
+  );
+  static const otherColumnsStayAvailable = TranslatableString(
+    en: 'Other columns stay available',
+    ar: 'تبقى الأعمدة الأخرى متاحة',
+    ur: 'دوسرے کالم دستیاب رہتے ہیں',
+    hi: 'अन्य कॉलम उपलब्ध रहते हैं',
+  );
+  static const otherColumnsStayAvailableDescription = TranslatableString(
+    en: 'Unmapped technical columns remain editable in the BOQ and are never silently discarded.',
+    ar: 'تبقى الأعمدة الفنية غير المعيّنة قابلة للتعديل في جدول الكميات ولا يتم تجاهلها بصمت أبداً.',
+    ur: 'غیر میپ شدہ تکنیکی کالم BOQ میں قابل تدوین رہتے ہیں اور کبھی خاموشی سے ضائع نہیں ہوتے۔',
+    hi: 'बिना मैप किए तकनीकी कॉलम BOQ में संपादन योग्य रहते हैं और कभी चुपचाप हटाए नहीं जाते।',
+  );
+  static const reviewWorkbook = TranslatableString(
+    en: 'Review workbook',
+    ar: 'مراجعة المصنف',
+    ur: 'ورک بک کا جائزہ لیں',
+    hi: 'वर्कबुक की समीक्षा करें',
+  );
+  static const readyToImport = TranslatableString(
+    en: 'Ready to import',
+    ar: 'جاهز للاستيراد',
+    ur: 'امپورٹ کے لیے تیار',
+    hi: 'आयात के लिए तैयार',
+  );
+  static const rowsFound = TranslatableString(
+    en: 'Rows found',
+    ar: 'الصفوف الموجودة',
+    ur: 'ملنے والی قطاریں',
+    hi: 'मिली पंक्तियाँ',
+  );
+  static const warnings = TranslatableString(
+    en: 'Warnings',
+    ar: 'تحذيرات',
+    ur: 'انتباہات',
+    hi: 'चेतावनियाँ',
+  );
+  static const fatalErrors = TranslatableString(
+    en: 'Fatal errors',
+    ar: 'أخطاء مانعة',
+    ur: 'سنگین غلطیاں',
+    hi: 'गंभीर त्रुटियाँ',
+  );
+  static const sheetTitle = TranslatableString(
+    en: 'Sheet title',
+    ar: 'عنوان الورقة',
+    ur: 'شیٹ کا عنوان',
+    hi: 'शीट शीर्षक',
+  );
+  static const mappingReadyDescription = TranslatableString(
+    en: '{mapped} of {total} recognized · no source column will be dropped',
+    ar: 'تم التعرف على {mapped} من {total} · لن يتم إسقاط أي عمود مصدر',
+    ur: '{total} میں سے {mapped} شناخت شدہ · کوئی سورس کالم ضائع نہیں ہوگا',
+    hi: '{total} में से {mapped} पहचाने गए · कोई स्रोत कॉलम नहीं हटेगा',
+  );
+  static const importMaterials = TranslatableString(
+    en: 'Import {count} Materials',
+    ar: 'استيراد {count} مادة',
+    ur: '{count} میٹریلز امپورٹ کریں',
+    hi: '{count} सामग्री आयात करें',
+  );
+  static const previewRetainedAfterFailure = TranslatableString(
+    en: 'The import was not committed. Your preview is still here so you can review it or try again.',
+    ar: 'لم يتم اعتماد الاستيراد. لا تزال المعاينة موجودة لتراجعها أو تحاول مرة أخرى.',
+    ur: 'امپورٹ کمٹ نہیں ہوا۔ آپ کا پری ویو یہاں موجود ہے تاکہ آپ جائزہ لے سکیں یا دوبارہ کوشش کریں۔',
+    hi: 'आयात कमिट नहीं हुआ। आपका पूर्वावलोकन यहीं है ताकि आप समीक्षा या पुनः प्रयास कर सकें।',
+  );
+  static const commercialImportPermissionRequired = TranslatableString(
+    en: 'This workbook contains recognized commercial cost columns. Remove them from the source file or ask an authorized commercial user to import it.',
+    ar: 'يحتوي هذا المصنف على أعمدة تكلفة تجارية معروفة. أزلها من الملف المصدر أو اطلب من مستخدم تجاري مخول استيراده.',
+    ur: 'اس ورک بک میں تسلیم شدہ تجارتی لاگت کے کالم ہیں۔ انہیں ماخذ فائل سے ہٹائیں یا کسی مجاز تجارتی صارف سے امپورٹ کروائیں۔',
+    hi: 'इस वर्कबुक में पहचाने गए वाणिज्यिक लागत कॉलम हैं। उन्हें स्रोत फ़ाइल से हटाएँ या किसी अधिकृत वाणिज्यिक उपयोगकर्ता से आयात कराएँ।',
+  );
+  static const importConflictTitle = TranslatableString(
+    en: 'Worksheet changed',
+    ar: 'تغيرت ورقة العمل',
+    ur: 'ورک شیٹ تبدیل ہو گئی',
+    hi: 'वर्कशीट बदल गई',
+  );
+  static const importConflictBody = TranslatableString(
+    en: 'This preview was based on an older worksheet version. Refresh the worksheet, then review the import again before committing it.',
+    ar: 'استندت هذه المعاينة إلى إصدار أقدم من ورقة العمل. حدّث ورقة العمل ثم راجع الاستيراد مرة أخرى قبل اعتماده.',
+    ur: 'یہ پری ویو ورک شیٹ کے پرانے ورژن پر مبنی تھا۔ ورک شیٹ ریفریش کریں، پھر امپورٹ کمٹ کرنے سے پہلے دوبارہ جائزہ لیں۔',
+    hi: 'यह पूर्वावलोकन वर्कशीट के पुराने संस्करण पर आधारित था। वर्कशीट रीफ़्रेश करें, फिर आयात कमिट करने से पहले दोबारा समीक्षा करें।',
+  );
+  static const workbookReadFailed = TranslatableString(
+    en: 'The workbook could not be read. Choose a valid configured Excel file and try again.',
+    ar: 'تعذرت قراءة المصنف. اختر ملف Excel صالحاً ومهيأً ثم حاول مرة أخرى.',
+    ur: 'ورک بک پڑھی نہیں جا سکی۔ درست ترتیب شدہ Excel فائل منتخب کریں اور دوبارہ کوشش کریں۔',
+    hi: 'वर्कबुक पढ़ी नहीं जा सकी। मान्य कॉन्फ़िगर की गई Excel फ़ाइल चुनकर फिर प्रयास करें।',
+  );
+  static const discardRowChanges = TranslatableString(
+    en: 'Discard row changes?',
+    ar: 'تجاهل تغييرات الصف؟',
+    ur: 'قطار کی تبدیلیاں ضائع کریں؟',
+    hi: 'पंक्ति के बदलाव छोड़ें?',
+  );
+  static const discardRowChangesBody = TranslatableString(
+    en: 'The unsaved edits in this material row will be removed.',
+    ar: 'ستتم إزالة التعديلات غير المحفوظة في صف المادة هذا.',
+    ur: 'اس میٹریل کی قطار میں غیر محفوظ ترامیم ختم ہو جائیں گی۔',
+    hi: 'इस सामग्री पंक्ति के सहेजे नहीं गए बदलाव हट जाएंगे।',
   );
   static const importPreview = TranslatableString(
     en: 'Import preview',

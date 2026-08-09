@@ -1799,6 +1799,8 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
 
 enum YorksV1ProjectWorkspaceTab { overview, boq, requests, documents }
 
+enum _MobileProjectDetailTab { information, team, buildings }
+
 class YorksV1ProjectWorkspaceScreen extends ConsumerStatefulWidget {
   const YorksV1ProjectWorkspaceScreen({
     super.key,
@@ -1817,6 +1819,8 @@ class YorksV1ProjectWorkspaceScreen extends ConsumerStatefulWidget {
 class _YorksV1ProjectWorkspaceScreenState
     extends ConsumerState<YorksV1ProjectWorkspaceScreen> {
   late YorksV1ProjectWorkspaceTab _tab;
+  bool _showMobileDetails = false;
+  _MobileProjectDetailTab _mobileDetailTab = _MobileProjectDetailTab.team;
 
   @override
   void initState() {
@@ -1829,6 +1833,10 @@ class _YorksV1ProjectWorkspaceScreenState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab) {
       _tab = widget.initialTab;
+    }
+    if (oldWidget.projectId != widget.projectId) {
+      _showMobileDetails = false;
+      _mobileDetailTab = _MobileProjectDetailTab.team;
     }
   }
 
@@ -1848,11 +1856,61 @@ class _YorksV1ProjectWorkspaceScreenState
     final documents = ref.watch(
       yorksV1DocumentWorkspaceProvider(widget.projectId),
     );
+    final mobile = YorksMobileUi.isActive(context);
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+
+    Widget mobileFrame({
+      required String title,
+      required Widget child,
+      bool details = false,
+      bool showMenu = false,
+      VoidCallback? onBack,
+    }) {
+      if (!mobile) return child;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          YorksMobileAppBar(
+            title: title,
+            leading: details || onBack != null
+                ? YorksMobileIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
+                    onPressed:
+                        onBack ??
+                        () => setState(() => _showMobileDetails = false),
+                  )
+                : YorksMobileIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
+                    onPressed: () => context.canPop()
+                        ? context.pop()
+                        : context.go(RoutePaths.yorksV1Projects),
+                  ),
+            trailing: showMenu
+                ? YorksMobileIconButton(
+                    icon: Icons.menu_rounded,
+                    tooltip: YorksV1ProjectStrings.projectDetails.primary,
+                    onPressed: () => setState(() {
+                      _mobileDetailTab = _MobileProjectDetailTab.team;
+                      _showMobileDetails = true;
+                    }),
+                  )
+                : null,
+          ),
+          Expanded(child: child),
+        ],
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: compactRoute
+      appBar: !mobile && compactRoute
           ? AppBar(
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
@@ -1868,10 +1926,16 @@ class _YorksV1ProjectWorkspaceScreenState
       body: SafeArea(
         top: false,
         child: portfolio.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => _PortfolioError(
-            language: language,
-            onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
+          loading: () => mobileFrame(
+            title: YorksV1ProjectStrings.projectWorkspace.primary,
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, _) => mobileFrame(
+            title: YorksV1ProjectStrings.projectWorkspace.primary,
+            child: _PortfolioError(
+              language: language,
+              onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
+            ),
           ),
           data: (items) {
             YorksV1ProjectPortfolioItem? project;
@@ -1882,9 +1946,13 @@ class _YorksV1ProjectWorkspaceScreenState
               }
             }
             if (project == null) {
-              return _PortfolioError(
-                language: language,
-                onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
+              return mobileFrame(
+                title: YorksV1ProjectStrings.projectWorkspace.primary,
+                child: _PortfolioError(
+                  language: language,
+                  onRetry: () =>
+                      ref.invalidate(yorksV1ProjectPortfolioProvider),
+                ),
               );
             }
             final selectedProject = project;
@@ -1918,44 +1986,93 @@ class _YorksV1ProjectWorkspaceScreenState
                     (role?.isGlobalProjectEngineer ?? false) ||
                     activeMember ||
                     isCreator);
-            return _ProjectWorkspaceBody(
-              item: selectedProject,
-              tab: _tab,
-              language: language,
-              requests: requests,
-              scopes: scopes,
-              groups: groups,
-              documents: documents,
-              onActivate:
-                  selectedProject.project.state ==
-                          YorksV1ProjectLifecycle.draft &&
-                      canManageProject
-                  ? () => _activateProject(selectedProject.project)
-                  : null,
-              onNewRequest: role?.canCreateMaterialRequest == true
-                  ? () => context.push(
-                      RoutePaths.yorksV1MaterialRequestDraftPath(
-                        const Uuid().v4(),
-                        projectId: selectedProject.project.id,
-                      ),
+            final VoidCallback? activateAction =
+                selectedProject.project.state ==
+                        YorksV1ProjectLifecycle.draft &&
+                    canManageProject
+                ? () => _activateProject(selectedProject.project)
+                : null;
+            final VoidCallback? newRequestAction =
+                projectStateIsEditable && role?.canCreateMaterialRequest == true
+                ? () => context.push(
+                    RoutePaths.yorksV1MaterialRequestDraftPath(
+                      const Uuid().v4(),
+                      projectId: selectedProject.project.id,
+                    ),
+                  )
+                : null;
+            final VoidCallback? editAction = canEdit
+                ? () => context.push(
+                    RoutePaths.yorksV1ProjectEditPath(
+                      selectedProject.project.id,
+                    ),
+                  )
+                : null;
+            final VoidCallback? archiveAction =
+                role == YorksV1Role.admin &&
+                    selectedProject.project.state !=
+                        YorksV1ProjectLifecycle.archived
+                ? () => _confirmSafeArchive(selectedProject.project)
+                : null;
+            final workspace = _showMobileDetails && mobile
+                ? _MobileProjectDetails(
+                    item: selectedProject,
+                    scopes: scopes,
+                    selected: _mobileDetailTab,
+                    onSelected: (value) =>
+                        setState(() => _mobileDetailTab = value),
+                    onActivate: activateAction,
+                    onNewRequest: newRequestAction,
+                    onEdit: editAction,
+                    onArchive: archiveAction,
+                  )
+                : _ProjectWorkspaceBody(
+                    item: selectedProject,
+                    tab: _tab,
+                    language: language,
+                    requests: requests,
+                    scopes: scopes,
+                    groups: groups,
+                    documents: documents,
+                    actorRole: role,
+                    activeMember: activeMember,
+                    canActAsProjectEngineer: canManageProject,
+                    onActivate: activateAction,
+                    onNewRequest: newRequestAction,
+                    onEdit: editAction,
+                    onArchive: archiveAction,
+                    onRetryRequests: () => ref.invalidate(
+                      yorksV1MaterialRequestListProvider(widget.projectId),
+                    ),
+                    onTabChanged: (value) {
+                      setState(() => _tab = value);
+                    },
+                  );
+            return mobileFrame(
+              title: _showMobileDetails
+                  ? YorksV1ProjectStrings.projectDetails.primary
+                  : switch (_tab) {
+                      YorksV1ProjectWorkspaceTab.overview =>
+                        selectedProject.project.reference,
+                      YorksV1ProjectWorkspaceTab.boq =>
+                        '${selectedProject.project.reference} · ${YorksV1ProjectStrings.boq.primary}',
+                      YorksV1ProjectWorkspaceTab.requests =>
+                        YorksV1ProjectStrings.materialRequests.primary,
+                      YorksV1ProjectWorkspaceTab.documents =>
+                        YorksV1ProjectStrings.documents.primary,
+                    },
+              details: _showMobileDetails,
+              showMenu:
+                  !_showMobileDetails &&
+                  _tab == YorksV1ProjectWorkspaceTab.overview,
+              onBack:
+                  !_showMobileDetails &&
+                      _tab != YorksV1ProjectWorkspaceTab.overview
+                  ? () => setState(
+                      () => _tab = YorksV1ProjectWorkspaceTab.overview,
                     )
                   : null,
-              onEdit: canEdit
-                  ? () => context.push(
-                      RoutePaths.yorksV1ProjectEditPath(
-                        selectedProject.project.id,
-                      ),
-                    )
-                  : null,
-              onArchive:
-                  role == YorksV1Role.admin &&
-                      selectedProject.project.state !=
-                          YorksV1ProjectLifecycle.archived
-                  ? () => _confirmSafeArchive(selectedProject.project)
-                  : null,
-              onTabChanged: (value) {
-                setState(() => _tab = value);
-              },
+              child: workspace,
             );
           },
         ),
@@ -2825,10 +2942,14 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     required this.scopes,
     required this.groups,
     required this.documents,
+    required this.actorRole,
+    required this.activeMember,
+    required this.canActAsProjectEngineer,
     required this.onActivate,
     required this.onNewRequest,
     required this.onEdit,
     required this.onArchive,
+    required this.onRetryRequests,
     required this.onTabChanged,
   });
 
@@ -2839,15 +2960,41 @@ class _ProjectWorkspaceBody extends StatelessWidget {
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
   final AsyncValue<List<YorksV1BoqGroup>> groups;
   final AsyncValue<YorksV1DocumentWorkspace> documents;
+  final YorksV1Role? actorRole;
+  final bool activeMember;
+  final bool canActAsProjectEngineer;
   final VoidCallback? onActivate;
   final VoidCallback? onNewRequest;
   final VoidCallback? onEdit;
   final VoidCallback? onArchive;
+  final VoidCallback onRetryRequests;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
 
   @override
   Widget build(BuildContext context) {
     final project = item.project;
+    if (YorksMobileUi.isActive(context)) {
+      return _MobileProjectWorkspace(
+        item: item,
+        tab: tab,
+        requests: requests,
+        scopes: scopes,
+        groups: groups,
+        documents: documents,
+        actorRole: actorRole,
+        activeMember: activeMember,
+        canActAsProjectEngineer: canActAsProjectEngineer,
+        onTabChanged: onTabChanged,
+        onOpenRequests: () => context.push(
+          RoutePaths.yorksV1MaterialRequestsPath(projectId: project.id),
+        ),
+        onOpenDocuments: () =>
+            context.push(RoutePaths.yorksV1ProjectDocumentsPath(project.id)),
+        onOpenRequest: (request) =>
+            context.push(_materialRequestOpenPath(request)),
+        onRetryRequests: onRetryRequests,
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop =
@@ -2933,6 +3080,1558 @@ class _ProjectWorkspaceBody extends StatelessWidget {
       },
     );
   }
+}
+
+class _MobileProjectDetails extends ConsumerWidget {
+  const _MobileProjectDetails({
+    required this.item,
+    required this.scopes,
+    required this.selected,
+    required this.onSelected,
+    required this.onActivate,
+    required this.onNewRequest,
+    required this.onEdit,
+    required this.onArchive,
+  });
+
+  final YorksV1ProjectPortfolioItem item;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+  final _MobileProjectDetailTab selected;
+  final ValueChanged<_MobileProjectDetailTab> onSelected;
+  final VoidCallback? onActivate;
+  final VoidCallback? onNewRequest;
+  final VoidCallback? onEdit;
+  final VoidCallback? onArchive;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final authUserId = ref.watch(yorksV1AuthUserIdProvider);
+    final hasProjectEngineerMembership =
+        authUserId != null &&
+        item.activeMembers.any(
+          (member) =>
+              member.memberAuthUserId == authUserId &&
+              member.projectRole ==
+                  YorksV1ProjectMembershipRole.projectEngineer,
+        );
+    final canManage =
+        role == YorksV1Role.admin ||
+        (role?.isGlobalProjectEngineer ?? false) ||
+        hasProjectEngineerMembership;
+    final directory = canManage
+        ? ref.watch(yorksV1ActiveProjectTeamDirectoryProvider)
+        : null;
+    return ColoredBox(
+      color: AppColors.mobileSurface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MobileProjectDetailTabs(selected: selected, onSelected: onSelected),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+              child: switch (selected) {
+                _MobileProjectDetailTab.information =>
+                  _MobileProjectInformation(
+                    item: item,
+                    onActivate: onActivate,
+                    onNewRequest: onNewRequest,
+                    onEdit: onEdit,
+                    onArchive: onArchive,
+                  ),
+                _MobileProjectDetailTab.team => _MobileProjectTeam(
+                  item: item,
+                  authUserId: authUserId,
+                  directory: directory,
+                  canManage: canManage,
+                  onRetryDirectory: () =>
+                      ref.invalidate(yorksV1ActiveProjectTeamDirectoryProvider),
+                ),
+                _MobileProjectDetailTab.buildings => _MobileProjectBuildings(
+                  item: item,
+                  scopes: scopes,
+                ),
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileProjectDetailTabs extends StatelessWidget {
+  const _MobileProjectDetailTabs({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _MobileProjectDetailTab selected;
+  final ValueChanged<_MobileProjectDetailTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      children: [
+        for (final tab in _MobileProjectDetailTab.values)
+          Expanded(
+            child: Semantics(
+              selected: selected == tab,
+              button: true,
+              child: InkWell(
+                key: ValueKey('yorks-mobile-project-detail-${tab.name}'),
+                onTap: () => onSelected(tab),
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minHeight: AppSpacing.minTapTarget,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        width: 2,
+                        color: selected == tab
+                            ? AppColors.blue
+                            : Colors.transparent,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    switch (tab) {
+                      _MobileProjectDetailTab.information =>
+                        YorksV1ProjectStrings.information.primary,
+                      _MobileProjectDetailTab.team =>
+                        YorksV1ProjectStrings.team.primary,
+                      _MobileProjectDetailTab.buildings =>
+                        YorksV1ProjectStrings.buildings.primary,
+                    },
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelMedium.copyWith(
+                      color: selected == tab ? AppColors.navy : AppColors.muted,
+                      fontWeight: selected == tab
+                          ? FontWeight.w800
+                          : FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _MobileProjectInformation extends StatelessWidget {
+  const _MobileProjectInformation({
+    required this.item,
+    required this.onActivate,
+    required this.onNewRequest,
+    required this.onEdit,
+    required this.onArchive,
+  });
+
+  final YorksV1ProjectPortfolioItem item;
+  final VoidCallback? onActivate;
+  final VoidCallback? onNewRequest;
+  final VoidCallback? onEdit;
+  final VoidCallback? onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    final project = item.project;
+    final notProvided = YorksV1ProjectStrings.notProvided.primary;
+    final client =
+        _safeVisibleText(project.clientName) ??
+        _safeVisibleText(item.clientName) ??
+        notProvided;
+    final rows = <_MobileProjectFact>[
+      _MobileProjectFact(
+        label: YorksV1ProjectStrings.yorksReference.primary,
+        value: project.reference,
+      ),
+      _MobileProjectFact(
+        label: YorksV1ProjectStrings.projectName.primary,
+        value: project.name,
+      ),
+      _MobileProjectFact(
+        label: YorksV1ProjectStrings.client.primary,
+        value: client,
+      ),
+      _MobileProjectFact(
+        label: YorksV1ProjectStrings.jobOrContractReference.primary,
+        value: _safeVisibleText(project.jobOrContractReference) ?? notProvided,
+      ),
+      _MobileProjectFact(
+        label: YorksV1ProjectStrings.siteLocation.primary,
+        value: _safeVisibleText(project.siteLocation) ?? notProvided,
+      ),
+      _MobileProjectFact(
+        label: YorksV1ProjectStrings.state.primary,
+        value: YorksV1ProjectStrings.stateLabel(project.state).primary,
+      ),
+    ];
+    final actions = <Widget>[
+      if (onActivate != null)
+        OutlinedButton.icon(
+          onPressed: onActivate,
+          icon: const Icon(Icons.play_circle_outline_rounded),
+          label: Text(YorksV1ProjectStrings.activateProject.primary),
+        ),
+      if (onNewRequest != null)
+        FilledButton.icon(
+          onPressed: onNewRequest,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
+        ),
+      if (onEdit != null)
+        OutlinedButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined),
+          label: Text(YorksV1ProjectStrings.editProject.primary),
+        ),
+      if (onArchive != null)
+        TextButton.icon(
+          onPressed: onArchive,
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          icon: const Icon(Icons.archive_outlined),
+          label: Text(YorksV1ProjectStrings.safeDeleteProject.primary),
+        ),
+    ];
+    return _MobileProjectDetailCard(
+      title: YorksV1ProjectStrings.projectInformation.primary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final row in rows)
+            _MobileProjectFactRow(label: row.label, value: row.value),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            for (var index = 0; index < actions.length; index++) ...[
+              SizedBox(height: AppSpacing.minTapTarget, child: actions[index]),
+              if (index != actions.length - 1) const SizedBox(height: 8),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileProjectTeam extends StatelessWidget {
+  const _MobileProjectTeam({
+    required this.item,
+    required this.authUserId,
+    required this.directory,
+    required this.canManage,
+    required this.onRetryDirectory,
+  });
+
+  final YorksV1ProjectPortfolioItem item;
+  final String? authUserId;
+  final AsyncValue<List<YorksV1ProjectTeamDirectoryMember>>? directory;
+  final bool canManage;
+  final VoidCallback onRetryDirectory;
+
+  @override
+  Widget build(BuildContext context) {
+    final directoryNames = <String, String>{
+      for (final member
+          in directory?.valueOrNull ??
+              const <YorksV1ProjectTeamDirectoryMember>[])
+        member.authUserId: member.displayName,
+    };
+    final projectEngineers = item.activeMembers
+        .where(
+          (member) =>
+              member.projectRole ==
+              YorksV1ProjectMembershipRole.projectEngineer,
+        )
+        .toList(growable: false);
+    final siteEngineers = item.activeMembers
+        .where(
+          (member) =>
+              member.projectRole == YorksV1ProjectMembershipRole.siteEngineer,
+        )
+        .toList(growable: false);
+    VoidCallback? manage;
+    if (canManage) {
+      manage = () => showDialog<void>(
+        context: context,
+        builder: (_) => _ProjectTeamAssignmentDialog(item: item),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (directory?.isLoading == true) ...[
+          _MobileProjectStateCard(
+            icon: Icons.sync_rounded,
+            copy: YorksV1ProjectStrings.loadingTeamDirectory,
+          ),
+          const SizedBox(height: 11),
+        ] else if (directory?.hasError == true) ...[
+          _MobileProjectStateCard(
+            icon: Icons.cloud_off_outlined,
+            copy: YorksV1ProjectStrings.teamDirectoryUnavailable,
+            actionLabel: YorksV1ProjectStrings.retry.primary,
+            onAction: onRetryDirectory,
+          ),
+          const SizedBox(height: 11),
+        ],
+        _MobileProjectTeamCard(
+          title: YorksV1ProjectStrings.projectEngineers.primary,
+          members: projectEngineers,
+          directoryNames: directoryNames,
+          authUserId: authUserId,
+          onManage: manage,
+        ),
+        const SizedBox(height: 11),
+        _MobileProjectTeamCard(
+          title: YorksV1ProjectStrings.siteEngineers.primary,
+          members: siteEngineers,
+          directoryNames: directoryNames,
+          authUserId: authUserId,
+          onManage: manage,
+          showHistoryNote: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _MobileProjectTeamCard extends StatelessWidget {
+  const _MobileProjectTeamCard({
+    required this.title,
+    required this.members,
+    required this.directoryNames,
+    required this.authUserId,
+    required this.onManage,
+    this.showHistoryNote = false,
+  });
+
+  final String title;
+  final List<YorksV1ProjectMember> members;
+  final Map<String, String> directoryNames;
+  final String? authUserId;
+  final VoidCallback? onManage;
+  final bool showHistoryNote;
+
+  @override
+  Widget build(BuildContext context) => _MobileProjectDetailCard(
+    title: title,
+    action: onManage == null
+        ? null
+        : TextButton(
+            onPressed: onManage,
+            child: Text(YorksV1ProjectStrings.manage.primary),
+          ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (members.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              YorksV1ProjectStrings.noActiveAssignments.primary,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+          )
+        else
+          for (var index = 0; index < members.length; index++) ...[
+            _MobileProjectPerson(
+              member: members[index],
+              displayName: _safeTeamMemberName(
+                members[index],
+                directoryNames[members[index].memberAuthUserId],
+              ),
+              isCurrentUser:
+                  authUserId != null &&
+                  members[index].memberAuthUserId == authUserId,
+            ),
+            if (index != members.length - 1) const SizedBox(height: 8),
+          ],
+        if (showHistoryNote) ...[
+          const SizedBox(height: 9),
+          Text(
+            YorksV1ProjectStrings.membershipHistoryRetained.primary,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _MobileProjectPerson extends StatelessWidget {
+  const _MobileProjectPerson({
+    required this.member,
+    required this.displayName,
+    required this.isCurrentUser,
+  });
+
+  final YorksV1ProjectMember member;
+  final String displayName;
+  final bool isCurrentUser;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = DateFormat.yMMMd().format(member.effectiveFrom.toLocal());
+    final role = switch (member.projectRole) {
+      YorksV1ProjectMembershipRole.projectEngineer =>
+        YorksV1ProjectStrings.projectEngineerRole.primary,
+      YorksV1ProjectMembershipRole.siteEngineer =>
+        YorksV1ProjectStrings.siteEngineerRole.primary,
+    };
+    return Container(
+      constraints: const BoxConstraints(minHeight: 58),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: AppSpacing.minTapTarget,
+            height: AppSpacing.minTapTarget,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: AppColors.blueContainerStrong,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              _memberInitials(displayName),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.navy,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$role · ${YorksV1ProjectStrings.assigned.primary.replaceFirst('{date}', date)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          _MobilePersonStatus(isCurrentUser: isCurrentUser),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobilePersonStatus extends StatelessWidget {
+  const _MobilePersonStatus({required this.isCurrentUser});
+
+  final bool isCurrentUser;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 26),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: isCurrentUser
+          ? AppColors.blueContainer
+          : AppColors.successContainer,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Text(
+      (isCurrentUser ? YorksV1ProjectStrings.you : YorksV1ProjectStrings.active)
+          .primary,
+      style: AppTypography.labelSmall.copyWith(
+        color: isCurrentUser ? AppColors.blue : AppColors.success,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
+class _MobileProjectBuildings extends StatelessWidget {
+  const _MobileProjectBuildings({required this.item, required this.scopes});
+
+  final YorksV1ProjectPortfolioItem item;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+
+  @override
+  Widget build(BuildContext context) {
+    if (item.buildings.isNotEmpty) {
+      return _MobileProjectDetailCard(
+        title: YorksV1ProjectStrings.buildings.primary,
+        child: Column(
+          children: [
+            for (var index = 0; index < item.buildings.length; index++) ...[
+              _MobileBuildingRow.fromBuilding(item.buildings[index]),
+              if (index != item.buildings.length - 1) const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      );
+    }
+    return scopes.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => _MobileProjectStateCard(
+        icon: Icons.cloud_off_outlined,
+        copy: YorksV1ProjectStrings.recordsUnavailable,
+      ),
+      data: (items) => _MobileProjectDetailCard(
+        title: YorksV1ProjectStrings.buildings.primary,
+        child: items.isEmpty
+            ? Text(
+                YorksV1ProjectStrings.noBuildingsAdded.primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              )
+            : Column(
+                children: [
+                  for (var index = 0; index < items.length; index++) ...[
+                    _MobileBuildingRow.fromScope(items[index]),
+                    if (index != items.length - 1) const SizedBox(height: 8),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _MobileBuildingRow extends StatelessWidget {
+  const _MobileBuildingRow({
+    required this.title,
+    required this.subtitle,
+    required this.common,
+  });
+
+  factory _MobileBuildingRow.fromBuilding(
+    YorksV1ProjectBuildingInput building,
+  ) => _MobileBuildingRow(
+    title: building.name,
+    subtitle: [
+      if (building.code.trim().isNotEmpty) building.code.trim(),
+      ?_safeVisibleText(building.deliveryAddress),
+    ].join(' · '),
+    common: false,
+  );
+
+  factory _MobileBuildingRow.fromScope(
+    YorksV1MaterialRequestScopeOption scope,
+  ) => _MobileBuildingRow(
+    title: scope.name,
+    subtitle: _safeVisibleText(scope.deliveryAddress) ?? '',
+    common: scope.isCommon,
+  );
+
+  final String title;
+  final String subtitle;
+  final bool common;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 58),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: AppSpacing.minTapTarget,
+          height: AppSpacing.minTapTarget,
+          decoration: BoxDecoration(
+            color: common
+                ? AppColors.warningContainer
+                : AppColors.blueContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            common ? Icons.hub_outlined : Icons.business_outlined,
+            color: common ? AppColors.warning : AppColors.blue,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.labelLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileProjectDetailCard extends StatelessWidget {
+  const _MobileProjectDetailCard({
+    required this.title,
+    required this.child,
+    this.action,
+  });
+
+  final String title;
+  final Widget child;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(15),
+      boxShadow: const [
+        BoxShadow(
+          color: AppColors.shadow,
+          blurRadius: 20,
+          offset: Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            ?action,
+          ],
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
+    ),
+  );
+}
+
+class _MobileProjectFact {
+  const _MobileProjectFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+class _MobileProjectFactRow extends StatelessWidget {
+  const _MobileProjectFactRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.muted,
+            letterSpacing: .7,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileProjectWorkspace extends StatelessWidget {
+  const _MobileProjectWorkspace({
+    required this.item,
+    required this.tab,
+    required this.requests,
+    required this.scopes,
+    required this.groups,
+    required this.documents,
+    required this.actorRole,
+    required this.activeMember,
+    required this.canActAsProjectEngineer,
+    required this.onTabChanged,
+    required this.onOpenRequests,
+    required this.onOpenDocuments,
+    required this.onOpenRequest,
+    required this.onRetryRequests,
+  });
+
+  final YorksV1ProjectPortfolioItem item;
+  final YorksV1ProjectWorkspaceTab tab;
+  final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+  final AsyncValue<List<YorksV1BoqGroup>> groups;
+  final AsyncValue<YorksV1DocumentWorkspace> documents;
+  final YorksV1Role? actorRole;
+  final bool activeMember;
+  final bool canActAsProjectEngineer;
+  final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
+  final VoidCallback onOpenRequests;
+  final VoidCallback onOpenDocuments;
+  final ValueChanged<YorksV1MaterialRequest> onOpenRequest;
+  final VoidCallback onRetryRequests;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = _MobileProjectWorkspaceTabs(
+      selected: tab,
+      onSelected: onTabChanged,
+    );
+    if (tab == YorksV1ProjectWorkspaceTab.boq) {
+      return ColoredBox(
+        color: AppColors.mobileSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            tabs,
+            Expanded(
+              child: YorksV1BoqGroupsScreen(
+                projectId: item.project.id,
+                embedded: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return ColoredBox(
+      color: AppColors.mobileSurface,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          YorksMobileUi.horizontalPadding,
+          YorksMobileUi.horizontalPadding,
+          YorksMobileUi.horizontalPadding,
+          28,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (tab == YorksV1ProjectWorkspaceTab.overview) ...[
+              _MobileProjectHero(item: item, scopes: scopes),
+              const SizedBox(height: 10),
+            ],
+            tabs,
+            const SizedBox(height: 13),
+            switch (tab) {
+              YorksV1ProjectWorkspaceTab.overview => _MobileProjectOverview(
+                requests: requests,
+                scopes: scopes,
+                groups: groups,
+                documents: documents,
+                actorRole: actorRole,
+                activeMember: activeMember,
+                canActAsProjectEngineer: canActAsProjectEngineer,
+                onOpenRequests: onOpenRequests,
+                onOpenRequest: onOpenRequest,
+                onRetryRequests: onRetryRequests,
+              ),
+              YorksV1ProjectWorkspaceTab.requests => _LinkedRecordCard(
+                icon: Icons.assignment_outlined,
+                title: YorksV1ProjectStrings.materialRequests,
+                action: YorksV1ProjectStrings.openRequests,
+                onOpen: onOpenRequests,
+              ),
+              YorksV1ProjectWorkspaceTab.documents => _LinkedRecordCard(
+                icon: Icons.folder_open_outlined,
+                title: YorksV1ProjectStrings.documents,
+                action: YorksV1ProjectStrings.openDocuments,
+                onOpen: onOpenDocuments,
+              ),
+              YorksV1ProjectWorkspaceTab.boq => const SizedBox.shrink(),
+            },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileProjectHero extends StatelessWidget {
+  const _MobileProjectHero({required this.item, required this.scopes});
+
+  final YorksV1ProjectPortfolioItem item;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+
+  @override
+  Widget build(BuildContext context) {
+    final project = item.project;
+    final loadedScopes = scopes.valueOrNull;
+    final buildingCount = loadedScopes == null
+        ? item.activeBuildingCount
+        : loadedScopes.where((scope) => !scope.isCommon).length;
+    final location = _safeVisibleText(project.siteLocation);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.navy, AppColors.navyHover],
+        ),
+        borderRadius: BorderRadius.circular(17),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withValues(alpha: .20),
+            blurRadius: 26,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  project.reference.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.onPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _MobileProjectStatus(state: project.state),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            project.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.headlineSmall.copyWith(
+              color: AppColors.onPrimary,
+              fontSize: 22,
+              height: 1.18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(
+                Icons.business_outlined,
+                size: 16,
+                color: AppColors.blueContainerStrong,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  [
+                    ?location,
+                    '$buildingCount ${YorksV1ProjectStrings.buildings.primary}',
+                  ].join('  ·  '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.blueContainerStrong,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileProjectStatus extends StatelessWidget {
+  const _MobileProjectStatus({required this.state});
+
+  final YorksV1ProjectLifecycle state;
+
+  @override
+  Widget build(BuildContext context) {
+    final success =
+        state == YorksV1ProjectLifecycle.active ||
+        state == YorksV1ProjectLifecycle.completed;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: success
+            ? AppColors.successContainer
+            : AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        YorksV1ProjectStrings.stateLabel(state).primary,
+        style: AppTypography.labelSmall.copyWith(
+          color: success ? AppColors.success : AppColors.inkSecondary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileProjectWorkspaceTabs extends StatelessWidget {
+  const _MobileProjectWorkspaceTabs({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final YorksV1ProjectWorkspaceTab selected;
+  final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(
+      border: Border(bottom: BorderSide(color: AppColors.line)),
+    ),
+    child: Row(
+      children: [
+        for (final tab in YorksV1ProjectWorkspaceTab.values)
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: selected == tab,
+              child: InkWell(
+                key: ValueKey('yorks-mobile-project-tab-${tab.name}'),
+                onTap: () => onSelected(tab),
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minHeight: AppSpacing.minTapTarget,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        width: 2,
+                        color: selected == tab
+                            ? AppColors.blue
+                            : Colors.transparent,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    _mobileProjectTabLabel(tab),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: selected == tab ? AppColors.navy : AppColors.muted,
+                      fontWeight: selected == tab
+                          ? FontWeight.w800
+                          : FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+String _mobileProjectTabLabel(YorksV1ProjectWorkspaceTab tab) => switch (tab) {
+  YorksV1ProjectWorkspaceTab.overview => YorksV1ProjectStrings.overview.primary,
+  YorksV1ProjectWorkspaceTab.boq => YorksV1ProjectStrings.boq.primary,
+  YorksV1ProjectWorkspaceTab.requests => YorksV1ProjectStrings.requests.primary,
+  YorksV1ProjectWorkspaceTab.documents => YorksV1ProjectStrings.docs.primary,
+};
+
+class _MobileProjectOverview extends StatelessWidget {
+  const _MobileProjectOverview({
+    required this.requests,
+    required this.scopes,
+    required this.groups,
+    required this.documents,
+    required this.actorRole,
+    required this.activeMember,
+    required this.canActAsProjectEngineer,
+    required this.onOpenRequests,
+    required this.onOpenRequest,
+    required this.onRetryRequests,
+  });
+
+  final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+  final AsyncValue<List<YorksV1BoqGroup>> groups;
+  final AsyncValue<YorksV1DocumentWorkspace> documents;
+  final YorksV1Role? actorRole;
+  final bool activeMember;
+  final bool canActAsProjectEngineer;
+  final VoidCallback onOpenRequests;
+  final ValueChanged<YorksV1MaterialRequest> onOpenRequest;
+  final VoidCallback onRetryRequests;
+
+  @override
+  Widget build(BuildContext context) {
+    final requestItems = requests.valueOrNull;
+    final approved = requestItems
+        ?.where(
+          (request) => request.state == YorksV1MaterialRequestState.approved,
+        )
+        .length;
+    final pending = requestItems
+        ?.where(
+          (request) =>
+              request.state == YorksV1MaterialRequestState.awaitingApproval,
+        )
+        .length;
+    final inProgress = requestItems
+        ?.where((request) => _isRequestInProgress(request.state))
+        .length;
+    final attentionItems =
+        requestItems
+            ?.where(
+              (request) => _requestNeedsAttention(
+                request,
+                actorRole: actorRole,
+                activeMember: activeMember,
+                canActAsProjectEngineer: canActAsProjectEngineer,
+              ),
+            )
+            .take(2)
+            .toList(growable: false) ??
+        const <YorksV1MaterialRequest>[];
+    final recentItems = requestItems == null
+        ? const <YorksV1MaterialRequest>[]
+        : ([...requestItems]..sort(
+                (left, right) => right.updatedAt.compareTo(left.updatedAt),
+              ))
+              .take(3)
+              .toList(growable: false);
+    final recordUnavailable =
+        groups.hasError || scopes.hasError || documents.hasError;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (requests.isLoading)
+          const LinearProgressIndicator(minHeight: 2)
+        else if (requests.hasError)
+          _MobileProjectStateCard(
+            icon: Icons.cloud_off_outlined,
+            copy: YorksV1ProjectStrings.requestsUnavailable,
+            actionLabel: YorksV1ProjectStrings.retry.primary,
+            onAction: onRetryRequests,
+          ),
+        if (!requests.hasError) ...[
+          _MobileProjectKpiGrid(
+            entries: [
+              _MobileProjectKpi(
+                label: YorksV1ProjectStrings.materialRequests.primary,
+                value: requestItems == null ? '—' : '${requestItems.length}',
+              ),
+              _MobileProjectKpi(
+                label: YorksV1ProjectStrings.approvedRequests.primary,
+                value: approved == null ? '—' : '$approved',
+              ),
+              _MobileProjectKpi(
+                label: YorksV1ProjectStrings.pendingApproval.primary,
+                value: pending == null ? '—' : '$pending',
+              ),
+              _MobileProjectKpi(
+                label: YorksV1ProjectStrings.inProgress.primary,
+                value: inProgress == null ? '—' : '$inProgress',
+              ),
+            ],
+          ),
+          const SizedBox(height: 15),
+          _MobileProjectSectionHeader(
+            title: YorksV1ProjectStrings.needsAttention.primary,
+            onViewAll: onOpenRequests,
+          ),
+          const SizedBox(height: 8),
+          if (requestItems == null)
+            const _MobileProjectListLoading()
+          else if (attentionItems.isEmpty)
+            _MobileProjectStateCard(
+              icon: Icons.check_rounded,
+              copy: YorksV1ProjectStrings.noAttentionRequired,
+            )
+          else
+            _MobileProjectRequestList(
+              items: attentionItems,
+              onTap: onOpenRequest,
+              showOwner: true,
+            ),
+          const SizedBox(height: 15),
+          _MobileProjectSectionHeader(
+            title: YorksV1ProjectStrings.recentMaterialRequests.primary,
+            onViewAll: onOpenRequests,
+          ),
+          const SizedBox(height: 8),
+          if (requestItems == null)
+            const _MobileProjectListLoading()
+          else if (recentItems.isEmpty)
+            _MobileProjectStateCard(
+              icon: Icons.history_rounded,
+              copy: YorksV1ProjectStrings.noRecentRequests,
+            )
+          else
+            _MobileProjectRequestList(items: recentItems, onTap: onOpenRequest),
+        ],
+        const SizedBox(height: 15),
+        Text(
+          YorksV1ProjectStrings.projectRecords.primary,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _MobileProjectRecordGrid(
+          entries: [
+            _MobileProjectKpi(
+              label: YorksV1ProjectStrings.boqGroups.primary,
+              value: _asyncCount(groups, (value) => value.length),
+            ),
+            _MobileProjectKpi(
+              label: YorksV1ProjectStrings.buildings.primary,
+              value: _asyncCount(
+                scopes,
+                (value) => value.where((scope) => !scope.isCommon).length,
+              ),
+            ),
+            _MobileProjectKpi(
+              label: YorksV1ProjectStrings.documents.primary,
+              value: _asyncCount(documents, (value) => value.documents.length),
+            ),
+          ],
+        ),
+        if (recordUnavailable) ...[
+          const SizedBox(height: 8),
+          Text(
+            YorksV1ProjectStrings.recordsUnavailable.primary,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MobileProjectKpi {
+  const _MobileProjectKpi({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+class _MobileProjectKpiGrid extends StatelessWidget {
+  const _MobileProjectKpiGrid({required this.entries});
+
+  final List<_MobileProjectKpi> entries;
+
+  @override
+  Widget build(BuildContext context) => GridView.builder(
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    itemCount: entries.length,
+    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 2,
+      crossAxisSpacing: 9,
+      mainAxisSpacing: 9,
+      mainAxisExtent: 82,
+    ),
+    itemBuilder: (context, index) =>
+        _MobileProjectKpiTile(entry: entries[index], large: true),
+  );
+}
+
+class _MobileProjectRecordGrid extends StatelessWidget {
+  const _MobileProjectRecordGrid({required this.entries});
+
+  final List<_MobileProjectKpi> entries;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      for (var index = 0; index < entries.length; index++) ...[
+        Expanded(child: _MobileProjectKpiTile(entry: entries[index])),
+        if (index != entries.length - 1) const SizedBox(width: 7),
+      ],
+    ],
+  );
+}
+
+class _MobileProjectKpiTile extends StatelessWidget {
+  const _MobileProjectKpiTile({required this.entry, this.large = false});
+
+  final _MobileProjectKpi entry;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: BoxConstraints(minHeight: large ? 82 : 66),
+    padding: EdgeInsets.symmetric(
+      horizontal: large ? 12 : 9,
+      vertical: large ? 10 : 8,
+    ),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(13),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          entry.label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.muted,
+            fontSize: large ? 9 : 8,
+            letterSpacing: .75,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          entry.value,
+          style:
+              (large ? AppTypography.headlineMedium : AppTypography.titleMedium)
+                  .copyWith(fontWeight: FontWeight.w800),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileProjectSectionHeader extends StatelessWidget {
+  const _MobileProjectSectionHeader({
+    required this.title,
+    required this.onViewAll,
+  });
+
+  final String title;
+  final VoidCallback onViewAll;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          title,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      TextButton(onPressed: onViewAll, child: Text(AppStrings.viewAll.primary)),
+    ],
+  );
+}
+
+class _MobileProjectRequestList extends StatelessWidget {
+  const _MobileProjectRequestList({
+    required this.items,
+    required this.onTap,
+    this.showOwner = false,
+  });
+
+  final List<YorksV1MaterialRequest> items;
+  final ValueChanged<YorksV1MaterialRequest> onTap;
+  final bool showOwner;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceContainerLowest,
+    shape: RoundedRectangleBorder(
+      side: const BorderSide(color: AppColors.line),
+      borderRadius: BorderRadius.circular(15),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        for (var index = 0; index < items.length; index++) ...[
+          _MobileProjectRequestRow(
+            request: items[index],
+            onTap: () => onTap(items[index]),
+            showOwner: showOwner,
+          ),
+          if (index != items.length - 1)
+            const Divider(height: 1, color: AppColors.line),
+        ],
+      ],
+    ),
+  );
+}
+
+class _MobileProjectRequestRow extends StatelessWidget {
+  const _MobileProjectRequestRow({
+    required this.request,
+    required this.onTap,
+    required this.showOwner,
+  });
+
+  final YorksV1MaterialRequest request;
+  final VoidCallback onTap;
+  final bool showOwner;
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = YorksV1ProjectStrings.roleLabel(
+      request.currentActionOwnerRole,
+    ).primary;
+    return InkWell(
+      key: ValueKey('mobile-project-request-${request.id}'),
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 70),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: AppSpacing.minTapTarget,
+                height: AppSpacing.minTapTarget,
+                decoration: BoxDecoration(
+                  color: AppColors.blueContainer.withValues(alpha: .65),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.assignment_outlined,
+                  size: 20,
+                  color: AppColors.blue,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      request.requestNumber ??
+                          YorksV1MaterialRequestStrings.draft.primary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${request.scopeName} · ${request.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      showOwner
+                          ? '${YorksV1ProjectStrings.currentOwner.primary}: $owner'
+                          : DateFormat.yMMMd().add_jm().format(
+                              request.updatedAt.toLocal(),
+                            ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.mutedLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              _MobileRequestStatePill(state: request.state),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileRequestStatePill extends StatelessWidget {
+  const _MobileRequestStatePill({required this.state});
+
+  final YorksV1MaterialRequestState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final attention = state == YorksV1MaterialRequestState.awaitingApproval;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 25),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: attention ? AppColors.warningContainer : AppColors.blueContainer,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        yorksV1MaterialRequestStateCopy(state).primary,
+        maxLines: 1,
+        style: AppTypography.labelSmall.copyWith(
+          color: attention ? AppColors.warning : AppColors.blue,
+          fontSize: 8,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileProjectStateCard extends StatelessWidget {
+  const _MobileProjectStateCard({
+    required this.icon,
+    required this.copy,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final TranslatableString copy;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 82),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(15),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: AppSpacing.minTapTarget,
+          height: AppSpacing.minTapTarget,
+          decoration: BoxDecoration(
+            color: AppColors.blueContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppColors.blue),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            copy.primary,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(width: 8),
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _MobileProjectListLoading extends StatelessWidget {
+  const _MobileProjectListLoading();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    height: 82,
+    child: Center(child: CircularProgressIndicator()),
+  );
+}
+
+bool _isRequestInProgress(YorksV1MaterialRequestState state) => switch (state) {
+  YorksV1MaterialRequestState.submitted ||
+  YorksV1MaterialRequestState.arranging ||
+  YorksV1MaterialRequestState.partiallyDispatched ||
+  YorksV1MaterialRequestState.dispatched ||
+  YorksV1MaterialRequestState.partiallyReceived => true,
+  _ => false,
+};
+
+bool _requestNeedsAttention(
+  YorksV1MaterialRequest request, {
+  required YorksV1Role? actorRole,
+  required bool activeMember,
+  required bool canActAsProjectEngineer,
+}) {
+  final owner = request.currentActionOwnerRole?.trim();
+  return switch (owner) {
+    'project_engineer' => canActAsProjectEngineer,
+    'senior_mechanical_engineer' =>
+      actorRole == YorksV1Role.admin ||
+          actorRole == YorksV1Role.seniorMechanicalEngineer,
+    'project_manager' =>
+      actorRole == YorksV1Role.admin || actorRole == YorksV1Role.projectManager,
+    'site_engineer' =>
+      actorRole == YorksV1Role.admin ||
+          (activeMember &&
+              (actorRole == YorksV1Role.siteEngineer ||
+                  actorRole == YorksV1Role.projectEngineer ||
+                  (actorRole?.isGlobalProjectEngineer ?? false))),
+    'procurement' =>
+      actorRole == YorksV1Role.admin || actorRole == YorksV1Role.procurement,
+    'admin' => actorRole == YorksV1Role.admin,
+    _ => false,
+  };
+}
+
+String _asyncCount<T>(AsyncValue<T> value, int Function(T value) count) {
+  final data = value.valueOrNull;
+  return data == null ? '—' : '${count(data)}';
 }
 
 class _ProjectR35Hero extends StatelessWidget {
@@ -3879,6 +5578,27 @@ String _memberInitials(String displayName) {
   if (parts.isEmpty) return '?';
   return parts.take(2).map((part) => part[0].toUpperCase()).join();
 }
+
+String? _safeVisibleText(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) return null;
+  if (_looksLikeUuid(normalized) ||
+      YorksV1ProjectTeamDirectoryMember.isEmailLikeDisplayName(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+String _safeTeamMemberName(YorksV1ProjectMember member, String? directoryName) {
+  return _safeVisibleText(member.displayName) ??
+      _safeVisibleText(directoryName) ??
+      YorksV1ProjectStrings.profileId.primary;
+}
+
+bool _looksLikeUuid(String value) => RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  caseSensitive: false,
+).hasMatch(value.trim());
 
 class _ProjectBuildingsCard extends StatelessWidget {
   const _ProjectBuildingsCard({required this.buildings, required this.count});

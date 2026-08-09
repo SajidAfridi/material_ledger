@@ -55,7 +55,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final destinations = [
-      YorksV1ShellStrings.overview.primary,
+      AppStrings.home.primary,
       YorksV1ShellStrings.projects.primary,
       YorksV1ShellStrings.materialRequests.primary,
       AppStrings.more.primary,

@@ -106,6 +106,7 @@ enum YorksV1BoqImportValidationCode {
   blankHeading,
   duplicateHeading,
   duplicateCanonicalMapping,
+  commercialPermissionRequired,
 }
 
 class YorksV1BoqImportValidationIssue {

@@ -489,6 +489,8 @@ class _YorksV1ProjectCreateFlowScreenState
         language: language,
         validationErrors: _validationErrors,
         teamDirectory: teamDirectory!,
+        onRetryDirectory: () =>
+            ref.invalidate(yorksV1ActiveProjectTeamDirectoryProvider),
       ),
     };
 
@@ -1521,7 +1523,10 @@ class _R35CreationStageHeader extends StatelessWidget {
           const SizedBox(height: 7),
           if (compact)
             Text(
-              _stageDescription(stage).primary,
+              (stage == YorksV1ProjectCreationStage.reviewAndCreate
+                      ? YorksV1ProjectStrings.reviewCreationDescription
+                      : _stageDescription(stage))
+                  .primary,
               style: AppTypography.bodySmall.copyWith(height: 1.45),
             )
           else
@@ -1685,7 +1690,12 @@ class _MobileStageNavigationItem extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                _stageCopy(stage).primary,
+                (YorksMobileUi.isActive(context) &&
+                            currentStage ==
+                                YorksV1ProjectCreationStage.reviewAndCreate
+                        ? _mobileReviewStageCopy(stage)
+                        : _stageCopy(stage))
+                    .primary,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
@@ -3346,20 +3356,25 @@ class _ReviewStage extends StatelessWidget {
     required this.language,
     required this.validationErrors,
     required this.teamDirectory,
+    required this.onRetryDirectory,
   });
 
   final YorksV1ProjectCreationDraft draft;
   final AppLanguage language;
   final Set<YorksV1ProjectValidationCode> validationErrors;
   final AsyncValue<List<YorksV1ProjectTeamDirectoryMember>> teamDirectory;
+  final VoidCallback onRetryDirectory;
 
   @override
   Widget build(BuildContext context) {
-    final directory = teamDirectory.asData?.value ?? const [];
+    final loadedDirectory = teamDirectory.asData?.value;
+    final directory = loadedDirectory ?? const [];
     final memberByAuthUserId = {
       for (final member in directory) member.authUserId: member,
     };
-    final hasUnavailableMember = _hasUnavailableInitialMember(draft, directory);
+    final hasUnavailableMember =
+        loadedDirectory != null &&
+        _hasUnavailableInitialMember(draft, loadedDirectory);
     final notProvided = YorksV1ProjectStrings.notProvided.primary;
     String namesForRole(YorksV1ProjectMembershipRole role) {
       final names = [
@@ -3399,6 +3414,25 @@ class _ReviewStage extends StatelessWidget {
     final end = draft.endDate == null
         ? notProvided
         : MaterialLocalizations.of(context).formatMediumDate(draft.endDate!);
+
+    if (YorksMobileUi.isActive(context)) {
+      final inputErrors = draft.toCreationInput().validate();
+      final directoryLoaded = teamDirectory.asData != null;
+      return _MobileReviewStage(
+        draft: draft,
+        language: language,
+        ready:
+            directoryLoaded &&
+            !hasUnavailableMember &&
+            inputErrors.isEmpty &&
+            validationErrors.isEmpty,
+        directoryLoading: teamDirectory.isLoading,
+        directoryFailed: teamDirectory.hasError,
+        hasUnavailableMember: hasUnavailableMember,
+        showValidation: inputErrors.isNotEmpty || validationErrors.isNotEmpty,
+        onRetryDirectory: onRetryDirectory,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3590,6 +3624,347 @@ class _ReviewStage extends StatelessWidget {
       ],
     );
   }
+}
+
+class _MobileReviewStage extends StatelessWidget {
+  const _MobileReviewStage({
+    required this.draft,
+    required this.language,
+    required this.ready,
+    required this.directoryLoading,
+    required this.directoryFailed,
+    required this.hasUnavailableMember,
+    required this.showValidation,
+    required this.onRetryDirectory,
+  });
+
+  final YorksV1ProjectCreationDraft draft;
+  final AppLanguage language;
+  final bool ready;
+  final bool directoryLoading;
+  final bool directoryFailed;
+  final bool hasUnavailableMember;
+  final bool showValidation;
+  final VoidCallback onRetryDirectory;
+
+  @override
+  Widget build(BuildContext context) {
+    final projectEngineers = draft.initialMembers
+        .where(
+          (member) =>
+              member.projectRole ==
+              YorksV1ProjectMembershipRole.projectEngineer,
+        )
+        .length;
+    final siteEngineers = draft.initialMembers
+        .where(
+          (member) =>
+              member.projectRole == YorksV1ProjectMembershipRole.siteEngineer,
+        )
+        .length;
+    final notProvided = YorksV1ProjectStrings.notProvided.primary;
+    final metrics = <_MobileReviewMetric>[
+      _MobileReviewMetric(
+        label: YorksV1ProjectStrings.client.primary,
+        value: _emptyToNull(draft.clientName) ?? notProvided,
+      ),
+      _MobileReviewMetric(
+        label: YorksV1ProjectStrings.siteLocation.primary,
+        value: _emptyToNull(draft.siteLocation) ?? notProvided,
+      ),
+      _MobileReviewMetric(
+        label: YorksV1ProjectStrings.projectEngineers.primary,
+        value: '$projectEngineers',
+      ),
+      _MobileReviewMetric(
+        label: YorksV1ProjectStrings.siteEngineers.primary,
+        value: '$siteEngineers',
+      ),
+      _MobileReviewMetric(
+        label: YorksV1ProjectStrings.buildings.primary,
+        value: '${draft.buildings.length}',
+      ),
+      _MobileReviewMetric(
+        label: YorksV1ProjectStrings.attachments.primary,
+        value: '${draft.attachments.length}',
+      ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            border: Border.all(color: AppColors.line),
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: const [
+              BoxShadow(
+                color: AppColors.shadow,
+                blurRadius: 20,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: draft.reference.trim().isEmpty
+                                ? notProvided
+                                : draft.reference.trim(),
+                            style: AppTypography.titleMedium.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          TextSpan(
+                            text: draft.name.trim().isEmpty
+                                ? ''
+                                : '  ${draft.name.trim()}',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (directoryLoading)
+                    const SizedBox.square(
+                      dimension: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    _MobileReviewStatus(ready: ready),
+                ],
+              ),
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: metrics.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  mainAxisExtent: _mobileReviewMetricExtent(context),
+                ),
+                itemBuilder: (context, index) {
+                  final metric = metrics[index];
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            metric.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.labelSmall.copyWith(
+                              color: AppColors.muted,
+                              fontSize: 9,
+                            ),
+                          ),
+                          Text(
+                            metric.value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.labelLarge.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (ready)
+          _MobileReviewCallout(
+            title: YorksV1ProjectStrings.whatHappensNext,
+            description: YorksV1ProjectStrings.creationScopeOutcome,
+            language: language,
+            success: true,
+          )
+        else if (hasUnavailableMember)
+          _MobileReviewCallout(
+            title: YorksV1ProjectStrings.stageNeedsAttention,
+            description: YorksV1ProjectStrings.teamMemberNoLongerAvailable,
+            language: language,
+          )
+        else if (directoryFailed)
+          _MobileReviewCallout(
+            title: YorksV1ProjectStrings.stageNeedsAttention,
+            description: YorksV1ProjectStrings.teamDirectoryUnavailable,
+            language: language,
+            actionLabel: YorksV1ProjectStrings.retry,
+            onAction: onRetryDirectory,
+          )
+        else if (showValidation)
+          _ValidationBanner(language: language),
+      ],
+    );
+  }
+}
+
+class _MobileReviewMetric {
+  const _MobileReviewMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+double _mobileReviewMetricExtent(BuildContext context) {
+  final scaler = MediaQuery.textScalerOf(context);
+  final labelHeight = scaler.scale(9) * 1.2;
+  final valueHeight =
+      scaler.scale(AppTypography.labelLarge.fontSize ?? 14) * 1.2;
+  // Keep additional leading beyond the explicit cell padding because Flutter's
+  // nonlinear text scaler may allocate more glyph/strut height than a scaled
+  // font-size estimate at accessibility sizes.
+  final requiredHeight = 20 + labelHeight + valueHeight;
+  return requiredHeight < 42 ? 42 : requiredHeight;
+}
+
+class _MobileReviewStatus extends StatelessWidget {
+  const _MobileReviewStatus({required this.ready});
+
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 28),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: ready ? AppColors.successContainer : AppColors.warningContainer,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Text(
+      (ready
+              ? YorksV1ProjectStrings.ready
+              : YorksV1ProjectStrings.stageNeedsAttention)
+          .primary,
+      style: AppTypography.labelSmall.copyWith(
+        color: ready
+            ? AppColors.onSuccessContainer
+            : AppColors.onWarningContainer,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
+class _MobileReviewCallout extends StatelessWidget {
+  const _MobileReviewCallout({
+    required this.title,
+    required this.description,
+    required this.language,
+    this.success = false,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final TranslatableString title;
+  final TranslatableString description;
+  final AppLanguage language;
+  final bool success;
+  final TranslatableString? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: success
+          ? AppColors.successContainer.withValues(alpha: .55)
+          : AppColors.errorContainer,
+      border: Border.all(
+        color: success
+            ? AppColors.success.withValues(alpha: .22)
+            : AppColors.error.withValues(alpha: .22),
+      ),
+      borderRadius: BorderRadius.circular(13),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: AppSpacing.minTapTarget,
+          height: AppSpacing.minTapTarget,
+          decoration: BoxDecoration(
+            color: success
+                ? AppColors.successContainer
+                : AppColors.errorContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            success ? Icons.check_rounded : Icons.error_outline_rounded,
+            color: success ? AppColors.success : AppColors.error,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _LocalizedCopy(
+                copy: title,
+                language: language,
+                englishStyle: AppTypography.labelLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              _LocalizedCopy(
+                copy: description,
+                language: language,
+                englishStyle: AppTypography.bodySmall.copyWith(
+                  color: AppColors.muted,
+                  height: 1.45,
+                ),
+              ),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: AppSpacing.minTapTarget,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: onAction,
+                      child: Text(actionLabel!.active(language)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ReviewSummaryRow {
@@ -3810,6 +4185,19 @@ TranslatableString _stageCopy(YorksV1ProjectCreationStage stage) {
       YorksV1ProjectStrings.attachments,
     YorksV1ProjectCreationStage.reviewAndCreate =>
       YorksV1ProjectStrings.reviewAndCreate,
+  };
+}
+
+TranslatableString _mobileReviewStageCopy(YorksV1ProjectCreationStage stage) {
+  return switch (stage) {
+    YorksV1ProjectCreationStage.projectDetails =>
+      YorksV1ProjectStrings.detailsStep,
+    YorksV1ProjectCreationStage.partiesAndAccess =>
+      YorksV1ProjectStrings.accessStep,
+    YorksV1ProjectCreationStage.buildings => YorksV1ProjectStrings.buildings,
+    YorksV1ProjectCreationStage.attachments => YorksV1ProjectStrings.filesStep,
+    YorksV1ProjectCreationStage.reviewAndCreate =>
+      YorksV1ProjectStrings.reviewStep,
   };
 }
 

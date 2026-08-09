@@ -53,6 +53,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         : true;
     final breadcrumbs = _breadcrumbsFor(location, current);
     final focusedMobileRoute = location == RoutePaths.engineerCreateProject;
+    final featureOwnsMobileTopBar = _featureOwnsMobileTopBar(location);
 
     void openSearch() {
       showYorksV1WorkspaceSearch(
@@ -113,19 +114,24 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                 color: AppColors.mobileSurface,
                 child: Column(
                   children: [
-                    _YorksWorkspaceMobileTopBar(
-                      breadcrumbs: breadcrumbs,
-                      location: location,
-                      unreadNotifications: unread,
-                      onMenu: () => context.go(RoutePaths.yorksV1MobileMore),
-                      onBack: () => context.canPop()
-                          ? context.pop()
-                          : context.go(RoutePaths.yorksV1Projects),
-                    ),
+                    if (!(YorksMobileUi.isActive(context) &&
+                        featureOwnsMobileTopBar))
+                      _YorksWorkspaceMobileTopBar(
+                        breadcrumbs: breadcrumbs,
+                        location: location,
+                        unreadNotifications: unread,
+                        onMenu: () => context.go(RoutePaths.yorksV1MobileMore),
+                        onBack: () => context.canPop()
+                            ? context.pop()
+                            : context.go(RoutePaths.yorksV1Projects),
+                      ),
                     Expanded(child: child),
                     if (!focusedMobileRoute)
                       _YorksMobileNavigation(
-                        destinations: _mobileDestinationsFor(role),
+                        destinations: _mobileDestinationsFor(
+                          role,
+                          nativeMobile: YorksMobileUi.isActive(context),
+                        ),
                         activePath: location,
                         language: language,
                       ),
@@ -156,31 +162,98 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     );
   }
 
-  List<_YorksDestination> _mobileDestinationsFor(YorksV1Role? role) {
+  /// Project records and their BOQ/document children have record-specific
+  /// titles that only the feature projection can supply. Those screens own the
+  /// compact app bar on mobile; the shared shell continues to own navigation
+  /// and every top-level workspace header.
+  bool _featureOwnsMobileTopBar(String location) {
+    final segments = Uri(path: location).pathSegments;
+    if (segments.length < 3 ||
+        segments[0] != 'yorks' ||
+        segments[1] != 'projects') {
+      return false;
+    }
+    return segments.last != 'edit';
+  }
+
+  List<_YorksDestination> _mobileDestinationsFor(
+    YorksV1Role? role, {
+    required bool nativeMobile,
+  }) {
     final all = _destinationsFor(role);
     _YorksDestination path(String route) =>
         all.firstWhere((destination) => destination.path == route);
+    if (!nativeMobile) {
+      final more = _YorksDestination(
+        label: AppStrings.more,
+        icon: Icons.grid_view_outlined,
+        selectedIcon: Icons.grid_view_rounded,
+        path: RoutePaths.yorksV1MobileMore,
+      );
+      if (role == YorksV1Role.procurement) {
+        return [
+          path(RoutePaths.engineerHome),
+          path(RoutePaths.yorksV1MaterialRequests),
+          path(RoutePaths.yorksV1Inventory),
+          path(RoutePaths.yorksV1Dispatches),
+          more,
+        ];
+      }
+      return [
+        path(RoutePaths.engineerHome),
+        path(RoutePaths.yorksV1Projects),
+        path(RoutePaths.yorksV1MaterialRequests),
+        more,
+      ];
+    }
+    _YorksDestination mobilePath(
+      String route,
+      IconData icon,
+      IconData selectedIcon, {
+      TranslatableString? mobileLabel,
+    }) {
+      final source = path(route);
+      return _YorksDestination(
+        label: mobileLabel ?? source.label,
+        compactLabel: mobileLabel ?? source.compactLabel,
+        icon: icon,
+        selectedIcon: selectedIcon,
+        path: source.path,
+      );
+    }
+
+    final home = mobilePath(
+      RoutePaths.engineerHome,
+      Icons.home_outlined,
+      Icons.home_rounded,
+      mobileLabel: AppStrings.home,
+    );
+    final projects = mobilePath(
+      RoutePaths.yorksV1Projects,
+      Icons.folder_outlined,
+      Icons.folder_rounded,
+    );
+    final requests = mobilePath(
+      RoutePaths.yorksV1MaterialRequests,
+      Icons.receipt_long_outlined,
+      Icons.receipt_long_rounded,
+    );
     final more = _YorksDestination(
       label: AppStrings.more,
-      icon: Icons.grid_view_outlined,
-      selectedIcon: Icons.grid_view_rounded,
+      icon: Icons.menu_rounded,
+      selectedIcon: Icons.menu_rounded,
       path: RoutePaths.yorksV1MobileMore,
     );
     if (role == YorksV1Role.procurement) {
       return [
-        path(RoutePaths.engineerHome),
-        path(RoutePaths.yorksV1MaterialRequests),
+        home,
+        requests,
         path(RoutePaths.yorksV1Inventory),
         path(RoutePaths.yorksV1Dispatches),
         more,
       ];
     }
-    return [
-      path(RoutePaths.engineerHome),
-      path(RoutePaths.yorksV1Projects),
-      path(RoutePaths.yorksV1MaterialRequests),
-      more,
-    ];
+    return [home, projects, requests, more];
   }
 
   List<_YorksDestination> _destinationsFor(YorksV1Role? role) {
@@ -1293,42 +1366,63 @@ class _YorksMobileNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: EdgeInsets.zero,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
-          border: Border(top: BorderSide(color: AppColors.line)),
-        ),
-        child: SizedBox(
-          height: YorksMobileUi.navigationHeight,
-          child: Row(
-            children: [
-              for (final destination in destinations)
-                Expanded(
-                  child: _YorksMobileItem(
-                    destination: destination,
-                    selected:
-                        destination.path == activePath ||
-                        (destination.path == RoutePaths.yorksV1Projects &&
-                            activePath?.startsWith('/yorks/projects') ==
-                                true) ||
-                        (destination.path ==
-                                RoutePaths.yorksV1MaterialRequests &&
-                            activePath?.startsWith(
-                                  '/yorks/material-requests',
-                                ) ==
-                                true),
-                    language: language,
-                  ),
-                ),
-            ],
+    if (!YorksMobileUi.isActive(context)) {
+      return SafeArea(
+        top: false,
+        minimum: EdgeInsets.zero,
+        child: DecoratedBox(
+          key: const ValueKey('yorks-compact-navigation-legacy'),
+          decoration: const BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            border: Border(top: BorderSide(color: AppColors.line)),
+          ),
+          child: SizedBox(
+            height: YorksMobileUi.navigationHeight,
+            child: _navigationRow(),
           ),
         ),
+      );
+    }
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Container(
+        key: const ValueKey('yorks-mobile-navigation'),
+        height: YorksMobileUi.navigationHeight,
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: AppColors.navy.withValues(alpha: .97),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x24142F50),
+              blurRadius: 22,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: _navigationRow(),
       ),
     );
   }
+
+  Widget _navigationRow() => Row(
+    children: [
+      for (final destination in destinations)
+        Expanded(
+          child: _YorksMobileItem(
+            destination: destination,
+            selected:
+                destination.path == activePath ||
+                (destination.path == RoutePaths.yorksV1Projects &&
+                    activePath?.startsWith('/yorks/projects') == true) ||
+                (destination.path == RoutePaths.yorksV1MaterialRequests &&
+                    activePath?.startsWith('/yorks/material-requests') == true),
+            language: language,
+          ),
+        ),
+    ],
+  );
 }
 
 class _YorksNavigationTile extends StatelessWidget {
@@ -1427,46 +1521,101 @@ class _YorksMobileItem extends StatelessWidget {
   final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    selected: selected,
-    label: destination.label.primary,
-    child: InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => context.go(destination.path!),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: AppSpacing.minTapTarget,
-          minHeight: AppSpacing.minTapTarget,
+  Widget build(BuildContext context) {
+    if (!YorksMobileUi.isActive(context)) {
+      return Semantics(
+        button: true,
+        selected: selected,
+        label: destination.label.primary,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => context.go(destination.path!),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: AppSpacing.minTapTarget,
+              minHeight: AppSpacing.minTapTarget,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    selected ? destination.selectedIcon : destination.icon,
+                    size: 20,
+                    color: selected ? AppColors.blue : AppColors.muted,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    (destination.compactLabel ?? destination.label).primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: selected ? AppColors.blue : AppColors.muted,
+                      fontSize: 9,
+                      height: 1,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                selected ? destination.selectedIcon : destination.icon,
-                size: 20,
-                color: selected ? AppColors.blue : AppColors.muted,
+      );
+    }
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: destination.label.primary,
+      child: Material(
+        color: selected
+            ? AppColors.onPrimary.withValues(alpha: .12)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: () => context.go(destination.path!),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: AppSpacing.minTapTarget,
+              minHeight: AppSpacing.minTapTarget,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    selected ? destination.selectedIcon : destination.icon,
+                    size: 20,
+                    color: selected
+                        ? AppColors.onPrimary
+                        : AppColors.lineStrong,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    (destination.compactLabel ?? destination.label).primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: selected
+                          ? AppColors.onPrimary
+                          : AppColors.lineStrong,
+                      fontSize: 9,
+                      height: 1,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                (destination.compactLabel ?? destination.label).primary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelSmall.copyWith(
-                  color: selected ? AppColors.blue : AppColors.muted,
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _YorksQuickNavigationButton extends StatelessWidget {

@@ -19,6 +19,7 @@ import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
@@ -434,6 +435,66 @@ class _BoqScopeSelector extends StatelessWidget {
         activeScopes.any((scope) => scope.id == selectedScopeId)
         ? selectedScopeId!
         : _allValue;
+    if (YorksMobileUi.isActive(context)) {
+      return Semantics(
+        label: YorksV1BoqStrings.scope.primary,
+        child: SizedBox(
+          height: 58,
+          child: ListView.separated(
+            key: const ValueKey('boq-scope-selector-mobile'),
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+            itemCount: activeScopes.length + 1,
+            separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+            itemBuilder: (context, index) {
+              final isOverview = index == 0;
+              final scope = isOverview ? null : activeScopes[index - 1];
+              final value = scope?.id ?? _allValue;
+              final selected = value == selectedValue;
+              final label = isOverview
+                  ? YorksV1BoqStrings.allScopes.primary
+                  : scope!.name;
+              return Semantics(
+                button: true,
+                selected: selected,
+                child: OutlinedButton(
+                  key: ValueKey('boq-mobile-scope-$value'),
+                  onPressed: () => onChanged(isOverview ? null : scope!.id),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(112, AppSpacing.minTapTarget),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    foregroundColor: selected
+                        ? AppColors.blue
+                        : AppColors.inkSecondary,
+                    backgroundColor: selected
+                        ? AppColors.surfaceContainerLowest
+                        : AppColors.mobileSurface,
+                    side: BorderSide(
+                      color: selected ? AppColors.blue : AppColors.line,
+                      width: selected ? 1.5 : 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelLarge.copyWith(
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
     return Semantics(
       label: YorksV1BoqStrings.scope.primary,
       child: DropdownButtonFormField<String>(
@@ -464,22 +525,70 @@ class _ReadOnlyAggregateBanner extends StatelessWidget {
   final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => NexusSectionCard(
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(Icons.visibility_outlined, color: AppColors.blue),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _CopyText(
-            copy: YorksV1BoqStrings.allScopesDescription,
-            language: language,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
+  Widget build(BuildContext context) {
+    if (YorksMobileUi.isActive(context)) {
+      return YorksMobileCard(
+        color: AppColors.mobileSurface,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: AppSpacing.massive,
+              height: AppSpacing.massive,
+              decoration: BoxDecoration(
+                color: AppColors.blueContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: const Icon(
+                Icons.info_outline_rounded,
+                color: AppColors.blue,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _CopyText(
+                    copy: YorksV1BoqStrings.independentBoqTitle,
+                    language: language,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  _CopyText(
+                    copy: YorksV1BoqStrings.independentBoqDescription,
+                    language: language,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
+    }
+    return NexusSectionCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.visibility_outlined, color: AppColors.blue),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _CopyText(
+              copy: YorksV1BoqStrings.allScopesDescription,
+              language: language,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _GroupsBody extends StatelessWidget {
@@ -546,6 +655,17 @@ class _GroupsBody extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      );
+    }
+
+    if (YorksMobileUi.isActive(context)) {
+      return _MobileBoqFolderList(
+        groups: groups,
+        language: language,
+        embedded: embedded,
+        onOpen: (group) => context.push(
+          RoutePaths.yorksV1BoqWorksheetPath(projectId, group.id),
         ),
       );
     }
@@ -629,6 +749,222 @@ class _GroupsBody extends StatelessWidget {
   }
 }
 
+enum _MobileFolderFilter { all, started, empty }
+
+class _MobileBoqFolderList extends StatefulWidget {
+  const _MobileBoqFolderList({
+    required this.groups,
+    required this.language,
+    required this.embedded,
+    required this.onOpen,
+  });
+
+  final List<YorksV1BoqGroup> groups;
+  final AppLanguage language;
+  final bool embedded;
+  final ValueChanged<YorksV1BoqGroup> onOpen;
+
+  @override
+  State<_MobileBoqFolderList> createState() => _MobileBoqFolderListState();
+}
+
+class _MobileBoqFolderListState extends State<_MobileBoqFolderList> {
+  _MobileFolderFilter _filter = _MobileFolderFilter.all;
+
+  @override
+  Widget build(BuildContext context) {
+    final started = widget.groups.where((group) => group.rowCount > 0).length;
+    final empty = widget.groups.length - started;
+    final filtered = switch (_filter) {
+      _MobileFolderFilter.all => widget.groups,
+      _MobileFolderFilter.started =>
+        widget.groups
+            .where((group) => group.rowCount > 0)
+            .toList(growable: false),
+      _MobileFolderFilter.empty =>
+        widget.groups
+            .where((group) => group.rowCount == 0)
+            .toList(growable: false),
+    };
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CopyText(
+          copy: YorksV1BoqStrings.materialFolders,
+          language: widget.language,
+          style: AppTypography.headlineMedium.copyWith(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _CopyText(
+          copy: YorksV1BoqStrings.materialFoldersDescription,
+          language: widget.language,
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.muted,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _MobileFolderFilterButton(
+                label:
+                    '${YorksV1BoqStrings.allFolders.primary} ${widget.groups.length}',
+                selected: _filter == _MobileFolderFilter.all,
+                onPressed: () =>
+                    setState(() => _filter = _MobileFolderFilter.all),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _MobileFolderFilterButton(
+                label: '${YorksV1BoqStrings.startedFolders.primary} $started',
+                selected: _filter == _MobileFolderFilter.started,
+                onPressed: () =>
+                    setState(() => _filter = _MobileFolderFilter.started),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _MobileFolderFilterButton(
+                label: '${YorksV1BoqStrings.emptyFolders.primary} $empty',
+                selected: _filter == _MobileFolderFilter.empty,
+                onPressed: () =>
+                    setState(() => _filter = _MobileFolderFilter.empty),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+      ],
+    );
+
+    Widget row(YorksV1BoqGroup group) =>
+        _MobileBoqFolderRow(group: group, onTap: () => widget.onOpen(group));
+
+    if (widget.embedded) {
+      return Column(
+        key: const ValueKey('boq-mobile-folder-list'),
+        children: [
+          header,
+          for (var index = 0; index < filtered.length; index++) ...[
+            row(filtered[index]),
+            if (index != filtered.length - 1)
+              const SizedBox(height: AppSpacing.sm),
+          ],
+        ],
+      );
+    }
+    return ListView.builder(
+      key: const ValueKey('boq-mobile-folder-list'),
+      padding: const EdgeInsets.only(bottom: AppSpacing.colossal),
+      itemCount: filtered.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) return header;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: row(filtered[index - 1]),
+        );
+      },
+    );
+  }
+}
+
+class _MobileFolderFilterButton extends StatelessWidget {
+  const _MobileFolderFilterButton({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+    onPressed: onPressed,
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(0, AppSpacing.minTapTarget),
+      foregroundColor: selected ? AppColors.blue : AppColors.muted,
+      backgroundColor: selected
+          ? AppColors.blueContainer
+          : AppColors.surfaceContainerLowest,
+      side: BorderSide(color: selected ? AppColors.blue : AppColors.line),
+      shape: const StadiumBorder(),
+    ),
+    child: Text(label),
+  );
+}
+
+class _MobileBoqFolderRow extends StatelessWidget {
+  const _MobileBoqFolderRow({required this.group, required this.onTap});
+
+  final YorksV1BoqGroup group;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    padding: EdgeInsets.zero,
+    onTap: onTap,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 88),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: AppSpacing.massive,
+              height: AppSpacing.massive,
+              decoration: BoxDecoration(
+                color: group.isCustom
+                    ? AppColors.purpleContainer
+                    : AppColors.blueContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              ),
+              child: Icon(
+                group.isCustom
+                    ? Icons.folder_special_outlined
+                    : Icons.folder_outlined,
+                color: group.isCustom ? AppColors.purple : AppColors.blue,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${group.displayOrder.toString().padLeft(2, '0')} · ${group.effectiveTitle}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${group.rowCount} ${YorksV1BoqStrings.materials.primary.toLowerCase()}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// The Overview selector is deliberately a summary rather than a flattened
 /// worksheet. It lets an engineer assess every independent scope at once
 /// without creating an ambiguous cross-building edit or MR source.
@@ -665,6 +1001,16 @@ class _BoqScopeOverview extends StatelessWidget {
         ),
       );
       summary.add(group);
+    }
+    if (YorksMobileUi.isActive(context)) {
+      return _MobileBoqScopeOverview(
+        summaries: summaries.values.toList(growable: false),
+        legacyGroups: legacyGroups,
+        language: language,
+        embedded: embedded,
+        onSelectScope: onSelectScope,
+        onAssignLegacyScope: onAssignLegacyScope,
+      );
     }
     final children = <Widget>[
       _CopyText(
@@ -741,6 +1087,174 @@ class _BoqScopeOverview extends StatelessWidget {
           )
         : ListView(children: children);
   }
+}
+
+class _MobileBoqScopeOverview extends StatelessWidget {
+  const _MobileBoqScopeOverview({
+    required this.summaries,
+    required this.legacyGroups,
+    required this.language,
+    required this.embedded,
+    this.onSelectScope,
+    this.onAssignLegacyScope,
+  });
+
+  final List<_BoqScopeSummary> summaries;
+  final List<YorksV1BoqGroup> legacyGroups;
+  final AppLanguage language;
+  final bool embedded;
+  final ValueChanged<String>? onSelectScope;
+  final ValueChanged<YorksV1BoqGroup>? onAssignLegacyScope;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = <Widget>[
+      for (final summary in summaries) ...[
+        _MobileBoqScopeCard(
+          summary: summary,
+          onTap: onSelectScope == null
+              ? null
+              : () => onSelectScope!(summary.scopeId),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
+      if (legacyGroups.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.sm),
+        _CopyText(
+          copy: YorksV1BoqStrings.legacyBoqs,
+          language: language,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final group in legacyGroups) ...[
+          _LegacyBoqScopeCard(
+            group: group,
+            language: language,
+            onAssign: onAssignLegacyScope == null
+                ? null
+                : () => onAssignLegacyScope!(group),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+      if (summaries.isEmpty && legacyGroups.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxxl),
+          child: _CopyText(
+            copy: YorksV1BoqStrings.noGroups,
+            language: language,
+            center: true,
+          ),
+        ),
+    ];
+    return embedded
+        ? Column(
+            key: const ValueKey('boq-mobile-scope-overview'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: content,
+          )
+        : ListView(
+            key: const ValueKey('boq-mobile-scope-overview'),
+            padding: const EdgeInsets.only(bottom: AppSpacing.colossal),
+            children: content,
+          );
+  }
+}
+
+class _MobileBoqScopeCard extends StatelessWidget {
+  const _MobileBoqScopeCard({required this.summary, this.onTap});
+
+  final _BoqScopeSummary summary;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    onTap: onTap,
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                summary.scopeName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (onTap != null)
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _MobileBoqMetric(
+                label: YorksV1BoqStrings.folders.primary,
+                value: summary.folderCount,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _MobileBoqMetric(
+                label: YorksV1BoqStrings.materials.primary,
+                value: summary.materialCount,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _MobileBoqMetric(
+                label: YorksV1BoqStrings.startedFolders.primary,
+                value: summary.startedFolderCount,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileBoqMetric extends StatelessWidget {
+  const _MobileBoqMetric({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: AppColors.mobileSurface,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      border: Border.all(color: AppColors.line),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '$value',
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BoqScopeSummary {
@@ -928,80 +1442,149 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    if (YorksMobileUi.isActive(context)) {
+      return ListView(
+        key: const ValueKey('boq-mobile-embedded-workspace'),
+        padding: const EdgeInsets.fromLTRB(
+          YorksMobileUi.horizontalPadding,
+          AppSpacing.sm,
+          YorksMobileUi.horizontalPadding,
+          AppSpacing.xxl,
+        ),
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          scopeSelector,
+          const SizedBox(height: AppSpacing.md),
+          if (isAllAggregate) ...[
+            _ReadOnlyAggregateBanner(language: language),
+            const SizedBox(height: AppSpacing.md),
+          ] else if (excelEnabled || editable) ...[
+            Row(
               children: [
-                Text(
-                  YorksV1BoqStrings.worksheets.primary,
-                  style: AppTypography.titleLarge.copyWith(
-                    fontWeight: FontWeight.w800,
+                if (excelEnabled)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onExport,
+                      icon: const Icon(Icons.file_download_outlined, size: 18),
+                      label: Text(YorksV1BoqStrings.exportWorkbook.primary),
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  YorksV1BoqStrings.boqDescription.primary,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
+                if (excelEnabled && editable)
+                  const SizedBox(width: AppSpacing.sm),
+                if (editable)
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onCreateGroup,
+                      icon: const Icon(
+                        Icons.create_new_folder_outlined,
+                        size: 18,
+                      ),
+                      label: Text(YorksV1BoqStrings.newGroup.primary),
+                    ),
                   ),
-                ),
               ],
             ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              if (excelEnabled && !isAllAggregate)
-                OutlinedButton.icon(
-                  onPressed: onExport,
-                  icon: const Icon(Icons.file_download_outlined, size: 18),
-                  label: Text(YorksV1BoqStrings.exportWorkbook.primary),
-                ),
-              if (editable)
-                FilledButton.icon(
-                  onPressed: onCreateGroup,
-                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-                  label: Text(YorksV1BoqStrings.newGroup.primary),
-                ),
-            ],
+            const SizedBox(height: AppSpacing.md),
+          ],
+          groups.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(AppSpacing.xxxl),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, _) => _ErrorState(language: language, onRetry: onRetry),
+            data: (items) => _GroupsBody(
+              groups: items,
+              language: language,
+              projectId: projectId,
+              editable: editable,
+              aggregateReadOnly: isAllAggregate,
+              onSelectScope: onSelectScope,
+              onAssignLegacyScope: onAssignLegacyScope,
+              onAddGroup: onCreateGroup,
+              embedded: true,
+            ),
           ),
         ],
-      ),
-      const SizedBox(height: AppSpacing.xl),
-      scopeSelector,
-      const SizedBox(height: AppSpacing.md),
-      if (isAllAggregate) ...[
-        _ReadOnlyAggregateBanner(language: language),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    YorksV1BoqStrings.worksheets.primary,
+                    style: AppTypography.titleLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    YorksV1BoqStrings.boqDescription.primary,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                if (excelEnabled && !isAllAggregate)
+                  OutlinedButton.icon(
+                    onPressed: onExport,
+                    icon: const Icon(Icons.file_download_outlined, size: 18),
+                    label: Text(YorksV1BoqStrings.exportWorkbook.primary),
+                  ),
+                if (editable)
+                  FilledButton.icon(
+                    onPressed: onCreateGroup,
+                    icon: const Icon(
+                      Icons.create_new_folder_outlined,
+                      size: 18,
+                    ),
+                    label: Text(YorksV1BoqStrings.newGroup.primary),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        scopeSelector,
         const SizedBox(height: AppSpacing.md),
+        if (isAllAggregate) ...[
+          _ReadOnlyAggregateBanner(language: language),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        groups.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.all(AppSpacing.xxxl),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (_, _) => _ErrorState(language: language, onRetry: onRetry),
+          data: (items) => _GroupsBody(
+            groups: items,
+            language: language,
+            projectId: projectId,
+            editable: editable,
+            aggregateReadOnly: isAllAggregate,
+            onSelectScope: onSelectScope,
+            onAssignLegacyScope: onAssignLegacyScope,
+            onAddGroup: onCreateGroup,
+            embedded: true,
+          ),
+        ),
       ],
-      groups.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.all(AppSpacing.xxxl),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-        error: (_, _) => _ErrorState(language: language, onRetry: onRetry),
-        data: (items) => _GroupsBody(
-          groups: items,
-          language: language,
-          projectId: projectId,
-          editable: editable,
-          aggregateReadOnly: isAllAggregate,
-          onSelectScope: onSelectScope,
-          onAssignLegacyScope: onAssignLegacyScope,
-          onAddGroup: onCreateGroup,
-          embedded: true,
-        ),
-      ),
-    ],
-  );
+    );
+  }
 }
 
 class _BoqGroupCard extends StatelessWidget {
@@ -1135,6 +1718,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
+    final canViewCommercials = ref.watch(canViewCommercialsProvider);
     final editable =
         role != null &&
         role != YorksV1Role.procurement &&
@@ -1154,13 +1738,22 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
                 onPressed: () => context.pop(),
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
-              title: _CopyText(
-                copy: YorksV1BoqStrings.worksheet,
-                language: language,
-                style: AppTypography.titleLarge.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              title: YorksMobileUi.isActive(context)
+                  ? Text(
+                      _mobileWorksheetTitle(state.worksheet),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.titleMedium.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    )
+                  : _CopyText(
+                      copy: YorksV1BoqStrings.worksheet,
+                      language: language,
+                      style: AppTypography.titleLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
               actions: [
                 if (documentsEnabled)
                   IconButton(
@@ -1214,6 +1807,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             language: language,
             editable: editable,
             excelEnabled: excelEnabled,
+            canViewCommercials: canViewCommercials,
             onSaved: () => _invalidateGroupLists(
               ref,
               projectId,
@@ -1244,10 +1838,29 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             onExport: excelEnabled && state.worksheet != null
                 ? () => _exportWorkbook(context, ref, state.worksheet!)
                 : null,
+            onOpenDocuments: documentsEnabled && state.worksheet != null
+                ? () => context.push(
+                    RoutePaths.yorksV1ProjectDocumentsPath(
+                      projectId,
+                      entityType: 'boq_group',
+                      entityId: groupId,
+                    ),
+                  )
+                : null,
           ),
         },
       ),
     );
+  }
+
+  static String _mobileWorksheetTitle(YorksV1BoqWorksheet? worksheet) {
+    if (worksheet == null) return YorksV1BoqStrings.worksheet.primary;
+    final scope = worksheet.group.scopeCode?.trim().isNotEmpty == true
+        ? worksheet.group.scopeCode!.trim()
+        : worksheet.group.scopeName?.trim();
+    return scope == null || scope.isEmpty
+        ? worksheet.group.effectiveTitle
+        : '$scope · ${worksheet.group.effectiveTitle}';
   }
 
   Future<void> _archive(
@@ -1287,11 +1900,37 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     AppLanguage language,
   ) async {
     try {
-      final selected = await ref
-          .read(yorksV1BoqWorkbookFileServiceProvider)
-          .selectWorkbook();
-      if (selected == null || !context.mounted) return;
+      final fileService = ref.read(yorksV1BoqWorkbookFileServiceProvider);
       final codec = ref.read(yorksV1BoqWorkbookCodecProvider);
+      final canManageCommercials = ref.read(canManageCommercialsProvider);
+      if (YorksMobileUi.isActive(context)) {
+        final imported = await Navigator.of(context, rootNavigator: true)
+            .push<bool>(
+              MaterialPageRoute<bool>(
+                fullscreenDialog: true,
+                builder: (_) => _MobileBoqWorkbookImportFlow(
+                  fileService: fileService,
+                  codec: codec,
+                  worksheet: worksheet,
+                  language: language,
+                  canManageCommercials: canManageCommercials,
+                  onCommit: controller.importWorkbook,
+                  readSyncStatus: () => ref
+                      .read(yorksV1BoqWorksheetControllerProvider(groupId))
+                      .status,
+                  onRefresh: controller.load,
+                ),
+              ),
+            );
+        if (!context.mounted || imported != true) return;
+        _invalidateGroupLists(ref, projectId, worksheet.group.scopeId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(YorksV1BoqStrings.imported.primary)),
+        );
+        return;
+      }
+      final selected = await fileService.selectWorkbook();
+      if (selected == null || !context.mounted) return;
       final workbook = codec.decode(
         bytes: selected.bytes,
         fileName: selected.fileName,
@@ -1304,6 +1943,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
           codec: codec,
           fallbackTitle: worksheet.group.effectiveTitle,
           language: language,
+          canManageCommercials: canManageCommercials,
         ),
       );
       if (preview == null) return;
@@ -1381,11 +2021,13 @@ class _WorksheetBody extends StatelessWidget {
     required this.language,
     required this.editable,
     required this.excelEnabled,
+    required this.canViewCommercials,
     required this.onSaved,
     required this.showPageHeader,
     this.onCreateRequestFromFolder,
     this.onImport,
     this.onExport,
+    this.onOpenDocuments,
   });
 
   final YorksV1BoqWorksheetState state;
@@ -1393,11 +2035,13 @@ class _WorksheetBody extends StatelessWidget {
   final AppLanguage language;
   final bool editable;
   final bool excelEnabled;
+  final bool canViewCommercials;
   final VoidCallback onSaved;
   final bool showPageHeader;
   final VoidCallback? onCreateRequestFromFolder;
   final Future<void> Function()? onImport;
   final Future<void> Function()? onExport;
+  final VoidCallback? onOpenDocuments;
 
   @override
   Widget build(BuildContext context) {
@@ -1429,6 +2073,12 @@ class _WorksheetBody extends StatelessWidget {
             onTitleChanged: controller.updateTitle,
             onImport: onImport,
             onExport: onExport,
+            onOpenDocuments: onOpenDocuments,
+            onAddMaterial: editable && worksheet.columns.isNotEmpty
+                ? () => controller.addBlankRow(
+                    afterRowId: worksheet.rows.lastOrNull?.id,
+                  )
+                : null,
             onSave: () async {
               final saved = await controller.save();
               if (!context.mounted) return;
@@ -1457,6 +2107,10 @@ class _WorksheetBody extends StatelessWidget {
             child: YorksV1BoqSpreadsheet(
               worksheet: worksheet,
               editable: editable,
+              canViewCommercials: canViewCommercials,
+              mobileConflict: state.status == YorksV1BoqSyncStatus.conflict,
+              mobileLanguage: language,
+              onMobileRefresh: controller.load,
               onUpdateCell: controller.updateCell,
               onAddBlankRow: controller.addBlankRow,
               onAddSimilarRow: controller.addSimilarRow,
@@ -1483,6 +2137,8 @@ class _WorksheetHeader extends StatelessWidget {
     required this.onSave,
     this.onImport,
     this.onExport,
+    this.onOpenDocuments,
+    this.onAddMaterial,
     required this.onRefresh,
     this.onCreateRequestFromFolder,
   });
@@ -1496,6 +2152,8 @@ class _WorksheetHeader extends StatelessWidget {
   final Future<void> Function() onSave;
   final Future<void> Function()? onImport;
   final Future<void> Function()? onExport;
+  final VoidCallback? onOpenDocuments;
+  final VoidCallback? onAddMaterial;
   final Future<void> Function() onRefresh;
   final VoidCallback? onCreateRequestFromFolder;
 
@@ -1513,6 +2171,22 @@ class _WorksheetHeader extends StatelessWidget {
               state.status == YorksV1BoqSyncStatus.ready
         ? AppColors.success
         : AppColors.warning;
+    if (YorksMobileUi.isActive(context)) {
+      return _MobileWorksheetHeader(
+        worksheet: worksheet,
+        status: status,
+        statusColor: statusColor,
+        editable: editable,
+        saving: state.status == YorksV1BoqSyncStatus.saving,
+        onTitleChanged: onTitleChanged,
+        onAddMaterial: onAddMaterial,
+        onImport: excelEnabled ? onImport : null,
+        onExport: excelEnabled ? onExport : null,
+        onOpenDocuments: onOpenDocuments,
+        onSave: onSave,
+        onCreateRequestFromFolder: onCreateRequestFromFolder,
+      );
+    }
     return Material(
       color: AppColors.surfaceContainerLowest,
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
@@ -1596,18 +2270,1033 @@ class _WorksheetHeader extends StatelessWidget {
   }
 }
 
+class _MobileWorksheetHeader extends StatelessWidget {
+  const _MobileWorksheetHeader({
+    required this.worksheet,
+    required this.status,
+    required this.statusColor,
+    required this.editable,
+    required this.saving,
+    required this.onTitleChanged,
+    required this.onSave,
+    this.onAddMaterial,
+    this.onImport,
+    this.onExport,
+    this.onOpenDocuments,
+    this.onCreateRequestFromFolder,
+  });
+
+  final YorksV1BoqWorksheet worksheet;
+  final TranslatableString status;
+  final Color statusColor;
+  final bool editable;
+  final bool saving;
+  final ValueChanged<String> onTitleChanged;
+  final Future<void> Function() onSave;
+  final VoidCallback? onAddMaterial;
+  final Future<void> Function()? onImport;
+  final Future<void> Function()? onExport;
+  final VoidCallback? onOpenDocuments;
+  final VoidCallback? onCreateRequestFromFolder;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          worksheet.group.effectiveTitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.titleMedium.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (editable)
+                        IconButton(
+                          tooltip: YorksV1BoqStrings.worksheetTitle.primary,
+                          constraints: const BoxConstraints(
+                            minWidth: AppSpacing.minTapTarget,
+                            minHeight: AppSpacing.minTapTarget,
+                          ),
+                          onPressed: () => _editMobileWorksheetTitle(
+                            context,
+                            worksheet.group.worksheetTitle,
+                            onTitleChanged,
+                          ),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                        ),
+                    ],
+                  ),
+                  if (worksheet.group.scopeName?.trim().isNotEmpty == true)
+                    Text(
+                      worksheet.group.scopeName!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            _SyncChip(copy: status, color: statusColor),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _MobileWorksheetAction(
+                key: const ValueKey('boq-mobile-add-material'),
+                label: YorksV1BoqStrings.addMaterial.primary,
+                icon: Icons.add_rounded,
+                primary: true,
+                onPressed: onAddMaterial,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _MobileWorksheetAction(
+                key: const ValueKey('boq-import-workbook'),
+                label: YorksV1BoqStrings.importWorkbook.primary,
+                icon: Icons.file_upload_outlined,
+                onPressed: saving || onImport == null ? null : onImport,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: _MobileWorksheetAction(
+                key: const ValueKey('boq-export-workbook'),
+                label: YorksV1BoqStrings.exportWorkbook.primary,
+                icon: Icons.file_download_outlined,
+                onPressed: onExport,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _MobileWorksheetAction(
+                label: YorksV1DocumentStrings.documents.primary,
+                icon: Icons.description_outlined,
+                onPressed: onOpenDocuments,
+              ),
+            ),
+          ],
+        ),
+        if (editable || onCreateRequestFromFolder != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              if (editable)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: saving ? null : onSave,
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: Text(YorksV1BoqStrings.saveWorksheet.primary),
+                  ),
+                ),
+              if (editable && onCreateRequestFromFolder != null)
+                const SizedBox(width: AppSpacing.sm),
+              if (onCreateRequestFromFolder != null)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('boq-create-request-from-folder'),
+                    onPressed: onCreateRequestFromFolder,
+                    icon: const Icon(Icons.assignment_outlined, size: 18),
+                    label: Text(YorksV1BoqStrings.sendWholeGroup.primary),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
+
+  static Future<void> _editMobileWorksheetTitle(
+    BuildContext context,
+    String current,
+    ValueChanged<String> onChanged,
+  ) async {
+    final controller = TextEditingController(text: current);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(YorksV1BoqStrings.worksheetTitle.primary),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(YorksV1BoqStrings.cancel.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(YorksV1BoqStrings.save.primary),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result != null && result.trim().isNotEmpty) onChanged(result.trim());
+  }
+}
+
+class _MobileWorksheetAction extends StatelessWidget {
+  const _MobileWorksheetAction({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.primary = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 21),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.labelLarge.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+    return SizedBox(
+      height: 54,
+      child: primary
+          ? FilledButton(onPressed: onPressed, child: child)
+          : OutlinedButton(onPressed: onPressed, child: child),
+    );
+  }
+}
+
+class _MobileBoqWorkbookImportFlow extends StatefulWidget {
+  const _MobileBoqWorkbookImportFlow({
+    required this.fileService,
+    required this.codec,
+    required this.worksheet,
+    required this.language,
+    required this.canManageCommercials,
+    required this.onCommit,
+    required this.readSyncStatus,
+    required this.onRefresh,
+  });
+
+  final YorksV1BoqWorkbookFileService fileService;
+  final YorksV1BoqWorkbookCodec codec;
+  final YorksV1BoqWorksheet worksheet;
+  final AppLanguage language;
+  final bool canManageCommercials;
+  final Future<bool> Function(YorksV1BoqImportPreview preview) onCommit;
+  final YorksV1BoqSyncStatus Function() readSyncStatus;
+  final Future<void> Function() onRefresh;
+
+  @override
+  State<_MobileBoqWorkbookImportFlow> createState() =>
+      _MobileBoqWorkbookImportFlowState();
+}
+
+class _MobileBoqWorkbookImportFlowState
+    extends State<_MobileBoqWorkbookImportFlow> {
+  int _step = 0;
+  bool _busy = false;
+  bool _commitFailed = false;
+  bool _commitConflict = false;
+  bool _selectionFailed = false;
+  YorksV1BoqParsedWorkbook? _workbook;
+  YorksV1BoqWorkbookSheet? _sheet;
+  int _headerRowIndex = 0;
+  bool _hasSelectedHeader = false;
+  String _title = '';
+  List<int> _headerRowIndexes = const [];
+  List<YorksV1BoqHeaderPath> _headerHierarchy = const [];
+  List<YorksV1BoqImportColumn> _columns = const [];
+  List<YorksV1BoqImportRow> _rows = const [];
+
+  YorksV1BoqImportPreview? get _preview {
+    final workbook = _workbook;
+    final sheet = _sheet;
+    if (workbook == null || sheet == null) return null;
+    return YorksV1BoqImportPreview(
+      fileName: workbook.fileName,
+      worksheetName: sheet.name,
+      title: _title,
+      headerRowIndex: _headerRowIndex,
+      headerRowIndexes: _headerRowIndexes,
+      headerHierarchy: _headerHierarchy,
+      columns: _columns,
+      rows: _rows,
+      validationIssues: _importValidationIssues(
+        widget.codec,
+        _columns,
+        canManageCommercials: widget.canManageCommercials,
+      ),
+    );
+  }
+
+  void _resetPreview() {
+    final workbook = _workbook;
+    final sheet = _sheet;
+    if (workbook == null || sheet == null) return;
+    final detected = widget.codec.preview(
+      workbook: workbook,
+      sheet: sheet,
+      fallbackTitle: widget.worksheet.group.effectiveTitle,
+      headerRowIndex: _hasSelectedHeader ? _headerRowIndex : null,
+    );
+    _headerRowIndex = detected.headerRowIndex;
+    _headerRowIndexes = detected.headerRowIndexes;
+    _headerHierarchy = detected.headerHierarchy;
+    _title = detected.title;
+    _columns = detected.columns;
+    _rows = detected.rows;
+  }
+
+  Future<void> _pickWorkbook() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _commitFailed = false;
+      _commitConflict = false;
+      _selectionFailed = false;
+    });
+    try {
+      final selected = await widget.fileService.selectWorkbook();
+      if (selected == null || !mounted) return;
+      final workbook = widget.codec.decode(
+        bytes: selected.bytes,
+        fileName: selected.fileName,
+      );
+      setState(() {
+        _workbook = workbook;
+        _sheet = workbook.sheets.first;
+        _headerRowIndex = 0;
+        _hasSelectedHeader = false;
+        _selectionFailed = false;
+        _resetPreview();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _selectionFailed = true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _selectSheet(YorksV1BoqWorkbookSheet sheet) {
+    setState(() {
+      _sheet = sheet;
+      _headerRowIndex = 0;
+      _hasSelectedHeader = false;
+      _commitFailed = false;
+      _commitConflict = false;
+      _resetPreview();
+    });
+  }
+
+  void _selectHeader(int index) {
+    setState(() {
+      _headerRowIndex = index;
+      _hasSelectedHeader = true;
+      _commitFailed = false;
+      _commitConflict = false;
+      _resetPreview();
+    });
+  }
+
+  void _updateColumn(
+    int index,
+    YorksV1BoqImportColumn Function(YorksV1BoqImportColumn current) update,
+  ) {
+    setState(() {
+      _columns = [
+        for (var item = 0; item < _columns.length; item++)
+          item == index ? update(_columns[item]) : _columns[item],
+      ];
+      _commitFailed = false;
+      _commitConflict = false;
+    });
+  }
+
+  Future<void> _continue() async {
+    if (_step < 3) {
+      setState(() => _step += 1);
+      return;
+    }
+    final preview = _preview;
+    if (preview == null || !preview.isValid || preview.title.trim().isEmpty) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _commitFailed = false;
+      _commitConflict = false;
+    });
+    bool imported;
+    try {
+      imported = await widget.onCommit(preview);
+    } catch (_) {
+      imported = false;
+    }
+    if (!mounted) return;
+    if (imported) {
+      setState(() => _busy = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context, true);
+      });
+      return;
+    }
+    setState(() {
+      _busy = false;
+      _commitConflict =
+          widget.readSyncStatus() == YorksV1BoqSyncStatus.conflict;
+      _commitFailed = !_commitConflict;
+    });
+  }
+
+  Future<void> _refreshAfterConflict() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    await widget.onRefresh();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    Navigator.pop(context, false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _preview;
+    final steps = [
+      YorksV1BoqStrings.importFileStep,
+      YorksV1BoqStrings.importSheetStep,
+      YorksV1BoqStrings.importMapStep,
+      YorksV1BoqStrings.importReviewStep,
+    ];
+    final canContinue =
+        !_busy &&
+        switch (_step) {
+          0 => _workbook != null,
+          1 => preview != null && _title.trim().isNotEmpty,
+          2 => preview?.isValid == true && _title.trim().isNotEmpty,
+          _ =>
+            !_commitConflict &&
+                preview?.isValid == true &&
+                _title.trim().isNotEmpty,
+        };
+    return PopScope(
+      canPop: !_busy,
+      child: Scaffold(
+        backgroundColor: AppColors.mobileSurface,
+        appBar: AppBar(
+          backgroundColor: AppColors.surfaceContainerLowest,
+          surfaceTintColor: Colors.transparent,
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            onPressed: _busy ? null : () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          title: Text(
+            steps[_step].primary,
+            style: AppTypography.titleMedium.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              _MobileImportProgress(currentStep: _step, steps: steps),
+              Expanded(
+                child: SingleChildScrollView(
+                  key: ValueKey('boq-mobile-import-step-$_step'),
+                  padding: const EdgeInsets.all(
+                    AppSpacing.mobileScreenHorizontal,
+                  ),
+                  child: switch (_step) {
+                    0 => _buildFileStep(),
+                    1 => _buildSheetStep(),
+                    2 => _buildMapStep(),
+                    _ => _buildReviewStep(),
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.mobileScreenHorizontal),
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              border: Border(top: BorderSide(color: AppColors.line)),
+            ),
+            child: Row(
+              children: [
+                if (_step > 0) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _step -= 1),
+                      child: Text(YorksV1BoqStrings.previous.primary),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                Expanded(
+                  flex: _step > 0 ? 1 : 2,
+                  child: FilledButton(
+                    key: const ValueKey('boq-mobile-import-continue'),
+                    onPressed: canContinue ? _continue : null,
+                    child: Text(
+                      _step == 3
+                          ? YorksV1BoqStrings.importMaterials.primary
+                                .replaceFirst(
+                                  '{count}',
+                                  '${preview?.rows.length ?? 0}',
+                                )
+                          : YorksV1BoqStrings.continueAction.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileStep() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _MobileImportHeading(
+        eyebrow: YorksV1BoqStrings.excelImport.primary,
+        title: YorksV1BoqStrings.chooseWorkbookTitle.primary,
+        description: YorksV1BoqStrings.chooseWorkbookDescription.primary,
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      YorksMobileCard(
+        child: Column(
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: AppColors.blueContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              ),
+              child: const Icon(
+                Icons.file_upload_outlined,
+                color: AppColors.blue,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              _workbook?.fileName ??
+                  YorksV1BoqStrings.uploadEquipmentSchedule.primary,
+              textAlign: TextAlign.center,
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1BoqStrings.xlsxConfiguredLimit.primary,
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('boq-mobile-import-choose-file'),
+                onPressed: _busy ? null : _pickWorkbook,
+                icon: const Icon(Icons.note_add_outlined),
+                label: Text(YorksV1BoqStrings.chooseFile.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      _MobileImportInfo(
+        title: YorksV1BoqStrings.importDestination.primary,
+        body: YorksV1BoqStrings.importDestinationDescription.primary
+            .replaceFirst(
+              '{scope}',
+              widget.worksheet.group.scopeName ??
+                  widget.worksheet.group.scopeCode ??
+                  YorksV1BoqStrings.scope.primary,
+            )
+            .replaceFirst('{folder}', widget.worksheet.group.effectiveTitle),
+      ),
+      if (_selectionFailed) ...[
+        const SizedBox(height: AppSpacing.md),
+        _MobileImportInfo(
+          title: YorksV1BoqStrings.importFailed.primary,
+          body: YorksV1BoqStrings.workbookReadFailed.primary,
+          error: true,
+        ),
+      ],
+    ],
+  );
+
+  Widget _buildSheetStep() {
+    final workbook = _workbook!;
+    final sheet = _sheet!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MobileImportHeading(
+          eyebrow: workbook.fileName,
+          title: YorksV1BoqStrings.chooseSheetTitle.primary,
+          description: YorksV1BoqStrings.chooseSheetDescription.primary,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _ImportSheetChoices(
+          sheets: workbook.sheets,
+          selected: sheet,
+          onSelected: _selectSheet,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        DropdownButtonFormField<int>(
+          key: ValueKey('boq-mobile-import-header-$_headerRowIndex'),
+          initialValue: sheet.nonEmptyRowIndexes.contains(_headerRowIndex)
+              ? _headerRowIndex
+              : null,
+          decoration: InputDecoration(
+            labelText: YorksV1BoqStrings.headerRow.primary,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            for (final index in sheet.nonEmptyRowIndexes)
+              DropdownMenuItem(value: index, child: Text('#${index + 1}')),
+          ],
+          onChanged: (index) {
+            if (index != null) _selectHeader(index);
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextFormField(
+          key: ValueKey('boq-mobile-import-title-${sheet.name}'),
+          initialValue: _title,
+          onChanged: (value) => setState(() => _title = value),
+          decoration: InputDecoration(
+            labelText: YorksV1BoqStrings.detectedTitle.primary,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMapStep() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _MobileImportHeading(
+        eyebrow: _workbook!.fileName,
+        title: YorksV1BoqStrings.mapColumnsTitle.primary,
+        description: YorksV1BoqStrings.mapColumnsDescription.primary,
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      for (var index = 0; index < _columns.length; index++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _ImportColumnEditor(
+            key: ValueKey(
+              'boq-mobile-import-column-${_columns[index].sourceIndex}',
+            ),
+            column: _columns[index],
+            canManageCommercials: widget.canManageCommercials,
+            onHeadingChanged: (value) => _updateColumn(
+              index,
+              (current) => current.copyWith(heading: value),
+            ),
+            onCanonicalChanged: (field) => _updateColumn(
+              index,
+              (current) => current.copyWith(
+                canonicalField: field,
+                clearCanonicalField: field == null,
+              ),
+            ),
+          ),
+        ),
+      for (final issue
+          in _preview?.validationIssues ??
+              const <YorksV1BoqImportValidationIssue>[]) ...[
+        _ImportIssueBanner(
+          copy: _importIssueCopy(issue.code),
+          language: widget.language,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+      _MobileImportInfo(
+        title: YorksV1BoqStrings.otherColumnsStayAvailable.primary,
+        body: YorksV1BoqStrings.otherColumnsStayAvailableDescription.primary,
+      ),
+    ],
+  );
+
+  Widget _buildReviewStep() {
+    final preview = _preview!;
+    final mapped = preview.columns
+        .where((column) => column.canonicalField != null)
+        .length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MobileImportHeading(
+          eyebrow: YorksV1BoqStrings.readyToImport.primary,
+          title: YorksV1BoqStrings.reviewWorkbook.primary,
+          description: YorksV1BoqStrings.importDescription.primary,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: AppSpacing.sm,
+          crossAxisSpacing: AppSpacing.sm,
+          childAspectRatio: 1.55,
+          children: [
+            _MobileImportMetric(
+              label: YorksV1BoqStrings.rowsFound.primary,
+              value: preview.rows.length,
+            ),
+            _MobileImportMetric(
+              label: YorksV1BoqStrings.columns.primary,
+              value: preview.columns.length,
+            ),
+            _MobileImportMetric(
+              label: YorksV1BoqStrings.mapped.primary,
+              value: mapped,
+            ),
+            _MobileImportMetric(
+              label: YorksV1BoqStrings.fatalErrors.primary,
+              value: preview.validationIssues.length,
+              warning: preview.validationIssues.isNotEmpty,
+            ),
+          ],
+        ),
+        if (preview.validationIssues.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          for (final issue in preview.validationIssues)
+            _ImportIssueBanner(
+              copy: _importIssueCopy(issue.code),
+              language: widget.language,
+            ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        YorksMobileCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                preview.title,
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${preview.rows.length} ${YorksV1BoqStrings.rows.primary} · '
+                '${preview.headerRowNumbers.map((number) => '#$number').join(', ')}',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+              const Divider(height: AppSpacing.xl),
+              Text(
+                YorksV1BoqStrings.columnMapping.primary,
+                style: AppTypography.labelLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                YorksV1BoqStrings.mappingReadyDescription.primary
+                    .replaceFirst('{mapped}', '$mapped')
+                    .replaceFirst('{total}', '${preview.columns.length}'),
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+        if (_commitConflict) ...[
+          const SizedBox(height: AppSpacing.md),
+          _MobileImportInfo(
+            title: YorksV1BoqStrings.importConflictTitle.primary,
+            body: YorksV1BoqStrings.importConflictBody.primary,
+            error: true,
+            actionLabel: YorksV1BoqStrings.refresh.primary,
+            onAction: _refreshAfterConflict,
+          ),
+        ] else if (_commitFailed) ...[
+          const SizedBox(height: AppSpacing.md),
+          _MobileImportInfo(
+            title: YorksV1BoqStrings.importFailed.primary,
+            body: YorksV1BoqStrings.previewRetainedAfterFailure.primary,
+            error: true,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MobileImportProgress extends StatelessWidget {
+  const _MobileImportProgress({required this.currentStep, required this.steps});
+
+  final int currentStep;
+  final List<TranslatableString> steps;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: AppColors.surfaceContainerLowest,
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.mobileScreenHorizontal,
+      AppSpacing.md,
+      AppSpacing.mobileScreenHorizontal,
+      AppSpacing.sm,
+    ),
+    child: Row(
+      children: [
+        for (var index = 0; index < steps.length; index++) ...[
+          Expanded(
+            child: Column(
+              children: [
+                Container(
+                  width: AppSpacing.huge,
+                  height: AppSpacing.huge,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: index <= currentStep
+                        ? AppColors.blue
+                        : AppColors.surfaceContainerHigh,
+                    shape: BoxShape.circle,
+                  ),
+                  child: index < currentStep
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        )
+                      : Text(
+                          '${index + 1}',
+                          style: AppTypography.labelLarge.copyWith(
+                            color: index <= currentStep
+                                ? Colors.white
+                                : AppColors.muted,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  steps[index].primary,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: index <= currentStep
+                        ? AppColors.blue
+                        : AppColors.mutedLight,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _MobileImportHeading extends StatelessWidget {
+  const _MobileImportHeading({
+    required this.eyebrow,
+    required this.title,
+    required this.description,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        eyebrow.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.labelLarge.copyWith(
+          color: AppColors.blue,
+          letterSpacing: 1.4,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      Text(
+        title,
+        style: AppTypography.headlineLarge.copyWith(
+          fontSize: 30,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      Text(
+        description,
+        style: AppTypography.bodyMedium.copyWith(
+          color: AppColors.muted,
+          height: 1.45,
+        ),
+      ),
+    ],
+  );
+}
+
+class _MobileImportInfo extends StatelessWidget {
+  const _MobileImportInfo({
+    required this.title,
+    required this.body,
+    this.error = false,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String body;
+  final bool error;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    color: error ? AppColors.errorContainer : AppColors.blueContainer,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          error ? Icons.error_outline_rounded : Icons.info_outline_rounded,
+          color: error ? AppColors.error : AppColors.blue,
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.titleSmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                body,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.muted,
+                  height: 1.45,
+                ),
+              ),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  height: AppSpacing.minTapTarget,
+                  child: TextButton(
+                    onPressed: onAction,
+                    child: Text(actionLabel!),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileImportMetric extends StatelessWidget {
+  const _MobileImportMetric({
+    required this.label,
+    required this.value,
+    this.warning = false,
+  });
+
+  final String label;
+  final int value;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
+        ),
+        const Spacer(),
+        Text(
+          '$value',
+          style: AppTypography.headlineMedium.copyWith(
+            color: warning ? AppColors.error : AppColors.ink,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _BoqWorkbookImportDialog extends StatefulWidget {
   const _BoqWorkbookImportDialog({
     required this.workbook,
     required this.codec,
     required this.fallbackTitle,
     required this.language,
+    required this.canManageCommercials,
   });
 
   final YorksV1BoqParsedWorkbook workbook;
   final YorksV1BoqWorkbookCodec codec;
   final String fallbackTitle;
   final AppLanguage language;
+  final bool canManageCommercials;
 
   @override
   State<_BoqWorkbookImportDialog> createState() =>
@@ -1642,7 +3331,11 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
     headerHierarchy: _headerHierarchy,
     columns: _columns,
     rows: _rows,
-    validationIssues: widget.codec.validatePreviewColumns(_columns),
+    validationIssues: _importValidationIssues(
+      widget.codec,
+      _columns,
+      canManageCommercials: widget.canManageCommercials,
+    ),
   );
 
   void _resetPreview() {
@@ -1843,6 +3536,7 @@ class _BoqWorkbookImportDialogState extends State<_BoqWorkbookImportDialog> {
                               'boq-import-column-${_columns[index].sourceIndex}',
                             ),
                             column: _columns[index],
+                            canManageCommercials: widget.canManageCommercials,
                             onHeadingChanged: (value) => _updateColumn(
                               index,
                               (current) => current.copyWith(heading: value),
@@ -1976,20 +3670,25 @@ class _ImportColumnEditor extends StatelessWidget {
   const _ImportColumnEditor({
     super.key,
     required this.column,
+    required this.canManageCommercials,
     required this.onHeadingChanged,
     required this.onCanonicalChanged,
   });
 
   final YorksV1BoqImportColumn column;
+  final bool canManageCommercials;
   final ValueChanged<String> onHeadingChanged;
   final ValueChanged<YorksV1BoqCanonicalField?> onCanonicalChanged;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final lockedCommercial =
+          column.canonicalField?.isCommercial == true && !canManageCommercials;
       final heading = TextFormField(
         initialValue: column.heading,
-        onChanged: onHeadingChanged,
+        enabled: !lockedCommercial,
+        onChanged: lockedCommercial ? null : onHeadingChanged,
         decoration: InputDecoration(
           labelText: YorksV1BoqStrings.columnHeading.primary,
           border: const OutlineInputBorder(),
@@ -2007,12 +3706,19 @@ class _ImportColumnEditor extends StatelessWidget {
             child: Text(YorksV1BoqStrings.noCanonicalMapping.primary),
           ),
           for (final field in YorksV1BoqCanonicalField.values)
+            if (canManageCommercials || !field.isCommercial)
+              DropdownMenuItem<YorksV1BoqCanonicalField?>(
+                value: field,
+                child: Text(_canonicalCopy(field).primary),
+              ),
+          if (lockedCommercial)
             DropdownMenuItem<YorksV1BoqCanonicalField?>(
-              value: field,
-              child: Text(_canonicalCopy(field).primary),
+              value: column.canonicalField,
+              enabled: false,
+              child: Text(_canonicalCopy(column.canonicalField!).primary),
             ),
         ],
-        onChanged: onCanonicalChanged,
+        onChanged: lockedCommercial ? null : onCanonicalChanged,
       );
       return constraints.maxWidth < 600
           ? Column(
@@ -2094,6 +3800,19 @@ class _ImportIssueBanner extends StatelessWidget {
   );
 }
 
+List<YorksV1BoqImportValidationIssue> _importValidationIssues(
+  YorksV1BoqWorkbookCodec codec,
+  List<YorksV1BoqImportColumn> columns, {
+  required bool canManageCommercials,
+}) => [
+  ...codec.validatePreviewColumns(columns),
+  if (!canManageCommercials &&
+      columns.any((column) => column.canonicalField?.isCommercial == true))
+    const YorksV1BoqImportValidationIssue(
+      code: YorksV1BoqImportValidationCode.commercialPermissionRequired,
+    ),
+];
+
 TranslatableString _importIssueCopy(YorksV1BoqImportValidationCode code) =>
     switch (code) {
       YorksV1BoqImportValidationCode.noColumns =>
@@ -2104,6 +3823,8 @@ TranslatableString _importIssueCopy(YorksV1BoqImportValidationCode code) =>
         YorksV1BoqStrings.importDuplicateHeading,
       YorksV1BoqImportValidationCode.duplicateCanonicalMapping =>
         YorksV1BoqStrings.importDuplicateCanonical,
+      YorksV1BoqImportValidationCode.commercialPermissionRequired =>
+        YorksV1BoqStrings.commercialImportPermissionRequired,
     };
 
 class YorksV1BoqSpreadsheet extends StatefulWidget {
@@ -2111,6 +3832,10 @@ class YorksV1BoqSpreadsheet extends StatefulWidget {
     super.key,
     required this.worksheet,
     required this.editable,
+    this.canViewCommercials = false,
+    this.mobileConflict = false,
+    this.mobileLanguage,
+    this.onMobileRefresh,
     required this.onUpdateCell,
     required this.onAddBlankRow,
     required this.onAddSimilarRow,
@@ -2122,6 +3847,10 @@ class YorksV1BoqSpreadsheet extends StatefulWidget {
 
   final YorksV1BoqWorksheet worksheet;
   final bool editable;
+  final bool canViewCommercials;
+  final bool mobileConflict;
+  final AppLanguage? mobileLanguage;
+  final Future<void> Function()? onMobileRefresh;
   final void Function({
     required String rowId,
     required String columnId,
@@ -2427,6 +4156,9 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
 
   Widget _buildMobile(BuildContext context) {
     final rows = widget.worksheet.rows;
+    final columns = widget.worksheet.columns
+        .where((column) => !column.isCommercial || widget.canViewCommercials)
+        .toList(growable: false);
     return Container(
       key: const ValueKey('yorks-v1-boq-mobile-list'),
       decoration: BoxDecoration(
@@ -2439,7 +4171,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
         children: [
           _buildToolbar(context),
           Expanded(
-            child: widget.worksheet.columns.isEmpty
+            child: columns.isEmpty
                 ? _EmptyWorksheet(copy: YorksV1BoqStrings.noColumns)
                 : rows.isEmpty
                 ? _EmptyWorksheet(copy: YorksV1BoqStrings.noRows)
@@ -2452,7 +4184,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                       key: ValueKey('mobile-boq-row-${rows[index].id}'),
                       row: rows[index],
                       number: index + 1,
-                      columns: widget.worksheet.columns,
+                      columns: columns,
                       editable: widget.editable,
                       onTap: () {
                         setState(() => _selectedRowId = rows[index].id);
@@ -2548,19 +4280,23 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
   }
 
   Future<void> _openMobileEditor(int rowIndex) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      sheetAnimationStyle: AnimationStyle.noAnimation,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (context) => _MobileBoqRowEditor(
-        initialIndex: rowIndex,
-        rows: widget.worksheet.rows,
-        columns: widget.worksheet.columns,
-        editable: widget.editable,
-        onUpdateCell: widget.onUpdateCell,
-        onRemoveRow: widget.onRemoveRow,
+    final columns = widget.worksheet.columns
+        .where((column) => !column.isCommercial || widget.canViewCommercials)
+        .toList(growable: false);
+    await Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (context) => _MobileBoqRowEditor(
+          initialIndex: rowIndex,
+          rows: widget.worksheet.rows,
+          columns: columns,
+          editable: widget.editable && !widget.mobileConflict,
+          conflict: widget.mobileConflict,
+          language: widget.mobileLanguage,
+          onRefresh: widget.onMobileRefresh,
+          onUpdateCell: widget.onUpdateCell,
+          onRemoveRow: widget.onRemoveRow,
+        ),
       ),
     );
   }
@@ -2910,54 +4646,101 @@ class _MobileRowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final populated = columns
-        .where((column) => '${row.valueFor(column.id) ?? ''}'.trim().isNotEmpty)
-        .take(2)
-        .toList(growable: false);
-    return Material(
-      color: AppColors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        onTap: onTap,
+    String valueFor(YorksV1BoqCanonicalField field) {
+      for (final column in columns) {
+        if (column.canonicalField != field) continue;
+        final value = '${row.valueFor(column.id) ?? ''}'.trim();
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    final populatedValues = <String>[
+      for (final column in columns)
+        if ('${row.valueFor(column.id) ?? ''}'.trim().isNotEmpty)
+          '${row.valueFor(column.id)}'.trim(),
+    ];
+    final description = valueFor(YorksV1BoqCanonicalField.description);
+    final title = description.isNotEmpty
+        ? description
+        : populatedValues.firstOrNull ??
+              '${YorksV1BoqStrings.mobileEditor.primary} $number';
+    final details = [
+      valueFor(YorksV1BoqCanonicalField.size),
+      valueFor(YorksV1BoqCanonicalField.brandOrigin),
+      valueFor(YorksV1BoqCanonicalField.model),
+      valueFor(YorksV1BoqCanonicalField.equipmentTag),
+    ].where((value) => value.isNotEmpty).toList(growable: false);
+    final quantity = valueFor(YorksV1BoqCanonicalField.quantity);
+    final unit = valueFor(YorksV1BoqCanonicalField.unit);
+    return YorksMobileCard(
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 102),
         child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.md,
+          ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                backgroundColor: AppColors.blueContainer,
-                foregroundColor: AppColors.blue,
-                child: Text('$number', style: AppTypography.labelLarge),
+              SizedBox(
+                width: 32,
+                child: Text(
+                  '$number',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    for (final column in populated)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                        child: Text(
-                          '${column.heading}: ${row.valueFor(column.id)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.bodyMedium,
-                        ),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.titleSmall.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                    if (populated.isEmpty)
+                    ),
+                    if (details.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
                       Text(
-                        YorksV1BoqStrings.mobileEditor.primary,
-                        style: AppTypography.bodyMedium.copyWith(
+                        details.join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
                           color: AppColors.muted,
                         ),
                       ),
+                    ],
+                    if (quantity.isNotEmpty || unit.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        [
+                          quantity,
+                          unit,
+                        ].where((value) => value.isNotEmpty).join(' '),
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.inkSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.sm),
               Icon(
-                editable ? Icons.edit_outlined : Icons.visibility_outlined,
-                color: AppColors.muted,
+                editable
+                    ? Icons.chevron_right_rounded
+                    : Icons.visibility_outlined,
+                color: AppColors.inkSecondary,
               ),
             ],
           ),
@@ -2973,6 +4756,9 @@ class _MobileBoqRowEditor extends StatefulWidget {
     required this.rows,
     required this.columns,
     required this.editable,
+    required this.conflict,
+    this.language,
+    this.onRefresh,
     required this.onUpdateCell,
     required this.onRemoveRow,
   });
@@ -2981,6 +4767,9 @@ class _MobileBoqRowEditor extends StatefulWidget {
   final List<YorksV1BoqRow> rows;
   final List<YorksV1BoqColumn> columns;
   final bool editable;
+  final bool conflict;
+  final AppLanguage? language;
+  final Future<void> Function()? onRefresh;
   final void Function({
     required String rowId,
     required String columnId,
@@ -2996,8 +4785,16 @@ class _MobileBoqRowEditor extends StatefulWidget {
 class _MobileBoqRowEditorState extends State<_MobileBoqRowEditor> {
   late int _index;
   final Map<String, TextEditingController> _controllers = {};
+  bool _allowPop = false;
 
   YorksV1BoqRow get _row => widget.rows[_index];
+  bool get _hasUnsavedChanges =>
+      widget.editable &&
+      widget.columns.any(
+        (column) =>
+            _controllers[column.id]?.text !=
+            '${_row.valueFor(column.id) ?? ''}',
+      );
 
   @override
   void initState() {
@@ -3047,96 +4844,207 @@ class _MobileBoqRowEditorState extends State<_MobileBoqRowEditor> {
     });
   }
 
+  Future<void> _requestExit() async {
+    if (!_hasUnsavedChanges) {
+      Navigator.pop(context);
+      return;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(YorksV1BoqStrings.discardRowChanges.primary),
+        content: Text(YorksV1BoqStrings.discardRowChangesBody.primary),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(AppStrings.keepEditing.primary),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(AppStrings.discard.primary),
+          ),
+        ],
+      ),
+    );
+    if (discard == true && mounted) _finishAndPop();
+  }
+
+  void _finishAndPop() {
+    if (!mounted) return;
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.pop(context);
+    });
+  }
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    child: SizedBox(
-      height: MediaQuery.sizeOf(context).height * 0.86,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${YorksV1BoqStrings.mobileEditor.primary} ${_index + 1}',
-                    style: AppTypography.titleLarge.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+  Widget build(BuildContext context) => PopScope(
+    canPop: _allowPop || !_hasUnsavedChanges,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _requestExit();
+    },
+    child: Scaffold(
+      backgroundColor: AppColors.mobileSurface,
+      appBar: AppBar(
+        backgroundColor: AppColors.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: _requestExit,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        title: Text(
+          YorksV1BoqStrings.editMaterial.primary,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.mobileScreenHorizontal,
+            AppSpacing.lg,
+            AppSpacing.mobileScreenHorizontal,
+            AppSpacing.colossal + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          children: [
+            Text(
+              '${YorksV1BoqStrings.mobileEditor.primary} ${_index + 1}',
+              style: AppTypography.labelLarge.copyWith(
+                color: AppColors.blue,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1BoqStrings.editMaterial.primary,
+              style: AppTypography.headlineLarge.copyWith(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1BoqStrings.editorDescription.primary,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.muted,
+                height: 1.45,
+              ),
+            ),
+            if (widget.conflict && widget.language != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              _ConflictBanner(
+                language: widget.language!,
+                onRefresh: widget.onRefresh ?? () async {},
+              ),
+            ] else if (!widget.editable && widget.language != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              _ReadOnlyBanner(language: widget.language!),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            for (final column in widget.columns) ...[
+              Text(
+                column.heading,
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.inkSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              TextFormField(
+                controller: _controllers[column.id],
+                enabled: widget.editable,
+                onChanged: (_) => setState(() {}),
+                textInputAction: TextInputAction.next,
+                minLines: 1,
+                maxLines:
+                    column.canonicalField ==
+                        YorksV1BoqCanonicalField.description
+                    ? 3
+                    : 1,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            if (widget.editable)
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final confirmed = await _confirm(
+                    context: context,
+                    title: YorksV1BoqStrings.deleteRow,
+                    body: YorksV1BoqStrings.deleteRowConfirmation,
+                  );
+                  if (confirmed != true || !context.mounted) return;
+                  widget.onRemoveRow(_row.id);
+                  _finishAndPop();
+                },
+                icon: const Icon(Icons.delete_outline),
+                label: Text(YorksV1BoqStrings.deleteRow.primary),
+              ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.mobileScreenHorizontal),
+          decoration: const BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            border: Border(top: BorderSide(color: AppColors.line)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _index == 0 ? null : () => _move(-1),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: const Size(0, AppSpacing.minTapTarget),
+                  ),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: Text(
+                    YorksV1BoqStrings.previous.primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                IconButton(
-                  tooltip: YorksV1BoqStrings.deleteRow.primary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _index == widget.rows.length - 1
+                      ? null
+                      : () => _move(1),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: const Size(0, AppSpacing.minTapTarget),
+                  ),
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                  label: Text(
+                    YorksV1BoqStrings.next.primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: FilledButton(
                   onPressed: !widget.editable
                       ? null
                       : () {
-                          widget.onRemoveRow(_row.id);
-                          Navigator.pop(context);
+                          _saveCurrent();
+                          _finishAndPop();
                         },
-                  icon: const Icon(Icons.delete_outline),
+                  child: Text(YorksV1BoqStrings.save.primary),
                 ),
-              ],
-            ),
-          ),
-          const Divider(height: AppSpacing.lg),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              children: [
-                for (final column in widget.columns) ...[
-                  TextFormField(
-                    controller: _controllers[column.id],
-                    enabled: widget.editable,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: column.heading,
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-              ],
-            ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _index == 0 ? null : () => _move(-1),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      label: Text(YorksV1BoqStrings.previous.primary),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _index == widget.rows.length - 1
-                          ? null
-                          : () => _move(1),
-                      icon: const Icon(Icons.arrow_forward_rounded),
-                      label: Text(YorksV1BoqStrings.next.primary),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        _saveCurrent();
-                        Navigator.pop(context);
-                      },
-                      child: Text(YorksV1BoqStrings.save.primary),
-                    ),
-                  ),
-                ],
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -3453,15 +5361,18 @@ Future<bool?> _confirm({
   ),
 );
 
-TranslatableString _canonicalCopy(YorksV1BoqCanonicalField field) =>
-    switch (field) {
-      YorksV1BoqCanonicalField.description => YorksV1BoqStrings.description,
-      YorksV1BoqCanonicalField.size => YorksV1BoqStrings.size,
-      YorksV1BoqCanonicalField.model => YorksV1BoqStrings.model,
-      YorksV1BoqCanonicalField.equipmentTag => YorksV1BoqStrings.equipmentTag,
-      YorksV1BoqCanonicalField.brandOrigin => YorksV1BoqStrings.brandOrigin,
-      YorksV1BoqCanonicalField.quantity => YorksV1BoqStrings.quantity,
-      YorksV1BoqCanonicalField.unit => YorksV1BoqStrings.unit,
-      YorksV1BoqCanonicalField.planningModelTag =>
-        YorksV1BoqStrings.planningModelTag,
-    };
+TranslatableString _canonicalCopy(
+  YorksV1BoqCanonicalField field,
+) => switch (field) {
+  YorksV1BoqCanonicalField.description => YorksV1BoqStrings.description,
+  YorksV1BoqCanonicalField.size => YorksV1BoqStrings.size,
+  YorksV1BoqCanonicalField.model => YorksV1BoqStrings.model,
+  YorksV1BoqCanonicalField.equipmentTag => YorksV1BoqStrings.equipmentTag,
+  YorksV1BoqCanonicalField.brandOrigin => YorksV1BoqStrings.brandOrigin,
+  YorksV1BoqCanonicalField.quantity => YorksV1BoqStrings.quantity,
+  YorksV1BoqCanonicalField.unit => YorksV1BoqStrings.unit,
+  YorksV1BoqCanonicalField.unitCost => YorksV1MaterialRequestStrings.unitCost,
+  YorksV1BoqCanonicalField.totalCost => YorksV1MaterialRequestStrings.totalCost,
+  YorksV1BoqCanonicalField.planningModelTag =>
+    YorksV1BoqStrings.planningModelTag,
+};

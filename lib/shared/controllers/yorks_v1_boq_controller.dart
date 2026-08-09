@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -48,8 +50,10 @@ class YorksV1BoqWorksheetController
   final String _groupId;
   final YorksV1BoqRepository _repository;
   final String Function() _uuidFactory;
+  _PendingBoqImport? _pendingImport;
 
   Future<void> load() async {
+    _pendingImport = null;
     state = const YorksV1BoqWorksheetState(
       status: YorksV1BoqSyncStatus.loading,
     );
@@ -111,6 +115,7 @@ class YorksV1BoqWorksheetController
             heading: cleanHeading,
             displayOrder: worksheet.columns.length + 1,
             canonicalField: canonicalField,
+            isCommercial: canonicalField?.isCommercial ?? false,
           ),
         ],
       ),
@@ -213,6 +218,8 @@ class YorksV1BoqWorksheetController
       case YorksV1BoqCanonicalField.model:
       case YorksV1BoqCanonicalField.equipmentTag:
       case YorksV1BoqCanonicalField.quantity:
+      case YorksV1BoqCanonicalField.unitCost:
+      case YorksV1BoqCanonicalField.totalCost:
       case YorksV1BoqCanonicalField.planningModelTag:
       case null:
         break;
@@ -243,7 +250,7 @@ class YorksV1BoqWorksheetController
       }
       canonicalValues.addAll(entry.canonicalValues);
       final canonical = column.canonicalField;
-      if (canonical != null) {
+      if (canonical != null && !canonical.isCommercial) {
         final clean = value.trim();
         if (clean.isEmpty) {
           canonicalValues.remove(canonical.wireValue);
@@ -350,6 +357,66 @@ class YorksV1BoqWorksheetController
       return false;
     }
 
+    final fingerprint = _importFingerprint(preview, current.group);
+    final existingCommand = _pendingImport;
+    final input = existingCommand?.fingerprint == fingerprint
+        ? existingCommand!.input
+        : _buildImportInput(preview, current, title);
+    _pendingImport = _PendingBoqImport(fingerprint: fingerprint, input: input);
+    state = YorksV1BoqWorksheetState(
+      status: YorksV1BoqSyncStatus.saving,
+      worksheet: current,
+    );
+    try {
+      final saved = await _repository.importWorksheet(input);
+      _pendingImport = null;
+      state = YorksV1BoqWorksheetState(
+        status: YorksV1BoqSyncStatus.saved,
+        worksheet: saved,
+      );
+      return true;
+    } on YorksV1DomainException catch (error) {
+      state = YorksV1BoqWorksheetState(
+        status: error.code == YorksV1DomainErrorCode.conflict
+            ? YorksV1BoqSyncStatus.conflict
+            : YorksV1BoqSyncStatus.failed,
+        worksheet: current,
+        errorCode: error.code,
+      );
+      return false;
+    } catch (_) {
+      state = YorksV1BoqWorksheetState(
+        status: YorksV1BoqSyncStatus.failed,
+        worksheet: current,
+        errorCode: YorksV1DomainErrorCode.backendUnavailable,
+      );
+      return false;
+    }
+  }
+
+  YorksV1BoqWorksheet _editableWorksheet() {
+    final worksheet = state.worksheet;
+    if (worksheet == null ||
+        worksheet.group.isArchived ||
+        worksheet.group.isLegacyUnassigned) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    return worksheet;
+  }
+
+  void _replace(YorksV1BoqWorksheet worksheet) {
+    _pendingImport = null;
+    state = YorksV1BoqWorksheetState(
+      status: YorksV1BoqSyncStatus.dirty,
+      worksheet: worksheet,
+    );
+  }
+
+  YorksV1ImportBoqWorksheetInput _buildImportInput(
+    YorksV1BoqImportPreview preview,
+    YorksV1BoqWorksheet current,
+    String title,
+  ) {
     final columns = [
       for (var index = 0; index < preview.columns.length; index++)
         YorksV1BoqColumn(
@@ -357,6 +424,8 @@ class YorksV1BoqWorksheetController
           heading: preview.columns[index].heading.trim(),
           displayOrder: index + 1,
           canonicalField: preview.columns[index].canonicalField,
+          isCommercial:
+              preview.columns[index].canonicalField?.isCommercial ?? false,
         ),
     ];
     final rows = [
@@ -387,68 +456,64 @@ class YorksV1BoqWorksheetController
                       .valueFor(preview.columns[columnIndex].sourceIndex)
                       .trim()
                       .isNotEmpty &&
-                  preview.columns[columnIndex].canonicalField != null)
+                  preview.columns[columnIndex].canonicalField != null &&
+                  !preview.columns[columnIndex].canonicalField!.isCommercial)
                 preview.columns[columnIndex].canonicalField!.wireValue: preview
                     .rows[rowIndex]
                     .valueFor(preview.columns[columnIndex].sourceIndex),
           },
         ),
     ];
-    final imported = YorksV1BoqWorksheet(
-      group: _groupWithTitle(current.group, title),
-      columns: columns,
-      rows: rows,
+    return YorksV1ImportBoqWorksheetInput(
+      worksheet: YorksV1BoqWorksheet(
+        group: _groupWithTitle(current.group, title),
+        columns: columns,
+        rows: rows,
+      ),
+      worksheetTitle: title,
+      expectedVersion: current.group.version,
+      idempotencyKey: _uuidFactory(),
+      sourceFileName: preview.fileName,
+      sourceWorksheetName: preview.worksheetName,
+      sourceHeaderRowNumber: preview.headerRowNumber,
+      sourceHeaderRowNumbers: preview.headerRowNumbers,
+      sourceHeaderHierarchy: preview.headerHierarchy,
     );
-    state = YorksV1BoqWorksheetState(
-      status: YorksV1BoqSyncStatus.saving,
-      worksheet: current,
-    );
-    try {
-      final saved = await _repository.importWorksheet(
-        YorksV1ImportBoqWorksheetInput(
-          worksheet: imported,
-          worksheetTitle: title,
-          expectedVersion: current.group.version,
-          idempotencyKey: _uuidFactory(),
-          sourceFileName: preview.fileName,
-          sourceWorksheetName: preview.worksheetName,
-          sourceHeaderRowNumber: preview.headerRowNumber,
-          sourceHeaderRowNumbers: preview.headerRowNumbers,
-          sourceHeaderHierarchy: preview.headerHierarchy,
-        ),
-      );
-      state = YorksV1BoqWorksheetState(
-        status: YorksV1BoqSyncStatus.saved,
-        worksheet: saved,
-      );
-      return true;
-    } on YorksV1DomainException catch (error) {
-      state = YorksV1BoqWorksheetState(
-        status: error.code == YorksV1DomainErrorCode.conflict
-            ? YorksV1BoqSyncStatus.conflict
-            : YorksV1BoqSyncStatus.failed,
-        worksheet: current,
-        errorCode: error.code,
-      );
-      return false;
-    }
   }
 
-  YorksV1BoqWorksheet _editableWorksheet() {
-    final worksheet = state.worksheet;
-    if (worksheet == null ||
-        worksheet.group.isArchived ||
-        worksheet.group.isLegacyUnassigned) {
-      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
-    }
-    return worksheet;
-  }
+  static String _importFingerprint(
+    YorksV1BoqImportPreview preview,
+    YorksV1BoqGroup group,
+  ) => jsonEncode({
+    'group_id': group.id,
+    'expected_version': group.version,
+    'file_name': preview.fileName.trim(),
+    'worksheet_name': preview.worksheetName.trim(),
+    'title': preview.title.trim(),
+    'header_rows': preview.headerRowNumbers,
+    'header_hierarchy': [
+      for (final path in preview.headerHierarchy) path.toJson(),
+    ],
+    'columns': [
+      for (final column in preview.columns)
+        [
+          column.sourceIndex,
+          column.heading.trim(),
+          column.canonicalField?.wireValue,
+        ],
+    ],
+    'rows': [
+      for (final row in preview.rows)
+        [row.sourceRowNumber, _sortedImportValues(row)],
+    ],
+  });
 
-  void _replace(YorksV1BoqWorksheet worksheet) {
-    state = YorksV1BoqWorksheetState(
-      status: YorksV1BoqSyncStatus.dirty,
-      worksheet: worksheet,
-    );
+  static List<List<Object>> _sortedImportValues(YorksV1BoqImportRow row) {
+    final entries = row.values.entries.toList(growable: false)
+      ..sort((left, right) => left.key.compareTo(right.key));
+    return [
+      for (final entry in entries) [entry.key, entry.value],
+    ];
   }
 
   static YorksV1BoqGroup _groupWithTitle(YorksV1BoqGroup group, String title) =>
@@ -488,4 +553,11 @@ class YorksV1BoqWorksheetController
         next[item].copyWith(displayOrder: item + 1),
     ];
   }
+}
+
+class _PendingBoqImport {
+  const _PendingBoqImport({required this.fingerprint, required this.input});
+
+  final String fingerprint;
+  final YorksV1ImportBoqWorksheetInput input;
 }
