@@ -425,7 +425,6 @@ class YorksV1MaterialRequestDocumentService {
       'Unit',
       if (commercial) 'Unit Cost',
       if (commercial) 'Total Cost',
-      'Status',
     ];
     final widths = commercial
         ? const <int, pw.TableColumnWidth>{
@@ -436,7 +435,6 @@ class YorksV1MaterialRequestDocumentService {
             4: pw.FlexColumnWidth(.9),
             5: pw.FlexColumnWidth(1.25),
             6: pw.FlexColumnWidth(1.25),
-            7: pw.FlexColumnWidth(1.1),
           }
         : const <int, pw.TableColumnWidth>{
             0: pw.FlexColumnWidth(.65),
@@ -444,7 +442,6 @@ class YorksV1MaterialRequestDocumentService {
             2: pw.FlexColumnWidth(2.05),
             3: pw.FlexColumnWidth(.85),
             4: pw.FlexColumnWidth(.95),
-            5: pw.FlexColumnWidth(1.25),
           };
     return pw.Table(
       border: pw.TableBorder.all(color: _documentGrid, width: .8),
@@ -457,12 +454,7 @@ class YorksV1MaterialRequestDocumentService {
           children: [for (final header in headers) _tableHeader(header)],
         ),
         for (var index = 0; index < request.lines.length; index++)
-          _materialRow(
-            request.lines[index],
-            index + 1,
-            commercial: commercial,
-            status: model.receiptStatuses[request.lines[index].id],
-          ),
+          _materialRow(request.lines[index], index + 1, commercial: commercial),
         for (var index = request.lines.length; index < 6; index++)
           _emptyMaterialRow(commercial: commercial),
       ],
@@ -473,7 +465,6 @@ class YorksV1MaterialRequestDocumentService {
     YorksV1MaterialRequestLine line,
     int number, {
     required bool commercial,
-    String? status,
   }) => pw.TableRow(
     children: [
       _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
@@ -494,14 +485,13 @@ class YorksV1MaterialRequestDocumentService {
           _dashWhenEmpty(_calculatedTotal(line) ?? line.totalCost),
           alignment: pw.Alignment.topRight,
         ),
-      _tableCell(_displayStatus(status), bold: true),
     ],
   );
 
   static pw.TableRow _emptyMaterialRow({required bool commercial}) =>
       pw.TableRow(
         children: [
-          for (var index = 0; index < (commercial ? 8 : 6); index++)
+          for (var index = 0; index < (commercial ? 7 : 5); index++)
             pw.SizedBox(height: 8.2 * _mm),
         ],
       );
@@ -683,19 +673,6 @@ class YorksV1MaterialRequestDocumentService {
   static String _dashWhenEmpty(String? value) {
     final normalized = value?.trim() ?? '';
     return normalized.isEmpty ? '—' : normalized;
-  }
-
-  static String _displayStatus(String? value) {
-    final normalized = value?.trim().replaceAll('_', ' ') ?? '';
-    if (normalized.isEmpty) return '—';
-    return normalized
-        .split(RegExp(r'\s+'))
-        .map(
-          (word) => word.isEmpty
-              ? word
-              : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-        )
-        .join(' ');
   }
 
   static String _safeName(String source) {

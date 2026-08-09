@@ -713,7 +713,7 @@ class YorksV1LogisticsDocumentService {
 
   static void _validateDeliveryOrder(YorksV1DeliveryOrderRevision revision) {
     if (revision.lines.isEmpty) {
-      throw StateError('The Delivery Order has no confirmed material lines.');
+      throw StateError('The Delivery Order has no dispatched material lines.');
     }
     for (var index = 0; index < revision.lines.length; index++) {
       final line = revision.lines[index];
@@ -722,7 +722,7 @@ class YorksV1LogisticsDocumentService {
           double.tryParse(line.quantity.trim()) == null ||
           double.parse(line.quantity.trim()) <= 0) {
         throw StateError(
-          'Delivery Order row ${index + 1} has incomplete final receipt values.',
+          'Delivery Order row ${index + 1} has incomplete dispatch snapshot values.',
         );
       }
     }

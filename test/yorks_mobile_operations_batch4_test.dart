@@ -148,7 +148,8 @@ void main() {
         find.byKey(const ValueKey('mobile-delivery-order-preview')),
         findsOneWidget,
       );
-      expect(find.text('4 Nos'), findsWidgets);
+      expect(find.text('Print / PDF'), findsWidgets);
+      expect(find.text('Download PDF'), findsWidgets);
       await _golden(tester, '37_delivery_order_$suffix');
     });
 
@@ -295,6 +296,25 @@ void main() {
     await _setViewport(tester, const Size(1366, 768), topInset: 0);
     await _pumpArrangement(tester, _workingArrangementWorkspace);
     expect(find.byKey(const ValueKey('mobile-arrangement-list')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop delivery order uses the controlled printable surface', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768), topInset: 0);
+    await _pumpReturns(tester, requestId: 'delivery', focusDeliveryOrder: true);
+
+    expect(
+      find.byKey(const ValueKey('yorks-v1-controlled-delivery-order-preview')),
+      findsOneWidget,
+    );
+    expect(find.text('Print / PDF'), findsWidgets);
+    expect(find.text('Download PDF'), findsWidgets);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/controlled_delivery_order_desktop.png'),
+    );
     expect(tester.takeException(), isNull);
   });
 }

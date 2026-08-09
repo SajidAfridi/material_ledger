@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
@@ -1346,6 +1347,7 @@ class _DeliveryOrderGenerationDialogState
   late final TextEditingController _reference;
   late final String _idempotencyKey;
   bool _working = false;
+  bool _creatingRevision = false;
 
   @override
   void initState() {
@@ -1365,6 +1367,9 @@ class _DeliveryOrderGenerationDialogState
   @override
   Widget build(BuildContext context) {
     if (YorksMobileUi.isActive(context)) return _buildMobile(context);
+    final order = widget.dispatch.deliveryOrder;
+    final revision = order?.currentRevision;
+    final showingPreview = revision != null && !_creatingRevision;
     final screen = MediaQuery.sizeOf(context);
     return Dialog(
       insetPadding: EdgeInsets.all(
@@ -1396,7 +1401,11 @@ class _DeliveryOrderGenerationDialogState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          YorksV1LogisticsStrings.generateDeliveryOrder.primary,
+                          (showingPreview
+                                  ? YorksV1LogisticsStrings.deliveryOrder
+                                  : YorksV1LogisticsStrings
+                                        .generateDeliveryOrder)
+                              .primary,
                           style: AppTypography.titleLarge.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
@@ -1429,55 +1438,34 @@ class _DeliveryOrderGenerationDialogState
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: _reference,
-                      enabled: !_working,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        labelText: YorksV1LogisticsStrings
-                            .deliveryOrderReference
-                            .primary,
-                        border: const OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: AppColors.blueContainer,
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: .24),
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          AppSpacing.radiusMd,
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.only(top: AppSpacing.xxs),
-                            child: Icon(
-                              Icons.description_outlined,
-                              color: AppColors.primary,
+                  children: showingPreview
+                      ? [
+                          _ControlledDeliveryOrderPreview(
+                            key: const ValueKey(
+                              'yorks-v1-controlled-delivery-order-preview',
                             ),
+                            workspace: widget.workspace,
+                            dispatch: widget.dispatch,
+                            revision: revision,
+                            documents: widget.documents,
+                            height: screen.height * .64,
                           ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Text(
-                              YorksV1LogisticsStrings
-                                  .deliveryOrderAfterReceipt
+                        ]
+                      : [
+                          TextField(
+                            controller: _reference,
+                            enabled: !_working,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: InputDecoration(
+                              labelText: YorksV1LogisticsStrings
+                                  .deliveryOrderReference
                                   .primary,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.onSurfaceVariant,
-                              ),
+                              border: const OutlineInputBorder(),
                             ),
                           ),
+                          const SizedBox(height: AppSpacing.md),
+                          _DeliveryOrderSnapshotCallout(),
                         ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -1500,14 +1488,25 @@ class _DeliveryOrderGenerationDialogState
                           ? null
                           : () => Navigator.of(context).pop(),
                     ),
-                    SecondaryButton(
-                      label: YorksV1LogisticsStrings.printDocument.primary,
-                      icon: Icons.print_outlined,
-                      isExpanded: false,
-                      onPressed: _working
-                          ? null
-                          : () => _generateAndOpen(_DeliveryOrderOutput.print),
-                    ),
+                    if (showingPreview)
+                      SecondaryButton(
+                        label: YorksV1LogisticsStrings.printDocument.primary,
+                        icon: Icons.print_outlined,
+                        isExpanded: false,
+                        onPressed: _working
+                            ? null
+                            : () => _printCurrent(order!, revision),
+                      )
+                    else
+                      SecondaryButton(
+                        label: YorksV1LogisticsStrings.printDocument.primary,
+                        icon: Icons.print_outlined,
+                        isExpanded: false,
+                        onPressed: _working
+                            ? null
+                            : () =>
+                                  _generateAndOpen(_DeliveryOrderOutput.print),
+                      ),
                     PrimaryButton(
                       label: YorksV1LogisticsStrings.downloadPdf.primary,
                       icon: Icons.download_outlined,
@@ -1515,9 +1514,22 @@ class _DeliveryOrderGenerationDialogState
                       isLoading: _working,
                       onPressed: _working
                           ? null
+                          : showingPreview
+                          ? () => _shareCurrent(order!, revision)
                           : () =>
                                 _generateAndOpen(_DeliveryOrderOutput.download),
                     ),
+                    if (showingPreview && widget.dispatch.canGenerate)
+                      SecondaryButton(
+                        label: YorksV1LogisticsStrings
+                            .regenerateDeliveryOrder
+                            .primary,
+                        icon: Icons.restart_alt_rounded,
+                        isExpanded: false,
+                        onPressed: _working
+                            ? null
+                            : () => setState(() => _creatingRevision = true),
+                      ),
                   ],
                 ),
               ),
@@ -1531,6 +1543,7 @@ class _DeliveryOrderGenerationDialogState
   Widget _buildMobile(BuildContext context) {
     final order = widget.dispatch.deliveryOrder;
     final revision = order?.currentRevision;
+    final showingPreview = revision != null && !_creatingRevision;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     return PopScope(
       canPop: !_working,
@@ -1540,7 +1553,11 @@ class _DeliveryOrderGenerationDialogState
           body: Column(
             children: [
               YorksMobileAppBar(
-                title: YorksV1LogisticsStrings.deliveryOrder.primary,
+                title:
+                    (showingPreview
+                            ? YorksV1LogisticsStrings.deliveryOrder
+                            : YorksV1LogisticsStrings.generateDeliveryOrder)
+                        .primary,
                 leading: YorksMobileIconButton(
                   icon: Icons.close_rounded,
                   tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
@@ -1548,7 +1565,7 @@ class _DeliveryOrderGenerationDialogState
                       ? () {}
                       : () => Navigator.of(context).pop(),
                 ),
-                trailing: revision == null
+                trailing: !showingPreview
                     ? null
                     : YorksMobileIconButton(
                         icon: Icons.share_outlined,
@@ -1572,7 +1589,7 @@ class _DeliveryOrderGenerationDialogState
                           .primary,
                     ),
                     const SizedBox(height: 14),
-                    if (revision == null) ...[
+                    if (!showingPreview) ...[
                       YorksMobileCard(
                         child: TextField(
                           controller: _reference,
@@ -1587,26 +1604,61 @@ class _DeliveryOrderGenerationDialogState
                       ),
                       const SizedBox(height: 12),
                     ] else ...[
-                      _MobileDeliveryOrderPreview(
+                      _ControlledDeliveryOrderPreview(
+                        key: const ValueKey('mobile-delivery-order-preview'),
                         workspace: widget.workspace,
                         dispatch: widget.dispatch,
-                        order: order!,
                         revision: revision,
+                        documents: widget.documents,
+                        height: 520,
                       ),
                       const SizedBox(height: 12),
-                      YorksMobileCallout(
-                        icon: Icons.lock_outline_rounded,
-                        title: YorksV1LogisticsStrings.deliveryOrder.primary,
-                        message: YorksV1LogisticsStrings
-                            .deliveryOrderAfterReceipt
-                            .primary,
-                      ),
+                      _DeliveryOrderSnapshotCallout(),
+                      if (documentsEnabled || widget.dispatch.canGenerate) ...[
+                        const SizedBox(height: 4),
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 4,
+                          children: [
+                            if (documentsEnabled)
+                              TextButton.icon(
+                                onPressed: _working
+                                    ? null
+                                    : () => _storeCurrent(order!, revision),
+                                icon: const Icon(
+                                  Icons.verified_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  YorksV1LogisticsStrings.storeVersion.primary,
+                                ),
+                              ),
+                            if (widget.dispatch.canGenerate)
+                              TextButton.icon(
+                                onPressed: _working
+                                    ? null
+                                    : () => setState(
+                                        () => _creatingRevision = true,
+                                      ),
+                                icon: const Icon(
+                                  Icons.restart_alt_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  YorksV1LogisticsStrings
+                                      .regenerateDeliveryOrder
+                                      .primary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ],
                 ),
               ),
               YorksMobileStickyActions(
-                children: revision == null
+                children: !showingPreview
                     ? [
                         OutlinedButton.icon(
                           onPressed: _working
@@ -1648,31 +1700,22 @@ class _DeliveryOrderGenerationDialogState
                             YorksV1LogisticsStrings.printDocument.primary,
                           ),
                         ),
-                        if (documentsEnabled)
-                          FilledButton.icon(
-                            onPressed: _working
-                                ? null
-                                : () => _storeCurrent(order!, revision),
-                            icon: _working
-                                ? const SizedBox.square(
-                                    dimension: 17,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.verified_outlined, size: 18),
-                            label: Text(
-                              YorksV1LogisticsStrings.storeVersion.primary,
-                            ),
-                          )
-                        else
-                          FilledButton.icon(
-                            onPressed: _working
-                                ? null
-                                : () => _shareCurrent(order!, revision),
-                            icon: const Icon(Icons.share_outlined, size: 18),
-                            label: Text(YorksV1LogisticsStrings.share.primary),
+                        FilledButton.icon(
+                          onPressed: _working
+                              ? null
+                              : () => _shareCurrent(order!, revision),
+                          icon: _working
+                              ? const SizedBox.square(
+                                  dimension: 17,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.download_outlined, size: 18),
+                          label: Text(
+                            YorksV1LogisticsStrings.downloadPdf.primary,
                           ),
+                        ),
                       ],
               ),
             ],
@@ -1809,203 +1852,63 @@ class _DeliveryOrderGenerationDialogState
   ).showSnackBar(SnackBar(content: Text(message)));
 }
 
-class _MobileDeliveryOrderPreview extends StatelessWidget {
-  const _MobileDeliveryOrderPreview({
+class _DeliveryOrderSnapshotCallout extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => YorksMobileCallout(
+    icon: Icons.lock_outline_rounded,
+    title: YorksV1LogisticsStrings.deliveryOrder.primary,
+    message: YorksV1LogisticsStrings.deliveryOrderAfterReceipt.primary,
+  );
+}
+
+/// Uses the exact A4 bytes sent to print/share, so web and mobile never keep a
+/// separate hand-built Delivery Order preview in sync with the PDF template.
+class _ControlledDeliveryOrderPreview extends StatelessWidget {
+  const _ControlledDeliveryOrderPreview({
+    super.key,
     required this.workspace,
     required this.dispatch,
-    required this.order,
     required this.revision,
+    required this.documents,
+    required this.height,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final YorksV1DeliveryOrderDispatch dispatch;
-  final YorksV1DeliveryOrder order;
   final YorksV1DeliveryOrderRevision revision;
+  final YorksV1LogisticsDocumentService documents;
+  final double height;
 
   @override
-  Widget build(BuildContext context) => YorksMobileCard(
-    key: const ValueKey('mobile-delivery-order-preview'),
-    padding: const EdgeInsets.all(10),
-    child: Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.ink.withValues(alpha: .55)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.ink.withValues(alpha: .55)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    YorksV1LogisticsStrings.companyName.primary,
-                    style: AppTypography.labelMedium.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.ink, width: 2),
-                        ),
-                        child: Text(
-                          'YA',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      Image.asset(
-                        'assets/branding/yorks_emblem_mobile.png',
-                        fit: BoxFit.contain,
-                        gaplessPlayback: true,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    YorksV1LogisticsStrings.companyName.ar,
-                    textDirection: TextDirection.rtl,
-                    textAlign: TextAlign.right,
-                    style: AppTypography.labelSmall.copyWith(
-                      fontFamily: 'NotoSansArabic',
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 9),
-          Text(
-            YorksV1LogisticsStrings.deliveryOrderTitle.primary,
-            textAlign: TextAlign.center,
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              Expanded(
-                child: _MobileReturnFact(
-                  label: YorksV1LogisticsStrings.reference.primary,
-                  value: order.reference,
-                ),
-              ),
-              Expanded(
-                child: _MobileReturnFact(
-                  label: YorksV1LogisticsStrings.date.primary,
-                  value: _date(dispatch.dispatchDate),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _MobileReturnFact(
-            label: YorksV1LogisticsStrings.project.primary,
-            value: workspace.projectName,
-          ),
-          const SizedBox(height: 8),
-          _MobileReturnFact(
-            label: YorksV1LogisticsStrings.scope.primary,
-            value: workspace.scopeName,
-          ),
-          const SizedBox(height: 10),
-          _MobileDeliveryOrderLineTable(lines: revision.lines),
-          const SizedBox(height: 8),
-          Text(
-            '${YorksV1LogisticsStrings.revision.primary} ${revision.revisionNumber} · ${revision.generatedByDisplayName}',
-            textAlign: TextAlign.right,
-            style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
-          ),
-        ],
-      ),
+  Widget build(BuildContext context) => Container(
+    height: height,
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
-  );
-}
-
-class _MobileDeliveryOrderLineTable extends StatelessWidget {
-  const _MobileDeliveryOrderLineTable({required this.lines});
-
-  final List<YorksV1DeliveryOrderLine> lines;
-
-  @override
-  Widget build(BuildContext context) => Table(
-    border: TableBorder.all(color: AppColors.ink.withValues(alpha: .55)),
-    columnWidths: const {
-      0: FixedColumnWidth(28),
-      1: FlexColumnWidth(),
-      2: FixedColumnWidth(48),
-      3: FixedColumnWidth(42),
-    },
-    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-    children: [
-      TableRow(
-        decoration: const BoxDecoration(color: Color(0xFFF1F3F6)),
-        children: [
-          _MobileDocumentCell(
-            YorksV1LogisticsStrings.serialNumber.primary,
-            bold: true,
-          ),
-          _MobileDocumentCell(
-            YorksV1LogisticsStrings.itemDescription.primary,
-            bold: true,
-          ),
-          _MobileDocumentCell(
-            YorksV1LogisticsStrings.deliveryQuantity.primary,
-            bold: true,
-          ),
-          _MobileDocumentCell(YorksV1LogisticsStrings.unit.primary, bold: true),
-        ],
+    clipBehavior: Clip.antiAlias,
+    child: PdfPreview(
+      build: (_) => documents.buildDeliveryOrderPdf(
+        workspace: workspace,
+        dispatch: dispatch,
+        revision: revision,
+        format: PdfPageFormat.a4,
       ),
-      for (final line in lines)
-        TableRow(
-          children: [
-            _MobileDocumentCell(line.serialNumber.toString()),
-            _MobileDocumentCell(line.description),
-            _MobileDocumentCell(yorksV1DisplayQuantity(line.quantity)),
-            _MobileDocumentCell(line.unit),
-          ],
+      allowPrinting: false,
+      allowSharing: false,
+      canChangeOrientation: false,
+      canChangePageFormat: false,
+      initialPageFormat: PdfPageFormat.a4,
+      useActions: false,
+      // The native PDF rasterizer completes asynchronously. A determinate
+      // indicator keeps the loading state accessible without leaving an
+      // indeterminate test ticker running when no native rasterizer exists.
+      loadingWidget: const Center(
+        child: SizedBox.square(
+          dimension: 28,
+          child: CircularProgressIndicator(value: .38, strokeWidth: 2.5),
         ),
-    ],
-  );
-}
-
-class _MobileDocumentCell extends StatelessWidget {
-  const _MobileDocumentCell(this.text, {this.bold = false});
-
-  final String text;
-  final bool bold;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-    child: Text(
-      text,
-      textAlign: bold ? TextAlign.center : TextAlign.start,
-      style: AppTypography.labelSmall.copyWith(
-        color: AppColors.ink,
-        fontSize: 8.5,
-        fontWeight: bold ? FontWeight.w900 : FontWeight.w500,
-        height: 1.2,
       ),
     ),
   );
