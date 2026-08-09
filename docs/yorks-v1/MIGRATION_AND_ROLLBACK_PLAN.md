@@ -202,6 +202,14 @@ If logistics has accepted a V1 command, legacy stock write paths remain
 disabled after a build rollback. Operators use an audited correction or a
 controlled server runbook.
 
+R38.3 smart-warehouse rollout is additive. Existing items stay uncategorized
+until Procurement/Admin confirms a mapping; no historical balance, reservation
+or movement is rewritten. Rollback revokes the new category/import RPC grants
+and redeploys the prior complete build while retaining category, alias, import
+batch and import-row audit records. Any committed imported quantity is reversed
+only by an authorized compensating stock movement, never by deleting the batch
+or copying an older balance.
+
 ## 9. Migration stop conditions
 
 Stop before production mutation when:

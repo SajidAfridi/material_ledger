@@ -71,6 +71,10 @@ Android. Add:
   state, SharedPreferences, export bytes, PDF bytes and notifications.
 - AP-08: direct/stale legacy deep links cannot reach Accounts, RFQ/PO, Material
   Plan or contradictory procurement actions.
+- AP-09: the R38.3 warehouse renders at 1366x768 and 360x800 without overflow;
+  the exact five-sheet client template downloads unchanged, exact aliases map,
+  fuzzy categories require confirmation, failed/retried imports retain one
+  command identity, and a bad later row leaves no partial item or movement.
 
 ## 4. Four-role security matrix
 

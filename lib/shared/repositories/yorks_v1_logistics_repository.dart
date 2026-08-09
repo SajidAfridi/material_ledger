@@ -17,6 +17,14 @@ abstract interface class YorksV1LogisticsRepository {
     YorksV1InventoryAdjustmentInput input,
   );
 
+  Future<YorksV1InventoryCategory> createInventoryCategory(
+    YorksV1InventoryCategoryCreationInput input,
+  );
+
+  Future<YorksV1InventoryImportResult> importInventory(
+    YorksV1InventoryImportInput input,
+  );
+
   Future<YorksV1LogisticsInventoryItem> setInventoryItemActive(
     YorksV1InventoryItemStateInput input,
   );
@@ -99,6 +107,34 @@ class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
       },
     );
     return _inventoryItem(response);
+  }
+
+  @override
+  Future<YorksV1InventoryCategory> createInventoryCategory(
+    YorksV1InventoryCategoryCreationInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_create_inventory_category',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _inventoryCategory(response);
+  }
+
+  @override
+  Future<YorksV1InventoryImportResult> importInventory(
+    YorksV1InventoryImportInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_import_inventory',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _inventoryImportResult(response);
   }
 
   @override
@@ -303,6 +339,28 @@ class YorksV1SupabaseLogisticsRepository implements YorksV1LogisticsRepository {
       );
     }
     return YorksV1LogisticsInventoryItem.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  static YorksV1InventoryCategory _inventoryCategory(Object? response) {
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1InventoryCategory.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  static YorksV1InventoryImportResult _inventoryImportResult(Object? response) {
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1InventoryImportResult.fromRpcJson(
       Map<String, dynamic>.from(response),
     );
   }

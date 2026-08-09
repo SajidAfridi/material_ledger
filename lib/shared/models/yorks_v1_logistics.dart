@@ -59,15 +59,29 @@ class YorksV1LogisticsInventoryItem {
     required this.reservedQuantity,
     required this.availableQuantity,
     required this.recordVersion,
+    this.itemCode,
+    this.categoryId,
+    this.categoryName,
     this.brandOrigin,
+    this.minimumStock,
+    this.locationBin,
+    this.notes,
     this.movementCount,
     this.lastMovementAt,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
+  final String? itemCode;
   final String description;
+  final String? categoryId;
+  final String? categoryName;
   final String? brandOrigin;
   final String unit;
+  final String? minimumStock;
+  final String? locationBin;
+  final String? notes;
   final bool isActive;
   final String onHandQuantity;
   final String reservedQuantity;
@@ -75,13 +89,32 @@ class YorksV1LogisticsInventoryItem {
   final int recordVersion;
   final int? movementCount;
   final DateTime? lastMovementAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  bool get hasMinimumStock => _decimal(minimumStock ?? '') != null;
+  bool get isOutOfStock => (_decimal(availableQuantity) ?? 0) <= 0;
+  bool get isLowStock {
+    final available = _decimal(availableQuantity);
+    final minimum = _decimal(minimumStock ?? '');
+    return available != null &&
+        minimum != null &&
+        available > 0 &&
+        available <= minimum;
+  }
 
   factory YorksV1LogisticsInventoryItem.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1LogisticsInventoryItem(
       id: _requiredString(json, 'id'),
+      itemCode: _trimToNull(json['item_code']),
       description: _requiredString(json, 'item_description'),
+      categoryId: _trimToNull(json['category_id']),
+      categoryName: _trimToNull(json['category_name']),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
+      minimumStock: _trimToNull(json['minimum_stock']),
+      locationBin: _trimToNull(json['location_bin']),
+      notes: _trimToNull(json['notes']),
       isActive: json['is_active'] != false,
       onHandQuantity: _string(json['on_hand_qty']),
       reservedQuantity: _string(json['reserved_qty']),
@@ -89,6 +122,50 @@ class YorksV1LogisticsInventoryItem {
       recordVersion: _positiveInt(json['record_version']),
       movementCount: _nullableInt(json['movement_count']),
       lastMovementAt: _nullableDate(json['last_movement_at']),
+      createdAt: _nullableDate(json['created_at']),
+      updatedAt: _nullableDate(json['updated_at']),
+    );
+  }
+}
+
+class YorksV1InventoryCategory {
+  YorksV1InventoryCategory({
+    required this.id,
+    required this.name,
+    required this.isSystem,
+    required this.isActive,
+    required this.recordVersion,
+    required this.itemCount,
+    required List<String> aliases,
+    required this.createdByDisplayName,
+    required this.createdAt,
+  }) : aliases = List.unmodifiable(aliases);
+
+  final String id;
+  final String name;
+  final bool isSystem;
+  final bool isActive;
+  final int recordVersion;
+  final int itemCount;
+  final List<String> aliases;
+  final String createdByDisplayName;
+  final DateTime createdAt;
+
+  factory YorksV1InventoryCategory.fromRpcJson(Map<String, dynamic> json) {
+    final rawAliases = json['aliases'];
+    return YorksV1InventoryCategory(
+      id: _requiredString(json, 'id'),
+      name: _requiredString(json, 'name'),
+      isSystem: json['is_system'] == true,
+      isActive: json['is_active'] != false,
+      recordVersion: _positiveInt(json['record_version']),
+      itemCount: _nonNegativeInt(json['item_count']),
+      aliases: [
+        if (rawAliases is List)
+          for (final alias in rawAliases) ?_trimToNull(alias),
+      ],
+      createdByDisplayName: _requiredString(json, 'created_by_display_name'),
+      createdAt: _requiredDate(json, 'created_at'),
     );
   }
 }
@@ -102,11 +179,19 @@ class YorksV1InventoryMovement {
     required this.reason,
     required this.actorDisplayName,
     required this.createdAt,
+    this.inventoryItemId,
+    this.itemCode,
+    this.itemDescription,
+    this.unit,
     this.sourceEntityType,
     this.sourceEntityId,
   });
 
   final String id;
+  final String? inventoryItemId;
+  final String? itemCode;
+  final String? itemDescription;
+  final String? unit;
   final String movementType;
   final String quantityDelta;
   final String onHandAfterQuantity;
@@ -119,6 +204,10 @@ class YorksV1InventoryMovement {
   factory YorksV1InventoryMovement.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1InventoryMovement(
       id: _requiredString(json, 'id'),
+      inventoryItemId: _trimToNull(json['inventory_item_id']),
+      itemCode: _trimToNull(json['item_code']),
+      itemDescription: _trimToNull(json['item_description']),
+      unit: _trimToNull(json['unit']),
       movementType: _requiredString(json, 'movement_type'),
       quantityDelta: _string(json['quantity_delta']),
       onHandAfterQuantity: _string(json['on_hand_after_qty']),
@@ -129,6 +218,55 @@ class YorksV1InventoryMovement {
       sourceEntityId: _trimToNull(json['source_entity_id']),
     );
   }
+}
+
+class YorksV1InventoryReservation {
+  const YorksV1InventoryReservation({
+    required this.id,
+    required this.inventoryItemId,
+    required this.itemDescription,
+    required this.unit,
+    required this.requestId,
+    required this.requestNumber,
+    required this.projectName,
+    required this.scopeName,
+    required this.reservedQuantity,
+    required this.remainingQuantity,
+    required this.state,
+    required this.createdAt,
+    this.itemCode,
+  });
+
+  final String id;
+  final String inventoryItemId;
+  final String? itemCode;
+  final String itemDescription;
+  final String unit;
+  final String requestId;
+  final String requestNumber;
+  final String projectName;
+  final String scopeName;
+  final String reservedQuantity;
+  final String remainingQuantity;
+  final String state;
+  final DateTime createdAt;
+
+  factory YorksV1InventoryReservation.fromRpcJson(Map<String, dynamic> json) =>
+      YorksV1InventoryReservation(
+        id: _requiredString(json, 'id'),
+        inventoryItemId: _requiredString(json, 'inventory_item_id'),
+        itemCode: _trimToNull(json['item_code']),
+        itemDescription: _requiredString(json, 'item_description'),
+        unit: _requiredString(json, 'unit'),
+        requestId: _requiredString(json, 'request_id'),
+        requestNumber: _requiredString(json, 'request_number'),
+        projectName: _requiredString(json, 'project_name'),
+        scopeName: _requiredString(json, 'scope_name'),
+        reservedQuantity: _string(json['reserved_qty']),
+        remainingQuantity: _string(json['remaining_qty']),
+        state: _requiredString(json, 'state'),
+        createdAt: _requiredDate(json, 'created_at'),
+      );
 }
 
 class YorksV1InventoryItemDetail {
@@ -423,15 +561,27 @@ class YorksV1LogisticsWorkspace {
 class YorksV1InventoryWorkspace {
   YorksV1InventoryWorkspace({
     required List<YorksV1LogisticsInventoryItem> items,
+    List<YorksV1InventoryCategory> categories = const [],
+    List<YorksV1InventoryMovement> recentMovements = const [],
+    List<YorksV1InventoryReservation> reservations = const [],
     YorksV1InventorySummary? summary,
   }) : items = List.unmodifiable(items),
+       categories = List.unmodifiable(categories),
+       recentMovements = List.unmodifiable(recentMovements),
+       reservations = List.unmodifiable(reservations),
        summary = summary ?? YorksV1InventorySummary.fromItems(items);
 
   final List<YorksV1LogisticsInventoryItem> items;
+  final List<YorksV1InventoryCategory> categories;
+  final List<YorksV1InventoryMovement> recentMovements;
+  final List<YorksV1InventoryReservation> reservations;
   final YorksV1InventorySummary summary;
 
   factory YorksV1InventoryWorkspace.fromRpcJson(Map<String, dynamic> json) {
     final rawItems = json['items'];
+    final rawCategories = json['categories'];
+    final rawMovements = json['recent_movements'];
+    final rawReservations = json['reservations'];
     if (rawItems is! List) {
       throw const YorksV1DomainException(
         YorksV1DomainErrorCode.unexpectedResponse,
@@ -447,6 +597,30 @@ class YorksV1InventoryWorkspace {
     final rawSummary = json['summary'];
     return YorksV1InventoryWorkspace(
       items: items,
+      categories: [
+        if (rawCategories is List)
+          for (final category in rawCategories)
+            if (category is Map)
+              YorksV1InventoryCategory.fromRpcJson(
+                Map<String, dynamic>.from(category),
+              ),
+      ],
+      recentMovements: [
+        if (rawMovements is List)
+          for (final movement in rawMovements)
+            if (movement is Map)
+              YorksV1InventoryMovement.fromRpcJson(
+                Map<String, dynamic>.from(movement),
+              ),
+      ],
+      reservations: [
+        if (rawReservations is List)
+          for (final reservation in rawReservations)
+            if (reservation is Map)
+              YorksV1InventoryReservation.fromRpcJson(
+                Map<String, dynamic>.from(reservation),
+              ),
+      ],
       summary: rawSummary is Map
           ? YorksV1InventorySummary.fromRpcJson(
               Map<String, dynamic>.from(rawSummary),
@@ -994,8 +1168,15 @@ class YorksV1InventoryAdjustmentInput {
     required this.idempotencyKey,
     this.inventoryItemId,
     this.description,
+    this.itemCode,
+    this.categoryId,
+    this.newCategoryName,
+    this.sourceCategoryText,
     this.brandOrigin,
     this.unit,
+    this.minimumStock,
+    this.locationBin,
+    this.notes,
   });
 
   final String quantityDelta;
@@ -1003,17 +1184,139 @@ class YorksV1InventoryAdjustmentInput {
   final String idempotencyKey;
   final String? inventoryItemId;
   final String? description;
+  final String? itemCode;
+  final String? categoryId;
+  final String? newCategoryName;
+  final String? sourceCategoryText;
   final String? brandOrigin;
   final String? unit;
+  final String? minimumStock;
+  final String? locationBin;
+  final String? notes;
 
   Map<String, Object?> toRpcPayload() => {
     'inventory_item_id': _trimToNull(inventoryItemId),
+    'item_code': _trimToNull(itemCode),
     'item_description': _trimToNull(description),
+    'category_id': _trimToNull(categoryId),
+    'new_category_name': _trimToNull(newCategoryName),
+    'source_category_text': _trimToNull(sourceCategoryText),
     'brand_origin': _trimToNull(brandOrigin),
     'unit': _trimToNull(unit),
+    'minimum_stock': _trimToNull(minimumStock),
+    'location_bin': _trimToNull(locationBin),
+    'notes': _trimToNull(notes),
     'quantity_delta': quantityDelta.trim(),
     'reason': reason.trim(),
   };
+}
+
+class YorksV1InventoryCategoryCreationInput {
+  const YorksV1InventoryCategoryCreationInput({
+    required this.name,
+    required this.idempotencyKey,
+  });
+
+  final String name;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {'name': name.trim()};
+}
+
+class YorksV1InventoryImportRowInput {
+  const YorksV1InventoryImportRowInput({
+    required this.sourceRowNumber,
+    required this.description,
+    required this.unit,
+    required this.stockAction,
+    required this.quantity,
+    required this.reason,
+    this.inventoryItemId,
+    this.itemCode,
+    this.categoryId,
+    this.newCategoryName,
+    this.sourceCategoryText,
+    this.brandOrigin,
+    this.minimumStock,
+    this.locationBin,
+    this.notes,
+  });
+
+  final int sourceRowNumber;
+  final String? inventoryItemId;
+  final String? itemCode;
+  final String description;
+  final String? categoryId;
+  final String? newCategoryName;
+  final String? sourceCategoryText;
+  final String? brandOrigin;
+  final String unit;
+  final String stockAction;
+  final String quantity;
+  final String reason;
+  final String? minimumStock;
+  final String? locationBin;
+  final String? notes;
+
+  Map<String, Object?> toRpcJson() => {
+    'source_row_number': sourceRowNumber,
+    'inventory_item_id': _trimToNull(inventoryItemId),
+    'item_code': _trimToNull(itemCode),
+    'item_description': description.trim(),
+    'category_id': _trimToNull(categoryId),
+    'new_category_name': _trimToNull(newCategoryName),
+    'source_category_text': _trimToNull(sourceCategoryText),
+    'brand_origin': _trimToNull(brandOrigin),
+    'unit': unit.trim(),
+    'stock_action': stockAction.trim(),
+    'quantity': quantity.trim(),
+    'reason': reason.trim(),
+    'minimum_stock': _trimToNull(minimumStock),
+    'location_bin': _trimToNull(locationBin),
+    'notes': _trimToNull(notes),
+  };
+}
+
+class YorksV1InventoryImportInput {
+  YorksV1InventoryImportInput({
+    required this.fileName,
+    required List<YorksV1InventoryImportRowInput> rows,
+    required this.idempotencyKey,
+  }) : rows = List.unmodifiable(rows);
+
+  final String fileName;
+  final List<YorksV1InventoryImportRowInput> rows;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'file_name': fileName.trim(),
+    'rows': [for (final row in rows) row.toRpcJson()],
+  };
+}
+
+class YorksV1InventoryImportResult {
+  const YorksV1InventoryImportResult({
+    required this.importBatchId,
+    required this.rowCount,
+    required this.createdItems,
+    required this.updatedItems,
+    required this.createdCategories,
+  });
+
+  final String importBatchId;
+  final int rowCount;
+  final int createdItems;
+  final int updatedItems;
+  final int createdCategories;
+
+  factory YorksV1InventoryImportResult.fromRpcJson(Map<String, dynamic> json) =>
+      YorksV1InventoryImportResult(
+        importBatchId: _requiredString(json, 'import_batch_id'),
+        rowCount: _nonNegativeInt(json['row_count']),
+        createdItems: _nonNegativeInt(json['created_items']),
+        updatedItems: _nonNegativeInt(json['updated_items']),
+        createdCategories: _nonNegativeInt(json['created_categories']),
+      );
 }
 
 class YorksV1InventoryItemStateInput {

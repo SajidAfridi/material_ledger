@@ -114,7 +114,12 @@ class YorksV1BoqWorkbookCodec {
       final relationships = _decodeRelationships(relationshipsXml);
       final workbook = XmlDocument.parse(workbookXml);
       final sheets = <YorksV1BoqWorkbookSheet>[];
-      for (final element in workbook.findAllElements('sheet')) {
+      // Some Excel producers use a namespace prefix (`x:sheet`) while others
+      // use the default spreadsheet namespace. Match by local name so both
+      // valid OOXML forms share the same safe parser.
+      for (final element in workbook.descendants.whereType<XmlElement>().where(
+        (element) => element.name.local == 'sheet',
+      )) {
         if (sheets.length >= _maxSheets) {
           throw const YorksV1DomainException(
             YorksV1DomainErrorCode.invalidInput,
@@ -332,14 +337,20 @@ class YorksV1BoqWorkbookCodec {
       utf8.decode(content, allowMalformed: false),
     );
     return [
-      for (final item in document.findAllElements('si')) _elementText(item),
+      for (final item in document.descendants.whereType<XmlElement>().where(
+        (element) => element.name.local == 'si',
+      ))
+        _elementText(item),
     ];
   }
 
   static Map<String, String> _decodeRelationships(String relationshipsXml) {
     final document = XmlDocument.parse(relationshipsXml);
     return {
-      for (final relationship in document.findAllElements('Relationship'))
+      for (final relationship
+          in document.descendants.whereType<XmlElement>().where(
+            (element) => element.name.local == 'Relationship',
+          ))
         if (_attribute(relationship, 'Id') != null &&
             _attribute(relationship, 'Target') != null)
           _attribute(relationship, 'Id')!: _attribute(relationship, 'Target')!,
@@ -363,13 +374,17 @@ class YorksV1BoqWorkbookCodec {
     final cells = <int, Map<int, String>>{};
     var maxRow = -1;
     var maxColumn = -1;
-    for (final row in document.findAllElements('row')) {
+    for (final row in document.descendants.whereType<XmlElement>().where(
+      (element) => element.name.local == 'row',
+    )) {
       final rowIndex = (_integer(_attribute(row, 'r')) ?? (maxRow + 2)) - 1;
       if (rowIndex < 0 || rowIndex >= _maxRowsPerSheet) {
         throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
       }
       var nextColumn = 0;
-      for (final cell in row.findElements('c')) {
+      for (final cell in row.childElements.where(
+        (element) => element.name.local == 'c',
+      )) {
         final reference = _attribute(cell, 'r');
         final column = reference == null
             ? nextColumn
@@ -685,7 +700,8 @@ class YorksV1BoqWorkbookCodec {
   }
 
   static XmlElement? _firstElement(XmlElement element, String localName) {
-    for (final descendant in element.findAllElements(localName)) {
+    for (final descendant in element.descendants.whereType<XmlElement>()) {
+      if (descendant.name.local != localName) continue;
       return descendant;
     }
     return null;

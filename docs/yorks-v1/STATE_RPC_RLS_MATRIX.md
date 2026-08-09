@@ -133,6 +133,7 @@ membership.
 | Arrangements | R assigned; decision RPC if Project Engineer | R assigned, no decision | R; create/update through RPC | R/RPC |
 | Approval decisions | R assigned; RPC if Project Engineer | R assigned | R, no write | R/RPC |
 | Inventory catalogue/balances | no general inventory workspace | no general inventory workspace | R/RPC manage | R/RPC |
+| Inventory categories/import batches | — | — | R; create/import via idempotent RPC | R; create/import via idempotent RPC |
 | Reservations/movements | related non-commercial summary | related non-commercial summary | R; write only via RPC | R; write only via RPC |
 | Dispatches | R assigned | R assigned | R/RPC create | R/RPC |
 | Receipt reviews | R/RPC assigned | R/RPC assigned | R, no confirm | R/RPC |
@@ -150,6 +151,12 @@ Procurement, inventory, commercial and Admin-only cells.
 
 Direct Procurement inserts/updates/deletes on project, scope, membership and BOQ
 tables must fail even when a route or stale client attempts them.
+
+Inventory category, alias and import-batch relations also deny ordinary table
+access. `v1_create_inventory_category`, expanded `v1_adjust_inventory` and
+`v1_import_inventory` are the only smart-warehouse write boundaries; the
+import command validates the whole workbook and commits or rolls back as one
+transaction.
 
 The All BOQ overview is read-only. It cannot be represented by a `scope_id`,
 used as a mutation target or used as an MR source; BOQ-derived MR lines must

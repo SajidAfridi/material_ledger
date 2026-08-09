@@ -337,6 +337,16 @@ does not erase the prior version or decision.
 V1 has one logical warehouse. Inventory uses decimal quantities and append-only
 movements. On-hand is changed only by trusted stock commands.
 
+The approved R38.3 warehouse refinement keeps a normalized category master and
+accepted source-text aliases. Seeded category names, including SED and RED, are
+literal business labels and are never expanded by inference. Imports never
+overwrite a balance: Opening Balance, Add Stock and Remove Stock append a
+server movement, while No Stock Change may update verified item master data
+without fabricating a movement. Minimum stock is an operational attention
+threshold only; it is not a valuation, reorder or purchase-order workflow.
+Close category matches are advisory until an authorized user confirms an
+existing category or explicitly creates a new one.
+
 Dispatch is one server transaction that:
 
 - validates Procurement/Admin authority, current state and idempotency key;

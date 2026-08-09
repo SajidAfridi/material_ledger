@@ -208,6 +208,14 @@ dispatches cannot over-supply or drive stock negative.
 Rollback after a committed stock command is roll-forward maintenance plus
 audited compensation, never restoration of the old writer.
 
+### R38.3 smart warehouse refinement
+
+Status: implemented as an additive Batch 7 refinement. The warehouse now uses
+the approved category/alias master, item code/minimum/location metadata,
+atomic reviewed workbook import, exact client download template and responsive
+Overview/Items/Movements/Reservations workspace. Procurement/Admin authority
+and the existing reservation/dispatch transaction model are unchanged.
+
 ## Batch 8 — Delivery Orders and Material Returns
 
 Implementation status: **passed.** See

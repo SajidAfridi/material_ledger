@@ -42,10 +42,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Items'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('VAV Damper'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Movement history'), findsOneWidget);
+    expect(find.text('Stock Movements'), findsWidgets);
     expect(find.text('Opening balance'), findsOneWidget);
   });
 
@@ -176,6 +178,16 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
   Future<YorksV1LogisticsInventoryItem> adjustInventory(
     YorksV1InventoryAdjustmentInput input,
   ) async => _item;
+
+  @override
+  Future<YorksV1InventoryCategory> createInventoryCategory(
+    YorksV1InventoryCategoryCreationInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1InventoryImportResult> importInventory(
+    YorksV1InventoryImportInput input,
+  ) => throw UnimplementedError();
 
   @override
   Future<YorksV1LogisticsInventoryItem> setInventoryItemActive(

@@ -80,6 +80,17 @@ backward visual or workflow compatibility.
 | Material events | Supplier/warehouse/site directions modeled separately | Dispatch plus site receipt review in V1; supplier-receipt/PO suite deferred |
 | Accounts | Outside V7 transformation but existing routes could remain | Explicitly unavailable in the V1 experience |
 
+### R38.3 smart warehouse client review pack
+
+The 9 August 2026 client review pack is the approved visual and interaction
+reference for the existing single-warehouse V1 capability. It adds normalized
+warehouse categories and aliases, item codes, minimum-stock attention levels,
+locations/bins, an exact five-sheet import template, reviewed Excel/CSV import
+and responsive Overview/Items/Stock Movements/Reservations surfaces. It does
+not add multiple warehouses, valuation, purchase orders or incoming-stock
+authority. Exact name/alias matches may map automatically; fuzzy matches are
+suggestions only and require Procurement/Admin confirmation.
+
 ## V7 safeguards that remain mandatory
 
 - Supabase Auth/Postgres are authoritative; Firebase is FCM transport only.
