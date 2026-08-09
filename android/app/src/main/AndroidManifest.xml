@@ -2,6 +2,8 @@
     <!-- Required by every installed build for Supabase, document transfer,
          Realtime refresh and other network-backed application services. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ requires an explicit runtime notification permission. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="Yorks AC. &amp; Ref."
@@ -34,6 +36,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Background FCM notifications use the same high-priority channel
+             created by FcmPushService for foreground messages. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="yorks_push" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

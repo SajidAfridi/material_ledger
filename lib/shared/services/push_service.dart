@@ -7,10 +7,25 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app.dart' show appRouterProvider;
+import '../../firebase_options.dart';
 import '../models/app_notification.dart';
 import '../providers/language_provider.dart' show supabaseClientProvider;
 import '../providers/session_provider.dart';
 import 'observability_service.dart';
+
+/// Public Web Push key, supplied by the release environment after it is
+/// generated in Firebase Console. It is intentionally a dart define rather
+/// than a source constant so an absent web credential fails closed instead of
+/// making browser notification permission appear to work when no FCM token can
+/// be issued.
+const _webPushVapidKey = String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
+
+const _androidChannel = AndroidNotificationChannel(
+  'yorks_push',
+  'Yorks notifications',
+  description: 'Workflow alerts and controlled-record updates.',
+  importance: Importance.high,
+);
 
 /// A push notification delivered from a server (its payload already maps onto
 /// the in-app [AppNotification] model — `type`, `refId`, `route`, `audience` —
@@ -47,8 +62,8 @@ class PushMessage {
 
 /// Server push behind one interface. [FcmPushService] is the real
 /// implementation (Firebase Cloud Messaging as pure TRANSPORT — Supabase
-/// stays the backend/auth/db); [NoopPushService] is the default until a
-/// Firebase project is configured.
+/// stays the backend/auth/db); [NoopPushService] remains the deterministic
+/// test/unsupported-platform implementation.
 ///
 /// IMPORTANT: `notifications` is now a SYNCED table (realtime + hydrate), so
 /// the actual [AppNotification] record already reaches every device on its
@@ -74,11 +89,47 @@ class NoopPushService implements PushService {
 }
 
 /// Required top-level entry point for background FCM messages (invoked in its
-/// own isolate). The OS already shows the system banner for a background/
-/// terminated push with zero app code — this exists only to satisfy the
-/// plugin's API contract (it must be top-level or static).
+/// own isolate). It must remain short and cannot update Riverpod or UI state.
 @pragma('vm:entry-point')
-Future<void> firebaseBackgroundMessageHandler(RemoteMessage message) async {}
+Future<void> firebaseBackgroundMessageHandler(RemoteMessage message) async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    _debugMessage('background', message);
+  } catch (error, stackTrace) {
+    _debugFailure('background initialization', error, stackTrace);
+  }
+}
+
+/// Registers the required top-level handler before the app starts building.
+/// Keeping it outside a widget prevents release tree-shaking from dropping the
+/// callback and means a background delivery can be handled after the first
+/// normal launch.
+void registerFirebaseBackgroundHandler() {
+  FirebaseMessaging.onBackgroundMessage(firebaseBackgroundMessageHandler);
+}
+
+void _debugMessage(String phase, RemoteMessage message) {
+  // FCM registration tokens and payloads are device/user data. Keep the
+  // requested diagnostic output strictly to development consoles; production
+  // observability receives only failures through the scrubbed reporter below.
+  if (!kDebugMode) return;
+  debugPrint(
+    '[fcm][$phase] id=${message.messageId ?? '-'} '
+    'notification=${message.notification} data=${message.data}',
+  );
+}
+
+void _debugToken(String token) {
+  if (kDebugMode) debugPrint('[fcm] device token: $token');
+}
+
+void _debugFailure(String phase, Object error, StackTrace stackTrace) {
+  if (kDebugMode) {
+    debugPrint('[fcm][$phase] $error\n$stackTrace');
+  }
+}
 
 /// Real push transport (FCM). Every step is defensive: a missing/misconfigured
 /// Firebase project (no `google-services.json` / `GoogleService-Info.plist`
@@ -91,6 +142,7 @@ class FcmPushService implements PushService {
   final _localPlugin = FlutterLocalNotificationsPlugin();
   final _controller = StreamController<PushMessage>.broadcast();
   bool _ready = false;
+  Future<void>? _initializing;
 
   @override
   Stream<PushMessage> get onMessage => _controller.stream;
@@ -100,7 +152,13 @@ class FcmPushService implements PushService {
     await initialize();
     if (!_ready) return null;
     try {
-      return await FirebaseMessaging.instance.getToken();
+      final token = await _getToken();
+      if (token != null) _debugToken(token);
+      // [initialize] can run before authentication exists (so permission is
+      // requested on app launch). Repeat this owner-bound registration after a
+      // later sign-in instead of leaving a token unassociated with that user.
+      await _registerToken(token);
+      return token;
     } catch (e, st) {
       _observe(e, st);
       return null;
@@ -110,24 +168,29 @@ class FcmPushService implements PushService {
   /// Full setup: Firebase, permission, background handler, local-notification
   /// display for foreground pushes, tap → deep-link, and device-token
   /// registration (+ refresh). Call once at app start; later calls no-op.
-  Future<void> initialize() async {
-    if (_ready) return;
+  Future<void> initialize() {
+    if (_ready) return Future<void>.value();
+    final inFlight = _initializing;
+    if (inFlight != null) return inFlight;
+    final attempt = _initialize();
+    _initializing = attempt;
+    return attempt.whenComplete(() {
+      if (identical(_initializing, attempt)) _initializing = null;
+    });
+  }
+
+  Future<void> _initialize() async {
     try {
-      await Firebase.initializeApp();
-    } catch (_) {
-      // No Firebase config present yet (no google-services.json /
-      // GoogleService-Info.plist + Firebase.initializeApp options). Push stays
-      // inactive BY DESIGN until credentials are added — this is an expected,
-      // benign state, so it must NOT be reported as an error (doing so logged a
-      // full stack trace on every launch). Sentry/Supabase degrade the same way.
-      if (kDebugMode) {
-        debugPrint('[push] Firebase not configured — push notifications off.');
-      }
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e, st) {
+      // Unsupported desktop targets and missing native configuration must not
+      // block Yorks. Android, iOS and web use the generated options above.
+      _debugFailure('initialization', e, st);
       return;
     }
     _ready = true;
-
-    FirebaseMessaging.onBackgroundMessage(firebaseBackgroundMessageHandler);
 
     try {
       await _localPlugin.initialize(
@@ -137,16 +200,24 @@ class FcmPushService implements PushService {
         ),
         onDidReceiveNotificationResponse: (resp) => _openRoute(resp.payload),
       );
+      final android = _localPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await android?.createNotificationChannel(_androidChannel);
     } catch (e, st) {
       _observe(e, st);
     }
 
     try {
-      await FirebaseMessaging.instance.requestPermission(
+      final settings = await FirebaseMessaging.instance.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
+      if (kDebugMode) {
+        debugPrint('[fcm] permission: ${settings.authorizationStatus.name}');
+      }
     } catch (e, st) {
       _observe(e, st);
     }
@@ -155,36 +226,61 @@ class FcmPushService implements PushService {
     // (a transient banner — the real record already synced into the
     // notifications table) and publish it on [onMessage] for any observer.
     FirebaseMessaging.onMessage.listen((m) {
+      _debugMessage('foreground', m);
       _showForeground(m);
       _controller.add(_toPushMessage(m));
     });
     // Backgrounded (app alive, tapped from the tray) → deep-link.
-    FirebaseMessaging.onMessageOpenedApp.listen(
-      (m) => _openRoute(m.data['route'] as String?),
-    );
+    FirebaseMessaging.onMessageOpenedApp.listen((m) {
+      _debugMessage('opened', m);
+      _openRoute(m.data['route'] as String?);
+    });
     // Terminated (the tap launched the app fresh) → check once at startup.
     try {
       final initial = await FirebaseMessaging.instance.getInitialMessage();
-      if (initial != null) _openRoute(initial.data['route'] as String?);
+      if (initial != null) {
+        _debugMessage('initial', initial);
+        _openRoute(initial.data['route'] as String?);
+      }
     } catch (e, st) {
       _observe(e, st);
     }
 
-    await _registerToken();
-    FirebaseMessaging.instance.onTokenRefresh.listen((_) => _registerToken());
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+      _debugToken(token);
+      _registerToken(token);
+    });
   }
 
-  PushMessage _toPushMessage(RemoteMessage m) => PushMessage.fromData(
-        m.data.map((k, v) => MapEntry(k, '$v')),
-      );
+  Future<String?> _getToken() {
+    if (!kIsWeb) return FirebaseMessaging.instance.getToken();
+    if (_webPushVapidKey.isEmpty) {
+      if (kDebugMode) {
+        debugPrint(
+          '[fcm] Web Push disabled: FIREBASE_WEB_VAPID_KEY is not configured.',
+        );
+      }
+      return Future<String?>.value(null);
+    }
+    return FirebaseMessaging.instance.getToken(
+      vapidKey: _webPushVapidKey,
+      // This service worker imports Flutter's generated cache worker, so FCM
+      // does not replace the PWA/offline worker at the root scope.
+      serviceWorkerScriptPath: 'firebase-messaging-sw.js',
+    );
+  }
+
+  PushMessage _toPushMessage(RemoteMessage m) =>
+      PushMessage.fromData(m.data.map((k, v) => MapEntry(k, '$v')));
 
   Future<void> _showForeground(RemoteMessage m) async {
     final n = m.notification;
     if (n == null) return;
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
-        'default',
-        'Notifications',
+        'yorks_push',
+        'Yorks notifications',
+        channelDescription: 'Workflow alerts and controlled-record updates.',
         importance: Importance.high,
         priority: Priority.high,
       ),
@@ -219,12 +315,12 @@ class FcmPushService implements PushService {
 
   /// Registers (or refreshes) this device's token against the signed-in user.
   /// Best-effort: push is a convenience, never a requirement to use the app.
-  Future<void> _registerToken() async {
+  Future<void> _registerToken([String? currentToken]) async {
     final client = _ref.read(supabaseClientProvider);
     final appUserId = _ref.read(currentUserProvider)?.id;
     if (client == null || appUserId == null) return;
     try {
-      final token = await FirebaseMessaging.instance.getToken();
+      final token = currentToken ?? await _getToken();
       if (token == null) return;
       await client.from('device_tokens').upsert({
         'id': token,
@@ -246,7 +342,7 @@ class FcmPushService implements PushService {
     final client = _ref.read(supabaseClientProvider);
     if (client == null) return;
     try {
-      final token = await FirebaseMessaging.instance.getToken();
+      final token = await _getToken();
       if (token == null) return;
       await client.from('device_tokens').delete().eq('id', token);
     } catch (e, st) {
@@ -263,6 +359,4 @@ class FcmPushService implements PushService {
   }
 }
 
-final pushServiceProvider = Provider<PushService>(
-  (ref) => FcmPushService(ref),
-);
+final pushServiceProvider = Provider<PushService>((ref) => FcmPushService(ref));

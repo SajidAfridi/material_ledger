@@ -251,7 +251,7 @@ JWT claims. Final Engineering approval activates the linked project inside the
 same transaction; direct project activation without an approved Phase 1 plan is
 rejected. Both Batch 8 migrations are recorded in Supabase migration history.
 
-## Push notifications — plumbing DONE, needs your credentials to activate
+## Push notifications — Yorks Firebase clients configured; final credentials pending
 FCM as pure push TRANSPORT (Supabase stays the backend/auth/db). Structured as
 a swappable seam like every other optional integration in this app (Sentry,
 Supabase): `PushService` interface, `NoopPushService` default,
@@ -267,6 +267,9 @@ role-audience one is readable by anyone signed in — the app already filters by
 role client-side).
 
 **What's built and verified:**
+- Firebase project `yorks-48c40` now has registered Yorks Android, iOS and web
+  apps. The generated Flutter options, Android `google-services.json`, iOS
+  `GoogleService-Info.plist` and native Gradle/Xcode wiring are tracked.
 - `notifications` + `device_tokens` tables, RLS, realtime — all live-verified via
   simulated JWTs (engineer sees their own + broadcasts, not another user's
   personal one; even admin can't `SELECT` `device_tokens`, only `service_role`
@@ -276,7 +279,9 @@ role client-side).
   free, Deno WebCrypto). Auth-gated (any signed-in user), then config-gated
   (responds `501` with no `FCM_SERVICE_ACCOUNT_JSON` secret set — never breaks
   the caller's flow). Verified via curl: 401 unauthenticated, 501 unconfigured.
-- Flutter client (`push_service.dart`): permission request, background handler,
+- Flutter client (`push_service.dart`): launch-time permission request,
+  generated-options initialization, debug-only token/payload diagnostics,
+  background handler,
   foreground local-notification display, tap → deep-link (reusing the existing
   `route` field, via the same "read the current router from Riverpod" pattern
   `hardwareActionProvider` already used), device-token registration + refresh.
@@ -294,23 +299,19 @@ role client-side).
   (`aps-environment: development`) + `UIBackgroundModes: remote-notification`
   wired into all 3 build configs. Verified: `pod install` + full simulator
   relaunch succeeded after each change.
-- Android: **deliberately untouched.** The `google-services` Gradle plugin
-  hard-fails the whole build if `google-services.json` is absent — applying it
-  now would break `flutter run`/`build` on Android immediately. Wire it only
-  once the file exists (see below).
+- Android: `google-services.json`, the Google Services Gradle plugin,
+  Android 13 notification permission and the Yorks high-priority channel are
+  configured. The release-shaped Android build passes.
 
-**To actually go live, you need to:**
-1. Create a Firebase project (free) — Cloud Messaging only, nothing else.
-2. Download `google-services.json` → `android/app/`, apply the
-   `com.google.gms.google-services` Gradle plugin (only then — see above).
-3. Download `GoogleService-Info.plist` → `ios/Runner/` (add to the Xcode
-   project).
-4. Apple Developer Program membership → generate an APNs auth key (.p8),
+**To actually go live, the release owner needs to:**
+1. Generate a Web Push VAPID key in Firebase Console and inject its public
+   value as `FIREBASE_WEB_VAPID_KEY` for the production web build.
+2. Apple Developer Program membership → generate an APNs auth key (.p8),
    upload it to the Firebase project's Cloud Messaging settings.
-5. Generate a Firebase service-account key (Project Settings → Service
+3. Generate a Firebase service-account key (Project Settings → Service
    Accounts) → set its JSON as the `FCM_SERVICE_ACCOUNT_JSON` secret on the
    `send-push` Edge Function.
-6. In Xcode, Signing & Capabilities → confirm "Push Notifications" + "Background
+4. In Xcode, Signing & Capabilities → confirm "Push Notifications" + "Background
    Modes → Remote notifications" are checked against your real Team/provisioning
    (the entitlements file is staged; your Team must actually grant the
    capability).

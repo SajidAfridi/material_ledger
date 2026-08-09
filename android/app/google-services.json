@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1003807035272",
+    "project_id": "yorks-48c40",
+    "storage_bucket": "yorks-48c40.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1003807035272:android:864f0fd2be15881c8ff43d",
+        "android_client_info": {
+          "package_name": "com.yorks.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1GEVL2wNXgdBed7ZdA-xhWhzILxnsXNc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

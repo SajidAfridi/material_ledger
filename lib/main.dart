@@ -16,6 +16,8 @@ import 'shared/models/yorks_v1_feature_flags.dart';
 import 'shared/providers/language_provider.dart';
 import 'shared/services/app_config_service.dart';
 import 'shared/services/observability_service.dart';
+import 'shared/services/push_service.dart'
+    show registerFirebaseBackgroundHandler;
 import 'shared/services/sentry_observability.dart';
 import 'shared/sync/supabase_bootstrap.dart';
 import 'shared/sync/supabase_sync_backend.dart';
@@ -73,6 +75,7 @@ void _bootstrap(ObservabilityService observability) {
   runZonedGuarded(
     () async {
       final binding = WidgetsFlutterBinding.ensureInitialized();
+      registerFirebaseBackgroundHandler();
 
       // Framework + platform errors → crash reporting.
       FlutterError.onError = (details) {

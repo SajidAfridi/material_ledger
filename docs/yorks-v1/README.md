@@ -44,6 +44,7 @@ explicit V7-to-V1 conflict resolution.
 | [`V01_VISUAL_EVIDENCE.md`](V01_VISUAL_EVIDENCE.md) | Workspace shell, empty Overview and Project Creation convergence evidence |
 | [`MOBILE_UI_IMPLEMENTATION_GUIDE.md`](MOBILE_UI_IMPLEMENTATION_GUIDE.md) | Mobile-only authority split, guard, state/permission checklist and evidence workflow |
 | [`MOBILE_UI_SCREEN_LEDGER.md`](MOBILE_UI_SCREEN_LEDGER.md) | Delivery state for all 52 mobile design references |
+| [`FIREBASE_MESSAGING_SETUP.md`](FIREBASE_MESSAGING_SETUP.md) | Firebase Cloud Messaging client, web worker and operator credential setup |
 | [`evidence/mobile-batch-02/README.md`](evidence/mobile-batch-02/README.md) | Verified local evidence index for mobile references 12–21 |
 | [`MIGRATION_AND_ROLLBACK_PLAN.md`](MIGRATION_AND_ROLLBACK_PLAN.md) | Additive migration, reconciliation, quarantine and rollback |
 | [`TEST_AND_ACCEPTANCE_PLAN.md`](TEST_AND_ACCEPTANCE_PLAN.md) | Test layers, 25 scenarios and web/Android evidence |

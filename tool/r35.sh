@@ -32,6 +32,7 @@ shift
 operator_supabase_url="${SUPABASE_URL:-}"
 operator_supabase_key="${SUPABASE_ANON_KEY:-}"
 operator_r35_environment="${R35_ENVIRONMENT:-}"
+operator_firebase_web_vapid_key="${FIREBASE_WEB_VAPID_KEY:-}"
 
 # Configuration is deliberately explicit. A missing file is acceptable only
 # when CI/operator environment variables already provide the complete pair.
@@ -47,6 +48,7 @@ fi
 supabase_url="${operator_supabase_url:-${SUPABASE_URL:-}}"
 supabase_key="${operator_supabase_key:-${SUPABASE_ANON_KEY:-}}"
 r35_environment="${operator_r35_environment:-${R35_ENVIRONMENT:-}}"
+firebase_web_vapid_key="${operator_firebase_web_vapid_key:-${FIREBASE_WEB_VAPID_KEY:-}}"
 
 if [[ -z "$r35_environment" ]]; then
   echo "R35_ENVIRONMENT must be local, staging, production, or ci." >&2
@@ -79,6 +81,12 @@ r35_defines=(
   '--dart-define=YORKS_V1_DOCUMENTS=true'
   '--dart-define=use_arabic=true'
 )
+
+# The VAPID public key is not a secret, but it is environment-specific. Omit
+# it for CI/local builds that intentionally do not exercise browser Push API.
+if [[ -n "$firebase_web_vapid_key" ]]; then
+  r35_defines+=("--dart-define=FIREBASE_WEB_VAPID_KEY=${firebase_web_vapid_key}")
+fi
 
 case "$command" in
   run)
