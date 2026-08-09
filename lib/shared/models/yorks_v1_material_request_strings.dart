@@ -180,6 +180,90 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'ریمارکس ہٹا دیے گئے ہیں۔ آئٹم کی ترتیب Yorks کے مانوس مواد درخواست فارم کے مطابق ہے۔',
     hi: 'टिप्पणियाँ हटा दी गई हैं। आइटम क्रम परिचित Yorks सामग्री अनुरोध फॉर्म से मेल खाता है।',
   );
+  static const continueAction = TranslatableString(
+    en: 'Continue',
+    ar: 'متابعة',
+    ur: 'جاری رکھیں',
+    hi: 'जारी रखें',
+  );
+  static const all = TranslatableString(
+    en: 'All',
+    ar: 'الكل',
+    ur: 'سب',
+    hi: 'सभी',
+  );
+  static const back = TranslatableString(
+    en: 'Back',
+    ar: 'رجوع',
+    ur: 'واپس',
+    hi: 'वापस',
+  );
+  static const selectedItems = TranslatableString(
+    en: 'Selected items',
+    ar: 'العناصر المختارة',
+    ur: 'منتخب آئٹمز',
+    hi: 'चुनी हुई वस्तुएँ',
+  );
+  static const noBoqItems = TranslatableString(
+    en: 'No BOQ items are available in this scope.',
+    ar: 'لا توجد بنود جدول كميات متاحة في هذا النطاق.',
+    ur: 'اس اسکوپ میں کوئی BOQ آئٹم دستیاب نہیں ہے۔',
+    hi: 'इस दायरे में कोई बीओक्यू आइटम उपलब्ध नहीं है।',
+  );
+  static const confirmScopeAndLines = TranslatableString(
+    en: 'I have reviewed the project scope and requested quantities.',
+    ar: 'لقد راجعت نطاق المشروع والكميات المطلوبة.',
+    ur: 'میں نے پراجیکٹ اسکوپ اور مطلوبہ مقداروں کا جائزہ لیا ہے۔',
+    hi: 'मैंने परियोजना के दायरे और मांगी गई मात्राओं की समीक्षा कर ली है।',
+  );
+  static const reviewAndSubmit = TranslatableString(
+    en: 'Review and submit',
+    ar: 'مراجعة وإرسال',
+    ur: 'جائزہ لیں اور جمع کرائیں',
+    hi: 'समीक्षा करें और जमा करें',
+  );
+  static const serverConfirmed = TranslatableString(
+    en: 'Your request has been submitted and is now with Procurement.',
+    ar: 'تم إرسال طلبك وهو الآن لدى المشتريات.',
+    ur: 'آپ کی درخواست جمع ہو گئی ہے اور اب پروکیورمنٹ کے پاس ہے۔',
+    hi: 'आपका अनुरोध जमा हो गया है और अब खरीद विभाग के पास है।',
+  );
+  static const viewRequest = TranslatableString(
+    en: 'View request',
+    ar: 'عرض الطلب',
+    ur: 'درخواست دیکھیں',
+    hi: 'अनुरोध देखें',
+  );
+  static const backToRequests = TranslatableString(
+    en: 'Back to requests',
+    ar: 'العودة إلى الطلبات',
+    ur: 'درخواستوں پر واپس جائیں',
+    hi: 'अनुरोधों पर वापस जाएँ',
+  );
+  static const unplannedMaterial = TranslatableString(
+    en: 'Custom material',
+    ar: 'مادة مخصصة',
+    ur: 'کسٹم میٹیریل',
+    hi: 'कस्टम सामग्री',
+  );
+  static const itemAdded = TranslatableString(
+    en: 'Item added to this draft.',
+    ar: 'تمت إضافة البند إلى هذه المسودة.',
+    ur: 'آئٹم اس ڈرافٹ میں شامل کر دی گئی ہے۔',
+    hi: 'आइटम इस ड्राफ़्ट में जोड़ दी गई है।',
+  );
+  static const workflowTimeline = TranslatableString(
+    en: 'Workflow timeline',
+    ar: 'الجدول الزمني لسير العمل',
+    ur: 'ورک فلو ٹائم لائن',
+    hi: 'वर्कफ़्लो समय-रेखा',
+  );
+  static const recentActivity = TranslatableString(
+    en: 'Recent activity',
+    ar: 'النشاط الأخير',
+    ur: 'حالیہ سرگرمی',
+    hi: 'हाल की गतिविधि',
+  );
   static const addItems = TranslatableString(
     en: 'Add items',
     ar: 'إضافة بنود',

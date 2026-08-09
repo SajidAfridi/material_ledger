@@ -308,12 +308,19 @@ void main() {
         // Assert that the action is available in the record; the router may
         // retain an offstage copy across the responsive viewport loop.
         expect(find.text('Generate Delivery Order'), findsAtLeastNWidgets(1));
-        expect(
-          find.byKey(
-            const ValueKey('yorks-v1-controlled-material-request-preview'),
-          ),
-          findsOneWidget,
-        );
+        if (size.width <= 720) {
+          expect(
+            find.byKey(const ValueKey('mobile-mr-lifecycle')),
+            findsOneWidget,
+          );
+        } else {
+          expect(
+            find.byKey(
+              const ValueKey('yorks-v1-controlled-material-request-preview'),
+            ),
+            findsOneWidget,
+          );
+        }
         expect(tester.takeException(), isNull, reason: 'viewport $size');
       }
     },

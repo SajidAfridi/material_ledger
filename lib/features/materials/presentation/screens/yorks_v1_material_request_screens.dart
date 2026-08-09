@@ -75,6 +75,12 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The phone register is intentionally a separate composition.  It keeps
+    // the same provider, routing and authorization preflight as the R35
+    // register below, while preserving the accepted tablet/web tree intact.
+    if (YorksMobileUi.isActive(context)) {
+      return _YorksMobileMaterialRequestsPage(projectId: projectId);
+    }
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final requests = ref.watch(yorksV1MaterialRequestListProvider(projectId));
@@ -190,6 +196,441 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+enum _MobileMaterialRequestFilter { all, draft, submitted, approved }
+
+/// Phone-only, status-led register for the authorized MR projection.
+///
+/// Counts, owner labels and state chips are deliberately derived from the
+/// records returned by [yorksV1MaterialRequestListProvider].  In particular,
+/// a transport failure is not rendered as an empty register or a zero count.
+class _YorksMobileMaterialRequestsPage extends ConsumerStatefulWidget {
+  const _YorksMobileMaterialRequestsPage({this.projectId});
+
+  final String? projectId;
+
+  @override
+  ConsumerState<_YorksMobileMaterialRequestsPage> createState() =>
+      _YorksMobileMaterialRequestsPageState();
+}
+
+class _YorksMobileMaterialRequestsPageState
+    extends ConsumerState<_YorksMobileMaterialRequestsPage> {
+  _MobileMaterialRequestFilter _filter = _MobileMaterialRequestFilter.all;
+
+  @override
+  Widget build(BuildContext context) {
+    final language = ref.watch(languageProvider);
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final canCreate = role?.canCreateMaterialRequest ?? false;
+    final requests = ref.watch(
+      yorksV1MaterialRequestListProvider(widget.projectId),
+    );
+    return Scaffold(
+      backgroundColor: AppColors.mobileSurface,
+      body: ColoredBox(
+        color: AppColors.mobileSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            YorksMobileAppBar(
+              title: YorksV1MaterialRequestStrings.requests.primary,
+              leading: YorksMobileIconButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.canPop()
+                    ? context.pop()
+                    : context.go(RoutePaths.engineerHome),
+              ),
+              trailing: YorksMobileIconButton(
+                icon: Icons.refresh_rounded,
+                tooltip: YorksV1MaterialRequestStrings.refresh.primary,
+                onPressed: () => ref.invalidate(
+                  yorksV1MaterialRequestListProvider(widget.projectId),
+                ),
+              ),
+            ),
+            Expanded(
+              child: requests.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, _) => _MobileMaterialRequestError(
+                  language: language,
+                  onRetry: () => ref.invalidate(
+                    yorksV1MaterialRequestListProvider(widget.projectId),
+                  ),
+                ),
+                data: (items) => _MobileMaterialRequestRegister(
+                  items: items,
+                  canCreate: canCreate,
+                  filter: _filter,
+                  onFilterChanged: (value) => setState(() => _filter = value),
+                  onCreate: canCreate
+                      ? () => context.push(
+                          RoutePaths.yorksV1MaterialRequestDraftPath(
+                            const Uuid().v4(),
+                            projectId: widget.projectId,
+                          ),
+                        )
+                      : null,
+                  onOpen: (request) =>
+                      context.push(_materialRequestOpenPath(request)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileMaterialRequestRegister extends StatelessWidget {
+  const _MobileMaterialRequestRegister({
+    required this.items,
+    required this.canCreate,
+    required this.filter,
+    required this.onFilterChanged,
+    required this.onCreate,
+    required this.onOpen,
+  });
+
+  final List<YorksV1MaterialRequest> items;
+  final bool canCreate;
+  final _MobileMaterialRequestFilter filter;
+  final ValueChanged<_MobileMaterialRequestFilter> onFilterChanged;
+  final VoidCallback? onCreate;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = items.where(_matches).toList(growable: false);
+    return ListView(
+      key: const ValueKey('mobile-material-request-register'),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 104),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    YorksV1MaterialRequestStrings.requests.primary,
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    YorksV1MaterialRequestStrings.requestsDescription.primary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (canCreate)
+              Semantics(
+                button: true,
+                label: YorksV1MaterialRequestStrings.newRequest.primary,
+                child: SizedBox.square(
+                  dimension: AppSpacing.minTapTarget,
+                  child: FilledButton(
+                    onPressed: onCreate,
+                    style: FilledButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Icon(Icons.add_rounded),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: YorksMobilePill(
+                label: YorksV1MaterialRequestStrings.all.primary,
+                selected: filter == _MobileMaterialRequestFilter.all,
+                onTap: () => onFilterChanged(_MobileMaterialRequestFilter.all),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: YorksMobilePill(
+                label: YorksV1MaterialRequestStrings.draft.primary,
+                selected: filter == _MobileMaterialRequestFilter.draft,
+                onTap: () =>
+                    onFilterChanged(_MobileMaterialRequestFilter.draft),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: YorksMobilePill(
+                label: YorksV1MaterialRequestStrings.submitted.primary,
+                selected: filter == _MobileMaterialRequestFilter.submitted,
+                onTap: () =>
+                    onFilterChanged(_MobileMaterialRequestFilter.submitted),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 118,
+          child: YorksMobilePill(
+            label: YorksV1MaterialRequestStrings.approved.primary,
+            selected: filter == _MobileMaterialRequestFilter.approved,
+            onTap: () => onFilterChanged(_MobileMaterialRequestFilter.approved),
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (items.isEmpty)
+          _MobileMaterialRequestEmpty(canCreate: canCreate, onCreate: onCreate)
+        else if (visible.isEmpty)
+          _MobileMaterialRequestNoMatches()
+        else
+          for (final request in visible) ...[
+            _MobileMaterialRequestCard(
+              request: request,
+              onTap: () => onOpen(request),
+            ),
+            const SizedBox(height: 10),
+          ],
+      ],
+    );
+  }
+
+  bool _matches(YorksV1MaterialRequest request) => switch (filter) {
+    _MobileMaterialRequestFilter.all => true,
+    _MobileMaterialRequestFilter.draft => request.state.isDraft,
+    _MobileMaterialRequestFilter.submitted =>
+      request.state == YorksV1MaterialRequestState.submitted ||
+          request.state == YorksV1MaterialRequestState.arranging ||
+          request.state == YorksV1MaterialRequestState.awaitingApproval,
+    _MobileMaterialRequestFilter.approved =>
+      request.state == YorksV1MaterialRequestState.approved ||
+          request.state == YorksV1MaterialRequestState.partiallyDispatched ||
+          request.state == YorksV1MaterialRequestState.dispatched ||
+          request.state == YorksV1MaterialRequestState.partiallyReceived ||
+          request.state == YorksV1MaterialRequestState.received ||
+          request.state == YorksV1MaterialRequestState.closed,
+  };
+}
+
+class _MobileMaterialRequestCard extends StatelessWidget {
+  const _MobileMaterialRequestCard({
+    required this.request,
+    required this.onTap,
+  });
+
+  final YorksV1MaterialRequest request;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    onTap: onTap,
+    padding: const EdgeInsets.all(14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                request.requestNumber ??
+                    YorksV1MaterialRequestStrings.draft.primary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.blue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            _MobileRequestStateChip(request: request),
+          ],
+        ),
+        const SizedBox(height: 7),
+        Text(
+          request.title?.trim().isNotEmpty == true
+              ? request.title!
+              : request.projectName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${request.projectReference} · ${request.scopeName}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.inventory_2_outlined,
+                size: 17,
+                color: AppColors.blue,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  '${request.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                  style: AppTypography.labelMedium,
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileRequestStateChip extends StatelessWidget {
+  const _MobileRequestStateChip({required this.request});
+
+  final YorksV1MaterialRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final done =
+        request.state == YorksV1MaterialRequestState.received ||
+        request.state == YorksV1MaterialRequestState.closed;
+    final cancelled = request.state == YorksV1MaterialRequestState.cancelled;
+    final background = cancelled
+        ? AppColors.errorContainer
+        : done
+        ? AppColors.successContainer
+        : AppColors.blueContainer;
+    final foreground = cancelled
+        ? AppColors.onErrorContainer
+        : done
+        ? AppColors.onSuccessContainer
+        : AppColors.onPrimaryContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        yorksV1MaterialRequestStateCopy(request.state).primary,
+        style: AppTypography.labelSmall.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileMaterialRequestEmpty extends StatelessWidget {
+  const _MobileMaterialRequestEmpty({required this.canCreate, this.onCreate});
+
+  final bool canCreate;
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 30),
+      child: Column(
+        children: [
+          const Icon(Icons.inbox_outlined, size: 38, color: AppColors.muted),
+          const SizedBox(height: 10),
+          Text(
+            YorksV1MaterialRequestStrings.noRequests.primary,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+          ),
+          if (canCreate) ...[
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add_rounded),
+              label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _MobileMaterialRequestNoMatches extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Text(
+        YorksV1MaterialRequestStrings.noRequests.primary,
+        textAlign: TextAlign.center,
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+      ),
+    ),
+  );
+}
+
+class _MobileMaterialRequestError extends StatelessWidget {
+  const _MobileMaterialRequestError({
+    required this.language,
+    required this.onRetry,
+  });
+
+  final AppLanguage language;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: YorksMobileCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.sync_problem_rounded,
+              size: 38,
+              color: AppColors.error,
+            ),
+            const SizedBox(height: 12),
+            _CopyText(
+              copy: YorksV1MaterialRequestStrings.saveFailed,
+              language: language,
+              center: true,
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(YorksV1MaterialRequestStrings.refresh.primary),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// Route-level R35 queues make the sidebar Dispatches and Material Returns
@@ -678,7 +1119,7 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: compactRoute
+      appBar: compactRoute && !YorksMobileUi.isActive(context)
           ? AppBar(
               backgroundColor: AppColors.surface,
               surfaceTintColor: Colors.transparent,
@@ -774,6 +1215,17 @@ class _DraftForm extends ConsumerWidget {
     final documentService = YorksV1MaterialRequestDocumentService();
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+
+    if (YorksMobileUi.isActive(context)) {
+      return _YorksMobileMaterialRequestDraftFlow(
+        state: state,
+        controller: controller,
+        projects: projects,
+        scopes: scopes,
+        onSave: () => _save(context, ref, controller, draft),
+        onSubmit: () => _submitForMobile(context, ref, controller),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -1037,22 +1489,1508 @@ class _DraftForm extends ConsumerWidget {
     WidgetRef ref,
     YorksV1MaterialRequestDraftController controller,
   ) async {
+    final submitted = await _submitForMobile(context, ref, controller);
+    if (!context.mounted || submitted == null) return;
+    context.go(RoutePaths.yorksV1MaterialRequestPath(submitted.id));
+  }
+
+  Future<YorksV1MaterialRequest?> _submitForMobile(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1MaterialRequestDraftController controller,
+  ) async {
     // See _save: Submit must validate the value the engineer can still see in
     // the active local editor instead of a stale draft snapshot.
     FocusManager.instance.primaryFocus?.unfocus();
     await Future<void>.delayed(Duration.zero);
     final submitted = await controller.submit();
-    if (!context.mounted) return;
+    if (!context.mounted) return null;
     if (submitted == null) {
       final message = controller.lastErrorCode == YorksV1DomainErrorCode.offline
           ? YorksV1MaterialRequestStrings.offlineSubmit.primary
           : YorksV1MaterialRequestStrings.submitFailed.primary;
       _snack(context, message);
-      return;
+      return null;
     }
     ref.invalidate(yorksV1MaterialRequestListProvider);
-    context.go(RoutePaths.yorksV1MaterialRequestPath(submitted.id));
+    return submitted;
   }
+}
+
+enum _MobileMaterialRequestDraftStep { information, materials, review }
+
+enum _MobileMaterialRequestSourcePage { none, boqFolders, boqRows, custom }
+
+/// The phone request composer is a presentation-only state machine layered on
+/// the existing draft controller. It never owns a second draft or command:
+/// all edits flow through [YorksV1MaterialRequestDraftController], and the
+/// success panel appears only after its connected submit returns a request.
+class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
+  const _YorksMobileMaterialRequestDraftFlow({
+    required this.state,
+    required this.controller,
+    required this.projects,
+    required this.scopes,
+    required this.onSave,
+    required this.onSubmit,
+  });
+
+  final YorksV1MaterialRequestDraftState state;
+  final YorksV1MaterialRequestDraftController controller;
+  final AsyncValue<List<YorksV1MaterialRequestProjectOption>> projects;
+  final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+  final Future<void> Function() onSave;
+  final Future<YorksV1MaterialRequest?> Function() onSubmit;
+
+  @override
+  ConsumerState<_YorksMobileMaterialRequestDraftFlow> createState() =>
+      _YorksMobileMaterialRequestDraftFlowState();
+}
+
+class _YorksMobileMaterialRequestDraftFlowState
+    extends ConsumerState<_YorksMobileMaterialRequestDraftFlow> {
+  _MobileMaterialRequestDraftStep _step =
+      _MobileMaterialRequestDraftStep.information;
+  _MobileMaterialRequestSourcePage _sourcePage =
+      _MobileMaterialRequestSourcePage.none;
+  List<YorksV1BoqGroup>? _groups;
+  YorksV1BoqWorksheet? _worksheet;
+  final Set<String> _selectedBoqRows = <String>{};
+  bool _loadingSource = false;
+  bool _reviewConfirmed = false;
+  YorksV1MaterialRequest? _submitted;
+  late final TextEditingController _customDescription;
+  late final TextEditingController _customBrand;
+  late final TextEditingController _customSize;
+  late final TextEditingController _customModel;
+  late final TextEditingController _customQuantity;
+  String _customUnit = 'Nos';
+
+  @override
+  void initState() {
+    super.initState();
+    _customDescription = TextEditingController();
+    _customBrand = TextEditingController();
+    _customSize = TextEditingController();
+    _customModel = TextEditingController();
+    _customQuantity = TextEditingController(text: '1');
+  }
+
+  @override
+  void dispose() {
+    _customDescription.dispose();
+    _customBrand.dispose();
+    _customSize.dispose();
+    _customModel.dispose();
+    _customQuantity.dispose();
+    super.dispose();
+  }
+
+  YorksV1MaterialRequestDraft get _draft => widget.state.draft;
+
+  bool get _busy =>
+      widget.state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
+      widget.state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_submitted != null) {
+      return Scaffold(
+        backgroundColor: AppColors.mobileSurface,
+        body: _successPage(context, _submitted!),
+      );
+    }
+    final sourceTitle = switch (_sourcePage) {
+      _MobileMaterialRequestSourcePage.none => null,
+      _MobileMaterialRequestSourcePage.boqFolders =>
+        YorksV1MaterialRequestStrings.addFromBoq.primary,
+      _MobileMaterialRequestSourcePage.boqRows =>
+        YorksV1MaterialRequestStrings.selectedItems.primary,
+      _MobileMaterialRequestSourcePage.custom =>
+        YorksV1MaterialRequestStrings.unplannedMaterial.primary,
+    };
+    return Scaffold(
+      backgroundColor: AppColors.mobileSurface,
+      body: ColoredBox(
+        color: AppColors.mobileSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            YorksMobileAppBar(
+              title: sourceTitle ?? _stepTitle,
+              leading: YorksMobileIconButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: _back,
+              ),
+            ),
+            Expanded(
+              child: switch (_sourcePage) {
+                _MobileMaterialRequestSourcePage.none => _draftStepBody(),
+                _MobileMaterialRequestSourcePage.boqFolders =>
+                  _boqFoldersBody(),
+                _MobileMaterialRequestSourcePage.boqRows => _boqRowsBody(),
+                _MobileMaterialRequestSourcePage.custom =>
+                  _customMaterialBody(),
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String get _stepTitle => switch (_step) {
+    _MobileMaterialRequestDraftStep.information =>
+      YorksV1MaterialRequestStrings.requestInformation.primary,
+    _MobileMaterialRequestDraftStep.materials =>
+      YorksV1MaterialRequestStrings.materialItems.primary,
+    _MobileMaterialRequestDraftStep.review =>
+      YorksV1MaterialRequestStrings.review.primary,
+  };
+
+  Widget _draftStepBody() => switch (_step) {
+    _MobileMaterialRequestDraftStep.information => _informationBody(),
+    _MobileMaterialRequestDraftStep.materials => _materialsBody(),
+    _MobileMaterialRequestDraftStep.review => _reviewBody(),
+  };
+
+  Widget _informationBody() => Column(
+    children: [
+      Expanded(
+        child: ListView(
+          key: const ValueKey('mobile-mr-information'),
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+          children: [
+            _MobileMrProgress(step: _step),
+            const SizedBox(height: 20),
+            Text(
+              YorksV1MaterialRequestStrings.requestInformation.primary,
+              style: AppTypography.headlineMedium.copyWith(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              YorksV1MaterialRequestStrings
+                  .requestInformationDescription
+                  .primary,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+            const SizedBox(height: 16),
+            YorksMobileCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    key: const ValueKey('mobile-mr-title'),
+                    initialValue: _draft.title ?? '',
+                    onChanged: widget.controller.setTitle,
+                    decoration: InputDecoration(
+                      labelText:
+                          YorksV1MaterialRequestStrings.requestTitle.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _mobileProjectField(),
+                  const SizedBox(height: 12),
+                  _mobileScopeField(),
+                  const SizedBox(height: 18),
+                  Text(
+                    YorksV1MaterialRequestStrings.requestTiming.primary,
+                    style: AppTypography.labelLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final timing in YorksV1MaterialRequestTiming.values)
+                        YorksMobilePill(
+                          label: yorksV1MaterialRequestTimingCopy(
+                            timing,
+                          ).primary,
+                          selected: _draft.timing == timing,
+                          onTap: _busy
+                              ? () {}
+                              : () => widget.controller.setTiming(timing),
+                        ),
+                    ],
+                  ),
+                  if (_draft.timing ==
+                      YorksV1MaterialRequestTiming.scheduled) ...[
+                    const SizedBox(height: 12),
+                    _mobileScheduledDate(),
+                  ],
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('mobile-mr-delivery-note'),
+                    initialValue: _draft.deliveryNote ?? '',
+                    minLines: 2,
+                    maxLines: 3,
+                    onChanged: widget.controller.setDeliveryNote,
+                    decoration: InputDecoration(
+                      labelText:
+                          YorksV1MaterialRequestStrings.deliveryNote.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _MobileMrNotice(
+              icon: Icons.lock_outline_rounded,
+              text: YorksV1MaterialRequestStrings.draftPrivate.primary,
+            ),
+          ],
+        ),
+      ),
+      _MobileMrStickyActions(
+        primaryLabel: YorksV1MaterialRequestStrings.continueAction.primary,
+        primaryIcon: Icons.arrow_forward_rounded,
+        onPrimary: _busy ? null : _continueToMaterials,
+      ),
+    ],
+  );
+
+  Widget _mobileProjectField() => widget.projects.when(
+    loading: () => const LinearProgressIndicator(),
+    error: (_, _) => _MobileMrNotice(
+      icon: Icons.sync_problem_rounded,
+      text: YorksV1MaterialRequestStrings.saveFailed.primary,
+      error: true,
+    ),
+    data: (items) => DropdownButtonFormField<String>(
+      key: const ValueKey('mobile-mr-project'),
+      initialValue: items.any((item) => item.id == _draft.projectId)
+          ? _draft.projectId
+          : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: YorksV1MaterialRequestStrings.project.primary,
+      ),
+      items: [
+        for (final item in items)
+          DropdownMenuItem(
+            value: item.id,
+            child: Text(
+              '${item.reference} · ${item.name}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: _busy ? null : _changeProject,
+    ),
+  );
+
+  Widget _mobileScopeField() => widget.scopes.when(
+    loading: () => const LinearProgressIndicator(),
+    error: (_, _) => _MobileMrNotice(
+      icon: Icons.sync_problem_rounded,
+      text: YorksV1MaterialRequestStrings.saveFailed.primary,
+      error: true,
+    ),
+    data: (items) => DropdownButtonFormField<String>(
+      key: const ValueKey('mobile-mr-scope'),
+      initialValue: items.any((item) => item.id == _draft.scopeId)
+          ? _draft.scopeId
+          : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: YorksV1MaterialRequestStrings.scope.primary,
+      ),
+      items: [
+        for (final item in items)
+          DropdownMenuItem(value: item.id, child: Text(item.name)),
+      ],
+      onChanged: _busy ? null : _changeScope,
+    ),
+  );
+
+  Widget _mobileScheduledDate() => OutlinedButton.icon(
+    icon: const Icon(Icons.calendar_today_outlined, size: 18),
+    label: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        _draft.scheduledDate == null
+            ? YorksV1MaterialRequestStrings.scheduledDate.primary
+            : MaterialLocalizations.of(
+                context,
+              ).formatMediumDate(_draft.scheduledDate!),
+      ),
+    ),
+    onPressed: _busy ? null : _pickScheduledDate,
+  );
+
+  Widget _materialsBody() => Column(
+    children: [
+      Expanded(
+        child: ListView(
+          key: const ValueKey('mobile-mr-materials'),
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+          children: [
+            _MobileMrProgress(step: _step),
+            const SizedBox(height: 20),
+            Text(
+              YorksV1MaterialRequestStrings.materialItems.primary,
+              style: AppTypography.headlineMedium.copyWith(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              YorksV1MaterialRequestStrings.materialItemsDescription.primary,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+            const SizedBox(height: 14),
+            _MobileMrSourceAction(
+              icon: Icons.folder_outlined,
+              title: YorksV1MaterialRequestStrings.addFromBoq.primary,
+              description:
+                  YorksV1MaterialRequestStrings.selectScopeToAddBoq.primary,
+              onTap: _busy ? null : _openBoqFolders,
+            ),
+            const SizedBox(height: 10),
+            _MobileMrSourceAction(
+              icon: Icons.add_box_outlined,
+              title: YorksV1MaterialRequestStrings.addCustomItem.primary,
+              description:
+                  YorksV1MaterialRequestStrings.requestScopeDescription.primary,
+              onTap: _busy
+                  ? null
+                  : () => setState(() {
+                      _sourcePage = _MobileMaterialRequestSourcePage.custom;
+                    }),
+            ),
+            const SizedBox(height: 16),
+            YorksMobileSectionHeader(
+              title: YorksV1MaterialRequestStrings.selectedItems.primary,
+              subtitle:
+                  '${_draft.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+            ),
+            const SizedBox(height: 10),
+            if (_draft.lines.isEmpty)
+              _MobileMaterialRequestEmpty(canCreate: false)
+            else ...[
+              if (_draft.lines.any((line) => line.quantityIsSuggested))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _MobileMrNotice(
+                    icon: Icons.info_outline_rounded,
+                    text: YorksV1MaterialRequestStrings
+                        .suggestedQuantityReview
+                        .primary,
+                  ),
+                ),
+              for (final line in _draft.lines) ...[
+                _MobileMrDraftLineCard(
+                  line: line,
+                  enabled: !_busy,
+                  onRemove: () => widget.controller.removeLine(line.id),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ],
+        ),
+      ),
+      _MobileMrStickyActions(
+        secondaryLabel: YorksV1MaterialRequestStrings.back.primary,
+        onSecondary: () =>
+            setState(() => _step = _MobileMaterialRequestDraftStep.information),
+        primaryLabel: YorksV1MaterialRequestStrings.review.primary,
+        primaryIcon: Icons.arrow_forward_rounded,
+        onPrimary: _busy || _draft.lines.isEmpty
+            ? null
+            : () => setState(
+                () => _step = _MobileMaterialRequestDraftStep.review,
+              ),
+      ),
+    ],
+  );
+
+  Widget _reviewBody() {
+    final project = widget.projects.valueOrNull
+        ?.where((item) => item.id == _draft.projectId)
+        .firstOrNull;
+    final scope = widget.scopes.valueOrNull
+        ?.where((item) => item.id == _draft.scopeId)
+        .firstOrNull;
+    final active = project?.state == YorksV1ProjectLifecycle.active.wireValue;
+    final canSubmit =
+        _draft.canSubmitLocally && active && _reviewConfirmed && !_busy;
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            key: const ValueKey('mobile-mr-review'),
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+            children: [
+              _MobileMrProgress(step: _step),
+              const SizedBox(height: 20),
+              Text(
+                YorksV1MaterialRequestStrings.reviewAndSubmit.primary,
+                style: AppTypography.headlineMedium.copyWith(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                YorksV1MaterialRequestStrings.reviewDescription.primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(height: 14),
+              YorksMobileCard(
+                child: Column(
+                  children: [
+                    _MobileMrFact(
+                      label: YorksV1MaterialRequestStrings.project.primary,
+                      value: project == null
+                          ? YorksV1MaterialRequestStrings.notProvided.primary
+                          : '${project.reference} · ${project.name}',
+                    ),
+                    _MobileMrFact(
+                      label: YorksV1MaterialRequestStrings.scopeLabel.primary,
+                      value:
+                          scope?.name ??
+                          YorksV1MaterialRequestStrings.notProvided.primary,
+                    ),
+                    _MobileMrFact(
+                      label: YorksV1MaterialRequestStrings.delivery.primary,
+                      value: yorksV1MaterialRequestTimingCopy(
+                        _draft.timing,
+                      ).primary,
+                    ),
+                    _MobileMrFact(
+                      label: YorksV1MaterialRequestStrings.items.primary,
+                      value: _draft.lines.length.toString(),
+                      last: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_draft.lines.any((line) => line.quantityIsSuggested))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _MobileMrNotice(
+                    icon: Icons.info_outline_rounded,
+                    text: YorksV1MaterialRequestStrings
+                        .suggestedQuantityReview
+                        .primary,
+                  ),
+                ),
+              if (!active)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _MobileMrNotice(
+                    icon: Icons.error_outline_rounded,
+                    text: YorksV1MaterialRequestStrings
+                        .projectMustBeActive
+                        .primary,
+                    error: true,
+                  ),
+                ),
+              Material(
+                color: Colors.transparent,
+                child: CheckboxListTile(
+                  value: _reviewConfirmed,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: _busy
+                      ? null
+                      : (value) =>
+                            setState(() => _reviewConfirmed = value ?? false),
+                  title: Text(
+                    YorksV1MaterialRequestStrings.confirmScopeAndLines.primary,
+                    style: AppTypography.bodySmall,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _MobileMrStickyActions(
+          secondaryLabel: YorksV1MaterialRequestStrings.saveDraft.primary,
+          onSecondary: _busy ? null : widget.onSave,
+          primaryLabel:
+              YorksV1MaterialRequestStrings.submitToProcurement.primary,
+          primaryIcon: Icons.send_rounded,
+          loading:
+              _busy &&
+              widget.state.status ==
+                  YorksV1MaterialRequestDraftSyncStatus.submitting,
+          onPrimary: canSubmit ? _submit : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _boqFoldersBody() {
+    if (_loadingSource) return const Center(child: CircularProgressIndicator());
+    final groups = _groups ?? const <YorksV1BoqGroup>[];
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            key: const ValueKey('mobile-mr-boq-folders'),
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+            children: [
+              Text(
+                YorksV1MaterialRequestStrings.addFromBoq.primary,
+                style: AppTypography.headlineMedium.copyWith(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                YorksV1MaterialRequestStrings.selectScopeToAddBoq.primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(height: 14),
+              if (groups.isEmpty)
+                _MobileMrNotice(
+                  icon: Icons.folder_off_outlined,
+                  text: YorksV1MaterialRequestStrings.noBoqItems.primary,
+                )
+              else
+                for (final group in groups) ...[
+                  YorksMobileCard(
+                    onTap: group.rowCount > 0
+                        ? () => _openWorksheet(group)
+                        : null,
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.folder_outlined,
+                          color: AppColors.blue,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                group.effectiveTitle,
+                                style: AppTypography.titleSmall.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${group.rowCount} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (group.rowCount == 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainerHigh,
+                              borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusFull,
+                              ),
+                            ),
+                            child: Text(
+                              YorksV1BoqStrings.emptyFolders.primary,
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.muted,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        else
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.muted,
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _boqRowsBody() {
+    final worksheet = _worksheet;
+    if (_loadingSource || worksheet == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            key: const ValueKey('mobile-mr-boq-rows'),
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+            children: [
+              Text(
+                worksheet.group.effectiveTitle,
+                style: AppTypography.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_selectedBoqRows.length} ${YorksV1MaterialRequestStrings.selectedItems.primary.toLowerCase()}',
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(height: 14),
+              for (final row in worksheet.rows) ...[
+                YorksMobileCard(
+                  onTap: () => setState(() {
+                    if (_selectedBoqRows.contains(row.id)) {
+                      _selectedBoqRows.remove(row.id);
+                    } else {
+                      _selectedBoqRows.add(row.id);
+                    }
+                  }),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: _selectedBoqRows.contains(row.id),
+                        onChanged: (_) => setState(() {
+                          if (_selectedBoqRows.contains(row.id)) {
+                            _selectedBoqRows.remove(row.id);
+                          } else {
+                            _selectedBoqRows.add(row.id);
+                          }
+                        }),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _boqDisplayValue(
+                                    worksheet,
+                                    row,
+                                    YorksV1BoqCanonicalField.description,
+                                  ).isEmpty
+                                  ? YorksV1MaterialRequestStrings
+                                        .notProvided
+                                        .primary
+                                  : _boqDisplayValue(
+                                      worksheet,
+                                      row,
+                                      YorksV1BoqCanonicalField.description,
+                                    ),
+                              style: AppTypography.titleSmall.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_boqDisplayValue(worksheet, row, YorksV1BoqCanonicalField.quantity)} ${_boqDisplayValue(worksheet, row, YorksV1BoqCanonicalField.unit)}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
+        ),
+        _MobileMrStickyActions(
+          secondaryLabel: YorksV1MaterialRequestStrings.back.primary,
+          onSecondary: () => setState(
+            () => _sourcePage = _MobileMaterialRequestSourcePage.boqFolders,
+          ),
+          primaryLabel: YorksV1MaterialRequestStrings.addFromBoq.primary,
+          primaryIcon: Icons.add_rounded,
+          onPrimary: _selectedBoqRows.isEmpty || _busy
+              ? null
+              : _addSelectedBoqRows,
+        ),
+      ],
+    );
+  }
+
+  Widget _customMaterialBody() => Column(
+    children: [
+      Expanded(
+        child: ListView(
+          key: const ValueKey('mobile-mr-custom-material'),
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+          children: [
+            Text(
+              YorksV1MaterialRequestStrings.unplannedMaterial.primary,
+              style: AppTypography.headlineMedium.copyWith(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              YorksV1MaterialRequestStrings.requestScopeDescription.primary,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+            const SizedBox(height: 14),
+            YorksMobileCard(
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: _customDescription,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      labelText:
+                          YorksV1MaterialRequestStrings.itemDescription.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _customBrand,
+                    decoration: InputDecoration(
+                      labelText:
+                          YorksV1MaterialRequestStrings.brandOrigin.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _customSize,
+                    decoration: InputDecoration(
+                      labelText: YorksV1MaterialRequestStrings.size.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _customModel,
+                    decoration: InputDecoration(
+                      labelText: YorksV1MaterialRequestStrings
+                          .planningModelTag
+                          .primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _customQuantity,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText:
+                                YorksV1MaterialRequestStrings.quantity.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _customUnit,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText:
+                                YorksV1MaterialRequestStrings.unit.primary,
+                          ),
+                          items: [
+                            for (final unit in _mrUnitOptions)
+                              DropdownMenuItem(value: unit, child: Text(unit)),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (value) => setState(
+                                  () => _customUnit = value ?? _customUnit,
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      _MobileMrStickyActions(
+        secondaryLabel: YorksV1MaterialRequestStrings.back.primary,
+        onSecondary: () =>
+            setState(() => _sourcePage = _MobileMaterialRequestSourcePage.none),
+        primaryLabel: YorksV1MaterialRequestStrings.addCustomItem.primary,
+        primaryIcon: Icons.add_rounded,
+        onPrimary: _busy ? null : _addCustomMaterial,
+      ),
+    ],
+  );
+
+  Widget _successPage(
+    BuildContext context,
+    YorksV1MaterialRequest request,
+  ) => ColoredBox(
+    color: AppColors.mobileSurface,
+    child: Column(
+      children: [
+        YorksMobileAppBar(
+          title: YorksV1MaterialRequestStrings.submitted.primary,
+          leading: YorksMobileIconButton(
+            icon: Icons.close_rounded,
+            tooltip: YorksV1MaterialRequestStrings.backToRequests.primary,
+            onPressed: () => context.go(RoutePaths.yorksV1MaterialRequests),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: YorksMobileCard(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 28,
+                    horizontal: 8,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DecoratedBox(
+                        decoration: const BoxDecoration(
+                          color: AppColors.successContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const SizedBox.square(
+                          dimension: 64,
+                          child: Icon(
+                            Icons.check_rounded,
+                            color: AppColors.success,
+                            size: 34,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        YorksV1MaterialRequestStrings.submitted.primary,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.headlineSmall.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        YorksV1MaterialRequestStrings.serverConfirmed.primary,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        request.requestNumber ??
+                            YorksV1MaterialRequestStrings
+                                .assignedOnSubmit
+                                .primary,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.blue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        _MobileMrStickyActions(
+          secondaryLabel: YorksV1MaterialRequestStrings.backToRequests.primary,
+          onSecondary: () => context.go(RoutePaths.yorksV1MaterialRequests),
+          primaryLabel: YorksV1MaterialRequestStrings.viewRequest.primary,
+          primaryIcon: Icons.arrow_forward_rounded,
+          onPrimary: () =>
+              context.go(RoutePaths.yorksV1MaterialRequestPath(request.id)),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _continueToMaterials() async {
+    if (_draft.projectId == null || _draft.scopeId == null) {
+      _snack(context, YorksV1MaterialRequestStrings.missingRequired.primary);
+      return;
+    }
+    setState(() => _step = _MobileMaterialRequestDraftStep.materials);
+  }
+
+  Future<void> _changeProject(String? projectId) async {
+    final requiresConfirmation =
+        _draft.lines.isNotEmpty && projectId != _draft.projectId;
+    if (requiresConfirmation &&
+        !await _confirmDiscard(
+          YorksV1MaterialRequestStrings.changeProject.primary,
+          YorksV1MaterialRequestStrings.changeProjectDiscardLines.primary
+              .replaceFirst('{count}', _draft.lines.length.toString()),
+        )) {
+      return;
+    }
+    await widget.controller.setProject(
+      projectId,
+      discardExistingLines: requiresConfirmation,
+    );
+  }
+
+  Future<void> _changeScope(String? scopeId) async {
+    final boqRows = _draft.lines
+        .where((line) => line.source == YorksV1MaterialRequestLineSource.boq)
+        .length;
+    final requiresConfirmation = scopeId != _draft.scopeId && boqRows > 0;
+    if (requiresConfirmation &&
+        !await _confirmDiscard(
+          YorksV1MaterialRequestStrings.changeScope.primary,
+          YorksV1MaterialRequestStrings.changeScopeDiscardBoqRows.primary
+              .replaceFirst('{count}', boqRows.toString()),
+        )) {
+      return;
+    }
+    await widget.controller.setScope(
+      scopeId,
+      discardIncompatibleBoqRows: requiresConfirmation,
+    );
+  }
+
+  Future<bool> _confirmDiscard(String title, String message) async =>
+      await showDialog<bool>(
+        context: context,
+        animationStyle: AnimationStyle.noAnimation,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(YorksV1MaterialRequestStrings.cancel.primary),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(title),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<void> _pickScheduledDate() async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+      initialDate: _draft.scheduledDate ?? now,
+    );
+    if (selected != null) await widget.controller.setScheduledDate(selected);
+  }
+
+  Future<void> _openBoqFolders() async {
+    if (_draft.projectId == null || _draft.scopeId == null) {
+      _snack(
+        context,
+        YorksV1MaterialRequestStrings.selectScopeToAddBoq.primary,
+      );
+      return;
+    }
+    setState(() {
+      _loadingSource = true;
+      _sourcePage = _MobileMaterialRequestSourcePage.boqFolders;
+    });
+    try {
+      final groups = await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .listGroupsForScope(_draft.projectId!, scopeId: _draft.scopeId!);
+      if (mounted) {
+        setState(() => _groups = groups);
+      }
+    } catch (_) {
+      if (mounted) {
+        _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingSource = false);
+      }
+    }
+  }
+
+  Future<void> _openWorksheet(YorksV1BoqGroup group) async {
+    setState(() => _loadingSource = true);
+    try {
+      final worksheet = await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .getWorksheet(group.id);
+      if (!mounted) return;
+      final existing = _draft.lines
+          .map((line) => line.sourceBoqRowId)
+          .whereType<String>();
+      setState(() {
+        _worksheet = worksheet;
+        _selectedBoqRows
+          ..clear()
+          ..addAll(
+            existing.where((id) => worksheet.rows.any((row) => row.id == id)),
+          );
+        _sourcePage = _MobileMaterialRequestSourcePage.boqRows;
+      });
+    } catch (_) {
+      if (mounted) {
+        _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingSource = false);
+      }
+    }
+  }
+
+  Future<void> _addSelectedBoqRows() async {
+    final worksheet = _worksheet;
+    if (worksheet == null) return;
+    try {
+      await widget.controller.addBoqRows(
+        worksheet: worksheet,
+        rowIds: _selectedBoqRows,
+      );
+      if (!mounted) return;
+      setState(() {
+        _sourcePage = _MobileMaterialRequestSourcePage.none;
+        _selectedBoqRows.clear();
+      });
+      _snack(context, YorksV1MaterialRequestStrings.itemAdded.primary);
+    } on YorksV1DomainException {
+      if (mounted) {
+        _snack(
+          context,
+          YorksV1MaterialRequestStrings.selectScopeToAddBoq.primary,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      }
+    }
+  }
+
+  Future<void> _addCustomMaterial() async {
+    if (_customDescription.text.trim().isEmpty ||
+        _customQuantity.text.trim().isEmpty) {
+      _snack(context, YorksV1MaterialRequestStrings.missingRequired.primary);
+      return;
+    }
+    await widget.controller.addCustomLine();
+    final line = widget.controller.currentDraft.lines.lastOrNull;
+    if (line == null) return;
+    await widget.controller.updateLine(
+      line.id,
+      (current) => current.copyWith(
+        description: _customDescription.text,
+        brandOrigin: _customBrand.text.trim().isEmpty
+            ? null
+            : _customBrand.text,
+        size: _customSize.text.trim().isEmpty ? null : _customSize.text,
+        model: _customModel.text.trim().isEmpty ? null : _customModel.text,
+        quantity: _customQuantity.text,
+        unit: _customUnit,
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _sourcePage = _MobileMaterialRequestSourcePage.none;
+      _customDescription.clear();
+      _customBrand.clear();
+      _customSize.clear();
+      _customModel.clear();
+      _customQuantity.text = '1';
+      _customUnit = 'Nos';
+    });
+    _snack(context, YorksV1MaterialRequestStrings.itemAdded.primary);
+  }
+
+  Future<void> _submit() async {
+    final submitted = await widget.onSubmit();
+    if (submitted != null && mounted) setState(() => _submitted = submitted);
+  }
+
+  void _back() {
+    if (_sourcePage == _MobileMaterialRequestSourcePage.boqRows) {
+      setState(() => _sourcePage = _MobileMaterialRequestSourcePage.boqFolders);
+      return;
+    }
+    if (_sourcePage != _MobileMaterialRequestSourcePage.none) {
+      setState(() => _sourcePage = _MobileMaterialRequestSourcePage.none);
+      return;
+    }
+    if (_step == _MobileMaterialRequestDraftStep.review) {
+      setState(() => _step = _MobileMaterialRequestDraftStep.materials);
+      return;
+    }
+    if (_step == _MobileMaterialRequestDraftStep.materials) {
+      setState(() => _step = _MobileMaterialRequestDraftStep.information);
+      return;
+    }
+    context.pop();
+  }
+}
+
+class _MobileMrProgress extends StatelessWidget {
+  const _MobileMrProgress({required this.step});
+
+  final _MobileMaterialRequestDraftStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = [
+      YorksV1MaterialRequestStrings.requestInformation,
+      YorksV1MaterialRequestStrings.materialItems,
+      YorksV1MaterialRequestStrings.review,
+    ];
+    return Row(
+      children: [
+        for (var index = 0; index < labels.length; index++) ...[
+          Expanded(
+            child: Column(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: index <= step.index
+                        ? AppColors.blue
+                        : AppColors.surfaceContainerHigh,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: index < step.index
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: AppColors.onPrimary,
+                        )
+                      : Text(
+                          '${index + 1}',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: index <= step.index
+                                ? AppColors.onPrimary
+                                : AppColors.muted,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  labels[index].primary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: index == step.index
+                        ? AppColors.blue
+                        : AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (index + 1 < labels.length)
+            Expanded(
+              child: Container(
+                height: 1,
+                margin: const EdgeInsets.only(bottom: 22),
+                color: index < step.index ? AppColors.blue : AppColors.line,
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MobileMrStickyActions extends StatelessWidget {
+  const _MobileMrStickyActions({
+    required this.primaryLabel,
+    required this.primaryIcon,
+    required this.onPrimary,
+    this.secondaryLabel,
+    this.onSecondary,
+    this.loading = false,
+  });
+
+  final String primaryLabel;
+  final IconData primaryIcon;
+  final VoidCallback? onPrimary;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border(top: BorderSide(color: AppColors.line)),
+      ),
+      child: Row(
+        children: [
+          if (secondaryLabel != null) ...[
+            Expanded(
+              child: OutlinedButton(
+                key: const ValueKey('mobile-mr-secondary-action'),
+                onPressed: onSecondary,
+                child: Text(secondaryLabel!),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            flex: secondaryLabel == null ? 1 : 2,
+            child: FilledButton.icon(
+              key: const ValueKey('mobile-mr-primary-action'),
+              onPressed: onPrimary,
+              icon: loading
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.onPrimary,
+                      ),
+                    )
+                  : Icon(primaryIcon),
+              label: Text(primaryLabel),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _MobileMrSourceAction extends StatelessWidget {
+  const _MobileMrSourceAction({
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    onTap: onTap,
+    child: Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.blueContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: SizedBox.square(
+            dimension: 38,
+            child: Icon(icon, size: 20, color: AppColors.blue),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: AppTypography.titleSmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+      ],
+    ),
+  );
+}
+
+class _MobileMrDraftLineCard extends StatelessWidget {
+  const _MobileMrDraftLineCard({
+    required this.line,
+    required this.enabled,
+    required this.onRemove,
+  });
+
+  final YorksV1MaterialRequestLine line;
+  final bool enabled;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) => YorksMobileCard(
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '${line.displayOrder}',
+            style: AppTypography.labelMedium.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                line.description.isEmpty
+                    ? YorksV1MaterialRequestStrings.notProvided.primary
+                    : line.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleSmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${yorksV1DisplayQuantity(line.quantity)} ${line.unit}${line.brandOrigin?.trim().isNotEmpty == true ? ' · ${line.brandOrigin}' : ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+        SizedBox.square(
+          dimension: AppSpacing.minTapTarget,
+          child: IconButton(
+            tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+            onPressed: enabled ? onRemove : null,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: AppColors.error,
+              size: 20,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileMrFact extends StatelessWidget {
+  const _MobileMrFact({
+    required this.label,
+    required this.value,
+    this.last = false,
+  });
+
+  final String label;
+  final String value;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: last ? 0 : 10),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.muted,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+        ),
+        if (!last)
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Divider(height: 1, color: AppColors.line),
+          ),
+      ],
+    ),
+  );
+}
+
+class _MobileMrNotice extends StatelessWidget {
+  const _MobileMrNotice({
+    required this.icon,
+    required this.text,
+    this.error = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: error ? AppColors.errorContainer : AppColors.blueContainer,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: error ? AppColors.errorContainer : AppColors.blueContainerStrong,
+      ),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: error ? AppColors.error : AppColors.blue),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            text,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.inkSecondary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Display-only preview matching the R35 prototype. The server assigns the
@@ -2875,6 +4813,38 @@ class _RequestDetailBody extends ConsumerWidget {
         onGenerateDeliveryOrder,
       null => null,
     };
+    final approvalActions =
+        arrangementWorkspace?.canDecide == true &&
+            arrangementForApproval != null
+        ? _RequestArrangementApprovalActions(
+            workspace: arrangementWorkspace!,
+            arrangement: arrangementForApproval,
+          )
+        : null;
+    if (YorksMobileUi.isActive(context)) {
+      return _MobileMaterialRequestLifecycle(
+        request: request,
+        primaryAction: primaryAction,
+        onPrimaryAction: onPrimaryAction,
+        onRefresh: onRefresh,
+        approvalActions: approvalActions,
+        onCancel: canCancel ? () => _cancel(context, ref, request) : null,
+        onOpenLogistics: canOpenLogistics
+            ? () => context.push(
+                RoutePaths.yorksV1MaterialRequestLogisticsPath(request.id),
+              )
+            : null,
+        onOpenDocuments: documentsEnabled
+            ? () => context.push(
+                RoutePaths.yorksV1ProjectDocumentsPath(
+                  request.projectId,
+                  entityType: 'material_request',
+                  entityId: request.id,
+                ),
+              )
+            : null,
+      );
+    }
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
@@ -2921,14 +4891,7 @@ class _RequestDetailBody extends ConsumerWidget {
                       : () => documentService.printDocumentPdf(
                           documentModel.valueOrNull!,
                         ),
-                  approvalActions:
-                      arrangementWorkspace?.canDecide == true &&
-                          arrangementForApproval != null
-                      ? _RequestArrangementApprovalActions(
-                          workspace: arrangementWorkspace!,
-                          arrangement: arrangementForApproval,
-                        )
-                      : null,
+                  approvalActions: approvalActions,
                   onCancel: canCancel
                       ? () => _cancel(context, ref, request)
                       : null,
@@ -3272,6 +5235,401 @@ class _RequestDetailBody extends ConsumerWidget {
         _snack(context, YorksV1DocumentStrings.uploadFailed.primary);
       }
     }
+  }
+}
+
+/// Compact lifecycle surface for a committed request.  It intentionally uses
+/// only the role-safe request projection and the already-resolved existing
+/// command callbacks supplied by [_RequestDetailBody].
+class _MobileMaterialRequestLifecycle extends StatelessWidget {
+  const _MobileMaterialRequestLifecycle({
+    required this.request,
+    required this.primaryAction,
+    required this.onPrimaryAction,
+    required this.onRefresh,
+    required this.approvalActions,
+    required this.onCancel,
+    required this.onOpenLogistics,
+    required this.onOpenDocuments,
+  });
+
+  final YorksV1MaterialRequest request;
+  final YorksV1MaterialRequestDetailPrimaryAction? primaryAction;
+  final VoidCallback? onPrimaryAction;
+  final VoidCallback onRefresh;
+  final Widget? approvalActions;
+  final VoidCallback? onCancel;
+  final VoidCallback? onOpenLogistics;
+  final VoidCallback? onOpenDocuments;
+
+  @override
+  Widget build(BuildContext context) {
+    final title =
+        request.requestNumber ??
+        YorksV1MaterialRequestStrings.materialRequest.primary;
+    final requestTitle = request.title?.trim();
+    final displayedTitle = requestTitle == null || requestTitle.isEmpty
+        ? title
+        : '$title · $requestTitle';
+    final (actionLabel, actionIcon) = _primaryActionCopy(primaryAction);
+    return Scaffold(
+      backgroundColor: AppColors.mobileSurface,
+      body: ColoredBox(
+        color: AppColors.mobileSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            YorksMobileAppBar(
+              title: title,
+              leading: YorksMobileIconButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.canPop()
+                    ? context.pop()
+                    : context.go(RoutePaths.yorksV1MaterialRequests),
+              ),
+              trailing: YorksMobileIconButton(
+                icon: Icons.refresh_rounded,
+                tooltip: YorksV1MaterialRequestStrings.refresh.primary,
+                onPressed: onRefresh,
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                key: const ValueKey('mobile-mr-lifecycle'),
+                padding: const EdgeInsets.fromLTRB(14, 16, 14, 104),
+                children: [
+                  Text(
+                    request.projectReference.toUpperCase(),
+                    style: AppTypography.eyebrow.copyWith(
+                      color: AppColors.blue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    displayedTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${request.scopeName} · ${request.requesterDisplayName ?? YorksV1MaterialRequestStrings.requester.primary}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  YorksMobileCard(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                YorksV1MaterialRequestStrings
+                                    .requestStatus
+                                    .primary,
+                                style: AppTypography.labelMedium.copyWith(
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                yorksV1MaterialRequestStateCopy(
+                                  request.state,
+                                ).primary,
+                                style: AppTypography.titleMedium.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _MobileRequestStateChip(request: request),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  YorksMobileSectionHeader(
+                    title:
+                        YorksV1MaterialRequestStrings.workflowTimeline.primary,
+                    subtitle: YorksV1MaterialRequestStrings
+                        .requestStatusDescription
+                        .primary,
+                  ),
+                  const SizedBox(height: 10),
+                  _MobileMrLifecycleTimeline(request: request),
+                  const SizedBox(height: 14),
+                  YorksMobileCard(
+                    child: Column(
+                      children: [
+                        _MobileMrFact(
+                          label: YorksV1MaterialRequestStrings
+                              .currentOwner
+                              .primary,
+                          value: _mobileOwner(request),
+                        ),
+                        _MobileMrFact(
+                          label:
+                              YorksV1MaterialRequestStrings.nextAction.primary,
+                          value: _mobileNextAction(request),
+                        ),
+                        _MobileMrFact(
+                          label: YorksV1MaterialRequestStrings.items.primary,
+                          value: request.lines.length.toString(),
+                          last: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  YorksMobileSectionHeader(
+                    title: YorksV1MaterialRequestStrings.recentActivity.primary,
+                  ),
+                  const SizedBox(height: 10),
+                  YorksMobileCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          yorksV1MaterialRequestStateCopy(
+                            request.state,
+                          ).primary,
+                          style: AppTypography.titleSmall.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          MaterialLocalizations.of(
+                            context,
+                          ).formatMediumDate(request.updatedAt.toLocal()),
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (approvalActions != null) ...[
+                    const SizedBox(height: 14),
+                    approvalActions!,
+                  ],
+                  if (onOpenLogistics != null ||
+                      onOpenDocuments != null ||
+                      onCancel != null) ...[
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (onOpenLogistics != null)
+                          OutlinedButton.icon(
+                            onPressed: onOpenLogistics,
+                            icon: const Icon(
+                              Icons.local_shipping_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              YorksV1LogisticsStrings
+                                  .dispatchAndReceipt
+                                  .primary,
+                            ),
+                          ),
+                        if (onOpenDocuments != null)
+                          OutlinedButton.icon(
+                            onPressed: onOpenDocuments,
+                            icon: const Icon(
+                              Icons.folder_open_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              YorksV1DocumentStrings.documents.primary,
+                            ),
+                          ),
+                        if (onCancel != null)
+                          OutlinedButton.icon(
+                            onPressed: onCancel,
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.error,
+                            ),
+                            label: Text(
+                              YorksV1MaterialRequestStrings
+                                  .cancelRequest
+                                  .primary,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (actionLabel != null && onPrimaryAction != null)
+              _MobileMrStickyActions(
+                primaryLabel: actionLabel,
+                primaryIcon: actionIcon!,
+                onPrimary: onPrimaryAction,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  (String?, IconData?) _primaryActionCopy(
+    YorksV1MaterialRequestDetailPrimaryAction? action,
+  ) => switch (action) {
+    YorksV1MaterialRequestDetailPrimaryAction.arrange => (
+      YorksV1MaterialRequestStrings.arrangeItems.primary,
+      Icons.inventory_2_outlined,
+    ),
+    YorksV1MaterialRequestDetailPrimaryAction.dispatch => (
+      YorksV1LogisticsStrings.dispatchApprovedItems.primary,
+      Icons.local_shipping_outlined,
+    ),
+    YorksV1MaterialRequestDetailPrimaryAction.receiptReview => (
+      YorksV1LogisticsStrings.reviewAndMarkReceived.primary,
+      Icons.fact_check_outlined,
+    ),
+    YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder => (
+      YorksV1LogisticsStrings.generateDeliveryOrder.primary,
+      Icons.receipt_long_outlined,
+    ),
+    null => (null, null),
+  };
+
+  String _mobileOwner(YorksV1MaterialRequest value) {
+    final raw = value.currentActionOwnerRole?.trim();
+    if (raw == null || raw.isEmpty) {
+      return YorksV1MaterialRequestStrings.notProvided.primary;
+    }
+    return _displayWorkflowRole(raw, AppLanguage.english);
+  }
+
+  String _mobileNextAction(YorksV1MaterialRequest value) =>
+      switch (value.state) {
+        YorksV1MaterialRequestState.submitted ||
+        YorksV1MaterialRequestState.arranging =>
+          YorksV1MaterialRequestStrings.procurementArranging.primary,
+        YorksV1MaterialRequestState.awaitingApproval =>
+          YorksV1MaterialRequestStrings.waitingForApproval.primary,
+        YorksV1MaterialRequestState.approved =>
+          YorksV1MaterialRequestStrings.readyForDispatch.primary,
+        YorksV1MaterialRequestState.partiallyDispatched ||
+        YorksV1MaterialRequestState.dispatched =>
+          YorksV1MaterialRequestStrings.awaitingReceipt.primary,
+        YorksV1MaterialRequestState.partiallyReceived ||
+        YorksV1MaterialRequestState.received ||
+        YorksV1MaterialRequestState.closed =>
+          YorksV1MaterialRequestStrings.receiptCompleted.primary,
+        YorksV1MaterialRequestState.draft =>
+          YorksV1MaterialRequestStrings.draftPrivate.primary,
+        YorksV1MaterialRequestState.cancelled =>
+          YorksV1MaterialRequestStrings.cancelled.primary,
+      };
+}
+
+class _MobileMrLifecycleTimeline extends StatelessWidget {
+  const _MobileMrLifecycleTimeline({required this.request});
+
+  final YorksV1MaterialRequest request;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeIndex = switch (request.state) {
+      YorksV1MaterialRequestState.draft => 0,
+      YorksV1MaterialRequestState.submitted ||
+      YorksV1MaterialRequestState.arranging => 1,
+      YorksV1MaterialRequestState.awaitingApproval => 2,
+      YorksV1MaterialRequestState.approved ||
+      YorksV1MaterialRequestState.partiallyDispatched ||
+      YorksV1MaterialRequestState.dispatched => 3,
+      YorksV1MaterialRequestState.partiallyReceived ||
+      YorksV1MaterialRequestState.received ||
+      YorksV1MaterialRequestState.closed => 4,
+      YorksV1MaterialRequestState.cancelled => 0,
+    };
+    final labels = [
+      YorksV1MaterialRequestStrings.request.primary,
+      YorksV1MaterialRequestStrings.procurement.primary,
+      YorksV1MaterialRequestStrings.projectEngineer.primary,
+      YorksV1MaterialRequestStrings.dispatch.primary,
+      YorksV1MaterialRequestStrings.received.primary,
+    ];
+    return YorksMobileCard(
+      child: Column(
+        children: [
+          for (var index = 0; index < labels.length; index++) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: index <= activeIndex
+                            ? AppColors.successContainer
+                            : AppColors.surfaceContainerHigh,
+                        shape: BoxShape.circle,
+                      ),
+                      child: index < activeIndex
+                          ? const Icon(
+                              Icons.check_rounded,
+                              size: 16,
+                              color: AppColors.success,
+                            )
+                          : Text(
+                              '${index + 1}',
+                              style: AppTypography.labelSmall.copyWith(
+                                color: index == activeIndex
+                                    ? AppColors.blue
+                                    : AppColors.muted,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                    ),
+                    if (index + 1 < labels.length)
+                      Container(
+                        width: 1,
+                        height: 21,
+                        color: index < activeIndex
+                            ? AppColors.success
+                            : AppColors.line,
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 11),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    labels[index],
+                    style: AppTypography.labelLarge.copyWith(
+                      color: index == activeIndex
+                          ? AppColors.ink
+                          : AppColors.muted,
+                      fontWeight: index == activeIndex ? FontWeight.w800 : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

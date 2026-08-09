@@ -162,17 +162,18 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     );
   }
 
-  /// Project records and their BOQ/document children have record-specific
-  /// titles that only the feature projection can supply. Those screens own the
-  /// compact app bar on mobile; the shared shell continues to own navigation
-  /// and every top-level workspace header.
+  /// Record-oriented Project and Material Request screens have titles and
+  /// actions that only their own controller-backed projections can supply.
+  /// They own the compact phone header while the shell retains its bottom
+  /// navigation. This avoids stacking a generic workspace toolbar above a
+  /// focused record toolbar on the native mobile breakpoint.
   bool _featureOwnsMobileTopBar(String location) {
     final segments = Uri(path: location).pathSegments;
-    if (segments.length < 3 ||
-        segments[0] != 'yorks' ||
-        segments[1] != 'projects') {
+    if (segments.length < 2 || segments[0] != 'yorks') {
       return false;
     }
+    if (segments[1] == 'material-requests') return true;
+    if (segments[1] != 'projects' || segments.length < 3) return false;
     return segments.last != 'edit';
   }
 

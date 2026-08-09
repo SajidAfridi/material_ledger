@@ -13,7 +13,9 @@ implemented and authorized.
 
 Batch 1 verification commit: `3bb8d3b7259347fa07eefca16dc110d6d5a8cc76`
 (`3bb8d3b`). Batch 2 evidence is tracked under
-[`evidence/mobile-batch-02/`](evidence/mobile-batch-02/README.md).
+[`evidence/mobile-batch-02/`](evidence/mobile-batch-02/README.md). Batch 3
+evidence is tracked under
+[`evidence/mobile-batch-03/`](evidence/mobile-batch-03/README.md).
 
 | Ref | Screen | Domain | Delivery slice | State | Evidence / production note |
 |---:|---|---|---|---|---|
@@ -38,13 +40,13 @@ Batch 1 verification commit: `3bb8d3b7259347fa07eefca16dc110d6d5a8cc76`
 | 19 | Excel Import — Upload | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/19_excel_import_upload/deltas.md); local reversible selection, no server mutation |
 | 20 | Excel Import — Map Columns | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/20_excel_import_map/deltas.md); arbitrary mappings preserved and protected costs classified |
 | 21 | Excel Import — Review | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/21_excel_import_review/deltas.md); only final Import invokes the trusted command |
-| 22 | Material Requests | Material Requests | Future | Planned | Status-led register backed by authorized MR data |
-| 23 | New MR — Information | Material Requests | Future | Planned | Scope-first private draft; timing validation stays production-driven |
-| 24 | MR — Add from BOQ | Material Requests | Future | Planned | Same-scope BOQ selection only; Overview is never a source |
-| 25 | MR — Custom Material | Material Requests | Future | Planned | Explicit unplanned item; must not mutate BOQ silently |
-| 26 | MR — Review & Submit | Material Requests | Future | Planned | Explicit online submission and server confirmation |
-| 27 | MR Submitted | Material Requests | Future | Planned | Never show success before the committed response |
-| 28 | MR Detail Lifecycle | Material Requests | Future | Planned | Truthful state, owner, next action and audit only |
+| 22 | Material Requests | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/22_material_request_register/deltas.md); authorized status-led register and create capability |
+| 23 | New MR — Information | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/23_mr_information/deltas.md); scope-first private draft and production timing validation |
+| 24 | MR — Add from BOQ | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/24_mr_add_from_boq/deltas.md); selected real scope only; Overview is never a source |
+| 25 | MR — Custom Material | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/25_mr_custom_material/deltas.md); controller-backed unplanned item never mutates BOQ |
+| 26 | MR — Review & Submit | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/26_mr_review_submit/deltas.md); explicit confirmation and connected server submit |
+| 27 | MR Submitted | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/27_mr_submitted_success/deltas.md); success only after committed response |
+| 28 | MR Detail Lifecycle | Material Requests | Batch 3 | Verified | [Evidence](evidence/mobile-batch-03/28_mr_detail_lifecycle/deltas.md); truthful state, owner and fail-closed action |
 | 29 | Procurement Arrangement | Procurement | Future | Planned | Procurement/Admin production authority and exception-aware lines |
 | 30 | Arrangement Line Detail | Procurement | Future | Planned | Full/Partial/Cannot Provide fields follow current decision semantics |
 | 31 | Arrangement Review | Procurement | Future | Planned | Complete version/reservation command remains atomic |

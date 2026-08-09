@@ -209,6 +209,9 @@ Use deterministic fixture state and the exact same viewport for both sides.
 Do not say “pixel perfect”, “parity” or “verified” without this evidence. The
 directory and naming convention for Batch 2 is documented in
 [`evidence/mobile-batch-02/README.md`](evidence/mobile-batch-02/README.md).
+The same contract, including explicit Flutter-Before absence where no matching
+fixture was captured, is applied by
+[`evidence/mobile-batch-03/README.md`](evidence/mobile-batch-03/README.md).
 
 ## 9. Test and release gate
 
