@@ -770,7 +770,9 @@ GoRouter createAppRouter({
         GoRoute(
           path: RoutePaths.engineerProfile,
           pageBuilder: (context, state) =>
-              _framed(state.pageKey, const EngineerProfileScreen()),
+              yorksV1ProjectsEnabled && yorksV1Role != null
+              ? _yorksV1Slide(state.pageKey, const EngineerProfileScreen())
+              : _framed(state.pageKey, const EngineerProfileScreen()),
         ),
       if (!useEngineerShell)
         GoRoute(

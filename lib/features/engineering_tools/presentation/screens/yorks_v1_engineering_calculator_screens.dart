@@ -4,10 +4,12 @@ import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/yorks_v1_engineering_tools.dart';
@@ -17,6 +19,22 @@ import '../../../../shared/services/yorks_v1_engineering_calculator_service.dart
 const _ductPrefsKey = 'yorks_r35_duct_calculation';
 const _espPrefsKey = 'yorks_r35_esp_calculation';
 const _jsonMime = 'application/json';
+
+/// A calculator can be reached through a pushed record route or directly from
+/// a saved deep link. A root deep link therefore falls back to the mobile More
+/// hub instead of leaving the phone back affordance inert.
+void _leaveMobileEngineeringTool(BuildContext context) {
+  final router = GoRouter.maybeOf(context);
+  if (router?.canPop() ?? false) {
+    router!.pop();
+    return;
+  }
+  if (Navigator.of(context).canPop()) {
+    Navigator.of(context).pop();
+    return;
+  }
+  router?.go(RoutePaths.yorksV1MobileMore);
+}
 
 class YorksV1DuctSizerScreen extends ConsumerStatefulWidget {
   const YorksV1DuctSizerScreen({super.key});
@@ -230,7 +248,7 @@ class _YorksV1DuctSizerScreenState
           leading: YorksMobileIconButton(
             icon: Icons.arrow_back_rounded,
             tooltip: 'Back',
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: () => _leaveMobileEngineeringTool(context),
           ),
           trailing: PopupMenuButton<String>(
             tooltip: 'Calculation actions',
@@ -1014,7 +1032,7 @@ class _YorksV1EspCalculatorScreenState
         leading: YorksMobileIconButton(
           icon: Icons.arrow_back_rounded,
           tooltip: 'Back',
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () => _leaveMobileEngineeringTool(context),
         ),
         trailing: PopupMenuButton<String>(
           tooltip: 'Calculation actions',

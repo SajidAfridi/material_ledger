@@ -228,7 +228,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(YorksV1ShellStrings.secureAccess.primary.toUpperCase()),
+        find.text(
+          size.width <= 720
+              ? AppStrings.signIn.primary
+              : YorksV1ShellStrings.secureAccess.primary.toUpperCase(),
+        ),
         findsOneWidget,
       );
       expect(

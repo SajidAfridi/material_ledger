@@ -356,42 +356,43 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: YorksMobilePill(
-                label: YorksV1MaterialRequestStrings.all.primary,
-                selected: filter == _MobileMaterialRequestFilter.all,
-                onTap: () => onFilterChanged(_MobileMaterialRequestFilter.all),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: YorksMobilePill(
-                label: YorksV1MaterialRequestStrings.draft.primary,
-                selected: filter == _MobileMaterialRequestFilter.draft,
-                onTap: () =>
-                    onFilterChanged(_MobileMaterialRequestFilter.draft),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: YorksMobilePill(
-                label: YorksV1MaterialRequestStrings.submitted.primary,
-                selected: filter == _MobileMaterialRequestFilter.submitted,
-                onTap: () =>
-                    onFilterChanged(_MobileMaterialRequestFilter.submitted),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
         SizedBox(
-          width: 118,
-          child: YorksMobilePill(
-            label: YorksV1MaterialRequestStrings.approved.primary,
-            selected: filter == _MobileMaterialRequestFilter.approved,
-            onTap: () => onFilterChanged(_MobileMaterialRequestFilter.approved),
+          height: AppSpacing.minTapTarget,
+          child: SingleChildScrollView(
+            key: const ValueKey('mobile-material-request-filter-rail'),
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(right: 14),
+            child: Row(
+              children: [
+                _MobileMaterialRequestFilterTab(
+                  label: YorksV1MaterialRequestStrings.all.primary,
+                  selected: filter == _MobileMaterialRequestFilter.all,
+                  onTap: () =>
+                      onFilterChanged(_MobileMaterialRequestFilter.all),
+                ),
+                const SizedBox(width: 8),
+                _MobileMaterialRequestFilterTab(
+                  label: YorksV1MaterialRequestStrings.draft.primary,
+                  selected: filter == _MobileMaterialRequestFilter.draft,
+                  onTap: () =>
+                      onFilterChanged(_MobileMaterialRequestFilter.draft),
+                ),
+                const SizedBox(width: 8),
+                _MobileMaterialRequestFilterTab(
+                  label: YorksV1MaterialRequestStrings.submitted.primary,
+                  selected: filter == _MobileMaterialRequestFilter.submitted,
+                  onTap: () =>
+                      onFilterChanged(_MobileMaterialRequestFilter.submitted),
+                ),
+                const SizedBox(width: 8),
+                _MobileMaterialRequestFilterTab(
+                  label: YorksV1MaterialRequestStrings.approved.primary,
+                  selected: filter == _MobileMaterialRequestFilter.approved,
+                  onTap: () =>
+                      onFilterChanged(_MobileMaterialRequestFilter.approved),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 14),
@@ -426,6 +427,28 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
           request.state == YorksV1MaterialRequestState.received ||
           request.state == YorksV1MaterialRequestState.closed,
   };
+}
+
+/// A single, scrollable rail keeps every request state reachable on narrow
+/// phones instead of detaching a filter into a second row.
+class _MobileMaterialRequestFilterTab extends StatelessWidget {
+  const _MobileMaterialRequestFilterTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: label,
+    child: YorksMobilePill(label: label, selected: selected, onTap: onTap),
+  );
 }
 
 class _MobileMaterialRequestCard extends StatelessWidget {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,6 +12,11 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+
+const _displayVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '1.0.0',
+);
 
 /// Secure Yorks authentication in the approved R35 access composition.
 ///
@@ -34,6 +40,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Color(0xFF000E26),
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -131,6 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final phone = YorksMobileUi.isActive(context);
     final desktop = MediaQuery.sizeOf(context).width > 900;
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -144,7 +164,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ],
             )
-          : _AuthMobileLayout(owner: this, language: language),
+          : phone
+          ? _AuthPhoneLayout(owner: this, language: language)
+          : _AuthTabletLayout(owner: this, language: language),
     );
   }
 }
@@ -343,8 +365,78 @@ class _AuthFormPanel extends StatelessWidget {
   );
 }
 
-class _AuthMobileLayout extends StatelessWidget {
-  const _AuthMobileLayout({required this.owner, required this.language});
+class _AuthPhoneLayout extends StatelessWidget {
+  const _AuthPhoneLayout({required this.owner, required this.language});
+
+  final _LoginScreenState owner;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF041E42), Color(0xFF00183A), Color(0xFF000E26)],
+        stops: [0, .54, 1],
+      ),
+    ),
+    child: SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            28,
+            constraints.maxHeight < 760 ? 40 : 72,
+            28,
+            20 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Column(
+            children: [
+              const BrandLogo(size: 92, shadow: true),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    YorksV1ShellStrings.companyName.primary,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.headlineMedium.copyWith(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      height: 1.18,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                YorksV1ShellStrings.companyLegalNameCompact.primary,
+                textAlign: TextAlign.center,
+                style: AppTypography.bodyLarge.copyWith(
+                  color: Colors.white.withValues(alpha: .72),
+                  fontSize: 16,
+                  height: 1.52,
+                ),
+              ),
+              const SizedBox(height: 0),
+              _AuthForm(owner: owner, language: language, mobile: true),
+              SizedBox(height: constraints.maxHeight < 760 ? 85 : 143),
+              const _MobileAuthFooter(),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Keeps the established intermediate 721–900px composition intact. The new
+/// immersive access UI is deliberately limited to the phone breakpoint.
+class _AuthTabletLayout extends StatelessWidget {
+  const _AuthTabletLayout({required this.owner, required this.language});
 
   final _LoginScreenState owner;
   final AppLanguage language;
@@ -397,6 +489,45 @@ class _AuthMobileLayout extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+class _MobileAuthFooter extends StatelessWidget {
+  const _MobileAuthFooter();
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Text(
+        YorksV1ShellStrings.byContinuingYouAgreeToOur.primary,
+        textAlign: TextAlign.center,
+        style: AppTypography.bodyMedium.copyWith(
+          color: Colors.white.withValues(alpha: .58),
+          fontSize: 13,
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        '${AppStrings.termsOfService.primary} '
+        '${YorksV1ShellStrings.and.primary} '
+        '${AppStrings.privacyPolicy.primary}',
+        textAlign: TextAlign.center,
+        style: AppTypography.bodyMedium.copyWith(
+          color: const Color(0xFF478EFF),
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 26),
+      Text(
+        'v$_displayVersion',
+        style: AppTypography.bodyMedium.copyWith(
+          color: Colors.white.withValues(alpha: .58),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
   );
 }
 
@@ -488,10 +619,15 @@ class _AuthCard extends StatelessWidget {
 }
 
 class _AuthForm extends StatelessWidget {
-  const _AuthForm({required this.owner, required this.language});
+  const _AuthForm({
+    required this.owner,
+    required this.language,
+    this.mobile = false,
+  });
 
   final _LoginScreenState owner;
   final AppLanguage language;
+  final bool mobile;
 
   @override
   Widget build(BuildContext context) => Form(
@@ -499,33 +635,52 @@ class _AuthForm extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AuthFieldLabel(label: YorksV1ShellStrings.companyEmail),
-        const SizedBox(height: AppSpacing.sm),
+        _AuthFieldLabel(
+          label: YorksV1ShellStrings.companyEmail,
+          mobile: mobile,
+        ),
+        SizedBox(height: mobile ? 6 : AppSpacing.sm),
         TextFormField(
           controller: owner._emailController,
           focusNode: owner._emailFocusNode,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.ink),
+          style: AppTypography.bodyMedium.copyWith(
+            color: mobile ? Colors.white : AppColors.ink,
+            fontSize: mobile ? 16 : null,
+          ),
+          cursorColor: mobile ? Colors.white : AppColors.blue,
           decoration: _inputDecoration(
             hintText: YorksV1ShellStrings.companyEmailHint.primary,
+            prefixIcon: mobile
+                ? const Icon(Icons.mail_outline_rounded, color: Colors.white)
+                : null,
+            mobile: mobile,
           ),
           onFieldSubmitted: (_) => owner._passwordFocusNode.requestFocus(),
           validator: owner._validateEmail,
         ),
-        const SizedBox(height: AppSpacing.lg),
-        _AuthFieldLabel(label: AppStrings.password),
-        const SizedBox(height: AppSpacing.sm),
+        SizedBox(height: mobile ? 15 : AppSpacing.lg),
+        _AuthFieldLabel(label: AppStrings.password, mobile: mobile),
+        SizedBox(height: mobile ? 6 : AppSpacing.sm),
         TextFormField(
           controller: owner._passwordController,
           focusNode: owner._passwordFocusNode,
           obscureText: owner._obscurePassword,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.password],
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.ink),
+          style: AppTypography.bodyMedium.copyWith(
+            color: mobile ? Colors.white : AppColors.ink,
+            fontSize: mobile ? 16 : null,
+          ),
+          cursorColor: mobile ? Colors.white : AppColors.blue,
           decoration: _inputDecoration(
             hintText: YorksV1ShellStrings.passwordHint.primary,
+            prefixIcon: mobile
+                ? const Icon(Icons.lock_outline_rounded, color: Colors.white)
+                : null,
+            mobile: mobile,
             suffixIcon: IconButton(
               tooltip:
                   (owner._obscurePassword
@@ -538,13 +693,14 @@ class _AuthForm extends StatelessWidget {
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
                 size: 20,
+                color: mobile ? Colors.white : null,
               ),
             ),
           ),
           onFieldSubmitted: (_) => owner._handleLogin(),
           validator: owner._validatePassword,
         ),
-        const SizedBox(height: AppSpacing.sm),
+        SizedBox(height: mobile ? 0 : AppSpacing.sm),
         Row(
           children: [
             SizedBox(
@@ -553,98 +709,186 @@ class _AuthForm extends StatelessWidget {
               child: Checkbox(
                 value: owner._rememberMe,
                 onChanged: (value) => owner._setRememberMe(value ?? false),
+                fillColor: mobile
+                    ? WidgetStateProperty.resolveWith(
+                        (states) => states.contains(WidgetState.selected)
+                            ? const Color(0xFF1677FF)
+                            : Colors.transparent,
+                      )
+                    : null,
+                checkColor: Colors.white,
+                side: mobile
+                    ? BorderSide(color: Colors.white.withValues(alpha: .68))
+                    : null,
               ),
             ),
             Expanded(
               child: Text(
                 AppStrings.rememberMe.primary,
                 style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.muted,
+                  color: mobile
+                      ? Colors.white.withValues(alpha: .9)
+                      : AppColors.muted,
+                  fontSize: mobile ? 13 : null,
+                  fontWeight: mobile ? FontWeight.w600 : null,
                 ),
               ),
             ),
             Text(
               YorksV1ShellStrings.protectedSessionStatus.primary,
-              style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
+              style: AppTypography.labelMedium.copyWith(
+                color: mobile ? const Color(0xFF478EFF) : AppColors.muted,
+                fontSize: mobile ? 13 : null,
+                fontWeight: mobile ? FontWeight.w700 : null,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.sm),
+        SizedBox(height: mobile ? 5 : AppSpacing.sm),
         SizedBox(
-          height: 48,
-          child: FilledButton(
-            onPressed: owner._isLoading ? null : owner._handleLogin,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.navy,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: owner._isLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+          height: mobile ? 52 : 48,
+          child: mobile
+              ? _MobileSignInButton(owner: owner)
+              : FilledButton(
+                  onPressed: owner._isLoading ? null : owner._handleLogin,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.navy,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        AppStrings.signIn.primary,
-                        style: AppTypography.labelLarge.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      const Icon(Icons.arrow_forward_rounded, size: 20),
-                    ],
                   ),
-          ),
+                  child: owner._isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              AppStrings.signIn.primary,
+                              style: AppTypography.labelLarge.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            const Icon(Icons.arrow_forward_rounded, size: 20),
+                          ],
+                        ),
+                ),
         ),
       ],
     ),
   );
 }
 
-InputDecoration _inputDecoration({String? hintText, Widget? suffixIcon}) =>
-    InputDecoration(
-      hintText: hintText,
-      hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.mutedLight),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
+class _MobileSignInButton extends StatelessWidget {
+  const _MobileSignInButton({required this.owner});
+
+  final _LoginScreenState owner;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xFF247DFF), Color(0xFF0E5DEB)],
       ),
-      suffixIcon: suffixIcon,
-      enabledBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: AppColors.line),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x40175FC6),
+          blurRadius: 16,
+          offset: Offset(0, 6),
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: owner._isLoading ? null : owner._handleLogin,
+        borderRadius: BorderRadius.circular(12),
+        child: Center(
+          child: owner._isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  AppStrings.signIn.primary,
+                  style: AppTypography.titleLarge.copyWith(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+        ),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: AppColors.blue, width: 1.5),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: AppColors.error),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-    );
+    ),
+  );
+}
+
+InputDecoration _inputDecoration({
+  String? hintText,
+  Widget? prefixIcon,
+  Widget? suffixIcon,
+  bool mobile = false,
+}) => InputDecoration(
+  hintText: hintText,
+  hintStyle: AppTypography.bodyMedium.copyWith(
+    color: mobile ? Colors.white.withValues(alpha: .72) : AppColors.mutedLight,
+    fontSize: mobile ? 16 : null,
+  ),
+  isDense: mobile,
+  contentPadding: EdgeInsets.symmetric(
+    horizontal: mobile ? 16 : AppSpacing.lg,
+    vertical: mobile ? 12 : AppSpacing.md,
+  ),
+  prefixIcon: prefixIcon,
+  suffixIcon: suffixIcon,
+  enabledBorder: OutlineInputBorder(
+    borderSide: BorderSide(
+      color: mobile ? Colors.white.withValues(alpha: .35) : AppColors.line,
+    ),
+    borderRadius: BorderRadius.circular(mobile ? 12 : AppSpacing.radiusMd),
+  ),
+  focusedBorder: OutlineInputBorder(
+    borderSide: BorderSide(
+      color: mobile ? const Color(0xFF5A9DFF) : AppColors.blue,
+      width: 1.5,
+    ),
+    borderRadius: BorderRadius.circular(mobile ? 12 : AppSpacing.radiusMd),
+  ),
+  errorBorder: OutlineInputBorder(
+    borderSide: const BorderSide(color: AppColors.error),
+    borderRadius: BorderRadius.circular(mobile ? 12 : AppSpacing.radiusMd),
+  ),
+);
 
 class _AuthFieldLabel extends StatelessWidget {
-  const _AuthFieldLabel({required this.label});
+  const _AuthFieldLabel({required this.label, this.mobile = false});
 
   final TranslatableString label;
+  final bool mobile;
 
   @override
   Widget build(BuildContext context) => Text(
     label.primary,
     style: AppTypography.labelLarge.copyWith(
-      color: AppColors.inkSecondary,
-      fontWeight: FontWeight.w700,
+      color: mobile
+          ? Colors.white.withValues(alpha: .78)
+          : AppColors.inkSecondary,
+      fontSize: mobile ? 13 : null,
+      fontWeight: mobile ? FontWeight.w600 : FontWeight.w700,
     ),
   );
 }

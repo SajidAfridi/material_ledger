@@ -51,6 +51,11 @@ void main() {
       find.byType(SplashScreen),
       matchesGoldenFile('goldens/mobile_batch1/splash_390.png'),
     );
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(find.byType(SplashScreen), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('Yorks mobile login — 390×844', (tester) async {
@@ -64,6 +69,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await _settleLogo(tester, find.byType(LoginScreen));
+    expect(find.text('Sign in with SSO'), findsNothing);
     await expectLater(
       find.byType(LoginScreen),
       matchesGoldenFile('goldens/mobile_batch1/login_390.png'),
@@ -154,12 +160,10 @@ void main() {
 }
 
 Future<void> _settleLogo(WidgetTester tester, Finder scope) async {
-  await tester.runAsync(
-    () => precacheImage(
-      const AssetImage('assets/logo.png'),
-      tester.element(scope),
-    ),
-  );
+  await tester.runAsync(() async {
+    final context = tester.element(scope);
+    await precacheImage(const AssetImage('assets/logo.png'), context);
+  });
   await tester.pump();
 }
 

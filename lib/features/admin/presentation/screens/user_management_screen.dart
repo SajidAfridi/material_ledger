@@ -186,6 +186,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final phone = YorksMobileUi.isActive(context);
     final all = ref.watch(usersProvider);
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
@@ -207,7 +208,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.surface,
-      floatingActionButton: MediaQuery.sizeOf(context).width < 820
+      // A nested FAB sits over the workspace navigation on phones. The phone
+      // header owns the same create action so it remains visible without
+      // obscuring a directory row.
+      floatingActionButton: !phone && MediaQuery.sizeOf(context).width < 820
           ? FloatingActionButton.extended(
               onPressed: () => _AddUserSheet.show(context),
               icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -232,6 +236,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   children: [
                     _AdminPageHeader(
                       compact: compact,
+                      phone: phone,
                       onCreate: () => _AddUserSheet.show(context),
                       onRefresh: () async {
                         try {
@@ -290,69 +295,99 @@ enum _AdminManagementTab { users, projectAccess, accessHistory }
 class _AdminPageHeader extends StatelessWidget {
   const _AdminPageHeader({
     required this.compact,
+    required this.phone,
     required this.onCreate,
     required this.onRefresh,
   });
 
   final bool compact;
+  final bool phone;
   final VoidCallback onCreate;
   final VoidCallback onRefresh;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      if (compact)
-        Padding(
-          padding: const EdgeInsets.only(right: AppSpacing.sm),
-          child: IconButton(
-            onPressed: () => context.pop(),
-            icon: const Icon(Icons.arrow_back_rounded),
+  Widget build(BuildContext context) {
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'ADMINISTRATION',
+          style: AppTypography.eyebrow.copyWith(
+            color: AppColors.blue,
+            letterSpacing: 1.5,
           ),
         ),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'ADMINISTRATION',
-              style: AppTypography.eyebrow.copyWith(
-                color: AppColors.blue,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const Gap(AppSpacing.xs),
-            Text(
-              'User Access',
-              style: AppTypography.displaySmall.copyWith(
-                color: AppColors.ink,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1.2,
-              ),
-            ),
-            const Gap(AppSpacing.xs),
-            Text(
-              'Complete control of users, roles, project assignments and recoverable access removal.',
-              style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
-            ),
-          ],
+        const Gap(AppSpacing.xs),
+        Text(
+          'User Access',
+          style: AppTypography.displaySmall.copyWith(
+            color: AppColors.ink,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.2,
+          ),
         ),
-      ),
-      const Gap(AppSpacing.lg),
-      if (!compact)
-        _AdminPrimaryButton(
-          label: 'Create User',
-          icon: Icons.add_rounded,
-          onPressed: onCreate,
-        )
-      else
-        IconButton(
-          tooltip: 'Refresh users',
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh_rounded),
+        const Gap(AppSpacing.xs),
+        Text(
+          'Complete control of users, roles, project assignments and recoverable access removal.',
+          style: AppTypography.bodyLarge.copyWith(color: AppColors.muted),
         ),
-    ],
-  );
+      ],
+    );
+    if (phone) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: heading),
+              YorksMobileIconButton(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Refresh users',
+                onPressed: onRefresh,
+              ),
+            ],
+          ),
+          const Gap(AppSpacing.md),
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Add user'),
+            ),
+          ),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (compact)
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: IconButton(
+              onPressed: () => context.pop(),
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+          ),
+        Expanded(child: heading),
+        const Gap(AppSpacing.lg),
+        if (!compact)
+          _AdminPrimaryButton(
+            label: 'Create User',
+            icon: Icons.add_rounded,
+            onPressed: onCreate,
+          )
+        else
+          IconButton(
+            tooltip: 'Refresh users',
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+      ],
+    );
+  }
 }
 
 class _AdminTabBar extends StatelessWidget {
@@ -362,26 +397,35 @@ class _AdminTabBar extends StatelessWidget {
   final ValueChanged<_AdminManagementTab> onChanged;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: DecoratedBox(
+  Widget build(BuildContext context) {
+    final tabs = [
+      _tab('Users', _AdminManagementTab.users),
+      _tab('Project Access', _AdminManagementTab.projectAccess),
+      _tab('Access History', _AdminManagementTab.accessHistory),
+    ];
+    final control = DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
       child: Padding(
         padding: const EdgeInsets.all(6),
-        child: Wrap(
-          spacing: 4,
-          children: [
-            _tab('Users', _AdminManagementTab.users),
-            _tab('Project Access', _AdminManagementTab.projectAccess),
-            _tab('Access History', _AdminManagementTab.accessHistory),
-          ],
-        ),
+        child: YorksMobileUi.isActive(context)
+            ? Row(mainAxisSize: MainAxisSize.min, children: tabs)
+            : Wrap(spacing: 4, children: tabs),
       ),
-    ),
-  );
+    );
+    if (!YorksMobileUi.isActive(context)) {
+      return Align(alignment: Alignment.centerLeft, child: control);
+    }
+    return SizedBox(
+      height: AppSpacing.minTapTarget + 12,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: control,
+      ),
+    );
+  }
 
   Widget _tab(String label, _AdminManagementTab value) => TextButton(
     onPressed: () => onChanged(value),
@@ -429,30 +473,33 @@ class _UsersTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 820;
+    final phone = YorksMobileUi.isActive(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AdminMetricGrid(
-          metrics: [
-            (
-              'ACTIVE USERS',
-              '$activeUsers',
-              'Across Engineer, Procurement and Admin',
-            ),
-            ('ENGINEERS', '$engineers', 'Project delivery and site coverage'),
-            (
-              'ASSIGNED PROJECTS',
-              '0',
-              'Primary and supporting access controlled',
-            ),
-            (
-              'DEACTIVATED',
-              '$deactivated',
-              'Recoverable accounts with history retained',
-            ),
-          ],
-        ),
-        const Gap(AppSpacing.lg),
+        if (!phone) ...[
+          _AdminMetricGrid(
+            metrics: [
+              (
+                'ACTIVE USERS',
+                '$activeUsers',
+                'Across Engineer, Procurement and Admin',
+              ),
+              ('ENGINEERS', '$engineers', 'Project delivery and site coverage'),
+              (
+                'ASSIGNED PROJECTS',
+                '0',
+                'Primary and supporting access controlled',
+              ),
+              (
+                'DEACTIVATED',
+                '$deactivated',
+                'Recoverable accounts with history retained',
+              ),
+            ],
+          ),
+          const Gap(AppSpacing.lg),
+        ],
         _AdminSurfaceCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -756,33 +803,108 @@ class _MobileUserCard extends StatelessWidget {
   final ValueChanged<AppUser> onDelete;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: () => _ManageUserSheet.show(context, user),
-    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-    child: _AdminSurfaceCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Row(
-        children: [
-          _UserAvatar(user: user),
-          const Gap(AppSpacing.md),
-          Expanded(child: _UserIdentity(user: user)),
-          const Gap(AppSpacing.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              StatusChip.info(
-                _roleLabel(user, yorksV1Provisioning: yorksV1Provisioning),
-              ),
-              const Gap(AppSpacing.xs),
-              user.active
-                  ? StatusChip.success(AppStrings.userActive.primary)
-                  : StatusChip.error(AppStrings.userInactive.primary),
-            ],
-          ),
-        ],
+  Widget build(BuildContext context) {
+    final role = _roleLabel(user, yorksV1Provisioning: yorksV1Provisioning);
+    return Semantics(
+      button: true,
+      label: '${user.fullName}, $role',
+      child: YorksMobileCard(
+        onTap: () => _ManageUserSheet.show(context, user),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                _UserAvatar(user: user),
+                const Gap(AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.fullName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.titleSmall.copyWith(
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Gap(AppSpacing.xxs),
+                      Text(
+                        user.email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+              ],
+            ),
+            const Gap(AppSpacing.md),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                _MobileUserStatusPill(label: role, info: true),
+                _MobileUserStatusPill(
+                  label: user.active
+                      ? AppStrings.userActive.primary
+                      : AppStrings.userInactive.primary,
+                  active: user.active,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+class _MobileUserStatusPill extends StatelessWidget {
+  const _MobileUserStatusPill({
+    required this.label,
+    this.info = false,
+    this.active = false,
+  });
+
+  final String label;
+  final bool info;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = info
+        ? NexusStatusPalette.forTone(NexusStatusTone.info)
+        : NexusStatusPalette.forTone(
+            active ? NexusStatusTone.success : NexusStatusTone.danger,
+          );
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 248, minHeight: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: palette.background,
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.labelMedium.copyWith(
+          color: palette.foreground,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _UserIdentity extends StatelessWidget {
@@ -1099,17 +1221,32 @@ class _AddUserSheet extends ConsumerStatefulWidget {
     return showDialog<void>(
       context: context,
       barrierColor: AppColors.scrim.withValues(alpha: .38),
-      builder: (_) => Dialog(
-        backgroundColor: AppColors.surfaceContainerLowest,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 704),
-          child: _AddUserSheet(),
-        ),
-      ),
+      builder: (dialogContext) {
+        final viewport = MediaQuery.sizeOf(dialogContext);
+        final phone = YorksMobileUi.isActive(dialogContext);
+        return Dialog(
+          alignment: phone ? Alignment.bottomCenter : Alignment.center,
+          backgroundColor: AppColors.surfaceContainerLowest,
+          insetPadding: phone
+              ? const EdgeInsets.fromLTRB(8, 48, 8, 0)
+              : const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          shape: RoundedRectangleBorder(
+            borderRadius: phone
+                ? const BorderRadius.vertical(
+                    top: Radius.circular(AppSpacing.radiusXl),
+                  )
+                : BorderRadius.circular(AppSpacing.radiusXl),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 704,
+              maxHeight: viewport.height * .92,
+            ),
+            child: const _AddUserSheet(),
+          ),
+        );
+      },
     );
   }
 

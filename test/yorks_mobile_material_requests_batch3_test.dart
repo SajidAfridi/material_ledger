@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
+import 'package:material_ledger/core/constants/constants.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
@@ -303,6 +304,35 @@ void main() {
     expect(find.byType(YorksV1WorkspaceShell), findsOneWidget);
     expect(find.text('Material Requests'), findsNWidgets(2));
     expect(find.text('Requests'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mobile MR filters remain one touch-safe scroll rail', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestListProvider(
+            null,
+          ).overrideWith((ref) async => [_submittedRequest, _draftRequest]),
+        ],
+        child: const YorksV1MaterialRequestsScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rail = find.byKey(
+      const ValueKey('mobile-material-request-filter-rail'),
+    );
+    expect(rail, findsOneWidget);
+    expect(tester.getSize(rail).height, AppSpacing.minTapTarget);
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Approved'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -39,9 +39,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final mobile = MediaQuery.sizeOf(context).width <= 720;
+      final mobile = YorksMobileUi.isActive(context);
       _continueTimer = Timer(
-        mobile ? const Duration(milliseconds: 900) : Duration.zero,
+        // Every phone launch—including a restored/warm authenticated session—
+        // starts at this route. Keep the branded hand-off long enough to read
+        // without delaying the desktop workspace.
+        mobile ? const Duration(milliseconds: 1600) : Duration.zero,
         () async {
           if (!mounted) return;
           // The approved R35 prototype goes directly from splash to sign-in. The
@@ -65,16 +68,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.sizeOf(context).width <= 720;
+    final mobile = YorksMobileUi.isActive(context);
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF081D36), AppColors.navy, AppColors.navyHover],
-            stops: [0, 0.58, 1],
-          ),
+        decoration: BoxDecoration(
+          gradient: mobile
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF041E42),
+                    Color(0xFF00183A),
+                    Color(0xFF000E26),
+                  ],
+                  stops: [0, 0.54, 1],
+                )
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF081D36),
+                    AppColors.navy,
+                    AppColors.navyHover,
+                  ],
+                  stops: [0, 0.58, 1],
+                ),
         ),
         child: Stack(
           fit: StackFit.expand,
@@ -109,49 +127,80 @@ class _SplashMobileContent extends StatelessWidget {
   const _SplashMobileContent();
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(28, 90, 28, 30),
-    child: Column(
-      children: [
-        const Spacer(flex: 4),
-        const BrandLogo(size: 94, shadow: true),
-        const SizedBox(height: 24),
-        Text(
-          YorksV1ShellStrings.companyName.primary,
-          textAlign: TextAlign.center,
-          style: AppTypography.headlineMedium.copyWith(
-            color: Colors.white,
-            fontSize: 25,
-            fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => Padding(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 22),
+      child: Column(
+        children: [
+          SizedBox(height: constraints.maxHeight < 760 ? 148 : 204),
+          const BrandLogo(size: 158, shadow: true),
+          const SizedBox(height: 22),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                YorksV1ShellStrings.companyName.primary,
+                textAlign: TextAlign.center,
+                style: AppTypography.headlineMedium.copyWith(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  height: 1.18,
+                  letterSpacing: -0.6,
+                ),
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          YorksV1ShellStrings.companyLegalName.primary,
-          maxLines: 2,
-          textAlign: TextAlign.center,
-          style: AppTypography.bodyMedium.copyWith(
-            color: Colors.white.withValues(alpha: .72),
-            height: 1.45,
+          const SizedBox(height: 18),
+          Container(
+            width: 36,
+            height: 3,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1677FF),
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
-        ),
-        const Spacer(flex: 5),
-        Text(
-          YorksV1ShellStrings.operationalWorkspace.primary.toUpperCase(),
-          style: AppTypography.eyebrow.copyWith(
-            color: const Color(0xFF9CC8F8),
-            letterSpacing: 1.5,
+          const SizedBox(height: 16),
+          Text(
+            YorksV1ShellStrings.projectManagementSystem.primary,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyLarge.copyWith(
+              color: Colors.white.withValues(alpha: .72),
+              fontSize: 16,
+              height: 1.52,
+            ),
           ),
-        ),
-        const SizedBox(height: 9),
-        Text(
-          YorksV1ShellStrings.secureProjectWorkspace.primary,
-          textAlign: TextAlign.center,
-          style: AppTypography.bodySmall.copyWith(
-            color: Colors.white.withValues(alpha: .6),
+          const Spacer(flex: 3),
+          const Icon(
+            Icons.verified_user_outlined,
+            size: 42,
+            color: Color(0xFF1677FF),
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Text(
+            YorksV1ShellStrings.oneSourceOfTruthForEveryProject.primary,
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyLarge.copyWith(
+              color: Colors.white.withValues(alpha: .75),
+              fontSize: 15,
+            ),
+          ),
+          const Spacer(flex: 4),
+          SizedBox(
+            width: 188,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+              child: const LinearProgressIndicator(
+                value: .37,
+                minHeight: 5,
+                backgroundColor: Color(0xFF12345F),
+                valueColor: AlwaysStoppedAnimation(Color(0xFF1677FF)),
+              ),
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

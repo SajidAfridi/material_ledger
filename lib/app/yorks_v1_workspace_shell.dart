@@ -172,7 +172,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     // phone header just like record routes. Keep the shared bottom navigation,
     // but do not stack the generic workspace toolbar above their own actions.
     if (location == RoutePaths.yorksV1DuctSizer ||
-        location == RoutePaths.yorksV1EspCalculator) {
+        location == RoutePaths.yorksV1EspCalculator ||
+        location == RoutePaths.engineerProfile) {
       return true;
     }
     final segments = Uri(path: location).pathSegments;
@@ -484,34 +485,40 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
         children: [
-          YorksMobileCard(
-            child: Row(
-              children: [
-                _Avatar(name: user?.fullName ?? '', size: 48),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user?.fullName ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.titleMedium,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _roleCopy(role).active(language),
-                        style: AppTypography.bodySmall,
-                      ),
-                    ],
+          Semantics(
+            button: true,
+            label: AppStrings.profile.active(language),
+            child: YorksMobileCard(
+              key: const ValueKey('mobile-profile-entry'),
+              onTap: () => context.go(RoutePaths.engineerProfile),
+              child: Row(
+                children: [
+                  _Avatar(name: user?.fullName ?? '', size: 48),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user?.fullName ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _roleCopy(role).active(language),
+                          style: AppTypography.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const Icon(
-                  Icons.verified_user_outlined,
-                  color: AppColors.success,
-                ),
-              ],
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.muted,
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 18),

@@ -17,6 +17,12 @@ abstract final class YorksV1ShellStrings {
     ur: 'یارکس ایئر کنڈیشننگ اینڈ ریفریجریشن ایل ایل سی-ایس پی سی',
     hi: 'यॉर्क्स एयर कंडीशनिंग एंड रेफ्रिजरेशन एलएलसी-एसपीसी',
   );
+  static const companyLegalNameCompact = TranslatableString(
+    en: 'Air Conditioning &\nRefrigeration LLC-SPC',
+    ar: 'تكييف الهواء والتبريد\nذ.م.م - ش.ش.و',
+    ur: 'ایئر کنڈیشننگ اور\nریفریجریشن ایل ایل سی-ایس پی سی',
+    hi: 'एयर कंडीशनिंग और\nरेफ्रिजरेशन एलएलसी-एसपीसी',
+  );
   static const operationalWorkspace = TranslatableString(
     en: 'Operational workspace',
     ar: 'مساحة العمل التشغيلية',
@@ -34,6 +40,30 @@ abstract final class YorksV1ShellStrings {
     ar: 'مساحة عمل مشروع آمنة',
     ur: 'محفوظ پراجیکٹ ورک اسپیس',
     hi: 'सुरक्षित प्रोजेक्ट कार्यक्षेत्र',
+  );
+  static const projectManagementSystem = TranslatableString(
+    en: 'Air Conditioning & Refrigeration\nProject Management System',
+    ar: 'نظام إدارة مشاريع التكييف والتبريد',
+    ur: 'ایئر کنڈیشننگ اور ریفریجریشن\nپراجیکٹ مینجمنٹ سسٹم',
+    hi: 'एयर कंडीशनिंग और रेफ्रिजरेशन\nप्रोजेक्ट प्रबंधन प्रणाली',
+  );
+  static const oneSourceOfTruthForEveryProject = TranslatableString(
+    en: 'One source of truth for every project.',
+    ar: 'مصدر واحد للحقيقة لكل مشروع.',
+    ur: 'ہر پراجیکٹ کے لیے سچائی کا ایک ذریعہ۔',
+    hi: 'हर प्रोजेक्ट के लिए सत्य का एक स्रोत।',
+  );
+  static const byContinuingYouAgreeToOur = TranslatableString(
+    en: 'By continuing, you agree to our',
+    ar: 'بالمتابعة، فإنك توافق على',
+    ur: 'جاری رکھنے سے، آپ ہماری شرائط سے اتفاق کرتے ہیں',
+    hi: 'जारी रखकर, आप हमारी शर्तों से सहमत होते हैं',
+  );
+  static const and = TranslatableString(
+    en: 'and',
+    ar: 'و',
+    ur: 'اور',
+    hi: 'और',
   );
   static const signInHero = TranslatableString(
     en: 'Keep every project, material request and delivery easy to follow.',
