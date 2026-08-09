@@ -150,9 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 class _AuthBrandPanel extends StatelessWidget {
-  const _AuthBrandPanel({this.compact = false});
-
-  final bool compact;
+  const _AuthBrandPanel();
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -173,36 +171,24 @@ class _AuthBrandPanel extends StatelessWidget {
         SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              compact ? AppSpacing.xl : AppSpacing.massive,
-              compact ? AppSpacing.lg : AppSpacing.huge,
-              compact ? AppSpacing.xl : AppSpacing.massive,
-              compact ? AppSpacing.xl : AppSpacing.massive,
+              AppSpacing.massive,
+              AppSpacing.huge,
+              AppSpacing.massive,
+              AppSpacing.massive,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const _AuthBrandMark(),
-                if (compact) ...[
-                  const Spacer(),
-                  Text(
-                    YorksV1ShellStrings.operationalWorkspace.primary
-                        .toUpperCase(),
-                    style: AppTypography.eyebrow.copyWith(
-                      color: const Color(0xFF82BCFF),
-                      letterSpacing: 1.5,
-                    ),
+                const Spacer(flex: 3),
+                const _AuthHero(),
+                const Spacer(flex: 4),
+                Text(
+                  YorksV1ShellStrings.authorisedPersonnelOnly.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: Colors.white.withValues(alpha: 0.52),
                   ),
-                ] else ...[
-                  const Spacer(flex: 3),
-                  const _AuthHero(),
-                  const Spacer(flex: 4),
-                  Text(
-                    YorksV1ShellStrings.authorisedPersonnelOnly.primary,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: Colors.white.withValues(alpha: 0.52),
-                    ),
-                  ),
-                ],
+                ),
               ],
             ),
           ),
@@ -365,19 +351,50 @@ class _AuthMobileLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: AppColors.surface,
-    child: SingleChildScrollView(
-      child: Column(
-        children: [
-          SizedBox(height: 280, child: const _AuthBrandPanel(compact: true)),
-          Transform.translate(
-            offset: const Offset(0, -22),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: _AuthCard(owner: owner, language: language, compact: true),
+    color: AppColors.mobileSurface,
+    child: SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(18, 34, 18, 24),
+        child: Column(
+          children: [
+            const BrandLogo(size: 72, shadow: true),
+            const SizedBox(height: 14),
+            Text(
+              YorksV1ShellStrings.companyName.primary,
+              style: AppTypography.headlineSmall.copyWith(
+                color: AppColors.navy,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              YorksV1ShellStrings.secureProjectWorkspace.primary,
+              style: AppTypography.bodySmall,
+            ),
+            const SizedBox(height: 26),
+            _AuthCard(owner: owner, language: language, compact: true),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.lock_outline_rounded,
+                  size: 14,
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    YorksV1ShellStrings.authorisedPersonnelOnly.primary,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.labelSmall,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -398,11 +415,11 @@ class _AuthCard extends StatelessWidget {
   Widget build(BuildContext context) => ConstrainedBox(
     constraints: const BoxConstraints(maxWidth: 455),
     child: Container(
-      padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxxl),
+      padding: EdgeInsets.all(compact ? 18 : AppSpacing.xxxl),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(compact ? 15 : 20),
         boxShadow: const [
           BoxShadow(
             color: AppColors.shadow,
@@ -438,7 +455,7 @@ class _AuthCard extends StatelessWidget {
                 height: 1.55,
               ),
             ),
-            const SizedBox(height: AppSpacing.xxl),
+            SizedBox(height: compact ? AppSpacing.lg : AppSpacing.xxl),
             _AuthForm(owner: owner, language: language),
             const SizedBox(height: AppSpacing.lg),
             const Divider(color: AppColors.line, height: 1),

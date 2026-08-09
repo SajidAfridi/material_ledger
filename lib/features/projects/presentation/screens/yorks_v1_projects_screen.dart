@@ -163,6 +163,26 @@ class _R35OverviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (YorksMobileUi.isActive(context)) {
+      return _YorksMobileOverview(
+        role: role,
+        displayName: displayName,
+        projects: projects,
+        requests: requests,
+        projectCount: projectCount,
+        openRequests: openRequests,
+        needsAction: needsAction,
+        dispatchReady: dispatchReady,
+        canCreateProject: canCreateProject,
+        canCreateRequest: canCreateRequest,
+        onCreateProject: onCreateProject,
+        onCreateRequest: onCreateRequest,
+        onOpenProjects: onOpenProjects,
+        onOpenRequests: onOpenRequests,
+        onRetryProjects: onRetryProjects,
+        onRetryRequests: onRetryRequests,
+      );
+    }
     if (procurement) {
       return _R35ProcurementOverview(
         requests: requests,
@@ -248,6 +268,194 @@ class _R35OverviewPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _YorksMobileOverview extends StatelessWidget {
+  const _YorksMobileOverview({
+    required this.role,
+    required this.displayName,
+    required this.projects,
+    required this.requests,
+    required this.projectCount,
+    required this.openRequests,
+    required this.needsAction,
+    required this.dispatchReady,
+    required this.canCreateProject,
+    required this.canCreateRequest,
+    required this.onCreateProject,
+    required this.onCreateRequest,
+    required this.onOpenProjects,
+    required this.onOpenRequests,
+    required this.onRetryProjects,
+    required this.onRetryRequests,
+  });
+
+  final YorksV1Role? role;
+  final String? displayName;
+  final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final int projectCount;
+  final int openRequests;
+  final int needsAction;
+  final int dispatchReady;
+  final bool canCreateProject;
+  final bool canCreateRequest;
+  final VoidCallback onCreateProject;
+  final VoidCallback onCreateRequest;
+  final VoidCallback onOpenProjects;
+  final VoidCallback onOpenRequests;
+  final VoidCallback onRetryProjects;
+  final VoidCallback onRetryRequests;
+
+  @override
+  Widget build(BuildContext context) {
+    final procurement = role == YorksV1Role.procurement;
+    final name = (displayName ?? '').trim().split(RegExp(r'\s+')).first;
+    final safeName = name.isEmpty
+        ? YorksV1ShellStrings.companyName.primary
+        : name;
+    final recentProjects =
+        projects.valueOrNull ?? const <YorksV1ProjectPortfolioItem>[];
+    return ColoredBox(
+      color: AppColors.mobileSurface,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          onRetryProjects();
+          onRetryRequests();
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
+          children: [
+            Text(
+              procurement
+                  ? YorksV1ShellStrings.procurementGreeting.primary
+                        .toUpperCase()
+                  : YorksV1ShellStrings.goodAfternoon.primary.toUpperCase(),
+              style: AppTypography.eyebrow,
+            ),
+            const SizedBox(height: 5),
+            Text(
+              procurement
+                  ? YorksV1ShellStrings.procurementHero.primary
+                  : '$safeName, ${YorksV1ShellStrings.workspaceReady.primary}',
+              style: AppTypography.headlineMedium.copyWith(
+                fontSize: 25,
+                height: 1.13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              procurement
+                  ? YorksV1ShellStrings.procurementHeroDescription.primary
+                  : YorksV1ShellStrings.overviewWorkspaceDescription.primary,
+              style: AppTypography.bodySmall.copyWith(height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            if (canCreateProject || canCreateRequest)
+              Row(
+                children: [
+                  if (canCreateProject)
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: onCreateProject,
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: Text(YorksV1ProjectStrings.newProject.primary),
+                      ),
+                    ),
+                  if (canCreateProject && canCreateRequest)
+                    const SizedBox(width: 8),
+                  if (canCreateRequest)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onCreateRequest,
+                        icon: const Icon(Icons.assignment_outlined, size: 18),
+                        label: Text(
+                          YorksV1MaterialRequestStrings.newRequest.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 18),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.55,
+              children: [
+                YorksMobileMetricCard(
+                  label: YorksV1ProjectStrings.projects.primary,
+                  value: '$projectCount',
+                  icon: Icons.folder_outlined,
+                ),
+                YorksMobileMetricCard(
+                  label: YorksV1ShellStrings.openRequests.primary,
+                  value: '$openRequests',
+                  icon: Icons.assignment_outlined,
+                ),
+                YorksMobileMetricCard(
+                  label: YorksV1ShellStrings.needsYourAction.primary,
+                  value: '$needsAction',
+                  icon: Icons.priority_high_rounded,
+                  tint: AppColors.warningContainer,
+                  iconColor: AppColors.warning,
+                ),
+                YorksMobileMetricCard(
+                  label: YorksV1ShellStrings.readyToDispatch.primary,
+                  value: '$dispatchReady',
+                  icon: Icons.local_shipping_outlined,
+                  tint: AppColors.successContainer,
+                  iconColor: AppColors.success,
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            YorksMobileSectionHeader(
+              title: procurement
+                  ? YorksV1ShellStrings.needsProcurementAction.primary
+                  : YorksV1ShellStrings.needsYourAction.primary,
+              action: TextButton(
+                onPressed: onOpenRequests,
+                child: Text(YorksV1ShellStrings.viewAll.primary),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _R35ActionCard(
+              requests: requests,
+              role: role,
+              onRetry: onRetryRequests,
+            ),
+            const SizedBox(height: 20),
+            YorksMobileSectionHeader(
+              title: YorksV1ProjectStrings.projects.primary,
+              action: TextButton(
+                onPressed: onOpenProjects,
+                child: Text(YorksV1ShellStrings.viewAll.primary),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (projects.isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (recentProjects.isEmpty)
+              YorksMobileCard(
+                child: Text(
+                  YorksV1ProjectStrings.noProjects.primary,
+                  style: AppTypography.bodySmall,
+                ),
+              )
+            else
+              for (final item in recentProjects.take(3)) ...[
+                _MobileProjectCard(item: item, language: AppLanguage.english),
+                const SizedBox(height: 8),
+              ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1489,6 +1697,32 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
     final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
     final canCreate = role?.canCreateProject == true;
 
+    if (YorksMobileUi.isActive(context)) {
+      return Scaffold(
+        backgroundColor: AppColors.mobileSurface,
+        body: portfolio.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => _PortfolioError(
+            language: language,
+            onRetry: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
+          ),
+          data: (items) => _YorksMobileProjectsPage(
+            items: items,
+            visible: _filter(items),
+            language: language,
+            stateFilter: _stateFilter,
+            search: _search,
+            canCreate: canCreate,
+            onSearchChanged: (value) => setState(() => _search = value),
+            onStateChanged: (value) => setState(() => _stateFilter = value),
+            onCreate: canCreate
+                ? () => context.push(RoutePaths.engineerCreateProject)
+                : null,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
@@ -1815,6 +2049,142 @@ class _YorksV1ProjectWorkspaceScreenState
       );
     }
   }
+}
+
+class _YorksMobileProjectsPage extends StatelessWidget {
+  const _YorksMobileProjectsPage({
+    required this.items,
+    required this.visible,
+    required this.language,
+    required this.stateFilter,
+    required this.search,
+    required this.canCreate,
+    required this.onSearchChanged,
+    required this.onStateChanged,
+    required this.onCreate,
+  });
+
+  final List<YorksV1ProjectPortfolioItem> items;
+  final List<YorksV1ProjectPortfolioItem> visible;
+  final AppLanguage language;
+  final YorksV1ProjectLifecycle? stateFilter;
+  final String search;
+  final bool canCreate;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<YorksV1ProjectLifecycle?> onStateChanged;
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.mobileSurface,
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    YorksV1ProjectStrings.projects.primary,
+                    style: AppTypography.headlineMedium.copyWith(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    (canCreate
+                            ? YorksV1ProjectStrings.portfolioDescription
+                            : YorksV1ProjectStrings.viewOnlyPortfolio)
+                        .primary,
+                    maxLines: 2,
+                    style: AppTypography.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            if (canCreate)
+              SizedBox.square(
+                dimension: AppSpacing.minTapTarget,
+                child: FilledButton(
+                  onPressed: onCreate,
+                  style: FilledButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Icon(Icons.add_rounded),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        TextFormField(
+          initialValue: search,
+          onChanged: onSearchChanged,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            hintText: YorksV1ProjectStrings.searchProjects.primary,
+            filled: true,
+            fillColor: AppColors.surfaceContainerLowest,
+            contentPadding: const EdgeInsets.symmetric(vertical: 11),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.line),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: YorksMobilePill(
+                label: YorksV1ProjectStrings.allStates.primary,
+                selected: stateFilter == null,
+                onTap: () => onStateChanged(null),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: YorksMobilePill(
+                label: YorksV1ProjectStrings.activeState.primary,
+                selected: stateFilter == YorksV1ProjectLifecycle.active,
+                onTap: () => onStateChanged(YorksV1ProjectLifecycle.active),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: YorksMobilePill(
+                label: YorksV1ProjectStrings.completedState.primary,
+                selected: stateFilter == YorksV1ProjectLifecycle.completed,
+                onTap: () => onStateChanged(YorksV1ProjectLifecycle.completed),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (items.isEmpty)
+          _PortfolioEmpty(
+            language: language,
+            canCreate: canCreate,
+            onCreate: onCreate,
+          )
+        else if (visible.isEmpty)
+          _NoMatchingProjects(language: language)
+        else
+          _MobileProjectList(items: visible, language: language),
+      ],
+    ),
+  );
 }
 
 class _PortfolioBody extends StatelessWidget {

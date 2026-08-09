@@ -58,9 +58,7 @@ void main() {
       YorksV1ShellStrings.overview.primary,
       YorksV1ShellStrings.projects.primary,
       YorksV1ShellStrings.materialRequests.primary,
-      YorksV1ShellStrings.materialReturns.primary,
-      YorksV1ShellStrings.ductSizer.primary,
-      YorksV1ShellStrings.espCalculator.primary,
+      AppStrings.more.primary,
     ];
     final bounds = <Rect>[];
     for (final destination in destinations) {
@@ -77,14 +75,14 @@ void main() {
             widget is Semantics &&
             widget.properties.label == AppStrings.more.primary,
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(bounds.map((rect) => rect.top).toSet(), hasLength(1));
     expect(bounds.map((rect) => rect.bottom).toSet(), hasLength(1));
     for (final rect in bounds) {
       expect(rect.width, greaterThanOrEqualTo(44));
       expect(rect.height, greaterThanOrEqualTo(44));
-      expect(rect.bottom, lessThanOrEqualTo(790));
+      expect(rect.bottom, lessThanOrEqualTo(800));
     }
     for (var index = 1; index < bounds.length; index++) {
       expect((bounds[index].width - bounds.first.width).abs(), lessThan(0.1));
@@ -126,6 +124,13 @@ void main() {
           findsNothing,
         );
         expect(find.text(YorksV1ShellStrings.auditTrail.primary), findsNothing);
+        await tester.runAsync(
+          () => precacheImage(
+            const AssetImage('assets/logo.png'),
+            tester.element(find.byType(YorksV1WorkspaceShell)),
+          ),
+        );
+        await tester.pump();
         await expectLater(
           find.byType(MaterialApp),
           matchesGoldenFile(
@@ -261,6 +266,11 @@ class _ShellTestApp extends StatelessWidget {
           builder: (_, _) => const YorksV1WorkspaceShell(
             child: Scaffold(body: SizedBox.expand()),
           ),
+        ),
+        GoRoute(
+          path: '/yorks/more',
+          builder: (_, _) =>
+              const YorksV1WorkspaceShell(child: YorksV1MobileMoreScreen()),
         ),
       ],
     );

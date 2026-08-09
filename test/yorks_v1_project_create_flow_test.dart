@@ -94,6 +94,45 @@ void main() {
     }
   });
 
+  for (final stage in [
+    YorksV1ProjectCreationStage.projectDetails,
+    YorksV1ProjectCreationStage.partiesAndAccess,
+    YorksV1ProjectCreationStage.buildings,
+    YorksV1ProjectCreationStage.attachments,
+  ]) {
+    testWidgets('Yorks mobile project creation ${stage.name} — 390×844', (
+      tester,
+    ) async {
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: _FakeProjectRepository(),
+      );
+      if (stage != YorksV1ProjectCreationStage.projectDetails) {
+        final notifier = container.read(
+          yorksV1ProjectCreationDraftProvider(_authUserId).notifier,
+        );
+        await notifier.save(
+          container
+              .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+              .copyWith(
+                reference: 'YRA-MOBILE-001',
+                name: 'Mobile project',
+                currentStage: stage,
+              ),
+        );
+      }
+      await _pumpScreen(tester, container, size: const Size(390, 844));
+
+      await expectLater(
+        find.byType(YorksV1ProjectCreateFlowScreen),
+        matchesGoldenFile(
+          'goldens/mobile_batch1/project_create_${stage.name}_390.png',
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('Procurement receives a clear forbidden create screen', (
     tester,
   ) async {

@@ -279,6 +279,52 @@ class _YorksV1ProjectCreateFlowScreenState
                   ? YorksV1ProjectStrings.updateProject
                   : YorksV1ProjectStrings.createAndView,
             );
+            if (!desktop) {
+              return ColoredBox(
+                color: AppColors.mobileSurface,
+                child: Column(
+                  children: [
+                    Material(
+                      color: AppColors.surfaceContainerLowest,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 9),
+                        child: navigation,
+                      ),
+                    ),
+                    const Divider(height: 1, color: AppColors.line),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _R35CreationStageHeader(stage: draft.currentStage),
+                            const SizedBox(height: 4),
+                            content,
+                          ],
+                        ),
+                      ),
+                    ),
+                    Material(
+                      color: AppColors.surfaceContainerLowest,
+                      child: SafeArea(
+                        top: false,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(14, 9, 14, 10),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: AppColors.line),
+                            ),
+                          ),
+                          child: footer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
             final horizontal = desktop ? 30.0 : 14.0;
             return ColoredBox(
               color: desktop ? AppColors.surface : AppColors.mobileSurface,
@@ -1452,7 +1498,7 @@ class _R35CreationStageHeader extends StatelessWidget {
         MediaQuery.sizeOf(context).width <= AppSpacing.compactBreakpoint;
     return Padding(
       padding: compact
-          ? const EdgeInsets.fromLTRB(14, 16, 14, 12)
+          ? EdgeInsets.zero
           : const EdgeInsets.fromLTRB(24, 22, 24, 15),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1473,27 +1519,33 @@ class _R35CreationStageHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 7),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 9,
-                height: 9,
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
+          if (compact)
+            Text(
+              _stageDescription(stage).primary,
+              style: AppTypography.bodySmall.copyWith(height: 1.45),
+            )
+          else
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                YorksV1ProjectStrings.stepSaved.primary,
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.muted,
-                  fontWeight: FontWeight.w700,
+                const SizedBox(width: 7),
+                Text(
+                  YorksV1ProjectStrings.stepSaved.primary,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -1532,16 +1584,120 @@ class _StageNavigation extends StatelessWidget {
         children: children,
       );
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var index = 0; index < children.length; index++) ...[
-            SizedBox(width: 134, child: children[index]),
-            if (index != children.length - 1) const SizedBox(width: 5),
-          ],
-        ],
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final stage in YorksV1ProjectCreationStage.values)
+          Expanded(
+            child: _MobileStageNavigationItem(
+              stage: stage,
+              currentStage: currentStage,
+              onTap: stage.index <= currentStage.index
+                  ? () => onSelect(stage)
+                  : null,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MobileStageNavigationItem extends StatelessWidget {
+  const _MobileStageNavigationItem({
+    required this.stage,
+    required this.currentStage,
+    required this.onTap,
+  });
+
+  final YorksV1ProjectCreationStage stage;
+  final YorksV1ProjectCreationStage currentStage;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = stage == currentStage;
+    final completed = stage.index < currentStage.index;
+    return Semantics(
+      button: onTap != null,
+      selected: selected,
+      label: _stageCopy(stage).primary,
+      child: InkWell(
+        key: ValueKey('yorks-v1-project-stage-${stage.name}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  if (stage.index > 0)
+                    Expanded(
+                      child: Divider(
+                        color: completed || selected
+                            ? AppColors.blue
+                            : AppColors.lineStrong,
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: completed || selected
+                          ? AppColors.blue
+                          : AppColors.surfaceContainerLowest,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: completed || selected
+                            ? AppColors.blue
+                            : AppColors.lineStrong,
+                      ),
+                    ),
+                    child: completed
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          )
+                        : Text(
+                            '${stage.index + 1}',
+                            style: AppTypography.labelSmall.copyWith(
+                              color: selected ? Colors.white : AppColors.muted,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
+                  if (stage.index <
+                      YorksV1ProjectCreationStage.values.length - 1)
+                    Expanded(
+                      child: Divider(
+                        color: completed
+                            ? AppColors.blue
+                            : AppColors.lineStrong,
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _stageCopy(stage).primary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTypography.labelSmall.copyWith(
+                  fontSize: 8,
+                  color: selected ? AppColors.blue : AppColors.muted,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -3576,13 +3732,17 @@ class _StageActions extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              primary,
               if (isAttachments) ...[
-                const SizedBox(height: AppSpacing.sm),
-                skip,
+                Align(alignment: Alignment.centerRight, child: skip),
+                const SizedBox(height: 6),
               ],
-              const SizedBox(height: AppSpacing.sm),
-              back,
+              Row(
+                children: [
+                  Expanded(child: back),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: primary),
+                ],
+              ),
             ],
           );
         }
@@ -3650,6 +3810,21 @@ TranslatableString _stageCopy(YorksV1ProjectCreationStage stage) {
       YorksV1ProjectStrings.attachments,
     YorksV1ProjectCreationStage.reviewAndCreate =>
       YorksV1ProjectStrings.reviewAndCreate,
+  };
+}
+
+TranslatableString _stageDescription(YorksV1ProjectCreationStage stage) {
+  return switch (stage) {
+    YorksV1ProjectCreationStage.projectDetails =>
+      YorksV1ProjectStrings.createProjectDescription,
+    YorksV1ProjectCreationStage.partiesAndAccess =>
+      YorksV1ProjectStrings.accessDescription,
+    YorksV1ProjectCreationStage.buildings =>
+      YorksV1ProjectStrings.buildingsIntro,
+    YorksV1ProjectCreationStage.attachments =>
+      YorksV1ProjectStrings.attachmentsDropzoneDescription,
+    YorksV1ProjectCreationStage.reviewAndCreate =>
+      YorksV1ProjectStrings.reviewBeforeCreate,
   };
 }
 

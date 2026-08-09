@@ -14,15 +14,96 @@ import '../providers/notification_provider.dart';
 /// Notification centre (SRS §4.6) — a simple, single list of lifecycle alerts
 /// with read/unread status. Accessible by all roles. Tap to mark read; swipe to
 /// dismiss; "Mark all read" clears the unread state.
-class NotificationsScreen extends ConsumerWidget {
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  _NotificationFilter _filter = _NotificationFilter.all;
+
+  @override
+  Widget build(BuildContext context) {
     final lang = ref.watch(languageProvider);
     // Role-scoped: each role only sees alerts meant for them (admin sees all).
     final notifications = ref.watch(visibleNotificationsProvider);
     final unread = ref.watch(unreadNotificationCountProvider);
+    final mobile = YorksMobileUi.isActive(context);
+
+    if (mobile) {
+      final visible = switch (_filter) {
+        _NotificationFilter.all => notifications,
+        _NotificationFilter.unread =>
+          notifications.where((notification) => !notification.isRead).toList(),
+        _NotificationFilter.urgent =>
+          notifications
+              .where(
+                (notification) => notification.type == NotificationType.stock,
+              )
+              .toList(),
+      };
+      return Scaffold(
+        backgroundColor: AppColors.mobileSurface,
+        body: Column(
+          children: [
+            YorksMobileAppBar(
+              title: AppStrings.notifications.primary,
+              leading: YorksMobileIconButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => context.pop(),
+              ),
+              trailing: unread > 0
+                  ? TextButton(
+                      onPressed: () => ref
+                          .read(notificationsProvider.notifier)
+                          .markAllRead(),
+                      child: Text(
+                        AppStrings.markAllRead.primary,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.blue,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+              child: Row(
+                children: [
+                  for (final filter in _NotificationFilter.values) ...[
+                    Expanded(
+                      child: YorksMobilePill(
+                        label: filter.label.active(lang),
+                        selected: _filter == filter,
+                        onTap: () => setState(() => _filter = filter),
+                      ),
+                    ),
+                    if (filter != _NotificationFilter.values.last)
+                      const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+            Expanded(
+              child: visible.isEmpty
+                  ? _EmptyState(lang: lang)
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+                      itemCount: visible.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) => _NotificationDismissible(
+                        notification: visible[index],
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -69,42 +150,52 @@ class NotificationsScreen extends ConsumerWidget {
                   separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
                   itemBuilder: (context, i) {
                     final n = notifications[i];
-                    return Dismissible(
-                      key: Key(n.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: AppSpacing.xl),
-                        decoration: BoxDecoration(
-                          color: AppColors.errorContainer.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.radiusLg,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.delete_outline_rounded,
-                          color: AppColors.error,
-                        ),
-                      ),
-                      onDismissed: (_) =>
-                          ref.read(notificationsProvider.notifier).dismiss(n.id),
-                      child: _NotificationCard(
-                        notification: n,
-                        onTap: () {
-                          ref
-                              .read(notificationsProvider.notifier)
-                              .markRead(n.id);
-                          // Deep-link straight to the request/plan it refers to.
-                          if (n.route.isNotEmpty) context.push(n.route);
-                        },
-                      ),
-                    );
+                    return _NotificationDismissible(notification: n);
                   },
                 ),
         ),
       ),
     );
   }
+}
+
+enum _NotificationFilter {
+  all(AppStrings.filterAllUpper),
+  unread(AppStrings.filterUnread),
+  urgent(AppStrings.filterUrgent);
+
+  const _NotificationFilter(this.label);
+  final TranslatableString label;
+}
+
+class _NotificationDismissible extends ConsumerWidget {
+  const _NotificationDismissible({required this.notification});
+
+  final AppNotification notification;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Dismissible(
+    key: Key(notification.id),
+    direction: DismissDirection.endToStart,
+    background: Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.errorContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+    ),
+    onDismissed: (_) =>
+        ref.read(notificationsProvider.notifier).dismiss(notification.id),
+    child: _NotificationCard(
+      notification: notification,
+      onTap: () {
+        ref.read(notificationsProvider.notifier).markRead(notification.id);
+        if (notification.route.isNotEmpty) context.push(notification.route);
+      },
+    ),
+  );
 }
 
 // ─── Notification card ───────────────────────────────────────────
@@ -209,14 +300,8 @@ class _NotificationCard extends StatelessWidget {
       Icons.local_shipping_outlined,
       AppColors.tertiary,
     ),
-    NotificationType.stock => (
-      Icons.warning_amber_rounded,
-      AppColors.warning,
-    ),
-    NotificationType.project => (
-      Icons.domain_add_outlined,
-      AppColors.success,
-    ),
+    NotificationType.stock => (Icons.warning_amber_rounded, AppColors.warning),
+    NotificationType.project => (Icons.domain_add_outlined, AppColors.success),
     NotificationType.info => (
       Icons.info_outline_rounded,
       AppColors.onSurfaceVariant,

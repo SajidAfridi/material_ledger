@@ -282,6 +282,7 @@ abstract final class RoutePaths {
   static const String about = '/about';
   static const String activityLog = '/activity';
   static const String notifications = '/notifications';
+  static const String yorksV1MobileMore = '/yorks/more';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
 }
@@ -368,6 +369,7 @@ bool _isAllowedForRole(
     RoutePaths.engineerHome,
     RoutePaths.about,
     RoutePaths.notifications,
+    RoutePaths.yorksV1MobileMore,
     RoutePaths.activityLog,
     RoutePaths.privacyPolicy,
     RoutePaths.termsOfService,
@@ -1131,6 +1133,11 @@ GoRouter createAppRouter({
         path: RoutePaths.activityLog,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const ActivityLogScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MobileMore,
+        pageBuilder: (context, state) =>
+            _yorksV1Slide(state.pageKey, const YorksV1MobileMoreScreen()),
       ),
       GoRoute(
         path: RoutePaths.notifications,

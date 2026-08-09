@@ -37,16 +37,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-    _continueTimer = Timer(Duration.zero, () async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // The approved R35 prototype goes directly from splash to sign-in. The
-      // old first-run language gate could redirect that hand-off back to
-      // splash forever on a fresh browser profile. English is the configured
-      // default; users can change the display language later from Profile.
-      if (!ref.read(onboardingCompleteProvider)) {
-        await ref.read(onboardingCompleteProvider.notifier).complete();
-      }
-      if (mounted) context.go(RoutePaths.login);
+      final mobile = MediaQuery.sizeOf(context).width <= 720;
+      _continueTimer = Timer(
+        mobile ? const Duration(milliseconds: 900) : Duration.zero,
+        () async {
+          if (!mounted) return;
+          // The approved R35 prototype goes directly from splash to sign-in. The
+          // old first-run language gate could redirect that hand-off back to
+          // splash forever on a fresh browser profile. English is the configured
+          // default; users can change the display language later from Profile.
+          if (!ref.read(onboardingCompleteProvider)) {
+            await ref.read(onboardingCompleteProvider.notifier).complete();
+          }
+          if (mounted) context.go(RoutePaths.login);
+        },
+      );
     });
   }
 
@@ -57,34 +64,94 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF081D36), AppColors.navy, AppColors.navyHover],
-          stops: [0, 0.58, 1],
+  Widget build(BuildContext context) {
+    final mobile = MediaQuery.sizeOf(context).width <= 720;
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF081D36), AppColors.navy, AppColors.navyHover],
+            stops: [0, 0.58, 1],
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (!mobile) ...[
+              const IgnorePointer(
+                child: CustomPaint(painter: _SplashGridPainter()),
+              ),
+              const IgnorePointer(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: SizedBox(
+                    height: 300,
+                    child: CustomPaint(painter: _SiteLinePainter()),
+                  ),
+                ),
+              ),
+            ],
+            SafeArea(
+              child: mobile
+                  ? const _SplashMobileContent()
+                  : const Center(child: _SplashContent()),
+            ),
+          ],
         ),
       ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const IgnorePointer(
-            child: CustomPaint(painter: _SplashGridPainter()),
+    );
+  }
+}
+
+class _SplashMobileContent extends StatelessWidget {
+  const _SplashMobileContent();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(28, 90, 28, 30),
+    child: Column(
+      children: [
+        const Spacer(flex: 4),
+        const BrandLogo(size: 94, shadow: true),
+        const SizedBox(height: 24),
+        Text(
+          YorksV1ShellStrings.companyName.primary,
+          textAlign: TextAlign.center,
+          style: AppTypography.headlineMedium.copyWith(
+            color: Colors.white,
+            fontSize: 25,
+            fontWeight: FontWeight.w800,
           ),
-          const IgnorePointer(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                height: 300,
-                child: CustomPaint(painter: _SiteLinePainter()),
-              ),
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          YorksV1ShellStrings.companyLegalName.primary,
+          maxLines: 2,
+          textAlign: TextAlign.center,
+          style: AppTypography.bodyMedium.copyWith(
+            color: Colors.white.withValues(alpha: .72),
+            height: 1.45,
           ),
-          SafeArea(child: Center(child: _SplashContent())),
-        ],
-      ),
+        ),
+        const Spacer(flex: 5),
+        Text(
+          YorksV1ShellStrings.operationalWorkspace.primary.toUpperCase(),
+          style: AppTypography.eyebrow.copyWith(
+            color: const Color(0xFF9CC8F8),
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 9),
+        Text(
+          YorksV1ShellStrings.secureProjectWorkspace.primary,
+          textAlign: TextAlign.center,
+          style: AppTypography.bodySmall.copyWith(
+            color: Colors.white.withValues(alpha: .6),
+          ),
+        ),
+      ],
     ),
   );
 }

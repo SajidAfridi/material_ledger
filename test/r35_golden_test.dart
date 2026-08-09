@@ -47,6 +47,32 @@ void main() {
     );
   });
 
+  testWidgets('Yorks mobile engineer overview — 390×844', (tester) async {
+    await _pumpOverview(
+      tester,
+      size: const Size(390, 844),
+      role: YorksV1Role.projectEngineer,
+    );
+
+    await expectLater(
+      find.byType(YorksV1WorkspaceShell),
+      matchesGoldenFile('goldens/mobile_batch1/engineer_overview_390.png'),
+    );
+  });
+
+  testWidgets('Yorks mobile procurement overview — 390×844', (tester) async {
+    await _pumpOverview(
+      tester,
+      size: const Size(390, 844),
+      role: YorksV1Role.procurement,
+    );
+
+    await expectLater(
+      find.byType(YorksV1WorkspaceShell),
+      matchesGoldenFile('goldens/mobile_batch1/procurement_overview_390.png'),
+    );
+  });
+
   testWidgets('R35 procurement shell and overview — 1366×768', (tester) async {
     await _pumpOverview(
       tester,
@@ -105,4 +131,11 @@ Future<void> _pumpOverview(
     ),
   );
   await tester.pumpAndSettle();
+  await tester.runAsync(
+    () => precacheImage(
+      const AssetImage('assets/logo.png'),
+      tester.element(find.byType(YorksV1WorkspaceShell)),
+    ),
+  );
+  await tester.pump();
 }
