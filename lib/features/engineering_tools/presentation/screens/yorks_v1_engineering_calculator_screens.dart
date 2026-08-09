@@ -85,6 +85,9 @@ class _YorksV1DuctSizerScreenState
   Widget build(BuildContext context) {
     final air = _air[_condition] ?? _air['20°C Air STP']!;
     final result = _result ?? _calculate(notify: false);
+    if (YorksMobileUi.isActive(context)) {
+      return _buildMobile(context, result);
+    }
     return NexusPageShell(
       eyebrow: 'Engineering tools',
       title: 'Duct Sizer',
@@ -197,6 +200,299 @@ class _YorksV1DuctSizerScreenState
       ),
     );
   }
+
+  Widget _buildMobile(
+    BuildContext context,
+    YorksV1DuctCalculationResult result,
+  ) {
+    final width = _unitSystem == 'SI'
+        ? result.widthMillimetres
+        : result.widthMillimetres / 25.4;
+    final height = _unitSystem == 'SI'
+        ? result.heightMillimetres
+        : result.heightMillimetres / 25.4;
+    final velocity = _unitSystem == 'SI'
+        ? result.velocityMetresPerSecond
+        : result.velocityMetresPerSecond * 196.850394;
+    final friction = _unitSystem == 'SI'
+        ? result.frictionRatePaPerMetre
+        : result.frictionRatePaPerMetre / 8.172803;
+    final lengthUnit = _unitSystem == 'SI' ? 'mm' : 'in';
+    final velocityUnit = _unitSystem == 'SI' ? 'm/s' : 'fpm';
+    final frictionUnit = _unitSystem == 'SI' ? 'Pa/m' : 'in.wg/100 ft';
+
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(YorksMobileUi.appBarHeight),
+        child: YorksMobileAppBar(
+          title: 'Duct Sizer',
+          leading: YorksMobileIconButton(
+            icon: Icons.arrow_back_rounded,
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          trailing: PopupMenuButton<String>(
+            tooltip: 'Calculation actions',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onSelected: (value) {
+              switch (value) {
+                case 'save':
+                  _save();
+                case 'open':
+                  _open();
+                case 'import':
+                  _import();
+                case 'export':
+                  _export();
+                case 'print':
+                  _print();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'save', child: Text('Save')),
+              PopupMenuItem(value: 'open', child: Text('Open saved')),
+              PopupMenuItem(value: 'import', child: Text('Import')),
+              PopupMenuItem(value: 'export', child: Text('Export')),
+              PopupMenuItem(value: 'print', child: Text('Print / PDF')),
+            ],
+          ),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 18, 14, 96),
+          children: [
+            const YorksMobilePageTitle(
+              eyebrow: 'Engineering tool',
+              title: 'Duct sizer',
+              description:
+                  'Size and check an air duct using the current calculation basis.',
+            ),
+            const SizedBox(height: 16),
+            YorksMobileCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Calculation basis', style: AppTypography.titleMedium),
+                  const SizedBox(height: 12),
+                  _SelectField(
+                    label: 'Unit system',
+                    value: _unitSystem == 'SI' ? 'SI Units' : 'Imperial Units',
+                    items: const ['SI Units', 'Imperial Units'],
+                    onChanged: _switchUnitSystem,
+                  ),
+                  const SizedBox(height: 12),
+                  _SelectField(
+                    label: 'Air condition',
+                    value: _condition,
+                    items: _air.keys.toList(growable: false),
+                    onChanged: (value) => setState(() {
+                      _condition = value;
+                      _calculate();
+                    }),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Sizing method', style: AppTypography.titleMedium),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: AppSpacing.minTapTarget,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final mode in YorksV1DuctSolveMode.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: YorksMobilePill(
+                        label: _mobileModeLabel(mode),
+                        selected: _mode == mode,
+                        onTap: () => setState(() {
+                          _mode = mode;
+                          _calculate();
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            YorksMobileCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Design parameters', style: AppTypography.titleMedium),
+                  const SizedBox(height: 14),
+                  _NumberField(
+                    label: 'Flow rate',
+                    controller: _flow,
+                    suffix: _unitSystem == 'SI' ? 'L/s' : 'CFM',
+                    onChanged: (_) => _calculate(),
+                  ),
+                  const SizedBox(height: 12),
+                  _ToggleField(
+                    label: 'Duct shape',
+                    selected: _shape == YorksV1DuctShape.rectangular
+                        ? 'Rectangular'
+                        : 'Circular',
+                    items: const ['Rectangular', 'Circular'],
+                    onChanged: (value) => setState(() {
+                      _shape = value == 'Rectangular'
+                          ? YorksV1DuctShape.rectangular
+                          : YorksV1DuctShape.circular;
+                      _calculate();
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  _SelectField(
+                    label: 'Duct material',
+                    value: _material,
+                    items: _roughness.keys.toList(growable: false),
+                    onChanged: (value) => setState(() {
+                      _material = value;
+                      _calculate();
+                    }),
+                  ),
+                  if (_mode == YorksV1DuctSolveMode.checkSize &&
+                      _shape == YorksV1DuctShape.rectangular) ...[
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Duct width',
+                      controller: _width,
+                      suffix: lengthUnit,
+                      onChanged: (_) => _calculate(),
+                    ),
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Duct height',
+                      controller: _height,
+                      suffix: lengthUnit,
+                      onChanged: (_) => _calculate(),
+                    ),
+                  ],
+                  if (_mode == YorksV1DuctSolveMode.checkSize &&
+                      _shape == YorksV1DuctShape.circular) ...[
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Duct diameter',
+                      controller: _diameter,
+                      suffix: lengthUnit,
+                      onChanged: (_) => _calculate(),
+                    ),
+                  ],
+                  if (_mode == YorksV1DuctSolveMode.velocity) ...[
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Target velocity',
+                      controller: _targetVelocity,
+                      suffix: velocityUnit,
+                      onChanged: (_) => _calculate(),
+                    ),
+                  ],
+                  if (_mode == YorksV1DuctSolveMode.friction) ...[
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Target friction rate',
+                      controller: _targetFriction,
+                      suffix: frictionUnit,
+                      onChanged: (_) => _calculate(),
+                    ),
+                  ],
+                  if (_mode == YorksV1DuctSolveMode.equivalentDiameter) ...[
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Equivalent diameter',
+                      controller: _equivalentDiameter,
+                      suffix: lengthUnit,
+                      onChanged: (_) => _calculate(),
+                    ),
+                  ],
+                  if (_mode != YorksV1DuctSolveMode.checkSize &&
+                      _shape == YorksV1DuctShape.rectangular) ...[
+                    const SizedBox(height: 12),
+                    _NumberField(
+                      label: 'Width : height ratio',
+                      controller: _aspectRatio,
+                      suffix: ': 1',
+                      onChanged: (_) => _calculate(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            YorksMobileCallout(
+              icon: Icons.verified_user_outlined,
+              title: result.valid
+                  ? 'Calculated from current inputs'
+                  : 'Inputs required',
+              message: result.valid
+                  ? 'Verify the final design against the approved project specification.'
+                  : 'Enter positive airflow and dimensions to calculate a result.',
+              warning: !result.valid,
+            ),
+            const SizedBox(height: 16),
+            Text('Calculated results', style: AppTypography.titleMedium),
+            const SizedBox(height: 10),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.32,
+              children: [
+                YorksMobileMetricCard(
+                  label: _shape == YorksV1DuctShape.circular
+                      ? 'Diameter'
+                      : 'Duct size',
+                  value: result.valid
+                      ? (_shape == YorksV1DuctShape.circular
+                            ? '${width.toStringAsFixed(_unitSystem == 'SI' ? 0 : 1)} $lengthUnit'
+                            : '${width.toStringAsFixed(_unitSystem == 'SI' ? 0 : 1)} × ${height.toStringAsFixed(_unitSystem == 'SI' ? 0 : 1)}')
+                      : '—',
+                  icon: Icons.straighten_rounded,
+                ),
+                YorksMobileMetricCard(
+                  label: 'Velocity',
+                  value: result.valid
+                      ? '${velocity.toStringAsFixed(_unitSystem == 'SI' ? 2 : 0)} $velocityUnit'
+                      : '—',
+                  icon: Icons.air_rounded,
+                ),
+                YorksMobileMetricCard(
+                  label: 'Equivalent Ø',
+                  value: result.valid
+                      ? '${(result.equivalentDiameterMetres * 1000).toStringAsFixed(_unitSystem == 'SI' ? 0 : 1)} $lengthUnit'
+                      : '—',
+                  icon: Icons.circle_outlined,
+                ),
+                YorksMobileMetricCard(
+                  label: 'Friction rate',
+                  value: result.valid
+                      ? '${friction.toStringAsFixed(2)} $frictionUnit'
+                      : '—',
+                  icon: Icons.speed_rounded,
+                  tint: AppColors.surfaceContainerHigh,
+                  iconColor: AppColors.navy,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _mobileModeLabel(YorksV1DuctSolveMode mode) => switch (mode) {
+    YorksV1DuctSolveMode.checkSize => 'Check size',
+    YorksV1DuctSolveMode.velocity => 'By velocity',
+    YorksV1DuctSolveMode.friction => 'By friction',
+    YorksV1DuctSolveMode.equivalentDiameter => 'Equivalent Ø',
+  };
 
   Widget _ductInputs() => Padding(
     padding: const EdgeInsets.all(AppSpacing.xl),
@@ -582,6 +878,9 @@ class _YorksV1EspCalculatorScreenState
       _rows,
       _number(_safety.text),
     );
+    if (YorksMobileUi.isActive(context)) {
+      return _buildMobile(context, totals);
+    }
     return NexusPageShell(
       eyebrow: 'Engineering tools',
       title: 'ESP Calculator',
@@ -702,6 +1001,148 @@ class _YorksV1EspCalculatorScreenState
       ),
     );
   }
+
+  Widget _buildMobile(
+    BuildContext context,
+    ({double subtotalPa, double finalPa, int incompleteRows}) totals,
+  ) => Scaffold(
+    backgroundColor: AppColors.surface,
+    appBar: PreferredSize(
+      preferredSize: const Size.fromHeight(YorksMobileUi.appBarHeight),
+      child: YorksMobileAppBar(
+        title: 'ESP Calculator',
+        leading: YorksMobileIconButton(
+          icon: Icons.arrow_back_rounded,
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        trailing: PopupMenuButton<String>(
+          tooltip: 'Calculation actions',
+          icon: const Icon(Icons.more_horiz_rounded),
+          onSelected: (value) {
+            switch (value) {
+              case 'save':
+                _save();
+              case 'open':
+                _open();
+              case 'import':
+                _import();
+              case 'export':
+                _export();
+              case 'fittings':
+                _showFittings();
+              case 'print':
+                _print();
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'save', child: Text('Save')),
+            PopupMenuItem(value: 'open', child: Text('Open saved')),
+            PopupMenuItem(value: 'import', child: Text('Import JSON')),
+            PopupMenuItem(value: 'export', child: Text('Export JSON')),
+            PopupMenuItem(value: 'fittings', child: Text('Fitting library')),
+            PopupMenuItem(value: 'print', child: Text('Print / PDF')),
+          ],
+        ),
+      ),
+    ),
+    body: SafeArea(
+      top: false,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 18, 14, 96),
+        children: [
+          const YorksMobilePageTitle(
+            eyebrow: 'Engineering tool',
+            title: 'External static pressure',
+            description:
+                'Build a traceable calculation from the current system rows.',
+          ),
+          const SizedBox(height: 16),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.42,
+            children: [
+              YorksMobileMetricCard(
+                label: 'System loss',
+                value: '${totals.subtotalPa.toStringAsFixed(1)} Pa',
+                icon: Icons.speed_rounded,
+              ),
+              YorksMobileMetricCard(
+                label: 'Final ESP',
+                value: '${totals.finalPa.toStringAsFixed(1)} Pa',
+                icon: Icons.air_rounded,
+                tint: AppColors.navy,
+                iconColor: Colors.white,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          YorksMobileCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Calculation details', style: AppTypography.titleMedium),
+                _EspHeader(
+                  controllers: [
+                    _projectName,
+                    _projectNo,
+                    _systemNo,
+                    _revision,
+                    _date,
+                    _equipment,
+                  ],
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'System components',
+                  style: AppTypography.titleMedium,
+                ),
+              ),
+              SizedBox(
+                height: AppSpacing.minTapTarget,
+                child: FilledButton.icon(
+                  onPressed: _addRow,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add row'),
+                ),
+              ),
+            ],
+          ),
+          if (totals.incompleteRows > 0) ...[
+            const SizedBox(height: 10),
+            YorksMobileCallout(
+              icon: Icons.info_outline_rounded,
+              title:
+                  '${totals.incompleteRows} row${totals.incompleteRows == 1 ? '' : 's'} incomplete',
+              message:
+                  'Complete the duct data or enter a manufacturer/manual ESP before issuing the calculation.',
+              warning: true,
+            ),
+          ],
+          _EspRows(rows: _rows, onChanged: _updateRow, onDelete: _deleteRow),
+          const SizedBox(height: 8),
+          YorksMobileCard(
+            child: _EspSummary(
+              safety: _safety,
+              totals: totals,
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   void _updateRow(YorksV1EspRow row) => setState(() {
     final index = _rows.indexWhere((item) => item.id == row.id);

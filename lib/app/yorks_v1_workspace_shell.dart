@@ -168,6 +168,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
   /// navigation. This avoids stacking a generic workspace toolbar above a
   /// focused record toolbar on the native mobile breakpoint.
   bool _featureOwnsMobileTopBar(String location) {
+    // The retained engineering calculators use a focused, controller-backed
+    // phone header just like record routes. Keep the shared bottom navigation,
+    // but do not stack the generic workspace toolbar above their own actions.
+    if (location == RoutePaths.yorksV1DuctSizer ||
+        location == RoutePaths.yorksV1EspCalculator) {
+      return true;
+    }
     final segments = Uri(path: location).pathSegments;
     if (segments.length < 2 || segments[0] != 'yorks') {
       return false;
