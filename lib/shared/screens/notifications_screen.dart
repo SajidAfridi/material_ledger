@@ -58,9 +58,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               ),
               trailing: unread > 0
                   ? TextButton(
-                      onPressed: () => ref
-                          .read(notificationsProvider.notifier)
-                          .markAllRead(),
+                      onPressed: () =>
+                          ref.read(notificationActionsProvider).markAllRead(),
                       child: Text(
                         AppStrings.markAllRead.primary,
                         style: AppTypography.labelSmall.copyWith(
@@ -129,7 +128,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           if (unread > 0)
             TextButton(
               onPressed: () =>
-                  ref.read(notificationsProvider.notifier).markAllRead(),
+                  ref.read(notificationActionsProvider).markAllRead(),
               child: Text(AppStrings.markAllRead.primary),
             ),
         ],
@@ -176,7 +175,9 @@ class _NotificationDismissible extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => Dismissible(
     key: Key(notification.id),
-    direction: DismissDirection.endToStart,
+    direction: notification.isServerAuthoritative
+        ? DismissDirection.none
+        : DismissDirection.endToStart,
     background: Container(
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.only(right: AppSpacing.xl),
@@ -187,11 +188,11 @@ class _NotificationDismissible extends ConsumerWidget {
       child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
     ),
     onDismissed: (_) =>
-        ref.read(notificationsProvider.notifier).dismiss(notification.id),
+        ref.read(notificationActionsProvider).dismiss(notification),
     child: _NotificationCard(
       notification: notification,
       onTap: () {
-        ref.read(notificationsProvider.notifier).markRead(notification.id);
+        ref.read(notificationActionsProvider).markRead(notification);
         if (notification.route.isNotEmpty) context.push(notification.route);
       },
     ),

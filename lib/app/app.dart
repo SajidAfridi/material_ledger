@@ -12,6 +12,7 @@ import '../shared/providers/role_permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
+import '../shared/providers/yorks_v1_notification_provider.dart';
 import '../shared/services/app_config_service.dart';
 import '../shared/sync/realtime_sync.dart';
 import '../shared/sync/sync_engine.dart';
@@ -128,6 +129,10 @@ class MaterialLedgerApp extends ConsumerWidget {
     ref.watch(documentExpiryMonitorProvider);
     // Register this device for push whenever the signed-in user changes.
     ref.watch(pushBridgeProvider);
+    // Mount the recipient-scoped normalized notification feed globally. This
+    // powers the badge/centre and provides a polling fallback if Realtime is
+    // temporarily unavailable.
+    ref.watch(yorksV1NotificationsProvider);
 
     return MaterialApp.router(
       title: 'Yorks AC. & Ref.',

@@ -10,14 +10,12 @@ import '../../app/app.dart' show appRouterProvider;
 import '../../firebase_options.dart';
 import '../models/app_notification.dart';
 import '../providers/language_provider.dart' show supabaseClientProvider;
-import '../providers/session_provider.dart';
 import 'observability_service.dart';
 
-/// Public Web Push key, supplied by the release environment after it is
-/// generated in Firebase Console. It is intentionally a dart define rather
-/// than a source constant so an absent web credential fails closed instead of
-/// making browser notification permission appear to work when no FCM token can
-/// be issued.
+/// Optional project-specific Web Push key. Firebase supports its default VAPID
+/// key when this is absent; a release can still inject the project key for push
+/// services that require a non-default key without placing credentials in
+/// source control.
 const _webPushVapidKey = String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
 
 const _androidChannel = AndroidNotificationChannel(
@@ -257,10 +255,12 @@ class FcmPushService implements PushService {
     if (_webPushVapidKey.isEmpty) {
       if (kDebugMode) {
         debugPrint(
-          '[fcm] Web Push disabled: FIREBASE_WEB_VAPID_KEY is not configured.',
+          '[fcm] FIREBASE_WEB_VAPID_KEY is not configured; using Firebase default.',
         );
       }
-      return Future<String?>.value(null);
+      return FirebaseMessaging.instance.getToken(
+        serviceWorkerScriptPath: 'firebase-messaging-sw.js',
+      );
     }
     return FirebaseMessaging.instance.getToken(
       vapidKey: _webPushVapidKey,
@@ -317,19 +317,18 @@ class FcmPushService implements PushService {
   /// Best-effort: push is a convenience, never a requirement to use the app.
   Future<void> _registerToken([String? currentToken]) async {
     final client = _ref.read(supabaseClientProvider);
-    final appUserId = _ref.read(currentUserProvider)?.id;
-    if (client == null || appUserId == null) return;
+    final authUserId = client?.auth.currentUser?.id;
+    if (client == null || authUserId == null || authUserId.isEmpty) return;
     try {
       final token = currentToken ?? await _getToken();
       if (token == null) return;
-      await client.from('device_tokens').upsert({
-        'id': token,
-        'data': {
-          'appUserId': appUserId,
-          'platform': defaultTargetPlatform.name,
-          'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      await client.rpc(
+        'v1_register_push_device',
+        params: {
+          'p_token': token,
+          'p_platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
         },
-      });
+      );
     } catch (e, st) {
       _observe(e, st);
     }
@@ -344,7 +343,7 @@ class FcmPushService implements PushService {
     try {
       final token = await _getToken();
       if (token == null) return;
-      await client.from('device_tokens').delete().eq('id', token);
+      await client.rpc('v1_unregister_push_device', params: {'p_token': token});
     } catch (e, st) {
       _observe(e, st);
     }

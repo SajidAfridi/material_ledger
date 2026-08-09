@@ -1,210 +1,272 @@
-// send-push — fan out a push notification to one or more app users via FCM.
+// Yorks V1 trusted FCM transport.
 //
-// The client can't hold Google's service-account key, so the actual send goes
-// through this Edge Function: given target `app_user_id`s + a title/body, it
-// looks up their registered device tokens (device_tokens — service_role only,
-// the client has no read access to it) and calls FCM's HTTP v1 API using a
-// server-to-server OAuth2 token obtained from the service-account key.
-//
-// PUSH IS PURELY A TRANSPORT: the actual notification record already lives in
-// the (synced) `notifications` table and reaches every device on its own — this
-// function's only job is to wake the target device and hand it a `route` to
-// deep-link to on tap. It is config-gated like every other optional integration
-// in this app: with no FCM_SERVICE_ACCOUNT_JSON secret set, it responds 501
-// rather than erroring the caller's flow (the in-app/synced notification still
-// works with no push).
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+// Postgres is authoritative: a workflow RPC inserts v1_notifications, which
+// creates a durable outbox row and invokes this function with only that UUID.
+// The caller cannot choose recipients or message copy. This function claims
+// the outbox command atomically, derives safe non-commercial copy, reads only
+// the recipient's protected device tokens, and records a retryable result.
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  type PushClaim,
+  routeFor,
+  safePushCopy,
+  webLinkFor,
+} from "./notification_payload.ts";
 
 const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-yorks-push-secret",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, extraHeaders = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...cors, 'Content-Type': 'application/json' },
-  })
-
-// ── Google service-account OAuth2 (server-to-server, RS256 JWT-bearer) ──
-// Standard flow, implemented dependency-free with Deno's built-in WebCrypto
-// (mirrors this project's other Edge Function's "no external deps" style).
+    headers: { ...cors, ...extraHeaders, "Content-Type": "application/json" },
+  });
 
 function base64UrlEncode(bytes: Uint8Array): string {
-  let str = ''
-  for (const b of bytes) str += String.fromCharCode(b)
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  let value = "";
+  for (const byte of bytes) value += String.fromCharCode(byte);
+  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 async function importPrivateKey(pem: string): Promise<CryptoKey> {
   const contents = pem
-    .replace('-----BEGIN PRIVATE KEY-----', '')
-    .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\s/g, '')
-  const der = Uint8Array.from(atob(contents), (c) => c.charCodeAt(0))
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s/g, "");
+  const der = Uint8Array.from(
+    atob(contents),
+    (character) => character.charCodeAt(0),
+  );
   return crypto.subtle.importKey(
-    'pkcs8',
+    "pkcs8",
     der,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
-    ['sign'],
-  )
+    ["sign"],
+  );
 }
 
-/** Exchanges a Firebase/GCP service-account key for a short-lived FCM access token. */
 async function getFcmAccessToken(
   serviceAccount: { client_email: string; private_key: string },
 ): Promise<string> {
-  const now = Math.floor(Date.now() / 1000)
+  const now = Math.floor(Date.now() / 1000);
   const header = base64UrlEncode(
-    new TextEncoder().encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })),
-  )
+    new TextEncoder().encode(JSON.stringify({ alg: "RS256", typ: "JWT" })),
+  );
   const claims = base64UrlEncode(
-    new TextEncoder().encode(
-      JSON.stringify({
-        iss: serviceAccount.client_email,
-        scope: 'https://www.googleapis.com/auth/firebase.messaging',
-        aud: 'https://oauth2.googleapis.com/token',
-        iat: now,
-        exp: now + 3600,
-      }),
-    ),
-  )
-  const unsigned = `${header}.${claims}`
-  const key = await importPrivateKey(serviceAccount.private_key)
+    new TextEncoder().encode(JSON.stringify({
+      iss: serviceAccount.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: now,
+      exp: now + 3600,
+    })),
+  );
+  const unsigned = `${header}.${claims}`;
+  const key = await importPrivateKey(serviceAccount.private_key);
   const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
+    "RSASSA-PKCS1-v1_5",
     key,
     new TextEncoder().encode(unsigned),
-  )
-  const jwt = `${unsigned}.${base64UrlEncode(new Uint8Array(signature))}`
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  );
+  const assertion = `${unsigned}.${base64UrlEncode(new Uint8Array(signature))}`;
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
     }),
-  })
-  const tokenData = await res.json()
-  if (!res.ok) throw new Error(`token exchange failed: ${JSON.stringify(tokenData)}`)
-  return tokenData.access_token as string
+  });
+  const tokenData = await response.json();
+  if (!response.ok || typeof tokenData.access_token !== "string") {
+    throw new Error(`FCM_OAUTH_${response.status}`);
+  }
+  return tokenData.access_token;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
-
-  const url = Deno.env.get('SUPABASE_URL')!
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-
-  // ── Authorize FIRST: caller must be signed in (any role — sending a push
-  // for a teammate's event is routine, low-stakes, done by every role). This
-  // must happen before anything else, including the config-availability
-  // check below, so an unauthenticated caller never learns configuration
-  // state. ──
-  const authHeader = req.headers.get('Authorization') ?? ''
-  if (!authHeader.startsWith('Bearer ')) return json({ error: 'missing token' }, 401)
-  const caller = createClient(url, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const { data: who, error: whoErr } = await caller.auth.getUser()
-  if (whoErr || !who?.user) return json({ error: 'unauthorized' }, 401)
-
-  const saJson = Deno.env.get('FCM_SERVICE_ACCOUNT_JSON')
-  if (!saJson) {
-    // Not configured yet — the in-app/synced notification still works without
-    // push, so this is a soft failure, not a hard error for the caller.
-    return json({ ok: false, error: 'push not configured' }, 501)
+Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") {
+    return new Response("ok", { headers: cors });
+  }
+  if (request.method !== "POST") {
+    return json({ error: "method not allowed" }, 405);
   }
 
-  let body: {
-    targetAppUserIds?: string[]
-    title?: string
-    body?: string
-    data?: Record<string, string>
-  }
-  try {
-    body = await req.json()
-  } catch {
-    return json({ error: 'invalid JSON body' }, 400)
-  }
-  const targets = (body.targetAppUserIds ?? []).filter(Boolean)
-  if (targets.length === 0 || !body.title) {
-    return json({ error: 'targetAppUserIds (non-empty) and title required' }, 400)
-  }
-
+  const suppliedSecret = request.headers.get("x-yorks-push-secret") ?? "";
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const serviceAccountJson = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON") ?? "";
+  if (!url || !serviceKey) return json({ error: "backend unavailable" }, 503);
   const admin = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
-  })
+  });
+  const { data: secretIsValid, error: secretError } = await admin.rpc(
+    "v1_validate_push_webhook_secret",
+    { p_secret: suppliedSecret },
+  );
+  if (secretError || secretIsValid !== true) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  let notificationId = "";
+  try {
+    const body = await request.json();
+    notificationId = typeof body.notificationId === "string"
+      ? body.notificationId
+      : "";
+  } catch {
+    return json({ error: "invalid JSON body" }, 400);
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(notificationId)) {
+    return json({ error: "notificationId required" }, 400);
+  }
+
+  const finish = async (
+    status: "sent" | "no_devices" | "failed",
+    sentDeviceCount = 0,
+    errorCode?: string,
+  ) => {
+    await admin.rpc("v1_finish_notification_push", {
+      p_notification_id: notificationId,
+      p_status: status,
+      p_sent_device_count: sentDeviceCount,
+      p_error_code: errorCode ?? null,
+    });
+  };
+
+  const { data: claimData, error: claimError } = await admin.rpc(
+    "v1_claim_notification_push",
+    { p_notification_id: notificationId },
+  );
+  if (claimError) return json({ error: "claim failed" }, 500);
+  if (!claimData) return json({ ok: true, skipped: true });
+  const claim = claimData as PushClaim;
+
+  if (!serviceAccountJson) {
+    await finish("failed", 0, "FCM_NOT_CONFIGURED");
+    return json({ error: "push not configured" }, 503, { "Retry-After": "60" });
+  }
+
+  const { data: tokenRows, error: tokenError } = await admin
+    .from("v1_push_device_tokens")
+    .select("token, platform")
+    .eq("auth_user_id", claim.recipientAuthUserId);
+  if (tokenError) {
+    await finish("failed", 0, "TOKEN_LOOKUP_FAILED");
+    return json({ error: "token lookup failed" }, 503, { "Retry-After": "30" });
+  }
+  if (!tokenRows || tokenRows.length === 0) {
+    await finish("no_devices");
+    return json({ ok: true, sent: 0, note: "no registered devices" });
+  }
 
   try {
-    // Tiny team app — a full scan + in-memory filter avoids PostgREST JSON-path
-    // filter syntax entirely and is trivially fast at this scale.
-    const { data: rows, error: tokErr } = await admin
-      .from('device_tokens')
-      .select('id, data')
-    if (tokErr) throw tokErr
-
-    const targetSet = new Set(targets)
-    const matching = (rows ?? []).filter((r) =>
-      targetSet.has((r.data as Record<string, unknown>)?.appUserId as string),
-    )
-    if (matching.length === 0) {
-      return json({ ok: true, sent: 0, note: 'no registered devices for these users' })
+    const serviceAccount = JSON.parse(serviceAccountJson) as {
+      project_id: string;
+      client_email: string;
+      private_key: string;
+    };
+    if (
+      !serviceAccount.project_id || !serviceAccount.client_email ||
+      !serviceAccount.private_key
+    ) {
+      throw new Error("FCM_SERVICE_ACCOUNT_INVALID");
     }
-
-    const serviceAccount = JSON.parse(saJson) as {
-      project_id: string
-      client_email: string
-      private_key: string
-    }
-    const accessToken = await getFcmAccessToken(serviceAccount)
+    const accessToken = await getFcmAccessToken(serviceAccount);
     const sendUrl =
-      `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`
+      `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
+    const copy = safePushCopy(claim.eventCode);
+    const route = routeFor(claim);
+    const webLink = webLinkFor(
+      route,
+      Deno.env.get("YORKS_WEB_ORIGIN") ?? "",
+    );
+    let sent = 0;
+    let transientFailures = 0;
+    const staleTokens: string[] = [];
 
-    let sent = 0
-    const staleTokenIds: string[] = []
-    for (const row of matching) {
-      const token = row.id as string
-      const res = await fetch(sendUrl, {
-        method: 'POST',
+    for (const row of tokenRows) {
+      const token = row.token as string;
+      const isWeb = row.platform === "web";
+      const data = {
+        notificationId: claim.notificationId,
+        eventCode: claim.eventCode,
+        type: copy.type,
+        refId: claim.requestId ?? claim.entityId,
+        route,
+      };
+      const response = await fetch(sendUrl, {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           message: {
             token,
-            notification: { title: body.title, body: body.body ?? '' },
-            data: body.data ?? {},
+            data,
+            ...(isWeb
+              ? {
+                webpush: {
+                  notification: {
+                    title: copy.title,
+                    body: copy.body,
+                    icon: "/icons/Icon-192.png",
+                  },
+                  ...(webLink ? { fcm_options: { link: webLink } } : {}),
+                },
+              }
+              : {
+                notification: { title: copy.title, body: copy.body },
+                android: { priority: "high" },
+                apns: { payload: { aps: { sound: "default" } } },
+              }),
           },
         }),
-      })
-      if (res.ok) {
-        sent += 1
+      });
+      if (response.ok) {
+        sent += 1;
+        continue;
+      }
+      const errorBody = await response.json().catch(() => ({}));
+      const status = errorBody?.error?.status as string | undefined;
+      if (status === "NOT_FOUND" || status === "UNREGISTERED") {
+        staleTokens.push(token);
       } else {
-        const errBody = await res.json().catch(() => ({}))
-        const status = errBody?.error?.status
-        // The token no longer exists on the device (uninstalled / reset) —
-        // self-clean so we stop trying to push to it.
-        if (status === 'NOT_FOUND' || status === 'UNREGISTERED') {
-          staleTokenIds.push(token)
-        }
+        transientFailures += 1;
       }
     }
 
-    if (staleTokenIds.length > 0) {
-      await admin.from('device_tokens').delete().in('id', staleTokenIds)
+    if (staleTokens.length > 0) {
+      await admin.from("v1_push_device_tokens").delete().in(
+        "token",
+        staleTokens,
+      );
     }
-
-    return json({ ok: true, sent, staleRemoved: staleTokenIds.length })
-  } catch (e) {
-    return json({ error: String(e) }, 500)
+    if (sent > 0) {
+      await finish(
+        "sent",
+        sent,
+        transientFailures > 0 ? "PARTIAL_SEND" : undefined,
+      );
+      return json({ ok: true, sent, staleRemoved: staleTokens.length });
+    }
+    if (transientFailures > 0) {
+      await finish("failed", 0, "FCM_SEND_FAILED");
+      return json({ error: "FCM send failed" }, 503, { "Retry-After": "30" });
+    }
+    await finish("no_devices");
+    return json({ ok: true, sent: 0, staleRemoved: staleTokens.length });
+  } catch (error) {
+    const code = String(error).includes("FCM_SERVICE_ACCOUNT_INVALID")
+      ? "FCM_SERVICE_ACCOUNT_INVALID"
+      : "FCM_TRANSPORT_FAILED";
+    await finish("failed", 0, code);
+    return json({ error: code }, 503, { "Retry-After": "60" });
   }
-})
+});

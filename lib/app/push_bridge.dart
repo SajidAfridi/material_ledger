@@ -19,8 +19,13 @@ final pushBridgeProvider = Provider<void>((ref) {
   // Supabase.
   final push = ref.read(pushServiceProvider);
   unawaited(push.register());
-  ref.listen<AppUser?>(currentUserProvider, (_, next) {
-    if (next == null) return;
+  ref.listen<AppUser?>(currentUserProvider, (previous, next) {
+    if (next == null) {
+      if (previous != null && push is FcmPushService) {
+        unawaited(push.unregisterToken());
+      }
+      return;
+    }
     unawaited(push.register());
   }, fireImmediately: true);
 });

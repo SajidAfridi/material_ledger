@@ -7,6 +7,7 @@ import '../models/app_user.dart';
 import '../models/user_role.dart';
 import '../models/yorks_v1_role.dart';
 import '../services/password_hasher.dart';
+import '../services/push_service.dart';
 import 'language_provider.dart';
 import 'users_provider.dart';
 
@@ -388,6 +389,8 @@ class AuthController {
     final client = _ref.read(supabaseClientProvider);
     if (client != null) {
       try {
+        final push = _ref.read(pushServiceProvider);
+        if (push is FcmPushService) await push.unregisterToken();
         await client.auth.signOut();
       } catch (_) {
         // Best-effort — the local session is cleared regardless below.

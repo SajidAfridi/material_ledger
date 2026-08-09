@@ -10,6 +10,7 @@ import '../sync/sync_engine.dart';
 import 'language_provider.dart' show supabaseClientProvider;
 import 'session_provider.dart';
 import 'users_provider.dart';
+import 'yorks_v1_notification_provider.dart';
 
 const _kNotificationsKey = 'notifications_list_v3';
 const _uuid = Uuid();
@@ -19,11 +20,13 @@ final notificationsProvider =
     StateNotifierProvider<NotificationsNotifier, List<AppNotification>>((ref) {
       return NotificationsNotifier(
         ref,
-        ref.watch(storageProvider).collection<AppNotification>(
-          _kNotificationsKey,
-          toJson: (n) => n.toJson(),
-          fromJson: AppNotification.fromJson,
-        ),
+        ref
+            .watch(storageProvider)
+            .collection<AppNotification>(
+              _kNotificationsKey,
+              toJson: (n) => n.toJson(),
+              fromJson: AppNotification.fromJson,
+            ),
       );
     });
 
@@ -50,16 +53,52 @@ bool notificationVisibleTo(
 final visibleNotificationsProvider = Provider<List<AppNotification>>((ref) {
   final role = ref.watch(currentRoleProvider);
   final userId = ref.watch(currentUserProvider)?.id ?? '';
-  return ref
+  final legacy = ref
       .watch(notificationsProvider)
       .where((n) => notificationVisibleTo(n, role, currentUserId: userId))
       .toList();
+  final authoritative = ref.watch(yorksV1AppNotificationsProvider);
+  final merged = <AppNotification>[...authoritative, ...legacy]
+    ..sort((left, right) => right.timestamp.compareTo(left.timestamp));
+  return merged;
 });
 
 /// Count of unread notifications for the current role (drives the badge dot).
 final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref.watch(visibleNotificationsProvider).where((n) => !n.isRead).length;
 });
+
+final notificationActionsProvider = Provider<NotificationActions>(
+  NotificationActions.new,
+);
+
+class NotificationActions {
+  const NotificationActions(this._ref);
+
+  final Ref _ref;
+
+  Future<void> markRead(AppNotification notification) {
+    if (notification.isServerAuthoritative) {
+      return _ref
+          .read(yorksV1NotificationsProvider.notifier)
+          .markSeen(notification.id);
+    }
+    return _ref.read(notificationsProvider.notifier).markRead(notification.id);
+  }
+
+  Future<void> markAllRead() async {
+    await _ref.read(notificationsProvider.notifier).markAllRead();
+    await _ref.read(yorksV1NotificationsProvider.notifier).markAllSeen();
+  }
+
+  Future<void> dismiss(AppNotification notification) async {
+    if (notification.isServerAuthoritative) {
+      await markRead(notification);
+      return;
+    }
+    await _ref.read(notificationsProvider.notifier).dismiss(notification.id);
+  }
+}
 
 /// Which `AppUser.id`s a push for [n] should reach: a personally-targeted
 /// notification goes to just that user; a role-audience one fans out to every
@@ -178,10 +217,7 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
     AppNotification? updated;
     state = [
       for (final n in state)
-        if (n.id == id)
-          updated = n.copyWith(isRead: true)
-        else
-          n,
+        if (n.id == id) updated = n.copyWith(isRead: true) else n,
     ];
     if (updated == null) return;
     await _persist();

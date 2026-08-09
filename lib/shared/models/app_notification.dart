@@ -17,6 +17,20 @@ enum NotificationType {
       .firstWhere((t) => t.key == key, orElse: () => NotificationType.info);
 }
 
+/// Where the record is authoritative. Yorks V1 workflow alerts live in the
+/// normalized server table and must be acknowledged through its trusted RPC;
+/// legacy alerts retain their existing local/sync behavior.
+enum NotificationOrigin {
+  legacy('legacy'),
+  yorksV1('yorks_v1');
+
+  const NotificationOrigin(this.key);
+  final String key;
+
+  static NotificationOrigin fromKey(String? key) =>
+      key == yorksV1.key ? yorksV1 : legacy;
+}
+
 /// A single in-app notification (notification centre — read/unread status).
 class AppNotification {
   const AppNotification({
@@ -31,6 +45,7 @@ class AppNotification {
     this.route = '',
     this.audience = '',
     this.userId = '',
+    this.origin = NotificationOrigin.legacy,
   });
 
   final String id;
@@ -60,6 +75,10 @@ class AppNotification {
   /// to [audience] role targeting. Decodes to '' for old/Firebase data.
   final String userId;
 
+  final NotificationOrigin origin;
+
+  bool get isServerAuthoritative => origin == NotificationOrigin.yorksV1;
+
   /// Human-readable relative time string.
   String get relativeTime {
     final diff = DateTime.now().difference(timestamp);
@@ -82,6 +101,7 @@ class AppNotification {
     route: route,
     audience: audience,
     userId: userId,
+    origin: origin,
   );
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +116,7 @@ class AppNotification {
     'route': route,
     'audience': audience,
     'userId': userId,
+    'origin': origin.key,
   };
 
   factory AppNotification.fromJson(Map<String, dynamic> json) =>
@@ -111,6 +132,7 @@ class AppNotification {
         route: json['route'] as String? ?? '',
         audience: json['audience'] as String? ?? '',
         userId: json['userId'] as String? ?? '',
+        origin: NotificationOrigin.fromKey(json['origin'] as String?),
       );
 
   static String encodeList(List<AppNotification> items) =>
