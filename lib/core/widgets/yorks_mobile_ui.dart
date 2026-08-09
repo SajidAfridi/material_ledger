@@ -201,6 +201,241 @@ class YorksMobileSectionHeader extends StatelessWidget {
   );
 }
 
+class YorksMobilePageTitle extends StatelessWidget {
+  const YorksMobilePageTitle({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    required this.description,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        eyebrow.toUpperCase(),
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.blue,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.4,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        title,
+        style: AppTypography.headlineLarge.copyWith(
+          color: AppColors.ink,
+          fontSize: 25,
+          height: 1.08,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -.55,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        description,
+        style: AppTypography.bodyMedium.copyWith(
+          color: AppColors.muted,
+          fontSize: 13,
+          height: 1.38,
+        ),
+      ),
+    ],
+  );
+}
+
+class YorksMobileCallout extends StatelessWidget {
+  const YorksMobileCallout({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.warning = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning ? AppColors.warning : AppColors.blue;
+    final background = warning
+        ? AppColors.warningContainer
+        : AppColors.blueContainer.withValues(alpha: .42);
+    final border = warning
+        ? AppColors.warning.withValues(alpha: .38)
+        : AppColors.blueContainerStrong;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: warning
+                  ? const Color(0xFFFFEEC0)
+                  : const Color(0xFFE5F0FC),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: SizedBox.square(
+              dimension: 38,
+              child: Icon(icon, color: color, size: 21),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.titleSmall),
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class YorksMobileSegmentOption<T> {
+  const YorksMobileSegmentOption({required this.value, required this.label});
+
+  final T value;
+  final String label;
+}
+
+class YorksMobileSegmentedControl<T> extends StatelessWidget {
+  const YorksMobileSegmentedControl({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+    this.enabled = true,
+  });
+
+  final List<YorksMobileSegmentOption<T>> options;
+  final T? selected;
+  final ValueChanged<T> onSelected;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        for (final option in options)
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: selected == option.value,
+              child: SizedBox(
+                height: AppSpacing.minTapTarget,
+                child: Material(
+                  color: selected == option.value
+                      ? AppColors.surfaceContainerLowest
+                      : Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                    side: selected == option.value
+                        ? const BorderSide(color: AppColors.blueContainerStrong)
+                        : BorderSide.none,
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(9),
+                    onTap: enabled ? () => onSelected(option.value) : null,
+                    child: Center(
+                      child: Text(
+                        option.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: selected == option.value
+                              ? AppColors.blue
+                              : AppColors.muted,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class YorksMobileStickyActions extends StatelessWidget {
+  const YorksMobileStickyActions({
+    super.key,
+    required this.children,
+    this.summary,
+  });
+
+  final String? summary;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.surfaceContainerLowest,
+    elevation: 8,
+    shadowColor: AppColors.shadow,
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 9, 14, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (summary != null) ...[
+              Text(
+                summary!,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                for (var index = 0; index < children.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 8),
+                  Expanded(child: children[index]),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class YorksMobileMetricCard extends StatelessWidget {
   const YorksMobileMetricCard({
     super.key,

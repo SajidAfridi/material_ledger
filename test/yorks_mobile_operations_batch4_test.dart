@@ -1,0 +1,814 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ledger/core/theme/app_theme.dart';
+import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
+import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
+import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
+import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
+import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_arrangement_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_arrangement_repository.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+late SharedPreferences _preferences;
+
+void main() {
+  setUpAll(() async {
+    final nexusFontLoader = FontLoader('NexusSans')
+      ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    final arabicFontLoader = FontLoader('NotoSansArabic')
+      ..addFont(rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'));
+    final flutterCache = _flutterCacheDirectory();
+    final iconBytes = await File(
+      '${flutterCache.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    ).readAsBytes();
+    final iconFontLoader = FontLoader('MaterialIcons')
+      ..addFont(Future.value(ByteData.sublistView(iconBytes)));
+    await Future.wait([
+      nexusFontLoader.load(),
+      arabicFontLoader.load(),
+      iconFontLoader.load(),
+    ]);
+  });
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    _preferences = await SharedPreferences.getInstance();
+  });
+
+  for (final size in [const Size(390, 844), const Size(360, 800)]) {
+    final suffix = '${size.width.toInt()}x${size.height.toInt()}';
+
+    testWidgets('ref29 arrangement list $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpArrangement(tester, _workingArrangementWorkspace);
+      expect(
+        find.byKey(const ValueKey('mobile-arrangement-list')),
+        findsOneWidget,
+      );
+      await _golden(tester, '29_arrangement_list_$suffix');
+    });
+
+    testWidgets('ref30 arrangement line editor $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpArrangement(tester, _workingArrangementWorkspace);
+      await tester.tap(find.text('Motorized smoke damper'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mobile-arrangement-line')),
+        findsOneWidget,
+      );
+      await _golden(tester, '30_arrangement_line_$suffix');
+    });
+
+    testWidgets('ref31 arrangement review $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpArrangement(tester, _workingArrangementWorkspace);
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-arrangement-review-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mobile-arrangement-review')),
+        findsOneWidget,
+      );
+      await _golden(tester, '31_arrangement_review_$suffix');
+    });
+
+    testWidgets('ref32 engineer arrangement approval $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpArrangement(tester, _approvalArrangementWorkspace);
+      expect(
+        find.byKey(const ValueKey('mobile-arrangement-approval')),
+        findsOneWidget,
+      );
+      await _golden(tester, '32_arrangement_approval_$suffix');
+    });
+
+    testWidgets('ref33 return arrangement reason $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpArrangement(tester, _approvalArrangementWorkspace);
+      await tester.tap(find.text('Return'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mobile-return-arrangement-reason')),
+        findsOneWidget,
+      );
+      await _golden(tester, '33_arrangement_return_$suffix');
+    });
+
+    testWidgets('ref34 create dispatch $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpLogistics(tester, requestId: 'dispatch');
+      expect(
+        find.byKey(const ValueKey('mobile-dispatch-create')),
+        findsOneWidget,
+      );
+      await _golden(tester, '34_dispatch_create_$suffix');
+    });
+
+    testWidgets('ref35 receipt review $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpLogistics(tester, requestId: 'receipt', focusReceipt: true);
+      expect(
+        find.byKey(const ValueKey('mobile-receipt-review')),
+        findsOneWidget,
+      );
+      expect(find.text('0 / 2 lines reviewed'), findsOneWidget);
+      await _golden(tester, '35_receipt_review_$suffix');
+    });
+
+    testWidgets('ref36 delivery exception $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpLogistics(tester, requestId: 'receipt', focusReceipt: true);
+      await tester.tap(find.text('Missing').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mobile-receipt-exception')),
+        findsOneWidget,
+      );
+      await _golden(tester, '36_receipt_exception_$suffix');
+    });
+
+    testWidgets('ref37 delivery order $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpReturns(
+        tester,
+        requestId: 'delivery',
+        focusDeliveryOrder: true,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-delivery-order-preview')),
+        findsOneWidget,
+      );
+      expect(find.text('4 Nos'), findsWidgets);
+      await _golden(tester, '37_delivery_order_$suffix');
+    });
+
+    testWidgets('ref38 return material selection $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpReturns(tester, requestId: 'returns');
+      expect(
+        find.byKey(const ValueKey('mobile-return-select')),
+        findsOneWidget,
+      );
+      await _golden(tester, '38_return_select_$suffix');
+    });
+
+    testWidgets('ref39 return material review $suffix', (tester) async {
+      await _setViewport(tester, size);
+      await _pumpReturns(tester, requestId: 'returns');
+      await tester.tap(find.text('Copper pipe'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, '2');
+      await tester.tap(find.text('Save Review'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next · 1 Items'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mobile-return-review')),
+        findsOneWidget,
+      );
+      await _golden(tester, '39_return_review_$suffix');
+    });
+  }
+
+  testWidgets('receipt requires an explicit outcome for every line', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = await _pumpLogistics(
+      tester,
+      requestId: 'receipt',
+      focusReceipt: true,
+    );
+    final confirm = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Confirm receipt review'),
+    );
+    expect(confirm.onPressed, isNull);
+    expect(repository.receipts, isEmpty);
+
+    await tester.tap(find.text('Receive all as dispatched'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Confirm receipt review'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.receipts, hasLength(1));
+    expect(
+      repository.receipts.single.lines.every(
+        (line) => line.outcome == YorksV1ReceiptOutcome.received,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('dispatch retry reuses one command identity', (tester) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = _OperationsRepository()..dispatchFailures = 1;
+    await _pumpLogistics(tester, requestId: 'dispatch', repository: repository);
+    await tester.enterText(find.byType(TextField).first, 'DN-100');
+    await tester.tap(find.widgetWithText(FilledButton, 'Dispatch now'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Dispatch now'));
+    await tester.pumpAndSettle();
+
+    expect(repository.dispatches, hasLength(2));
+    expect(
+      repository.dispatches.first.idempotencyKey,
+      repository.dispatches.last.idempotencyKey,
+    );
+  });
+
+  testWidgets('receipt retry preserves reviewed state and command identity', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = _OperationsRepository()..receiptFailures = 1;
+    await _pumpLogistics(
+      tester,
+      requestId: 'receipt',
+      focusReceipt: true,
+      repository: repository,
+    );
+    await tester.tap(find.text('Receive all as dispatched'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Confirm receipt review'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2 lines reviewed'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Confirm receipt review'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.receipts, hasLength(2));
+    expect(
+      repository.receipts.first.idempotencyKey,
+      repository.receipts.last.idempotencyKey,
+    );
+  });
+
+  testWidgets('return draft retry reuses the same command identity', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = _OperationsRepository()..returnFailures = 1;
+    await _pumpReturns(tester, requestId: 'returns', repository: repository);
+    await tester.tap(find.text('Copper pipe'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '2');
+    await tester.tap(find.text('Save Review'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next · 1 Items'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save return draft'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save return draft'));
+    await tester.pumpAndSettle();
+
+    expect(repository.returnDrafts, hasLength(2));
+    expect(
+      repository.returnDrafts.first.idempotencyKey,
+      repository.returnDrafts.last.idempotencyKey,
+    );
+  });
+
+  testWidgets('desktop arrangement stays on the existing office surface', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768), topInset: 0);
+    await _pumpArrangement(tester, _workingArrangementWorkspace);
+    expect(find.byKey(const ValueKey('mobile-arrangement-list')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+Future<void> _golden(WidgetTester tester, String name) async {
+  await expectLater(
+    find.byType(MaterialApp),
+    matchesGoldenFile('goldens/mobile_batch4/$name.png'),
+  );
+  expect(tester.takeException(), isNull);
+}
+
+Future<void> _pumpArrangement(
+  WidgetTester tester,
+  YorksV1ArrangementWorkspace workspace,
+) async {
+  final repository = _ArrangementRepository(workspace);
+  await tester.pumpWidget(
+    _app(
+      overrides: [
+        yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: const YorksV1ArrangementScreen(requestId: 'request-1'),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<_OperationsRepository> _pumpLogistics(
+  WidgetTester tester, {
+  required String requestId,
+  bool focusReceipt = false,
+  _OperationsRepository? repository,
+}) async {
+  final fixture = repository ?? _OperationsRepository();
+  await tester.pumpWidget(
+    _app(
+      overrides: [
+        yorksV1LogisticsRepositoryProvider.overrideWithValue(fixture),
+      ],
+      child: YorksV1LogisticsScreen(
+        requestId: requestId,
+        focusReceiptReview: focusReceipt,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return fixture;
+}
+
+Future<_OperationsRepository> _pumpReturns(
+  WidgetTester tester, {
+  required String requestId,
+  bool focusDeliveryOrder = false,
+  _OperationsRepository? repository,
+}) async {
+  final fixture = repository ?? _OperationsRepository();
+  if (focusDeliveryOrder) {
+    await tester.pumpWidget(
+      _app(
+        overrides: const [],
+        child: Center(
+          child: Image.asset(
+            'assets/branding/yorks_emblem_mobile.png',
+            width: 42,
+            height: 42,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  }
+  await tester.pumpWidget(
+    _app(
+      overrides: [
+        yorksV1LogisticsRepositoryProvider.overrideWithValue(fixture),
+      ],
+      child: YorksV1ReturnsDocumentsScreen(
+        requestId: requestId,
+        focusDeliveryOrder: focusDeliveryOrder,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return fixture;
+}
+
+Widget _app({required List<Override> overrides, required Widget child}) =>
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        ...overrides,
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: child,
+      ),
+    );
+
+Future<void> _setViewport(
+  WidgetTester tester,
+  Size size, {
+  double topInset = 26,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  tester.view.padding = FakeViewPadding(top: topInset);
+  tester.view.viewPadding = FakeViewPadding(top: topInset);
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+    tester.view.resetPadding();
+    tester.view.resetViewPadding();
+  });
+}
+
+Directory _flutterCacheDirectory() {
+  var directory = File(Platform.resolvedExecutable).parent;
+  for (var level = 0; level < 8; level++) {
+    if (directory.path.endsWith('${Platform.pathSeparator}cache')) {
+      return directory;
+    }
+    directory = directory.parent;
+  }
+  throw StateError('Could not locate the Flutter cache from the test runner');
+}
+
+final _workingArrangementWorkspace = YorksV1ArrangementWorkspace(
+  requestId: 'request-1',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'Procurement arrangement',
+  requestRecordVersion: 4,
+  canBegin: false,
+  canSave: true,
+  canDecide: false,
+  arrangements: [_workingArrangement],
+);
+
+final _approvalArrangementWorkspace = YorksV1ArrangementWorkspace(
+  requestId: 'request-1',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'Project Engineer review',
+  requestRecordVersion: 5,
+  canBegin: false,
+  canSave: false,
+  canDecide: true,
+  arrangements: [_approvalArrangement],
+);
+
+final _workingArrangement = YorksV1ProcurementArrangement(
+  id: 'arrangement-1',
+  version: 1,
+  status: YorksV1ArrangementStatus.working,
+  isCurrent: true,
+  recordVersion: 2,
+  startedByDisplayName: 'Ali Raza',
+  startedAt: DateTime.utc(2026, 8, 9),
+  lines: const [
+    YorksV1ArrangementLine(
+      id: 'arrangement-line-1',
+      requestLineId: 'request-line-1',
+      displayOrder: 1,
+      description: 'Motorized smoke damper',
+      brandOrigin: 'Beteccad UAE',
+      requestedQuantity: '11',
+      unit: 'Nos',
+      source: YorksV1ArrangementSource.warehouse,
+      inventoryItemId: 'inventory-1',
+      decision: YorksV1ArrangementDecision.full,
+      arrangedQuantity: '11',
+      unitCost: '110.29',
+    ),
+    YorksV1ArrangementLine(
+      id: 'arrangement-line-2',
+      requestLineId: 'request-line-2',
+      displayOrder: 2,
+      description: 'Flexible duct connector',
+      brandOrigin: 'Yorks',
+      requestedQuantity: '6',
+      unit: 'Nos',
+      source: YorksV1ArrangementSource.externalSupplier,
+      externalSupplier: 'Local supplier',
+      decision: YorksV1ArrangementDecision.partial,
+      arrangedQuantity: '4',
+      reason: 'Two units are pending supplier confirmation.',
+      unitCost: '35',
+    ),
+    YorksV1ArrangementLine(
+      id: 'arrangement-line-3',
+      requestLineId: 'request-line-3',
+      displayOrder: 3,
+      description: 'Spring mounts',
+      requestedQuantity: '2',
+      unit: 'Set',
+      source: YorksV1ArrangementSource.externalSupplier,
+      decision: YorksV1ArrangementDecision.unavailable,
+      arrangedQuantity: '0',
+      reason: 'Not currently available.',
+    ),
+  ],
+);
+
+final _approvalArrangement = YorksV1ProcurementArrangement(
+  id: _workingArrangement.id,
+  version: _workingArrangement.version,
+  status: YorksV1ArrangementStatus.awaitingApproval,
+  isCurrent: true,
+  recordVersion: 3,
+  startedByDisplayName: _workingArrangement.startedByDisplayName,
+  startedAt: _workingArrangement.startedAt,
+  savedAt: DateTime.utc(2026, 8, 9, 10),
+  savedByDisplayName: 'Ali Raza',
+  procurementNote: 'Partial supply is clearly marked for review.',
+  lines: _workingArrangement.lines,
+);
+
+class _ArrangementRepository implements YorksV1ArrangementRepository {
+  _ArrangementRepository(this.workspace);
+
+  final YorksV1ArrangementWorkspace workspace;
+
+  @override
+  Future<YorksV1ArrangementWorkspace> begin(
+    YorksV1BeginArrangementInput input,
+  ) async => workspace;
+
+  @override
+  Future<YorksV1ArrangementWorkspace> decide(
+    YorksV1DecideArrangementInput input,
+  ) async => workspace;
+
+  @override
+  Future<YorksV1ArrangementWorkspace> getWorkspace(String requestId) async =>
+      workspace;
+
+  @override
+  Future<List<YorksV1InventoryItem>> listInventoryItems() async => const [
+    YorksV1InventoryItem(
+      id: 'inventory-1',
+      description: 'Motorized smoke damper',
+      unit: 'Nos',
+      onHandQuantity: '12',
+      reservedQuantity: '1',
+      availableQuantity: '11',
+      recordVersion: 2,
+    ),
+  ];
+
+  @override
+  Future<YorksV1ArrangementWorkspace> save(
+    YorksV1SaveArrangementInput input,
+  ) async => workspace;
+}
+
+class _OperationsRepository implements YorksV1LogisticsRepository {
+  int dispatchFailures = 0;
+  int receiptFailures = 0;
+  int returnFailures = 0;
+  final List<YorksV1DispatchInput> dispatches = [];
+  final List<YorksV1ReceiptConfirmationInput> receipts = [];
+  final List<YorksV1MaterialReturnDraftInput> returnDrafts = [];
+
+  @override
+  Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId) async =>
+      requestId == 'receipt' ? _receiptWorkspace : _dispatchWorkspace;
+
+  @override
+  Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) async {
+    dispatches.add(input);
+    if (dispatchFailures-- > 0) throw StateError('temporary failure');
+    return _dispatchWorkspace;
+  }
+
+  @override
+  Future<YorksV1LogisticsWorkspace> confirmReceipt(
+    YorksV1ReceiptConfirmationInput input,
+  ) async {
+    receipts.add(input);
+    if (receiptFailures-- > 0) throw StateError('temporary failure');
+    return _receiptWorkspace;
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
+    String requestId,
+  ) async => requestId == 'delivery' ? _deliveryWorkspace : _returnsWorkspace;
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
+    YorksV1DeliveryOrderGenerationInput input,
+  ) async => _deliveryWorkspace;
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> saveMaterialReturnDraft(
+    YorksV1MaterialReturnDraftInput input,
+  ) async {
+    returnDrafts.add(input);
+    if (returnFailures-- > 0) throw StateError('temporary failure');
+    return _returnsWorkspace;
+  }
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> submitMaterialReturn(
+    YorksV1MaterialReturnSubmissionInput input,
+  ) async => _returnsWorkspace;
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> confirmMaterialReturn(
+    YorksV1MaterialReturnConfirmationInput input,
+  ) async => _returnsWorkspace;
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> rejectMaterialReturn(
+    YorksV1MaterialReturnRejectionInput input,
+  ) async => _returnsWorkspace;
+
+  @override
+  Future<YorksV1InventoryWorkspace> getInventory({String? search}) async =>
+      YorksV1InventoryWorkspace(items: const []);
+
+  @override
+  Future<YorksV1InventoryItemDetail> getInventoryItem(String inventoryItemId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<YorksV1LogisticsInventoryItem> adjustInventory(
+    YorksV1InventoryAdjustmentInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1LogisticsInventoryItem> setInventoryItemActive(
+    YorksV1InventoryItemStateInput input,
+  ) => throw UnimplementedError();
+}
+
+final _dispatchWorkspace = YorksV1LogisticsWorkspace(
+  requestId: 'dispatch',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'approved',
+  requestRecordVersion: 7,
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeName: 'Common / All Buildings',
+  canDispatch: true,
+  canConfirmReceipt: false,
+  dispatchCandidates: const [
+    YorksV1DispatchCandidate(
+      requestLineId: 'request-line-1',
+      displayOrder: 1,
+      description: 'Motorized smoke damper',
+      brandOrigin: 'Beteccad UAE',
+      unit: 'Nos',
+      approvedQuantity: '4',
+      goodReceivedQuantity: '0',
+      inTransitQuantity: '0',
+      stillNeededQuantity: '4',
+      source: YorksV1LogisticsSource.warehouse,
+      inventoryItemId: 'inventory-1',
+      reservedRemainingQuantity: '4',
+      warehouseAvailableQuantity: '7',
+    ),
+  ],
+  dispatches: const [],
+);
+
+final _receiptDispatch = YorksV1MaterialDispatch(
+  id: 'dispatch-1',
+  number: 'YRA-322-DSP001',
+  dispatchDate: DateTime.utc(2026, 8, 9),
+  state: YorksV1DispatchState.receiptPending,
+  recordVersion: 2,
+  dispatchedByDisplayName: 'Ali Raza',
+  dispatchedAt: DateTime.utc(2026, 8, 9, 9),
+  canConfirmReceipt: true,
+  deliveryReference: 'DN-100',
+  driverName: 'Ahmed',
+  vehicleReference: 'AD-20451',
+  lines: const [
+    YorksV1DispatchLine(
+      id: 'dispatch-line-1',
+      requestLineId: 'request-line-1',
+      description: 'Motorized smoke damper',
+      brandOrigin: 'Beteccad UAE',
+      unit: 'Nos',
+      source: YorksV1LogisticsSource.warehouse,
+      dispatchedQuantity: '4',
+      approvedQuantity: '4',
+    ),
+    YorksV1DispatchLine(
+      id: 'dispatch-line-2',
+      requestLineId: 'request-line-2',
+      description: 'Flexible duct connector',
+      brandOrigin: 'Yorks',
+      unit: 'Nos',
+      source: YorksV1LogisticsSource.externalSupplier,
+      dispatchedQuantity: '2',
+      approvedQuantity: '2',
+    ),
+  ],
+);
+
+final _receiptWorkspace = YorksV1LogisticsWorkspace(
+  requestId: 'receipt',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'dispatched',
+  requestRecordVersion: 8,
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeName: 'Common / All Buildings',
+  canDispatch: false,
+  canConfirmReceipt: true,
+  dispatchCandidates: const [],
+  dispatches: [_receiptDispatch],
+);
+
+final _deliveryOrder = YorksV1DeliveryOrder(
+  id: 'delivery-order-1',
+  dispatchId: 'dispatch-1',
+  reference: 'DO-2026-0101',
+  recordVersion: 1,
+  currentRevisionId: 'delivery-revision-1',
+  revisions: [
+    YorksV1DeliveryOrderRevision(
+      id: 'delivery-revision-1',
+      revisionNumber: 1,
+      isCurrent: true,
+      generatedAt: DateTime.utc(2026, 8, 9, 10),
+      generatedByDisplayName: 'Omar Farooq',
+      lines: const [
+        YorksV1DeliveryOrderLine(
+          serialNumber: 1,
+          description: 'Motorized smoke damper',
+          quantity: '4',
+          unit: 'Nos',
+        ),
+        YorksV1DeliveryOrderLine(
+          serialNumber: 2,
+          description: 'Flexible duct connector',
+          quantity: '2',
+          unit: 'Nos',
+        ),
+      ],
+    ),
+  ],
+);
+
+final _deliveryWorkspace = YorksV1ReturnsDocumentsWorkspace(
+  requestId: 'delivery',
+  projectId: 'project-1',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'dispatched',
+  requestRecordVersion: 8,
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  projectReference: 'YRA-322',
+  scopeName: 'Common / All Buildings',
+  canGenerateDeliveryOrder: true,
+  canSubmitMaterialReturn: false,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: [
+    YorksV1DeliveryOrderDispatch(
+      dispatchId: 'dispatch-1',
+      dispatchNumber: 'YRA-322-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 9),
+      dispatchRecordVersion: 2,
+      canGenerate: true,
+      deliveryOrder: _deliveryOrder,
+    ),
+  ],
+  returnCandidates: const [],
+  materialReturns: const [],
+  returnInventoryItems: const [],
+);
+
+final _returnsWorkspace = YorksV1ReturnsDocumentsWorkspace(
+  requestId: 'returns',
+  projectId: 'project-1',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'received',
+  requestRecordVersion: 9,
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  projectReference: 'YRA-322',
+  scopeName: 'Common / All Buildings',
+  canGenerateDeliveryOrder: false,
+  canSubmitMaterialReturn: true,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: const [],
+  returnCandidates: const [
+    YorksV1ReturnCandidate(
+      receiptReviewLineId: 'receipt-line-1',
+      dispatchNumber: 'YRA-322-DSP001',
+      displayOrder: 1,
+      description: 'Copper pipe',
+      brandOrigin: 'Mueller',
+      unit: 'Mtr',
+      source: YorksV1LogisticsSource.warehouse,
+      goodReceivedQuantity: '12',
+      confirmedReturnQuantity: '2',
+      eligibleReturnQuantity: '10',
+      sourceInventoryItemId: 'inventory-copper',
+    ),
+    YorksV1ReturnCandidate(
+      receiptReviewLineId: 'receipt-line-2',
+      dispatchNumber: 'YRA-322-DSP001',
+      displayOrder: 2,
+      description: 'Flexible duct connector',
+      brandOrigin: 'Yorks',
+      unit: 'Nos',
+      source: YorksV1LogisticsSource.externalSupplier,
+      goodReceivedQuantity: '4',
+      confirmedReturnQuantity: '0',
+      eligibleReturnQuantity: '4',
+    ),
+  ],
+  materialReturns: const [],
+  returnInventoryItems: const [],
+);

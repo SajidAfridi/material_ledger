@@ -203,6 +203,30 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ابھی ڈسپیچ کریں',
     hi: 'अभी डिस्पैच करें',
   );
+  static const createDispatch = TranslatableString(
+    en: 'Create Dispatch',
+    ar: 'إنشاء إرسال',
+    ur: 'ڈسپیچ بنائیں',
+    hi: 'डिस्पैच बनाएँ',
+  );
+  static const dispatchOutstandingOnly = TranslatableString(
+    en: 'Dispatch only the outstanding approved quantity.',
+    ar: 'أرسل فقط الكمية المعتمدة المتبقية.',
+    ur: 'صرف باقی منظور شدہ مقدار ڈسپیچ کریں۔',
+    hi: 'केवल शेष स्वीकृत मात्रा भेजें।',
+  );
+  static const stockProtected = TranslatableString(
+    en: 'Stock is protected',
+    ar: 'المخزون محمي',
+    ur: 'اسٹاک محفوظ ہے',
+    hi: 'स्टॉक सुरक्षित है',
+  );
+  static const stockRecheckedOnDispatch = TranslatableString(
+    en: 'Warehouse availability is rechecked and locked when the dispatch commits.',
+    ar: 'تتم إعادة فحص توفر المستودع وقفله عند اعتماد الإرسال.',
+    ur: 'ڈسپیچ کی تصدیق پر گودام کی دستیابی دوبارہ جانچ کر لاک کی جاتی ہے۔',
+    hi: 'डिस्पैच प्रतिबद्ध होने पर वेयरहाउस उपलब्धता दोबारा जाँचकर लॉक की जाती है।',
+  );
   static const dispatchApprovedItems = TranslatableString(
     en: 'Dispatch Approved Items',
     ar: 'إرسال العناصر المعتمدة',
@@ -286,6 +310,66 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'مراجعة الاستلام',
     ur: 'وصولی کا جائزہ',
     hi: 'प्राप्ति समीक्षा',
+  );
+  static const reviewDelivery = TranslatableString(
+    en: 'Review Delivery',
+    ar: 'مراجعة التسليم',
+    ur: 'ڈیلیوری کا جائزہ',
+    hi: 'डिलीवरी की समीक्षा',
+  );
+  static const receiveAllAsDispatched = TranslatableString(
+    en: 'Receive all as dispatched',
+    ar: 'استلام الكل كما تم إرساله',
+    ur: 'تمام کو ڈسپیچ کے مطابق وصول کریں',
+    hi: 'सभी को भेजी गई मात्रा के रूप में प्राप्त करें',
+  );
+  static const reviewed = TranslatableString(
+    en: 'Reviewed',
+    ar: 'تمت المراجعة',
+    ur: 'جائزہ مکمل',
+    hi: 'समीक्षित',
+  );
+  static const pending = TranslatableString(
+    en: 'Pending',
+    ar: 'قيد الانتظار',
+    ur: 'زیر التوا',
+    hi: 'लंबित',
+  );
+  static const deliveryException = TranslatableString(
+    en: 'Delivery Exception',
+    ar: 'استثناء التسليم',
+    ur: 'ڈیلیوری استثناء',
+    hi: 'डिलीवरी अपवाद',
+  );
+  static const result = TranslatableString(
+    en: 'Result',
+    ar: 'النتيجة',
+    ur: 'نتیجہ',
+    hi: 'परिणाम',
+  );
+  static const explanation = TranslatableString(
+    en: 'Explanation',
+    ar: 'التوضيح',
+    ur: 'وضاحت',
+    hi: 'स्पष्टीकरण',
+  );
+  static const exceptionExplanationRequired = TranslatableString(
+    en: 'Required for Missing or Damaged.',
+    ar: 'مطلوب في حالة النقص أو التلف.',
+    ur: 'گم یا خراب ہونے کی صورت میں ضروری ہے۔',
+    hi: 'लापता या क्षतिग्रस्त होने पर आवश्यक है।',
+  );
+  static const replacementEligible = TranslatableString(
+    en: 'Replacement remains eligible',
+    ar: 'يبقى الاستبدال مستحقاً',
+    ur: 'متبادل کی اہلیت برقرار ہے',
+    hi: 'प्रतिस्थापन योग्य रहता है',
+  );
+  static const saveReview = TranslatableString(
+    en: 'Save Review',
+    ar: 'حفظ المراجعة',
+    ur: 'جائزہ محفوظ کریں',
+    hi: 'समीक्षा सहेजें',
   );
   static const reviewAndMarkReceived = TranslatableString(
     en: 'Review & Mark Received',
@@ -426,10 +510,10 @@ abstract final class YorksV1LogisticsStrings {
     hi: 'संशोधन',
   );
   static const noDeliveryOrders = TranslatableString(
-    en: 'No receipt-reviewed dispatches are available yet.',
-    ar: 'لا توجد عمليات إرسال تمت مراجعة استلامها بعد.',
-    ur: 'ابھی کوئی وصولی شدہ ڈسپیچ دستیاب نہیں ہے۔',
-    hi: 'अभी तक कोई प्राप्ति-समीक्षित डिस्पैच उपलब्ध नहीं है।',
+    en: 'No committed dispatches are available yet.',
+    ar: 'لا توجد عمليات إرسال معتمدة حتى الآن.',
+    ur: 'ابھی تک کوئی تصدیق شدہ ڈسپیچ دستیاب نہیں ہے۔',
+    hi: 'अभी तक कोई पुष्ट डिस्पैच उपलब्ध नहीं है।',
   );
   static const exportExcel = TranslatableString(
     en: 'Excel',
@@ -449,11 +533,83 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'PDF ڈاؤن لوڈ کریں',
     hi: 'PDF डाउनलोड करें',
   );
+  static const share = TranslatableString(
+    en: 'Share',
+    ar: 'مشاركة',
+    ur: 'شیئر کریں',
+    hi: 'साझा करें',
+  );
+  static const storeVersion = TranslatableString(
+    en: 'Store Version',
+    ar: 'حفظ الإصدار',
+    ur: 'ورژن محفوظ کریں',
+    hi: 'संस्करण संग्रहीत करें',
+  );
   static const materialReturns = TranslatableString(
     en: 'Material returns',
     ar: 'مرتجعات المواد',
     ur: 'میٹریل واپسی',
     hi: 'सामग्री वापसी',
+  );
+  static const newMaterialReturn = TranslatableString(
+    en: 'New Material Return',
+    ar: 'إرجاع مواد جديد',
+    ur: 'نئی میٹریل واپسی',
+    hi: 'नई सामग्री वापसी',
+  );
+  static const selectDeliveredMaterial = TranslatableString(
+    en: 'Select delivered material',
+    ar: 'اختر المواد المسلّمة',
+    ur: 'ڈیلیور شدہ میٹریل منتخب کریں',
+    hi: 'वितरित सामग्री चुनें',
+  );
+  static const eligibleGoodReceivedOnly = TranslatableString(
+    en: 'Only eligible good-received quantities from this project scope are shown.',
+    ar: 'تظهر فقط الكميات السليمة المستلمة والمؤهلة من نطاق المشروع هذا.',
+    ur: 'اس پروجیکٹ دائرے سے صرف اہل درست وصول شدہ مقدار دکھائی جاتی ہے۔',
+    hi: 'इस परियोजना दायरे से केवल योग्य अच्छी प्राप्त मात्राएँ दिखाई जाती हैं।',
+  );
+  static const searchDeliveredItems = TranslatableString(
+    en: 'Search delivered items',
+    ar: 'البحث في المواد المسلّمة',
+    ur: 'ڈیلیور شدہ اشیاء تلاش کریں',
+    hi: 'वितरित सामग्री खोजें',
+  );
+  static const searchItemHint = TranslatableString(
+    en: 'Type item name',
+    ar: 'اكتب اسم الصنف',
+    ur: 'آئٹم کا نام لکھیں',
+    hi: 'वस्तु का नाम लिखें',
+  );
+  static const reviewReturn = TranslatableString(
+    en: 'Review Return',
+    ar: 'مراجعة الإرجاع',
+    ur: 'واپسی کا جائزہ',
+    hi: 'वापसी की समीक्षा',
+  );
+  static const returnDraft = TranslatableString(
+    en: 'Return Draft',
+    ar: 'مسودة الإرجاع',
+    ur: 'واپسی ڈرافٹ',
+    hi: 'वापसी ड्राफ़्ट',
+  );
+  static const reviewReturnedMaterial = TranslatableString(
+    en: 'Review returned material',
+    ar: 'مراجعة المواد المرتجعة',
+    ur: 'واپس کیے گئے میٹریل کا جائزہ',
+    hi: 'लौटाई गई सामग्री की समीक्षा',
+  );
+  static const procurementConfirmsBeforeStock = TranslatableString(
+    en: 'Procurement confirms receipt before stock is restored.',
+    ar: 'تؤكد المشتريات الاستلام قبل إعادة المخزون.',
+    ur: 'اسٹاک بحال ہونے سے پہلے پروکیورمنٹ وصولی کی تصدیق کرتی ہے۔',
+    hi: 'स्टॉक बहाल होने से पहले खरीद विभाग प्राप्ति की पुष्टि करता है।',
+  );
+  static const notes = TranslatableString(
+    en: 'Notes',
+    ar: 'ملاحظات',
+    ur: 'نوٹس',
+    hi: 'टिप्पणियाँ',
   );
   static const eligibleToReturn = TranslatableString(
     en: 'Eligible to return',
@@ -532,6 +688,46 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'أدخل كمية موجبة لا تتجاوز الكمية المتاحة.',
     ur: 'مثبت مقدار درج کریں جو اہل مقدار سے زیادہ نہ ہو۔',
     hi: 'ऐसी धनात्मक मात्रा दर्ज करें जो योग्य राशि से अधिक न हो।',
+  );
+
+  static TranslatableString dispatchUnits(String quantity) =>
+      TranslatableString(
+        en: 'Dispatch $quantity Units',
+        ar: 'إرسال $quantity وحدة',
+        ur: '$quantity یونٹس ڈسپیچ کریں',
+        hi: '$quantity इकाइयाँ भेजें',
+      );
+
+  static TranslatableString linesReviewed(int reviewed, int total) =>
+      TranslatableString(
+        en: '$reviewed / $total lines reviewed',
+        ar: 'تمت مراجعة $reviewed من $total بنداً',
+        ur: '$reviewed / $total لائنز کا جائزہ',
+        hi: '$reviewed / $total पंक्तियाँ समीक्षित',
+      );
+
+  static TranslatableString replacementQuantity(
+    String quantity,
+    String unit,
+  ) => TranslatableString(
+    en: 'The $quantity $unit exception stays outstanding for a later dispatch.',
+    ar: 'تبقى كمية الاستثناء $quantity $unit معلقة لإرسال لاحق.',
+    ur: '$quantity $unit استثنائی مقدار بعد کے ڈسپیچ کے لیے باقی رہتی ہے۔',
+    hi: '$quantity $unit अपवाद मात्रा बाद के डिस्पैच के लिए लंबित रहती है।',
+  );
+
+  static TranslatableString nextItems(int count) => TranslatableString(
+    en: 'Next · $count Items',
+    ar: 'التالي · $count أصناف',
+    ur: 'اگلا · $count آئٹمز',
+    hi: 'अगला · $count वस्तुएँ',
+  );
+
+  static TranslatableString selectedItems(int count) => TranslatableString(
+    en: '$count ${count == 1 ? 'item' : 'items'} selected',
+    ar: 'تم اختيار $count ${count == 1 ? 'صنف' : 'أصناف'}',
+    ur: '$count آئٹمز منتخب',
+    hi: '$count वस्तुएँ चुनी गईं',
   );
 }
 

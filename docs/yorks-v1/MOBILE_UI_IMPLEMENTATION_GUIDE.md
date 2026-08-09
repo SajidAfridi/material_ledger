@@ -11,9 +11,9 @@ implementation aid, not a new source of workflow, authorization, quantity or
 document truth.
 
 The screen-by-screen delivery state is recorded in
-[`MOBILE_UI_SCREEN_LEDGER.md`](MOBILE_UI_SCREEN_LEDGER.md). Evidence for the
-current ten-screen slice starts under
-[`evidence/mobile-batch-02/`](evidence/mobile-batch-02/README.md).
+[`MOBILE_UI_SCREEN_LEDGER.md`](MOBILE_UI_SCREEN_LEDGER.md). The current
+operational workflow evidence is under
+[`evidence/mobile-batch-04/`](evidence/mobile-batch-04/README.md).
 
 ## 1. Source identity
 
@@ -212,6 +212,9 @@ directory and naming convention for Batch 2 is documented in
 The same contract, including explicit Flutter-Before absence where no matching
 fixture was captured, is applied by
 [`evidence/mobile-batch-03/README.md`](evidence/mobile-batch-03/README.md).
+The arrangement, approval, dispatch, receipt, Delivery Order and return
+application of that contract is recorded in
+[`evidence/mobile-batch-04/README.md`](evidence/mobile-batch-04/README.md).
 
 ## 9. Test and release gate
 

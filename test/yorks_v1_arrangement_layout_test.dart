@@ -122,7 +122,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Arrange Material Request'), findsOneWidget);
+    expect(find.text('Arrange requested items'), findsOneWidget);
     expect(find.text('Start arrangement'), findsNothing);
     expect(tester.takeException(), isNull);
     await expectLater(

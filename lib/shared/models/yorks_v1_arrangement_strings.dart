@@ -21,6 +21,132 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'دستیاب لائنیں فراہم کریں یا واضح طور پر نشان زد کریں جو فراہم نہیں ہو سکتیں۔',
     hi: 'उपलब्ध पंक्तियों की आपूर्ति करें या स्पष्ट रूप से चिह्नित करें कि क्या उपलब्ध नहीं कराया जा सकता।',
   );
+  static const arrangeRequestedItems = TranslatableString(
+    en: 'Arrange requested items',
+    ar: 'ترتيب المواد المطلوبة',
+    ur: 'درخواست کردہ اشیاء ترتیب دیں',
+    hi: 'अनुरोधित सामग्री व्यवस्थित करें',
+  );
+  static const decideEveryLine = TranslatableString(
+    en: 'Decide each line before sending the arrangement to Project Engineers.',
+    ar: 'حدّد قرار كل بند قبل إرسال الترتيب إلى مهندسي المشروع.',
+    ur: 'انتظام پروجیکٹ انجینئرز کو بھیجنے سے پہلے ہر لائن کا فیصلہ کریں۔',
+    hi: 'व्यवस्था प्रोजेक्ट इंजीनियरों को भेजने से पहले प्रत्येक पंक्ति तय करें।',
+  );
+  static const arrangeItem = TranslatableString(
+    en: 'Arrange Item',
+    ar: 'ترتيب البند',
+    ur: 'آئٹم ترتیب دیں',
+    hi: 'वस्तु व्यवस्थित करें',
+  );
+  static const available = TranslatableString(
+    en: 'Available',
+    ar: 'المتاح',
+    ur: 'دستیاب',
+    hi: 'उपलब्ध',
+  );
+  static const previous = TranslatableString(
+    en: 'Previous',
+    ar: 'السابق',
+    ur: 'پچھلا',
+    hi: 'पिछला',
+  );
+  static const saveAndNext = TranslatableString(
+    en: 'Save & Next',
+    ar: 'حفظ والتالي',
+    ur: 'محفوظ کریں اور اگلا',
+    hi: 'सहेजें और अगला',
+  );
+  static const arrangementReview = TranslatableString(
+    en: 'Arrangement Review',
+    ar: 'مراجعة الترتيب',
+    ur: 'انتظام کا جائزہ',
+    hi: 'व्यवस्था समीक्षा',
+  );
+  static const readyForProjectEngineer = TranslatableString(
+    en: 'Ready for Project Engineer',
+    ar: 'جاهز لمهندس المشروع',
+    ur: 'پروجیکٹ انجینئر کے لیے تیار',
+    hi: 'प्रोजेक्ट इंजीनियर के लिए तैयार',
+  );
+  static const approvalReleasesArranged = TranslatableString(
+    en: 'Approval releases only the arranged quantities.',
+    ar: 'تعتمد الموافقة الكميات المرتبة فقط.',
+    ur: 'منظوری صرف ترتیب شدہ مقدار جاری کرتی ہے۔',
+    hi: 'मंजूरी केवल व्यवस्थित मात्राओं को जारी करती है।',
+  );
+  static const projectEngineerReview = TranslatableString(
+    en: 'Project Engineer Review',
+    ar: 'مراجعة مهندس المشروع',
+    ur: 'پروجیکٹ انجینئر کا جائزہ',
+    hi: 'प्रोजेक्ट इंजीनियर समीक्षा',
+  );
+  static const reviewExceptionsFirst = TranslatableString(
+    en: 'Review exceptions first, then approve or return the full arrangement.',
+    ar: 'راجع الاستثناءات أولاً ثم اعتمد الترتيب كاملاً أو أعده.',
+    ur: 'پہلے استثنائی لائنوں کا جائزہ لیں، پھر مکمل انتظام منظور یا واپس کریں۔',
+    hi: 'पहले अपवादों की समीक्षा करें, फिर पूरी व्यवस्था मंजूर या वापस करें।',
+  );
+  static const allMaterialLines = TranslatableString(
+    en: 'All material lines',
+    ar: 'جميع بنود المواد',
+    ur: 'تمام میٹریل لائنز',
+    hi: 'सभी सामग्री पंक्तियाँ',
+  );
+  static const materialLineFacts = TranslatableString(
+    en: 'Requested, arranged, source and reason',
+    ar: 'المطلوب والمرتب والمصدر والسبب',
+    ur: 'درخواست، ترتیب، ذریعہ اور وجہ',
+    hi: 'अनुरोधित, व्यवस्थित, स्रोत और कारण',
+  );
+  static const approvalMeaning = TranslatableString(
+    en: 'What approval means',
+    ar: 'ماذا تعني الموافقة',
+    ur: 'منظوری کا مطلب',
+    hi: 'मंजूरी का अर्थ',
+  );
+  static const approvalMeaningMessage = TranslatableString(
+    en: 'Only positive arranged quantities become dispatchable. Unavailable lines remain in history.',
+    ar: 'تصبح الكميات المرتبة الموجبة فقط قابلة للإرسال، وتبقى البنود غير المتاحة في السجل.',
+    ur: 'صرف مثبت ترتیب شدہ مقدار ڈسپیچ ہو سکتی ہے۔ غیر دستیاب لائنز تاریخ میں رہتی ہیں۔',
+    hi: 'केवल सकारात्मक व्यवस्थित मात्राएँ भेजी जा सकती हैं। अनुपलब्ध पंक्तियाँ इतिहास में रहती हैं।',
+  );
+  static const returnArrangement = TranslatableString(
+    en: 'Return Arrangement',
+    ar: 'إعادة الترتيب',
+    ur: 'انتظام واپس کریں',
+    hi: 'व्यवस्था लौटाएँ',
+  );
+  static const whatNeedsToChange = TranslatableString(
+    en: 'What needs to change?',
+    ar: 'ما الذي يحتاج إلى تغيير؟',
+    ur: 'کیا تبدیل کرنا ضروری ہے؟',
+    hi: 'क्या बदलना चाहिए?',
+  );
+  static const returnReasonRecorded = TranslatableString(
+    en: 'Your reason is recorded and the next arrangement version will be prefilled.',
+    ar: 'سيتم تسجيل سببك وتعبئة إصدار الترتيب التالي مسبقاً.',
+    ur: 'آپ کی وجہ محفوظ ہوگی اور انتظام کا اگلا ورژن پہلے سے بھرا ہوگا۔',
+    hi: 'आपका कारण दर्ज होगा और अगला व्यवस्था संस्करण पहले से भरा होगा।',
+  );
+  static const returnReasonHint = TranslatableString(
+    en: 'Required and visible to Procurement.',
+    ar: 'مطلوب ومرئي للمشتريات.',
+    ur: 'ضروری اور پروکیورمنٹ کو نظر آتا ہے۔',
+    hi: 'आवश्यक और खरीद विभाग को दिखाई देता है।',
+  );
+  static const whatHappensNext = TranslatableString(
+    en: 'What happens next',
+    ar: 'ما الذي يحدث بعد ذلك',
+    ur: 'اگلا مرحلہ',
+    hi: 'आगे क्या होगा',
+  );
+  static const returnedArrangementHistory = TranslatableString(
+    en: 'Procurement receives a new editable arrangement version. The current version remains immutable in history.',
+    ar: 'تستلم المشتريات إصداراً جديداً قابلاً للتعديل، ويبقى الإصدار الحالي ثابتاً في السجل.',
+    ur: 'پروکیورمنٹ کو نیا قابل ترمیم ورژن ملے گا۔ موجودہ ورژن تاریخ میں ناقابل تبدیلی رہے گا۔',
+    hi: 'खरीद विभाग को नया संपादन योग्य संस्करण मिलेगा। वर्तमान संस्करण इतिहास में अपरिवर्तनीय रहेगा।',
+  );
   static const quantityRule = TranslatableString(
     en: 'Arranged quantity can never exceed the requested quantity. Warehouse quantities are also checked against current available inventory.',
     ar: 'لا يمكن أن تتجاوز الكمية المرتبة الكمية المطلوبة. كما يتم التحقق من كميات المستودع مقابل المخزون المتاح الحالي.',
@@ -62,6 +188,18 @@ abstract final class YorksV1ArrangementStrings {
     ar: 'إعادة إلى المشتريات',
     ur: 'پروکیورمنٹ کو واپس بھیجیں',
     hi: 'खरीद विभाग को लौटाएँ',
+  );
+  static const returnAction = TranslatableString(
+    en: 'Return',
+    ar: 'إرجاع',
+    ur: 'واپس کریں',
+    hi: 'लौटाएँ',
+  );
+  static const approveAction = TranslatableString(
+    en: 'Approve',
+    ar: 'اعتماد',
+    ur: 'منظور کریں',
+    hi: 'स्वीकृत करें',
   );
   static const returnReason = TranslatableString(
     en: 'Return reason',
@@ -212,6 +350,40 @@ abstract final class YorksV1ArrangementStrings {
     ar: 'أكمل كل بند. القرارات الجزئية وغير المتاحة تحتاج سببًا.',
     ur: 'ہر سطر مکمل کریں۔ جزوی اور غیر دستیاب فیصلوں کے لیے وجہ ضروری ہے۔',
     hi: 'हर पंक्ति पूरी करें। आंशिक और अनुपलब्ध निर्णयों के लिए कारण चाहिए।',
+  );
+
+  static TranslatableString itemPosition(int item, int total) =>
+      TranslatableString(
+        en: 'Item $item of $total',
+        ar: 'البند $item من $total',
+        ur: 'آئٹم $item از $total',
+        hi: 'वस्तु $item / $total',
+      );
+
+  static TranslatableString linesDecided(int decided, int total) =>
+      TranslatableString(
+        en: '$decided / $total lines decided',
+        ar: 'تم تحديد $decided من $total بنداً',
+        ur: '$decided / $total لائنز کا فیصلہ',
+        hi: '$decided / $total पंक्तियाँ तय',
+      );
+
+  static TranslatableString exceptionsRequireAttention(int count) =>
+      TranslatableString(
+        en: '$count exceptions require attention',
+        ar: '$count استثناءات تحتاج إلى الانتباه',
+        ur: '$count استثنائی لائنز توجہ چاہتی ہیں',
+        hi: '$count अपवादों पर ध्यान आवश्यक है',
+      );
+
+  static TranslatableString exceptionSummary(
+    int partial,
+    int unavailable,
+  ) => TranslatableString(
+    en: '$partial partial and $unavailable unavailable lines remain explicit.',
+    ar: 'تبقى $partial بنود جزئية و$unavailable بنود غير متاحة موضحة بوضوح.',
+    ur: '$partial جزوی اور $unavailable غیر دستیاب لائنز واضح رہتی ہیں۔',
+    hi: '$partial आंशिक और $unavailable अनुपलब्ध पंक्तियाँ स्पष्ट रहती हैं।',
   );
 
   static TranslatableString invalidQuantityFor(String line) =>

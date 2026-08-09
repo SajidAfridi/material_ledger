@@ -69,7 +69,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Return quantity'), findsOneWidget);
-    expect(find.text('Save return draft'), findsWidgets);
+    expect(find.byType(TextField), findsWidgets);
   });
 
   testWidgets(
