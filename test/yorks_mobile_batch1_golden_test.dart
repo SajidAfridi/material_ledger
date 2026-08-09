@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
+import 'package:material_ledger/core/constants/app_colors.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/login/presentation/screens/login_screen.dart';
 import 'package:material_ledger/features/onboarding/presentation/screens/splash_screen.dart';
@@ -59,20 +60,30 @@ void main() {
   });
 
   testWidgets('Yorks mobile login — 390×844', (tester) async {
-    await _setViewport(tester, const Size(390, 844));
-    final preferences = await SharedPreferences.getInstance();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
-        child: MaterialApp(theme: AppTheme.light, home: const LoginScreen()),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _settleLogo(tester, find.byType(LoginScreen));
+    await _pumpLogin(tester, const Size(390, 844));
     expect(find.text('Sign in with SSO'), findsNothing);
+    _expectLoginFieldContrast(tester, mobile: true);
     await expectLater(
       find.byType(LoginScreen),
       matchesGoldenFile('goldens/mobile_batch1/login_390.png'),
+    );
+  });
+
+  testWidgets('Yorks mobile login contrast — 360×800', (tester) async {
+    await _pumpLogin(tester, const Size(360, 800));
+    _expectLoginFieldContrast(tester, mobile: true);
+    await expectLater(
+      find.byType(LoginScreen),
+      matchesGoldenFile('goldens/mobile_batch1/login_360.png'),
+    );
+  });
+
+  testWidgets('Yorks desktop login contrast — 1366×768', (tester) async {
+    await _pumpLogin(tester, const Size(1366, 768));
+    _expectLoginFieldContrast(tester, mobile: false);
+    await expectLater(
+      find.byType(LoginScreen),
+      matchesGoldenFile('goldens/mobile_batch1/login_1366.png'),
     );
   });
 
@@ -157,6 +168,42 @@ void main() {
       matchesGoldenFile('goldens/mobile_batch1/projects_390.png'),
     );
   });
+}
+
+Future<void> _pumpLogin(WidgetTester tester, Size size) async {
+  await _setViewport(tester, size);
+  final preferences = await SharedPreferences.getInstance();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+      child: MaterialApp(theme: AppTheme.light, home: const LoginScreen()),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await _settleLogo(tester, find.byType(LoginScreen));
+}
+
+void _expectLoginFieldContrast(WidgetTester tester, {required bool mobile}) {
+  final editors = tester.widgetList<EditableText>(find.byType(EditableText));
+  final decorators = tester.widgetList<InputDecorator>(
+    find.byType(InputDecorator),
+  );
+  expect(editors, hasLength(2));
+  expect(decorators, hasLength(2));
+  for (final editor in editors) {
+    expect(editor.style.color, AppColors.ink);
+    expect(editor.cursorColor, AppColors.blue);
+  }
+  for (final decorator in decorators) {
+    expect(
+      decorator.decoration.fillColor,
+      mobile ? Colors.white : AppColors.surfaceContainerLowest,
+    );
+    expect(
+      decorator.decoration.hintStyle?.color,
+      mobile ? AppColors.muted : AppColors.mutedLight,
+    );
+  }
 }
 
 Future<void> _settleLogo(WidgetTester tester, Finder scope) async {

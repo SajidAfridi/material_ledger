@@ -647,14 +647,14 @@ class _AuthForm extends StatelessWidget {
           textInputAction: TextInputAction.next,
           autofillHints: const [AutofillHints.email],
           style: AppTypography.bodyMedium.copyWith(
-            color: mobile ? Colors.white : AppColors.ink,
+            color: AppColors.ink,
             fontSize: mobile ? 16 : null,
           ),
-          cursorColor: mobile ? Colors.white : AppColors.blue,
+          cursorColor: AppColors.blue,
           decoration: _inputDecoration(
             hintText: YorksV1ShellStrings.companyEmailHint.primary,
             prefixIcon: mobile
-                ? const Icon(Icons.mail_outline_rounded, color: Colors.white)
+                ? const Icon(Icons.mail_outline_rounded, color: AppColors.muted)
                 : null,
             mobile: mobile,
           ),
@@ -671,14 +671,14 @@ class _AuthForm extends StatelessWidget {
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.password],
           style: AppTypography.bodyMedium.copyWith(
-            color: mobile ? Colors.white : AppColors.ink,
+            color: AppColors.ink,
             fontSize: mobile ? 16 : null,
           ),
-          cursorColor: mobile ? Colors.white : AppColors.blue,
+          cursorColor: AppColors.blue,
           decoration: _inputDecoration(
             hintText: YorksV1ShellStrings.passwordHint.primary,
             prefixIcon: mobile
-                ? const Icon(Icons.lock_outline_rounded, color: Colors.white)
+                ? const Icon(Icons.lock_outline_rounded, color: AppColors.muted)
                 : null,
             mobile: mobile,
             suffixIcon: IconButton(
@@ -693,7 +693,7 @@ class _AuthForm extends StatelessWidget {
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
                 size: 20,
-                color: mobile ? Colors.white : null,
+                color: mobile ? AppColors.muted : null,
               ),
             ),
           ),
@@ -845,9 +845,10 @@ InputDecoration _inputDecoration({
 }) => InputDecoration(
   hintText: hintText,
   hintStyle: AppTypography.bodyMedium.copyWith(
-    color: mobile ? Colors.white.withValues(alpha: .72) : AppColors.mutedLight,
+    color: mobile ? AppColors.muted : AppColors.mutedLight,
     fontSize: mobile ? 16 : null,
   ),
+  fillColor: mobile ? Colors.white : null,
   isDense: mobile,
   contentPadding: EdgeInsets.symmetric(
     horizontal: mobile ? 16 : AppSpacing.lg,
