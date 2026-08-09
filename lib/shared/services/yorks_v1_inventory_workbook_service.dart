@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:intl/intl.dart';
 
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_inventory_workbook.dart';
@@ -47,7 +49,6 @@ class YorksV1PlatformInventoryWorkbookFileService
     extensions: ['csv'],
     mimeTypes: ['text/csv'],
   );
-
   @override
   Future<YorksV1InventorySelectedWorkbook?> selectWorkbook() async {
     final file = await openFile(acceptedTypeGroups: const [_xlsx, _csv]);
@@ -76,52 +77,248 @@ class YorksV1PlatformInventoryWorkbookFileService
   Future<bool> saveStockRegister({
     required YorksV1InventoryWorkspace workspace,
     required String suggestedName,
+  }) => _save(
+    bytes: buildStockRegisterWorkbook(workspace: workspace),
+    name: suggestedName,
+    type: _xlsx,
+    mimeType: _xlsxMime,
+  );
+
+  /// The stock register is a read-only operational snapshot. It deliberately
+  /// contains neither costs nor valuation and cannot be re-imported as a
+  /// quantity-changing command.
+  static Uint8List buildStockRegisterWorkbook({
+    required YorksV1InventoryWorkspace workspace,
+    DateTime? generatedAt,
   }) {
-    final rows = <List<Object?>>[
-      const [
-        'Item Code',
-        'Item Description',
-        'Category',
-        'Brand / Origin',
-        'Unit',
-        'On Hand',
-        'Reserved',
-        'Available',
-        'Minimum Stock',
-        'Location / Bin',
-        'Status',
-        'Last Updated',
-      ],
-      for (final item in workspace.items)
-        [
-          item.itemCode ?? '',
-          item.description,
-          item.categoryName ?? 'Uncategorized',
-          item.brandOrigin ?? '',
-          item.unit,
-          item.onHandQuantity,
-          item.reservedQuantity,
-          item.availableQuantity,
-          item.minimumStock ?? '',
-          item.locationBin ?? '',
-          item.isActive
-              ? item.isOutOfStock
-                    ? 'Out of Stock'
-                    : item.isLowStock
-                    ? 'Low Stock'
-                    : 'Active'
-              : 'Inactive',
-          item.updatedAt?.toIso8601String() ?? '',
-        ],
+    final generated = (generatedAt ?? DateTime.now()).toUtc();
+    final title = 'Yorks Warehouse Stock Register — ${_dateStamp(generated)}';
+    const headings = [
+      'Item Code',
+      'Item Description',
+      'Category',
+      'Brand / Origin',
+      'Unit',
+      'On Hand',
+      'Reserved',
+      'Available',
+      'Minimum Stock',
+      'Location / Bin',
+      'Status',
+      'Last Updated',
     ];
-    final csv = rows.map((row) => row.map(_csvCell).join(',')).join('\r\n');
-    return _save(
-      bytes: Uint8List.fromList(utf8.encode('\ufeff$csv')),
-      name: suggestedName,
-      type: _csv,
-      mimeType: 'text/csv',
+    final rows = [
+      for (final item in workspace.items) _stockRegisterValues(item, generated),
+    ];
+    return _encodeStyledStockRegister(
+      title: title,
+      headings: headings,
+      rows: rows,
     );
   }
+
+  static String stockRegisterSuggestedName(DateTime generatedAt) =>
+      'Yorks_Warehouse_Stock_Register_${_dateStamp(generatedAt.toUtc())}.xlsx';
+
+  static List<String> _stockRegisterValues(
+    YorksV1LogisticsInventoryItem item,
+    DateTime generatedAt,
+  ) => [
+    item.itemCode ?? '',
+    item.description,
+    _parentCategoryName(item.categoryPath, item.categoryName),
+    item.brandOrigin ?? '',
+    item.unit,
+    _displayQuantity(item.onHandQuantity),
+    _displayQuantity(item.reservedQuantity),
+    _displayQuantity(item.availableQuantity),
+    item.minimumStock == null ? '' : _displayQuantity(item.minimumStock!),
+    item.locationBin ?? '',
+    item.isActive
+        ? item.isOutOfStock
+              ? 'Out of Stock'
+              : item.isLowStock
+              ? 'Low Stock'
+              : 'In Stock'
+        : 'Inactive',
+    DateFormat(
+      'dd MMM yyyy, hh:mm a',
+    ).format((item.updatedAt ?? generatedAt).toLocal()),
+  ];
+
+  static String _parentCategoryName(String? path, String? fallback) {
+    final index = path?.indexOf(' › ') ?? -1;
+    if (index > 0) return path!.substring(0, index).trim();
+    return fallback?.trim().isNotEmpty == true
+        ? fallback!.trim()
+        : 'Uncategorized';
+  }
+
+  static String _displayQuantity(String value) {
+    final normalized = value.trim();
+    if (!RegExp(r'^-?\d+(?:\.\d+)?$').hasMatch(normalized)) {
+      return normalized;
+    }
+    return normalized
+        .replaceFirstMapped(RegExp(r'(\.\d*?)0+$'), (match) => match.group(1)!)
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+
+  static String _dateStamp(DateTime value) =>
+      DateFormat('yyyy-MM-dd').format(value);
+
+  /// Uses only the small, documented subset of XLSX that the application also
+  /// decodes: inline text cells, one sheet and explicit styles. This keeps the
+  /// register visually usable in Excel/Numbers without introducing a mutable
+  /// spreadsheet dependency or a second export data path.
+  static Uint8List _encodeStyledStockRegister({
+    required String title,
+    required List<String> headings,
+    required List<List<String>> rows,
+  }) {
+    final archive = Archive()
+      ..addFile(
+        ArchiveFile.string(
+          '[Content_Types].xml',
+          _stockRegisterContentTypesXml,
+        ),
+      )
+      ..addFile(
+        ArchiveFile.string('_rels/.rels', _stockRegisterRootRelationshipsXml),
+      )
+      ..addFile(
+        ArchiveFile.string('xl/workbook.xml', _stockRegisterWorkbookXml),
+      )
+      ..addFile(
+        ArchiveFile.string(
+          'xl/_rels/workbook.xml.rels',
+          _stockRegisterWorkbookRelationshipsXml,
+        ),
+      )
+      ..addFile(ArchiveFile.string('xl/styles.xml', _stockRegisterStylesXml))
+      ..addFile(
+        ArchiveFile.string(
+          'xl/worksheets/sheet1.xml',
+          _stockRegisterSheetXml(title: title, headings: headings, rows: rows),
+        ),
+      );
+    return Uint8List.fromList(ZipEncoder().encode(archive));
+  }
+
+  static String _stockRegisterSheetXml({
+    required String title,
+    required List<String> headings,
+    required List<List<String>> rows,
+  }) {
+    const widths = [18, 36, 28, 24, 12, 12, 12, 12, 15, 18, 16, 24];
+    final output = StringBuffer(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+      '<cols>',
+    );
+    for (var index = 0; index < widths.length; index++) {
+      output.write(
+        '<col min="${index + 1}" max="${index + 1}" width="${widths[index]}" customWidth="1"/>',
+      );
+    }
+    output.write('</cols><sheetData>');
+    output.write(
+      '<row r="1" ht="26" customHeight="1">${_stockRegisterCell('A1', title, 1)}</row>',
+    );
+    output.write('<row r="2" ht="23" customHeight="1">');
+    for (var index = 0; index < headings.length; index++) {
+      output.write(
+        _stockRegisterCell('${_excelColumnName(index)}2', headings[index], 2),
+      );
+    }
+    output.write('</row>');
+    for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      final excelRow = rowIndex + 3;
+      output.write('<row r="$excelRow">');
+      for (
+        var columnIndex = 0;
+        columnIndex < rows[rowIndex].length;
+        columnIndex++
+      ) {
+        final style = columnIndex == 0
+            ? 3
+            : columnIndex >= 5 && columnIndex <= 8
+            ? 5
+            : 4;
+        output.write(
+          _stockRegisterCell(
+            '${_excelColumnName(columnIndex)}$excelRow',
+            rows[rowIndex][columnIndex],
+            style,
+          ),
+        );
+      }
+      output.write('</row>');
+    }
+    final lastRow = rows.length + 2;
+    output.write(
+      '</sheetData><autoFilter ref="A2:L$lastRow"/><mergeCells count="1"><mergeCell ref="A1:L1"/></mergeCells></worksheet>',
+    );
+    return output.toString();
+  }
+
+  static String _stockRegisterCell(String ref, String value, int style) {
+    final preserve = value.trim() != value ? ' xml:space="preserve"' : '';
+    return '<c r="$ref" s="$style" t="inlineStr"><is><t$preserve>${_xmlEscape(value)}</t></is></c>';
+  }
+
+  static String _excelColumnName(int index) {
+    var value = index + 1;
+    final output = StringBuffer();
+    while (value > 0) {
+      value--;
+      output.writeCharCode(65 + (value % 26));
+      value ~/= 26;
+    }
+    return output.toString().split('').reversed.join();
+  }
+
+  static String _xmlEscape(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
+
+  static const _stockRegisterContentTypesXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      '<Default Extension="xml" ContentType="application/xml"/>'
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      '</Types>';
+  static const _stockRegisterRootRelationshipsXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      '</Relationships>';
+  static const _stockRegisterWorkbookXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      '<sheets><sheet name="Stock Register" sheetId="1" r:id="rId1"/></sheets></workbook>';
+  static const _stockRegisterWorkbookRelationshipsXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+      '</Relationships>';
+  static const _stockRegisterStylesXml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      '<fonts count="2"><font><sz val="11"/><color theme="1"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FF132033"/><name val="Arial"/><family val="2"/></font></fonts>'
+      '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E0E5"/><bgColor indexed="64"/></patternFill></fill></fills>'
+      '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFC7D1"/></left><right style="thin"><color rgb="FFBFC7D1"/></right><top style="thin"><color rgb="FFBFC7D1"/></top><bottom style="thin"><color rgb="FFBFC7D1"/></bottom><diagonal/></border></borders>'
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+      '<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyAlignment="1" xfId="0"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyAlignment="1" xfId="0"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1" xfId="0"><alignment horizontal="right" vertical="center"/></xf></cellXfs>'
+      '</styleSheet>';
 
   static Future<bool> _save({
     required Uint8List bytes,
@@ -146,11 +343,6 @@ class YorksV1PlatformInventoryWorkbookFileService
     final normalized = pathOrName.replaceAll('\\', '/');
     final slash = normalized.lastIndexOf('/');
     return slash < 0 ? normalized : normalized.substring(slash + 1);
-  }
-
-  static String _csvCell(Object? value) {
-    final text = value?.toString() ?? '';
-    return '"${text.replaceAll('"', '""')}"';
   }
 }
 

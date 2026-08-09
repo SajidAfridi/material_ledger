@@ -37,6 +37,8 @@ void main() {
     tester,
   ) async {
     final preferences = await SharedPreferences.getInstance();
+    await tester.binding.setSurfaceSize(const Size(1366, 768));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       _testApp(preferences: preferences, child: const YorksV1InventoryScreen()),
     );
@@ -44,11 +46,51 @@ void main() {
 
     await tester.tap(find.text('Items'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('VAV Damper'));
+    await tester.tap(find.textContaining('VAV Damper'));
     await tester.pumpAndSettle();
 
     expect(find.text('Stock Movements'), findsWidgets);
     expect(find.text('Opening balance'), findsOneWidget);
+  });
+
+  testWidgets('inventory detail edits metadata through its separate command', (
+    tester,
+  ) async {
+    final preferences = await SharedPreferences.getInstance();
+    final repository = _FakeLogisticsRepository();
+    await tester.binding.setSurfaceSize(const Size(1366, 768));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      _testApp(
+        preferences: preferences,
+        repository: repository,
+        child: const YorksV1InventoryScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Items'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('VAV Damper'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit Details'));
+    await tester.pumpAndSettle();
+    final descriptionField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.controller?.text == 'VAV Damper',
+      description: 'the inventory item description field',
+    );
+    await tester.enterText(descriptionField, 'VAV Damper revised');
+    await tester.tap(find.text('Save Item Details'));
+    await tester.pumpAndSettle();
+
+    expect(repository.metadataInput, isNotNull);
+    expect(repository.metadataInput!.description, 'VAV Damper revised');
+    expect(
+      repository.metadataInput!.toRpcPayload().containsKey('quantity'),
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('return quantity uses a focused editor on a 360px mobile width', (
@@ -141,20 +183,41 @@ void main() {
 Widget _testApp({
   required SharedPreferences preferences,
   required Widget child,
+  YorksV1LogisticsRepository? repository,
 }) => ProviderScope(
   overrides: [
     sharedPreferencesProvider.overrideWithValue(preferences),
     yorksV1LogisticsRepositoryProvider.overrideWithValue(
-      _FakeLogisticsRepository(),
+      repository ?? _FakeLogisticsRepository(),
     ),
   ],
   child: MaterialApp(home: child),
 );
 
-class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
+class _FakeLogisticsRepository
+    implements
+        YorksV1LogisticsRepository,
+        YorksV1InventoryItemMetadataRepository {
+  YorksV1InventoryItemMetadataInput? metadataInput;
+
   @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async =>
-      YorksV1InventoryWorkspace(items: [_item]);
+      YorksV1InventoryWorkspace(
+        items: [_item],
+        categories: [
+          YorksV1InventoryCategory(
+            id: 'category-1',
+            name: 'Dampers & Fire Control',
+            isSystem: true,
+            isActive: true,
+            recordVersion: 1,
+            itemCount: 1,
+            aliases: [],
+            createdByDisplayName: 'System',
+            createdAt: DateTime.utc(2026, 8, 10),
+          ),
+        ],
+      );
 
   @override
   Future<YorksV1InventoryItemDetail> getInventoryItem(
@@ -178,6 +241,14 @@ class _FakeLogisticsRepository implements YorksV1LogisticsRepository {
   Future<YorksV1LogisticsInventoryItem> adjustInventory(
     YorksV1InventoryAdjustmentInput input,
   ) async => _item;
+
+  @override
+  Future<YorksV1LogisticsInventoryItem> updateInventoryItemMetadata(
+    YorksV1InventoryItemMetadataInput input,
+  ) async {
+    metadataInput = input;
+    return _item;
+  }
 
   @override
   Future<YorksV1InventoryCategory> createInventoryCategory(
@@ -303,7 +374,10 @@ YorksV1ReturnsDocumentsWorkspace _returnsWorkspace(String requestId) =>
 
 const _item = YorksV1LogisticsInventoryItem(
   id: 'inventory-1',
+  itemCode: 'VAV-001',
   description: 'VAV Damper',
+  categoryId: 'category-1',
+  categoryName: 'Dampers & Fire Control',
   brandOrigin: 'UAE',
   unit: 'Nos',
   isActive: true,
@@ -311,6 +385,7 @@ const _item = YorksV1LogisticsInventoryItem(
   reservedQuantity: '1',
   availableQuantity: '4',
   recordVersion: 2,
+  metadataRecordVersion: 1,
   movementCount: 1,
 );
 

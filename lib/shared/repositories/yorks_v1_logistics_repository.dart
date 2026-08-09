@@ -72,10 +72,20 @@ abstract interface class YorksV1InventoryCategorySuggestionRepository {
   });
 }
 
+/// Optional item-master command boundary. It is deliberately separate from
+/// the stock command so existing clients cannot accidentally submit a balance
+/// mutation while editing descriptive item data.
+abstract interface class YorksV1InventoryItemMetadataRepository {
+  Future<YorksV1LogisticsInventoryItem> updateInventoryItemMetadata(
+    YorksV1InventoryItemMetadataInput input,
+  );
+}
+
 class YorksV1SupabaseLogisticsRepository
     implements
         YorksV1LogisticsRepository,
-        YorksV1InventoryCategorySuggestionRepository {
+        YorksV1InventoryCategorySuggestionRepository,
+        YorksV1InventoryItemMetadataRepository {
   const YorksV1SupabaseLogisticsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -125,6 +135,20 @@ class YorksV1SupabaseLogisticsRepository
             : input.action != null
             ? input.toStockMovementRpcPayload()
             : input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _inventoryItem(response);
+  }
+
+  @override
+  Future<YorksV1LogisticsInventoryItem> updateInventoryItemMetadata(
+    YorksV1InventoryItemMetadataInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_update_inventory_item',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
         'p_idempotency_key': input.idempotencyKey,
       },
     );

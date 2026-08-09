@@ -1308,6 +1308,65 @@ class YorksV1InventoryAdjustmentInput {
   };
 }
 
+/// A metadata-only item-master command. Quantity and reservations deliberately
+/// do not appear in this payload: the server owns them through append-only
+/// movements and approved Material Request arrangements.
+class YorksV1InventoryItemMetadataInput {
+  const YorksV1InventoryItemMetadataInput({
+    required this.inventoryItemId,
+    required this.expectedMetadataVersion,
+    required this.itemCode,
+    required this.description,
+    required this.categoryId,
+    required this.brandOrigin,
+    required this.sizeText,
+    required this.modelReference,
+    required this.unit,
+    required this.minimumStock,
+    required this.locationBin,
+    required this.notes,
+    required this.idempotencyKey,
+    this.newCategoryName,
+    this.newCategoryParentId,
+    this.sourceCategoryText,
+  });
+
+  final String inventoryItemId;
+  final int expectedMetadataVersion;
+  final String? itemCode;
+  final String description;
+  final String? categoryId;
+  final String? newCategoryName;
+  final String? newCategoryParentId;
+  final String? sourceCategoryText;
+  final String? brandOrigin;
+  final String? sizeText;
+  final String? modelReference;
+  final String unit;
+  final String? minimumStock;
+  final String? locationBin;
+  final String? notes;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'inventory_item_id': inventoryItemId,
+    'expected_metadata_version': expectedMetadataVersion,
+    'item_code': _trimToNull(itemCode),
+    'item_description': description.trim(),
+    'category_id': _trimToNull(categoryId),
+    'new_category_name': _trimToNull(newCategoryName),
+    'new_category_parent_id': _trimToNull(newCategoryParentId),
+    'source_category_text': _trimToNull(sourceCategoryText),
+    'brand_origin': _trimToNull(brandOrigin),
+    'size_text': _trimToNull(sizeText),
+    'model_reference': _trimToNull(modelReference),
+    'unit': unit.trim(),
+    'minimum_stock': _trimToNull(minimumStock),
+    'location_bin': _trimToNull(locationBin),
+    'notes': _trimToNull(notes),
+  };
+}
+
 class YorksV1InventoryCategoryCreationInput {
   const YorksV1InventoryCategoryCreationInput({
     required this.name,

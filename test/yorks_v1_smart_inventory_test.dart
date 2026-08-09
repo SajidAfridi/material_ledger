@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_inventory_import_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_inventory_workbook.dart';
@@ -76,6 +77,32 @@ void main() {
       isNot(contains('item_description')),
     );
     expect(input.toStockMovementRpcPayload(), isNot(contains('category_id')));
+  });
+
+  test('metadata edit payload cannot include stock or reservation fields', () {
+    const input = YorksV1InventoryItemMetadataInput(
+      inventoryItemId: '93000000-0000-4000-8000-000000000001',
+      expectedMetadataVersion: 4,
+      itemCode: 'INSUL-25',
+      description: 'Duct insulation',
+      categoryId: 'supports-insulation',
+      brandOrigin: 'K-Flex / Italy',
+      sizeText: '25 mm',
+      modelReference: 'K-Flex ST',
+      unit: 'Roll',
+      minimumStock: '5',
+      locationBin: 'G-02',
+      notes: 'Keep dry',
+      idempotencyKey: '93000000-0000-4000-8000-000000000002',
+    );
+
+    final payload = input.toRpcPayload();
+    expect(payload, containsPair('expected_metadata_version', 4));
+    expect(payload, containsPair('size_text', '25 mm'));
+    expect(payload, isNot(contains('quantity')));
+    expect(payload, isNot(contains('on_hand_qty')));
+    expect(payload, isNot(contains('reserved_qty')));
+    expect(payload, isNot(contains('expected_version')));
   });
 
   test(
@@ -161,6 +188,88 @@ void main() {
       expect(workbook.sheets.first.rows.first, contains('Item Description *'));
     },
   );
+
+  test('stock register export is a readable operational XLSX snapshot', () {
+    final generatedAt = DateTime(2026, 8, 9, 15, 5);
+    final workspace = YorksV1InventoryWorkspace(
+      items: [
+        YorksV1LogisticsInventoryItem(
+          id: 'register-item',
+          itemCode: 'SAR-500',
+          description: 'Supply Air Register',
+          categoryId: 'category-linear',
+          categoryName: 'Linear Grille',
+          categoryPath: 'Air Terminals › Linear Grille',
+          brandOrigin: 'Betec CAD / UAE',
+          unit: 'Nos',
+          minimumStock: '5.0000',
+          locationBin: 'A-01',
+          isActive: true,
+          onHandQuantity: '64.0000',
+          reservedQuantity: '6.0000',
+          availableQuantity: '58.0000',
+          recordVersion: 1,
+          updatedAt: generatedAt,
+        ),
+      ],
+    );
+
+    final bytes =
+        YorksV1PlatformInventoryWorkbookFileService.buildStockRegisterWorkbook(
+          workspace: workspace,
+          generatedAt: generatedAt,
+        );
+    final workbook = const YorksV1BoqWorkbookCodec().decode(
+      fileName:
+          YorksV1PlatformInventoryWorkbookFileService.stockRegisterSuggestedName(
+            generatedAt,
+          ),
+      bytes: bytes,
+    );
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    expect(workbook.sheets, hasLength(1));
+    expect(
+      workbook.sheets.single.rows[1],
+      equals(const [
+        'Item Code',
+        'Item Description',
+        'Category',
+        'Brand / Origin',
+        'Unit',
+        'On Hand',
+        'Reserved',
+        'Available',
+        'Minimum Stock',
+        'Location / Bin',
+        'Status',
+        'Last Updated',
+      ]),
+    );
+    expect(
+      workbook.sheets.single.rows[2],
+      equals(const [
+        'SAR-500',
+        'Supply Air Register',
+        'Air Terminals',
+        'Betec CAD / UAE',
+        'Nos',
+        '64',
+        '6',
+        '58',
+        '5',
+        'A-01',
+        'In Stock',
+        '09 Aug 2026, 03:05 PM',
+      ]),
+    );
+    expect(archive.findFile('xl/styles.xml'), isNotNull);
+    final sheetXml = utf8.decode(
+      archive.findFile('xl/worksheets/sheet1.xml')!.readBytes()!,
+    );
+    expect(sheetXml, contains('state="frozen"'));
+    expect(sheetXml, contains('<autoFilter ref="A2:L3"/>'));
+  });
 
   test(
     'failed import retains preview and reuses the same command identity',

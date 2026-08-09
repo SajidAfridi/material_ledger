@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,8 +9,10 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_inventory_workbook_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
+import 'package:material_ledger/shared/services/yorks_v1_inventory_workbook_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -99,7 +102,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Add / Receive stock').first);
+      await tester.tap(find.text('Add / Receive Stock').first);
       await tester.pumpAndSettle();
       expect(find.text('Create inventory item'), findsOneWidget);
       expect(find.text('Receive or adjust existing stock'), findsOneWidget);
@@ -134,6 +137,316 @@ void main() {
       );
     });
   }
+
+  for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop', size: const Size(1366, 768)),
+    (suffix: 'mobile', size: const Size(360, 800)),
+  ]) {
+    testWidgets('R38.3 warehouse item detail — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Items').first);
+      await tester.pumpAndSettle();
+      final item = find.textContaining('GI duct sheet 24 gauge').first;
+      if (evidence.size.width < 500) {
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -720));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(item);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Active Reservations'), findsOneWidget);
+      expect(find.text('Receive / Adjust'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r38_3/warehouse_item_detail_${evidence.suffix}.png',
+        ),
+      );
+    });
+  }
+
+  for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop', size: const Size(1366, 768)),
+    (suffix: 'mobile', size: const Size(360, 800)),
+  ]) {
+    testWidgets('R38.3 warehouse categories — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Items').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manage categories').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Warehouse Categories'), findsOneWidget);
+      expect(find.text('New Parent Category'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r38_3/warehouse_categories_${evidence.suffix}.png',
+        ),
+      );
+    });
+  }
+
+  testWidgets('Warehouse category management creates a top-level category', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = _CategoryCreationRepository();
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1LogisticsRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          home: const YorksV1InventoryScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Items').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manage categories').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.hintText == 'e.g. Air Terminals',
+      ),
+      'fresh air systems',
+    );
+    await tester.tap(find.text('Add Category'));
+    await tester.pumpAndSettle();
+
+    expect(repository.creation, isNotNull);
+    expect(repository.creation!.name, 'fresh air systems');
+    expect(repository.creation!.parentCategoryId, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final evidence
+      in <({String tab, String surface, String name, Size size})>[
+        (
+          tab: 'Items',
+          surface: 'Warehouse Items',
+          name: 'items_desktop',
+          size: const Size(1366, 768),
+        ),
+        (
+          tab: 'Items',
+          surface: 'Warehouse Items',
+          name: 'items_mobile',
+          size: const Size(360, 800),
+        ),
+        (
+          tab: 'Stock Movements',
+          surface: 'Stock Movement History',
+          name: 'movements_desktop',
+          size: const Size(1366, 768),
+        ),
+        (
+          tab: 'Stock Movements',
+          surface: 'Stock Movement History',
+          name: 'movements_mobile',
+          size: const Size(360, 800),
+        ),
+        (
+          tab: 'Reservations',
+          surface: 'Active Reservations',
+          name: 'reservations_desktop',
+          size: const Size(1366, 768),
+        ),
+        (
+          tab: 'Reservations',
+          surface: 'Active Reservations',
+          name: 'reservations_mobile',
+          size: const Size(360, 800),
+        ),
+      ]) {
+    testWidgets('R38.3 warehouse ${evidence.tab} — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final tab = find.text(evidence.tab).first;
+      if (evidence.size.width < 500 && evidence.tab == 'Reservations') {
+        await tester.ensureVisible(tab);
+      }
+      await tester.tap(tab);
+      await tester.pumpAndSettle();
+
+      expect(find.text(evidence.surface), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r38_3/warehouse_${evidence.name}.png'),
+      );
+    });
+  }
+
+  for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop', size: const Size(1366, 768)),
+    (suffix: 'mobile', size: const Size(360, 800)),
+  ]) {
+    testWidgets('R38.3 warehouse import preview — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+            yorksV1InventoryWorkbookFileServiceProvider.overrideWithValue(
+              const _GoldenInventoryWorkbookFileService(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Import Inventory').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Select Excel or CSV file'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Preview Inventory Import'), findsOneWidget);
+      expect(find.text('Smart category mapping is active'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r38_3/warehouse_import_${evidence.suffix}.png',
+        ),
+      );
+    });
+  }
+
+  testWidgets('Warehouse item search includes the item brand', (tester) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1LogisticsRepositoryProvider.overrideWithValue(
+            const _GoldenInventoryRepository(),
+          ),
+        ],
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          home: const YorksV1InventoryScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Items').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Yorks');
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Round air diffuser 300 mm'), findsOneWidget);
+    expect(find.textContaining('GI duct sheet 24 gauge'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Directory _flutterCacheDirectory() {
@@ -155,11 +468,83 @@ class _GoldenInventoryRepository implements YorksV1LogisticsRepository {
       _workspace;
 
   @override
+  Future<YorksV1InventoryItemDetail> getInventoryItem(
+    String inventoryItemId,
+  ) async {
+    final item = _workspace.items.singleWhere(
+      (item) => item.id == inventoryItemId,
+    );
+    return YorksV1InventoryItemDetail(
+      item: item,
+      movements: _workspace.recentMovements
+          .where((movement) => movement.inventoryItemId == inventoryItemId)
+          .toList(growable: false),
+    );
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _CategoryCreationRepository implements YorksV1LogisticsRepository {
+  YorksV1InventoryCategoryCreationInput? creation;
+
+  @override
+  Future<YorksV1InventoryWorkspace> getInventory({String? search}) async =>
+      _workspace;
+
+  @override
+  Future<YorksV1InventoryCategory> createInventoryCategory(
+    YorksV1InventoryCategoryCreationInput input,
+  ) async {
+    creation = input;
+    return YorksV1InventoryCategory(
+      id: 'category-created',
+      name: input.name,
+      isSystem: false,
+      isActive: true,
+      recordVersion: 1,
+      itemCount: 0,
+      aliases: const [],
+      createdByDisplayName: 'Ali Raza',
+      createdAt: DateTime.utc(2026, 8, 10),
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _GoldenInventoryWorkbookFileService
+    implements YorksV1InventoryWorkbookFileService {
+  const _GoldenInventoryWorkbookFileService();
+
+  @override
+  Future<YorksV1InventorySelectedWorkbook?>
+  selectWorkbook() async => YorksV1InventorySelectedWorkbook(
+    fileName: 'Yorks_Warehouse_Inventory_Import_Template.csv',
+    bytes: Uint8List.fromList(
+      utf8.encode(
+        '''Item Code,Item Description,Category,Brand / Origin,Unit,Stock Action,Quantity,Reason,Minimum Stock,Location / Bin,Notes
+WH-NEW-001,Ceiling supply grille,Air Grille Fittings,Yorks,NOS,Opening Balance,10,Opening count,2,A-01,Receiving
+WH-NEW-002,Wall return grille,Air Grille Fittings,Yorks,NOS,Opening Balance,8,Opening count,2,A-02,Receiving
+WH-NEW-003,Weather louvre,Air Grille Fittings,Yorks,NOS,Opening Balance,6,Opening count,1,A-03,Receiving''',
+      ),
+    ),
+  );
+
+  @override
+  Future<bool> saveImportTemplate() async => true;
+
+  @override
+  Future<bool> saveStockRegister({
+    required YorksV1InventoryWorkspace workspace,
+    required String suggestedName,
+  }) async => true;
+}
+
 final _workspace = YorksV1InventoryWorkspace(
-  items: const [
+  items: [
     YorksV1LogisticsInventoryItem(
       id: 'item-1',
       itemCode: 'WH-DCT-001',
@@ -175,6 +560,8 @@ final _workspace = YorksV1InventoryWorkspace(
       reservedQuantity: '3',
       availableQuantity: '9',
       recordVersion: 3,
+      metadataRecordVersion: 1,
+      updatedAt: DateTime.utc(2026, 8, 9, 10, 30),
     ),
     YorksV1LogisticsInventoryItem(
       id: 'item-2',
@@ -192,6 +579,7 @@ final _workspace = YorksV1InventoryWorkspace(
       reservedQuantity: '2',
       availableQuantity: '2',
       recordVersion: 2,
+      metadataRecordVersion: 1,
     ),
     YorksV1LogisticsInventoryItem(
       id: 'item-3',
@@ -208,6 +596,7 @@ final _workspace = YorksV1InventoryWorkspace(
       reservedQuantity: '0',
       availableQuantity: '0',
       recordVersion: 1,
+      metadataRecordVersion: 1,
     ),
   ],
   categories: [
