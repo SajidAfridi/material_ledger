@@ -350,7 +350,6 @@ class YorksV1LogisticsDocumentService {
   static final PdfColor _documentGrid = PdfColor.fromHex('#222222');
   static final PdfColor _headerFill = PdfColor.fromHex('#D0D0D0');
   static final PdfColor _documentMuted = PdfColor.fromHex('#5C6673');
-  static final PdfColor _footerRule = PdfColor.fromHex('#2B91B1');
 
   static pw.Widget _deliveryOrderHeader({
     required pw.MemoryImage? logo,
@@ -675,7 +674,7 @@ class YorksV1LogisticsDocumentService {
       vertical: 1.5 * PdfPageFormat.mm,
     ),
     decoration: pw.BoxDecoration(
-      border: pw.Border.all(color: _footerRule, width: .65),
+      border: pw.Border.all(color: _documentInk, width: .65),
     ),
     child: pw.Column(
       children: [
@@ -685,19 +684,27 @@ class YorksV1LogisticsDocumentService {
           ),
           textDirection: pw.TextDirection.ltr,
           textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 6.8, lineSpacing: 1.8),
+          style: pw.TextStyle(
+            fontSize: 6.8,
+            lineSpacing: 1.8,
+            color: _documentInk,
+          ),
         ),
         pw.SizedBox(height: 1.2 * PdfPageFormat.mm),
         pw.Text(
           YorksV1CompanyDocumentStrings.contactLine.en,
           textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 6.8, lineSpacing: 1.8),
+          style: pw.TextStyle(
+            fontSize: 6.8,
+            lineSpacing: 1.8,
+            color: _documentInk,
+          ),
         ),
         pw.SizedBox(height: 1.2 * PdfPageFormat.mm),
         pw.Text(
           'E-mail: ${YorksV1CompanyDocumentStrings.email}',
           textAlign: pw.TextAlign.center,
-          style: const pw.TextStyle(fontSize: 6.8),
+          style: pw.TextStyle(fontSize: 6.8, color: _documentInk),
         ),
       ],
     ),

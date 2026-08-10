@@ -142,7 +142,7 @@ membership.
 | Reservations/movements | related non-commercial summary | related non-commercial summary | R; write only via RPC | R; write only via RPC |
 | Dispatches | R assigned | R assigned | R/RPC create | R/RPC |
 | Receipt reviews | R/RPC assigned | R/RPC assigned | R, no confirm | R/RPC |
-| Delivery Orders | R/RPC generate after own assigned receipt review | R/RPC generate after own assigned receipt review | R/RPC generate | R/RPC |
+| Delivery Orders | R/RPC generate after an assigned committed dispatch | R/RPC generate after an assigned committed dispatch | R/RPC generate after committed dispatch | R/RPC generate after committed dispatch |
 | Returns | R/RPC create assigned | R/RPC create assigned | R/RPC confirm/reject | R/RPC |
 | Operational documents | R/C through authorized links | R/C through authorized links | R/C through authorized links | R/C |
 | Commercial documents | capability plus link | capability plus link | capability plus link | capability plus link |

@@ -58,13 +58,13 @@ abstract final class YorksV1InventoryStrings {
     hi: 'कुल आइटम',
   );
   static const activeStockItems = TranslatableString(
-    en: 'Active stock items',
+    en: 'Active Stock Items',
     ar: 'أصناف المخزون النشطة',
     ur: 'فعال اسٹاک آئٹمز',
     hi: 'सक्रिय स्टॉक आइटम',
   );
   static const itemsWithReservations = TranslatableString(
-    en: 'Items with reservations',
+    en: 'Items With Reservations',
     ar: 'أصناف عليها حجوزات',
     ur: 'ریزرویشن والے آئٹمز',
     hi: 'आरक्षण वाले आइटम',
@@ -82,7 +82,7 @@ abstract final class YorksV1InventoryStrings {
     hi: 'आरक्षित स्टॉक',
   );
   static const needsAttention = TranslatableString(
-    en: 'Needs attention',
+    en: 'Needs Procurement Attention',
     ar: 'يحتاج إلى انتباه',
     ur: 'توجہ درکار',
     hi: 'ध्यान आवश्यक',
@@ -112,13 +112,13 @@ abstract final class YorksV1InventoryStrings {
     hi: 'आरक्षित',
   );
   static const quickTools = TranslatableString(
-    en: 'Quick tools',
+    en: 'Quick Tools',
     ar: 'أدوات سريعة',
     ur: 'فوری ٹولز',
     hi: 'त्वरित टूल',
   );
   static const addReceive = TranslatableString(
-    en: 'Add / Receive stock',
+    en: 'Add / Receive Stock',
     ar: 'إضافة / استلام مخزون',
     ur: 'اسٹاک شامل / وصول کریں',
     hi: 'स्टॉक जोड़ें / प्राप्त करें',
@@ -136,19 +136,19 @@ abstract final class YorksV1InventoryStrings {
     hi: 'स्टॉक हटाएं',
   );
   static const importInventory = TranslatableString(
-    en: 'Import inventory',
+    en: 'Import Inventory',
     ar: 'استيراد المخزون',
     ur: 'انوینٹری درآمد کریں',
     hi: 'इन्वेंटरी आयात करें',
   );
   static const downloadFormat = TranslatableString(
-    en: 'Download format',
+    en: 'Download Format',
     ar: 'تنزيل النموذج',
     ur: 'فارمیٹ ڈاؤن لوڈ کریں',
     hi: 'फ़ॉर्मेट डाउनलोड करें',
   );
   static const downloadImportFormat = TranslatableString(
-    en: 'Download import format',
+    en: 'Download Import Format',
     ar: 'تنزيل نموذج الاستيراد',
     ur: 'درآمدی فارمیٹ ڈاؤن لوڈ کریں',
     hi: 'आयात प्रारूप डाउनलोड करें',
@@ -170,6 +170,54 @@ abstract final class YorksV1InventoryStrings {
     ar: 'أضف سجل الصنف وسجّل الرصيد الافتتاحي اختيارياً.',
     ur: 'آئٹم ماسٹر شامل کریں اور اختیاری طور پر اوپننگ بیلنس درج کریں۔',
     hi: 'आइटम मास्टर जोड़ें और वैकल्पिक रूप से शुरुआती शेष दर्ज करें।',
+  );
+  static const itemDetails = TranslatableString(
+    en: 'Item Details',
+    ar: 'تفاصيل الصنف',
+    ur: 'آئٹم کی تفصیلات',
+    hi: 'आइटम विवरण',
+  );
+  static const editInventoryItem = TranslatableString(
+    en: 'Edit Inventory Item',
+    ar: 'تعديل صنف المخزون',
+    ur: 'انوینٹری آئٹم میں ترمیم کریں',
+    hi: 'इन्वेंटरी आइटम संपादित करें',
+  );
+  static const editInventoryItemHelp = TranslatableString(
+    en: 'Metadata only; stock remains movement-controlled.',
+    ar: 'بيانات تعريفية فقط؛ تظل الكمية محكومة بالحركات.',
+    ur: 'صرف میٹا ڈیٹا؛ اسٹاک حرکات کے ذریعے کنٹرول ہوتا ہے۔',
+    hi: 'केवल मेटाडेटा; स्टॉक मूवमेंट द्वारा नियंत्रित रहता है।',
+  );
+  static const editDetails = TranslatableString(
+    en: 'Edit Details',
+    ar: 'تعديل التفاصيل',
+    ur: 'تفصیلات میں ترمیم کریں',
+    hi: 'विवरण संपादित करें',
+  );
+  static const saveItemDetails = TranslatableString(
+    en: 'Save Item Details',
+    ar: 'حفظ تفاصيل الصنف',
+    ur: 'آئٹم کی تفصیلات محفوظ کریں',
+    hi: 'आइटम विवरण सहेजें',
+  );
+  static const receiveAdjust = TranslatableString(
+    en: 'Receive / Adjust',
+    ar: 'استلام / تعديل',
+    ur: 'وصول / ایڈجسٹ',
+    hi: 'प्राप्त / समायोजित',
+  );
+  static const lastUpdated = TranslatableString(
+    en: 'Last updated',
+    ar: 'آخر تحديث',
+    ur: 'آخری اپ ڈیٹ',
+    hi: 'अंतिम अपडेट',
+  );
+  static const notConfigured = TranslatableString(
+    en: 'Not configured',
+    ar: 'غير مهيأ',
+    ur: 'ترتیب نہیں دیا گیا',
+    hi: 'कॉन्फ़िगर नहीं है',
   );
   static const adjustExistingStock = TranslatableString(
     en: 'Receive or adjust existing stock',
@@ -291,17 +339,95 @@ abstract final class YorksV1InventoryStrings {
     ur: 'کیٹیگریز منظم کریں',
     hi: 'श्रेणियां प्रबंधित करें',
   );
+  static const warehouseCategories = TranslatableString(
+    en: 'Warehouse Categories',
+    ar: 'فئات المستودع',
+    ur: 'گودام کی کیٹیگریز',
+    hi: 'वेयरहाउस श्रेणियां',
+  );
+  static const warehouseCategoriesHelp = TranslatableString(
+    en: 'A shared Procurement category library. New parent categories and accepted import aliases become available to future users.',
+    ar: 'مكتبة فئات مشتركة للمشتريات. تصبح الفئات الرئيسية الجديدة وأسماء الاستيراد البديلة المعتمدة متاحة للمستخدمين لاحقاً.',
+    ur: 'خریداری کی مشترکہ کیٹیگری لائبریری۔ نئی بنیادی کیٹیگریز اور منظور شدہ امپورٹ عرف آئندہ صارفین کے لیے دستیاب ہوتے ہیں۔',
+    hi: 'यह खरीद की साझा श्रेणी लाइब्रेरी है। नई मूल श्रेणियां और स्वीकृत आयात उपनाम भविष्य के उपयोगकर्ताओं के लिए उपलब्ध होंगे।',
+  );
+  static const newParentCategory = TranslatableString(
+    en: 'New Parent Category',
+    ar: 'فئة رئيسية جديدة',
+    ur: 'نئی بنیادی کیٹیگری',
+    hi: 'नई मूल श्रेणी',
+  );
+  static const parentCategoryHint = TranslatableString(
+    en: 'e.g. Air Terminals',
+    ar: 'مثال: مخارج الهواء',
+    ur: 'مثلاً: ایئر ٹرمینلز',
+    hi: 'जैसे: एयर टर्मिनल्स',
+  );
+  static const addCategory = TranslatableString(
+    en: 'Add Category',
+    ar: 'إضافة فئة',
+    ur: 'کیٹیگری شامل کریں',
+    hi: 'श्रेणी जोड़ें',
+  );
+  static const categoryNormalizationHelp = TranslatableString(
+    en: 'Names are normalized to Title Case. The system suggests close existing categories before creating a duplicate.',
+    ar: 'تُوحَّد الأسماء بصيغة العنوان. يقترح النظام الفئات المتشابهة قبل إنشاء تكرار.',
+    ur: 'نام ٹائٹل کیس میں یکساں کیے جاتے ہیں۔ سسٹم نقل بنانے سے پہلے ملتی جلتی موجودہ کیٹیگریز تجویز کرتا ہے۔',
+    hi: 'नाम टाइटल केस में सामान्यीकृत होते हैं। सिस्टम डुप्लिकेट बनाने से पहले समान मौजूदा श्रेणियां सुझाता है।',
+  );
+  static const yorksStandardCategory = TranslatableString(
+    en: 'Yorks standard category',
+    ar: 'فئة يوركس القياسية',
+    ur: 'یارکس کی معیاری کیٹیگری',
+    hi: 'यॉर्क्स मानक श्रेणी',
+  );
+  static const noSavedAliases = TranslatableString(
+    en: 'No saved aliases yet',
+    ar: 'لا توجد أسماء بديلة محفوظة بعد',
+    ur: 'ابھی تک کوئی محفوظ عرف نہیں',
+    hi: 'अभी तक कोई सहेजा गया उपनाम नहीं है',
+  );
+  static const recognizedAs = TranslatableString(
+    en: 'Recognized as:',
+    ar: 'يُتعرّف عليه كـ:',
+    ur: 'اس نام سے پہچانا جاتا ہے:',
+    hi: 'के रूप में पहचाना गया:',
+  );
+  static const itemsCount = TranslatableString(
+    en: 'items',
+    ar: 'أصناف',
+    ur: 'آئٹمز',
+    hi: 'आइटम',
+  );
+  static const importFormat = TranslatableString(
+    en: 'Import Format',
+    ar: 'تنسيق الاستيراد',
+    ur: 'امپورٹ فارمیٹ',
+    hi: 'आयात प्रारूप',
+  );
   static const categoryCoverage = TranslatableString(
-    en: 'Category coverage',
+    en: 'Stock Catalogue by Category',
     ar: 'تغطية الفئات',
     ur: 'کیٹیگری کوریج',
     hi: 'श्रेणी कवरेज',
   );
+  static const categoryCoverageHelp = TranslatableString(
+    en: 'Item counts—not mixed-unit quantity totals.',
+    ar: 'عدد الأصناف وليس إجمالي كميات الوحدات المختلفة.',
+    ur: 'آئٹم گنتی — مختلف یونٹ مقداروں کے کل نہیں۔',
+    hi: 'आइटम की संख्या—मिश्रित इकाई मात्राओं का योग नहीं।',
+  );
   static const recentActivity = TranslatableString(
-    en: 'Recent stock activity',
+    en: 'Recent Stock Movements',
     ar: 'نشاط المخزون الأخير',
     ur: 'حالیہ اسٹاک سرگرمی',
     hi: 'हाल की स्टॉक गतिविधि',
+  );
+  static const recentActivityHelp = TranslatableString(
+    en: 'Every quantity change remains attributable.',
+    ar: 'يبقى كل تغيير في الكمية منسوباً إلى منفذه.',
+    ur: 'ہر مقداری تبدیلی کا ذمہ دار واضح رہتا ہے۔',
+    hi: 'हर मात्रा परिवर्तन का स्रोत दर्ज रहता है।',
   );
   static const search = TranslatableString(
     en: 'Search code, item, category or location',
@@ -326,6 +452,18 @@ abstract final class YorksV1InventoryStrings {
     ar: 'أصناف المستودع',
     ur: 'گودام آئٹمز',
     hi: 'वेयरहाउस आइटम',
+  );
+  static const warehouseItemsTitle = TranslatableString(
+    en: 'Warehouse Items',
+    ar: 'أصناف المستودع',
+    ur: 'گودام آئٹمز',
+    hi: 'वेयरहाउस आइटम',
+  );
+  static const warehouseItemsHelp = TranslatableString(
+    en: 'On Hand and movement history are controlled; Reserved remains workflow-owned.',
+    ar: 'الموجود وسجل الحركات منضبطان، بينما تظل الكمية المحجوزة مملوكة لسير العمل.',
+    ur: 'آن ہینڈ اور موومنٹ ہسٹری کنٹرولڈ ہیں؛ ریزروڈ ورک فلو کے پاس رہتا ہے۔',
+    hi: 'ऑन हैंड और मूवमेंट इतिहास नियंत्रित हैं; आरक्षित कार्यप्रवाह के स्वामित्व में रहता है।',
   );
   static const alias = TranslatableString(
     en: 'alias',
@@ -376,10 +514,10 @@ abstract final class YorksV1InventoryStrings {
     hi: 'श्रेणी',
   );
   static const location = TranslatableString(
-    en: 'Location / Bin',
+    en: 'Location / Shelf',
     ar: 'الموقع / الرف',
-    ur: 'مقام / بن',
-    hi: 'स्थान / बिन',
+    ur: 'مقام / شیلف',
+    hi: 'स्थान / शेल्फ',
   );
   static const minimumStock = TranslatableString(
     en: 'Minimum stock',
@@ -507,6 +645,12 @@ abstract final class YorksV1InventoryStrings {
     ur: 'فعال',
     hi: 'सक्रिय',
   );
+  static const inactive = TranslatableString(
+    en: 'Inactive',
+    ar: 'غير نشط',
+    ur: 'غیر فعال',
+    hi: 'निष्क्रिय',
+  );
   static const noItems = TranslatableString(
     en: 'No warehouse items match these filters.',
     ar: 'لا توجد أصناف تطابق عوامل التصفية.',
@@ -518,5 +662,347 @@ abstract final class YorksV1InventoryStrings {
     ar: 'لم يؤكد الخادم التغيير. لم يتم إظهار أي حفظ.',
     ur: 'سرور نے تبدیلی کی تصدیق نہیں کی۔ کچھ محفوظ نہیں دکھایا گیا۔',
     hi: 'सर्वर ने परिवर्तन की पुष्टि नहीं की। कुछ भी सहेजा हुआ नहीं दिखाया गया।',
+  );
+  static const activeWarehouseCatalogue = TranslatableString(
+    en: 'Active warehouse catalogue',
+    ar: 'كتالوج المستودع النشط',
+    ur: 'فعال گودام کیٹلاگ',
+    hi: 'सक्रिय वेयरहाउस कैटलॉग',
+  );
+  static const committedToActiveWork = TranslatableString(
+    en: 'Committed to active work',
+    ar: 'مخصص للعمل النشط',
+    ur: 'فعال کام کے لیے مختص',
+    hi: 'सक्रिय कार्य के लिए प्रतिबद्ध',
+  );
+  static const configuredThresholds = TranslatableString(
+    en: 'Configured thresholds',
+    ar: 'الحدود المهيأة',
+    ur: 'ترتیب شدہ حدیں',
+    hi: 'कॉन्फ़िगर की गई सीमाएँ',
+  );
+  static const noAvailableQuantity = TranslatableString(
+    en: 'No available quantity',
+    ar: 'لا توجد كمية متاحة',
+    ur: 'کوئی دستیاب مقدار نہیں',
+    hi: 'कोई उपलब्ध मात्रा नहीं',
+  );
+  static const onlyAttentionItems = TranslatableString(
+    en: 'Only stock conditions requiring a decision are shown.',
+    ar: 'تظهر فقط حالات المخزون التي تتطلب قراراً.',
+    ur: 'صرف فیصلہ درکار اسٹاک حالات دکھائے جاتے ہیں۔',
+    hi: 'केवल निर्णय की आवश्यकता वाली स्टॉक स्थितियां दिखाई जाती हैं।',
+  );
+  static const commonProcurementActions = TranslatableString(
+    en: 'Common Procurement actions.',
+    ar: 'إجراءات المشتريات الشائعة.',
+    ur: 'عام پروکیورمنٹ اقدامات۔',
+    hi: 'सामान्य खरीद क्रियाएं।',
+  );
+  static const controlledExcelStructure = TranslatableString(
+    en: 'Controlled Excel structure',
+    ar: 'بنية Excel مضبوطة',
+    ur: 'کنٹرول شدہ ایکسل ڈھانچہ',
+    hi: 'नियंत्रित एक्सेल संरचना',
+  );
+  static const previewBeforeCommit = TranslatableString(
+    en: 'Preview before commit',
+    ar: 'معاينة قبل الحفظ',
+    ur: 'محفوظ کرنے سے پہلے پیش منظر',
+    hi: 'कमिट से पहले पूर्वावलोकन',
+  );
+  static const movementNotBalanceOverwrite = TranslatableString(
+    en: 'Movement, not balance overwrite',
+    ar: 'حركة وليست استبدال رصيد',
+    ur: 'موومنٹ، بیلنس اووررائٹ نہیں',
+    hi: 'मूवमेंट, बैलेंस ओवरराइट नहीं',
+  );
+  static const currentOperationalSnapshot = TranslatableString(
+    en: 'Current operational snapshot',
+    ar: 'لقطة تشغيلية حالية',
+    ur: 'موجودہ آپریشنل منظر',
+    hi: 'वर्तमान परिचालन स्नैपशॉट',
+  );
+  static const reusableSmartCategoryLibrary = TranslatableString(
+    en: 'Reusable smart category library',
+    ar: 'مكتبة فئات ذكية قابلة لإعادة الاستخدام',
+    ur: 'دوبارہ استعمال ہونے والی سمارٹ کیٹیگری لائبریری',
+    hi: 'पुन: उपयोग योग्य स्मार्ट श्रेणी लाइब्रेरी',
+  );
+  static const searchWarehouse = TranslatableString(
+    en: 'Search warehouse',
+    ar: 'بحث في المستودع',
+    ur: 'گودام تلاش کریں',
+    hi: 'वेयरहाउस खोजें',
+  );
+  static const itemSearchHint = TranslatableString(
+    en: 'Item code, description, make, unit or location',
+    ar: 'رمز الصنف أو الوصف أو المنشأ أو الوحدة أو الموقع',
+    ur: 'آئٹم کوڈ، تفصیل، برانڈ، یونٹ یا مقام',
+    hi: 'आइटम कोड, विवरण, ब्रांड, यूनिट या स्थान',
+  );
+  static const status = TranslatableString(
+    en: 'Status',
+    ar: 'الحالة',
+    ur: 'حالت',
+    hi: 'स्थिति',
+  );
+  static const allStatus = TranslatableString(
+    en: 'All Status',
+    ar: 'كل الحالات',
+    ur: 'تمام حالتیں',
+    hi: 'सभी स्थितियां',
+  );
+  static const allUnits = TranslatableString(
+    en: 'All Units',
+    ar: 'كل الوحدات',
+    ur: 'تمام یونٹس',
+    hi: 'सभी यूनिट',
+  );
+  static const allCategories = TranslatableString(
+    en: 'All Categories',
+    ar: 'كل الفئات',
+    ur: 'تمام کیٹیگریز',
+    hi: 'सभी श्रेणियां',
+  );
+  static const inStock = TranslatableString(
+    en: 'In Stock',
+    ar: 'متوفر',
+    ur: 'اسٹاک میں',
+    hi: 'स्टॉक में',
+  );
+  static const stock = TranslatableString(
+    en: 'Stock',
+    ar: 'مخزون',
+    ur: 'اسٹاک',
+    hi: 'स्टॉक',
+  );
+  static const view = TranslatableString(
+    en: 'View',
+    ar: 'عرض',
+    ur: 'دیکھیں',
+    hi: 'देखें',
+  );
+  static const stockMovements = TranslatableString(
+    en: 'Stock Movement History',
+    ar: 'سجل حركات المخزون',
+    ur: 'اسٹاک موومنٹ کی تاریخ',
+    hi: 'स्टॉक मूवमेंट इतिहास',
+  );
+  static const movementHistoryHelp = TranslatableString(
+    en: 'Quantity delta, balance after, actor, reason and source reference remain visible.',
+    ar: 'يبقى فرق الكمية والرصيد والمنفذ والسبب والمرجع ظاهراً.',
+    ur: 'مقدار فرق، بعد کا بیلنس، عامل، وجہ اور حوالہ نظر آتے رہتے ہیں۔',
+    hi: 'मात्रा अंतर, बाद का बैलेंस, कर्ता, कारण और स्रोत संदर्भ दिखते रहते हैं।',
+  );
+  static const immutableHistory = TranslatableString(
+    en: 'Immutable history',
+    ar: 'سجل غير قابل للتغيير',
+    ur: 'ناقابل تبدیلی تاریخ',
+    hi: 'अपरिवर्तनीय इतिहास',
+  );
+  static const searchMovements = TranslatableString(
+    en: 'Search movements',
+    ar: 'بحث في الحركات',
+    ur: 'موومنٹس تلاش کریں',
+    hi: 'मूवमेंट खोजें',
+  );
+  static const movementSearchHint = TranslatableString(
+    en: 'Item, reference, reason or actor',
+    ar: 'الصنف أو المرجع أو السبب أو المنفذ',
+    ur: 'آئٹم، حوالہ، وجہ یا عامل',
+    hi: 'आइटम, संदर्भ, कारण या कर्ता',
+  );
+  static const movementType = TranslatableString(
+    en: 'Movement Type',
+    ar: 'نوع الحركة',
+    ur: 'موومنٹ کی قسم',
+    hi: 'मूवमेंट प्रकार',
+  );
+  static const allMovements = TranslatableString(
+    en: 'All Movements',
+    ar: 'كل الحركات',
+    ur: 'تمام موومنٹس',
+    hi: 'सभी मूवमेंट',
+  );
+  static const stockIn = TranslatableString(
+    en: 'Stock In',
+    ar: 'إدخال مخزون',
+    ur: 'اسٹاک اِن',
+    hi: 'स्टॉक इन',
+  );
+  static const stockOut = TranslatableString(
+    en: 'Stock Out',
+    ar: 'إخراج مخزون',
+    ur: 'اسٹاک آؤٹ',
+    hi: 'स्टॉक आउट',
+  );
+  static const warehouseDispatch = TranslatableString(
+    en: 'Warehouse Dispatch',
+    ar: 'إرسال المستودع',
+    ur: 'گودام ڈسپیچ',
+    hi: 'वेयरहाउस डिस्पैच',
+  );
+  static const materialReturn = TranslatableString(
+    en: 'Material Return',
+    ar: 'إرجاع مواد',
+    ur: 'مواد واپسی',
+    hi: 'सामग्री वापसी',
+  );
+  static const activeReservations = TranslatableString(
+    en: 'Active Reservations',
+    ar: 'الحجوزات النشطة',
+    ur: 'فعال ریزرویشنز',
+    hi: 'सक्रिय आरक्षण',
+  );
+  static const reservationsHelp = TranslatableString(
+    en: 'Read-only commitments created by approved warehouse-sourced Material Requests.',
+    ar: 'التزامات للقراءة فقط أنشأتها طلبات المواد المعتمدة من المستودع.',
+    ur: 'منظور شدہ گودام سے ماخذ مواد کی درخواستوں کی صرف پڑھنے کی پابندیاں۔',
+    hi: 'स्वीकृत वेयरहाउस-स्रोत सामग्री अनुरोधों द्वारा बनाई गई केवल-पढ़ने योग्य प्रतिबद्धताएं।',
+  );
+  static const materialRequest = TranslatableString(
+    en: 'Material Request',
+    ar: 'طلب مواد',
+    ur: 'مواد کی درخواست',
+    hi: 'सामग्री अनुरोध',
+  );
+  static const projectScope = TranslatableString(
+    en: 'Project / Scope',
+    ar: 'المشروع / النطاق',
+    ur: 'پراجیکٹ / اسکوپ',
+    hi: 'प्रोजेक्ट / स्कोप',
+  );
+  static const inventoryItem = TranslatableString(
+    en: 'Inventory Item',
+    ar: 'صنف المخزون',
+    ur: 'انوینٹری آئٹم',
+    hi: 'इन्वेंटरी आइटम',
+  );
+  static const openMaterialRequest = TranslatableString(
+    en: 'Open MR',
+    ar: 'فتح طلب المواد',
+    ur: 'مواد کی درخواست کھولیں',
+    hi: 'सामग्री अनुरोध खोलें',
+  );
+  static const previewInventoryImport = TranslatableString(
+    en: 'Preview Inventory Import',
+    ar: 'معاينة استيراد المخزون',
+    ur: 'انوینٹری درآمد کا پیش منظر',
+    hi: 'इन्वेंटरी इम्पोर्ट पूर्वावलोकन',
+  );
+  static const nothingChangesUntilConfirm = TranslatableString(
+    en: 'Nothing changes until Confirm Import',
+    ar: 'لا يتغير شيء قبل تأكيد الاستيراد',
+    ur: 'درآمد کی تصدیق تک کچھ تبدیل نہیں ہوتا',
+    hi: 'इम्पोर्ट की पुष्टि तक कुछ नहीं बदलता',
+  );
+  static const rowsFound = TranslatableString(
+    en: 'Rows Found',
+    ar: 'الصفوف الموجودة',
+    ur: 'ملنے والی قطاریں',
+    hi: 'पंक्तियां मिलीं',
+  );
+  static const nonEmptyDataRows = TranslatableString(
+    en: 'Non-empty data rows',
+    ar: 'صفوف بيانات غير فارغة',
+    ur: 'خالی نہ ہونے والی ڈیٹا قطاریں',
+    hi: 'गैर-रिक्त डेटा पंक्तियां',
+  );
+  static const newItems = TranslatableString(
+    en: 'New Items',
+    ar: 'أصناف جديدة',
+    ur: 'نئے آئٹمز',
+    hi: 'नई आइटम',
+  );
+  static const willCreateItemMasters = TranslatableString(
+    en: 'Will create item masters',
+    ar: 'سيتم إنشاء سجلات الأصناف',
+    ur: 'آئٹم ماسٹر بنائے جائیں گے',
+    hi: 'आइटम मास्टर बनाए जाएंगे',
+  );
+  static const existingMatches = TranslatableString(
+    en: 'Existing Matches',
+    ar: 'مطابقات موجودة',
+    ur: 'موجودہ مماثلتیں',
+    hi: 'मौजूदा मिलान',
+  );
+  static const matchedByCodeOrIdentity = TranslatableString(
+    en: 'Matched by code or identity',
+    ar: 'مطابقة بالرمز أو الهوية',
+    ur: 'کوڈ یا شناخت سے مماثل',
+    hi: 'कोड या पहचान से मिलान',
+  );
+  static const needReview = TranslatableString(
+    en: 'Need Review',
+    ar: 'تحتاج مراجعة',
+    ur: 'جائزہ درکار',
+    hi: 'समीक्षा जरूरी',
+  );
+  static const smartCategoryMappingActive = TranslatableString(
+    en: 'Smart category mapping is active',
+    ar: 'تعيين الفئات الذكي نشط',
+    ur: 'سمارٹ کیٹیگری میپنگ فعال ہے',
+    hi: 'स्मार्ट श्रेणी मैपिंग सक्रिय है',
+  );
+  static const smartCategoryMappingHelp = TranslatableString(
+    en: 'Existing category names and saved aliases are reused. Close matches require your decision. New categories are created only after Confirm Import.',
+    ar: 'يعاد استخدام أسماء الفئات والأسماء البديلة المحفوظة. تتطلب المطابقات القريبة قرارك. لا تُنشأ الفئات الجديدة إلا بعد التأكيد.',
+    ur: 'موجودہ کیٹیگری نام اور محفوظ عرف دوبارہ استعمال ہوتے ہیں۔ قریبی مماثلت آپ کا فیصلہ مانگتی ہے۔ نئی کیٹیگری صرف تصدیق کے بعد بنتی ہے۔',
+    hi: 'मौजूदा श्रेणी नाम और सहेजे गए उपनाम फिर से उपयोग होते हैं। निकट मिलान के लिए आपका निर्णय जरूरी है। नई श्रेणियां केवल पुष्टि के बाद बनती हैं।',
+  );
+  static const reviewWarningsBeforeImport = TranslatableString(
+    en: 'Review warnings before import',
+    ar: 'راجع التحذيرات قبل الاستيراد',
+    ur: 'درآمد سے پہلے وارننگز کا جائزہ لیں',
+    hi: 'इम्पोर्ट से पहले चेतावनियों की समीक्षा करें',
+  );
+  static const serverRevalidatesBeforeCommit = TranslatableString(
+    en: 'The server revalidates the same rules before commit.',
+    ar: 'يعيد الخادم التحقق من القواعد نفسها قبل الحفظ.',
+    ur: 'سرور محفوظ کرنے سے پہلے انہی قواعد کی دوبارہ توثیق کرتا ہے۔',
+    hi: 'सर्वर कमिट से पहले इन्हीं नियमों का पुनः सत्यापन करता है।',
+  );
+  static const row = TranslatableString(
+    en: 'Row',
+    ar: 'الصف',
+    ur: 'قطار',
+    hi: 'पंक्ति',
+  );
+  static const stockAction = TranslatableString(
+    en: 'Stock Action',
+    ar: 'إجراء المخزون',
+    ur: 'اسٹاک ایکشن',
+    hi: 'स्टॉक कार्रवाई',
+  );
+  static const itemMatchResult = TranslatableString(
+    en: 'Item Match / Result',
+    ar: 'مطابقة / نتيجة الصنف',
+    ur: 'آئٹم مماثلت / نتیجہ',
+    hi: 'आइटम मिलान / परिणाम',
+  );
+  static const validation = TranslatableString(
+    en: 'Validation',
+    ar: 'التحقق',
+    ur: 'توثیق',
+    hi: 'सत्यापन',
+  );
+  static const chooseAnotherFile = TranslatableString(
+    en: 'Choose Another File',
+    ar: 'اختر ملفاً آخر',
+    ur: 'دوسری فائل منتخب کریں',
+    hi: 'दूसरी फ़ाइल चुनें',
+  );
+  static const confirmImport = TranslatableString(
+    en: 'Confirm Import',
+    ar: 'تأكيد الاستيراد',
+    ur: 'درآمد کی تصدیق کریں',
+    hi: 'इम्पोर्ट की पुष्टि करें',
+  );
+  static const ready = TranslatableString(
+    en: 'Ready',
+    ar: 'جاهز',
+    ur: 'تیار',
+    hi: 'तैयार',
   );
 }
