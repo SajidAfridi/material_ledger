@@ -2,6 +2,14 @@ import 'yorks_v1_domain_error.dart';
 
 const Object _keep = Object();
 
+/// Keeps controlled Material Request and Delivery Order descriptions legible
+/// without changing the remainder of a user-entered material name.
+String normalizeYorksV1MaterialRequestItemDescription(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return '${trimmed.substring(0, 1).toUpperCase()}${trimmed.substring(1)}';
+}
+
 /// A controlled request timing value. The server independently enforces the
 /// scheduled-date rule; this enum is only a typed client representation.
 enum YorksV1MaterialRequestTiming {
@@ -193,7 +201,9 @@ class YorksV1MaterialRequestLine {
     id: id,
     displayOrder: displayOrder,
     source: source,
-    description: description ?? this.description,
+    description: description == null
+        ? this.description
+        : normalizeYorksV1MaterialRequestItemDescription(description),
     brandOrigin: identical(brandOrigin, _keep)
         ? this.brandOrigin
         : brandOrigin as String?,
@@ -228,7 +238,7 @@ class YorksV1MaterialRequestLine {
     'id': id,
     'displayOrder': displayOrder,
     'source': source.wireValue,
-    'description': description,
+    'description': normalizeYorksV1MaterialRequestItemDescription(description),
     'brandOrigin': _trimToNull(brandOrigin),
     'size': _trimToNull(size),
     'model': _trimToNull(model),
@@ -260,7 +270,9 @@ class YorksV1MaterialRequestLine {
       'source_kind': source.wireValue,
       'source_boq_group_id': _trimToNull(sourceBoqGroupId),
       'source_boq_row_id': _trimToNull(sourceBoqRowId),
-      'item_description': description.trim(),
+      'item_description': normalizeYorksV1MaterialRequestItemDescription(
+        description,
+      ),
       'brand_origin': _trimToNull(brandOrigin),
       // Always send the object because the deployed function validates that it
       // exists even when empty.
@@ -275,7 +287,9 @@ class YorksV1MaterialRequestLine {
       id: _string(json['id']),
       displayOrder: _positiveInt(json['displayOrder'] ?? json['display_order']),
       source: YorksV1MaterialRequestLineSource.fromWireValue(json['source']),
-      description: _string(json['description'] ?? json['item_description']),
+      description: normalizeYorksV1MaterialRequestItemDescription(
+        _string(json['description'] ?? json['item_description']),
+      ),
       brandOrigin: _trimToNull(json['brandOrigin'] ?? json['brand_origin']),
       size:
           _technicalText(json['technical_attributes'], 'size') ??

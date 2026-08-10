@@ -790,6 +790,24 @@ void main() {
     expect(request.jobContractReference, 'N-19957.2');
   });
 
+  test('normalizes only the first material-description character', () {
+    final line = YorksV1MaterialRequestLine(
+      id: _draftId,
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: 'duct insulation 25 mm',
+      quantity: '1',
+      unit: 'Roll',
+    );
+
+    expect(
+      line.copyWith(description: 'fire rated sealant').description,
+      'Fire rated sealant',
+    );
+    expect(line.toDraftJson()['description'], 'Duct insulation 25 mm');
+    expect(line.toRpcJson()['item_description'], 'Duct insulation 25 mm');
+  });
+
   test(
     'technical planning fields stay separate from commercial and receipt data',
     () {
