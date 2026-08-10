@@ -6,6 +6,7 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,6 +33,42 @@ void main() {
     expect(find.text('VAV Damper'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'dispatch refreshes the Delivery Order workspace before receipt review',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      final repository = _FakeLogisticsRepository();
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          repository: repository,
+          child: const _DispatchDeliveryOrderRefreshHarness(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delivery Order pending'), findsOneWidget);
+      expect(repository.returnsWorkspaceCalls, 1);
+
+      await tester.enterText(find.byType(TextField).first, 'DN-REF-001');
+      final dispatchButton = find.text('Dispatch now').last;
+      await tester.ensureVisible(dispatchButton);
+      await tester.tap(dispatchButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delivery Order ready'), findsOneWidget);
+      expect(repository.returnsWorkspaceCalls, greaterThanOrEqualTo(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('inventory detail renders the protected movement ledger', (
     tester,
@@ -194,11 +231,41 @@ Widget _testApp({
   child: MaterialApp(home: child),
 );
 
+class _DispatchDeliveryOrderRefreshHarness extends ConsumerWidget {
+  const _DispatchDeliveryOrderRefreshHarness();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final workspace = ref.watch(
+      yorksV1ReturnsDocumentsWorkspaceProvider('request-1'),
+    );
+    final deliveryOrderReady =
+        workspace.valueOrNull?.deliveryOrderDispatches.any(
+          (dispatch) => dispatch.canGenerate,
+        ) ??
+        false;
+    return Scaffold(
+      body: Column(
+        children: [
+          Text(
+            deliveryOrderReady
+                ? 'Delivery Order ready'
+                : 'Delivery Order pending',
+          ),
+          Expanded(child: YorksV1LogisticsScreen(requestId: 'request-1')),
+        ],
+      ),
+    );
+  }
+}
+
 class _FakeLogisticsRepository
     implements
         YorksV1LogisticsRepository,
         YorksV1InventoryItemMetadataRepository {
   YorksV1InventoryItemMetadataInput? metadataInput;
+  bool _dispatchCommitted = false;
+  int returnsWorkspaceCalls = 0;
 
   @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async =>
@@ -268,6 +335,7 @@ class _FakeLogisticsRepository
   @override
   Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId) async {
     if (requestId == 'receipt-focus') return _receiptFocusWorkspace;
+    if (_dispatchCommitted) return _postDispatchLogisticsWorkspace(requestId);
     return YorksV1LogisticsWorkspace(
       requestId: requestId,
       requestNumber: 'Y-001-MR001',
@@ -298,8 +366,10 @@ class _FakeLogisticsRepository
   }
 
   @override
-  Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) =>
-      getWorkspace(input.requestId);
+  Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) async {
+    _dispatchCommitted = true;
+    return getWorkspace(input.requestId);
+  }
 
   @override
   Future<YorksV1LogisticsWorkspace> confirmReceipt(
@@ -309,9 +379,13 @@ class _FakeLogisticsRepository
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
     String requestId,
-  ) async => requestId == 'delivery-focus'
-      ? _deliveryFocusWorkspace
-      : _returnsWorkspace(requestId);
+  ) async {
+    returnsWorkspaceCalls++;
+    if (requestId == 'delivery-focus') return _deliveryFocusWorkspace;
+    return _dispatchCommitted
+        ? _postDispatchDeliveryWorkspace(requestId)
+        : _returnsWorkspace(requestId);
+  }
 
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
@@ -371,6 +445,60 @@ YorksV1ReturnsDocumentsWorkspace _returnsWorkspace(String requestId) =>
       materialReturns: const [],
       returnInventoryItems: const [],
     );
+
+YorksV1LogisticsWorkspace _postDispatchLogisticsWorkspace(String requestId) =>
+    YorksV1LogisticsWorkspace(
+      requestId: requestId,
+      requestNumber: 'Y-001-MR001',
+      requestState: 'dispatched',
+      requestRecordVersion: 6,
+      projectName: 'Yorks Project',
+      scopeName: 'Building A',
+      canDispatch: false,
+      canConfirmReceipt: true,
+      dispatchCandidates: const [],
+      dispatches: [
+        YorksV1MaterialDispatch(
+          id: 'dispatch-after-commit',
+          number: 'Y-001-DSP001',
+          dispatchDate: DateTime.utc(2026, 8, 10),
+          state: YorksV1DispatchState.receiptPending,
+          recordVersion: 1,
+          dispatchedByDisplayName: 'Procurement User',
+          dispatchedAt: DateTime.utc(2026, 8, 10),
+          canConfirmReceipt: true,
+          lines: const [],
+        ),
+      ],
+    );
+
+YorksV1ReturnsDocumentsWorkspace _postDispatchDeliveryWorkspace(
+  String requestId,
+) => YorksV1ReturnsDocumentsWorkspace(
+  requestId: requestId,
+  projectId: 'project-1',
+  requestNumber: 'Y-001-MR001',
+  requestState: 'dispatched',
+  requestRecordVersion: 6,
+  projectName: 'Yorks Project',
+  projectReference: 'Y-001',
+  scopeName: 'Building A',
+  canGenerateDeliveryOrder: true,
+  canSubmitMaterialReturn: false,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: [
+    YorksV1DeliveryOrderDispatch(
+      dispatchId: 'dispatch-after-commit',
+      dispatchNumber: 'Y-001-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 10),
+      dispatchRecordVersion: 1,
+      canGenerate: true,
+    ),
+  ],
+  returnCandidates: const [],
+  materialReturns: const [],
+  returnInventoryItems: const [],
+);
 
 const _item = YorksV1LogisticsInventoryItem(
   id: 'inventory-1',

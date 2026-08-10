@@ -106,6 +106,12 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
 
   void _refresh(WidgetRef ref) {
     ref.invalidate(yorksV1LogisticsWorkspaceProvider(requestId));
+    // The request detail remains mounted while Procurement opens this route.
+    // A committed dispatch is immediately a Delivery Order candidate, so its
+    // role-safe documents projection must be refreshed before the user
+    // returns to the detail page. Receipt review is a later, independent
+    // workflow fact and is not required for this refresh.
+    ref.invalidate(yorksV1ReturnsDocumentsWorkspaceProvider(requestId));
     ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId));
   }
 }

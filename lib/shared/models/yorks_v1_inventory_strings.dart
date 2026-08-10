@@ -514,10 +514,10 @@ abstract final class YorksV1InventoryStrings {
     hi: 'श्रेणी',
   );
   static const location = TranslatableString(
-    en: 'Location / Bin',
+    en: 'Location / Shelf',
     ar: 'الموقع / الرف',
-    ur: 'مقام / بن',
-    hi: 'स्थान / बिन',
+    ur: 'مقام / شیلف',
+    hi: 'स्थान / शेल्फ',
   );
   static const minimumStock = TranslatableString(
     en: 'Minimum stock',
