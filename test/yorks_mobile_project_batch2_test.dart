@@ -333,7 +333,7 @@ void main() {
     await _setViewport(tester, const Size(390, 844));
     final repository = _ControlledProjectRepository(controlCreate: true);
     final container = await _createCreationContainer(repository);
-    await _seedReviewDraft(container);
+    await _seedReviewDraft(container, includeAttachmentMetadata: false);
     YorksV1Project? created;
     await _pumpCreationShell(
       tester,
@@ -409,7 +409,10 @@ Future<ProviderContainer> _createCreationContainer(
   return container;
 }
 
-Future<void> _seedReviewDraft(ProviderContainer container) async {
+Future<void> _seedReviewDraft(
+  ProviderContainer container, {
+  bool includeAttachmentMetadata = true,
+}) async {
   final current = container.read(
     yorksV1ProjectCreationDraftProvider(_authUserId),
   );
@@ -441,11 +444,13 @@ Future<void> _seedReviewDraft(ProviderContainer container) async {
             YorksV1ProjectBuildingInput(code: 'DF4W', name: 'Building 4'),
             YorksV1ProjectBuildingInput(code: 'DF6W', name: 'Building 6'),
           ],
-          attachments: const [
-            YorksV1ProjectAttachmentInput(fileName: 'contract.pdf'),
-            YorksV1ProjectAttachmentInput(fileName: 'drawing.pdf'),
-            YorksV1ProjectAttachmentInput(fileName: 'programme.xlsx'),
-          ],
+          attachments: includeAttachmentMetadata
+              ? const [
+                  YorksV1ProjectAttachmentInput(fileName: 'contract.pdf'),
+                  YorksV1ProjectAttachmentInput(fileName: 'drawing.pdf'),
+                  YorksV1ProjectAttachmentInput(fileName: 'programme.xlsx'),
+                ]
+              : const [],
         ),
       );
 }

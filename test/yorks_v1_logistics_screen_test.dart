@@ -9,6 +9,7 @@ import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
+import 'package:material_ledger/shared/services/yorks_v1_logistics_document_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -67,6 +68,7 @@ void main() {
       expect(find.text('Delivery Order ready'), findsOneWidget);
       expect(repository.returnsWorkspaceCalls, greaterThanOrEqualTo(2));
       expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 6));
     },
   );
 
@@ -154,7 +156,7 @@ void main() {
   });
 
   testWidgets(
-    'focused receipt route opens the R35 receipt review dialog for its dispatch',
+    'stale focused receipt route fails closed without opening another dispatch',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
 
@@ -164,34 +166,25 @@ void main() {
           child: const YorksV1LogisticsScreen(
             requestId: 'receipt-focus',
             focusReceiptReview: true,
-            // A stale deep link must still find the next server-authorized
-            // dispatch rather than leaving the receipt action inert.
+            // A stale deep link must never silently select a different
+            // committed dispatch.
             focusedDispatchId: 'stale-dispatch',
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Review delivered materials'), findsOneWidget);
-      expect(find.text('Focus damper'), findsOneWidget);
-      expect(find.text('Received'), findsOneWidget);
-      expect(find.text('Missing'), findsOneWidget);
-      expect(find.text('Damaged'), findsOneWidget);
-      expect(find.text('Good quantity'), findsOneWidget);
       expect(
-        find.text('Line note (required for missing or damaged)'),
+        find.text('This record changed. Refresh it before trying again.'),
         findsOneWidget,
       );
-      expect(
-        find.text('All dispatch lines have been reviewed.'),
-        findsOneWidget,
-      );
-      expect(find.text('Save receipt review'), findsOneWidget);
+      expect(find.text('Review delivered materials'), findsNothing);
+      await tester.pump(const Duration(seconds: 6));
     },
   );
 
   testWidgets(
-    'focused Delivery Order route opens the generation dialog without returns',
+    'stale focused Delivery Order route fails closed without another dispatch',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
 
@@ -201,18 +194,70 @@ void main() {
           child: const YorksV1ReturnsDocumentsScreen(
             requestId: 'delivery-focus',
             focusDeliveryOrder: true,
-            // Likewise, a stale dispatch focus falls back to the available
-            // Delivery Order candidate without entering Material Returns.
+            // Likewise, a stale focus must not open a different committed
+            // dispatch's controlled document.
             focusedDispatchId: 'stale-dispatch',
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Generate Delivery Order'), findsWidgets);
-      expect(find.text('Delivery Order reference'), findsOneWidget);
-      expect(find.text('Download PDF'), findsOneWidget);
+      expect(
+        find.text('This record changed. Refresh it before trying again.'),
+        findsOneWidget,
+      );
+      expect(find.text('Delivery Order reference'), findsNothing);
       expect(find.text('Material returns'), findsNothing);
+      await tester.pump(const Duration(seconds: 6));
+    },
+  );
+
+  testWidgets(
+    'Delivery Order output retry reuses the server-confirmed revision',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      final repository = _DeliveryOrderRetryRepository();
+      final documents = _LostOutputDocuments();
+      final initial = _postDispatchDeliveryWorkspace('delivery-output-retry');
+      final dispatch = initial.deliveryOrderDispatches.single;
+
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          repository: repository,
+          child: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => showYorksV1DeliveryOrderGenerationDialog(
+                    context,
+                    workspace: initial,
+                    dispatch: dispatch,
+                    documents: documents,
+                  ),
+                  child: const Text('Open Delivery Order'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open Delivery Order'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'DO-RETRY-001');
+
+      await tester.tap(find.text('Download PDF'));
+      await tester.pumpAndSettle();
+      expect(repository.generationCalls, 1);
+      expect(documents.shareAttempts, 1);
+      expect(find.text('Delivery Order reference'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 6));
+
+      await tester.tap(find.text('Download PDF'));
+      await tester.pumpAndSettle();
+      expect(repository.generationCalls, 1);
+      expect(documents.shareAttempts, 2);
+      expect(find.text('Delivery Order reference'), findsNothing);
     },
   );
 }
@@ -415,6 +460,34 @@ class _FakeLogisticsRepository
   ) async => _returnsWorkspace('request-1');
 }
 
+class _DeliveryOrderRetryRepository extends _FakeLogisticsRepository {
+  int generationCalls = 0;
+
+  @override
+  Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
+    YorksV1DeliveryOrderGenerationInput input,
+  ) async {
+    generationCalls++;
+    return _confirmedDeliveryOrderWorkspace(input.requestId);
+  }
+}
+
+class _LostOutputDocuments extends YorksV1LogisticsDocumentService {
+  int shareAttempts = 0;
+
+  @override
+  Future<void> shareDeliveryOrderPdf({
+    required YorksV1ReturnsDocumentsWorkspace workspace,
+    required YorksV1DeliveryOrderDispatch dispatch,
+    required YorksV1DeliveryOrderRevision revision,
+  }) async {
+    shareAttempts++;
+    if (shareAttempts == 1) {
+      throw StateError('Local output channel unavailable.');
+    }
+  }
+}
+
 YorksV1ReturnsDocumentsWorkspace _returnsWorkspace(String requestId) =>
     YorksV1ReturnsDocumentsWorkspace(
       requestId: requestId,
@@ -493,6 +566,58 @@ YorksV1ReturnsDocumentsWorkspace _postDispatchDeliveryWorkspace(
       dispatchDate: DateTime.utc(2026, 8, 10),
       dispatchRecordVersion: 1,
       canGenerate: true,
+    ),
+  ],
+  returnCandidates: const [],
+  materialReturns: const [],
+  returnInventoryItems: const [],
+);
+
+YorksV1ReturnsDocumentsWorkspace _confirmedDeliveryOrderWorkspace(
+  String requestId,
+) => YorksV1ReturnsDocumentsWorkspace(
+  requestId: requestId,
+  projectId: 'project-1',
+  requestNumber: 'Y-001-MR001',
+  requestState: 'dispatched',
+  requestRecordVersion: 6,
+  projectName: 'Yorks Project',
+  projectReference: 'Y-001',
+  scopeName: 'Building A',
+  canGenerateDeliveryOrder: true,
+  canSubmitMaterialReturn: false,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: [
+    YorksV1DeliveryOrderDispatch(
+      dispatchId: 'dispatch-after-commit',
+      dispatchNumber: 'Y-001-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 10),
+      dispatchRecordVersion: 1,
+      canGenerate: true,
+      deliveryOrder: YorksV1DeliveryOrder(
+        id: 'delivery-order-1',
+        dispatchId: 'dispatch-after-commit',
+        reference: 'DO-RETRY-001',
+        recordVersion: 1,
+        currentRevisionId: 'revision-1',
+        revisions: [
+          YorksV1DeliveryOrderRevision(
+            id: 'revision-1',
+            revisionNumber: 1,
+            isCurrent: true,
+            generatedAt: DateTime.utc(2026, 8, 10),
+            generatedByDisplayName: 'Project Engineer',
+            lines: const [
+              YorksV1DeliveryOrderLine(
+                serialNumber: 1,
+                description: 'VAV Damper',
+                quantity: '4',
+                unit: 'Nos',
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   ],
   returnCandidates: const [],

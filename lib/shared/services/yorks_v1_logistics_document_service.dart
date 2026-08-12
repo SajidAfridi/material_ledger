@@ -8,6 +8,7 @@ import '../models/yorks_v1_boq.dart';
 import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_logistics_strings.dart';
+import '../models/yorks_v1_project_strings.dart';
 import '../models/yorks_v1_quantity.dart';
 import 'yorks_v1_boq_workbook_service.dart';
 import 'yorks_v1_pdf_arabic.dart';
@@ -40,7 +41,7 @@ class YorksV1LogisticsDocumentService {
       for (final line in revision.lines)
         [
           line.serialNumber.toString(),
-          line.description,
+          yorksV1DeliveryOrderLineDescription(line),
           yorksV1DisplayQuantity(line.quantity),
           line.unit,
         ],
@@ -67,7 +68,7 @@ class YorksV1LogisticsDocumentService {
         [
           line.displayOrder.toString(),
           line.description,
-          line.returnQuantity,
+          yorksV1DisplayQuantity(line.returnQuantity),
           line.unit,
         ],
     ],
@@ -130,10 +131,36 @@ class YorksV1LogisticsDocumentService {
     final logo = await _loadLogo();
     final theme = await _buildTheme();
     final deliveryOrder = dispatch.deliveryOrder!;
+    final isReceiptReviewed =
+        revision.snapshotKind == YorksV1DeliveryOrderSnapshotKind.receiptReview;
+    final documentTitle =
+        (isReceiptReviewed
+                ? YorksV1LogisticsStrings.deliveryReportTitle
+                : YorksV1LogisticsStrings.deliveryOrderTitle)
+            .primary;
+    // A long dispatch is deliberately split into a normal table sequence and
+    // a final-page bundle. The bundle reserves a stable signing area directly
+    // above the fixed company footer, so the sign-off is never stranded on an
+    // otherwise empty page or split from the final delivered lines.
+    final useDedicatedSignOffPage = revision.lines.length > 16;
+    final finalPageLineCount = useDedicatedSignOffPage ? 6 : 0;
+    final leadingLines = useDedicatedSignOffPage
+        ? revision.lines.sublist(0, revision.lines.length - finalPageLineCount)
+        : revision.lines;
+    final finalPageLines = useDedicatedSignOffPage
+        ? revision.lines.sublist(revision.lines.length - finalPageLineCount)
+        : const <YorksV1DeliveryOrderLine>[];
+    // Typical single-page records keep their sign-off at the lower edge of
+    // the page. For unusually long descriptions, allow the PDF engine to
+    // paginate naturally rather than risk clipping handwritten fields.
+    final useAnchoredSinglePageSignOff =
+        !useDedicatedSignOffPage &&
+        revision.lines.length <= 11 &&
+        revision.lines.every((line) => line.description.length <= 72);
     _validateDeliveryOrder(revision);
     final document = pw.Document(
       theme: theme,
-      title: '${deliveryOrder.reference} - Delivery Order',
+      title: '${deliveryOrder.reference} - $documentTitle',
       author: YorksV1CompanyDocumentStrings.legalName.primary,
       creator: 'Yorks Project Management',
     );
@@ -155,16 +182,36 @@ class YorksV1LogisticsDocumentService {
                 workspace: workspace,
                 dispatch: dispatch,
                 deliveryOrder: deliveryOrder,
+                revision: revision,
+                documentTitle: documentTitle,
               )
             : pw.SizedBox(),
-        footer: _pageNumber,
+        // The company contact panel is a true page footer. Keeping it here
+        // reserves its space on every page, rather than letting a long table
+        // push it into the document body or onto a following page.
+        footer: _deliveryOrderFooter,
         build: (_) => [
-          _deliveryOrderTable(revision.lines),
-          // A revision contains the server-produced, immutable dispatch
-          // snapshot. Do not recompute its quantities from later receipts.
-          pw.NewPage(freeSpace: 66 * PdfPageFormat.mm),
-          pw.Spacer(),
-          _deliveryOrderClosingBlock(workspace),
+          if (useDedicatedSignOffPage) ...[
+            _deliveryOrderTable(leadingLines),
+            _deliveryOrderFinalPageBundle(finalPageLines),
+          ] else if (useAnchoredSinglePageSignOff)
+            _deliveryOrderAnchoredSinglePageBundle(leadingLines)
+          else ...[
+            _deliveryOrderTable(leadingLines),
+            // Keep the handwritten receipt section together. The contact
+            // panel lives in the fixed footer above, so this block either
+            // follows the final table rows or starts cleanly on the next
+            // page as one unit.
+            pw.Inseparable(
+              child: pw.Column(
+                mainAxisSize: pw.MainAxisSize.min,
+                children: [
+                  pw.SizedBox(height: 4 * PdfPageFormat.mm),
+                  _deliveryOrderSignatureBlock(),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -225,7 +272,7 @@ class YorksV1LogisticsDocumentService {
                 [
                   line.displayOrder.toString(),
                   line.description,
-                  line.returnQuantity,
+                  yorksV1DisplayQuantity(line.returnQuantity),
                   line.unit,
                 ],
             ],
@@ -320,9 +367,7 @@ class YorksV1LogisticsDocumentService {
       _logoFuture ??= _loadLogoUncached();
 
   static Future<pw.MemoryImage> _loadLogoUncached() async {
-    final data = await rootBundle.load(
-      'assets/branding/yorks_emblem_black.png',
-    );
+    final data = await rootBundle.load('assets/logo.png');
     return pw.MemoryImage(data.buffer.asUint8List());
   }
 
@@ -356,71 +401,92 @@ class YorksV1LogisticsDocumentService {
     required YorksV1ReturnsDocumentsWorkspace workspace,
     required YorksV1DeliveryOrderDispatch dispatch,
     required YorksV1DeliveryOrder deliveryOrder,
-  }) => pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-    children: [
-      _companyHeader(logo),
-      pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
-      pw.Center(
-        child: pw.Text(
-          YorksV1LogisticsStrings.deliveryOrderTitle.primary,
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-            color: _documentInk,
+    required YorksV1DeliveryOrderRevision revision,
+    required String documentTitle,
+  }) {
+    final identity = revision.documentIdentity;
+    final projectName = identity?.projectName ?? workspace.projectName;
+    final jobReference =
+        identity?.jobContractReference ?? workspace.jobContractReference;
+    final contractor =
+        identity?.mainContractorName ??
+        workspace.mainContractorName ??
+        projectName;
+    final dispatchDate = identity?.dispatchDate ?? dispatch.dispatchDate;
+    final scope =
+        identity?.scopeCode ??
+        identity?.scopeName ??
+        workspace.scopeCode ??
+        workspace.scopeName;
+    final materialContext =
+        identity?.materialContext ??
+        workspace.materialContext ??
+        'Material delivery';
+    final dispatchRole = identity?.dispatchedByExactRole;
+    final dispatchedBy = [
+      identity?.dispatchedByDisplayName,
+      if (dispatchRole != null)
+        YorksV1ProjectStrings.roleLabel(dispatchRole).primary,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        _companyHeader(logo),
+        pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+        pw.Center(
+          child: pw.Text(
+            documentTitle,
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+              color: _documentInk,
+            ),
           ),
         ),
-      ),
-      pw.SizedBox(height: 2.6 * PdfPageFormat.mm),
-      pw.Table(
-        columnWidths: const {
-          0: pw.FlexColumnWidth(4.2),
-          1: pw.FlexColumnWidth(1.8),
-        },
-        children: [
-          pw.TableRow(
-            children: [
-              _deliveryTopText(
-                'M/s. ${workspace.mainContractorName ?? workspace.projectName}',
-                bold: true,
-              ),
-              _deliveryTopText('Ref: ${deliveryOrder.reference}', bold: true),
-            ],
+        pw.SizedBox(height: 2.6 * PdfPageFormat.mm),
+        pw.Table(
+          columnWidths: const {
+            0: pw.FlexColumnWidth(4.2),
+            1: pw.FlexColumnWidth(1.8),
+          },
+          children: [
+            pw.TableRow(
+              children: [
+                _deliveryTopText(contractor, bold: true),
+                _deliveryTopText('Ref: ${deliveryOrder.reference}', bold: true),
+              ],
+            ),
+            pw.TableRow(
+              children: [
+                _deliveryTopText(''),
+                _deliveryTopText(
+                  'Date: ${DateFormat('dd/MM/yyyy').format(dispatchDate.toLocal())}',
+                ),
+              ],
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 3 * PdfPageFormat.mm),
+        _deliveryLabelValue(
+          'Project',
+          YorksV1CompanyDocumentStrings.qualifiedProjectName(
+            projectName: projectName,
+            jobContractReference: jobReference,
           ),
-          pw.TableRow(
-            children: [
-              _deliveryTopText(''),
-              _deliveryTopText(
-                'Date: ${DateFormat('dd/MM/yyyy').format(dispatch.dispatchDate.toLocal())}',
-              ),
-            ],
-          ),
+          valueBold: true,
+        ),
+        pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+        _deliveryLabelValue('Building No.', scope, valueBold: true),
+        pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+        _deliveryLabelValue('Materials', materialContext, valueBold: true),
+        if (dispatchedBy.isNotEmpty) ...[
+          pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+          _deliveryLabelValue('Dispatched by', dispatchedBy, valueBold: true),
         ],
-      ),
-      pw.SizedBox(height: 3 * PdfPageFormat.mm),
-      _deliveryLabelValue(
-        'Project',
-        YorksV1CompanyDocumentStrings.qualifiedProjectName(
-          projectName: workspace.projectName,
-          jobContractReference: workspace.jobContractReference,
-        ),
-        valueBold: true,
-      ),
-      pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
-      _deliveryLabelValue(
-        'Building No.',
-        workspace.scopeCode ?? workspace.scopeName,
-        valueBold: true,
-      ),
-      pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
-      _deliveryLabelValue(
-        'Materials',
-        workspace.materialContext ?? 'Material delivery',
-        valueBold: true,
-      ),
-      pw.SizedBox(height: 4 * PdfPageFormat.mm),
-    ],
-  );
+        pw.SizedBox(height: 4 * PdfPageFormat.mm),
+      ],
+    );
+  }
 
   static pw.Widget _companyHeader(pw.MemoryImage? logo) => pw.Container(
     width: double.infinity,
@@ -447,14 +513,6 @@ class YorksV1LogisticsDocumentService {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 1.2 * PdfPageFormat.mm),
-              pw.Text(
-                'SINCE 1984',
-                style: pw.TextStyle(
-                  fontSize: 7.5,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
             ],
           ),
         ),
@@ -475,7 +533,7 @@ class YorksV1LogisticsDocumentService {
             ),
             textDirection: pw.TextDirection.ltr,
             textAlign: pw.TextAlign.right,
-            style: const pw.TextStyle(fontSize: 7.4),
+            style: pw.TextStyle(fontSize: 10.2, fontWeight: pw.FontWeight.bold),
           ),
         ),
       ],
@@ -523,44 +581,80 @@ class YorksV1LogisticsDocumentService {
     ],
   );
 
-  static pw.Widget _deliveryOrderTable(List<YorksV1DeliveryOrderLine> lines) =>
-      pw.Table(
-        border: pw.TableBorder.all(color: _documentGrid, width: .7),
-        columnWidths: const {
-          0: pw.FlexColumnWidth(.7),
-          1: pw.FlexColumnWidth(5.1),
-          2: pw.FlexColumnWidth(1.05),
-          3: pw.FlexColumnWidth(1.15),
-        },
-        defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
-        children: [
-          pw.TableRow(
-            repeat: true,
-            decoration: pw.BoxDecoration(color: _headerFill),
-            children: [
-              _deliveryTableHeader('S. No.'),
-              _deliveryTableHeader('Description'),
-              _deliveryTableHeader('Qty.'),
-              _deliveryTableHeader('Unit'),
-            ],
-          ),
-          for (var index = 0; index < lines.length; index++)
-            pw.TableRow(
-              children: [
-                _deliveryCell('${index + 1}', alignment: pw.Alignment.center),
-                _deliveryCell(lines[index].description),
-                _deliveryCell(
-                  yorksV1DisplayQuantity(lines[index].quantity),
-                  alignment: pw.Alignment.center,
-                ),
-                _deliveryCell(
-                  lines[index].unit,
-                  alignment: pw.Alignment.center,
-                ),
-              ],
+  static pw.Widget _deliveryOrderTable(
+    List<YorksV1DeliveryOrderLine> lines, {
+    bool includeHeader = true,
+  }) => pw.Table(
+    border: pw.TableBorder.all(color: _documentGrid, width: .7),
+    columnWidths: const {
+      0: pw.FlexColumnWidth(.7),
+      1: pw.FlexColumnWidth(5.1),
+      2: pw.FlexColumnWidth(1.05),
+      3: pw.FlexColumnWidth(1.15),
+    },
+    defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+    children: [
+      if (includeHeader)
+        pw.TableRow(
+          repeat: true,
+          decoration: pw.BoxDecoration(color: _headerFill),
+          children: [
+            _deliveryTableHeader('S. No.'),
+            _deliveryTableHeader('Description'),
+            _deliveryTableHeader('Qty.'),
+            _deliveryTableHeader('Unit'),
+          ],
+        ),
+      for (var index = 0; index < lines.length; index++)
+        pw.TableRow(
+          children: [
+            _deliveryCell(
+              '${lines[index].serialNumber}',
+              alignment: pw.Alignment.center,
             ),
-        ],
-      );
+            _deliveryDescriptionCell(lines[index]),
+            _deliveryCell(
+              yorksV1DisplayQuantity(lines[index].quantity),
+              alignment: pw.Alignment.center,
+            ),
+            _deliveryCell(lines[index].unit, alignment: pw.Alignment.center),
+          ],
+        ),
+    ],
+  );
+
+  static pw.Widget _deliveryOrderFinalPageBundle(
+    List<YorksV1DeliveryOrderLine> lines,
+  ) => pw.Inseparable(
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        // The leading table's repeated heading already opens this page. The
+        // final rows are a continuation grouped with sign-off, not a second
+        // table section that should introduce another heading mid-page.
+        _deliveryOrderTable(lines, includeHeader: false),
+        pw.SizedBox(height: 5 * PdfPageFormat.mm),
+        _deliveryOrderSignatureBlock(),
+      ],
+    ),
+  );
+
+  static pw.Widget _deliveryOrderAnchoredSinglePageBundle(
+    List<YorksV1DeliveryOrderLine> lines,
+  ) => pw.Container(
+    // First-page content space below the company/title block and above the
+    // fixed contact footer. This lets short forms keep the handover section
+    // visually attached to the footer without forcing an extra page.
+    height: 178 * PdfPageFormat.mm,
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        _deliveryOrderTable(lines),
+        pw.Spacer(),
+        _deliveryOrderSignatureBlock(),
+      ],
+    ),
+  );
 
   static pw.Widget _deliveryTableHeader(String text) => pw.Padding(
     padding: pw.EdgeInsets.symmetric(
@@ -582,14 +676,33 @@ class YorksV1LogisticsDocumentService {
     alignment: alignment,
     padding: pw.EdgeInsets.symmetric(
       horizontal: 2.2 * PdfPageFormat.mm,
-      vertical: 4 * PdfPageFormat.mm,
+      vertical: 2.4 * PdfPageFormat.mm,
     ),
     child: pw.Text(text, style: const pw.TextStyle(fontSize: 8.1)),
   );
 
-  static pw.Widget _deliveryOrderClosingBlock(
-    YorksV1ReturnsDocumentsWorkspace workspace,
-  ) => pw.Column(
+  static pw.Widget _deliveryDescriptionCell(YorksV1DeliveryOrderLine line) =>
+      pw.Container(
+        alignment: pw.Alignment.centerLeft,
+        padding: pw.EdgeInsets.symmetric(
+          horizontal: 2.2 * PdfPageFormat.mm,
+          vertical: 2.4 * PdfPageFormat.mm,
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          mainAxisSize: pw.MainAxisSize.min,
+          children: [
+            pw.Text(line.description, style: const pw.TextStyle(fontSize: 8.1)),
+            pw.SizedBox(height: .9 * PdfPageFormat.mm),
+            pw.Text(
+              yorksV1DeliveryOrderLineMetadata(line),
+              style: pw.TextStyle(fontSize: 7.2, color: PdfColors.blueGrey700),
+            ),
+          ],
+        ),
+      );
+
+  static pw.Widget _deliveryOrderSignatureBlock() => pw.Column(
     mainAxisSize: pw.MainAxisSize.min,
     children: [
       _writingLine('Delivery Address', ''),
@@ -634,8 +747,6 @@ class YorksV1LogisticsDocumentService {
           style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
         ),
       ),
-      pw.SizedBox(height: 6 * PdfPageFormat.mm),
-      _companyContact(),
     ],
   );
 
@@ -710,6 +821,15 @@ class YorksV1LogisticsDocumentService {
     ),
   );
 
+  static pw.Widget _deliveryOrderFooter(pw.Context context) => pw.Column(
+    mainAxisSize: pw.MainAxisSize.min,
+    children: [
+      _companyContact(),
+      pw.SizedBox(height: 1.5 * PdfPageFormat.mm),
+      _pageNumber(context),
+    ],
+  );
+
   static pw.Widget _pageNumber(pw.Context context) => pw.Align(
     alignment: pw.Alignment.centerRight,
     child: pw.Text(
@@ -727,9 +847,11 @@ class YorksV1LogisticsDocumentService {
       if (line.description.trim().isEmpty ||
           line.unit.trim().isEmpty ||
           double.tryParse(line.quantity.trim()) == null ||
-          double.parse(line.quantity.trim()) <= 0) {
+          double.parse(line.quantity.trim()) < 0 ||
+          (revision.snapshotKind == YorksV1DeliveryOrderSnapshotKind.dispatch &&
+              double.parse(line.quantity.trim()) <= 0)) {
         throw StateError(
-          'Delivery Order row ${index + 1} has incomplete dispatch snapshot values.',
+          'Delivery Order row ${index + 1} has incomplete snapshot values.',
         );
       }
     }

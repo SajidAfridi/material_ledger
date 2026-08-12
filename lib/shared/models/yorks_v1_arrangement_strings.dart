@@ -261,17 +261,71 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'بیرونی سپلائر',
     hi: 'बाहरी आपूर्तिकर्ता',
   );
-  static const supplierName = TranslatableString(
-    en: 'Supplier name',
-    ar: 'اسم المورد',
-    ur: 'سپلائر کا نام',
-    hi: 'आपूर्तिकर्ता का नाम',
+  static const supplierNameOptional = TranslatableString(
+    en: 'Supplier name optional',
+    ar: 'اسم المورد (اختياري)',
+    ur: 'سپلائر کا نام (اختیاری)',
+    hi: 'आपूर्तिकर्ता का नाम (वैकल्पिक)',
   );
   static const warehouseItem = TranslatableString(
     en: 'Warehouse item',
     ar: 'صنف المستودع',
     ur: 'گودام آئٹم',
     hi: 'वेयरहाउस आइटम',
+  );
+  static const searchWarehouseItem = TranslatableString(
+    en: 'Search warehouse items',
+    ar: 'البحث في أصناف المستودع',
+    ur: 'گودام کی اشیاء تلاش کریں',
+    hi: 'वेयरहाउस आइटम खोजें',
+  );
+  static const createInventoryItem = TranslatableString(
+    en: 'Create inventory item',
+    ar: 'إنشاء صنف مخزون',
+    ur: 'انوینٹری آئٹم بنائیں',
+    hi: 'इन्वेंट्री आइटम बनाएं',
+  );
+  static const createInventoryItemHelp = TranslatableString(
+    en: 'Create a controlled item master from this request line. New stock is recorded only when you enter a physical opening balance and reason.',
+    ar: 'أنشئ صنف مخزون مضبوطاً من بند الطلب. لا يُسجل المخزون الجديد إلا عند إدخال رصيد افتتاحي فعلي وسبب.',
+    ur: 'اس درخواست کی لائن سے کنٹرول شدہ انوینٹری آئٹم بنائیں۔ نیا اسٹاک صرف اس وقت ریکارڈ ہوتا ہے جب آپ حقیقی افتتاحی بیلنس اور وجہ درج کریں۔',
+    hi: 'इस अनुरोध पंक्ति से नियंत्रित इन्वेंट्री आइटम बनाएं। नया स्टॉक केवल वास्तविक प्रारंभिक शेष और कारण दर्ज करने पर रिकॉर्ड होता है।',
+  );
+  static const inventoryItemCreated = TranslatableString(
+    en: 'Inventory item created',
+    ar: 'تم إنشاء صنف المخزون',
+    ur: 'انوینٹری آئٹم بن گیا',
+    hi: 'इन्वेंट्री आइटम बनाया गया',
+  );
+  static const createdItemHasNoAvailableStock = TranslatableString(
+    en: 'The new item has no available stock. Receive physical stock before using it from Warehouse, or choose External supplier.',
+    ar: 'لا يوجد مخزون متاح للصنف الجديد. استلم المخزون الفعلي قبل استخدامه من المستودع، أو اختر مورداً خارجياً.',
+    ur: 'نئے آئٹم کا کوئی دستیاب اسٹاک نہیں ہے۔ گودام سے استعمال سے پہلے فزیکل اسٹاک وصول کریں، یا بیرونی سپلائر منتخب کریں۔',
+    hi: 'नए आइटम में उपलब्ध स्टॉक नहीं है। वेयरहाउस से उपयोग करने से पहले भौतिक स्टॉक प्राप्त करें, या बाहरी आपूर्तिकर्ता चुनें।',
+  );
+  static const categoryRequiredForNewItem = TranslatableString(
+    en: 'Choose an existing category or explicitly create a new parent category.',
+    ar: 'اختر فئة موجودة أو أنشئ فئة رئيسية جديدة صراحةً.',
+    ur: 'موجودہ کیٹیگری منتخب کریں یا واضح طور پر نئی پیرنٹ کیٹیگری بنائیں۔',
+    hi: 'मौजूदा श्रेणी चुनें या स्पष्ट रूप से नई मूल श्रेणी बनाएं।',
+  );
+  static const newParentCategory = TranslatableString(
+    en: 'Create as a new parent category',
+    ar: 'إنشاء كفئة رئيسية جديدة',
+    ur: 'نئی پیرنٹ کیٹیگری کے طور پر بنائیں',
+    hi: 'नई मूल श्रेणी के रूप में बनाएं',
+  );
+  static const openingBalanceOptional = TranslatableString(
+    en: 'Opening balance optional',
+    ar: 'الرصيد الافتتاحي اختياري',
+    ur: 'افتتاحی بیلنس اختیاری',
+    hi: 'प्रारंभिक शेष वैकल्पिक',
+  );
+  static const physicalStockReason = TranslatableString(
+    en: 'Physical stock reason',
+    ar: 'سبب المخزون الفعلي',
+    ur: 'فزیکل اسٹاک کی وجہ',
+    hi: 'भौतिक स्टॉक का कारण',
   );
   static const availability = TranslatableString(
     en: 'Warehouse availability',
@@ -411,21 +465,12 @@ abstract final class YorksV1ArrangementStrings {
         hi: '$line को आरक्षित करने से पहले वेयरहाउस आइटम चाहिए।',
       );
 
-  static TranslatableString emptyWarehouseFor(
-    String line,
-  ) => TranslatableString(
-    en: 'Warehouse inventory is empty. Select External supplier and enter a supplier for $line.',
-    ar: 'مخزون المستودع فارغ. اختر موردًا خارجيًا وأدخل المورد لـ $line.',
-    ur: 'گودام کا ذخیرہ خالی ہے۔ بیرونی سپلائر منتخب کریں اور $line کے لیے سپلائر درج کریں۔',
-    hi: 'वेयरहाउस इन्वेंट्री खाली है। बाहरी सप्लायर चुनें और $line के लिए सप्लायर दर्ज करें।',
-  );
-
-  static TranslatableString supplierRequiredFor(String line) =>
+  static TranslatableString emptyWarehouseFor(String line) =>
       TranslatableString(
-        en: '$line needs an external supplier name.',
-        ar: 'يحتاج $line إلى اسم المورد الخارجي.',
-        ur: '$line کے لیے بیرونی سپلائر کا نام درکار ہے۔',
-        hi: '$line के लिए बाहरी सप्लायर नाम चाहिए।',
+        en: 'Warehouse inventory is empty. Select External supplier for $line.',
+        ar: 'مخزون المستودع فارغ. اختر مورداً خارجياً لـ $line.',
+        ur: 'گودام کا ذخیرہ خالی ہے۔ $line کے لیے بیرونی سپلائر منتخب کریں۔',
+        hi: 'वेयरहाउस इन्वेंट्री खाली है। $line के लिए बाहरी सप्लायर चुनें।',
       );
 
   static TranslatableString partialReasonFor(String line) => TranslatableString(

@@ -11,6 +11,7 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/permissions_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_arrangement_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_arrangement_repository.dart';
@@ -160,6 +161,7 @@ void main() {
         find.byKey(const ValueKey('mobile-return-select')),
         findsOneWidget,
       );
+      expect(find.textContaining('10.0000'), findsNothing);
       await _golden(tester, '38_return_select_$suffix');
     });
 
@@ -229,6 +231,7 @@ void main() {
       repository.dispatches.first.idempotencyKey,
       repository.dispatches.last.idempotencyKey,
     );
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('receipt retry preserves reviewed state and command identity', (
@@ -290,6 +293,28 @@ void main() {
     );
   });
 
+  testWidgets('return quantities never expose database numeric scale', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpReturns(
+      tester,
+      requestId: 'returns',
+      repository: _OperationsRepository(
+        returnsWorkspace: _returnsWorkspaceWithScaledDraft,
+      ),
+    );
+
+    expect(find.textContaining('10.0000'), findsNothing);
+    expect(find.textContaining('50.0000'), findsNothing);
+    expect(
+      tester
+          .widgetList<TextField>(find.byType(TextField))
+          .map((field) => field.controller?.text),
+      contains('10'),
+    );
+  });
+
   testWidgets('desktop arrangement stays on the existing office surface', (
     tester,
   ) async {
@@ -335,6 +360,8 @@ Future<void> _pumpArrangement(
   await tester.pumpWidget(
     _app(
       overrides: [
+        canManageCommercialsProvider.overrideWithValue(true),
+        canViewCommercialsProvider.overrideWithValue(true),
         yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
       ],
       child: const YorksV1ArrangementScreen(requestId: 'request-1'),
@@ -358,6 +385,8 @@ Future<_OperationsRepository> _pumpLogistics(
       child: YorksV1LogisticsScreen(
         requestId: requestId,
         focusReceiptReview: focusReceipt,
+        focusedDispatchId: focusReceipt ? 'dispatch-1' : null,
+        initialDispatchDate: DateTime.utc(2026, 8, 9),
       ),
     ),
   );
@@ -397,6 +426,7 @@ Future<_OperationsRepository> _pumpReturns(
       child: YorksV1ReturnsDocumentsScreen(
         requestId: requestId,
         focusDeliveryOrder: focusDeliveryOrder,
+        focusedDispatchId: focusDeliveryOrder ? 'dispatch-1' : null,
       ),
     ),
   );
@@ -573,6 +603,9 @@ class _ArrangementRepository implements YorksV1ArrangementRepository {
 }
 
 class _OperationsRepository implements YorksV1LogisticsRepository {
+  _OperationsRepository({this.returnsWorkspace});
+
+  final YorksV1ReturnsDocumentsWorkspace? returnsWorkspace;
   int dispatchFailures = 0;
   int receiptFailures = 0;
   int returnFailures = 0;
@@ -603,7 +636,9 @@ class _OperationsRepository implements YorksV1LogisticsRepository {
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> getReturnsDocumentsWorkspace(
     String requestId,
-  ) async => requestId == 'delivery' ? _deliveryWorkspace : _returnsWorkspace;
+  ) async =>
+      returnsWorkspace ??
+      (requestId == 'delivery' ? _deliveryWorkspace : _returnsWorkspace);
 
   @override
   Future<YorksV1ReturnsDocumentsWorkspace> generateDeliveryOrder(
@@ -758,12 +793,16 @@ final _deliveryOrder = YorksV1DeliveryOrder(
         YorksV1DeliveryOrderLine(
           serialNumber: 1,
           description: 'Motorized smoke damper',
+          size: '500x300mm',
+          model: 'MSD-500',
           quantity: '4',
           unit: 'Nos',
         ),
         YorksV1DeliveryOrderLine(
           serialNumber: 2,
           description: 'Flexible duct connector',
+          size: '300mm',
+          model: 'FDC-300',
           quantity: '2',
           unit: 'Nos',
         ),
@@ -821,9 +860,9 @@ final _returnsWorkspace = YorksV1ReturnsDocumentsWorkspace(
       brandOrigin: 'Mueller',
       unit: 'Mtr',
       source: YorksV1LogisticsSource.warehouse,
-      goodReceivedQuantity: '12',
-      confirmedReturnQuantity: '2',
-      eligibleReturnQuantity: '10',
+      goodReceivedQuantity: '12.0000',
+      confirmedReturnQuantity: '2.0000',
+      eligibleReturnQuantity: '10.0000',
       sourceInventoryItemId: 'inventory-copper',
     ),
     YorksV1ReturnCandidate(
@@ -840,5 +879,61 @@ final _returnsWorkspace = YorksV1ReturnsDocumentsWorkspace(
     ),
   ],
   materialReturns: const [],
+  returnInventoryItems: const [],
+);
+
+final _returnsWorkspaceWithScaledDraft = YorksV1ReturnsDocumentsWorkspace(
+  requestId: 'returns',
+  projectId: 'project-1',
+  requestNumber: 'YRA-322-MR101',
+  requestState: 'received',
+  requestRecordVersion: 9,
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  projectReference: 'YRA-322',
+  scopeName: 'Common / All Buildings',
+  canGenerateDeliveryOrder: false,
+  canSubmitMaterialReturn: true,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: const [],
+  returnCandidates: const [
+    YorksV1ReturnCandidate(
+      receiptReviewLineId: 'receipt-line-scaled',
+      dispatchNumber: 'YRA-322-DSP001',
+      displayOrder: 1,
+      description: 'Cable tray hanging clamp',
+      unit: 'Nos',
+      source: YorksV1LogisticsSource.warehouse,
+      goodReceivedQuantity: '50.0000',
+      confirmedReturnQuantity: '0.0000',
+      eligibleReturnQuantity: '50.0000',
+      sourceInventoryItemId: 'inventory-clamp',
+    ),
+  ],
+  materialReturns: [
+    YorksV1MaterialReturn(
+      id: 'return-scaled',
+      state: YorksV1MaterialReturnState.draft,
+      recordVersion: 1,
+      draftedAt: DateTime.utc(2026, 8, 12),
+      draftedByDisplayName: 'Project Engineer',
+      canEditDraft: true,
+      canSubmit: true,
+      canConfirm: false,
+      canReject: false,
+      lines: const [
+        YorksV1MaterialReturnLine(
+          id: 'return-line-scaled',
+          receiptReviewLineId: 'receipt-line-scaled',
+          dispatchNumber: 'YRA-322-DSP001',
+          displayOrder: 1,
+          description: 'Cable tray hanging clamp',
+          unit: 'Nos',
+          source: YorksV1LogisticsSource.warehouse,
+          goodQuantitySnapshot: '50.0000',
+          returnQuantity: '10.0000',
+        ),
+      ],
+    ),
+  ],
   returnInventoryItems: const [],
 );

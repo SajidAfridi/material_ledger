@@ -60,6 +60,12 @@ New server audit events retain both the normalized workflow role and the exact
 Auth role. Historical events keep their existing canonical role and are not
 silently backfilled with an invented exact claim.
 
+A submitted MR also freezes that exact server-controlled role. Controlled
+documents and audit presentation use the immutable exact role, so a Senior
+Mechanical Engineer or Project Manager is never relabeled as a Project
+Engineer on the form even though authorization uses the normalized workflow
+role.
+
 A Project Engineer approves a Procurement arrangement only when they also hold
 an active Project Engineer membership for that project. A Site Engineer may
 create and submit an MR, but cannot approve or return its arrangement; an old
@@ -300,7 +306,9 @@ Every request line has exactly one current arrangement decision:
 - `unavailable`: arranged quantity is zero, with a required reason.
 
 Warehouse is the default source. A line may instead use an external supplier
-text source. V1 has no full supplier/RFQ/PO lifecycle.
+source. The supplier name is optional operational context because V1 has no
+full supplier/RFQ/PO lifecycle. Selecting External Supplier is sufficient for
+a Full line; Partial and Cannot Provide Now still require their decision reason.
 
 Saving a complete arrangement version atomically:
 
@@ -347,6 +355,13 @@ threshold only; it is not a valuation, reorder or purchase-order workflow.
 Close category matches are advisory until an authorized user confirms an
 existing category or explicitly creates a new one.
 
+During the current catalogue-reconciliation period, Procurement may also save
+an inventory item without a category. The item remains truthfully
+uncategorized; the client and server do not invent a fallback category or
+alias. Making category selection mandatory later is a separate product and
+migration decision. When a category is supplied, the same trusted resolver,
+parent-category creation and duplicate protections remain mandatory.
+
 Dispatch is one server transaction that:
 
 - validates Procurement/Admin authority, current state and idempotency key;
@@ -382,9 +397,23 @@ role, Procurement or Admin may generate it. This document-only command does not
 permit an Engineer to dispatch stock, arrange a request or confirm a material
 return. Cardinality is one current DO revision per dispatch; regeneration
 creates an immutable new revision and supersedes, never overwrites, the prior
-snapshot. It uses immutable dispatched quantities and the approved four
-columns: S.No, Description, Qty and Unit. Receipt review remains an independent
-later fact and never rewrites the dispatch document.
+snapshot. A dispatch revision uses immutable dispatched quantities and the
+approved four columns: S.No, Description, Qty and Unit.
+
+The Description cell also renders the Size and, when present, Model/Planning
+Model Tag captured on the submitted Material Request line. These values are
+frozen into each Delivery Report revision; preview, Excel, PDF and print must
+not resolve them from a later mutable inventory record. Size remains explicitly
+labelled even when a legacy request did not capture a value.
+
+When a receipt review is confirmed, the server appends a distinct immutable
+`receipt_review` Delivery Report revision when a Delivery Order already exists.
+The current printable report then shows each confirmed good quantity, including
+zero for a fully missing or damaged line, while the earlier `dispatch` revision
+continues to prove what Procurement committed. If no Delivery Order existed at
+receipt time, generating one afterwards creates that receipt-reviewed revision.
+Material Returns remain later, separate inventory facts: they do not rewrite
+either dispatch or receipt evidence.
 
 Controlled MR and DO documents use `YORKS Airconditioning & Refrigeration
 LLC-SPC` and `يوركس للتكييف والتبريد - ذ.م.م - ش.ش.و`, show the approved Abu

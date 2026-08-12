@@ -110,6 +110,19 @@ Legacy role handling:
   movements, dispatches, reviews, DOs and returns.
 - Reconcile on-hand as opening balance plus normalized movements; report every
   difference before enabling logistics.
+- Receipt-reviewed Delivery Report support is additive: existing Delivery Order
+  revisions are classified as immutable `dispatch` evidence, and no historical
+  review is silently converted. A current receipt-reviewed report is created
+  only by the trusted receipt-confirmation command or a later explicit document
+  generation. Rollback leaves appended revisions intact and returns the UI to
+  the preserved dispatch snapshot rather than copying protected facts back.
+- Delivery Report Size/Model enrichment is additive and quantity-neutral.
+  Existing revision lines are linked deterministically through their immutable
+  dispatch line to the submitted MR technical attributes; no inventory master
+  data is consulted. Rows without trustworthy legacy metadata retain null and
+  render an explicit missing Size instead of fabricating a value. Rollback may
+  stop projecting the two nullable columns, but must not delete revision lines,
+  dispatch links, quantities or audit history.
 
 ### M5 — documents and audit
 
@@ -222,6 +235,36 @@ revoke the new suggestion/create-item/stock-adjust grants and redeploy the prior
 client while retaining committed categories, aliases, item metadata and stock
 movements. Physical quantity is corrected only by an authorized compensating
 movement.
+
+Migration `20260810214737_yorks_v1_optional_arrangement_inventory_category_and_mr_progress.sql`
+temporarily permits an inventory item created during arrangement reconciliation
+to retain a null category, while preserving the same trusted create command and
+all stock invariants. It also adds read-only MR dispatch-progress projections;
+it does not rewrite requested, approved, dispatched or received quantities. A
+rollback retains any truthfully uncategorized item and its movement history;
+operators may classify it later through the audited metadata workflow, never by
+deleting or recreating the item.
+
+Migration `20260811062730_yorks_v1_material_workflow_production_hardening.sql`
+is additive and preserves every request, arrangement, reservation, dispatch,
+receipt, document, notification and audit row. It replaces trusted function
+definitions in place to enforce protected commercial response shapes and
+writes, correctly closes all-unavailable approvals, and adds an idempotent
+received-request close command. Re-running is anchor-checked and fails before
+mutation if the expected deployed definitions have drifted. Rollback redeploys
+the prior complete client and revokes the new close-command grant; it retains
+all committed closures and audit evidence. A closure is corrected only through
+an authorized, audited forward migration or command, never by deleting history.
+
+Migration `20260812082422_yorks_v1_optional_external_supplier.sql` replaces
+only the trusted `v1_save_arrangement` function definition so a Full External
+Supplier line may omit the supplier-name context. It changes no table, row,
+reservation, quantity, version, idempotency key or audit record, and it retains
+the required reason for Partial and Cannot Provide Now decisions. The migration
+is anchor-checked and repeatable; it fails before mutation if the deployed
+function has drifted. Rollback restores the prior trusted function definition
+and redeploys the prior client. Existing arrangements with a null supplier name
+remain truthful history and must not be fabricated or destructively rewritten.
 
 ## 9. Migration stop conditions
 

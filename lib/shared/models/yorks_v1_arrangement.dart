@@ -72,10 +72,12 @@ class YorksV1InventoryItem {
     required this.reservedQuantity,
     required this.availableQuantity,
     required this.recordVersion,
+    this.itemCode,
     this.brandOrigin,
   });
 
   final String id;
+  final String? itemCode;
   final String description;
   final String? brandOrigin;
   final String unit;
@@ -87,6 +89,7 @@ class YorksV1InventoryItem {
   factory YorksV1InventoryItem.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1InventoryItem(
       id: _requiredString(json, 'id'),
+      itemCode: _trimToNull(json['item_code']),
       description: _requiredString(json, 'item_description'),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
@@ -182,6 +185,9 @@ class YorksV1ProcurementArrangement {
     this.savedByDisplayName,
     this.reviewDecision,
     this.reviewReason,
+    this.decidedByDisplayName,
+    this.decidedByRole,
+    this.decidedAt,
     this.procurementNote,
   }) : lines = List.unmodifiable(lines);
 
@@ -196,6 +202,9 @@ class YorksV1ProcurementArrangement {
   final String? savedByDisplayName;
   final YorksV1ArrangementReviewDecision? reviewDecision;
   final String? reviewReason;
+  final String? decidedByDisplayName;
+  final String? decidedByRole;
+  final DateTime? decidedAt;
 
   /// Procurement-only overall arrangement context; never inferred from lines.
   final String? procurementNote;
@@ -225,6 +234,9 @@ class YorksV1ProcurementArrangement {
       savedByDisplayName: _trimToNull(json['saved_by_display_name']),
       reviewDecision: reviewDecision,
       reviewReason: _trimToNull(json['decision_reason']),
+      decidedByDisplayName: _trimToNull(json['decided_by_display_name']),
+      decidedByRole: _trimToNull(json['decided_by_role']),
+      decidedAt: _nullableDate(json['decided_at']),
       procurementNote: _trimToNull(json['procurement_note']),
       lines: [
         for (final line in json['lines'] as List)

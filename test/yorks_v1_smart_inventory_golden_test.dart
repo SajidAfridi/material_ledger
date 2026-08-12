@@ -63,6 +63,7 @@ void main() {
 
       expect(find.text('Warehouse Inventory'), findsOneWidget);
       expect(find.text('Stock quantity remains controlled'), findsOneWidget);
+      expect(find.text('4.0000'), findsNothing);
       expect(find.text('Incoming stock'), findsNothing);
       expect(tester.takeException(), isNull);
       await expectLater(
@@ -133,6 +134,55 @@ void main() {
         find.byType(MaterialApp),
         matchesGoldenFile(
           'goldens/r35/smart_inventory_create_${evidence.suffix}.png',
+        ),
+      );
+    });
+  }
+
+  for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop', size: const Size(1366, 768)),
+    (suffix: 'mobile', size: const Size(360, 800)),
+  ]) {
+    testWidgets('R38.3 controlled Ton and Boxes units — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add / Receive Stock').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create inventory item'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ton'), findsOneWidget);
+      expect(find.text('Boxes'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/smart_inventory_controlled_units_${evidence.suffix}.png',
         ),
       );
     });
@@ -414,6 +464,57 @@ void main() {
     });
   }
 
+  testWidgets(
+    'warehouse import exposes explicit existing-or-new category choices',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+            yorksV1InventoryWorkbookFileServiceProvider.overrideWithValue(
+              const _GoldenInventoryWorkbookFileService(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Import Inventory').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Select Excel or CSV file'));
+      await tester.pumpAndSettle();
+
+      final firstChoice = find.byKey(
+        const ValueKey('inventory-category-2-null-null'),
+      );
+      expect(firstChoice, findsOneWidget);
+      await tester.tap(firstChoice);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create “Air Grille Fittings”').last);
+      await tester.pumpAndSettle();
+
+      final confirm = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Confirm Import (3)'),
+      );
+      expect(confirm.onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Warehouse item search includes the item brand', (tester) async {
     tester.view.physicalSize = const Size(1366, 768);
     tester.view.devicePixelRatio = 1;
@@ -553,7 +654,7 @@ final _workspace = YorksV1InventoryWorkspace(
       categoryName: 'Ductwork & Accessories',
       brandOrigin: 'UAE',
       unit: 'Nos',
-      minimumStock: '4',
+      minimumStock: '4.0000',
       locationBin: 'A-01',
       isActive: true,
       onHandQuantity: '12',

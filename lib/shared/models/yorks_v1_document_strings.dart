@@ -286,6 +286,12 @@ String yorksV1DocumentEntityLabel(YorksV1DocumentEntityType entityType) {
       ur: 'ڈیلیوری آرڈر',
       hi: 'डिलीवरी ऑर्डर',
     ),
+    YorksV1DocumentEntityType.rentalProperty => const TranslatableString(
+      en: 'Rental property',
+      ar: 'العقار المؤجر',
+      ur: 'کرائے کی جائیداد',
+      hi: 'किराये की संपत्ति',
+    ),
   };
   return copy.primary;
 }

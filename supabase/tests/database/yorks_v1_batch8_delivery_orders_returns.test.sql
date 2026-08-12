@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(50);
+select plan(58);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -166,7 +166,7 @@ insert into public.v1_material_request_lines (
   requested_qty, unit
 ) values
   ('81100000-0000-4000-8000-000000000001',
-    '81000000-0000-4000-8000-000000000001', 1, 'custom', 'Copper pipe', 'UAE', 3, 'Mtr'),
+    '81000000-0000-4000-8000-000000000001', 1, 'custom', 'Copper pipe', 'UAE', 5, 'Mtr'),
   ('81100000-0000-4000-8000-000000000002',
     '81000000-0000-4000-8000-000000000001', 2, 'custom', 'Refrigerant valve', 'EU', 1, 'Nos');
 insert into public.v1_inventory_items (
@@ -193,7 +193,7 @@ insert into public.v1_procurement_arrangement_lines (
   '81400000-0000-4000-8000-000000000001',
   '81300000-0000-4000-8000-000000000001',
   '81100000-0000-4000-8000-000000000001', 'warehouse',
-  '81200000-0000-4000-8000-000000000001', 'full', 3, 3
+  '81200000-0000-4000-8000-000000000001', 'full', 5, 5
 ), (
   '81400000-0000-4000-8000-000000000002',
   '81300000-0000-4000-8000-000000000001',
@@ -206,7 +206,7 @@ insert into public.v1_material_request_line_approvals (
 ) values (
   '81100000-0000-4000-8000-000000000001',
   '81400000-0000-4000-8000-000000000001',
-  '81300000-0000-4000-8000-000000000001', 3,
+  '81300000-0000-4000-8000-000000000001', 5,
   '10000000-0000-4000-8000-000000000001'
 ), (
   '81100000-0000-4000-8000-000000000002',
@@ -369,11 +369,23 @@ select ok(
   ) -> 'project_engineers') = 1
   and (public.v1_material_request_document_projection(
     '81000000-0000-4000-8000-000000000001'::uuid
-  ) #>> '{dispatch,reference}') = 'DN-B8-001'
+  ) #>> '{dispatch,reference}') = 'DN-B8-002'
   and (public.v1_material_request_document_projection(
     '81000000-0000-4000-8000-000000000001'::uuid
-  ) -> 'receipt_statuses') @> '[{"status":"Received"}]'::jsonb,
-  'The controlled MR document projection includes Project Engineers, dispatch and receipt facts'
+  ) ->> 'show_line_status')::boolean
+  and (public.v1_material_request_document_projection(
+    '81000000-0000-4000-8000-000000000001'::uuid
+  ) -> 'receipt_statuses') @> '[{
+    "request_line_id":"81100000-0000-4000-8000-000000000001",
+    "requested_qty":"5.0000",
+    "approved_qty":"5.0000",
+    "dispatched_qty":"4.0000",
+    "in_transit_qty":"1.0000",
+    "reviewed_good_qty":"3.0000",
+    "remaining_approved_qty":"1.0000",
+    "status":"Awaiting receipt review"
+  }]'::jsonb,
+  'The controlled MR document projection includes truthful partial-dispatch progress'
 );
 
 select throws_ok(
@@ -928,6 +940,265 @@ select is(
     where delivery_order.dispatch_id = '81500000-0000-4000-8000-000000000002'),
   2,
   'Global Engineer regeneration preserves prior immutable dispatch revisions'
+);
+
+-- A Delivery Order created at dispatch is immutable evidence of what was sent.
+-- Once the assigned Engineer confirms the receipt review, the current
+-- printable Delivery Report must instead show the confirmed good quantity,
+-- including a zero-quantity line for a fully missing or damaged item.
+set local role postgres;
+insert into public.v1_material_requests (
+  id, project_id, scope_id, request_number, title, timing, state, record_version,
+  created_by_auth_user_id, requester_display_name, requester_project_role,
+  current_action_owner_role, current_action_code, submitted_at,
+  project_engineer_snapshot
+) values (
+  '82100000-0000-4000-8000-000000000001',
+  (select project_id from v1_b8_targets), (select scope_id from v1_b8_targets),
+  'B8-RET-001-MR002', 'Receipt report quantity proof', 'normal', 'dispatched', 1,
+  '10000000-0000-4000-8000-000000000001', 'Local Project Engineer', 'project_engineer',
+  'project_engineer', 'material_request_receipt_review', clock_timestamp(),
+  '[{"display_name":"Local Project Engineer"}]'::jsonb
+);
+insert into public.v1_material_request_lines (
+  id, request_id, display_order, source_kind, item_description, brand_origin,
+  requested_qty, unit, technical_attributes
+) values
+  ('82200000-0000-4000-8000-000000000001',
+    '82100000-0000-4000-8000-000000000001', 1, 'custom', 'Supply duct', 'UAE', 10, 'Nos',
+    '{"size":"500x300mm","model":"GI"}'::jsonb),
+  ('82200000-0000-4000-8000-000000000002',
+    '82100000-0000-4000-8000-000000000001', 2, 'custom', 'Control panel', 'UAE', 2, 'Nos',
+    '{"size":"600x400mm","planning_model_tag":"CP-01"}'::jsonb);
+insert into public.v1_procurement_arrangements (
+  id, request_id, arrangement_version, status, is_current,
+  started_by_auth_user_id, saved_by_auth_user_id, saved_at
+) values (
+  '82300000-0000-4000-8000-000000000001',
+  '82100000-0000-4000-8000-000000000001', 1, 'approved', true,
+  '10000000-0000-4000-8000-000000000003',
+  '10000000-0000-4000-8000-000000000003', clock_timestamp()
+);
+insert into public.v1_procurement_arrangement_lines (
+  id, arrangement_id, request_line_id, source_kind, inventory_item_id,
+  decision, arranged_qty, warehouse_available_at_save
+) values
+  ('82400000-0000-4000-8000-000000000001',
+    '82300000-0000-4000-8000-000000000001',
+    '82200000-0000-4000-8000-000000000001', 'external_supplier', null, 'full', 10, null),
+  ('82400000-0000-4000-8000-000000000002',
+    '82300000-0000-4000-8000-000000000001',
+    '82200000-0000-4000-8000-000000000002', 'external_supplier', null, 'full', 2, null);
+insert into public.v1_material_request_line_approvals (
+  request_line_id, arrangement_line_id, arrangement_id, approved_qty,
+  approved_by_auth_user_id
+) values
+  ('82200000-0000-4000-8000-000000000001',
+    '82400000-0000-4000-8000-000000000001',
+    '82300000-0000-4000-8000-000000000001', 10,
+    '10000000-0000-4000-8000-000000000001'),
+  ('82200000-0000-4000-8000-000000000002',
+    '82400000-0000-4000-8000-000000000002',
+    '82300000-0000-4000-8000-000000000001', 2,
+    '10000000-0000-4000-8000-000000000001');
+insert into public.v1_material_dispatches (
+  id, request_id, project_id, dispatch_number, dispatch_date, delivery_reference, state,
+  dispatched_by_auth_user_id, dispatched_by_role
+) values (
+  '82500000-0000-4000-8000-000000000001',
+  '82100000-0000-4000-8000-000000000001',
+  (select project_id from v1_b8_targets), 'B8-RET-001-DSP003', current_date, 'DN-B8-003',
+  'receipt_pending', '10000000-0000-4000-8000-000000000003', 'procurement'
+);
+insert into public.v1_material_dispatch_lines (
+  id, dispatch_id, request_line_id, arrangement_line_id, source_kind,
+  inventory_item_id, external_supplier, item_description, brand_origin, unit,
+  approved_qty_snapshot, dispatched_qty
+) values
+  ('82600000-0000-4000-8000-000000000001',
+    '82500000-0000-4000-8000-000000000001',
+    '82200000-0000-4000-8000-000000000001',
+    '82400000-0000-4000-8000-000000000001', 'external_supplier', null,
+    'Local Supplier', 'Supply duct', 'UAE', 'Nos', 10, 10),
+  ('82600000-0000-4000-8000-000000000002',
+    '82500000-0000-4000-8000-000000000001',
+    '82200000-0000-4000-8000-000000000002',
+    '82400000-0000-4000-8000-000000000002', 'external_supplier', null,
+    'Local Supplier', 'Control panel', 'UAE', 'Nos', 2, 2);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_generate_delivery_order(
+    jsonb_build_object(
+      'request_id', '82100000-0000-4000-8000-000000000001',
+      'dispatch_id', '82500000-0000-4000-8000-000000000001',
+      'expected_request_version', 1, 'expected_dispatch_version', 1,
+      'delivery_order_reference', 'B8-DO-RECEIPT-REVIEW'
+    ), '82700000-0000-4000-8000-000000000001'::uuid
+  )$$,
+  'The committed dispatch first creates an immutable dispatch Delivery Order'
+);
+
+set local role postgres;
+select is(
+  (select sum(line.delivery_quantity)::text
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'
+     and revision.snapshot_kind = 'dispatch'),
+  '12.0000',
+  'The immutable dispatch snapshot retains all 12 committed items before receipt review'
+);
+
+select ok(
+  (select bool_and(
+     line.size_text is not null and line.model_reference is not null
+   )
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'
+     and revision.snapshot_kind = 'dispatch')
+  and (select public.v1_delivery_order_projection(delivery_order.id)
+       #>> '{revisions,0,lines,0,size}'
+       from public.v1_delivery_orders delivery_order
+       where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001') = '500x300mm'
+  and (select public.v1_delivery_order_projection(delivery_order.id)
+       #>> '{revisions,0,lines,0,model}'
+       from public.v1_delivery_orders delivery_order
+       where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001') = 'GI',
+  'Dispatch Delivery Order freezes and projects submitted MR size and model metadata'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_confirm_receipt(
+    jsonb_build_object(
+      'request_id', '82100000-0000-4000-8000-000000000001',
+      'dispatch_id', '82500000-0000-4000-8000-000000000001',
+      'expected_request_version', 1, 'expected_dispatch_version', 1,
+      'lines', jsonb_build_array(
+        jsonb_build_object(
+          'dispatch_line_id', '82600000-0000-4000-8000-000000000001',
+          'outcome', 'missing', 'good_qty', '8', 'note', 'Two items missing'
+        ),
+        jsonb_build_object(
+          'dispatch_line_id', '82600000-0000-4000-8000-000000000002',
+          'outcome', 'damaged', 'good_qty', '0', 'note', 'Both items damaged'
+        )
+      )
+    ), '82700000-0000-4000-8000-000000000002'::uuid
+  )$$,
+  'Receipt review atomically appends the receipt-reviewed Delivery Report'
+);
+
+set local role postgres;
+select ok(
+  (select count(*) = 2
+   from public.v1_delivery_order_revisions revision
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001')
+  and (select sum(line.delivery_quantity) = 12
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'
+     and revision.snapshot_kind = 'dispatch')
+  and (select sum(line.delivery_quantity) = 8
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'
+     and revision.snapshot_kind = 'receipt_review'
+     and revision.id = delivery_order.current_revision_id)
+  and (select count(*) = 2 and min(line.delivery_quantity) = 0
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'
+     and revision.snapshot_kind = 'receipt_review'
+     and revision.id = delivery_order.current_revision_id),
+  'The current Delivery Report shows 8 good items and retains the fully damaged zero-quantity line'
+);
+
+select ok(
+  (select bool_and(
+     line.size_text is not null and line.model_reference is not null
+   )
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001')
+  and (select count(distinct (line.size_text, line.model_reference)) = 2
+   from public.v1_delivery_order_revision_lines line
+   join public.v1_delivery_order_revisions revision
+     on revision.id = line.delivery_order_revision_id
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'),
+  'Receipt-reviewed Delivery Report retains the same immutable size/model facts across revisions'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_confirm_receipt(
+    jsonb_build_object(
+      'request_id', '82100000-0000-4000-8000-000000000001',
+      'dispatch_id', '82500000-0000-4000-8000-000000000001',
+      'expected_request_version', 1, 'expected_dispatch_version', 1,
+      'lines', jsonb_build_array(
+        jsonb_build_object(
+          'dispatch_line_id', '82600000-0000-4000-8000-000000000001',
+          'outcome', 'missing', 'good_qty', '8', 'note', 'Two items missing'
+        ),
+        jsonb_build_object(
+          'dispatch_line_id', '82600000-0000-4000-8000-000000000002',
+          'outcome', 'damaged', 'good_qty', '0', 'note', 'Both items damaged'
+        )
+      )
+    ), '82700000-0000-4000-8000-000000000002'::uuid
+  )$$,
+  'A receipt confirmation retry returns the stored result'
+);
+
+set local role postgres;
+select is(
+  (select count(*)::integer
+   from public.v1_delivery_order_revisions revision
+   join public.v1_delivery_orders delivery_order
+     on delivery_order.id = revision.delivery_order_id
+   where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'),
+  2,
+  'A receipt retry never duplicates the receipt-reviewed Delivery Report revision'
 );
 
 select * from finish();

@@ -28,7 +28,7 @@ final yorksV1CurrentCommercialCapabilityRepositoryProvider =
 /// capability override immediately changes to loading (which purges protected
 /// Riverpod state) before an authoritative server refresh can re-enable it.
 final yorksV1CurrentCommercialCapabilitiesProvider =
-    StateNotifierProvider.autoDispose<
+    StateNotifierProvider<
       YorksV1CurrentCommercialCapabilitiesNotifier,
       AsyncValue<YorksV1CommercialCapabilities?>
     >((ref) {
@@ -63,6 +63,50 @@ typedef YorksV1AuthorizationSignalSubscription =
       required Future<void> Function() onSignal,
       required void Function(Object? error) onUnavailable,
     });
+
+/// Tracks actual Realtime channel readiness transitions.
+///
+/// Supabase may repeat `subscribed` for an already healthy channel. Treating
+/// those acknowledgements as reconnects causes a protected capability reload
+/// and makes cost-aware controls repeatedly disappear while the reload fails
+/// closed. A channel becomes ready only once until a non-subscribed status
+/// explicitly marks it unavailable.
+class YorksV1AuthorizationSignalReadiness {
+  YorksV1AuthorizationSignalReadiness(Iterable<String> channelNames)
+    : _knownChannels = Set.unmodifiable(channelNames);
+
+  final Set<String> _knownChannels;
+  final Set<String> _readyChannels = {};
+
+  bool get allReady =>
+      _knownChannels.isNotEmpty &&
+      _readyChannels.length == _knownChannels.length;
+
+  bool markSubscribed(String channelName) {
+    if (!_knownChannels.contains(channelName)) return false;
+    return _readyChannels.add(channelName);
+  }
+
+  bool markUnavailable(String channelName) {
+    if (!_knownChannels.contains(channelName)) return false;
+    return _readyChannels.remove(channelName);
+  }
+}
+
+/// Whether a Realtime subscription status proves that the authorization
+/// signal is no longer usable.
+///
+/// `closed` is intentionally excluded. The Realtime client emits it while a
+/// PostgreSQL subscription is being replaced/rejoined; its own integration
+/// helpers likewise treat only channel errors and timeouts as failed joins.
+/// Treating that transient lifecycle notification as a revocation repeatedly
+/// purges the Unit Cost controls even though the authorized channel is healthy
+/// again a moment later.
+bool yorksV1AuthorizationSignalStatusRequiresFailure(
+  RealtimeSubscribeStatus status,
+) =>
+    status == RealtimeSubscribeStatus.channelError ||
+    status == RealtimeSubscribeStatus.timedOut;
 
 class YorksV1CurrentCommercialCapabilitiesNotifier
     extends StateNotifier<AsyncValue<YorksV1CommercialCapabilities?>> {
@@ -176,11 +220,10 @@ class YorksV1CurrentCommercialCapabilitiesNotifier
     // A join is not enough on its own: after both registrations are live, we
     // fetch the protected value again before retaining commercial data.
     const tables = ['v1_user_capabilities', 'v1_profiles'];
-    var readyTableCount = 0;
+    final readiness = YorksV1AuthorizationSignalReadiness(tables);
     final initialJoin = Completer<bool>();
     _initialAuthorizationJoin = initialJoin;
     for (final table in tables) {
-      var isReady = false;
       final channel = client
           .channel('v1-commercial-access:$table:$authUserId')
           .onPostgresChanges(
@@ -197,7 +240,7 @@ class YorksV1CurrentCommercialCapabilitiesNotifier
               // subscriptions are live. Before that point, the eventual
               // post-join RPC includes this change; afterwards it can refresh
               // directly.
-              if (readyTableCount == tables.length) {
+              if (readiness.allReady) {
                 unawaited(_refresh());
               }
             },
@@ -205,11 +248,12 @@ class YorksV1CurrentCommercialCapabilitiesNotifier
           .subscribe((status, error) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
-              if (!isReady) {
-                isReady = true;
-                readyTableCount += 1;
-              }
-              if (readyTableCount == tables.length) {
+              // Realtime can repeat `subscribed` for the same healthy channel.
+              // Only a real not-ready -> ready transition may trigger the
+              // protected recheck; duplicate acknowledgements are no-ops.
+              final becameReady = readiness.markSubscribed(table);
+              if (!becameReady) return;
+              if (readiness.allReady) {
                 if (!initialJoin.isCompleted) {
                   // `start` performs the first protected RPC only after this
                   // exact two-channel acknowledgement.
@@ -223,12 +267,16 @@ class YorksV1CurrentCommercialCapabilitiesNotifier
               return;
             }
 
-            if (isReady) {
-              isReady = false;
-              readyTableCount -= 1;
+            // A `closed` status is emitted during normal channel replacement
+            // and automatic rejoin. It is not evidence of a permission change
+            // (nor a failed subscription), so leaving the authenticated
+            // snapshot alone preserves the stable Procurement form. Actual
+            // channel errors and timeouts still fail closed immediately.
+            if (yorksV1AuthorizationSignalStatusRequiresFailure(status)) {
+              readiness.markUnavailable(table);
+              _invalidateForAuthorizationSignalFailure(error);
+              if (!initialJoin.isCompleted) initialJoin.complete(false);
             }
-            _invalidateForAuthorizationSignalFailure(error);
-            if (!initialJoin.isCompleted) initialJoin.complete(false);
           });
       _channels.add(channel);
     }

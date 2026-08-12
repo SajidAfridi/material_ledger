@@ -15,6 +15,12 @@ import 'language_provider.dart';
 const _yorksV1MaterialRequestDraftKeyPrefix =
     'yorks_v1_material_request_drafts_v1';
 
+/// Invalidates the device-local draft index when a single editor persists or
+/// removes one of its private recovery records.  This is deliberately local
+/// state: incomplete drafts are not exposed through server request lists.
+final yorksV1MaterialRequestLocalDraftRevisionProvider =
+    StateProvider.family<int, String>((ref, ownerAuthUserId) => 0);
+
 class YorksV1MaterialRequestDraftKey {
   const YorksV1MaterialRequestDraftKey({
     required this.ownerAuthUserId,
@@ -54,7 +60,46 @@ final yorksV1MaterialRequestDraftControllerProvider =
         store: store,
         repository: ref.watch(yorksV1MaterialRequestRepositoryProvider),
         uuidFactory: uuid.v4,
+        onLocalDraftsChanged: () {
+          final revision = ref.read(
+            yorksV1MaterialRequestLocalDraftRevisionProvider(
+              key.ownerAuthUserId,
+            ).notifier,
+          );
+          revision.state++;
+        },
       );
+    });
+
+/// The owner-scoped index of recoverable, not-yet-server-saved Material
+/// Request input.  It is read only by the authenticated owner's register and
+/// never substituted for the authoritative server request projection.
+final yorksV1MaterialRequestLocalDraftsProvider =
+    Provider.family<List<YorksV1MaterialRequestDraft>, String>((
+      ref,
+      ownerAuthUserId,
+    ) {
+      ref.watch(
+        yorksV1MaterialRequestLocalDraftRevisionProvider(ownerAuthUserId),
+      );
+      final store = ref
+          .watch(storageProvider)
+          .collection<YorksV1MaterialRequestDraft>(
+            '${_yorksV1MaterialRequestDraftKeyPrefix}_$ownerAuthUserId',
+            toJson: (draft) => draft.toJson(),
+            fromJson: YorksV1MaterialRequestDraft.fromJson,
+          );
+      final drafts = store
+          .readAll()
+          .where(
+            (draft) =>
+                draft.ownerAuthUserId == ownerAuthUserId &&
+                draft.serverRecordVersion == 0 &&
+                draft.hasRecoverableContent,
+          )
+          .toList(growable: false);
+      drafts.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return List.unmodifiable(drafts);
     });
 
 final yorksV1MaterialRequestListProvider = FutureProvider.autoDispose
@@ -345,12 +390,15 @@ bool yorksV1MaterialRequestNeedsAction(
   YorksV1Role? role,
 ) {
   if (role == null || request.state.isDraft) return false;
-  if (request.state == YorksV1MaterialRequestState.received ||
-      request.state == YorksV1MaterialRequestState.closed ||
+  if (request.state == YorksV1MaterialRequestState.closed ||
       request.state == YorksV1MaterialRequestState.cancelled) {
     return false;
   }
   if (role == YorksV1Role.admin) return true;
+  if (request.currentActionOwnerRole == 'project_engineer' &&
+      role.isGlobalProjectEngineer) {
+    return true;
+  }
   return request.currentActionOwnerRole == role.claimValue;
 }
 

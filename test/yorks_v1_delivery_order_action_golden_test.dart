@@ -75,6 +75,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Generate Delivery Order'), findsAtLeastNWidgets(1));
+      expect(
+        find.text('Generate Delivery Order').hitTestable(),
+        findsOneWidget,
+        reason:
+            'The post-dispatch Delivery Order action must be immediately usable.',
+      );
       expect(tester.takeException(), isNull);
       await expectLater(
         find.byType(MaterialApp),

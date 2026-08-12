@@ -7,10 +7,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../models/yorks_v1_boq.dart';
+import '../models/yorks_v1_arrangement_strings.dart';
 import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_material_request_strings.dart';
+import '../models/yorks_v1_project_strings.dart';
 import '../models/yorks_v1_quantity.dart';
 import 'yorks_v1_boq_workbook_service.dart';
 import 'yorks_v1_pdf_arabic.dart';
@@ -113,10 +115,7 @@ class YorksV1MaterialRequestDocumentService {
               'mr_column_4': lines[index].unit,
               if (includeCommercial) 'mr_column_5': lines[index].unitCost ?? '',
               if (includeCommercial)
-                'mr_column_6':
-                    _calculatedTotal(lines[index]) ??
-                    lines[index].totalCost ??
-                    '',
+                'mr_column_6': lines[index].totalCost ?? '',
             },
             canonicalValues: const {},
           ),
@@ -226,9 +225,7 @@ class YorksV1MaterialRequestDocumentService {
       _logoFuture ??= _loadLogoUncached();
 
   static Future<pw.MemoryImage> _loadLogoUncached() async {
-    final data = await rootBundle.load(
-      'assets/branding/yorks_emblem_black.png',
-    );
+    final data = await rootBundle.load('assets/logo.png');
     return pw.MemoryImage(data.buffer.asUint8List());
   }
 
@@ -259,7 +256,7 @@ class YorksV1MaterialRequestDocumentService {
     final request = model.request;
     final requestedBy = [
       request.requesterDisplayName?.trim(),
-      request.requesterProjectRole?.trim(),
+      requesterRoleLabel(request),
     ].whereType<String>().where((value) => value.isNotEmpty).join(' · ');
     final scheduledDate = request.scheduledDate == null
         ? '—'
@@ -346,14 +343,6 @@ class YorksV1MaterialRequestDocumentService {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 1.2 * _mm),
-              pw.Text(
-                'SINCE 1984',
-                style: pw.TextStyle(
-                  fontSize: 7.5,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
             ],
           ),
         ),
@@ -417,6 +406,7 @@ class YorksV1MaterialRequestDocumentService {
     required bool commercial,
   }) {
     final request = model.request;
+    final showStatus = model.showLineStatus;
     final headers = [
       'R No',
       'Item Description',
@@ -425,9 +415,10 @@ class YorksV1MaterialRequestDocumentService {
       'Unit',
       if (commercial) 'Unit Cost',
       if (commercial) 'Total Cost',
+      if (showStatus) 'Status',
     ];
     final widths = commercial
-        ? const <int, pw.TableColumnWidth>{
+        ? <int, pw.TableColumnWidth>{
             0: pw.FlexColumnWidth(.65),
             1: pw.FlexColumnWidth(3.45),
             2: pw.FlexColumnWidth(1.8),
@@ -435,13 +426,15 @@ class YorksV1MaterialRequestDocumentService {
             4: pw.FlexColumnWidth(.9),
             5: pw.FlexColumnWidth(1.25),
             6: pw.FlexColumnWidth(1.25),
+            if (showStatus) 7: const pw.FlexColumnWidth(1.45),
           }
-        : const <int, pw.TableColumnWidth>{
+        : <int, pw.TableColumnWidth>{
             0: pw.FlexColumnWidth(.65),
             1: pw.FlexColumnWidth(4.25),
             2: pw.FlexColumnWidth(2.05),
             3: pw.FlexColumnWidth(.85),
             4: pw.FlexColumnWidth(.95),
+            if (showStatus) 5: const pw.FlexColumnWidth(1.45),
           };
     return pw.Table(
       border: pw.TableBorder.all(color: _documentGrid, width: .8),
@@ -454,9 +447,16 @@ class YorksV1MaterialRequestDocumentService {
           children: [for (final header in headers) _tableHeader(header)],
         ),
         for (var index = 0; index < request.lines.length; index++)
-          _materialRow(request.lines[index], index + 1, commercial: commercial),
+          _materialRow(
+            request.lines[index],
+            index + 1,
+            commercial: commercial,
+            status: showStatus
+                ? model.receiptStatuses[request.lines[index].id]
+                : null,
+          ),
         for (var index = request.lines.length; index < 6; index++)
-          _emptyMaterialRow(commercial: commercial),
+          _emptyMaterialRow(commercial: commercial, showStatus: showStatus),
       ],
     );
   }
@@ -465,6 +465,7 @@ class YorksV1MaterialRequestDocumentService {
     YorksV1MaterialRequestLine line,
     int number, {
     required bool commercial,
+    String? status,
   }) => pw.TableRow(
     children: [
       _tableCell('$number', bold: true, alignment: pw.Alignment.topCenter),
@@ -482,19 +483,26 @@ class YorksV1MaterialRequestDocumentService {
         ),
       if (commercial)
         _tableCell(
-          _dashWhenEmpty(_calculatedTotal(line) ?? line.totalCost),
+          _dashWhenEmpty(line.totalCost),
           alignment: pw.Alignment.topRight,
         ),
+      if (status != null) _tableCell(status),
     ],
   );
 
-  static pw.TableRow _emptyMaterialRow({required bool commercial}) =>
-      pw.TableRow(
-        children: [
-          for (var index = 0; index < (commercial ? 7 : 5); index++)
-            pw.SizedBox(height: 8.2 * _mm),
-        ],
-      );
+  static pw.TableRow _emptyMaterialRow({
+    required bool commercial,
+    required bool showStatus,
+  }) => pw.TableRow(
+    children: [
+      for (
+        var index = 0;
+        index < (commercial ? 7 : 5) + (showStatus ? 1 : 0);
+        index++
+      )
+        pw.SizedBox(height: 8.2 * _mm),
+    ],
+  );
 
   static pw.Widget _tableHeader(String value) => pw.Padding(
     padding: pw.EdgeInsets.symmetric(
@@ -537,7 +545,7 @@ class YorksV1MaterialRequestDocumentService {
       if (line.equipmentTag?.trim().isNotEmpty ?? false)
         'Tag: ${line.equipmentTag!.trim()}',
       if (line.planningModelTag?.trim().isNotEmpty ?? false)
-        'Model/Serial: ${line.planningModelTag!.trim()}',
+        'Model / Tag: ${line.planningModelTag!.trim()}',
     ];
     return pw.Padding(
       padding: pw.EdgeInsets.symmetric(
@@ -565,6 +573,7 @@ class YorksV1MaterialRequestDocumentService {
     YorksV1MaterialRequestDocumentModel model,
   ) {
     final request = model.request;
+    final arrangement = model.arrangement;
     final approval = model.approval;
     final dispatch = model.dispatch;
     return pw.Column(
@@ -576,22 +585,31 @@ class YorksV1MaterialRequestDocumentService {
             pw.TableRow(
               children: [
                 _approvalCell(
-                  'Requested by (Site / Project Engineer)',
+                  YorksV1MaterialRequestStrings.requestedBy.primary,
                   request.requesterDisplayName ?? '',
-                  request.requesterProjectRole ?? '',
+                  requesterRoleLabel(request),
                   request.submittedAt ?? request.createdAt,
                 ),
                 _approvalCell(
-                  'Approved by (Project Engineer)',
-                  approval?.displayName ?? '',
-                  approval?.reference ?? approval?.role ?? '',
-                  approval?.actedAt,
+                  YorksV1ArrangementStrings.arrangement.primary,
+                  arrangement?.displayName ?? '',
+                  _actorRoleLabel(arrangement),
+                  arrangement?.actedAt,
+                  reference: arrangement?.reference,
                 ),
                 _approvalCell(
-                  'Ordered / Dispatched by (Procurement)',
+                  YorksV1MaterialRequestStrings.approvedByEngineer.primary,
+                  approval?.displayName ?? '',
+                  _actorRoleLabel(approval),
+                  approval?.actedAt,
+                  reference: approval?.reference,
+                ),
+                _approvalCell(
+                  YorksV1MaterialRequestStrings.dispatchedByProcurement.primary,
                   dispatch?.displayName ?? '',
-                  dispatch?.reference ?? dispatch?.role ?? '',
+                  _actorRoleLabel(dispatch),
                   dispatch?.actedAt,
+                  reference: dispatch?.reference,
                 ),
               ],
             ),
@@ -601,13 +619,29 @@ class YorksV1MaterialRequestDocumentService {
     );
   }
 
+  static String requesterRoleLabel(YorksV1MaterialRequest request) {
+    final role = request.requesterExactRole ?? request.requesterProjectRole;
+    final normalized = role?.trim();
+    if (normalized == null || normalized.isEmpty) return '';
+    return switch (normalized) {
+      'project_engineer' ||
+      'site_engineer' ||
+      'senior_mechanical_engineer' ||
+      'project_manager' ||
+      'procurement' ||
+      'admin' => YorksV1ProjectStrings.roleLabel(normalized).primary,
+      _ => normalized,
+    };
+  }
+
   static pw.Widget _approvalCell(
     String title,
     String name,
     String detail,
-    DateTime? date,
-  ) => pw.Container(
-    height: 31 * _mm,
+    DateTime? date, {
+    String? reference,
+  }) => pw.Container(
+    height: 35 * _mm,
     padding: pw.EdgeInsets.all(2.5 * _mm),
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -619,7 +653,11 @@ class YorksV1MaterialRequestDocumentService {
         pw.SizedBox(height: 3.7 * _mm),
         _approvalText('Name', name),
         pw.SizedBox(height: 2.4 * _mm),
-        _approvalText(detail.isEmpty ? 'Reference' : 'Role', detail),
+        _approvalText('Role', detail),
+        if (reference != null && reference.trim().isNotEmpty) ...[
+          pw.SizedBox(height: 1.4 * _mm),
+          _approvalText('Reference', reference),
+        ],
         pw.SizedBox(height: 2.4 * _mm),
         _approvalText(
           'Date',
@@ -642,8 +680,7 @@ class YorksV1MaterialRequestDocumentService {
       final line = request.lines[index];
       if (line.description.trim().isEmpty ||
           line.unit.trim().isEmpty ||
-          double.tryParse(line.quantity.trim()) == null ||
-          double.parse(line.quantity.trim()) <= 0) {
+          YorksV1DecimalQuantity.tryParse(line.quantity)?.isPositive != true) {
         throw StateError(
           'Material Request row ${index + 1} has incomplete controlled values.',
         );
@@ -663,11 +700,9 @@ class YorksV1MaterialRequestDocumentService {
     return '${line.description.trim()}\n${details.join('\n')}';
   }
 
-  static String? _calculatedTotal(YorksV1MaterialRequestLine line) {
-    final qty = double.tryParse(line.quantity.trim());
-    final cost = double.tryParse(line.unitCost?.trim() ?? '');
-    if (qty == null || cost == null) return null;
-    return (qty * cost).toStringAsFixed(2);
+  static String _actorRoleLabel(YorksV1MaterialRequestDocumentActor? actor) {
+    final role = actor?.role.trim() ?? '';
+    return role.isEmpty ? '' : YorksV1ProjectStrings.roleLabel(role).primary;
   }
 
   static String _dashWhenEmpty(String? value) {

@@ -43,7 +43,9 @@ from (values
   ('unit-set', 'Set', 'Set', 'سیٹ', 4),
   ('unit-pairs', 'Pairs', 'Pairs', 'جوڑے', 5),
   ('unit-roll', 'Roll', 'Roll', 'رول', 6),
-  ('unit-box', 'Box', 'Box', 'ڈبہ', 7)
+  ('unit-box', 'Box', 'Box', 'ڈبہ', 7),
+  ('unit-ton', 'Ton', 'Ton', 'ٹن', 8),
+  ('unit-boxes', 'Boxes', 'Boxes', 'ڈبے', 9)
 ) as defaults(id, name, symbol, secondary_name, sort_order)
 on conflict (id) do nothing;
 

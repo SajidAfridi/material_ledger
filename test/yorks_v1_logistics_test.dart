@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
@@ -86,6 +88,34 @@ void main() {
     },
   );
 
+  test('the logistics repository bounds a stalled RPC', () async {
+    final repository = YorksV1SupabaseLogisticsRepository(
+      featureFlags: const YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+        logistics: true,
+      ),
+      connectivity: DefaultConnectivity(),
+      rpcClient: _HangingRpcClient(),
+      rpcTimeout: const Duration(milliseconds: 1),
+    );
+
+    await expectLater(
+      repository.getWorkspace('request-1'),
+      throwsA(
+        isA<YorksV1DomainException>().having(
+          (error) => error.code,
+          'code',
+          YorksV1DomainErrorCode.backendUnavailable,
+        ),
+      ),
+    );
+  });
+
   test('Delivery Order input normalizes its globally unique reference', () {
     const input = YorksV1DeliveryOrderGenerationInput(
       requestId: 'request-1',
@@ -98,6 +128,45 @@ void main() {
 
     expect(input.toRpcPayload()['delivery_order_reference'], 'YORKS DO-001');
   });
+
+  test(
+    'Delivery Order revision decodes receipt-reviewed quantity evidence',
+    () {
+      final revision = YorksV1DeliveryOrderRevision.fromRpcJson({
+        'id': 'revision-1',
+        'revision_number': 2,
+        'snapshot_kind': 'receipt_review',
+        'is_current': true,
+        'generated_at': '2026-08-10T10:00:00Z',
+        'generated_by_display_name': 'Site Engineer',
+        'lines': [
+          {
+            's_no': 1,
+            'item_description': 'supply duct',
+            'size': '500x300mm',
+            'model': 'GI',
+            'quantity': '8',
+            'unit': 'Nos',
+          },
+          {
+            's_no': 2,
+            'item_description': 'control panel',
+            'quantity': '0',
+            'unit': 'Nos',
+          },
+        ],
+      });
+
+      expect(
+        revision.snapshotKind,
+        YorksV1DeliveryOrderSnapshotKind.receiptReview,
+      );
+      expect(revision.lines.map((line) => line.quantity), ['8', '0']);
+      expect(revision.lines.first.description, 'Supply duct');
+      expect(revision.lines.first.size, '500x300mm');
+      expect(revision.lines.first.model, 'GI');
+    },
+  );
 
   test(
     'returns and documents repository boundary remains default-off',
@@ -208,4 +277,12 @@ class _RecordingRpcClient implements YorksV1MaterialRequestRpcClient {
     calls.add(functionName);
     return _workspaceJson();
   }
+}
+
+class _HangingRpcClient implements YorksV1MaterialRequestRpcClient {
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) => Completer<Object?>().future;
 }

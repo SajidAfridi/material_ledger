@@ -22,3 +22,12 @@ final yorksV1DocumentsRepositoryProvider = Provider<YorksV1DocumentsRepository>(
     );
   },
 );
+
+final yorksV1RentalDocumentsRepositoryProvider =
+    Provider<YorksV1RentalDocumentsRepository>((ref) {
+      final repository = ref.watch(yorksV1DocumentsRepositoryProvider);
+      if (repository is! YorksV1RentalDocumentsRepository) {
+        throw StateError('Rental document repository is unavailable.');
+      }
+      return repository as YorksV1RentalDocumentsRepository;
+    });

@@ -99,7 +99,8 @@ class YorksV1ProjectEditFlowScreen extends ConsumerWidget {
 }
 
 class _YorksV1ProjectCreateFlowScreenState
-    extends ConsumerState<YorksV1ProjectCreateFlowScreen> {
+    extends ConsumerState<YorksV1ProjectCreateFlowScreen>
+    with WidgetsBindingObserver {
   final _detailsFormKey = GlobalKey<FormState>();
   final _scrollController = ScrollController();
 
@@ -180,8 +181,28 @@ class _YorksV1ProjectCreateFlowScreenState
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_flushPendingDraft());
+    }
+  }
+
+  @override
   void dispose() {
-    _draftSaveTimer?.cancel();
+    // A text edit may still be inside the short debounce window when a route
+    // is popped or the app is backgrounded.  Start the owner-scoped local save
+    // before tearing down the screen so a recovery session resumes exactly at
+    // the last entered value rather than the previous field value.
+    unawaited(_flushPendingDraft());
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     for (final controller in _controllers) {
       controller.dispose();
@@ -1064,24 +1085,51 @@ class _YorksV1ProjectCreateFlowScreenState
       for (final attachment in current.attachments)
         attachment.fileName.trim().toLowerCase(),
     };
+    final pendingNames = {
+      for (final file in _selectedAttachmentFiles)
+        file.fileName.trim().toLowerCase(),
+    };
     final additions = <YorksV1SelectedDocument>[];
+    final reselected = <String, YorksV1SelectedDocument>{};
     var skippedDuplicate = false;
     for (final selected in selectedFiles) {
       final key = selected.fileName.trim().toLowerCase();
+      if (existingNames.contains(key) && !pendingNames.contains(key)) {
+        // Browser/file-picker bytes cannot be persisted safely in a local
+        // recovery record. Selecting the same named file after resume is a
+        // deliberate reattachment, not a duplicate.
+        reselected[key] = selected;
+        pendingNames.add(key);
+        continue;
+      }
       if (!existingNames.add(key)) {
         skippedDuplicate = true;
         continue;
       }
       additions.add(selected);
     }
-    if (additions.isEmpty) {
+    if (additions.isEmpty && reselected.isEmpty) {
       _showMessage(YorksV1ProjectStrings.duplicateAttachment, error: true);
       return;
     }
     await _saveDraft(
       current.copyWith(
         attachments: [
-          ...current.attachments,
+          for (final attachment in current.attachments)
+            reselected[attachment.fileName.trim().toLowerCase()] == null
+                ? attachment
+                : YorksV1ProjectAttachmentInput(
+                    fileName:
+                        reselected[attachment.fileName.trim().toLowerCase()]!
+                            .fileName,
+                    mimeType:
+                        reselected[attachment.fileName.trim().toLowerCase()]!
+                            .mimeType,
+                    sizeBytes:
+                        reselected[attachment.fileName.trim().toLowerCase()]!
+                            .bytes
+                            .lengthInBytes,
+                  ),
           for (final selected in additions)
             YorksV1ProjectAttachmentInput(
               fileName: selected.fileName,
@@ -1093,7 +1141,12 @@ class _YorksV1ProjectCreateFlowScreenState
     );
     if (!mounted) return;
     setState(() {
-      _selectedAttachmentFiles = [..._selectedAttachmentFiles, ...additions];
+      _selectedAttachmentFiles = [
+        for (final file in _selectedAttachmentFiles)
+          if (!reselected.containsKey(file.fileName.trim().toLowerCase())) file,
+        ...reselected.values,
+        ...additions,
+      ];
     });
     if (skippedDuplicate) {
       _showMessage(YorksV1ProjectStrings.duplicateAttachment, error: true);
@@ -1132,6 +1185,13 @@ class _YorksV1ProjectCreateFlowScreenState
     if (_isCreating) return;
     await _flushPendingDraft();
     final draft = _currentDraft();
+    if (!_isEditing && _hasAttachmentsNeedingReselect(draft)) {
+      _showMessage(YorksV1ProjectStrings.attachmentNeedsReselect, error: true);
+      if (draft.currentStage != YorksV1ProjectCreationStage.attachments) {
+        await _setStage(YorksV1ProjectCreationStage.attachments);
+      }
+      return;
+    }
     final loadedDirectory = ref
         .read(yorksV1ActiveProjectTeamDirectoryProvider)
         .asData
@@ -1254,6 +1314,18 @@ class _YorksV1ProjectCreateFlowScreenState
         error: true,
       );
     }
+  }
+
+  bool _hasAttachmentsNeedingReselect(YorksV1ProjectCreationDraft draft) {
+    if (draft.attachments.isEmpty) return false;
+    final selectedNames = {
+      for (final file in _selectedAttachmentFiles)
+        file.fileName.trim().toLowerCase(),
+    };
+    return draft.attachments.any(
+      (attachment) =>
+          !selectedNames.contains(attachment.fileName.trim().toLowerCase()),
+    );
   }
 
   Future<int> _uploadSelectedAttachments(YorksV1Project project) async {
@@ -3293,11 +3365,23 @@ class _AttachmentSummary extends StatelessWidget {
                     if (attachment.sizeBytes != null)
                       _formatAttachmentSize(attachment.sizeBytes!),
                     if (pendingFile != null)
-                      YorksV1ProjectStrings.attachmentReady.primary,
+                      YorksV1ProjectStrings.attachmentReady.primary
+                    else
+                      YorksV1ProjectStrings.attachmentNeedsReselect.primary,
                   ].join(' · '),
-                  style: AppTypography.bodySmall,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: pendingFile == null ? AppColors.warning : null,
+                  ),
                 ),
-              ],
+              ] else
+                Text(
+                  pendingFile == null
+                      ? YorksV1ProjectStrings.attachmentNeedsReselect.primary
+                      : YorksV1ProjectStrings.attachmentReady.primary,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: pendingFile == null ? AppColors.warning : null,
+                  ),
+                ),
             ],
           ),
         ),

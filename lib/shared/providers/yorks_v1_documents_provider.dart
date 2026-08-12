@@ -19,3 +19,10 @@ final yorksV1DocumentWorkspaceProvider = FutureProvider.autoDispose
           .watch(yorksV1DocumentsRepositoryProvider)
           .getWorkspace(projectId);
     });
+
+final yorksV1RentalDocumentWorkspaceProvider = FutureProvider.autoDispose
+    .family<YorksV1DocumentWorkspace, String>((ref, propertyId) {
+      return ref
+          .watch(yorksV1RentalDocumentsRepositoryProvider)
+          .getRentalWorkspace(propertyId);
+    });

@@ -903,6 +903,12 @@ abstract final class YorksV1ProjectStrings {
     ur: 'اپ لوڈ کے لیے تیار',
     hi: 'अपलोड के लिए तैयार',
   );
+  static const attachmentNeedsReselect = TranslatableString(
+    en: 'Select this file again before creating the project. File contents are not retained in device-local draft recovery.',
+    ar: 'اختر هذا الملف مرة أخرى قبل إنشاء المشروع. لا يتم الاحتفاظ بمحتوى الملف في استرداد المسودة المحلية على الجهاز.',
+    ur: 'پراجیکٹ بنانے سے پہلے اس فائل کو دوبارہ منتخب کریں۔ مقامی ڈرافٹ ریکوری میں فائل کا مواد محفوظ نہیں رکھا جاتا۔',
+    hi: 'प्रोजेक्ट बनाने से पहले इस फ़ाइल को फिर से चुनें। डिवाइस-स्थानीय ड्राफ़्ट रिकवरी में फ़ाइल सामग्री नहीं रखी जाती।',
+  );
   static const invalidAttachment = TranslatableString(
     en: 'Choose a PDF, XLSX, DOCX, JPG or PNG file no larger than 20 MB.',
     ar: 'اختر ملف PDF أو XLSX أو DOCX أو JPG أو PNG لا يزيد حجمه عن 20 ميغابايت.',
@@ -1467,6 +1473,10 @@ abstract final class YorksV1ProjectStrings {
       YorksV1DomainErrorCode.unauthenticated => signInRequired,
       YorksV1DomainErrorCode.unauthorized => noPermission,
       YorksV1DomainErrorCode.invalidInput => stageNeedsAttention,
+      YorksV1DomainErrorCode.insufficientStock ||
+      YorksV1DomainErrorCode.quantityCapExceeded ||
+      YorksV1DomainErrorCode.immutableRecord ||
+      YorksV1DomainErrorCode.incompleteReview => stageNeedsAttention,
       YorksV1DomainErrorCode.invalidTransition => const TranslatableString(
         en: 'This project action is no longer available in its current state.',
         ar: 'إجراء المشروع هذا لم يعد متاحاً في حالته الحالية.',

@@ -40,6 +40,41 @@ void main() {
     );
   });
 
+  test('global Project Engineers receive canonical close-review work', () {
+    final request = YorksV1MaterialRequest.fromRpcJson({
+      'id': 'request-close',
+      'project_id': 'project-1',
+      'project_ref': 'YRA-001',
+      'project_name': 'Test project',
+      'scope_id': 'scope-1',
+      'scope_name': 'Common / All Buildings',
+      'state': 'received',
+      'timing': 'normal',
+      'record_version': 4,
+      'created_at': '2026-08-05T00:00:00Z',
+      'updated_at': '2026-08-05T00:00:00Z',
+      'current_action_owner_role': 'project_engineer',
+      'current_action_code': 'material_request_close_review',
+      'lines': <Object>[],
+    });
+
+    expect(
+      yorksV1MaterialRequestNeedsAction(
+        request,
+        YorksV1Role.seniorMechanicalEngineer,
+      ),
+      isTrue,
+    );
+    expect(
+      yorksV1MaterialRequestNeedsAction(request, YorksV1Role.projectManager),
+      isTrue,
+    );
+    expect(
+      yorksV1MaterialRequestNeedsAction(request, YorksV1Role.procurement),
+      isFalse,
+    );
+  });
+
   testWidgets('R35 user access stays usable at desktop and mobile widths', (
     tester,
   ) async {

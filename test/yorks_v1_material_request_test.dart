@@ -19,6 +19,30 @@ import 'package:pdf/pdf.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'normalizes request descriptions and preserves the new controlled units',
+    () {
+      const line = YorksV1MaterialRequestLine(
+        id: 'description-unit-line',
+        displayOrder: 1,
+        source: YorksV1MaterialRequestLineSource.custom,
+        description: 'motorized smoke damper',
+        quantity: '1',
+        unit: 'Ton',
+      );
+
+      expect(
+        normalizeYorksV1MaterialRequestItemDescription(
+          '  motorized smoke damper  ',
+        ),
+        'Motorized smoke damper',
+      );
+      expect(line.toRpcJson()['item_description'], 'Motorized smoke damper');
+      expect(line.toRpcJson()['unit'], 'Ton');
+      expect(line.copyWith(unit: 'Boxes').toRpcJson()['unit'], 'Boxes');
+    },
+  );
+
   group('Yorks V1 Material Request draft controller', () {
     test(
       'keeps draft recovery private and submits one versioned command',
@@ -253,6 +277,42 @@ void main() {
           controller.state.status,
           YorksV1MaterialRequestDraftSyncStatus.local,
         );
+      },
+    );
+
+    test(
+      'indexes recoverable local input and restores it for the same owner',
+      () async {
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        var localDraftChanges = 0;
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: _FakeRequestRepository(),
+          uuidFactory: _Ids().next,
+          onLocalDraftsChanged: () => localDraftChanges++,
+        );
+        addTearDown(controller.dispose);
+
+        expect(controller.state.draft.hasRecoverableContent, isFalse);
+        await controller.setTitle('Level 2 equipment');
+        await controller.addCustomLine();
+
+        expect(controller.state.draft.hasRecoverableContent, isTrue);
+        expect(localDraftChanges, greaterThanOrEqualTo(2));
+        expect(store.readAll(), hasLength(1));
+
+        final restored = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: _FakeRequestRepository(),
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(restored.dispose);
+        expect(restored.state.draft.title, 'Level 2 equipment');
+        expect(restored.state.draft.lines, hasLength(1));
       },
     );
 
@@ -806,6 +866,26 @@ void main() {
     );
     expect(line.toDraftJson()['description'], 'Duct insulation 25 mm');
     expect(line.toRpcJson()['item_description'], 'Duct insulation 25 mm');
+
+    final normalized = line.copyWith(
+      brandOrigin: 'betec CAD / uAE',
+      size: 'large 600 x 600',
+      model: 'model-x remains mixed',
+      equipmentTag: 'tag-a1 remains mixed',
+      planningModelTag: 'planning-a1 remains mixed',
+    );
+    expect(normalized.brandOrigin, 'Betec CAD / uAE');
+    expect(normalized.size, 'Large 600 x 600');
+    expect(normalized.model, 'Model-x remains mixed');
+    expect(normalized.equipmentTag, 'Tag-a1 remains mixed');
+    expect(normalized.planningModelTag, 'Planning-a1 remains mixed');
+    expect(normalized.toRpcJson()['brand_origin'], 'Betec CAD / uAE');
+    expect(normalized.toRpcJson()['technical_attributes'], {
+      'size': 'Large 600 x 600',
+      'model': 'Model-x remains mixed',
+      'equipment_tag': 'Tag-a1 remains mixed',
+      'planning_model_tag': 'Planning-a1 remains mixed',
+    });
   });
 
   test(
@@ -835,7 +915,10 @@ void main() {
       expect(line.unitCost, isNull);
       expect(line.toRpcJson()['technical_attributes'], {
         'size': '600 x 600',
+        'model': 'MSD-600',
+        'equipment_tag': 'MSD-01A',
         'planning_model_tag': 'MSD-01A',
+        'quantity_suggested': true,
       });
     },
   );
@@ -858,6 +941,7 @@ void main() {
       requestNumber: 'YRA123-MR101',
       requesterDisplayName: 'Project Engineer',
       requesterProjectRole: 'Project Engineer',
+      requesterExactRole: 'senior_mechanical_engineer',
       lines: const [
         YorksV1MaterialRequestLine(
           id: 'line-1',
@@ -905,6 +989,75 @@ void main() {
       'N-19957.2-Yorks Test Project',
     );
   });
+
+  test('Material Request projections retain the exact requester role', () {
+    final request = YorksV1MaterialRequest.fromRpcJson({
+      'id': _draftId,
+      'project_id': _projectId,
+      'project_ref': 'YRA-123',
+      'project_name': 'Yorks Test Project',
+      'scope_id': _scopeId,
+      'scope_name': 'Common / All Buildings',
+      'state': 'submitted',
+      'record_version': 2,
+      'created_at': '2026-08-11T00:00:00Z',
+      'updated_at': '2026-08-11T00:00:00Z',
+      'timing': 'normal',
+      'requester_project_role': 'project_engineer',
+      'requester_exact_role': 'senior_mechanical_engineer',
+      'lines': const [],
+    });
+
+    expect(request.requesterProjectRole, 'project_engineer');
+    expect(request.requesterExactRole, 'senior_mechanical_engineer');
+    expect(
+      YorksV1MaterialRequestDocumentService.requesterRoleLabel(request),
+      'Senior Mechanical Engineer',
+    );
+  });
+
+  test(
+    'Material Request document parses truthful partial-dispatch progress',
+    () {
+      final model = YorksV1MaterialRequestDocumentModel.fromRpcJson({
+        'request': {
+          'id': _draftId,
+          'project_id': _projectId,
+          'project_ref': 'YRA-123',
+          'project_name': 'Yorks Test Project',
+          'scope_id': _scopeId,
+          'scope_name': 'Common / All Buildings',
+          'state': 'approved',
+          'record_version': 3,
+          'created_at': '2026-08-11T00:00:00Z',
+          'updated_at': '2026-08-11T00:00:00Z',
+          'timing': 'normal',
+          'lines': [
+            {
+              'id': 'line-1',
+              'display_order': 1,
+              'source': 'custom',
+              'item_description': 'Damper',
+              'requested_qty': '10',
+              'unit': 'Nos',
+            },
+          ],
+        },
+        'show_line_status': true,
+        'receipt_statuses': const [
+          {
+            'request_line_id': 'line-1',
+            'requested_qty': '10.0000',
+            'fulfilled_qty': '5.0000',
+            'status': 'Partial',
+          },
+        ],
+      });
+
+      expect(model.showLineStatus, isTrue);
+      expect(model.receiptStatuses['line-1'], '5 / 10 · Partial');
+    },
+  );
 }
 
 const _siteEngineer = '10000000-0000-4000-8000-000000000002';
@@ -1027,6 +1180,15 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   @override
   Future<YorksV1MaterialRequest> cancel(
     YorksV1CancelMaterialRequestInput input,
+  ) async => _request(
+    requestId: input.requestId,
+    version: input.expectedVersion + 1,
+    number: 'B5TEST-MR001',
+  );
+
+  @override
+  Future<YorksV1MaterialRequest> close(
+    YorksV1CloseMaterialRequestInput input,
   ) async => _request(
     requestId: input.requestId,
     version: input.expectedVersion + 1,

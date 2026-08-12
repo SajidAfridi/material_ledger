@@ -26,7 +26,8 @@ enum YorksV1DocumentEntityType {
   materialRequest('material_request'),
   dispatch('dispatch'),
   materialReturn('material_return'),
-  deliveryOrder('delivery_order');
+  deliveryOrder('delivery_order'),
+  rentalProperty('rental_property');
 
   const YorksV1DocumentEntityType(this.wireValue);
 

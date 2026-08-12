@@ -1,4 +1,5 @@
 import 'yorks_v1_domain_error.dart';
+import 'yorks_v1_item_description.dart';
 
 enum YorksV1LogisticsSource {
   warehouse('warehouse'),
@@ -115,7 +116,9 @@ class YorksV1LogisticsInventoryItem {
     return YorksV1LogisticsInventoryItem(
       id: _requiredString(json, 'id'),
       itemCode: _trimToNull(json['item_code']),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
       categoryId: _trimToNull(json['category_id']),
       categoryName: _trimToNull(json['category_name']),
       categoryPath: _trimToNull(json['category_path']),
@@ -261,7 +264,7 @@ class YorksV1InventoryMovement {
       id: _requiredString(json, 'id'),
       inventoryItemId: _trimToNull(json['inventory_item_id']),
       itemCode: _trimToNull(json['item_code']),
-      itemDescription: _trimToNull(json['item_description']),
+      itemDescription: _normalizedDescriptionOrNull(json['item_description']),
       unit: _trimToNull(json['unit']),
       movementType: _requiredString(json, 'movement_type'),
       quantityDelta: _string(json['quantity_delta']),
@@ -311,7 +314,9 @@ class YorksV1InventoryReservation {
         id: _requiredString(json, 'id'),
         inventoryItemId: _requiredString(json, 'inventory_item_id'),
         itemCode: _trimToNull(json['item_code']),
-        itemDescription: _requiredString(json, 'item_description'),
+        itemDescription: normalizeYorksV1ItemDescription(
+          _requiredString(json, 'item_description'),
+        ),
         unit: _requiredString(json, 'unit'),
         requestId: _requiredString(json, 'request_id'),
         requestNumber: _requiredString(json, 'request_number'),
@@ -393,7 +398,9 @@ class YorksV1DispatchCandidate {
     return YorksV1DispatchCandidate(
       requestLineId: _requiredString(json, 'request_line_id'),
       displayOrder: _positiveInt(json['display_order']),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
       approvedQuantity: _string(json['approved_qty']),
@@ -444,7 +451,9 @@ class YorksV1DispatchLine {
     return YorksV1DispatchLine(
       id: _requiredString(json, 'id'),
       requestLineId: _requiredString(json, 'request_line_id'),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
       source: YorksV1LogisticsSource.fromWireValue(json['source_kind']),
@@ -466,17 +475,20 @@ class YorksV1ReceiptReview {
     required this.id,
     required this.reviewedAt,
     required this.reviewedByDisplayName,
+    this.reviewedByRole,
   });
 
   final String id;
   final DateTime reviewedAt;
   final String reviewedByDisplayName;
+  final String? reviewedByRole;
 
   factory YorksV1ReceiptReview.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1ReceiptReview(
       id: _requiredString(json, 'id'),
       reviewedAt: _requiredDate(json, 'reviewed_at'),
       reviewedByDisplayName: _requiredString(json, 'reviewed_by_display_name'),
+      reviewedByRole: _trimToNull(json['reviewed_by_role']),
     );
   }
 }
@@ -495,6 +507,7 @@ class YorksV1MaterialDispatch {
     this.driverName,
     this.vehicleReference,
     this.deliveryReference,
+    this.dispatchedByRole,
     this.receiptReview,
   }) : lines = List.unmodifiable(lines);
 
@@ -509,6 +522,7 @@ class YorksV1MaterialDispatch {
   final String? driverName;
   final String? vehicleReference;
   final String? deliveryReference;
+  final String? dispatchedByRole;
   final YorksV1ReceiptReview? receiptReview;
   final List<YorksV1DispatchLine> lines;
 
@@ -536,6 +550,7 @@ class YorksV1MaterialDispatch {
       driverName: _trimToNull(json['driver_name']),
       vehicleReference: _trimToNull(json['vehicle_reference']),
       deliveryReference: _trimToNull(json['delivery_reference']),
+      dispatchedByRole: _trimToNull(json['dispatched_by_role']),
       receiptReview: rawReview is Map
           ? YorksV1ReceiptReview.fromRpcJson(
               Map<String, dynamic>.from(rawReview),
@@ -765,20 +780,54 @@ class YorksV1DeliveryOrderLine {
     required this.description,
     required this.quantity,
     required this.unit,
+    this.size,
+    this.model,
   });
 
   final int serialNumber;
   final String description;
   final String quantity;
   final String unit;
+  final String? size;
+  final String? model;
 
   factory YorksV1DeliveryOrderLine.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1DeliveryOrderLine(
       serialNumber: _positiveInt(json['s_no']),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
+      size: _trimToNull(json['size']),
+      model: _trimToNull(json['model']),
       quantity: _string(json['quantity']),
       unit: _requiredString(json, 'unit'),
     );
+  }
+}
+
+/// Identifies the immutable evidence captured by a Delivery Order revision.
+///
+/// A dispatch snapshot records what Procurement committed. A receipt-review
+/// snapshot records the confirmed good quantity for that same dispatch without
+/// rewriting the original dispatch evidence.
+enum YorksV1DeliveryOrderSnapshotKind {
+  dispatch('dispatch'),
+  receiptReview('receipt_review');
+
+  const YorksV1DeliveryOrderSnapshotKind(this.wireValue);
+
+  final String wireValue;
+
+  static YorksV1DeliveryOrderSnapshotKind fromWireValue(Object? value) {
+    if (value is String) {
+      for (final kind in values) {
+        if (kind.wireValue == value) return kind;
+      }
+    }
+    // Revisions created before the explicit discriminator were generated only
+    // from confirmed receipt-good lines. Preserve that provenance rather than
+    // relabelling them as dispatch snapshots.
+    return receiptReview;
   }
 }
 
@@ -790,6 +839,10 @@ class YorksV1DeliveryOrderRevision {
     required this.generatedAt,
     required this.generatedByDisplayName,
     required List<YorksV1DeliveryOrderLine> lines,
+    this.snapshotKind = YorksV1DeliveryOrderSnapshotKind.dispatch,
+    this.generatedByRole,
+    this.documentIdentity,
+    this.documentIdentityVerified = false,
   }) : lines = List.unmodifiable(lines);
 
   final String id;
@@ -797,6 +850,10 @@ class YorksV1DeliveryOrderRevision {
   final bool isCurrent;
   final DateTime generatedAt;
   final String generatedByDisplayName;
+  final YorksV1DeliveryOrderSnapshotKind snapshotKind;
+  final String? generatedByRole;
+  final YorksV1DeliveryOrderDocumentIdentity? documentIdentity;
+  final bool documentIdentityVerified;
   final List<YorksV1DeliveryOrderLine> lines;
 
   factory YorksV1DeliveryOrderRevision.fromRpcJson(Map<String, dynamic> json) {
@@ -815,6 +872,16 @@ class YorksV1DeliveryOrderRevision {
         json,
         'generated_by_display_name',
       ),
+      snapshotKind: YorksV1DeliveryOrderSnapshotKind.fromWireValue(
+        json['snapshot_kind'],
+      ),
+      generatedByRole: _trimToNull(json['generated_by_role']),
+      documentIdentity: json['document_identity'] is Map
+          ? YorksV1DeliveryOrderDocumentIdentity.fromRpcJson(
+              Map<String, dynamic>.from(json['document_identity'] as Map),
+            )
+          : null,
+      documentIdentityVerified: json['document_identity_verified'] == true,
       lines: [
         for (final line in rawLines)
           if (line is Map)
@@ -824,6 +891,77 @@ class YorksV1DeliveryOrderRevision {
       ],
     );
   }
+}
+
+class YorksV1DeliveryOrderDocumentIdentity {
+  const YorksV1DeliveryOrderDocumentIdentity({
+    required this.projectId,
+    required this.projectReference,
+    required this.projectName,
+    required this.scopeId,
+    required this.scopeName,
+    required this.dispatchId,
+    required this.dispatchNumber,
+    required this.dispatchDate,
+    this.jobContractReference,
+    this.scopeCode,
+    this.mainContractorName,
+    this.deliveryAddress,
+    this.materialContext,
+    this.requestNumber,
+    this.deliveryReference,
+    this.driverName,
+    this.vehicleReference,
+    this.dispatchedAt,
+    this.dispatchedByDisplayName,
+    this.dispatchedByExactRole,
+  });
+
+  final String projectId;
+  final String projectReference;
+  final String projectName;
+  final String? jobContractReference;
+  final String scopeId;
+  final String scopeName;
+  final String? scopeCode;
+  final String? mainContractorName;
+  final String? deliveryAddress;
+  final String? materialContext;
+  final String? requestNumber;
+  final String dispatchId;
+  final String dispatchNumber;
+  final String? deliveryReference;
+  final DateTime dispatchDate;
+  final String? driverName;
+  final String? vehicleReference;
+  final DateTime? dispatchedAt;
+  final String? dispatchedByDisplayName;
+  final String? dispatchedByExactRole;
+
+  factory YorksV1DeliveryOrderDocumentIdentity.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1DeliveryOrderDocumentIdentity(
+    projectId: _requiredString(json, 'project_id'),
+    projectReference: _requiredString(json, 'project_ref'),
+    projectName: _requiredString(json, 'project_name'),
+    jobContractReference: _trimToNull(json['job_contract_reference']),
+    scopeId: _requiredString(json, 'scope_id'),
+    scopeName: _requiredString(json, 'scope_name'),
+    scopeCode: _trimToNull(json['scope_code']),
+    mainContractorName: _trimToNull(json['main_contractor_name']),
+    deliveryAddress: _trimToNull(json['delivery_address']),
+    materialContext: _trimToNull(json['material_context']),
+    requestNumber: _trimToNull(json['request_number']),
+    dispatchId: _requiredString(json, 'dispatch_id'),
+    dispatchNumber: _requiredString(json, 'dispatch_number'),
+    deliveryReference: _trimToNull(json['delivery_reference']),
+    dispatchDate: _requiredDate(json, 'dispatch_date'),
+    driverName: _trimToNull(json['driver_name']),
+    vehicleReference: _trimToNull(json['vehicle_reference']),
+    dispatchedAt: _nullableDate(json['dispatched_at']),
+    dispatchedByDisplayName: _trimToNull(json['dispatched_by_display_name']),
+    dispatchedByExactRole: _trimToNull(json['dispatched_by_exact_role']),
+  );
 }
 
 class YorksV1DeliveryOrder {
@@ -884,6 +1022,7 @@ class YorksV1DeliveryOrderDispatch {
     required this.dispatchRecordVersion,
     required this.canGenerate,
     this.receiptReviewedAt,
+    this.deliveryReference,
     this.deliveryOrder,
   });
 
@@ -893,6 +1032,7 @@ class YorksV1DeliveryOrderDispatch {
   final int dispatchRecordVersion;
   final bool canGenerate;
   final DateTime? receiptReviewedAt;
+  final String? deliveryReference;
   final YorksV1DeliveryOrder? deliveryOrder;
 
   factory YorksV1DeliveryOrderDispatch.fromRpcJson(Map<String, dynamic> json) {
@@ -904,6 +1044,7 @@ class YorksV1DeliveryOrderDispatch {
       dispatchRecordVersion: _positiveInt(json['dispatch_record_version']),
       canGenerate: json['can_generate'] == true,
       receiptReviewedAt: _nullableDate(json['receipt_reviewed_at']),
+      deliveryReference: _trimToNull(json['delivery_reference']),
       deliveryOrder: rawOrder is Map
           ? YorksV1DeliveryOrder.fromRpcJson(
               Map<String, dynamic>.from(rawOrder),
@@ -945,7 +1086,9 @@ class YorksV1ReturnCandidate {
       receiptReviewLineId: _requiredString(json, 'receipt_review_line_id'),
       dispatchNumber: _requiredString(json, 'dispatch_number'),
       displayOrder: _positiveInt(json['display_order']),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
       source: YorksV1LogisticsSource.fromWireValue(json['source_kind']),
@@ -973,7 +1116,9 @@ class YorksV1ReturnInventoryItem {
   factory YorksV1ReturnInventoryItem.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1ReturnInventoryItem(
       id: _requiredString(json, 'id'),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
     );
@@ -1015,7 +1160,9 @@ class YorksV1MaterialReturnLine {
       receiptReviewLineId: _requiredString(json, 'receipt_review_line_id'),
       dispatchNumber: _requiredString(json, 'dispatch_number'),
       displayOrder: _positiveInt(json['display_order']),
-      description: _requiredString(json, 'item_description'),
+      description: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
       brandOrigin: _trimToNull(json['brand_origin']),
       unit: _requiredString(json, 'unit'),
       source: YorksV1LogisticsSource.fromWireValue(json['source_kind']),
@@ -1263,16 +1410,40 @@ class YorksV1InventoryAdjustmentInput {
 
   bool get createsItem => _trimToNull(inventoryItemId) == null;
 
+  YorksV1InventoryAdjustmentInput withIdempotencyKey(String value) =>
+      YorksV1InventoryAdjustmentInput(
+        quantityDelta: quantityDelta,
+        reason: reason,
+        idempotencyKey: value,
+        inventoryItemId: inventoryItemId,
+        description: description,
+        itemCode: itemCode,
+        categoryId: categoryId,
+        newCategoryName: newCategoryName,
+        sourceCategoryText: sourceCategoryText,
+        brandOrigin: brandOrigin,
+        unit: unit,
+        minimumStock: minimumStock,
+        locationBin: locationBin,
+        notes: notes,
+        sizeText: sizeText,
+        modelReference: modelReference,
+        newCategoryParentId: newCategoryParentId,
+        expectedVersion: expectedVersion,
+        action: action,
+        reference: reference,
+      );
+
   Map<String, Object?> toCreateItemRpcPayload() => {
     'item_code': _trimToNull(itemCode),
-    'item_description': _trimToNull(description),
+    'item_description': _normalizedDescriptionOrNull(description),
     'category_id': _trimToNull(categoryId),
     'new_category_name': _trimToNull(newCategoryName),
     'new_category_parent_id': _trimToNull(newCategoryParentId),
     'source_category_text': _trimToNull(sourceCategoryText),
-    'brand_origin': _trimToNull(brandOrigin),
-    'size_text': _trimToNull(sizeText),
-    'model_reference': _trimToNull(modelReference),
+    'brand_origin': normalizeYorksV1OptionalItemText(brandOrigin),
+    'size_text': normalizeYorksV1OptionalItemText(sizeText),
+    'model_reference': normalizeYorksV1OptionalItemText(modelReference),
     'unit': _trimToNull(unit),
     'minimum_stock': _trimToNull(minimumStock),
     'location_bin': _trimToNull(locationBin),
@@ -1294,11 +1465,11 @@ class YorksV1InventoryAdjustmentInput {
   Map<String, Object?> toRpcPayload() => {
     'inventory_item_id': _trimToNull(inventoryItemId),
     'item_code': _trimToNull(itemCode),
-    'item_description': _trimToNull(description),
+    'item_description': _normalizedDescriptionOrNull(description),
     'category_id': _trimToNull(categoryId),
     'new_category_name': _trimToNull(newCategoryName),
     'source_category_text': _trimToNull(sourceCategoryText),
-    'brand_origin': _trimToNull(brandOrigin),
+    'brand_origin': normalizeYorksV1OptionalItemText(brandOrigin),
     'unit': _trimToNull(unit),
     'minimum_stock': _trimToNull(minimumStock),
     'location_bin': _trimToNull(locationBin),
@@ -1352,14 +1523,14 @@ class YorksV1InventoryItemMetadataInput {
     'inventory_item_id': inventoryItemId,
     'expected_metadata_version': expectedMetadataVersion,
     'item_code': _trimToNull(itemCode),
-    'item_description': description.trim(),
+    'item_description': normalizeYorksV1ItemDescription(description),
     'category_id': _trimToNull(categoryId),
     'new_category_name': _trimToNull(newCategoryName),
     'new_category_parent_id': _trimToNull(newCategoryParentId),
     'source_category_text': _trimToNull(sourceCategoryText),
-    'brand_origin': _trimToNull(brandOrigin),
-    'size_text': _trimToNull(sizeText),
-    'model_reference': _trimToNull(modelReference),
+    'brand_origin': normalizeYorksV1OptionalItemText(brandOrigin),
+    'size_text': normalizeYorksV1OptionalItemText(sizeText),
+    'model_reference': normalizeYorksV1OptionalItemText(modelReference),
     'unit': unit.trim(),
     'minimum_stock': _trimToNull(minimumStock),
     'location_bin': _trimToNull(locationBin),
@@ -1423,11 +1594,11 @@ class YorksV1InventoryImportRowInput {
     'source_row_number': sourceRowNumber,
     'inventory_item_id': _trimToNull(inventoryItemId),
     'item_code': _trimToNull(itemCode),
-    'item_description': description.trim(),
+    'item_description': normalizeYorksV1ItemDescription(description),
     'category_id': _trimToNull(categoryId),
     'new_category_name': _trimToNull(newCategoryName),
     'source_category_text': _trimToNull(sourceCategoryText),
-    'brand_origin': _trimToNull(brandOrigin),
+    'brand_origin': normalizeYorksV1OptionalItemText(brandOrigin),
     'unit': unit.trim(),
     'stock_action': stockAction.trim(),
     'quantity': quantity.trim(),
@@ -1695,7 +1866,7 @@ class YorksV1NewReturnInventoryItemInput {
   final String unit;
 
   Map<String, Object?> toRpcJson() => {
-    'item_description': description.trim(),
+    'item_description': normalizeYorksV1ItemDescription(description),
     'brand_origin': _trimToNull(brandOrigin),
     'unit': unit.trim(),
   };
@@ -1778,6 +1949,11 @@ String _string(Object? value) => switch (value) {
 String? _trimToNull(Object? value) {
   final text = _string(value).trim();
   return text.isEmpty ? null : text;
+}
+
+String? _normalizedDescriptionOrNull(Object? value) {
+  final trimmed = _trimToNull(value);
+  return trimmed == null ? null : normalizeYorksV1ItemDescription(trimmed);
 }
 
 String _requiredString(Map<String, dynamic> json, String key) {

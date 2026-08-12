@@ -89,7 +89,24 @@ abstract interface class YorksV1DocumentsRepository {
   });
 }
 
-class YorksV1SupabaseDocumentsRepository implements YorksV1DocumentsRepository {
+/// Rental documents share the controlled Yorks document store, but use an
+/// Admin-only server projection so a property identifier is never mistaken for
+/// a project membership boundary.
+abstract interface class YorksV1RentalDocumentsRepository {
+  Future<YorksV1DocumentWorkspace> getRentalWorkspace(String propertyId);
+
+  Future<YorksV1DocumentWorkspace> uploadRental(
+    YorksV1DocumentUploadInput input,
+  );
+
+  Future<Uint8List> downloadDocument({
+    required String bucketId,
+    required String objectPath,
+  });
+}
+
+class YorksV1SupabaseDocumentsRepository
+    implements YorksV1DocumentsRepository, YorksV1RentalDocumentsRepository {
   const YorksV1SupabaseDocumentsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -118,9 +135,36 @@ class YorksV1SupabaseDocumentsRepository implements YorksV1DocumentsRepository {
   }
 
   @override
-  Future<YorksV1DocumentWorkspace> upload(
+  Future<YorksV1DocumentWorkspace> getRentalWorkspace(String propertyId) async {
+    final response = await _invoke(
+      functionName: 'v1_rental_document_workspace_projection',
+      parameters: {'p_property_id': propertyId},
+    );
+    return _workspace(response);
+  }
+
+  @override
+  Future<YorksV1DocumentWorkspace> upload(YorksV1DocumentUploadInput input) =>
+      _upload(
+        input,
+        prepareFunction: 'v1_prepare_document_upload',
+        reload: () => getWorkspace(input.projectId),
+      );
+
+  @override
+  Future<YorksV1DocumentWorkspace> uploadRental(
     YorksV1DocumentUploadInput input,
-  ) async {
+  ) => _upload(
+    input,
+    prepareFunction: 'v1_prepare_rental_document_upload',
+    reload: () => getRentalWorkspace(input.projectId),
+  );
+
+  Future<YorksV1DocumentWorkspace> _upload(
+    YorksV1DocumentUploadInput input, {
+    required String prepareFunction,
+    required Future<YorksV1DocumentWorkspace> Function() reload,
+  }) async {
     _requireReady();
     final rpc = _rpcClient!;
     final storage = _storageClient;
@@ -134,7 +178,7 @@ class YorksV1SupabaseDocumentsRepository implements YorksV1DocumentsRepository {
     final intent = _intent(
       await _rpc(
         rpc,
-        functionName: 'v1_prepare_document_upload',
+        functionName: prepareFunction,
         parameters: {
           'p_payload': input.toRpcPayload(hash),
           'p_idempotency_key': input.idempotencyKey,
@@ -175,7 +219,7 @@ class YorksV1SupabaseDocumentsRepository implements YorksV1DocumentsRepository {
         );
       }
     }
-    return getWorkspace(input.projectId);
+    return reload();
   }
 
   @override

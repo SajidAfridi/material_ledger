@@ -21,6 +21,8 @@ void main() {
       YorksV1DeliveryOrderLine(
         serialNumber: 1,
         description: 'Copper pipe',
+        size: '50x50mm',
+        model: 'GI',
         quantity: '3',
         unit: 'Mtr',
       ),
@@ -88,8 +90,86 @@ void main() {
       );
       expect(
         workbook.sheets.single.rows[2],
-        equals(const ['1', 'Copper pipe', '3', 'Mtr']),
+        equals(const [
+          '1',
+          'Copper pipe\nSize: 50x50mm · Model: GI',
+          '3',
+          'Mtr',
+        ]),
       );
+    },
+  );
+
+  test(
+    'receipt-reviewed Delivery Report exports confirmed good quantities without dropping exception lines',
+    () async {
+      final reviewedRevision = YorksV1DeliveryOrderRevision(
+        id: 'revision-receipt-reviewed',
+        revisionNumber: 3,
+        isCurrent: true,
+        generatedAt: DateTime.utc(2026, 8, 10),
+        generatedByDisplayName: 'Project Engineer',
+        snapshotKind: YorksV1DeliveryOrderSnapshotKind.receiptReview,
+        lines: const [
+          YorksV1DeliveryOrderLine(
+            serialNumber: 1,
+            description: 'Copper pipe',
+            size: '50x50mm',
+            model: 'GI',
+            quantity: '8',
+            unit: 'Mtr',
+          ),
+          YorksV1DeliveryOrderLine(
+            serialNumber: 2,
+            description: 'Refrigerant valve',
+            size: '25mm',
+            model: 'RV-25',
+            quantity: '0',
+            unit: 'Nos',
+          ),
+        ],
+      );
+
+      final workbook = const YorksV1BoqWorkbookCodec().decode(
+        bytes: service.buildDeliveryOrderExcel(
+          workspace: workspace,
+          dispatch: dispatch,
+          revision: reviewedRevision,
+        ),
+        fileName: 'delivery-report.xlsx',
+      );
+      expect(
+        workbook.sheets.single.rows[2],
+        equals(const [
+          '1',
+          'Copper pipe\nSize: 50x50mm · Model: GI',
+          '8',
+          'Mtr',
+        ]),
+      );
+      expect(
+        workbook.sheets.single.rows[3],
+        equals(const [
+          '2',
+          'Refrigerant valve\nSize: 25mm · Model: RV-25',
+          '0',
+          'Nos',
+        ]),
+      );
+
+      final bytes = await service.buildDeliveryOrderPdf(
+        workspace: workspace,
+        dispatch: dispatch,
+        revision: reviewedRevision,
+        format: PdfPageFormat.a4,
+      );
+      expect(bytes, isNotEmpty);
+      if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
+        await Directory('output/pdf').create(recursive: true);
+        await File(
+          'output/pdf/r35-delivery-report-receipt-reviewed.pdf',
+        ).writeAsBytes(bytes, flush: true);
+      }
     },
   );
 
@@ -119,4 +199,76 @@ void main() {
       ).writeAsBytes(bytes, flush: true);
     }
   });
+
+  test('Delivery Order keeps a typical multi-line dispatch compact', () async {
+    final multiLineRevision = YorksV1DeliveryOrderRevision(
+      id: 'revision-compact',
+      revisionNumber: 3,
+      isCurrent: true,
+      generatedAt: DateTime.utc(2026, 8, 10),
+      generatedByDisplayName: 'Procurement User',
+      lines: List.generate(
+        11,
+        (index) => YorksV1DeliveryOrderLine(
+          serialNumber: index + 1,
+          description: 'Dispatched material ${index + 1}',
+          quantity: '${index + 1}',
+          unit: 'Nos',
+        ),
+      ),
+    );
+    final bytes = await service.buildDeliveryOrderPdf(
+      workspace: workspace,
+      dispatch: dispatch,
+      revision: multiLineRevision,
+      format: PdfPageFormat.a4,
+    );
+
+    expect(bytes.length, greaterThan(500));
+    expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
+      await Directory('output/pdf').create(recursive: true);
+      await File(
+        'output/pdf/r35-delivery-order-compact.pdf',
+      ).writeAsBytes(bytes, flush: true);
+    }
+  });
+
+  test(
+    'Delivery Report keeps its fixed contact footer on every page of a long receipt',
+    () async {
+      final longReceiptRevision = YorksV1DeliveryOrderRevision(
+        id: 'revision-long-receipt',
+        revisionNumber: 4,
+        isCurrent: true,
+        generatedAt: DateTime.utc(2026, 8, 11),
+        generatedByDisplayName: 'Project Engineer',
+        snapshotKind: YorksV1DeliveryOrderSnapshotKind.receiptReview,
+        lines: List.generate(
+          32,
+          (index) => YorksV1DeliveryOrderLine(
+            serialNumber: index + 1,
+            description: 'Received material ${index + 1}',
+            quantity: '${index + 1}',
+            unit: 'Nos',
+          ),
+        ),
+      );
+      final bytes = await service.buildDeliveryOrderPdf(
+        workspace: workspace,
+        dispatch: dispatch,
+        revision: longReceiptRevision,
+        format: PdfPageFormat.a4,
+      );
+
+      expect(bytes.length, greaterThan(500));
+      expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+      if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
+        await Directory('output/pdf').create(recursive: true);
+        await File(
+          'output/pdf/r35-delivery-report-multipage.pdf',
+        ).writeAsBytes(bytes, flush: true);
+      }
+    },
+  );
 }

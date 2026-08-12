@@ -52,6 +52,113 @@ void main() {
     _preferences = await SharedPreferences.getInstance();
   });
 
+  testWidgets('desktop MR draft keeps source actions and row tools distinct', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester, boqRepository: _DesktopBoqRepositoryFixture());
+
+    expect(find.text('Add Custom Item'), findsOneWidget);
+    expect(find.text('Add from BOQ'), findsOneWidget);
+    expect(find.text('Import Excel'), findsOneWidget);
+    expect(find.text('Row tools'), findsOneWidget);
+    expect(find.text('Add Blank Row'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_draft_boq_actions_desktop.png'),
+    );
+  });
+
+  testWidgets('desktop MR BOQ picker selects scoped rows without duplicates', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester, boqRepository: _DesktopBoqRepositoryFixture());
+
+    await tester.tap(find.text('Add from BOQ'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('desktop-mr-boq-picker')), findsOneWidget);
+    expect(
+      find.text('Add Items from Common / All Buildings BOQ'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Air outlets'), findsOneWidget);
+    final addButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('desktop-mr-add-selected-boq-items')),
+    );
+    expect(addButton.onPressed, isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey('desktop-mr-boq-row-mobile-mr-boq-row')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1 selected'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_boq_picker_populated_desktop.png'),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('desktop-mr-add-selected-boq-items')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Flexible duct'), findsOneWidget);
+
+    await tester.tap(find.text('Add from BOQ'));
+    await tester.pumpAndSettle();
+    expect(find.text('Already added'), findsOneWidget);
+    final rowCheckbox = tester.widget<Checkbox>(
+      find.byKey(const ValueKey('desktop-mr-boq-row-mobile-mr-boq-row')),
+    );
+    expect(rowCheckbox.onChanged, isNull);
+  });
+
+  testWidgets('BOQ folder route seeds project scope before copying rows', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(
+      tester,
+      boqRepository: _DesktopBoqRepositoryFixture(),
+      boqGroupId: 'mobile-mr-boq-group',
+    );
+
+    expect(find.text('Flexible duct'), findsOneWidget);
+    expect(find.text('Common / All Buildings'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop MR BOQ picker has a truthful empty state', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester, boqRepository: _EmptyBoqRepositoryFixture());
+
+    await tester.tap(find.text('Add from BOQ'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No materials in Common / All Buildings BOQ'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Add or import materials into this scope'),
+      findsOneWidget,
+    );
+    final addButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('desktop-mr-add-selected-boq-items')),
+    );
+    expect(addButton.onPressed, isNull);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_boq_picker_empty_desktop.png'),
+    );
+  });
+
   for (final size in [const Size(390, 844), const Size(360, 800)]) {
     final suffix = '${size.width.toInt()}x${size.height.toInt()}';
 
@@ -202,7 +309,6 @@ void main() {
       await _pumpLifecycle(tester);
 
       expect(find.byKey(const ValueKey('mobile-mr-lifecycle')), findsOneWidget);
-      expect(find.text('Current owner'), findsOneWidget);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/mobile_batch3/mr_lifecycle_$suffix.png'),
@@ -249,6 +355,11 @@ void main() {
 
     expect(find.byKey(const ValueKey('mobile-mr-materials')), findsOneWidget);
     expect(find.text('Flexible duct'), findsOneWidget);
+    // The root-overlay success notice deliberately remains visible across a
+    // route/state change. Let its bounded lifetime finish before the widget
+    // test tears down the navigator.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -335,6 +446,65 @@ void main() {
     expect(find.text('Approved'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final size in [const Size(1366, 768), const Size(360, 800)]) {
+    final suffix = '${size.width.toInt()}x${size.height.toInt()}';
+
+    testWidgets('MR register exposes owner-local draft recovery $suffix', (
+      tester,
+    ) async {
+      await _setViewport(tester, size);
+      const ownerAuthUserId = 'recoverable-draft-owner';
+      final repository = _MaterialRequestRepositoryFixture();
+      final recoveryContainer = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+        ],
+      );
+      addTearDown(recoveryContainer.dispose);
+      final draftController = recoveryContainer.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: ownerAuthUserId,
+            draftId: 'recoverable-local-draft',
+          ),
+        ).notifier,
+      );
+      await draftController.setTitle('Plant room materials');
+      await draftController.setProject(_projectId);
+
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1AuthUserIdProvider.overrideWithValue(ownerAuthUserId),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1MaterialRequestListProvider(
+              null,
+            ).overrideWith((ref) async => [_submittedRequest]),
+          ],
+          child: const YorksV1MaterialRequestsScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 saved local draft'), findsOneWidget);
+      expect(find.text('Plant room materials'), findsOneWidget);
+      expect(find.text('Resume saved draft'), findsOneWidget);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_local_recovery_$suffix.png'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Widget _scope({
@@ -358,6 +528,7 @@ Widget _scope({
 Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   WidgetTester tester, {
   YorksV1BoqRepository? boqRepository,
+  String? boqGroupId,
 }) async {
   final repository = _MaterialRequestRepositoryFixture();
   await tester.pumpWidget(
@@ -391,9 +562,10 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
           ],
         ),
       ],
-      child: const YorksV1MaterialRequestDraftScreen(
+      child: YorksV1MaterialRequestDraftScreen(
         draftId: _draftId,
         projectId: _projectId,
+        boqGroupId: boqGroupId,
       ),
     ),
   );
@@ -540,6 +712,11 @@ class _MaterialRequestRepositoryFixture
   @override
   Future<YorksV1MaterialRequest> cancel(
     YorksV1CancelMaterialRequestInput input,
+  ) async => _submittedRequest;
+
+  @override
+  Future<YorksV1MaterialRequest> close(
+    YorksV1CloseMaterialRequestInput input,
   ) async => _submittedRequest;
 
   @override
@@ -709,6 +886,30 @@ class _BoqRepositoryFixture implements YorksV1BoqRepository {
   Future<YorksV1BoqWorksheet> saveWorksheet(
     YorksV1SaveBoqWorksheetInput input,
   ) async => _worksheet;
+}
+
+class _DesktopBoqRepositoryFixture extends _BoqRepositoryFixture {
+  @override
+  Future<List<YorksV1BoqGroup>> listGroups(String projectId) async => [
+    _BoqRepositoryFixture._group,
+  ];
+
+  @override
+  Future<List<YorksV1BoqGroup>> listGroupsForScope(
+    String projectId, {
+    String? scopeId,
+  }) async => [_BoqRepositoryFixture._group];
+}
+
+class _EmptyBoqRepositoryFixture extends _BoqRepositoryFixture {
+  @override
+  Future<List<YorksV1BoqGroup>> listGroups(String projectId) async => const [];
+
+  @override
+  Future<List<YorksV1BoqGroup>> listGroupsForScope(
+    String projectId, {
+    String? scopeId,
+  }) async => const [];
 }
 
 int _groupsDisplayOrder(String name) => switch (name) {

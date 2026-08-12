@@ -11,6 +11,12 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ڈیلیوری آرڈر',
     hi: 'डिलीवरी ऑर्डर',
   );
+  static const deliveryReportTitle = TranslatableString(
+    en: 'DELIVERY REPORT',
+    ar: 'تقرير التسليم',
+    ur: 'ڈیلیوری رپورٹ',
+    hi: 'डिलीवरी रिपोर्ट',
+  );
   static const reference = TranslatableString(
     en: 'Ref.',
     ar: 'المرجع',
@@ -58,6 +64,12 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'تم استلام البضائع بحالة جيدة',
     ur: 'سامان اچھی حالت میں وصول ہوا',
     hi: 'सामान अच्छी स्थिति में प्राप्त हुआ',
+  );
+  static const receiptReviewedQuantities = TranslatableString(
+    en: 'RECEIPT-REVIEWED QUANTITIES',
+    ar: 'الكميات المؤكدة بعد مراجعة الاستلام',
+    ur: 'رسید کے جائزے کے بعد تصدیق شدہ مقداریں',
+    hi: 'रसीद समीक्षा के बाद पुष्ट मात्राएँ',
   );
   static const serialNumber = TranslatableString(
     en: 'S:No',
@@ -130,6 +142,24 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'وصف الصنف',
     ur: 'آئٹم کی تفصیل',
     hi: 'आइटम विवरण',
+  );
+  static const itemSize = TranslatableString(
+    en: 'Size',
+    ar: 'المقاس',
+    ur: 'سائز',
+    hi: 'आकार',
+  );
+  static const itemModel = TranslatableString(
+    en: 'Model',
+    ar: 'الموديل',
+    ur: 'ماڈل',
+    hi: 'मॉडल',
+  );
+  static const notProvided = TranslatableString(
+    en: 'Not provided',
+    ar: 'غير متوفر',
+    ur: 'فراہم نہیں کیا گیا',
+    hi: 'प्रदान नहीं किया गया',
   );
   static const brandOrigin = TranslatableString(
     en: 'Brand / origin',
@@ -486,10 +516,10 @@ abstract final class YorksV1LogisticsStrings {
     hi: 'आधिकारिक डिलीवरी ऑर्डर संदर्भ दर्ज करें।',
   );
   static const deliveryOrderAfterReceipt = TranslatableString(
-    en: 'The immutable Delivery Order includes committed dispatched quantities.',
-    ar: 'يتضمن أمر التسليم غير القابل للتعديل كميات الإرسال المعتمدة.',
-    ur: 'ناقابلِ ترمیم ڈیلیوری آرڈر میں تصدیق شدہ ڈسپیچ مقدار شامل ہوتی ہے۔',
-    hi: 'अपरिवर्तनीय डिलीवरी ऑर्डर में पुष्ट डिस्पैच मात्राएँ शामिल होती हैं।',
+    en: 'Dispatch evidence remains immutable. A confirmed receipt review creates the current Delivery Report with good quantities.',
+    ar: 'يبقى إثبات الإرسال غير قابل للتعديل. تنشئ مراجعة الاستلام المؤكدة تقرير التسليم الحالي بالكميات السليمة.',
+    ur: 'ڈسپیچ کا ثبوت ناقابلِ ترمیم رہتا ہے۔ تصدیق شدہ رسید جائزہ اچھی مقدار کے ساتھ موجودہ ڈیلیوری رپورٹ بناتا ہے۔',
+    hi: 'डिस्पैच प्रमाण अपरिवर्तनीय रहता है। पुष्ट रसीद समीक्षा अच्छी मात्राओं के साथ वर्तमान डिलीवरी रिपोर्ट बनाती है।',
   );
   static const generateDeliveryOrder = TranslatableString(
     en: 'Generate Delivery Order',
@@ -730,6 +760,22 @@ abstract final class YorksV1LogisticsStrings {
     hi: '$count वस्तुएँ चुनी गईं',
   );
 }
+
+/// The approved four-column Delivery Report keeps technical metadata inside
+/// Description. Size is always stated explicitly; model follows when frozen
+/// on the submitted Material Request line.
+String yorksV1DeliveryOrderLineMetadata(YorksV1DeliveryOrderLine line) {
+  final size = line.size?.trim();
+  final model = line.model?.trim();
+  return [
+    '${YorksV1LogisticsStrings.itemSize.primary}: ${size == null || size.isEmpty ? YorksV1LogisticsStrings.notProvided.primary : size}',
+    if (model != null && model.isNotEmpty)
+      '${YorksV1LogisticsStrings.itemModel.primary}: $model',
+  ].join(' · ');
+}
+
+String yorksV1DeliveryOrderLineDescription(YorksV1DeliveryOrderLine line) =>
+    '${line.description}\n${yorksV1DeliveryOrderLineMetadata(line)}';
 
 TranslatableString yorksV1LogisticsSourceCopy(YorksV1LogisticsSource source) =>
     switch (source) {

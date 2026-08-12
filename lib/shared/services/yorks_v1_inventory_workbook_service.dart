@@ -357,6 +357,7 @@ class YorksV1InventoryCategoryMatcher {
     if (key.isEmpty) return null;
     for (final category in categories) {
       if (yorksV1InventorySearchKey(category.name) == key ||
+          yorksV1InventorySearchKey(category.displayPath) == key ||
           category.aliases.any(
             (alias) => yorksV1InventorySearchKey(alias) == key,
           )) {
@@ -376,10 +377,13 @@ class YorksV1InventoryCategoryMatcher {
             YorksV1InventoryCategorySuggestion(
               category: category,
               score: math.max(
-                _similarity(value, category.name),
-                category.aliases.fold<double>(
-                  0,
-                  (best, alias) => math.max(best, _similarity(value, alias)),
+                _similarity(value, category.displayPath),
+                math.max(
+                  _similarity(value, category.name),
+                  category.aliases.fold<double>(
+                    0,
+                    (best, alias) => math.max(best, _similarity(value, alias)),
+                  ),
                 ),
               ),
             ),
@@ -714,6 +718,7 @@ class YorksV1InventoryWorkbookCodec {
 
     String? categoryId;
     String? newCategoryName;
+    var requiresCategoryDecision = false;
     List<YorksV1InventoryCategorySuggestion> suggestions = const [];
     if (row.sourceCategory.isEmpty) {
       categoryId = item?.categoryId;
@@ -738,25 +743,16 @@ class YorksV1InventoryWorkbookCodec {
         );
       }
     } else {
+      requiresCategoryDecision = true;
       suggestions = matcher.rank(row.sourceCategory, categories);
-      if (suggestions.isNotEmpty && suggestions.first.score >= .55) {
-        issues.add(
-          const YorksV1InventoryImportIssue(
-            code: YorksV1InventoryImportIssueCode.categoryDecisionRequired,
-          ),
-        );
-      } else {
-        newCategoryName = yorksV1InventoryCategoryDisplayName(
-          row.sourceCategory,
-        );
-        issues.add(
-          YorksV1InventoryImportIssue(
-            code: YorksV1InventoryImportIssueCode.newCategory,
-            detail: newCategoryName,
-            isWarning: true,
-          ),
-        );
-      }
+      // A non-exact category must never be silently promoted to a master.
+      // Show both the existing-category and new-parent choices even when no
+      // fuzzy suggestion was found; Procurement must explicitly choose one.
+      issues.add(
+        const YorksV1InventoryImportIssue(
+          code: YorksV1InventoryImportIssueCode.categoryDecisionRequired,
+        ),
+      );
     }
     return YorksV1InventoryImportRow(
       sourceRowNumber: row.sourceRowNumber,
@@ -774,6 +770,7 @@ class YorksV1InventoryWorkbookCodec {
       inventoryItemId: item?.id,
       categoryId: categoryId,
       newCategoryName: newCategoryName,
+      requiresCategoryDecision: requiresCategoryDecision,
       suggestions: suggestions,
       issues: issues,
     );
@@ -815,6 +812,9 @@ class YorksV1InventoryWorkbookCodec {
       'pairs': 'Pairs',
       'roll': 'Roll',
       'box': 'Box',
+      'ton': 'Ton',
+      'tons': 'Ton',
+      'boxes': 'Boxes',
     };
     return allowed[yorksV1InventorySearchKey(value)];
   }

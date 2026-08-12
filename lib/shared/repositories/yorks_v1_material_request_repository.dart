@@ -63,6 +63,8 @@ abstract interface class YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> cancel(
     YorksV1CancelMaterialRequestInput input,
   );
+
+  Future<YorksV1MaterialRequest> close(YorksV1CloseMaterialRequestInput input);
 }
 
 /// Server-backed normalized MR repository. The only local persistence lives in
@@ -204,6 +206,20 @@ class YorksV1SupabaseMaterialRequestRepository
   ) async {
     final response = await _invoke(
       functionName: 'v1_cancel_material_request',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> close(
+    YorksV1CloseMaterialRequestInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_close_material_request',
       parameters: {
         'p_payload': input.toRpcPayload(),
         'p_idempotency_key': input.idempotencyKey,
