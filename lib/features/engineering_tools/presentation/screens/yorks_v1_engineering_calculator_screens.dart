@@ -842,7 +842,11 @@ class _YorksV1DuctSizerScreenState
 }
 
 class YorksV1EspCalculatorScreen extends ConsumerStatefulWidget {
-  const YorksV1EspCalculatorScreen({super.key});
+  const YorksV1EspCalculatorScreen({super.key, this.initialDate});
+
+  /// Used when reopening a controlled calculation or restoring a draft. A new
+  /// calculation continues to default to the current date.
+  final DateTime? initialDate;
 
   @override
   ConsumerState<YorksV1EspCalculatorScreen> createState() =>
@@ -855,7 +859,7 @@ class _YorksV1EspCalculatorScreenState
   final _projectNo = TextEditingController();
   final _systemNo = TextEditingController();
   final _revision = TextEditingController(text: 'A');
-  final _date = TextEditingController(text: _dateText());
+  late final TextEditingController _date;
   final _equipment = TextEditingController();
   final _safety = TextEditingController(text: '10');
   final _rows = <YorksV1EspRow>[
@@ -863,14 +867,16 @@ class _YorksV1EspCalculatorScreenState
   ];
   bool _restoring = true;
 
-  static String _dateText() {
-    final now = DateTime.now();
+  static String _dateText(DateTime now) {
     return '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
   }
 
   @override
   void initState() {
     super.initState();
+    _date = TextEditingController(
+      text: _dateText(widget.initialDate ?? DateTime.now()),
+    );
     Future<void>.microtask(_restore);
   }
 
@@ -1216,7 +1222,8 @@ class _YorksV1EspCalculatorScreenState
         _projectNo.text = '${header['projectNo'] ?? ''}';
         _systemNo.text = '${header['systemNo'] ?? ''}';
         _revision.text = '${header['revision'] ?? 'A'}';
-        _date.text = '${header['date'] ?? _dateText()}';
+        _date.text =
+            '${header['date'] ?? _dateText(widget.initialDate ?? DateTime.now())}';
         _equipment.text = '${header['equipment'] ?? ''}';
         _safety.text = '${data['safetyFactor'] ?? '10'}';
         final rows = data['rows'];

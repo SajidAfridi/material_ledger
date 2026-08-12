@@ -104,6 +104,7 @@ flutter:
     - assets/images/
     - assets/fonts/
     - assets/branding/source_emblem.png
+    - assets/branding/yorks_emblem_web.png
     - assets/branding/yorks_emblem_black.png
     - assets/branding/yorks_emblem_mobile.png
 

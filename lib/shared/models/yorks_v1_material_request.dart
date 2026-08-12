@@ -1,6 +1,13 @@
 import 'yorks_v1_domain_error.dart';
+import 'yorks_v1_item_description.dart';
 
 const Object _keep = Object();
+
+/// Keeps controlled Material Request and Delivery Order descriptions legible
+/// without changing the remainder of a user-entered material name.
+String normalizeYorksV1MaterialRequestItemDescription(String value) {
+  return normalizeYorksV1ItemDescription(value);
+}
 
 /// A controlled request timing value. The server independently enforces the
 /// scheduled-date rule; this enum is only a typed client representation.
@@ -193,18 +200,24 @@ class YorksV1MaterialRequestLine {
     id: id,
     displayOrder: displayOrder,
     source: source,
-    description: description ?? this.description,
+    description: description == null
+        ? this.description
+        : normalizeYorksV1MaterialRequestItemDescription(description),
     brandOrigin: identical(brandOrigin, _keep)
         ? this.brandOrigin
-        : brandOrigin as String?,
-    size: identical(size, _keep) ? this.size : size as String?,
-    model: identical(model, _keep) ? this.model : model as String?,
+        : normalizeYorksV1OptionalItemText(brandOrigin),
+    size: identical(size, _keep)
+        ? this.size
+        : normalizeYorksV1OptionalItemText(size),
+    model: identical(model, _keep)
+        ? this.model
+        : normalizeYorksV1OptionalItemText(model),
     equipmentTag: identical(equipmentTag, _keep)
         ? this.equipmentTag
-        : equipmentTag as String?,
+        : normalizeYorksV1OptionalItemText(equipmentTag),
     planningModelTag: identical(planningModelTag, _keep)
         ? this.planningModelTag
-        : planningModelTag as String?,
+        : normalizeYorksV1OptionalItemText(planningModelTag),
     quantity: quantity ?? this.quantity,
     unit: unit ?? this.unit,
     quantityIsSuggested:
@@ -228,12 +241,12 @@ class YorksV1MaterialRequestLine {
     'id': id,
     'displayOrder': displayOrder,
     'source': source.wireValue,
-    'description': description,
-    'brandOrigin': _trimToNull(brandOrigin),
-    'size': _trimToNull(size),
-    'model': _trimToNull(model),
-    'equipmentTag': _trimToNull(equipmentTag),
-    'planningModelTag': _trimToNull(planningModelTag),
+    'description': normalizeYorksV1MaterialRequestItemDescription(description),
+    'brandOrigin': normalizeYorksV1OptionalItemText(brandOrigin),
+    'size': normalizeYorksV1OptionalItemText(size),
+    'model': normalizeYorksV1OptionalItemText(model),
+    'equipmentTag': normalizeYorksV1OptionalItemText(equipmentTag),
+    'planningModelTag': normalizeYorksV1OptionalItemText(planningModelTag),
     'quantityIsSuggested': quantityIsSuggested,
     'quantity': quantity,
     'unit': unit,
@@ -242,17 +255,31 @@ class YorksV1MaterialRequestLine {
   };
 
   Map<String, dynamic> toRpcJson() {
-    final safeSize = _trimToNull(size);
-    final safePlanningModelTag = _trimToNull(planningModelTag);
+    final safeSize = normalizeYorksV1OptionalItemText(size);
+    final safeModel = normalizeYorksV1OptionalItemText(model);
+    final safeEquipmentTag = normalizeYorksV1OptionalItemText(equipmentTag);
+    final safePlanningModelTag = normalizeYorksV1OptionalItemText(
+      planningModelTag,
+    );
 
-    // Keep payload compatible with older deployed R35 RPC contracts that only
-    // accept `size` and `planning_model_tag` in technical attributes.
-    final technicalAttributes = <String, String>{};
+    // The normalized RPC preserves every canonical technical value selected
+    // from BOQ. Unknown worksheet-only columns remain in the BOQ worksheet and
+    // are deliberately not promoted into this controlled MR schema.
+    final technicalAttributes = <String, dynamic>{};
     if (safeSize != null) {
       technicalAttributes['size'] = safeSize;
     }
+    if (safeModel != null) {
+      technicalAttributes['model'] = safeModel;
+    }
+    if (safeEquipmentTag != null) {
+      technicalAttributes['equipment_tag'] = safeEquipmentTag;
+    }
     if (safePlanningModelTag != null) {
       technicalAttributes['planning_model_tag'] = safePlanningModelTag;
+    }
+    if (source == YorksV1MaterialRequestLineSource.boq) {
+      technicalAttributes['quantity_suggested'] = quantityIsSuggested;
     }
     return {
       'id': id.trim(),
@@ -260,8 +287,10 @@ class YorksV1MaterialRequestLine {
       'source_kind': source.wireValue,
       'source_boq_group_id': _trimToNull(sourceBoqGroupId),
       'source_boq_row_id': _trimToNull(sourceBoqRowId),
-      'item_description': description.trim(),
-      'brand_origin': _trimToNull(brandOrigin),
+      'item_description': normalizeYorksV1MaterialRequestItemDescription(
+        description,
+      ),
+      'brand_origin': normalizeYorksV1OptionalItemText(brandOrigin),
       // Always send the object because the deployed function validates that it
       // exists even when empty.
       'technical_attributes': technicalAttributes,
@@ -275,20 +304,28 @@ class YorksV1MaterialRequestLine {
       id: _string(json['id']),
       displayOrder: _positiveInt(json['displayOrder'] ?? json['display_order']),
       source: YorksV1MaterialRequestLineSource.fromWireValue(json['source']),
-      description: _string(json['description'] ?? json['item_description']),
-      brandOrigin: _trimToNull(json['brandOrigin'] ?? json['brand_origin']),
-      size:
-          _technicalText(json['technical_attributes'], 'size') ??
-          _trimToNull(json['size']),
-      model:
-          _technicalText(json['technical_attributes'], 'model') ??
-          _trimToNull(json['model']),
-      equipmentTag:
-          _technicalText(json['technical_attributes'], 'equipment_tag') ??
-          _trimToNull(json['equipmentTag'] ?? json['equipment_tag']),
-      planningModelTag:
-          _technicalText(json['technical_attributes'], 'planning_model_tag') ??
-          _trimToNull(json['planningModelTag'] ?? json['planning_model_tag']),
+      description: normalizeYorksV1MaterialRequestItemDescription(
+        _string(json['description'] ?? json['item_description']),
+      ),
+      brandOrigin: normalizeYorksV1OptionalItemText(
+        json['brandOrigin'] ?? json['brand_origin'],
+      ),
+      size: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'size') ?? json['size'],
+      ),
+      model: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'model') ?? json['model'],
+      ),
+      equipmentTag: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'equipment_tag') ??
+            json['equipmentTag'] ??
+            json['equipment_tag'],
+      ),
+      planningModelTag: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'planning_model_tag') ??
+            json['planningModelTag'] ??
+            json['planning_model_tag'],
+      ),
       quantityIsSuggested:
           _technicalText(json['technical_attributes'], 'quantity_suggested') ==
               'true' ||
@@ -312,17 +349,21 @@ class YorksV1MaterialRequestLine {
       source: YorksV1MaterialRequestLineSource.fromWireValue(
         json['source_kind'],
       ),
-      description: _requiredString(json, 'item_description'),
-      brandOrigin: _trimToNull(json['brand_origin']),
-      size: _technicalText(json['technical_attributes'], 'size'),
-      model: _technicalText(json['technical_attributes'], 'model'),
-      equipmentTag: _technicalText(
-        json['technical_attributes'],
-        'equipment_tag',
+      description: normalizeYorksV1MaterialRequestItemDescription(
+        _requiredString(json, 'item_description'),
       ),
-      planningModelTag: _technicalText(
-        json['technical_attributes'],
-        'planning_model_tag',
+      brandOrigin: normalizeYorksV1OptionalItemText(json['brand_origin']),
+      size: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'size'),
+      ),
+      model: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'model'),
+      ),
+      equipmentTag: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'equipment_tag'),
+      ),
+      planningModelTag: normalizeYorksV1OptionalItemText(
+        _technicalText(json['technical_attributes'], 'planning_model_tag'),
       ),
       quantityIsSuggested:
           _technicalText(json['technical_attributes'], 'quantity_suggested') ==
@@ -367,6 +408,8 @@ class YorksV1MaterialRequest {
     this.deliveryNote,
     this.requesterDisplayName,
     this.requesterProjectRole,
+    this.requesterExactRole,
+    this.documentIdentityVerified = false,
     this.currentActionOwnerRole,
     this.currentActionCode,
     this.submittedAt,
@@ -393,6 +436,11 @@ class YorksV1MaterialRequest {
   final String? deliveryNote;
   final String? requesterDisplayName;
   final String? requesterProjectRole;
+
+  /// The immutable exact server-controlled Auth role captured at submission.
+  /// [requesterProjectRole] remains the normalized workflow role.
+  final String? requesterExactRole;
+  final bool documentIdentityVerified;
   final String? currentActionOwnerRole;
   final String? currentActionCode;
   final DateTime? submittedAt;
@@ -439,6 +487,8 @@ class YorksV1MaterialRequest {
       deliveryNote: _trimToNull(json['delivery_note']),
       requesterDisplayName: _trimToNull(json['requester_display_name']),
       requesterProjectRole: _trimToNull(json['requester_project_role']),
+      requesterExactRole: _trimToNull(json['requester_exact_role']),
+      documentIdentityVerified: json['document_identity_verified'] == true,
       currentActionOwnerRole: _trimToNull(json['current_action_owner_role']),
       currentActionCode: _trimToNull(json['current_action_code']),
       submittedAt: _nullableDate(json['submitted_at']),
@@ -540,6 +590,18 @@ class YorksV1MaterialRequestDraft {
   /// the server once the server-side draft contract can be satisfied.
   bool get canSaveLocally => true;
 
+  /// Local-only drafts are intentionally recoverable before they satisfy the
+  /// connected save/submit contract.  Keep an empty, never-edited editor out
+  /// of the resume list, but retain every meaningful field or line entered by
+  /// its owner on this device.
+  bool get hasRecoverableContent =>
+      _trimToNull(projectId) != null ||
+      _trimToNull(scopeId) != null ||
+      _trimToNull(title) != null ||
+      _trimToNull(deliveryNote) != null ||
+      scheduledDate != null ||
+      lines.isNotEmpty;
+
   YorksV1SaveMaterialRequestDraftInput toSaveInput() =>
       YorksV1SaveMaterialRequestDraftInput(draft: this);
 
@@ -634,6 +696,23 @@ class YorksV1CancelMaterialRequestInput {
     'request_id': requestId.trim(),
     'expected_version': expectedVersion,
     'reason': reason.trim(),
+  };
+}
+
+class YorksV1CloseMaterialRequestInput {
+  const YorksV1CloseMaterialRequestInput({
+    required this.requestId,
+    required this.expectedVersion,
+    required this.idempotencyKey,
+  });
+
+  final String requestId;
+  final int expectedVersion;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'request_id': requestId.trim(),
+    'expected_version': expectedVersion,
   };
 }
 

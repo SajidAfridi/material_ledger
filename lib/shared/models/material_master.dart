@@ -211,7 +211,13 @@ String unitMasterIdForLegacySymbol(String symbol) {
     'set' || 'sets' => 'unit-set',
     'pair' || 'pairs' => 'unit-pairs',
     'roll' || 'rolls' => 'unit-roll',
-    'box' || 'boxes' => 'unit-box',
+    'box' => 'unit-box',
+    'boxes' => 'unit-boxes',
+    // Keep the historical plural master stable. New entries use the new
+    // controlled singular Ton value; legacy records still resolve to their
+    // original custom ID instead of being silently reclassified.
+    'ton' => 'unit-ton',
+    'tons' => 'custom-unit-tons',
     _ => 'custom-unit-${_slug(symbol)}',
   };
 }
@@ -238,7 +244,9 @@ String legacyUnitSymbolForMasterId(String id, {String fallback = 'pcs'}) {
     'unit-meter' => 'm',
     'unit-set' => 'sets',
     'unit-roll' => 'rolls',
-    'unit-box' => 'boxes',
+    'unit-box' => 'box',
+    'unit-ton' => 'ton',
+    'unit-boxes' => 'boxes',
     _ => fallback,
   };
 }

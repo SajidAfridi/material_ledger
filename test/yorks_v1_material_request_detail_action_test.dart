@@ -30,7 +30,7 @@ void main() {
       );
     });
 
-    test('shows dispatch-level delivery order before receipt review', () {
+    test('keeps receipt review ahead of the optional delivery order', () {
       expect(
         yorksV1MaterialRequestDetailPrimaryAction(
           state: YorksV1MaterialRequestState.dispatched,
@@ -51,7 +51,7 @@ void main() {
           canConfirmReceipt: true,
           canGenerateDeliveryOrder: true,
         ),
-        YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder,
+        YorksV1MaterialRequestDetailPrimaryAction.receiptReview,
       );
       expect(
         yorksV1MaterialRequestDetailPrimaryAction(
@@ -63,6 +63,35 @@ void main() {
           canGenerateDeliveryOrder: true,
         ),
         YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder,
+      );
+    });
+
+    test('returns replacement dispatch after a partial receipt', () {
+      expect(
+        yorksV1MaterialRequestDetailPrimaryAction(
+          state: YorksV1MaterialRequestState.partiallyReceived,
+          role: YorksV1Role.procurement,
+          canArrange: false,
+          canDispatch: true,
+          canConfirmReceipt: false,
+          canGenerateDeliveryOrder: true,
+        ),
+        YorksV1MaterialRequestDetailPrimaryAction.dispatch,
+      );
+    });
+
+    test('received requests close before optional document actions', () {
+      expect(
+        yorksV1MaterialRequestDetailPrimaryAction(
+          state: YorksV1MaterialRequestState.received,
+          role: YorksV1Role.projectManager,
+          canArrange: false,
+          canDispatch: false,
+          canConfirmReceipt: false,
+          canGenerateDeliveryOrder: true,
+          canClose: true,
+        ),
+        YorksV1MaterialRequestDetailPrimaryAction.close,
       );
     });
 

@@ -39,6 +39,12 @@ abstract final class YorksV1InventoryStrings {
     ur: 'آئٹمز',
     hi: 'आइटम',
   );
+  static const item = TranslatableString(
+    en: 'Item',
+    ar: 'الصنف',
+    ur: 'آئٹم',
+    hi: 'आइटम',
+  );
   static const movements = TranslatableString(
     en: 'Stock Movements',
     ar: 'حركات المخزون',
@@ -519,6 +525,12 @@ abstract final class YorksV1InventoryStrings {
     ur: 'مقام / شیلف',
     hi: 'स्थान / शेल्फ',
   );
+  static const locationColumn = TranslatableString(
+    en: 'Location',
+    ar: 'الموقع',
+    ur: 'مقام',
+    hi: 'स्थान',
+  );
   static const minimumStock = TranslatableString(
     en: 'Minimum stock',
     ar: 'الحد الأدنى للمخزون',
@@ -602,6 +614,12 @@ abstract final class YorksV1InventoryStrings {
     ar: 'اختر فئة موجودة أو أكد فئة جديدة.',
     ur: 'موجودہ کیٹیگری منتخب کریں یا نئی کی تصدیق کریں۔',
     hi: 'मौजूदा श्रेणी चुनें या नई की पुष्टि करें।',
+  );
+  static const chooseOrCreateCategory = TranslatableString(
+    en: 'Choose or create',
+    ar: 'اختر أو أنشئ',
+    ur: 'منتخب کریں یا بنائیں',
+    hi: 'चुनें या बनाएं',
   );
   static const reviewRow = TranslatableString(
     en: 'Review this row before import.',

@@ -240,6 +240,64 @@ void main() {
     );
   });
 
+  testWidgets(
+    'restored attachment metadata requires and accepts a same-name reselect',
+    (tester) async {
+      final container = await createContainer(
+        role: YorksV1Role.projectEngineer,
+        repository: _FakeProjectRepository(),
+        documentFileService: _FakeDocumentFileService(),
+      );
+      await container
+          .read(yorksV1ProjectCreationDraftProvider(_authUserId).notifier)
+          .save(
+            container
+                .read(yorksV1ProjectCreationDraftProvider(_authUserId))
+                .copyWith(
+                  reference: 'YRA-ATTACH-RECOVERY-001',
+                  name: 'Attachment recovery project',
+                  currentStage: YorksV1ProjectCreationStage.attachments,
+                  buildings: const [
+                    YorksV1ProjectBuildingInput(
+                      code: 'B1',
+                      name: 'Building One',
+                    ),
+                  ],
+                  attachments: const [
+                    YorksV1ProjectAttachmentInput(
+                      fileName: 'site-plan.pdf',
+                      mimeType: 'application/pdf',
+                      sizeBytes: 1,
+                    ),
+                  ],
+                ),
+          );
+
+      await _pumpScreen(tester, container);
+      expect(
+        find.textContaining(
+          YorksV1ProjectStrings.attachmentNeedsReselect.primary,
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('yorks-v1-attachment-dropzone')),
+      );
+      await tester.pumpAndSettle();
+
+      final restored = container.read(
+        yorksV1ProjectCreationDraftProvider(_authUserId),
+      );
+      expect(restored.attachments, hasLength(1));
+      expect(restored.attachments.single.sizeBytes, 3);
+      expect(
+        find.textContaining(YorksV1ProjectStrings.attachmentReady.primary),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('R35 project attachments stage — 1366×768', (tester) async {
     final container = await createContainer(
       role: YorksV1Role.projectEngineer,

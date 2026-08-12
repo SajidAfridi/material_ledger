@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../constants/constants.dart';
@@ -11,6 +12,13 @@ class BrandLogo extends StatelessWidget {
 
   final double size;
   final bool shadow;
+
+  // The full-resolution PNG remains the canonical document/native asset. The
+  // web shell never renders this mark above 84 logical pixels, so its compact
+  // 256px counterpart preserves the visible seal while avoiding a 1.3 MB
+  // first-page image transfer.
+  static const _webAsset = 'assets/branding/yorks_emblem_web.png';
+  static const _nativeAsset = 'assets/logo.png';
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +42,7 @@ class BrandLogo extends StatelessWidget {
         child: ClipOval(
           clipBehavior: Clip.antiAlias,
           child: Image.asset(
-            'assets/logo.png',
+            kIsWeb ? _webAsset : _nativeAsset,
             width: size,
             height: size,
             fit: BoxFit.cover,

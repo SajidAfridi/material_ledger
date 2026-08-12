@@ -377,6 +377,8 @@ final _unitSeeds = <MaterialUnitMaster>[
     ('unit-pairs', 'Pairs', 'Pairs', 'جوڑے'),
     ('unit-roll', 'Roll', 'Roll', 'رول'),
     ('unit-box', 'Box', 'Box', 'ڈبہ'),
+    ('unit-ton', 'Ton', 'Ton', 'ٹن'),
+    ('unit-boxes', 'Boxes', 'Boxes', 'ڈبے'),
   ].indexed)
     MaterialUnitMaster(
       id: entry.$2.$1,

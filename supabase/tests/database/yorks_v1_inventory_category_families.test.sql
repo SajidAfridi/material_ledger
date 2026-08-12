@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(22);
+select plan(24);
 
 select ok(
   has_function_privilege(
@@ -109,7 +109,21 @@ select lives_ok(
   'Procurement atomically creates an item master and opening balance'
 );
 
+select lives_ok(
+  $$select public.v1_create_inventory_item(
+    '{"item_code":"R383-UNCATEGORIZED-1","item_description":"Arrangement-created uncategorized item","unit":"Nos","opening_quantity":"0","reason":""}'::jsonb,
+    '92000000-0000-4000-8000-000000000013'
+  )$$,
+  'Procurement may create an uncategorized item during catalogue reconciliation'
+);
+
 set local role postgres;
+select is(
+  (select category_id from public.v1_inventory_items
+   where item_code = 'R383-UNCATEGORIZED-1'),
+  null::uuid,
+  'The optional category is stored as null rather than a fabricated category'
+);
 select is(
   (select on_hand_qty from public.v1_inventory_balances balance
    join public.v1_inventory_items item on item.id = balance.inventory_item_id

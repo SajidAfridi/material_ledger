@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
@@ -18,6 +20,17 @@ void main() {
       workspace.currentArrangement?.lines.single.inventoryItemId,
       'item-1',
     );
+    final inventory = YorksV1InventoryItem.fromRpcJson({
+      'id': 'item-1',
+      'item_code': 'MSD-600',
+      'item_description': 'Motorized smoke damper',
+      'unit': 'Nos',
+      'on_hand_qty': '12',
+      'reserved_qty': '0',
+      'available_qty': '12',
+      'record_version': 1,
+    });
+    expect(inventory.itemCode, 'MSD-600');
   });
 
   test('save input emits complete server-recognized line decisions', () {
@@ -91,6 +104,33 @@ void main() {
       expect(client.calls, isEmpty);
     },
   );
+
+  test('the arrangement repository bounds a stalled RPC', () async {
+    final repository = YorksV1SupabaseArrangementRepository(
+      featureFlags: const YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+      ),
+      connectivity: DefaultConnectivity(),
+      rpcClient: _HangingRpcClient(),
+      rpcTimeout: const Duration(milliseconds: 1),
+    );
+
+    await expectLater(
+      repository.getWorkspace('request-1'),
+      throwsA(
+        isA<YorksV1DomainException>().having(
+          (error) => error.code,
+          'code',
+          YorksV1DomainErrorCode.backendUnavailable,
+        ),
+      ),
+    );
+  });
 }
 
 Map<String, dynamic> _workspaceJson() => {
@@ -148,4 +188,12 @@ class _RecordingRpcClient implements YorksV1MaterialRequestRpcClient {
     calls.add(functionName);
     return _workspaceJson();
   }
+}
+
+class _HangingRpcClient implements YorksV1MaterialRequestRpcClient {
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) => Completer<Object?>().future;
 }

@@ -32,7 +32,9 @@ void main() {
 
     test('approved equivalents fold and unmatched units remain custom', () {
       expect(unitMasterIdForLegacySymbol('pcs'), 'unit-nos');
-      expect(unitMasterIdForLegacySymbol('boxes'), 'unit-box');
+      expect(unitMasterIdForLegacySymbol('boxes'), 'unit-boxes');
+      expect(unitMasterIdForLegacySymbol('ton'), 'unit-ton');
+      expect(unitMasterIdForLegacySymbol('tons'), 'custom-unit-tons');
       expect(unitMasterIdForLegacySymbol('ft'), 'custom-unit-ft');
       expect(unitMasterIdForLegacySymbol('m³'), 'custom-unit-m');
     });
@@ -110,8 +112,8 @@ void main() {
       container.read(materialCategoriesProvider);
       container.read(materialUnitsProvider);
       expect(container.read(materialCategoriesProvider), hasLength(8));
-      expect(container.read(materialUnitsProvider), hasLength(18));
-      expect(container.read(selectableMaterialUnitsProvider), hasLength(8));
+      expect(container.read(materialUnitsProvider), hasLength(20));
+      expect(container.read(selectableMaterialUnitsProvider), hasLength(10));
 
       final prefs = container.read(sharedPreferencesProvider);
       final encoded = [

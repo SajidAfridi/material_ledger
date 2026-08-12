@@ -6,14 +6,16 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
-import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
+import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
 
 /// Role-aware request logistics. Server-derived action flags distinguish the
 /// Procurement dispatch form from Project/Site Engineer receipt review.
@@ -23,6 +25,7 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
     required this.requestId,
     this.focusReceiptReview = false,
     this.focusedDispatchId,
+    this.initialDispatchDate,
   });
 
   final String requestId;
@@ -32,6 +35,10 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
   /// still using the protected logistics command for the receipt commit.
   final bool focusReceiptReview;
   final String? focusedDispatchId;
+
+  /// Allows a caller restoring a partially prepared dispatch to retain the
+  /// intended date. Normal workflow starts with today's date.
+  final DateTime? initialDispatchDate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,6 +58,7 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
         showPageHeader: !compactRoute && !mobile,
         focusReceiptReview: focusReceiptReview,
         focusedDispatchId: focusedDispatchId,
+        initialDispatchDate: initialDispatchDate,
       ),
     );
     if (mobile) {
@@ -124,6 +132,7 @@ class _FocusedLogisticsBody extends StatefulWidget {
     required this.showPageHeader,
     required this.focusReceiptReview,
     required this.focusedDispatchId,
+    required this.initialDispatchDate,
   });
 
   final YorksV1LogisticsWorkspace workspace;
@@ -132,6 +141,7 @@ class _FocusedLogisticsBody extends StatefulWidget {
   final bool showPageHeader;
   final bool focusReceiptReview;
   final String? focusedDispatchId;
+  final DateTime? initialDispatchDate;
 
   @override
   State<_FocusedLogisticsBody> createState() => _FocusedLogisticsBodyState();
@@ -169,14 +179,13 @@ class _FocusedLogisticsBodyState extends State<_FocusedLogisticsBody> {
         }
       }
       if (target == null || !target.canConfirmReceipt) {
-        for (final dispatch in widget.workspace.dispatches) {
-          if (dispatch.canConfirmReceipt) {
-            target = dispatch;
-            break;
-          }
-        }
+        YorksAppToast.show(
+          context,
+          title: YorksV1MaterialRequestStrings.recordChanged.primary,
+          tone: YorksAppToastTone.error,
+        );
+        return;
       }
-      if (target == null || !target.canConfirmReceipt) return;
       final confirmed = await showYorksV1ReceiptReviewDialog(
         context,
         workspace: widget.workspace,
@@ -195,6 +204,7 @@ class _FocusedLogisticsBodyState extends State<_FocusedLogisticsBody> {
     language: widget.language,
     onChanged: widget.onChanged,
     showPageHeader: widget.showPageHeader,
+    initialDispatchDate: widget.initialDispatchDate,
   );
 }
 
@@ -204,12 +214,14 @@ class _LogisticsBody extends StatelessWidget {
     required this.language,
     required this.onChanged,
     required this.showPageHeader,
+    required this.initialDispatchDate,
   });
 
   final YorksV1LogisticsWorkspace workspace;
   final AppLanguage language;
   final VoidCallback onChanged;
   final bool showPageHeader;
+  final DateTime? initialDispatchDate;
 
   @override
   Widget build(BuildContext context) {
@@ -219,6 +231,7 @@ class _LogisticsBody extends StatelessWidget {
           workspace: workspace,
           onChanged: onChanged,
           mobileFlow: true,
+          initialDispatchDate: initialDispatchDate,
         );
       }
       return _MobileDispatchHistory(workspace: workspace, onChanged: onChanged);
@@ -262,6 +275,7 @@ class _LogisticsBody extends StatelessWidget {
                     child: _DispatchEditor(
                       workspace: workspace,
                       onChanged: onChanged,
+                      initialDispatchDate: initialDispatchDate,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -374,11 +388,13 @@ class _DispatchEditor extends ConsumerStatefulWidget {
     required this.workspace,
     required this.onChanged,
     this.mobileFlow = false,
+    this.initialDispatchDate,
   });
 
   final YorksV1LogisticsWorkspace workspace;
   final VoidCallback onChanged;
   final bool mobileFlow;
+  final DateTime? initialDispatchDate;
 
   @override
   ConsumerState<_DispatchEditor> createState() => _DispatchEditorState();
@@ -390,12 +406,13 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
   final _vehicle = TextEditingController();
   final Map<String, TextEditingController> _quantities = {};
   late String _commandIdempotencyKey;
-  DateTime _dispatchDate = DateTime.now();
+  late DateTime _dispatchDate;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    _dispatchDate = widget.initialDispatchDate ?? DateTime.now();
     _commandIdempotencyKey = const Uuid().v4();
     _syncControllers();
   }
@@ -439,15 +456,21 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
       // approved line immediately, while still allowing a partial dispatch.
       // For warehouse lines, never suggest more than what is currently
       // available at the warehouse; the server remains the final authority.
-      var suggested = _number(candidate.stillNeededQuantity);
-      final available = _number(candidate.warehouseAvailableQuantity ?? '');
+      var suggested =
+          YorksV1DecimalQuantity.tryParse(candidate.stillNeededQuantity) ??
+          YorksV1DecimalQuantity.zero;
+      final available =
+          YorksV1DecimalQuantity.tryParse(
+            candidate.warehouseAvailableQuantity ?? '',
+          ) ??
+          YorksV1DecimalQuantity.zero;
       if (candidate.source == YorksV1LogisticsSource.warehouse) {
-        suggested = available > 0 && suggested > 0
-            ? (suggested < available ? suggested : available)
-            : 0;
+        suggested = available.isPositive && suggested.isPositive
+            ? suggested.min(available)
+            : YorksV1DecimalQuantity.zero;
       }
       _quantities[candidate.requestLineId] = TextEditingController(
-        text: suggested > 0 ? _quantityText(suggested) : '',
+        text: suggested.isPositive ? suggested.canonicalText : '',
       );
     }
   }
@@ -455,84 +478,96 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
   @override
   Widget build(BuildContext context) {
     final candidates = widget.workspace.dispatchCandidates
-        .where((candidate) => _number(candidate.stillNeededQuantity) > 0)
+        .where(
+          (candidate) =>
+              YorksV1DecimalQuantity.tryParse(
+                candidate.stillNeededQuantity,
+              )?.isPositive ==
+              true,
+        )
         .toList(growable: false);
     if (widget.mobileFlow) {
-      return _MobileDispatchEditor(
-        workspace: widget.workspace,
-        deliveryReference: _deliveryReference,
-        driver: _driver,
-        vehicle: _vehicle,
-        quantities: _quantities,
-        dispatchDate: _dispatchDate,
-        saving: _saving,
-        onDate: _pickDate,
-        onChanged: () => setState(() {}),
-        onDispatch: _dispatch,
+      return PopScope(
+        canPop: !_saving,
+        child: _MobileDispatchEditor(
+          workspace: widget.workspace,
+          deliveryReference: _deliveryReference,
+          driver: _driver,
+          vehicle: _vehicle,
+          quantities: _quantities,
+          dispatchDate: _dispatchDate,
+          saving: _saving,
+          onDate: _pickDate,
+          onChanged: () => setState(() {}),
+          onDispatch: _dispatch,
+        ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
-          children: [
-            SizedBox(
-              width: 240,
-              child: _TextInput(
-                controller: _deliveryReference,
-                label: YorksV1LogisticsStrings.deliveryReference.primary,
+    return PopScope(
+      canPop: !_saving,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              SizedBox(
+                width: 240,
+                child: _TextInput(
+                  controller: _deliveryReference,
+                  label: YorksV1LogisticsStrings.deliveryReference.primary,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 220,
-              child: SecondaryButton(
-                label: _dateLabel(_dispatchDate),
-                isExpanded: false,
-                icon: Icons.calendar_today_outlined,
-                onPressed: _saving ? null : _pickDate,
+              SizedBox(
+                width: 220,
+                child: SecondaryButton(
+                  label: _dateLabel(_dispatchDate),
+                  isExpanded: false,
+                  icon: Icons.calendar_today_outlined,
+                  onPressed: _saving ? null : _pickDate,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 240,
-              child: _TextInput(
-                controller: _driver,
-                label: YorksV1LogisticsStrings.driver.primary,
+              SizedBox(
+                width: 240,
+                child: _TextInput(
+                  controller: _driver,
+                  label: YorksV1LogisticsStrings.driver.primary,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 240,
-              child: _TextInput(
-                controller: _vehicle,
-                label: YorksV1LogisticsStrings.vehicle.primary,
+              SizedBox(
+                width: 240,
+                child: _TextInput(
+                  controller: _vehicle,
+                  label: YorksV1LogisticsStrings.vehicle.primary,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        if (candidates.isEmpty)
-          Text(
-            YorksV1LogisticsStrings.noDispatch.primary,
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
-          )
-        else
-          _DispatchCandidateList(
-            candidates: candidates,
-            controllers: _quantities,
+            ],
           ),
-        const SizedBox(height: AppSpacing.lg),
-        Align(
-          alignment: Alignment.centerRight,
-          child: PrimaryButton(
-            label: YorksV1LogisticsStrings.dispatchNow.primary,
-            icon: Icons.local_shipping_outlined,
-            isExpanded: false,
-            isLoading: _saving,
-            onPressed: candidates.isEmpty || _saving ? null : _dispatch,
+          const SizedBox(height: AppSpacing.lg),
+          if (candidates.isEmpty)
+            Text(
+              YorksV1LogisticsStrings.noDispatch.primary,
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+            )
+          else
+            _DispatchCandidateList(
+              candidates: candidates,
+              controllers: _quantities,
+            ),
+          const SizedBox(height: AppSpacing.lg),
+          Align(
+            alignment: Alignment.centerRight,
+            child: PrimaryButton(
+              label: YorksV1LogisticsStrings.dispatchNow.primary,
+              icon: Icons.local_shipping_outlined,
+              isExpanded: false,
+              isLoading: _saving,
+              onPressed: candidates.isEmpty || _saving ? null : _dispatch,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -554,8 +589,17 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
     final lines = <YorksV1DispatchLineInput>[];
     for (final candidate in widget.workspace.dispatchCandidates) {
       final quantity = _quantities[candidate.requestLineId]?.text.trim() ?? '';
-      if (_number(quantity) > 0) {
-        if (_number(quantity) > _number(candidate.stillNeededQuantity)) {
+      if (quantity.isEmpty) continue;
+      final parsedQuantity = YorksV1DecimalQuantity.tryParse(quantity);
+      if (parsedQuantity == null) {
+        _showError(YorksV1LogisticsStrings.invalidDispatch.primary);
+        return;
+      }
+      if (parsedQuantity.isPositive) {
+        final stillNeeded = YorksV1DecimalQuantity.tryParse(
+          candidate.stillNeededQuantity,
+        );
+        if (stillNeeded == null || parsedQuantity.compareTo(stillNeeded) > 0) {
           _showError(YorksV1LogisticsStrings.invalidDispatch.primary);
           return;
         }
@@ -573,8 +617,8 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
     }
     setState(() => _saving = true);
     try {
-      await ref
-          .read(yorksV1LogisticsRepositoryProvider)
+      final updated = await ref
+          .read(yorksV1MaterialWorkflowCommandControllerProvider)
           .dispatch(
             YorksV1DispatchInput(
               requestId: widget.workspace.requestId,
@@ -590,8 +634,27 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
       if (!mounted) return;
       _commandIdempotencyKey = const Uuid().v4();
       widget.onChanged();
+      final confirmedDispatch = updated.dispatches.isEmpty
+          ? null
+          : updated.dispatches.first;
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.dispatched.primary,
+        message: confirmedDispatch == null
+            ? YorksV1LogisticsStrings.receiptReview.primary
+            : '${confirmedDispatch.number} · '
+                  '${confirmedDispatch.dispatchedByDisplayName} · '
+                  '${YorksV1LogisticsStrings.receiptReview.primary}',
+        tone: YorksAppToastTone.success,
+      );
       for (final controller in _quantities.values) {
         controller.clear();
+      }
+    } on YorksV1DomainException catch (error) {
+      if (mounted) {
+        _showError(
+          YorksV1MaterialRequestStrings.commandFailure(error.code).primary,
+        );
       }
     } catch (_) {
       if (mounted) _showError(YorksV1LogisticsStrings.savingFailed.primary);
@@ -601,7 +664,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
   }
 
   void _showError(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      YorksAppToast.show(context, title: text, tone: YorksAppToastTone.error);
 }
 
 class _MobileDispatchEditor extends StatelessWidget {
@@ -1191,119 +1254,129 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
       );
     }
     final isCompact = screen.width < AppSpacing.yorksV1DesktopBreakpoint;
-    return Dialog(
-      insetPadding: EdgeInsets.all(isCompact ? AppSpacing.sm : AppSpacing.xxl),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 1320,
-          maxHeight: screen.height * .92,
-          minWidth: isCompact ? 0 : 760,
+    return PopScope(
+      canPop: !_saving,
+      child: Dialog(
+        insetPadding: EdgeInsets.all(
+          isCompact ? AppSpacing.sm : AppSpacing.xxl,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _ReceiptReviewHeader(
-              dispatchNumber: widget.dispatch.number,
-              onClose: _saving ? null : () => Navigator.of(context).pop(),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ReceiptDispatchBanner(dispatch: widget.dispatch),
-                    const SizedBox(height: AppSpacing.lg),
-                    for (
-                      var index = 0;
-                      index < widget.dispatch.lines.length;
-                      index++
-                    )
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: _ReceiptLineEditor(
-                          lineNumber: index + 1,
-                          line: widget.dispatch.lines[index],
-                          outcome: _outcomes[widget.dispatch.lines[index].id]!,
-                          goodQuantity:
-                              _goodQuantities[widget.dispatch.lines[index].id]!,
-                          note: _notes[widget.dispatch.lines[index].id]!,
-                          isDisabled: _saving,
-                          onOutcomeChanged: (outcome) => setState(() {
-                            final line = widget.dispatch.lines[index];
-                            _reviewed.add(line.id);
-                            _outcomes[line.id] = outcome;
-                            if (outcome == YorksV1ReceiptOutcome.received) {
-                              _goodQuantities[line.id]!.text = _displayQuantity(
-                                line.dispatchedQuantity,
-                              );
-                            } else if (_goodQuantities[line.id]!.text ==
-                                _displayQuantity(line.dispatchedQuantity)) {
-                              _goodQuantities[line.id]!.text = '0';
-                            }
-                          }),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 1320,
+            maxHeight: screen.height * .92,
+            minWidth: isCompact ? 0 : 760,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _ReceiptReviewHeader(
+                dispatchNumber: widget.dispatch.number,
+                onClose: _saving ? null : () => Navigator.of(context).pop(),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ReceiptDispatchBanner(dispatch: widget.dispatch),
+                      const SizedBox(height: AppSpacing.lg),
+                      for (
+                        var index = 0;
+                        index < widget.dispatch.lines.length;
+                        index++
+                      )
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                          child: _ReceiptLineEditor(
+                            lineNumber: index + 1,
+                            line: widget.dispatch.lines[index],
+                            outcome:
+                                _outcomes[widget.dispatch.lines[index].id]!,
+                            goodQuantity:
+                                _goodQuantities[widget
+                                    .dispatch
+                                    .lines[index]
+                                    .id]!,
+                            note: _notes[widget.dispatch.lines[index].id]!,
+                            isDisabled: _saving,
+                            onOutcomeChanged: (outcome) => setState(() {
+                              final line = widget.dispatch.lines[index];
+                              _reviewed.add(line.id);
+                              _outcomes[line.id] = outcome;
+                              if (outcome == YorksV1ReceiptOutcome.received) {
+                                _goodQuantities[line.id]!.text =
+                                    _displayQuantity(line.dispatchedQuantity);
+                              } else if (_goodQuantities[line.id]!.text ==
+                                  _displayQuantity(line.dispatchedQuantity)) {
+                                _goodQuantities[line.id]!.text = '0';
+                              }
+                            }),
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const Divider(height: 1),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: AppSpacing.md,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    SizedBox(
-                      width: isCompact
-                          ? screen.width -
-                                (AppSpacing.sm * 2) -
-                                (AppSpacing.lg * 2)
-                          : 360,
-                      child: CheckboxListTile(
-                        value: _allReviewed,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        onChanged: _saving
+              const Divider(height: 1),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.md,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      SizedBox(
+                        width: isCompact
+                            ? screen.width -
+                                  (AppSpacing.sm * 2) -
+                                  (AppSpacing.lg * 2)
+                            : 360,
+                        child: CheckboxListTile(
+                          value: _allReviewed,
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          onChanged: _saving
+                              ? null
+                              : (value) => setState(
+                                  () => _allReviewed = value ?? false,
+                                ),
+                          title: Text(
+                            YorksV1LogisticsStrings.allLinesReviewed.primary,
+                          ),
+                        ),
+                      ),
+                      SecondaryButton(
+                        label: MaterialLocalizations.of(
+                          context,
+                        ).cancelButtonLabel,
+                        isExpanded: false,
+                        onPressed: _saving
                             ? null
-                            : (value) =>
-                                  setState(() => _allReviewed = value ?? false),
-                        title: Text(
-                          YorksV1LogisticsStrings.allLinesReviewed.primary,
-                        ),
+                            : () => Navigator.of(context).pop(),
                       ),
-                    ),
-                    SecondaryButton(
-                      label: MaterialLocalizations.of(
-                        context,
-                      ).cancelButtonLabel,
-                      isExpanded: false,
-                      onPressed: _saving
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                    ),
-                    PrimaryButton(
-                      label: YorksV1LogisticsStrings.saveReceiptReview.primary,
-                      icon: Icons.verified_outlined,
-                      isExpanded: false,
-                      isLoading: _saving,
-                      onPressed: _allReviewed && !_saving ? _confirm : null,
-                    ),
-                  ],
+                      PrimaryButton(
+                        label:
+                            YorksV1LogisticsStrings.saveReceiptReview.primary,
+                        icon: Icons.verified_outlined,
+                        isExpanded: false,
+                        isLoading: _saving,
+                        onPressed: _allReviewed && !_saving ? _confirm : null,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1320,12 +1393,17 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
       final outcome = _outcomes[line.id]!;
       final good = _goodQuantities[line.id]!.text.trim();
       final note = _notes[line.id]!.text.trim();
-      final dispatched = _number(line.dispatchedQuantity);
-      if (_number(good) < 0 ||
+      final dispatched = YorksV1DecimalQuantity.tryParse(
+        line.dispatchedQuantity,
+      );
+      final goodQuantity = YorksV1DecimalQuantity.tryParse(good);
+      if (goodQuantity == null ||
+          dispatched == null ||
+          goodQuantity.isNegative ||
           (outcome == YorksV1ReceiptOutcome.received &&
-              _number(good) != dispatched) ||
+              goodQuantity != dispatched) ||
           (outcome != YorksV1ReceiptOutcome.received &&
-              (_number(good) >= dispatched || note.isEmpty))) {
+              (goodQuantity.compareTo(dispatched) >= 0 || note.isEmpty))) {
         _showFailure(YorksV1LogisticsStrings.invalidReceipt.primary);
         return;
       }
@@ -1341,7 +1419,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
     setState(() => _saving = true);
     try {
       await ref
-          .read(yorksV1LogisticsRepositoryProvider)
+          .read(yorksV1MaterialWorkflowCommandControllerProvider)
           .confirmReceipt(
             YorksV1ReceiptConfirmationInput(
               requestId: widget.workspace.requestId,
@@ -1356,6 +1434,12 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
       _receiptIdempotencyKey = const Uuid().v4();
       widget.onChanged();
       Navigator.of(context).pop(true);
+    } on YorksV1DomainException catch (error) {
+      if (mounted) {
+        _showFailure(
+          YorksV1MaterialRequestStrings.commandFailure(error.code).primary,
+        );
+      }
     } catch (_) {
       if (mounted) _showFailure(YorksV1LogisticsStrings.savingFailed.primary);
     } finally {
@@ -1363,9 +1447,11 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
     }
   }
 
-  void _showFailure(String message) => ScaffoldMessenger.of(
+  void _showFailure(String message) => YorksAppToast.show(
     context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+    title: message,
+    tone: YorksAppToastTone.error,
+  );
 
   void _receiveAll() {
     if (_saving) return;
@@ -1733,10 +1819,15 @@ class _MobileReceiptExceptionDialogState
 
   void _save() {
     final dispatched = _number(widget.line.dispatchedQuantity);
-    final good = _number(_goodQuantity.text);
-    if (good < 0 || good >= dispatched || _note.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(YorksV1LogisticsStrings.invalidReceipt.primary)),
+    final good = _decimalNumber(_goodQuantity.text);
+    if (good == null ||
+        good < 0 ||
+        good >= dispatched ||
+        _note.text.trim().isEmpty) {
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.invalidReceipt.primary,
+        tone: YorksAppToastTone.error,
       );
       return;
     }
@@ -2233,6 +2324,13 @@ class _ActiveText extends StatelessWidget {
 }
 
 double _number(String text) => double.tryParse(text) ?? 0;
+
+double? _decimalNumber(String text) {
+  final normalized = text.trim();
+  if (!RegExp(r'^\d+(?:\.\d{1,4})?$').hasMatch(normalized)) return null;
+  final value = double.tryParse(normalized);
+  return value != null && value.isFinite ? value : null;
+}
 
 String _quantityText(double value) => value == value.truncateToDouble()
     ? value.toInt().toString()

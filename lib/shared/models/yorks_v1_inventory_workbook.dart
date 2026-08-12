@@ -1,3 +1,4 @@
+import 'yorks_v1_item_description.dart';
 import 'yorks_v1_logistics.dart';
 
 enum YorksV1InventoryStockAction {
@@ -71,7 +72,7 @@ class YorksV1InventoryImportRow {
   YorksV1InventoryImportRow({
     required this.sourceRowNumber,
     required this.itemCode,
-    required this.description,
+    required String description,
     required this.sourceCategory,
     required this.brandOrigin,
     required this.unit,
@@ -84,9 +85,11 @@ class YorksV1InventoryImportRow {
     required this.inventoryItemId,
     required this.categoryId,
     required this.newCategoryName,
+    required this.requiresCategoryDecision,
     required List<YorksV1InventoryCategorySuggestion> suggestions,
     required List<YorksV1InventoryImportIssue> issues,
-  }) : suggestions = List.unmodifiable(suggestions),
+  }) : description = normalizeYorksV1ItemDescription(description),
+       suggestions = List.unmodifiable(suggestions),
        issues = List.unmodifiable(issues);
 
   final int sourceRowNumber;
@@ -104,6 +107,11 @@ class YorksV1InventoryImportRow {
   final String? inventoryItemId;
   final String? categoryId;
   final String? newCategoryName;
+
+  /// True when the source workbook category was neither an exact master name
+  /// nor a saved alias. This remains true after Procurement makes a choice so
+  /// the preview can keep that choice visible and reversible until commit.
+  final bool requiresCategoryDecision;
   final List<YorksV1InventoryCategorySuggestion> suggestions;
   final List<YorksV1InventoryImportIssue> issues;
 
@@ -115,6 +123,7 @@ class YorksV1InventoryImportRow {
   YorksV1InventoryImportRow copyWith({
     String? categoryId,
     String? newCategoryName,
+    bool? requiresCategoryDecision,
     bool clearCategoryId = false,
     bool clearNewCategoryName = false,
     List<YorksV1InventoryImportIssue>? issues,
@@ -136,6 +145,8 @@ class YorksV1InventoryImportRow {
     newCategoryName: clearNewCategoryName
         ? null
         : newCategoryName ?? this.newCategoryName,
+    requiresCategoryDecision:
+        requiresCategoryDecision ?? this.requiresCategoryDecision,
     suggestions: suggestions,
     issues: issues ?? this.issues,
   );

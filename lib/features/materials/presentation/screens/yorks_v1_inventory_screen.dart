@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/widgets/yorks_app_toast.dart';
 import '../../../../shared/controllers/yorks_v1_inventory_import_controller.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
@@ -14,6 +15,7 @@ import '../../../../shared/models/yorks_v1_inventory_strings.dart';
 import '../../../../shared/models/yorks_v1_inventory_workbook.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_inventory_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
@@ -28,6 +30,23 @@ enum _WarehouseItemStatus { all, active, reserved, low, out, inactive }
 enum _WarehouseMovementType { all, stockIn, stockOut, dispatch, materialReturn }
 
 enum _InventoryAction { createItem, adjustExisting }
+
+/// Inventory category IDs are server UUIDs. This local-only value represents
+/// the explicit "create a parent category" decision in import preview state.
+const _createImportedCategoryChoice = '__create_imported_category__';
+
+const _inventoryUnitOptions = <String>[
+  'Nos',
+  'Meter',
+  'Cm',
+  'Length',
+  'Set',
+  'Pairs',
+  'Roll',
+  'Box',
+  'Ton',
+  'Boxes',
+];
 
 /// R38.3 warehouse workspace. All content comes from the role-safe logistics
 /// projection and every mutation remains repository/RPC backed.
@@ -207,9 +226,7 @@ class _YorksV1InventoryScreenState
     );
   }
 
-  void _notice(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _notice(String message) => YorksAppToast.show(context, title: message);
 }
 
 class _WarehouseBody extends StatelessWidget {
@@ -1668,7 +1685,10 @@ class _InventoryTable extends StatelessWidget {
     builder: (context, constraints) => SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(
-        width: constraints.maxWidth,
+        // Keep the controlled desktop grid readable instead of squeezing
+        // headers and values into the viewport. Narrow desktops can scroll the
+        // full table; compact layouts use the purpose-built item cards above.
+        width: math.max(1600.0, constraints.maxWidth),
         child: Column(
           children: [
             _InventoryTableRow(language: language),
@@ -1712,7 +1732,7 @@ class _InventoryTableRow extends StatelessWidget {
     }) => Expanded(
       flex: flex,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 74),
+        constraints: BoxConstraints(minHeight: header ? 48 : 82),
         alignment: alignment,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
@@ -1728,7 +1748,7 @@ class _InventoryTableRow extends StatelessWidget {
     );
     Widget label(String text, {TextAlign? align}) => Text(
       text,
-      maxLines: header ? 2 : 2,
+      maxLines: header ? 1 : 2,
       overflow: TextOverflow.ellipsis,
       textAlign: align,
       style: header
@@ -1741,25 +1761,25 @@ class _InventoryTableRow extends StatelessWidget {
       children: header
           ? [
               cell(
-                flex: 20,
-                child: label(
-                  YorksV1LogisticsStrings.itemDescription.active(language),
-                ),
+                flex: 24,
+                child: label(YorksV1InventoryStrings.item.active(language)),
               ),
               cell(
-                flex: 10,
+                flex: 12,
                 child: label(YorksV1InventoryStrings.category.active(language)),
               ),
               cell(
-                flex: 5,
-                child: label(YorksV1InventoryStrings.location.active(language)),
+                flex: 6,
+                child: label(
+                  YorksV1InventoryStrings.locationColumn.active(language),
+                ),
               ),
               cell(
-                flex: 4,
+                flex: 5,
                 child: label(YorksV1LogisticsStrings.unit.active(language)),
               ),
               cell(
-                flex: 5,
+                flex: 6,
                 alignment: Alignment.centerRight,
                 child: label(
                   YorksV1LogisticsStrings.onHand.active(language),
@@ -1767,7 +1787,7 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 5,
+                flex: 6,
                 alignment: Alignment.centerRight,
                 child: label(
                   YorksV1LogisticsStrings.reserved.active(language),
@@ -1775,7 +1795,7 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 5,
+                flex: 6,
                 alignment: Alignment.centerRight,
                 child: label(
                   YorksV1LogisticsStrings.available.active(language),
@@ -1783,7 +1803,7 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 5,
+                flex: 7,
                 alignment: Alignment.centerRight,
                 child: label(
                   YorksV1InventoryStrings.minimumStock.active(language),
@@ -1791,14 +1811,14 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 6,
+                flex: 8,
                 child: label(YorksV1InventoryStrings.status.active(language)),
               ),
-              cell(flex: 18, last: true, child: const SizedBox()),
+              cell(flex: 20, last: true, child: const SizedBox()),
             ]
           : [
               cell(
-                flex: 20,
+                flex: 24,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1827,7 +1847,7 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 10,
+                flex: 12,
                 child: _TableCategoryPill(
                   text:
                       current.categoryPath ??
@@ -1835,10 +1855,10 @@ class _InventoryTableRow extends StatelessWidget {
                       YorksV1InventoryStrings.uncategorized.active(language),
                 ),
               ),
-              cell(flex: 5, child: label(current.locationBin ?? '—')),
-              cell(flex: 4, child: label(current.unit)),
+              cell(flex: 6, child: label(current.locationBin ?? '—')),
+              cell(flex: 5, child: label(current.unit)),
               cell(
-                flex: 5,
+                flex: 6,
                 alignment: Alignment.centerRight,
                 child: label(
                   _quantity(current.onHandQuantity),
@@ -1846,7 +1866,7 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 5,
+                flex: 6,
                 alignment: Alignment.centerRight,
                 child: label(
                   _quantity(current.reservedQuantity),
@@ -1854,7 +1874,7 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 5,
+                flex: 6,
                 alignment: Alignment.centerRight,
                 child: Text(
                   _quantity(current.availableQuantity),
@@ -1865,16 +1885,21 @@ class _InventoryTableRow extends StatelessWidget {
                 ),
               ),
               cell(
-                flex: 5,
+                flex: 7,
                 alignment: Alignment.centerRight,
-                child: label(current.minimumStock ?? '—', align: TextAlign.end),
+                child: label(
+                  current.minimumStock == null
+                      ? '—'
+                      : _quantity(current.minimumStock!),
+                  align: TextAlign.end,
+                ),
               ),
               cell(
-                flex: 6,
+                flex: 8,
                 child: _StockBadge(item: current, language: language),
               ),
               cell(
-                flex: 18,
+                flex: 20,
                 last: true,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -2873,16 +2898,7 @@ class _CreateInventoryItemDialogState
               _LabeledDropdown(
                 label: YorksV1LogisticsStrings.unit.active(language),
                 value: _unit,
-                values: const [
-                  'Nos',
-                  'Meter',
-                  'Cm',
-                  'Length',
-                  'Set',
-                  'Pairs',
-                  'Roll',
-                  'Box',
-                ],
+                values: _inventoryUnitOptions,
                 onChanged: _saving
                     ? null
                     : (value) => setState(() => _unit = value),
@@ -3073,10 +3089,10 @@ class _CreateInventoryItemDialogState
 
   void _failure() {
     final language = ref.read(languageProvider);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(YorksV1InventoryStrings.savingFailed.active(language)),
-      ),
+    YorksAppToast.show(
+      context,
+      title: YorksV1InventoryStrings.savingFailed.active(language),
+      tone: YorksAppToastTone.error,
     );
   }
 }
@@ -3553,22 +3569,11 @@ class _InventoryAdjustmentDialogState
                 labelText: YorksV1LogisticsStrings.unit.active(language),
                 border: const OutlineInputBorder(),
               ),
-              items:
-                  const [
-                        'Nos',
-                        'Meter',
-                        'Cm',
-                        'Length',
-                        'Set',
-                        'Pairs',
-                        'Roll',
-                        'Box',
-                      ]
-                      .map(
-                        (unit) =>
-                            DropdownMenuItem(value: unit, child: Text(unit)),
-                      )
-                      .toList(growable: false),
+              items: _inventoryUnitOptions
+                  .map(
+                    (unit) => DropdownMenuItem(value: unit, child: Text(unit)),
+                  )
+                  .toList(growable: false),
               onChanged: _saving
                   ? null
                   : (value) => setState(() => _unit = value ?? 'Nos'),
@@ -3801,10 +3806,10 @@ class _InventoryAdjustmentDialogState
 
   void _failure() {
     final language = ref.read(languageProvider);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(YorksV1InventoryStrings.savingFailed.active(language)),
-      ),
+    YorksAppToast.show(
+      context,
+      title: YorksV1InventoryStrings.savingFailed.active(language),
+      tone: YorksAppToastTone.error,
     );
   }
 }
@@ -3832,12 +3837,10 @@ class _InventoryImportDialog extends ConsumerWidget {
       if (result != null && context.mounted) {
         onCommitted();
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              YorksV1InventoryStrings.importSucceeded.active(language),
-            ),
-          ),
+        YorksAppToast.show(
+          context,
+          title: YorksV1InventoryStrings.importSucceeded.active(language),
+          tone: YorksAppToastTone.success,
         );
       }
     }
@@ -3969,14 +3972,11 @@ class _InventoryImportDialog extends ConsumerWidget {
                               .read(yorksV1InventoryWorkbookFileServiceProvider)
                               .saveImportTemplate();
                           if (saved && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  YorksV1InventoryStrings.downloadFormat.active(
-                                    language,
-                                  ),
-                                ),
-                              ),
+                            YorksAppToast.show(
+                              context,
+                              title: YorksV1InventoryStrings.downloadFormat
+                                  .active(language),
+                              tone: YorksAppToastTone.success,
                             );
                           }
                         },
@@ -4408,13 +4408,7 @@ class _InventoryImportPreviewTableRow extends StatelessWidget {
     final header = row == null;
     Widget cell(Widget child, int flex) => Expanded(flex: flex, child: child);
     Widget heading(String text) => Text(text, style: AppTypography.labelMedium);
-    final decisionRequired =
-        row?.issues.any(
-          (issue) =>
-              issue.code ==
-              YorksV1InventoryImportIssueCode.categoryDecisionRequired,
-        ) ??
-        false;
+    final decisionRequired = row?.requiresCategoryDecision ?? false;
     final severity = row?.hasErrors == true
         ? AppColors.error
         : row?.hasWarnings == true
@@ -4570,48 +4564,74 @@ class _ImportCategoryDecision extends StatelessWidget {
   final VoidCallback? onNew;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      DropdownButtonFormField<String>(
-        isExpanded: true,
-        decoration: const InputDecoration(isDense: true),
-        initialValue: row.categoryId,
-        items: [
-          for (final suggestion in row.suggestions)
+  Widget build(BuildContext context) {
+    final proposedName = yorksV1InventoryCategoryDisplayName(
+      row.sourceCategory,
+    );
+    final selected = row.newCategoryName != null
+        ? _createImportedCategoryChoice
+        : row.categoryId;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'inventory-category-${row.sourceRowNumber}-${row.categoryId}-${row.newCategoryName}',
+          ),
+          isExpanded: true,
+          decoration: const InputDecoration(isDense: true),
+          initialValue: selected,
+          hint: Text(
+            YorksV1InventoryStrings.chooseOrCreateCategory.active(language),
+          ),
+          items: [
             DropdownMenuItem(
-              value: suggestion.category.id,
+              value: _createImportedCategoryChoice,
               child: Text(
-                '${suggestion.category.displayPath} · ${(suggestion.score * 100).round()}%',
+                '${YorksV1InventoryStrings.createCategoryNamed.active(language)} “$proposedName”',
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-          for (final category in categories)
-            if (!row.suggestions.any(
-              (suggestion) => suggestion.category.id == category.id,
-            ))
+            for (final suggestion in row.suggestions)
               DropdownMenuItem(
-                value: category.id,
+                value: suggestion.category.id,
                 child: Text(
-                  category.displayPath,
+                  '${suggestion.category.displayPath} · ${(suggestion.score * 100).round()}%',
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+            for (final category in categories)
+              if (!row.suggestions.any(
+                (suggestion) => suggestion.category.id == category.id,
+              ))
+                DropdownMenuItem(
+                  value: category.id,
+                  child: Text(
+                    category.displayPath,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+          ],
+          onChanged: enabled
+              ? (value) {
+                  if (value == _createImportedCategoryChoice) {
+                    onNew?.call();
+                  } else if (value != null) {
+                    onCategory?.call(value);
+                  }
+                }
+              : null,
+        ),
+        if (row.newCategoryName != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          _CountPill(
+            YorksV1InventoryStrings.newCategory.active(language),
+            tone: AppColors.purple,
+          ),
         ],
-        onChanged: enabled
-            ? (value) {
-                if (value != null) onCategory?.call(value);
-              }
-            : null,
-      ),
-      const SizedBox(height: AppSpacing.xs),
-      TextButton.icon(
-        onPressed: enabled ? onNew : null,
-        icon: const Icon(Icons.add_rounded, size: 16),
-        label: Text(YorksV1InventoryStrings.newCategory.active(language)),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class _ImportRowResult extends StatelessWidget {
@@ -4678,7 +4698,8 @@ class _ImportRowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final needsDecision = row.issues.any(
+    final needsDecision = row.requiresCategoryDecision;
+    final decisionPending = row.issues.any(
       (issue) =>
           issue.code ==
           YorksV1InventoryImportIssueCode.categoryDecisionRequired,
@@ -4713,10 +4734,10 @@ class _ImportRowCard extends StatelessWidget {
               '${row.sourceCategory} · ${row.stockAction?.displayName ?? '—'}',
               style: AppTypography.bodySmall,
             ),
-            if (row.hasErrors || needsDecision) ...[
+            if (row.hasErrors || decisionPending) ...[
               const SizedBox(height: AppSpacing.md),
               Text(
-                needsDecision
+                decisionPending
                     ? YorksV1InventoryStrings.categoryDecision.active(language)
                     : YorksV1InventoryStrings.reviewRow.active(language),
                 style: AppTypography.bodySmall.copyWith(color: AppColors.error),
@@ -4724,46 +4745,13 @@ class _ImportRowCard extends StatelessWidget {
             ],
             if (needsDecision) ...[
               const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: YorksV1InventoryStrings.category.active(language),
-                  border: const OutlineInputBorder(),
-                ),
-                items: [
-                  for (final suggestion in row.suggestions)
-                    DropdownMenuItem(
-                      value: suggestion.category.id,
-                      child: Text(
-                        '${suggestion.category.displayPath} · ${(suggestion.score * 100).round()}%',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  for (final category in categories)
-                    if (!row.suggestions.any(
-                      (suggestion) => suggestion.category.id == category.id,
-                    ))
-                      DropdownMenuItem(
-                        value: category.id,
-                        child: Text(
-                          category.displayPath,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                ],
-                onChanged: enabled
-                    ? (value) {
-                        if (value != null) onCategory(value);
-                      }
-                    : null,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton.icon(
-                onPressed: enabled ? onNew : null,
-                icon: const Icon(Icons.add_rounded),
-                label: Text(
-                  YorksV1InventoryStrings.newCategory.active(language),
-                ),
+              _ImportCategoryDecision(
+                row: row,
+                categories: categories,
+                language: language,
+                enabled: enabled,
+                onCategory: onCategory,
+                onNew: onNew,
               ),
             ],
           ],
@@ -5004,12 +4992,10 @@ class _CategoriesDialogState extends ConsumerState<_CategoriesDialog> {
     } catch (_) {
       if (mounted) {
         final language = ref.read(languageProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              YorksV1InventoryStrings.savingFailed.active(language),
-            ),
-          ),
+        YorksAppToast.show(
+          context,
+          title: YorksV1InventoryStrings.savingFailed.active(language),
+          tone: YorksAppToastTone.error,
         );
       }
     } finally {
@@ -5636,7 +5622,11 @@ class _EditInventoryItemDialogState
     _size = TextEditingController(text: item.sizeText ?? '');
     _model = TextEditingController(text: item.modelReference ?? '');
     _location = TextEditingController(text: item.locationBin ?? '');
-    _minimum = TextEditingController(text: item.minimumStock ?? '');
+    _minimum = TextEditingController(
+      text: item.minimumStock == null
+          ? ''
+          : yorksV1DisplayQuantity(item.minimumStock!),
+    );
     _notes = TextEditingController(text: item.notes ?? '');
     _unit = item.unit;
     _categoryId = item.categoryId;
@@ -5700,16 +5690,7 @@ class _EditInventoryItemDialogState
                         _LabeledDropdown(
                           label: YorksV1LogisticsStrings.unit.active(language),
                           value: _unit,
-                          values: const [
-                            'Nos',
-                            'Meter',
-                            'Cm',
-                            'Length',
-                            'Set',
-                            'Pairs',
-                            'Roll',
-                            'Box',
-                          ],
+                          values: _inventoryUnitOptions,
                           onChanged: _saving
                               ? null
                               : (value) => setState(() => _unit = value),
@@ -5885,12 +5866,12 @@ class _EditInventoryItemDialogState
     }
   }
 
-  void _failure() => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        YorksV1InventoryStrings.savingFailed.active(ref.read(languageProvider)),
-      ),
+  void _failure() => YorksAppToast.show(
+    context,
+    title: YorksV1InventoryStrings.savingFailed.active(
+      ref.read(languageProvider),
     ),
+    tone: YorksAppToastTone.error,
   );
 }
 
@@ -6082,13 +6063,7 @@ class _StateMessage extends StatelessWidget {
 }
 
 String _quantity(String value) {
-  final parsed = double.tryParse(value);
-  if (parsed == null) return value;
-  if (parsed == parsed.roundToDouble()) return parsed.toInt().toString();
-  return parsed
-      .toStringAsFixed(4)
-      .replaceFirst(RegExp(r'0+$'), '')
-      .replaceFirst(RegExp(r'\.$'), '');
+  return yorksV1DisplayQuantity(value);
 }
 
 String _dateTime(DateTime value) {

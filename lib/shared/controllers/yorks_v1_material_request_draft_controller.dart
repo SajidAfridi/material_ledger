@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/yorks_v1_boq.dart';
 import '../models/yorks_v1_domain_error.dart';
+import '../models/yorks_v1_item_description.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
@@ -40,11 +42,13 @@ class YorksV1MaterialRequestDraftController
     required CollectionStore<YorksV1MaterialRequestDraft> store,
     required YorksV1MaterialRequestRepository repository,
     String Function()? uuidFactory,
+    VoidCallback? onLocalDraftsChanged,
   }) : _ownerAuthUserId = ownerAuthUserId,
        _draftId = draftId,
        _store = store,
        _repository = repository,
        _uuidFactory = uuidFactory ?? const Uuid().v4,
+       _onLocalDraftsChanged = onLocalDraftsChanged,
        super(
          YorksV1MaterialRequestDraftState(
            draft: _restoreOrEmpty(
@@ -61,6 +65,7 @@ class YorksV1MaterialRequestDraftController
   final CollectionStore<YorksV1MaterialRequestDraft> _store;
   final YorksV1MaterialRequestRepository _repository;
   final String Function() _uuidFactory;
+  final VoidCallback? _onLocalDraftsChanged;
   Future<void> _persistQueue = Future<void>.value();
   bool _connectedCommandInFlight = false;
 
@@ -318,29 +323,37 @@ class YorksV1MaterialRequestDraftController
           source: YorksV1MaterialRequestLineSource.boq,
           sourceBoqGroupId: worksheet.group.id,
           sourceBoqRowId: row.id,
-          description: _composeDescription(tag: tag, context: description),
-          brandOrigin: _boqValue(
-            worksheet,
-            row,
-            YorksV1BoqCanonicalField.brandOrigin,
-            headingPattern: r'brand|make|manufacturer|origin',
+          description: normalizeYorksV1MaterialRequestItemDescription(
+            _composeDescription(tag: tag, context: description),
           ),
-          size: _boqValue(
-            worksheet,
-            row,
-            YorksV1BoqCanonicalField.size,
-            headingPattern: r'size|dimension',
+          brandOrigin: normalizeYorksV1OptionalItemText(
+            _boqValue(
+              worksheet,
+              row,
+              YorksV1BoqCanonicalField.brandOrigin,
+              headingPattern: r'brand|make|manufacturer|origin',
+            ),
+          ),
+          size: normalizeYorksV1OptionalItemText(
+            _boqValue(
+              worksheet,
+              row,
+              YorksV1BoqCanonicalField.size,
+              headingPattern: r'size|dimension',
+            ),
           ),
           // A tag identifies equipment but is not a manufacturer model. Keep
           // it separate so PDFs and Procurement screens do not render the
           // same value twice as both Model and Tag.
-          model: rawModel.isNotEmpty ? rawModel : null,
-          equipmentTag: tag.isEmpty ? null : tag,
-          planningModelTag: _canonicalValue(
-            worksheet,
-            row,
-            YorksV1BoqCanonicalField.planningModelTag,
-            nullable: true,
+          model: normalizeYorksV1OptionalItemText(rawModel),
+          equipmentTag: normalizeYorksV1OptionalItemText(tag),
+          planningModelTag: normalizeYorksV1OptionalItemText(
+            _canonicalValue(
+              worksheet,
+              row,
+              YorksV1BoqCanonicalField.planningModelTag,
+              nullable: true,
+            ),
           ),
           quantity: hasSuggestedQuantity ? '1' : explicitQuantity,
           quantityIsSuggested: hasSuggestedQuantity,
@@ -370,12 +383,20 @@ class YorksV1MaterialRequestDraftController
           id: _uuidFactory(),
           displayOrder: draft.lines.length + index + 1,
           source: YorksV1MaterialRequestLineSource.excel,
-          description: importedLines[index].description,
-          brandOrigin: importedLines[index].brandOrigin,
-          size: importedLines[index].size,
-          model: importedLines[index].model,
-          equipmentTag: importedLines[index].equipmentTag,
-          planningModelTag: importedLines[index].planningModelTag,
+          description: normalizeYorksV1MaterialRequestItemDescription(
+            importedLines[index].description,
+          ),
+          brandOrigin: normalizeYorksV1OptionalItemText(
+            importedLines[index].brandOrigin,
+          ),
+          size: normalizeYorksV1OptionalItemText(importedLines[index].size),
+          model: normalizeYorksV1OptionalItemText(importedLines[index].model),
+          equipmentTag: normalizeYorksV1OptionalItemText(
+            importedLines[index].equipmentTag,
+          ),
+          planningModelTag: normalizeYorksV1OptionalItemText(
+            importedLines[index].planningModelTag,
+          ),
           quantityIsSuggested: importedLines[index].quantityIsSuggested,
           quantity: importedLines[index].quantity,
           unit: importedLines[index].unit,
@@ -594,6 +615,7 @@ class YorksV1MaterialRequestDraftController
         )
         .toList(growable: false);
     await _store.writeAll(all);
+    _onLocalDraftsChanged?.call();
   }
 
   Future<void> _replace(YorksV1MaterialRequestDraft draft) async {
@@ -625,6 +647,7 @@ class YorksV1MaterialRequestDraftController
       }
       if (!found) replaced.add(draft);
       await _store.writeAll(replaced);
+      _onLocalDraftsChanged?.call();
     });
     // Keep the queue usable after an individual local-storage failure while
     // still returning the original error to the caller.

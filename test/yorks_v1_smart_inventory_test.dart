@@ -55,6 +55,74 @@ void main() {
     expect(input.toCreateItemRpcPayload(), isNot(contains('expected_version')));
   });
 
+  test(
+    'inventory item payloads normalize descriptions and retain Ton and Boxes',
+    () {
+      const create = YorksV1InventoryAdjustmentInput(
+        description: 'duct insulation',
+        itemCode: 'INSUL-25',
+        categoryId: 'supports-insulation',
+        brandOrigin: 'k-Flex / italy',
+        sizeText: 'large roll',
+        modelReference: 'model-x remains mixed',
+        unit: 'Ton',
+        quantityDelta: '0',
+        reason: 'Master item',
+        idempotencyKey: '92000000-0000-4000-8000-000000000010',
+      );
+      const metadata = YorksV1InventoryItemMetadataInput(
+        inventoryItemId: '93000000-0000-4000-8000-000000000010',
+        expectedMetadataVersion: 1,
+        itemCode: 'FITT-01',
+        description: 'box of fittings',
+        categoryId: 'general',
+        brandOrigin: null,
+        sizeText: null,
+        modelReference: null,
+        unit: 'Boxes',
+        minimumStock: null,
+        locationBin: null,
+        notes: null,
+        idempotencyKey: '93000000-0000-4000-8000-000000000011',
+      );
+      const imported = YorksV1InventoryImportRowInput(
+        sourceRowNumber: 2,
+        description: 'ton of sealant',
+        unit: 'Ton',
+        stockAction: 'opening_balance',
+        quantity: '1',
+        reason: 'Opening count',
+      );
+
+      expect(
+        create.toCreateItemRpcPayload(),
+        containsPair('item_description', 'Duct insulation'),
+      );
+      expect(create.toCreateItemRpcPayload(), containsPair('unit', 'Ton'));
+      expect(
+        create.toCreateItemRpcPayload(),
+        containsPair('brand_origin', 'K-Flex / italy'),
+      );
+      expect(
+        create.toCreateItemRpcPayload(),
+        containsPair('size_text', 'Large roll'),
+      );
+      expect(
+        create.toCreateItemRpcPayload(),
+        containsPair('model_reference', 'Model-x remains mixed'),
+      );
+      expect(
+        metadata.toRpcPayload(),
+        containsPair('item_description', 'Box of fittings'),
+      );
+      expect(metadata.toRpcPayload(), containsPair('unit', 'Boxes'));
+      expect(
+        imported.toRpcJson(),
+        containsPair('item_description', 'Ton of sealant'),
+      );
+    },
+  );
+
   test('existing-item movement carries action and optimistic version only', () {
     const input = YorksV1InventoryAdjustmentInput(
       inventoryItemId: '93000000-0000-4000-8000-000000000001',
@@ -169,6 +237,192 @@ void main() {
         reviewed.rows.map((row) => row.toRpcInput().sourceCategoryText),
         everyElement('Round air termnial'),
       );
+    },
+  );
+
+  test(
+    'an unknown category stays pending until Procurement explicitly maps it',
+    () {
+      const codec = YorksV1InventoryWorkbookCodec();
+      final preview = codec.previewFromMatrix(
+        fileName: 'new-category.csv',
+        matrix: const [
+          [
+            'Item Code',
+            'Item Description',
+            'Category',
+            'Unit',
+            'Stock Action',
+            'Quantity',
+            'Reason',
+          ],
+          [
+            'MFD-002',
+            'motorized fire damper',
+            'MFD',
+            'Nos',
+            'Opening Balance',
+            '100',
+            'Opening count',
+          ],
+        ],
+        categories: _categories,
+        inventoryItems: const [],
+      );
+
+      expect(preview.canCommit, isFalse);
+      expect(preview.errorCount, 1);
+      expect(preview.rows.single.requiresCategoryDecision, isTrue);
+      expect(preview.rows.single.categoryId, isNull);
+      expect(preview.rows.single.newCategoryName, isNull);
+
+      final existing = codec.applyCategoryDecision(
+        preview: preview,
+        sourceCategory: 'MFD',
+        categoryId: 'general',
+      );
+      expect(existing.canCommit, isTrue);
+      expect(existing.rows.single.categoryId, 'general');
+      expect(existing.rows.single.newCategoryName, isNull);
+
+      final newParent = codec.applyCategoryDecision(
+        preview: preview,
+        sourceCategory: 'MFD',
+        createNew: true,
+      );
+      expect(newParent.canCommit, isTrue);
+      expect(newParent.rows.single.categoryId, isNull);
+      expect(newParent.rows.single.newCategoryName, 'MFD');
+      expect(newParent.rows.single.requiresCategoryDecision, isTrue);
+    },
+  );
+
+  test('hierarchical category paths from the import template map exactly', () {
+    final categories = [
+      YorksV1InventoryCategory(
+        id: 'round',
+        name: 'Round',
+        parentCategoryId: 'air-terminals',
+        parentName: 'Air Terminals',
+        displayPath: 'Air Terminals › Round',
+        isSystem: true,
+        isActive: true,
+        recordVersion: 2,
+        itemCount: 0,
+        aliases: const ['Round Air Terminal'],
+        createdByDisplayName: 'Yorks standard',
+        createdAt: DateTime.utc(2026, 8, 9),
+      ),
+      YorksV1InventoryCategory(
+        id: 'linear-grille',
+        name: 'Linear Grille',
+        parentCategoryId: 'air-terminals',
+        parentName: 'Air Terminals',
+        displayPath: 'Air Terminals › Linear Grille',
+        isSystem: true,
+        isActive: true,
+        recordVersion: 2,
+        itemCount: 0,
+        aliases: const ['Linear Grill'],
+        createdByDisplayName: 'Yorks standard',
+        createdAt: DateTime.utc(2026, 8, 9),
+      ),
+    ];
+    const codec = YorksV1InventoryWorkbookCodec();
+    final preview = codec.previewFromMatrix(
+      fileName: 'test123.xlsx',
+      matrix: const [
+        [
+          'Item Code',
+          'Item Description',
+          'Category',
+          'Unit',
+          'Stock Action',
+          'Quantity',
+          'Reason',
+        ],
+        [
+          'AT-RND-001',
+          'Round Air Terminal 300 mm',
+          'Air Terminals - Round',
+          'Nos',
+          'Opening Balance',
+          '12',
+          'Initial warehouse count',
+        ],
+        [
+          'AT-LG-001',
+          'Linear Grille 1200 × 150 mm',
+          'Air Terminals - Linear Grille',
+          'Nos',
+          'Add Stock',
+          '18',
+          'Stock received against supplier delivery',
+        ],
+      ],
+      categories: categories,
+      inventoryItems: const [],
+    );
+
+    expect(preview.canCommit, isTrue);
+    expect(preview.errorCount, 0);
+    expect(
+      preview.rows.map((row) => row.categoryId),
+      orderedEquals(const ['round', 'linear-grille']),
+    );
+    expect(
+      preview.rows.map((row) => row.requiresCategoryDecision),
+      everyElement(isFalse),
+    );
+  });
+
+  test(
+    'duplicate item codes remain blocking after a category is confirmed',
+    () {
+      const codec = YorksV1InventoryWorkbookCodec();
+      final preview = codec.previewFromMatrix(
+        fileName: 'duplicate-code.csv',
+        matrix: const [
+          [
+            'Item Code',
+            'Item Description',
+            'Category',
+            'Unit',
+            'Stock Action',
+            'Quantity',
+            'Reason',
+          ],
+          [
+            'MFD-001',
+            'motorized fire damper',
+            'MFD',
+            'Nos',
+            'Opening Balance',
+            '100',
+            'Opening count',
+          ],
+          [
+            'MFD-001',
+            'another motorized fire damper',
+            'MFD',
+            'Nos',
+            'Opening Balance',
+            '100',
+            'Opening count',
+          ],
+        ],
+        categories: _categories,
+        inventoryItems: const [],
+      );
+
+      final reviewed = codec.applyCategoryDecision(
+        preview: preview,
+        sourceCategory: 'MFD',
+        createNew: true,
+      );
+      expect(reviewed.rows.map((row) => row.hasErrors), everyElement(isTrue));
+      expect(reviewed.canCommit, isFalse);
+      expect(reviewed.errorCount, 2);
     },
   );
 

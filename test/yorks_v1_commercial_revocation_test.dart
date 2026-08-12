@@ -80,6 +80,53 @@ class _DeferredFirstCurrentCapabilityRepository
 }
 
 void main() {
+  test('only terminal Realtime statuses revoke the commercial snapshot', () {
+    expect(
+      yorksV1AuthorizationSignalStatusRequiresFailure(
+        RealtimeSubscribeStatus.subscribed,
+      ),
+      isFalse,
+    );
+    expect(
+      yorksV1AuthorizationSignalStatusRequiresFailure(
+        RealtimeSubscribeStatus.closed,
+      ),
+      isFalse,
+    );
+    expect(
+      yorksV1AuthorizationSignalStatusRequiresFailure(
+        RealtimeSubscribeStatus.channelError,
+      ),
+      isTrue,
+    );
+    expect(
+      yorksV1AuthorizationSignalStatusRequiresFailure(
+        RealtimeSubscribeStatus.timedOut,
+      ),
+      isTrue,
+    );
+  });
+
+  test('duplicate subscribed acknowledgements do not imitate a reconnect', () {
+    final readiness = YorksV1AuthorizationSignalReadiness(const [
+      'v1_user_capabilities',
+      'v1_profiles',
+    ]);
+
+    expect(readiness.markSubscribed('v1_user_capabilities'), isTrue);
+    expect(readiness.markSubscribed('v1_user_capabilities'), isFalse);
+    expect(readiness.allReady, isFalse);
+    expect(readiness.markSubscribed('v1_profiles'), isTrue);
+    expect(readiness.allReady, isTrue);
+    expect(readiness.markSubscribed('v1_profiles'), isFalse);
+    expect(readiness.allReady, isTrue);
+
+    expect(readiness.markUnavailable('v1_profiles'), isTrue);
+    expect(readiness.allReady, isFalse);
+    expect(readiness.markSubscribed('v1_profiles'), isTrue);
+    expect(readiness.allReady, isTrue);
+  });
+
   test(
     'a current-session refresh fails closed and replaces stale access',
     () async {

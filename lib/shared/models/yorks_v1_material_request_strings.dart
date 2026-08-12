@@ -1,10 +1,82 @@
 import 'app_strings.dart';
+import 'yorks_v1_domain_error.dart';
 import 'yorks_v1_company_document_strings.dart';
 import 'yorks_v1_material_request.dart';
 
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const connectToContinue = TranslatableString(
+    en: 'Connect to the server and try again.',
+    ar: 'اتصل بالخادم وحاول مرة أخرى.',
+    ur: 'سرور سے جڑیں اور دوبارہ کوشش کریں۔',
+    hi: 'सर्वर से जुड़ें और फिर प्रयास करें।',
+  );
+  static const actionNotAllowed = TranslatableString(
+    en: 'You are not allowed to complete this action.',
+    ar: 'غير مسموح لك بإكمال هذا الإجراء.',
+    ur: 'آپ کو یہ عمل مکمل کرنے کی اجازت نہیں ہے۔',
+    hi: 'आपको यह कार्रवाई पूरी करने की अनुमति नहीं है।',
+  );
+  static const recordChanged = TranslatableString(
+    en: 'This record changed. Refresh it before trying again.',
+    ar: 'تم تغيير هذا السجل. قم بتحديثه قبل المحاولة مرة أخرى.',
+    ur: 'یہ ریکارڈ بدل گیا ہے۔ دوبارہ کوشش سے پہلے اسے ریفریش کریں۔',
+    hi: 'यह रिकॉर्ड बदल गया है। फिर प्रयास करने से पहले इसे रीफ़्रेश करें।',
+  );
+  static const invalidWorkflowInput = TranslatableString(
+    en: 'Review the entered values and try again.',
+    ar: 'راجع القيم المدخلة وحاول مرة أخرى.',
+    ur: 'درج کی گئی اقدار کا جائزہ لیں اور دوبارہ کوشش کریں۔',
+    hi: 'दर्ज किए गए मानों की समीक्षा करें और फिर प्रयास करें।',
+  );
+  static const actionFailed = TranslatableString(
+    en: 'The server could not confirm this action. Try again safely.',
+    ar: 'تعذر على الخادم تأكيد هذا الإجراء. حاول مرة أخرى بأمان.',
+    ur: 'سرور اس عمل کی تصدیق نہیں کر سکا۔ محفوظ طریقے سے دوبارہ کوشش کریں۔',
+    hi: 'सर्वर इस कार्रवाई की पुष्टि नहीं कर सका। सुरक्षित रूप से फिर प्रयास करें।',
+  );
+  static const insufficientStock = TranslatableString(
+    en: 'Warehouse stock changed and is no longer sufficient. Refresh before dispatching again.',
+    ar: 'تغير مخزون المستودع ولم يعد كافياً. حدّث البيانات قبل إعادة الإرسال.',
+    ur: 'گودام کا اسٹاک بدل گیا ہے اور اب کافی نہیں۔ دوبارہ ڈسپیچ سے پہلے ریفریش کریں۔',
+    hi: 'वेयरहाउस स्टॉक बदल गया है और अब पर्याप्त नहीं है। फिर डिस्पैच करने से पहले रीफ़्रेश करें।',
+  );
+  static const quantityCapExceeded = TranslatableString(
+    en: 'This quantity exceeds the approved outstanding amount. Refresh and enter a smaller quantity.',
+    ar: 'تتجاوز هذه الكمية الرصيد المعتمد المتبقي. حدّث البيانات وأدخل كمية أقل.',
+    ur: 'یہ مقدار منظور شدہ بقایا مقدار سے زیادہ ہے۔ ریفریش کریں اور کم مقدار درج کریں۔',
+    hi: 'यह मात्रा स्वीकृत बकाया मात्रा से अधिक है। रीफ़्रेश करें और कम मात्रा दर्ज करें।',
+  );
+  static const immutableRecord = TranslatableString(
+    en: 'This committed reference cannot be changed. Open the existing document instead.',
+    ar: 'لا يمكن تغيير هذا المرجع المعتمد. افتح المستند الموجود بدلاً من ذلك.',
+    ur: 'اس تصدیق شدہ حوالے کو تبدیل نہیں کیا جا سکتا۔ موجودہ دستاویز کھولیں۔',
+    hi: 'इस प्रतिबद्ध संदर्भ को बदला नहीं जा सकता। इसके बजाय मौजूदा दस्तावेज़ खोलें।',
+  );
+  static const incompleteReview = TranslatableString(
+    en: 'Review every dispatched line and add a note for each Missing or Damaged quantity.',
+    ar: 'راجع كل بند مُرسل وأضف ملاحظة لكل كمية مفقودة أو تالفة.',
+    ur: 'ہر ڈسپیچ لائن کا جائزہ لیں اور ہر گم یا خراب مقدار کے لیے نوٹ شامل کریں۔',
+    hi: 'हर भेजी गई पंक्ति की समीक्षा करें और हर गुम या क्षतिग्रस्त मात्रा के लिए टिप्पणी जोड़ें।',
+  );
+
+  static TranslatableString commandFailure(YorksV1DomainErrorCode code) =>
+      switch (code) {
+        YorksV1DomainErrorCode.offline ||
+        YorksV1DomainErrorCode.backendUnavailable => connectToContinue,
+        YorksV1DomainErrorCode.unauthenticated ||
+        YorksV1DomainErrorCode.unauthorized => actionNotAllowed,
+        YorksV1DomainErrorCode.conflict => recordChanged,
+        YorksV1DomainErrorCode.invalidInput ||
+        YorksV1DomainErrorCode.invalidTransition => invalidWorkflowInput,
+        YorksV1DomainErrorCode.insufficientStock => insufficientStock,
+        YorksV1DomainErrorCode.quantityCapExceeded => quantityCapExceeded,
+        YorksV1DomainErrorCode.immutableRecord => immutableRecord,
+        YorksV1DomainErrorCode.incompleteReview => incompleteReview,
+        _ => actionFailed,
+      };
+
   static const companyName = TranslatableString(
     en: 'Yorks AC. & Ref.',
     ar: 'يوركس للتكييف والتبريد',
@@ -180,6 +252,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'ریمارکس ہٹا دیے گئے ہیں۔ آئٹم کی ترتیب Yorks کے مانوس مواد درخواست فارم کے مطابق ہے۔',
     hi: 'टिप्पणियाँ हटा दी गई हैं। आइटम क्रम परिचित Yorks सामग्री अनुरोध फॉर्म से मेल खाता है।',
   );
+  static const rowTools = TranslatableString(
+    en: 'Row tools',
+    ar: 'أدوات الصفوف',
+    ur: 'قطار کے ٹولز',
+    hi: 'पंक्ति उपकरण',
+  );
   static const continueAction = TranslatableString(
     en: 'Continue',
     ar: 'متابعة',
@@ -209,6 +287,62 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'لا توجد بنود جدول كميات متاحة في هذا النطاق.',
     ur: 'اس اسکوپ میں کوئی BOQ آئٹم دستیاب نہیں ہے۔',
     hi: 'इस दायरे में कोई बीओक्यू आइटम उपलब्ध नहीं है।',
+  );
+  static const addSelectedItems = TranslatableString(
+    en: 'Add Selected Items',
+    ar: 'إضافة العناصر المحددة',
+    ur: 'منتخب آئٹمز شامل کریں',
+    hi: 'चुने हुए आइटम जोड़ें',
+  );
+  static const selectAll = TranslatableString(
+    en: 'Select all',
+    ar: 'تحديد الكل',
+    ur: 'سب منتخب کریں',
+    hi: 'सभी चुनें',
+  );
+  static const alreadyAdded = TranslatableString(
+    en: 'Already added',
+    ar: 'تمت إضافته مسبقًا',
+    ur: 'پہلے ہی شامل ہے',
+    hi: 'पहले से जोड़ा गया',
+  );
+  static const noBoqMaterialsHelp = TranslatableString(
+    en: 'Add or import materials into this scope’s BOQ first, or add a custom item to the request.',
+    ar: 'أضف المواد أو استوردها أولًا إلى جدول كميات هذا النطاق، أو أضف عنصرًا مخصصًا إلى الطلب.',
+    ur: 'پہلے اس اسکوپ کے BOQ میں مواد شامل یا درآمد کریں، یا درخواست میں کسٹم آئٹم شامل کریں۔',
+    hi: 'पहले इस दायरे के BOQ में सामग्री जोड़ें या आयात करें, अथवा अनुरोध में कस्टम आइटम जोड़ें।',
+  );
+  static const boqScopeOnly = TranslatableString(
+    en: 'Only materials from the selected request scope are shown.',
+    ar: 'تظهر فقط مواد نطاق الطلب المحدد.',
+    ur: 'صرف منتخب درخواست اسکوپ کا مواد دکھایا جاتا ہے۔',
+    hi: 'केवल चुने हुए अनुरोध दायरे की सामग्री दिखाई जाती है।',
+  );
+  static const changeScopeToBrowseBoq = TranslatableString(
+    en: 'Change Building / Other in Request Information to browse a different BOQ.',
+    ar: 'غيّر المبنى / غيره في معلومات الطلب لاستعراض جدول كميات مختلف.',
+    ur: 'مختلف BOQ دیکھنے کے لیے درخواست کی معلومات میں عمارت / دیگر تبدیل کریں۔',
+    hi: 'अलग BOQ देखने के लिए अनुरोध जानकारी में भवन / अन्य बदलें।',
+  );
+  static TranslatableString addItemsFromBoq(String scopeName) =>
+      TranslatableString(
+        en: 'Add Items from $scopeName BOQ',
+        ar: 'إضافة عناصر من جدول كميات $scopeName',
+        ur: '$scopeName BOQ سے آئٹمز شامل کریں',
+        hi: '$scopeName BOQ से आइटम जोड़ें',
+      );
+  static TranslatableString noMaterialsInBoq(String scopeName) =>
+      TranslatableString(
+        en: 'No materials in $scopeName BOQ',
+        ar: 'لا توجد مواد في جدول كميات $scopeName',
+        ur: '$scopeName BOQ میں کوئی مواد نہیں',
+        hi: '$scopeName BOQ में कोई सामग्री नहीं है',
+      );
+  static TranslatableString selectedItemCount(int count) => TranslatableString(
+    en: '$count selected',
+    ar: 'تم تحديد $count',
+    ur: '$count منتخب',
+    hi: '$count चुने गए',
   );
   static const confirmScopeAndLines = TranslatableString(
     en: 'I have reviewed the project scope and requested quantities.',
@@ -588,6 +722,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'مسودہ اس ڈیوائس پر محفوظ ہو گیا۔ اسے ہم وقت کرنے کے لیے درخواست مکمل کریں۔',
     hi: 'ड्राफ़्ट इस डिवाइस पर सहेजा गया। सिंक करने के लिए अनुरोध पूरा करें।',
   );
+  static const resumeSavedDraft = TranslatableString(
+    en: 'Resume saved draft',
+    ar: 'استئناف المسودة المحفوظة',
+    ur: 'محفوظ شدہ ڈرافٹ جاری رکھیں',
+    hi: 'सहेजा गया ड्राफ़्ट फिर से शुरू करें',
+  );
+  static const localDraftPrivate = TranslatableString(
+    en: 'This unfinished request is private to you on this device. Continue where you left off before creating another request.',
+    ar: 'هذا الطلب غير المكتمل خاص بك على هذا الجهاز. تابع من حيث توقفت قبل إنشاء طلب آخر.',
+    ur: 'یہ نامکمل درخواست اس ڈیوائس پر صرف آپ کی ہے۔ نئی درخواست بنانے سے پہلے وہیں سے جاری رکھیں جہاں آپ نے چھوڑا تھا۔',
+    hi: 'यह अधूरा अनुरोध इस डिवाइस पर केवल आपके लिए है। नया अनुरोध बनाने से पहले वहीं से जारी रखें जहाँ आपने छोड़ा था।',
+  );
+  static TranslatableString localDraftCount(int count) => TranslatableString(
+    en: '$count saved local draft${count == 1 ? '' : 's'}',
+    ar: '$count مسودة محلية محفوظة',
+    ur: '$count محفوظ مقامی ڈرافٹس',
+    hi: '$count सहेजे गए स्थानीय ड्राफ़्ट',
+  );
   static const saveFailed = TranslatableString(
     en: 'Could not save this draft.',
     ar: 'تعذر حفظ هذه المسودة.',
@@ -791,6 +943,30 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'اكتملت مراجعة الاستلام',
     ur: 'وصولی کا جائزہ مکمل ہو گیا',
     hi: 'प्राप्ति समीक्षा पूर्ण हुई',
+  );
+  static const replacementDispatchRequired = TranslatableString(
+    en: 'Replacement dispatch required',
+    ar: 'مطلوب إرسال بديل',
+    ur: 'متبادل ڈسپیچ درکار ہے',
+    hi: 'प्रतिस्थापन डिस्पैच आवश्यक है',
+  );
+  static const closeReviewRequired = TranslatableString(
+    en: 'Ready for Project Engineer closure',
+    ar: 'جاهز للإغلاق بواسطة مهندس المشروع',
+    ur: 'پروجیکٹ انجینئر کی بندش کے لیے تیار',
+    hi: 'प्रोजेक्ट इंजीनियर द्वारा बंद करने के लिए तैयार',
+  );
+  static const closeRequest = TranslatableString(
+    en: 'Close request',
+    ar: 'إغلاق الطلب',
+    ur: 'درخواست بند کریں',
+    hi: 'अनुरोध बंद करें',
+  );
+  static const requestClosed = TranslatableString(
+    en: 'Request closed',
+    ar: 'تم إغلاق الطلب',
+    ur: 'درخواست بند ہو گئی',
+    hi: 'अनुरोध बंद हो गया',
   );
   static const requestDetails = TranslatableString(
     en: 'Request Details',

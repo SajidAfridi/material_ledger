@@ -6,6 +6,7 @@ import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
+import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
@@ -15,6 +16,7 @@ import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_arrangement_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_boq_provider.dart';
@@ -305,9 +307,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 250));
 
         expect(find.text('Request Status'), findsOneWidget);
-        // Assert that the action is available in the record; the router may
-        // retain an offstage copy across the responsive viewport loop.
-        expect(find.text('Generate Delivery Order'), findsAtLeastNWidgets(1));
+        // A fully received record is closed before optional document work; the
+        // router may retain an offstage copy across the viewport loop.
+        expect(find.text('Close request'), findsAtLeastNWidgets(1));
         if (size.width <= 720) {
           expect(
             find.byKey(const ValueKey('mobile-mr-lifecycle')),
@@ -323,6 +325,129 @@ void main() {
         }
         expect(tester.takeException(), isNull, reason: 'viewport $size');
       }
+    },
+  );
+
+  testWidgets(
+    'approval actions stack before the Material Request heading can collapse',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final request = YorksV1MaterialRequest(
+        id: 'approval-layout',
+        projectId: 'project-layout',
+        projectReference: 'YRA-313',
+        projectName: 'Yorks Tower',
+        scopeId: 'common',
+        scopeName: 'Electrical Materials',
+        state: YorksV1MaterialRequestState.awaitingApproval,
+        recordVersion: 2,
+        createdAt: DateTime.utc(2026, 8, 12),
+        updatedAt: DateTime.utc(2026, 8, 12),
+        timing: YorksV1MaterialRequestTiming.normal,
+        requestNumber: 'YRA313-MR002',
+        title: 'Electrical Materials',
+        requesterDisplayName: 'Valentin Ortula',
+        requesterProjectRole: 'Project Engineer',
+        currentActionOwnerRole: 'Project Engineer',
+        lines: const [
+          YorksV1MaterialRequestLine(
+            id: 'approval-line',
+            displayOrder: 1,
+            source: YorksV1MaterialRequestLineSource.custom,
+            description: 'Cable tray hanging clamp',
+            quantity: '50',
+            unit: 'Nos',
+          ),
+        ],
+      );
+      final arrangement = YorksV1ProcurementArrangement(
+        id: 'arrangement-layout',
+        version: 1,
+        status: YorksV1ArrangementStatus.awaitingApproval,
+        isCurrent: true,
+        recordVersion: 2,
+        startedByDisplayName: 'Procurement User',
+        startedAt: DateTime.utc(2026, 8, 12),
+        lines: const [
+          YorksV1ArrangementLine(
+            id: 'arrangement-line',
+            requestLineId: 'approval-line',
+            displayOrder: 1,
+            description: 'Cable tray hanging clamp',
+            requestedQuantity: '50',
+            unit: 'Nos',
+            source: YorksV1ArrangementSource.externalSupplier,
+            decision: YorksV1ArrangementDecision.full,
+            arrangedQuantity: '50',
+          ),
+        ],
+      );
+      final workspace = YorksV1ArrangementWorkspace(
+        requestId: request.id,
+        requestNumber: request.requestNumber,
+        requestState: 'awaiting_approval',
+        requestRecordVersion: 2,
+        canBegin: false,
+        canSave: false,
+        canDecide: true,
+        arrangements: [arrangement],
+      );
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const YorksV1WorkspaceShell(
+              child: YorksV1MaterialRequestDetailScreen(
+                requestId: 'approval-layout',
+              ),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              request.id,
+            ).overrideWith((ref) async => request),
+            yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+              (ref) async =>
+                  YorksV1MaterialRequestDocumentModel.fromRequest(request),
+            ),
+            yorksV1ArrangementWorkspaceProvider(
+              request.id,
+            ).overrideWith((ref) async => workspace),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      final heading = find.byKey(
+        const ValueKey('material-request-record-heading'),
+      );
+      expect(heading, findsOneWidget);
+      expect(tester.getSize(heading).width, greaterThan(500));
+      expect(find.text('Review & Approve'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/material_request_approval_header_1366x768.png',
+        ),
+      );
     },
   );
 

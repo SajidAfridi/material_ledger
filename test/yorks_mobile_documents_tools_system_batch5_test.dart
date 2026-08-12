@@ -82,7 +82,10 @@ void main() {
 
     testWidgets('ref49 ESP calculator $suffix', (tester) async {
       await _setViewport(tester, size);
-      await _pump(tester, const YorksV1EspCalculatorScreen());
+      await _pump(
+        tester,
+        YorksV1EspCalculatorScreen(initialDate: DateTime.utc(2026, 8, 9)),
+      );
 
       expect(find.text('System components'), findsOneWidget);
       expect(find.text('Add row'), findsOneWidget);

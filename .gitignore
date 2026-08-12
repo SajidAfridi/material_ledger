@@ -63,3 +63,5 @@ app.*.map.json
 # tests and non-secret seed remain the reproducible source of truth.
 /supabase/.temp/
 /supabase/.branches/
+.vercel
+.env*

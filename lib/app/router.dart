@@ -351,12 +351,6 @@ bool _isAllowedForRole(
     perms,
     RoleCapability.viewCommercials,
   );
-  final canAccessRentals = resolveCapability(
-    user,
-    role,
-    perms,
-    RoleCapability.rentals,
-  );
   final canAccessPeople = resolveCapability(
     user,
     role,
@@ -407,7 +401,13 @@ bool _isAllowedForRole(
   }
 
   // Modules with their own tab + detail screens.
-  if (path.startsWith('/rentals')) return canAccessRentals;
+  // The normalized R38.4 rental workspace is deliberately Admin-only for the
+  // first rollout. The client guard follows the same exact, server-controlled
+  // Yorks role claim as the rental RPCs; legacy capability overrides cannot
+  // expose commercial tenant, rent, receipt or cheque data.
+  if (path.startsWith('/rentals')) {
+    return yorksV1Role == YorksV1Role.admin;
+  }
   if (path.startsWith('/people')) return canAccessPeople;
 
   // Remaining office screens (inventory, transactions, procurement, dispatch,

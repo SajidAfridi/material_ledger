@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_domain_error.dart';
@@ -90,13 +92,16 @@ class YorksV1SupabaseLogisticsRepository
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
     YorksV1MaterialRequestRpcClient? rpcClient,
+    Duration rpcTimeout = const Duration(seconds: 20),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
-       _rpcClient = rpcClient;
+       _rpcClient = rpcClient,
+       _rpcTimeout = rpcTimeout;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
+  final Duration _rpcTimeout;
 
   @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async {
@@ -363,14 +368,18 @@ class YorksV1SupabaseLogisticsRepository
       );
     }
     try {
-      return await rpc.invoke(
-        functionName: functionName,
-        parameters: parameters,
-      );
+      return await rpc
+          .invoke(functionName: functionName, parameters: parameters)
+          .timeout(_rpcTimeout);
     } on YorksV1DomainException {
       rethrow;
     } on PostgrestException catch (error) {
       throw _mapPostgrestException(error);
+    } on TimeoutException catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: error,
+      );
     } catch (error) {
       throw YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
@@ -461,14 +470,35 @@ class YorksV1SupabaseLogisticsRepository
   static YorksV1DomainException _mapPostgrestException(
     PostgrestException error,
   ) {
-    final code = switch (error.code) {
-      '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
-      '40001' || '23505' || '55P03' => YorksV1DomainErrorCode.conflict,
-      '22023' ||
-      '22007' ||
-      '22P02' ||
-      '23514' => YorksV1DomainErrorCode.invalidInput,
-      _ => YorksV1DomainErrorCode.serverRejected,
+    final serverMessage = error.message.toUpperCase();
+    final code = switch (serverMessage) {
+      final value
+          when value.contains('V1_DISPATCH_STOCK_CAP_EXCEEDED') ||
+              value.contains('V1_DISPATCH_INVENTORY_ITEM_INVALID') =>
+        YorksV1DomainErrorCode.insufficientStock,
+      final value
+          when value.contains('V1_DISPATCH_APPROVED_CAP_EXCEEDED') ||
+              value.contains('V1_DISPATCH_LINE_NOT_APPROVED') =>
+        YorksV1DomainErrorCode.quantityCapExceeded,
+      final value
+          when value.contains('V1_DELIVERY_ORDER_REFERENCE_IMMUTABLE') =>
+        YorksV1DomainErrorCode.immutableRecord,
+      final value
+          when value.contains('V1_RECEIPT_LINES_INCOMPLETE') ||
+              value.contains('V1_RECEIPT_LINE_INVALID') =>
+        YorksV1DomainErrorCode.incompleteReview,
+      final value
+          when value.contains('STATE_') || value.contains('NOT_AWAITING') =>
+        YorksV1DomainErrorCode.invalidTransition,
+      _ => switch (error.code) {
+        '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
+        '40001' || '23505' || '55P03' => YorksV1DomainErrorCode.conflict,
+        '22023' ||
+        '22007' ||
+        '22P02' ||
+        '23514' => YorksV1DomainErrorCode.invalidInput,
+        _ => YorksV1DomainErrorCode.serverRejected,
+      },
     };
     return YorksV1DomainException(code, serverCode: error.code, cause: error);
   }

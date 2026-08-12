@@ -26,6 +26,12 @@
   <meta name="apple-mobile-web-app-title" content="Yorks AC. & Ref.">
   <link rel="apple-touch-icon" href="icons/Icon-192.png?v=golden-20260808">
 
+  <!-- The signed-in shell paints this small seal immediately. Preload its
+       display-sized rendition so it does not compete with the engine after
+       the first Flutter frame has been scheduled. The document/native PNG
+       remains separate and is loaded only by document workflows. -->
+  <link rel="preload" href="assets/assets/branding/yorks_emblem_web.png" as="image" type="image/png" fetchpriority="high">
+
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png?v=golden-20260808"/>
 

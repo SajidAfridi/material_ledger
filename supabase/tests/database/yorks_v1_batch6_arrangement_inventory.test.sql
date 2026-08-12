@@ -214,9 +214,9 @@ select throws_ok(
         jsonb_build_object(
           'arrangement_line_id', (select arrangement_line_id
             from v1_b6_arrangement_one_lines where display_order = 2),
-          'source_kind', 'external_supplier', 'external_supplier', 'External supplier',
-          'inventory_item_id', null, 'decision', 'unavailable',
-          'arranged_qty', '0', 'reason', 'Supplier confirmation pending'
+          'source_kind', 'external_supplier', 'external_supplier', null,
+          'inventory_item_id', null, 'decision', 'full',
+          'arranged_qty', '1', 'reason', null
         )
       )
     ), '64000000-0000-4000-8000-000000000002'::uuid
@@ -242,14 +242,14 @@ select lives_ok(
         jsonb_build_object(
           'arrangement_line_id', (select arrangement_line_id
             from v1_b6_arrangement_one_lines where display_order = 2),
-          'source_kind', 'external_supplier', 'external_supplier', 'External supplier',
-          'inventory_item_id', null, 'decision', 'unavailable',
-          'arranged_qty', '0', 'reason', 'Supplier confirmation pending'
+          'source_kind', 'external_supplier', 'external_supplier', null,
+          'inventory_item_id', null, 'decision', 'full',
+          'arranged_qty', '1', 'reason', null
         )
       )
     ), '64000000-0000-4000-8000-000000000003'::uuid
   )$$,
-  'Procurement saves the complete partial/unavailable arrangement'
+  'Procurement saves a Full external-supplier line without supplier name or reason'
 );
 
 set local role postgres;
