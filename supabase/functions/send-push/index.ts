@@ -185,6 +185,7 @@ Deno.serve(async (request) => {
     const webLink = webLinkFor(
       route,
       Deno.env.get("YORKS_WEB_ORIGIN") ?? "",
+      claim.notificationId,
     );
     let sent = 0;
     let transientFailures = 0;
@@ -219,13 +220,27 @@ Deno.serve(async (request) => {
                     title: copy.title,
                     body: copy.body,
                     icon: "/icons/Icon-192.png",
+                    badge: "/icons/Icon-192.png",
+                    tag: claim.notificationId,
+                    renotify: true,
+                    requireInteraction: false,
+                    silent: false,
+                    vibrate: [120, 60, 120],
                   },
                   ...(webLink ? { fcm_options: { link: webLink } } : {}),
                 },
               }
               : {
                 notification: { title: copy.title, body: copy.body },
-                android: { priority: "high" },
+                android: {
+                  priority: "high",
+                  notification: {
+                    channel_id: "yorks_push",
+                    sound: "default",
+                    default_vibrate_timings: true,
+                    notification_priority: "PRIORITY_HIGH",
+                  },
+                },
                 apns: { payload: { aps: { sound: "default" } } },
               }),
           },

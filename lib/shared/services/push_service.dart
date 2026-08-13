@@ -10,6 +10,7 @@ import '../../app/app.dart' show appRouterProvider;
 import '../../firebase_options.dart';
 import '../models/app_notification.dart';
 import '../providers/language_provider.dart' show supabaseClientProvider;
+import '../providers/yorks_v1_notification_provider.dart';
 import 'observability_service.dart';
 
 /// Project-specific public Web Push key. Production builds enforce that this
@@ -346,14 +347,14 @@ class FcmPushService implements PushService {
     // Backgrounded (app alive, tapped from the tray) → deep-link.
     FirebaseMessaging.onMessageOpenedApp.listen((m) {
       _debugMessage('opened', m);
-      _openRoute(m.data['route'] as String?);
+      _openMessage(m);
     });
     // Terminated (the tap launched the app fresh) → check once at startup.
     try {
       final initial = await FirebaseMessaging.instance.getInitialMessage();
       if (initial != null) {
         _debugMessage('initial', initial);
-        _openRoute(initial.data['route'] as String?);
+        _openMessage(initial);
       }
     } catch (e, st) {
       _observe(e, st);
@@ -454,6 +455,39 @@ class FcmPushService implements PushService {
       _ref.read(appRouterProvider).push(route);
     } catch (e, st) {
       _observe(e, st);
+    }
+  }
+
+  void _openMessage(RemoteMessage message) {
+    final push = _toPushMessage(message);
+    if (push.notificationId.isNotEmpty) {
+      unawaited(() async {
+        try {
+          await _ref
+              .read(yorksV1NotificationsProvider.notifier)
+              .markSeen(push.notificationId);
+        } catch (error, stackTrace) {
+          _observe(error, stackTrace);
+        }
+      }());
+    }
+    _openRoute(_routeWithAcknowledgement(push));
+  }
+
+  String _routeWithAcknowledgement(PushMessage push) {
+    if (push.route.isEmpty || push.notificationId.isEmpty) return push.route;
+    try {
+      final route = Uri.parse(push.route);
+      return route
+          .replace(
+            queryParameters: {
+              ...route.queryParameters,
+              'notificationId': push.notificationId,
+            },
+          )
+          .toString();
+    } catch (_) {
+      return push.route;
     }
   }
 

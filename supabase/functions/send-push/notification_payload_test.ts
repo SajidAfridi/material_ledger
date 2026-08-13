@@ -69,8 +69,9 @@ Deno.test("web link is absolute HTTPS and rejects unsafe configuration", () => {
     webLinkFor(
       "/yorks/material-requests/14000000-0000-4000-8000-000000000001",
       "https://yorks-r35.vercel.app",
+      "11000000-0000-4000-8000-000000000001",
     ),
-    "https://yorks-r35.vercel.app/yorks/material-requests/14000000-0000-4000-8000-000000000001",
+    "https://yorks-r35.vercel.app/#/yorks/material-requests/14000000-0000-4000-8000-000000000001?notificationId=11000000-0000-4000-8000-000000000001",
   );
   assertEquals(
     webLinkFor("//attacker.example", "https://yorks-r35.vercel.app"),

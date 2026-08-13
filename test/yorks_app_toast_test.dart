@@ -53,6 +53,39 @@ void main() {
       expect(find.text('Inventory item updated'), findsNothing);
     });
   }
+
+  for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop', size: const Size(1366, 768)),
+    (suffix: 'mobile', size: const Size(360, 720)),
+  ]) {
+    testWidgets('notification toast is responsive — ${evidence.suffix}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        YorksAppToast.dismiss();
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(const _NotificationToastHarness());
+      await tester.tap(find.text('Show alert'));
+      await tester.pump();
+
+      expect(find.text('You were mentioned'), findsOneWidget);
+      expect(find.text('VIEW DETAILS'), findsOneWidget);
+      expect(find.byTooltip('Close'), findsOneWidget);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/notification_toast_${evidence.suffix}.png',
+        ),
+      );
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pump();
+    });
+  }
 }
 
 class _ToastHarness extends StatelessWidget {
@@ -86,6 +119,38 @@ class _ToastHarness extends StatelessWidget {
               ),
             ),
             child: const Text('Open dialog'),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _NotificationToastHarness extends StatelessWidget {
+  const _NotificationToastHarness();
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.light,
+    home: Builder(
+      builder: (context) => Scaffold(
+        backgroundColor: const Color(0xFFEEF3F8),
+        body: Center(
+          child: FilledButton(
+            onPressed: () => YorksAppToast.show(
+              context,
+              title: 'You were mentioned',
+              message:
+                  'A teammate mentioned you in a material request comment.',
+              icon: Icons.notifications_active_rounded,
+              actionLabel: 'VIEW DETAILS',
+              onAction: () {},
+              dismissible: true,
+              maxWidth: 560,
+              duration: const Duration(seconds: 6),
+            ),
+            child: const Text('Show alert'),
           ),
         ),
       ),

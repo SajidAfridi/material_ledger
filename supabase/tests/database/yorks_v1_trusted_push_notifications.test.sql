@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(27);
+select plan(29);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -25,6 +25,12 @@ select ok(
   )
   and has_function_privilege(
     'authenticated', 'public.v1_list_my_notifications(integer)', 'execute'
+  )
+  and has_function_privilege(
+    'authenticated', 'public.v1_mark_all_notifications_seen()', 'execute'
+  )
+  and not has_function_privilege(
+    'anon', 'public.v1_mark_all_notifications_seen()', 'execute'
   ),
   'Clients use narrow token and notification RPCs, never protected tables'
 );
@@ -241,6 +247,45 @@ select ok(
   (select seen_at is not null from public.v1_list_my_notifications(100)
    where notification_id = '91000000-0000-4000-8000-000000000001'),
   'Acknowledgement is visible in the authoritative projection'
+);
+
+set local role postgres;
+update public.v1_notifications set seen_at = null
+where id = '91000000-0000-4000-8000-000000000001';
+insert into public.v1_notifications (
+  id, recipient_auth_user_id, event_code, entity_type, entity_id, created_at
+) values (
+  '91000000-0000-4000-8000-000000000004',
+  '10000000-0000-4000-8000-000000000003',
+  'material_request_mentioned', 'material_request',
+  '92000000-0000-4000-8000-000000000001', clock_timestamp()
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select is(
+  public.v1_mark_all_notifications_seen(),
+  2,
+  'Recipient acknowledges all of their unread notifications atomically'
+);
+
+set local role postgres;
+select ok(
+  not exists (
+    select 1 from public.v1_notifications
+    where recipient_auth_user_id = '10000000-0000-4000-8000-000000000003'
+      and seen_at is null
+  )
+  and exists (
+    select 1 from public.v1_notifications
+    where id = '91000000-0000-4000-8000-000000000002'
+      and seen_at is null
+  ),
+  'Bulk acknowledgement cannot alter another recipient notification'
 );
 
 set local role authenticated;

@@ -288,6 +288,228 @@ void main() {
     );
   });
 
+  testWidgets('request discussion caps its history and scrolls independently', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    final repository = _MaterialRequestRepositoryFixture();
+    final request = _requestVariant(
+      id: 'discussion-scroll-request',
+      comments: _discussionComments('discussion-scroll-request'),
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final region = find.byKey(
+      const ValueKey('material-request-discussion-scroll'),
+    );
+    final scrollable = find.descendant(
+      of: region,
+      matching: find.byType(Scrollable),
+    );
+    expect(region, findsOneWidget);
+    expect(tester.getSize(region).height, lessThanOrEqualTo(420));
+    expect(scrollable, findsOneWidget);
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+
+    await tester.ensureVisible(region);
+    await tester.pumpAndSettle();
+    await tester.drag(scrollable, const Offset(0, -240));
+    await tester.pumpAndSettle();
+    expect(position.pixels, greaterThan(0));
+    expect(
+      find.byKey(const ValueKey('material-request-comment-composer')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('material-request-discussion-card')),
+      matchesGoldenFile('goldens/r35/mr_discussion_scroll_desktop.png'),
+    );
+  });
+
+  testWidgets('mobile request discussion stays bounded at 360px', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final repository = _MaterialRequestRepositoryFixture();
+    final request = _requestVariant(
+      id: 'discussion-scroll-mobile-request',
+      comments: _discussionComments('discussion-scroll-mobile-request'),
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final region = find.byKey(
+      const ValueKey('material-request-discussion-scroll'),
+    );
+    await tester.scrollUntilVisible(
+      region,
+      420,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.descendant(
+      of: region,
+      matching: find.byType(Scrollable),
+    );
+    expect(tester.getSize(region).height, lessThanOrEqualTo(300));
+    expect(scrollable, findsOneWidget);
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    await tester.drag(scrollable, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(position.pixels, greaterThan(0));
+    expect(
+      find.byKey(const ValueKey('material-request-comment-composer')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('material-request-discussion-card')),
+      matchesGoldenFile('goldens/r35/mr_discussion_scroll_mobile_360.png'),
+    );
+  });
+
+  testWidgets('closed request renders all seven lifecycle stages complete', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    final request = _requestVariant(
+      id: 'closed-workflow-request',
+      state: YorksV1MaterialRequestState.closed,
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final workflow = find.byKey(
+      const ValueKey('material-request-workflow-strip'),
+    );
+    expect(workflow, findsOneWidget);
+    expect(
+      find.descendant(of: workflow, matching: find.byIcon(Icons.check_rounded)),
+      findsNWidgets(7),
+    );
+    expect(find.text('Stage 7 of 7'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      workflow,
+      matchesGoldenFile('goldens/r35/mr_closed_workflow_desktop.png'),
+    );
+  });
+
+  testWidgets('closed request completes mobile lifecycle at 360px', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final request = _requestVariant(
+      id: 'closed-workflow-mobile-request',
+      state: YorksV1MaterialRequestState.closed,
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final workflow = find.byKey(
+      const ValueKey('material-request-mobile-workflow'),
+    );
+    await tester.scrollUntilVisible(
+      workflow,
+      420,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(workflow, findsOneWidget);
+    expect(
+      find.descendant(of: workflow, matching: find.byIcon(Icons.check_rounded)),
+      findsNWidgets(7),
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      workflow,
+      matchesGoldenFile('goldens/r35/mr_closed_workflow_mobile_360.png'),
+    );
+  });
+
   testWidgets('desktop MR BOQ picker selects scoped rows without duplicates', (
     tester,
   ) async {
@@ -1039,6 +1261,53 @@ final _submittedRequest = YorksV1MaterialRequest(
     ),
   ],
 );
+
+YorksV1MaterialRequest _requestVariant({
+  required String id,
+  YorksV1MaterialRequestState state =
+      YorksV1MaterialRequestState.approvedForArrangement,
+  List<YorksV1MaterialRequestComment> comments = const [],
+}) => YorksV1MaterialRequest(
+  id: id,
+  projectId: _submittedRequest.projectId,
+  projectReference: _submittedRequest.projectReference,
+  projectName: _submittedRequest.projectName,
+  scopeId: _submittedRequest.scopeId,
+  scopeName: _submittedRequest.scopeName,
+  state: state,
+  recordVersion: _submittedRequest.recordVersion,
+  createdAt: _submittedRequest.createdAt,
+  updatedAt: _submittedRequest.updatedAt,
+  timing: _submittedRequest.timing,
+  requestNumber: _submittedRequest.requestNumber,
+  title: _submittedRequest.title,
+  requesterDisplayName: _submittedRequest.requesterDisplayName,
+  requesterProjectRole: _submittedRequest.requesterProjectRole,
+  currentActionOwnerRole: state == YorksV1MaterialRequestState.closed
+      ? null
+      : _submittedRequest.currentActionOwnerRole,
+  currentActionCode: state == YorksV1MaterialRequestState.closed
+      ? null
+      : _submittedRequest.currentActionCode,
+  comments: comments,
+  lines: _submittedRequest.lines,
+);
+
+List<YorksV1MaterialRequestComment> _discussionComments(String requestId) =>
+    List.generate(
+      9,
+      (index) => YorksV1MaterialRequestComment(
+        id: 'comment-$index',
+        requestId: requestId,
+        body: 'Discussion comment ${index + 1}',
+        authorAuthUserId: 'author-$index',
+        authorRole: 'project_engineer',
+        authorExactRole: 'project_engineer',
+        authorDisplayName: 'Engineer ${index + 1}',
+        createdAt: DateTime.utc(2026, 8, 14, 8, index),
+        mentions: const [],
+      ),
+    );
 
 final _draftRequest = YorksV1MaterialRequest(
   id: 'mobile-mr-draft-record',

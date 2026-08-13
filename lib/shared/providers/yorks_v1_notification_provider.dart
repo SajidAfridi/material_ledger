@@ -105,21 +105,47 @@ class YorksV1NotificationsNotifier
     if (repository == null) return;
     final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
     final index = current.indexWhere((item) => item.id == notificationId);
-    if (index < 0 || current[index].seenAt != null) return;
-    await repository.markSeen(notificationId);
-    await refresh();
+    if (index < 0) {
+      await repository.markSeen(notificationId);
+      await refresh();
+      return;
+    }
+    if (current[index].seenAt != null) return;
+    final acknowledged = current[index].acknowledgedAt(DateTime.now());
+    state = AsyncData([
+      ...current.take(index),
+      acknowledged,
+      ...current.skip(index + 1),
+    ]);
+    try {
+      await repository.markSeen(notificationId);
+    } catch (_) {
+      if (!_disposed) state = AsyncData(current);
+      rethrow;
+    }
   }
 
   Future<void> markAllSeen() async {
-    final unread = (state.valueOrNull ?? const <YorksV1NotificationRecord>[])
-        .where((record) => record.seenAt == null)
-        .map((record) => record.id)
-        .toList(growable: false);
-    for (final id in unread) {
-      if (_disposed) return;
-      await _repository?.markSeen(id);
+    final repository = _repository;
+    if (repository == null) return;
+    final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
+    if (!current.any((record) => record.seenAt == null)) return;
+    final acknowledgedAt = DateTime.now();
+    state = AsyncData(
+      current
+          .map(
+            (record) => record.seenAt == null
+                ? record.acknowledgedAt(acknowledgedAt)
+                : record,
+          )
+          .toList(growable: false),
+    );
+    try {
+      await repository.markAllSeen();
+    } catch (_) {
+      if (!_disposed) state = AsyncData(current);
+      rethrow;
     }
-    await refresh();
   }
 
   Future<bool> _subscribe() async {

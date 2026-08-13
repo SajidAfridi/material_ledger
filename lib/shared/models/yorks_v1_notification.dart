@@ -23,6 +23,18 @@ class YorksV1NotificationRecord {
   final DateTime createdAt;
   final DateTime? seenAt;
 
+  YorksV1NotificationRecord acknowledgedAt(DateTime value) =>
+      YorksV1NotificationRecord(
+        id: id,
+        eventCode: eventCode,
+        entityType: entityType,
+        entityId: entityId,
+        requestId: requestId,
+        projectId: projectId,
+        createdAt: createdAt,
+        seenAt: value,
+      );
+
   factory YorksV1NotificationRecord.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1NotificationRecord(
       id: json['notification_id'] as String,

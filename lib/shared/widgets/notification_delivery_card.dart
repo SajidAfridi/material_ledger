@@ -104,8 +104,11 @@ class _NotificationDeliveryCardState
 
   Future<void> _enable() async {
     setState(() => _working = true);
-    await prepareNotificationAlertSound();
-    await ref.read(pushServiceProvider).enable();
+    final soundReady = await prepareNotificationAlertSound();
+    final status = await ref.read(pushServiceProvider).enable();
+    if (soundReady && status.isAllowed) {
+      await playNotificationAlertSound();
+    }
     if (mounted) setState(() => _working = false);
   }
 

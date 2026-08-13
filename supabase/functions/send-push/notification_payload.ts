@@ -158,12 +158,23 @@ export function routeFor(claim: PushClaim): string {
   return "/notifications";
 }
 
-export function webLinkFor(route: string, origin: string): string | null {
+export function webLinkFor(
+  route: string,
+  origin: string,
+  notificationId = "",
+): string | null {
   try {
     const base = new URL(origin);
     if (base.protocol !== "https:") return null;
     if (!route.startsWith("/") || route.startsWith("//")) return null;
-    return new URL(route, base).toString();
+    const target = new URL(route, "https://yorks.invalid");
+    if (/^[0-9a-f-]{36}$/i.test(notificationId)) {
+      target.searchParams.set("notificationId", notificationId);
+    }
+    base.pathname = "/";
+    base.search = "";
+    base.hash = `#${target.pathname}${target.search}`;
+    return base.toString();
   } catch {
     return null;
   }

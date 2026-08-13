@@ -3830,7 +3830,10 @@ int _materialRequestStage(YorksV1MaterialRequestState state) => switch (state) {
   YorksV1MaterialRequestState.dispatched => 5,
   YorksV1MaterialRequestState.partiallyReceived ||
   YorksV1MaterialRequestState.received => 6,
-  YorksV1MaterialRequestState.closed => 7,
+  // Closed sits beyond the seventh visible stage so every lifecycle marker
+  // renders complete. The stage badge clamps this back to the user-facing
+  // "Stage 7 of 7" label.
+  YorksV1MaterialRequestState.closed => 8,
   YorksV1MaterialRequestState.cancelled => 1,
 };
 
@@ -4027,24 +4030,27 @@ class _IndustrialStageChip extends StatelessWidget {
   final int stage;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.sm,
-      vertical: AppSpacing.xs,
-    ),
-    decoration: BoxDecoration(
-      color: AppColors.successContainer,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-      border: Border.all(color: AppColors.success.withValues(alpha: .18)),
-    ),
-    child: Text(
-      YorksV1MaterialRequestStrings.stageOfSeven(stage).primary,
-      style: AppTypography.labelSmall.copyWith(
-        color: AppColors.onSuccessContainer,
-        fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) {
+    final visibleStage = stage > 7 ? 7 : stage;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
-    ),
-  );
+      decoration: BoxDecoration(
+        color: AppColors.successContainer,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+        border: Border.all(color: AppColors.success.withValues(alpha: .18)),
+      ),
+      child: Text(
+        YorksV1MaterialRequestStrings.stageOfSeven(visibleStage).primary,
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.onSuccessContainer,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _IndustrialMeta extends StatelessWidget {
@@ -4099,7 +4105,11 @@ class _IndustrialSectionNumber extends StatelessWidget {
 }
 
 class _IndustrialWorkflowStrip extends StatelessWidget {
-  const _IndustrialWorkflowStrip({required this.stage, this.condensed = false});
+  const _IndustrialWorkflowStrip({
+    super.key,
+    required this.stage,
+    this.condensed = false,
+  });
 
   final int stage;
   final bool condensed;
@@ -7777,6 +7787,7 @@ class _MobileMrLifecycleTimeline extends StatelessWidget {
     final stage = _materialRequestStage(request.state);
     final labels = _materialRequestStageLabels;
     return YorksMobileCard(
+      key: const ValueKey('material-request-mobile-workflow'),
       child: Column(
         children: [
           for (var index = 0; index < labels.length; index++) ...[
@@ -8006,6 +8017,7 @@ class _MaterialRequestDiscussionState
     extends ConsumerState<_MaterialRequestDiscussion> {
   final _commentController = TextEditingController();
   final _commentFocusNode = FocusNode();
+  final _discussionScrollController = ScrollController();
   final Set<String> _mentions = {};
   String? _mentionQuery;
   int? _mentionStart;
@@ -8022,6 +8034,7 @@ class _MaterialRequestDiscussionState
     _commentController.removeListener(_updateMentionQuery);
     _commentController.dispose();
     _commentFocusNode.dispose();
+    _discussionScrollController.dispose();
     super.dispose();
   }
 
@@ -8098,38 +8111,32 @@ class _MaterialRequestDiscussionState
         if (widget.request.comments.isEmpty)
           const _MaterialRequestDiscussionEmptyState()
         else
-          for (final comment in widget.request.comments) ...[
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${comment.authorDisplayName} · ${_displayWorkflowRole(comment.authorExactRole, language)}',
-                    style: AppTypography.labelMedium.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(comment.body, style: AppTypography.bodyMedium),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    MaterialLocalizations.of(
-                      context,
-                    ).formatMediumDate(comment.createdAt.toLocal()),
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
+          ConstrainedBox(
+            key: const ValueKey('material-request-discussion-scroll'),
+            constraints: BoxConstraints(maxHeight: widget.compact ? 300 : 420),
+            child: Scrollbar(
+              controller: _discussionScrollController,
+              thumbVisibility: widget.request.comments.length > 3,
+              interactive: true,
+              child: ListView.separated(
+                controller: _discussionScrollController,
+                primary: false,
+                shrinkWrap: true,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsetsDirectional.only(end: AppSpacing.xs),
+                itemCount: widget.request.comments.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: AppSpacing.sm),
+                itemBuilder: (context, index) => _MaterialRequestCommentCard(
+                  comment: widget.request.comments[index],
+                  language: language,
+                ),
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
+          ),
+        if (widget.request.comments.isNotEmpty)
+          const SizedBox(height: AppSpacing.sm),
         candidates.when(
           loading: () => _mentionQuery == null
               ? const SizedBox.shrink()
@@ -8312,6 +8319,45 @@ class _MaterialRequestDiscussionState
       if (mounted) setState(() => _posting = false);
     }
   }
+}
+
+class _MaterialRequestCommentCard extends StatelessWidget {
+  const _MaterialRequestCommentCard({
+    required this.comment,
+    required this.language,
+  });
+
+  final YorksV1MaterialRequestComment comment;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${comment.authorDisplayName} · ${_displayWorkflowRole(comment.authorExactRole, language)}',
+          style: AppTypography.labelMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(comment.body, style: AppTypography.bodyMedium),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          MaterialLocalizations.of(
+            context,
+          ).formatMediumDate(comment.createdAt.toLocal()),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+      ],
+    ),
+  );
 }
 
 class _MaterialRequestDiscussionEmptyState extends StatelessWidget {
@@ -9777,7 +9823,11 @@ class _RequestWorkflowCard extends StatelessWidget {
             },
           ),
           const SizedBox(height: AppSpacing.xl),
-          _IndustrialWorkflowStrip(stage: stage, condensed: true),
+          _IndustrialWorkflowStrip(
+            key: const ValueKey('material-request-workflow-strip'),
+            stage: stage,
+            condensed: true,
+          ),
           const SizedBox(height: AppSpacing.lg),
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),

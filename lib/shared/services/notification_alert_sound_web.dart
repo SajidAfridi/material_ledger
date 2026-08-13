@@ -8,12 +8,14 @@ web.AudioContext? _audioContext;
 /// calls this from the first pointer event and from the explicit Enable alerts
 /// action so later foreground workflow alerts can make a short, professional
 /// chime without bundling or downloading an audio file.
-Future<void> prepareNotificationAlertSound() async {
+Future<bool> prepareNotificationAlertSound() async {
   try {
     final context = _audioContext ??= web.AudioContext();
     if (context.state != 'running') await context.resume().toDart;
+    return context.state == 'running';
   } catch (_) {
     // Browser/OS policy remains authoritative. Visual alerts still work.
+    return false;
   }
 }
 

@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../core/constants/constants.dart';
+import '../../app/app.dart' show appRouterProvider;
+import '../../core/widgets/yorks_app_toast.dart';
 import '../models/app_notification.dart';
 import '../models/app_strings.dart';
 import '../models/yorks_v1_notification.dart';
@@ -42,6 +42,7 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   bool _serverPrimed = false;
   bool _legacyPrimed = false;
   bool _soundPrepared = false;
+  Future<bool>? _soundPreparation;
   DateTime? _lastSoundAt;
 
   @override
@@ -125,10 +126,33 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
     }
   }
 
-  Future<void> _prepareSound() async {
-    if (_soundPrepared) return;
-    _soundPrepared = true;
-    await prepareNotificationAlertSound();
+  Future<bool> _prepareSound() {
+    if (_soundPrepared) return Future<bool>.value(true);
+    final inFlight = _soundPreparation;
+    if (inFlight != null) return inFlight;
+    late final Future<bool> attempt;
+    attempt = prepareNotificationAlertSound()
+        .then((prepared) {
+          _soundPrepared = prepared;
+          return prepared;
+        })
+        .whenComplete(() {
+          if (identical(_soundPreparation, attempt)) _soundPreparation = null;
+        });
+    _soundPreparation = attempt;
+    return attempt;
+  }
+
+  Future<void> _playSound() async {
+    if (await _prepareSound()) await playNotificationAlertSound();
+  }
+
+  Future<void> _markRead(AppNotification notification) async {
+    try {
+      await ref.read(notificationActionsProvider).markRead(notification);
+    } catch (_) {
+      // The optimistic server state rolls back and Realtime/polling retries.
+    }
   }
 
   void _show(AppNotification notification) {
@@ -141,75 +165,38 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
     if (_lastSoundAt == null ||
         now.difference(_lastSoundAt!) > const Duration(milliseconds: 700)) {
       _lastSoundAt = now;
-      unawaited(playNotificationAlertSound());
+      unawaited(_playSound());
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      if (messenger == null) return;
-      messenger.showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 8),
-          backgroundColor: AppColors.navy,
-          margin: const EdgeInsets.all(AppSpacing.md),
-          content: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Icon(
-                  Icons.notifications_active_rounded,
-                  color: AppColors.onPrimary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      notification.title,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.onPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (notification.body.trim().isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        notification.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.onPrimary.withValues(alpha: .86),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          action: notification.route.isEmpty
-              ? null
-              : SnackBarAction(
-                  label: AppStrings.viewDetails.active(
-                    ref.read(languageProvider),
-                  ),
-                  textColor: AppColors.onPrimary,
-                  onPressed: () {
-                    unawaited(
-                      ref
-                          .read(notificationActionsProvider)
-                          .markRead(notification),
-                    );
-                    if (mounted) context.push(notification.route);
-                  },
-                ),
-        ),
+      final localNavigator = Navigator.maybeOf(context, rootNavigator: true);
+      final routerNavigator = localNavigator == null
+          ? ref.read(appRouterProvider).routerDelegate.navigatorKey.currentState
+          : null;
+      final alertContext =
+          (localNavigator ?? routerNavigator)?.overlay?.context;
+      if (alertContext == null) return;
+      YorksAppToast.show(
+        alertContext,
+        title: notification.title,
+        message: notification.body,
+        duration: const Duration(seconds: 4),
+        maxWidth: 560,
+        icon: Icons.notifications_active_rounded,
+        actionLabel: notification.route.isEmpty
+            ? null
+            : AppStrings.viewDetails.active(ref.read(languageProvider)),
+        onAction: notification.route.isEmpty
+            ? null
+            : () {
+                unawaited(_markRead(notification));
+                try {
+                  ref.read(appRouterProvider).push(notification.route);
+                } catch (_) {
+                  // A stale deep link must not make the alert action fatal.
+                }
+              },
+        dismissible: true,
       );
     });
   }

@@ -18,6 +18,21 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+function appUrlFor(data) {
+  const route = typeof data.route === 'string' && data.route.startsWith('/')
+    && !data.route.startsWith('//')
+    ? data.route
+    : '/notifications';
+  const target = new URL(route, 'https://yorks.invalid');
+  if (typeof data.notificationId === 'string'
+      && /^[0-9a-f-]{36}$/i.test(data.notificationId)) {
+    target.searchParams.set('notificationId', data.notificationId);
+  }
+  const appUrl = new URL(self.registration.scope);
+  appUrl.hash = `#${target.pathname}${target.search}`;
+  return appUrl.toString();
+}
+
 messaging.onBackgroundMessage((payload) => {
   // Requested operational diagnostic: visible in the device browser's console.
   // Business payloads must remain non-commercial by the Yorks notification
@@ -33,16 +48,16 @@ messaging.onBackgroundMessage((payload) => {
   const body = typeof data.body === 'string' && data.body
     ? data.body
     : 'A record assigned to you has changed.';
-  const route = typeof data.route === 'string' && data.route.startsWith('/')
-    && !data.route.startsWith('//')
-    ? data.route
-    : '/notifications';
   return self.registration.showNotification(title, {
     body,
     icon: '/icons/Icon-192.png',
     badge: '/icons/Icon-192.png',
     tag: data.notificationId || undefined,
-    data: { route, yorksFallback: true },
+    renotify: Boolean(data.notificationId),
+    requireInteraction: false,
+    silent: false,
+    vibrate: [120, 60, 120],
+    data: { appUrl: appUrlFor(data), yorksFallback: true },
   });
 });
 
@@ -51,7 +66,8 @@ self.addEventListener('notificationclick', (event) => {
   // their fcm_options.link). Handle only the data-only fallback created above.
   if (event.notification?.data?.yorksFallback !== true) return;
   event.notification.close();
-  const route = event.notification?.data?.route || '/notifications';
+  const appUrl = event.notification?.data?.appUrl
+    || appUrlFor({ route: '/notifications' });
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({
       type: 'window',
@@ -59,10 +75,10 @@ self.addEventListener('notificationclick', (event) => {
     });
     for (const windowClient of windows) {
       if ('focus' in windowClient) {
-        if ('navigate' in windowClient) await windowClient.navigate(route);
+        if ('navigate' in windowClient) await windowClient.navigate(appUrl);
         return windowClient.focus();
       }
     }
-    return self.clients.openWindow(route);
+    return self.clients.openWindow(appUrl);
   })());
 });
