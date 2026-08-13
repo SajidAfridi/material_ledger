@@ -2206,6 +2206,7 @@ class _YorksMobileMaterialRequestDraftFlowState
   late final TextEditingController _customSize;
   late final TextEditingController _customModel;
   late final TextEditingController _customQuantity;
+  String? _editingCustomLineId;
   String _customUnit = 'Nos';
 
   @override
@@ -2532,6 +2533,7 @@ class _YorksMobileMaterialRequestDraftFlowState
                 _MobileMrDraftLineCard(
                   line: line,
                   enabled: !_busy,
+                  onAddSimilar: () => _addSimilarMaterial(line),
                   onRemove: () => widget.controller.removeLine(line.id),
                 ),
                 const SizedBox(height: 10),
@@ -2638,6 +2640,21 @@ class _YorksMobileMaterialRequestDraftFlowState
                     error: true,
                   ),
                 ),
+              YorksMobileSectionHeader(
+                title: YorksV1MaterialRequestStrings.selectedItems.primary,
+                subtitle:
+                    '${_draft.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+              ),
+              const SizedBox(height: 10),
+              for (var index = 0; index < _draft.lines.length; index++) ...[
+                _MobileMrReviewLineCard(
+                  number: index + 1,
+                  line: _draft.lines[index],
+                ),
+                if (index != _draft.lines.length - 1)
+                  const SizedBox(height: 10),
+              ],
+              const SizedBox(height: 4),
               Material(
                 color: Colors.transparent,
                 child: CheckboxListTile(
@@ -2976,10 +2993,13 @@ class _YorksMobileMaterialRequestDraftFlowState
       ),
       _MobileMrStickyActions(
         secondaryLabel: YorksV1MaterialRequestStrings.back.primary,
-        onSecondary: () =>
-            setState(() => _sourcePage = _MobileMaterialRequestSourcePage.none),
-        primaryLabel: YorksV1MaterialRequestStrings.addCustomItem.primary,
-        primaryIcon: Icons.add_rounded,
+        onSecondary: () => unawaited(_closeCustomMaterialEditor()),
+        primaryLabel: _editingCustomLineId == null
+            ? YorksV1MaterialRequestStrings.addCustomItem.primary
+            : AppStrings.saveChanges.primary,
+        primaryIcon: _editingCustomLineId == null
+            ? Icons.add_rounded
+            : Icons.check_rounded,
         onPrimary: _busy ? null : _addCustomMaterial,
       ),
     ],
@@ -3243,8 +3263,13 @@ class _YorksMobileMaterialRequestDraftFlowState
       _snack(context, YorksV1MaterialRequestStrings.missingRequired.primary);
       return;
     }
-    await widget.controller.addCustomLine();
-    final line = widget.controller.currentDraft.lines.lastOrNull;
+    final editingLineId = _editingCustomLineId;
+    if (editingLineId == null) await widget.controller.addCustomLine();
+    final line = editingLineId == null
+        ? widget.controller.currentDraft.lines.lastOrNull
+        : widget.controller.currentDraft.lines
+              .where((item) => item.id == editingLineId)
+              .firstOrNull;
     if (line == null) return;
     await widget.controller.updateLine(
       line.id,
@@ -3262,6 +3287,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     if (!mounted) return;
     setState(() {
       _sourcePage = _MobileMaterialRequestSourcePage.none;
+      _editingCustomLineId = null;
       _customDescription.clear();
       _customBrand.clear();
       _customSize.clear();
@@ -3270,6 +3296,42 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customUnit = 'Nos';
     });
     _snack(context, YorksV1MaterialRequestStrings.itemAdded.primary);
+  }
+
+  Future<void> _addSimilarMaterial(YorksV1MaterialRequestLine source) async {
+    await widget.controller.addSimilarLine(afterLineId: source.id);
+    final lines = widget.controller.currentDraft.lines;
+    final sourceIndex = lines.indexWhere((line) => line.id == source.id);
+    if (sourceIndex < 0 || sourceIndex + 1 >= lines.length || !mounted) return;
+    final similar = lines[sourceIndex + 1];
+    setState(() {
+      _editingCustomLineId = similar.id;
+      _customDescription.text = similar.description;
+      _customBrand.text = similar.brandOrigin ?? '';
+      _customSize.text = similar.size ?? '';
+      _customModel.text = similar.model ?? similar.planningModelTag ?? '';
+      _customQuantity.clear();
+      _customUnit = similar.unit;
+      _sourcePage = _MobileMaterialRequestSourcePage.custom;
+    });
+  }
+
+  Future<void> _closeCustomMaterialEditor() async {
+    final provisionalLineId = _editingCustomLineId;
+    if (provisionalLineId != null) {
+      await widget.controller.removeLine(provisionalLineId);
+    }
+    if (!mounted) return;
+    setState(() {
+      _sourcePage = _MobileMaterialRequestSourcePage.none;
+      _editingCustomLineId = null;
+      _customDescription.clear();
+      _customBrand.clear();
+      _customSize.clear();
+      _customModel.clear();
+      _customQuantity.text = '1';
+      _customUnit = 'Nos';
+    });
   }
 
   Future<void> _submit() async {
@@ -3283,7 +3345,7 @@ class _YorksMobileMaterialRequestDraftFlowState
       return;
     }
     if (_sourcePage != _MobileMaterialRequestSourcePage.none) {
-      setState(() => _sourcePage = _MobileMaterialRequestSourcePage.none);
+      unawaited(_closeCustomMaterialEditor());
       return;
     }
     if (_step == _MobileMaterialRequestDraftStep.review) {
@@ -3491,11 +3553,13 @@ class _MobileMrDraftLineCard extends StatelessWidget {
   const _MobileMrDraftLineCard({
     required this.line,
     required this.enabled,
+    required this.onAddSimilar,
     required this.onRemove,
   });
 
   final YorksV1MaterialRequestLine line;
   final bool enabled;
+  final VoidCallback onAddSimilar;
   final VoidCallback onRemove;
 
   @override
@@ -3543,15 +3607,124 @@ class _MobileMrDraftLineCard extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox.square(
-          dimension: AppSpacing.minTapTarget,
-          child: IconButton(
-            tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
-            onPressed: enabled ? onRemove : null,
-            icon: const Icon(
-              Icons.close_rounded,
-              color: AppColors.error,
-              size: 20,
+        const SizedBox(width: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MrSimilarButton(
+              buttonKey: ValueKey('${line.id}-mobile-similar'),
+              enabled: enabled,
+              onPressed: onAddSimilar,
+            ),
+            const SizedBox(width: 4),
+            _MrDeleteButton(
+              buttonKey: ValueKey('${line.id}-mobile-delete'),
+              enabled: enabled,
+              onPressed: onRemove,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _MobileMrReviewLineCard extends StatelessWidget {
+  const _MobileMrReviewLineCard({required this.number, required this.line});
+
+  final int number;
+  final YorksV1MaterialRequestLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <(String, String)>[
+      if (line.brandOrigin?.trim().isNotEmpty == true)
+        (
+          YorksV1MaterialRequestStrings.brandOrigin.primary,
+          line.brandOrigin!.trim(),
+        ),
+      if (line.size?.trim().isNotEmpty == true)
+        (YorksV1MaterialRequestStrings.size.primary, line.size!.trim()),
+      if ((line.model ?? line.planningModelTag)?.trim().isNotEmpty == true)
+        (
+          YorksV1MaterialRequestStrings.planningModelTag.primary,
+          (line.model ?? line.planningModelTag)!.trim(),
+        ),
+    ];
+    return YorksMobileCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.blueContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$number',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.blue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  line.description,
+                  style: AppTypography.titleSmall.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _MobileMrReviewFact(
+            label: YorksV1MaterialRequestStrings.quantity.primary,
+            value: '${yorksV1DisplayQuantity(line.quantity)} ${line.unit}',
+          ),
+          for (final detail in details)
+            _MobileMrReviewFact(label: detail.$1, value: detail.$2),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileMrReviewFact extends StatelessWidget {
+  const _MobileMrReviewFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 104,
+          child: Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -5552,9 +5725,22 @@ class _DesktopLinesTable extends StatelessWidget {
               ),
             ),
             _MrTableCell(
-              child: _MrDeleteButton(
-                enabled: enabled,
-                onPressed: () => controller.removeLine(line.id),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _MrSimilarButton(
+                    buttonKey: ValueKey('${line.id}-desktop-similar'),
+                    enabled: enabled,
+                    onPressed: () =>
+                        controller.addSimilarLine(afterLineId: line.id),
+                  ),
+                  const SizedBox(width: 6),
+                  _MrDeleteButton(
+                    buttonKey: ValueKey('${line.id}-desktop-delete'),
+                    enabled: enabled,
+                    onPressed: () => controller.removeLine(line.id),
+                  ),
+                ],
               ),
             ),
           ],
@@ -5577,7 +5763,7 @@ class _DesktopLinesTable extends StatelessWidget {
             4: FlexColumnWidth(1.45),
             5: FlexColumnWidth(.9),
             6: FixedColumnWidth(106),
-            7: FixedColumnWidth(68),
+            7: FixedColumnWidth(118),
           },
           border: TableBorder(
             horizontalInside: BorderSide(color: AppColors.line),
@@ -5815,17 +6001,50 @@ class _InventoryDescriptionFieldState
 }
 
 class _MrDeleteButton extends StatelessWidget {
-  const _MrDeleteButton({required this.enabled, required this.onPressed});
+  const _MrDeleteButton({
+    this.buttonKey,
+    required this.enabled,
+    required this.onPressed,
+  });
 
+  final Key? buttonKey;
   final bool enabled;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) => IconButton(
+    key: buttonKey,
     tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
     icon: const Icon(Icons.close_rounded, color: AppColors.error),
     style: IconButton.styleFrom(
       side: const BorderSide(color: AppColors.error),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      minimumSize: const Size(44, 44),
+    ),
+    onPressed: enabled ? onPressed : null,
+  );
+}
+
+class _MrSimilarButton extends StatelessWidget {
+  const _MrSimilarButton({
+    this.buttonKey,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final Key? buttonKey;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: buttonKey,
+    tooltip: YorksV1MaterialRequestStrings.addSimilarRow.primary,
+    icon: const Icon(Icons.copy_all_outlined, color: AppColors.blue),
+    style: IconButton.styleFrom(
+      side: const BorderSide(color: AppColors.blue),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       ),
@@ -5904,7 +6123,14 @@ class _FocusedLineEditor extends StatelessWidget {
           children: [
             Text('${line.displayOrder}', style: AppTypography.titleSmall),
             const Spacer(),
+            _MrSimilarButton(
+              buttonKey: ValueKey('${line.id}-focused-similar'),
+              enabled: enabled,
+              onPressed: () => controller.addSimilarLine(afterLineId: line.id),
+            ),
+            const SizedBox(width: 6),
             _MrDeleteButton(
+              buttonKey: ValueKey('${line.id}-focused-delete'),
               enabled: enabled,
               onPressed: () => controller.removeLine(line.id),
             ),
@@ -6561,6 +6787,7 @@ class _RequestDetailBody extends ConsumerWidget {
                 ),
               )
             : null,
+        onGenerateDeliveryOrder: onGenerateDeliveryOrder,
         documentModel: documentModel,
         onPdf: documentModel.valueOrNull == null
             ? null
@@ -7007,6 +7234,7 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
     required this.onCancel,
     required this.onOpenLogistics,
     required this.onOpenDocuments,
+    required this.onGenerateDeliveryOrder,
     required this.documentModel,
     required this.onPdf,
     required this.onPrint,
@@ -7020,6 +7248,7 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
   final VoidCallback? onCancel;
   final VoidCallback? onOpenLogistics;
   final VoidCallback? onOpenDocuments;
+  final VoidCallback? onGenerateDeliveryOrder;
   final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
   final VoidCallback? onPdf;
   final VoidCallback? onPrint;
@@ -7138,6 +7367,25 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (onGenerateDeliveryOrder != null &&
+                      primaryAction !=
+                          YorksV1MaterialRequestDetailPrimaryAction
+                              .generateDeliveryOrder) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        key: const ValueKey(
+                          'mobile-mr-generate-delivery-order',
+                        ),
+                        onPressed: onGenerateDeliveryOrder,
+                        icon: const Icon(Icons.receipt_long_outlined),
+                        label: Text(
+                          YorksV1LogisticsStrings.generateDeliveryOrder.primary,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   YorksMobileSectionHeader(
                     title: YorksV1MaterialRequestStrings.items.primary,
@@ -7757,6 +8005,7 @@ class _MaterialRequestDiscussion extends ConsumerStatefulWidget {
 class _MaterialRequestDiscussionState
     extends ConsumerState<_MaterialRequestDiscussion> {
   final _commentController = TextEditingController();
+  final _commentFocusNode = FocusNode();
   final Set<String> _mentions = {};
   String? _mentionQuery;
   int? _mentionStart;
@@ -7772,6 +8021,7 @@ class _MaterialRequestDiscussionState
   void dispose() {
     _commentController.removeListener(_updateMentionQuery);
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -7804,41 +8054,49 @@ class _MaterialRequestDiscussionState
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.compact) ...[
-          Text(
-            YorksV1MaterialRequestStrings.discussion.primary,
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.w800,
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.blueContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: const Icon(
+                Icons.forum_outlined,
+                size: 18,
+                color: AppColors.blue,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            YorksV1MaterialRequestStrings.discussionDescription.primary,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                YorksV1MaterialRequestStrings.discussion.primary,
+                style: AppTypography.titleMedium.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('material-request-add-comment'),
+              onPressed: _posting ? null : _focusComposer,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.blue,
+                minimumSize: const Size(0, AppSpacing.minTapTarget),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                textStyle: AppTypography.labelMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              child: Text(YorksV1MaterialRequestStrings.addComment.primary),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
         if (widget.request.comments.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.forum_outlined,
-                  size: 34,
-                  color: AppColors.muted.withValues(alpha: .6),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  YorksV1MaterialRequestStrings.noComments.primary,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          )
+          const _MaterialRequestDiscussionEmptyState()
         else
           for (final comment in widget.request.comments) ...[
             Container(
@@ -7872,7 +8130,6 @@ class _MaterialRequestDiscussionState
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
-        const Divider(height: AppSpacing.lg),
         candidates.when(
           loading: () => _mentionQuery == null
               ? const SizedBox.shrink()
@@ -7884,41 +8141,94 @@ class _MaterialRequestDiscussionState
             onSelected: _insertMention,
           ),
         ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _commentController,
-                minLines: 1,
-                maxLines: 4,
-                enabled: !_posting,
-                decoration: InputDecoration(
-                  hintText:
-                      YorksV1MaterialRequestStrings.commentComposerHint.primary,
-                  prefixIcon: const Icon(
-                    Icons.alternate_email_rounded,
-                    size: 19,
+        Container(
+          key: const ValueKey('material-request-comment-composer'),
+          constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+          padding: const EdgeInsets.only(
+            left: AppSpacing.md,
+            right: AppSpacing.xxs,
+            top: AppSpacing.xxs,
+            bottom: AppSpacing.xxs,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            border: Border.all(color: AppColors.lineStrong),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  focusNode: _commentFocusNode,
+                  minLines: 1,
+                  maxLines: 4,
+                  enabled: !_posting,
+                  textInputAction: TextInputAction.newline,
+                  decoration: InputDecoration(
+                    hintText: YorksV1MaterialRequestStrings
+                        .commentComposerHint
+                        .primary,
+                    hintStyle: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            IconButton.filled(
-              tooltip: YorksV1MaterialRequestStrings.postComment.primary,
-              onPressed: _posting ? null : _post,
-              icon: _posting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded, size: 19),
-              style: IconButton.styleFrom(
-                minimumSize: const Size.square(AppSpacing.minTapTarget),
+              IconButton(
+                key: const ValueKey('material-request-mention-action'),
+                tooltip: YorksV1MaterialRequestStrings.mentionTeammates.primary,
+                onPressed: _posting ? null : _beginMention,
+                icon: const Icon(Icons.alternate_email_rounded, size: 20),
+                color: AppColors.inkSecondary,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(AppSpacing.minTapTarget),
+                ),
               ),
-            ),
-          ],
+              IconButton(
+                key: const ValueKey('material-request-attachment-action'),
+                tooltip: YorksV1MaterialRequestStrings
+                    .commentAttachmentsUnavailable
+                    .primary,
+                onPressed: null,
+                icon: const Icon(Icons.attach_file_rounded, size: 20),
+                disabledColor: AppColors.mutedLight,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(AppSpacing.minTapTarget),
+                ),
+              ),
+              IconButton.filled(
+                key: const ValueKey('material-request-send-comment'),
+                tooltip: YorksV1MaterialRequestStrings.postComment.primary,
+                onPressed: _posting ? null : _post,
+                icon: _posting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.onPrimary,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, size: 20),
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(AppSpacing.minTapTarget),
+                  backgroundColor: AppColors.blue,
+                  foregroundColor: AppColors.onPrimary,
+                  disabledBackgroundColor: AppColors.blueContainerStrong,
+                ),
+              ),
+            ],
+          ),
         ),
         if (_mentions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.xs),
@@ -7929,14 +8239,29 @@ class _MaterialRequestDiscussionState
         ],
       ],
     );
-    return widget.compact
-        ? YorksMobileCard(child: content)
-        : _R35RequestCard(
-            title: YorksV1MaterialRequestStrings.discussion.primary,
-            description:
-                YorksV1MaterialRequestStrings.discussionDescription.primary,
-            child: content,
-          );
+    return RepaintBoundary(
+      key: const ValueKey('material-request-discussion-card'),
+      child: widget.compact
+          ? YorksMobileCard(child: content)
+          : _R35RequestSurface(child: content),
+    );
+  }
+
+  void _focusComposer() => _commentFocusNode.requestFocus();
+
+  void _beginMention() {
+    _commentFocusNode.requestFocus();
+    final text = _commentController.text;
+    final selection = _commentController.selection;
+    final cursor = selection.isValid ? selection.baseOffset : text.length;
+    final prefix = cursor > 0 && !RegExp(r'\s').hasMatch(text[cursor - 1])
+        ? ' @'
+        : '@';
+    final next = text.replaceRange(cursor, cursor, prefix);
+    _commentController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: cursor + prefix.length),
+    );
   }
 
   void _insertMention(YorksV1MaterialRequestMention user) {
@@ -7987,6 +8312,80 @@ class _MaterialRequestDiscussionState
       if (mounted) setState(() => _posting = false);
     }
   }
+}
+
+class _MaterialRequestDiscussionEmptyState extends StatelessWidget {
+  const _MaterialRequestDiscussionEmptyState();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    key: const ValueKey('material-request-discussion-empty'),
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+    child: Column(
+      children: [
+        SizedBox(
+          width: 78,
+          height: 58,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 4,
+                top: 0,
+                child: _DiscussionBubble(
+                  color: AppColors.lineStrong,
+                  icon: Icons.notes_rounded,
+                ),
+              ),
+              Positioned(
+                right: 2,
+                bottom: 0,
+                child: _DiscussionBubble(
+                  color: AppColors.mutedLight,
+                  icon: Icons.more_horiz_rounded,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          YorksV1MaterialRequestStrings.noComments.primary,
+          textAlign: TextAlign.center,
+          style: AppTypography.labelLarge.copyWith(
+            color: AppColors.ink,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          YorksV1MaterialRequestStrings.startDiscussion.primary,
+          textAlign: TextAlign.center,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DiscussionBubble extends StatelessWidget {
+  const _DiscussionBubble({required this.color, required this.icon});
+
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 48,
+    height: 38,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      boxShadow: const [
+        BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: Offset(0, 3)),
+      ],
+    ),
+    child: Icon(icon, size: 23, color: AppColors.surfaceContainerLowest),
+  );
 }
 
 String _mentionHandle(String displayName) => displayName

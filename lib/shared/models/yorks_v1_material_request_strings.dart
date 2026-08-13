@@ -289,10 +289,16 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'बदलाव सहेजकर इंजीनियरिंग अनुमोदन के लिए भेज दिए गए हैं।',
   );
   static const discussion = TranslatableString(
-    en: 'Request discussion',
+    en: 'Request Discussion',
     ar: 'مناقشة الطلب',
     ur: 'درخواست پر گفتگو',
     hi: 'अनुरोध चर्चा',
+  );
+  static const addComment = TranslatableString(
+    en: 'Add Comment',
+    ar: 'إضافة تعليق',
+    ur: 'تبصرہ شامل کریں',
+    hi: 'टिप्पणी जोड़ें',
   );
   static const discussionDescription = TranslatableString(
     en: 'Comments stay with this request through every stage. Mention an authorized teammate to notify them.',
@@ -307,7 +313,7 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'टिप्पणी लिखें',
   );
   static const commentComposerHint = TranslatableString(
-    en: 'Write a comment and mention users with @',
+    en: 'Write a comment and mention users…',
     ar: 'اكتب تعليقًا واذكر المستخدمين باستخدام @',
     ur: '@ کے ساتھ تبصرہ لکھیں اور صارفین کا ذکر کریں',
     hi: 'टिप्पणी लिखें और @ से उपयोगकर्ताओं का उल्लेख करें',
@@ -337,10 +343,22 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'टिप्पणी पोस्ट करें',
   );
   static const noComments = TranslatableString(
-    en: 'No comments yet. Start the request discussion here.',
-    ar: 'لا توجد تعليقات بعد. ابدأ مناقشة الطلب هنا.',
-    ur: 'ابھی کوئی تبصرہ نہیں۔ درخواست پر گفتگو یہاں شروع کریں۔',
-    hi: 'अभी कोई टिप्पणी नहीं है। अनुरोध चर्चा यहाँ शुरू करें।',
+    en: 'No comments yet',
+    ar: 'لا توجد تعليقات بعد',
+    ur: 'ابھی کوئی تبصرہ نہیں',
+    hi: 'अभी कोई टिप्पणी नहीं है',
+  );
+  static const startDiscussion = TranslatableString(
+    en: 'Start the discussion by adding a comment.',
+    ar: 'ابدأ المناقشة بإضافة تعليق.',
+    ur: 'تبصرہ شامل کرکے گفتگو شروع کریں۔',
+    hi: 'टिप्पणी जोड़कर चर्चा शुरू करें।',
+  );
+  static const commentAttachmentsUnavailable = TranslatableString(
+    en: 'Comment attachments are not available.',
+    ar: 'مرفقات التعليقات غير متاحة.',
+    ur: 'تبصرے کے منسلکات دستیاب نہیں ہیں۔',
+    hi: 'टिप्पणी अटैचमेंट उपलब्ध नहीं हैं।',
   );
   static const searchInventory = TranslatableString(
     en: 'Search inventory descriptions',

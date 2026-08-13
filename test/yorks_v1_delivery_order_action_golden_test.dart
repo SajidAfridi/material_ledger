@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -18,7 +20,13 @@ void main() {
   setUpAll(() async {
     final fontLoader = FontLoader('NexusSans')
       ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
-    await fontLoader.load();
+    final flutterCache = _flutterCacheDirectory();
+    final iconBytes = await File(
+      '${flutterCache.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    ).readAsBytes();
+    final iconFontLoader = FontLoader('MaterialIcons')
+      ..addFont(Future.value(ByteData.sublistView(iconBytes)));
+    await Future.wait([fontLoader.load(), iconFontLoader.load()]);
   });
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -88,6 +96,110 @@ void main() {
       );
     });
   }
+
+  testWidgets(
+    'received request keeps Delivery Order available beside Close on mobile',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await _pumpReceivedRequest(tester);
+
+      expect(
+        find.byKey(const ValueKey('mobile-mr-generate-delivery-order')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Generate Delivery Order').hitTestable(),
+        findsOneWidget,
+      );
+      expect(find.text('Close request').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/received_delivery_order_small_mobile.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets('received request keeps Delivery Order available on tablet', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await _pumpReceivedRequest(tester);
+
+    expect(find.text('Close request'), findsOneWidget);
+    expect(find.text('Generate Delivery Order'), findsAtLeastNWidgets(1));
+    await tester.ensureVisible(find.text('Generate Delivery Order').last);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Generate Delivery Order').hitTestable(),
+      findsAtLeastNWidgets(1),
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/received_delivery_order_tablet.png'),
+    );
+  });
+}
+
+Directory _flutterCacheDirectory() {
+  var directory = File(Platform.resolvedExecutable).parent;
+  for (var level = 0; level < 8; level++) {
+    if (directory.path.endsWith('${Platform.pathSeparator}cache')) {
+      return directory;
+    }
+    directory = directory.parent;
+  }
+  throw StateError('Could not locate the Flutter cache from the test runner');
+}
+
+Future<void> _pumpReceivedRequest(WidgetTester tester) async {
+  final preferences = await SharedPreferences.getInstance();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        yorksV1CurrentRoleProvider.overrideWithValue(
+          YorksV1Role.seniorMechanicalEngineer,
+        ),
+        yorksV1MaterialRequestDetailProvider(
+          _receivedRequest.id,
+        ).overrideWith((ref) async => _receivedRequest),
+        yorksV1MaterialRequestDocumentProvider(
+          _receivedRequest.id,
+        ).overrideWith(
+          (ref) async =>
+              YorksV1MaterialRequestDocumentModel.fromRequest(_receivedRequest),
+        ),
+        yorksV1ReturnsDocumentsWorkspaceProvider(
+          _receivedRequest.id,
+        ).overrideWith((ref) async => _receivedWorkspace),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: const YorksV1MaterialRequestDetailScreen(
+          requestId: 'received-delivery-order-evidence',
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 final _request = YorksV1MaterialRequest(
@@ -142,6 +254,66 @@ final _workspace = YorksV1ReturnsDocumentsWorkspace(
       dispatchNumber: 'YRA322-DSP001',
       dispatchDate: DateTime.utc(2026, 8, 6),
       dispatchRecordVersion: 3,
+      canGenerate: true,
+    ),
+  ],
+  returnCandidates: const [],
+  materialReturns: const [],
+  returnInventoryItems: const [],
+);
+
+final _receivedRequest = YorksV1MaterialRequest(
+  id: 'received-delivery-order-evidence',
+  projectId: 'project-evidence',
+  projectReference: 'YRA-322',
+  projectName: 'Yorks Tower HVAC',
+  jobContractReference: 'N-19957.2',
+  scopeId: 'common',
+  scopeName: 'Common / All Buildings',
+  state: YorksV1MaterialRequestState.received,
+  recordVersion: 9,
+  createdAt: DateTime.utc(2026, 8, 6),
+  updatedAt: DateTime.utc(2026, 8, 13),
+  timing: YorksV1MaterialRequestTiming.normal,
+  requestNumber: 'YRA322-MR001',
+  title: 'Site delivery materials',
+  requesterDisplayName: 'Assigned Project Engineer',
+  requesterProjectRole: 'Project Engineer',
+  currentActionOwnerRole: 'Project Engineer',
+  currentActionCode: 'close_request',
+  lines: const [
+    YorksV1MaterialRequestLine(
+      id: 'line-evidence',
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: 'Insulated ductwork',
+      brandOrigin: 'Yorks',
+      quantity: '21',
+      unit: 'Nos',
+    ),
+  ],
+);
+
+final _receivedWorkspace = YorksV1ReturnsDocumentsWorkspace(
+  requestId: _receivedRequest.id,
+  projectId: _receivedRequest.projectId,
+  requestNumber: _receivedRequest.requestNumber!,
+  requestState: 'received',
+  requestRecordVersion: _receivedRequest.recordVersion,
+  projectName: _receivedRequest.projectName,
+  projectReference: _receivedRequest.projectReference,
+  jobContractReference: _receivedRequest.jobContractReference,
+  scopeName: _receivedRequest.scopeName,
+  scopeCode: 'B-01',
+  canGenerateDeliveryOrder: true,
+  canSubmitMaterialReturn: false,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: [
+    YorksV1DeliveryOrderDispatch(
+      dispatchId: 'dispatch-received-evidence',
+      dispatchNumber: 'YRA322-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 12),
+      dispatchRecordVersion: 4,
       canGenerate: true,
     ),
   ],

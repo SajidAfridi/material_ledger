@@ -72,6 +72,22 @@ void main() {
     );
   });
 
+  testWidgets('desktop MR row exposes Similar beside delete', (tester) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester);
+
+    await tester.tap(find.text('Add Blank Row'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Add Similar Row'), findsOneWidget);
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+    await tester.tap(find.byTooltip('Add Similar Row'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Add Similar Row'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'desktop description typing suggests inventory and fills descriptive cells',
     (tester) async {
@@ -160,12 +176,44 @@ void main() {
         YorksV1MaterialRequestStrings.commentComposerHint.primary,
       );
       await tester.ensureVisible(composer);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Request Discussion'), findsOneWidget);
+      expect(find.text('Add Comment'), findsOneWidget);
+      expect(find.text('No comments yet'), findsOneWidget);
+      expect(
+        find.text('Start the discussion by adding a comment.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(const ValueKey('material-request-attachment-action')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await expectLater(
+        find.byKey(const ValueKey('material-request-discussion-card')),
+        matchesGoldenFile('goldens/r35/mr_discussion_empty_desktop.png'),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-add-comment')),
+      );
+      await tester.pump();
+      expect(tester.widget<TextField>(composer).focusNode!.hasFocus, isTrue);
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-mention-action')),
+      );
+      await tester.pump();
+      expect(tester.widget<TextField>(composer).controller!.text, '@');
       await tester.enterText(composer, '@ali');
       await tester.pumpAndSettle();
 
       expect(find.text('@aliraza'), findsOneWidget);
       expect(
-        find.byType(MaterialApp),
+        find.byKey(const ValueKey('material-request-discussion-card')),
         matchesGoldenFile('goldens/r35/mr_discussion_mentions_desktop.png'),
       );
       await tester.tap(find.text('@aliraza'));
@@ -183,6 +231,62 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('request discussion matches the compact mobile reference', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final repository = _MaterialRequestRepositoryFixture();
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            _submittedRequest.id,
+          ).overrideWith((ref) async => _submittedRequest),
+          yorksV1MaterialRequestDocumentProvider(
+            _submittedRequest.id,
+          ).overrideWith(
+            (ref) async => YorksV1MaterialRequestDocumentModel.fromRequest(
+              _submittedRequest,
+            ),
+          ),
+        ],
+        child: const YorksV1MaterialRequestDetailScreen(
+          requestId: _submittedRequestId,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final composer = find.byKey(
+      const ValueKey('material-request-comment-composer'),
+    );
+    await tester.scrollUntilVisible(
+      composer,
+      420,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Request Discussion'), findsOneWidget);
+    expect(find.text('Add Comment'), findsOneWidget);
+    expect(find.text('No comments yet'), findsOneWidget);
+    expect(composer, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('material-request-discussion-card')),
+      matchesGoldenFile('goldens/r35/mr_discussion_empty_mobile_360.png'),
+    );
+  });
 
   testWidgets('desktop MR BOQ picker selects scoped rows without duplicates', (
     tester,
@@ -514,6 +618,65 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('small mobile duplicates a selected row and reviews its details', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(320, 568));
+    await _pumpDraft(tester);
+    await _addCustomMaterial(tester);
+
+    expect(find.byTooltip('Add Similar Row'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('Add Similar Row'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add Similar Row').hitTestable());
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('mobile-mr-custom-material')),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byType(TextFormField).at(4), '3');
+    await tester.tap(find.text('Save Changes').hitTestable());
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('3 Nos'),
+      120,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('mobile-mr-materials')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(find.text('3 Nos'), findsOneWidget);
+    expect(find.byTooltip('Add Similar Row'), findsAtLeastNWidgets(1));
+
+    // Remove the completed duplicate, then verify that the review stage shows
+    // the selected material itself and its requested quantity on a short phone.
+    await tester.ensureVisible(find.byIcon(Icons.close_rounded).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.close_rounded).hitTestable().last);
+    await tester.pumpAndSettle();
+    await _openReview(tester);
+    await tester.scrollUntilVisible(
+      find.text('Flexible duct'),
+      120,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('mobile-mr-review')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.ensureVisible(find.text('2 Nos'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('mobile-mr-review')), findsOneWidget);
+    expect(find.text('Flexible duct'), findsOneWidget);
+    expect(find.text('2 Nos'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_review_small_phone_320x568.png'),
+    );
+  });
 
   testWidgets('mobile MR adds only a row from the selected real BOQ scope', (
     tester,

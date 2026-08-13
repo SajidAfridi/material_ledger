@@ -97,6 +97,48 @@ void main() {
   );
 
   group('Yorks V1 Material Request draft controller', () {
+    test('inserts a similar line directly below the selected row', () async {
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: _FakeRequestRepository(),
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.addCustomLine();
+      await controller.addCustomLine();
+      await controller.addCustomLine();
+      final selected = controller.state.draft.lines[1];
+      await controller.updateLine(
+        selected.id,
+        (line) => line.copyWith(
+          description: 'Selected flexible duct',
+          brandOrigin: 'Yorks',
+          size: '12 inch',
+          model: 'FD-12',
+          quantity: '4',
+          unit: 'Meter',
+        ),
+      );
+
+      await controller.addSimilarLine(afterLineId: selected.id);
+
+      final lines = controller.state.draft.lines;
+      expect(lines, hasLength(4));
+      expect(lines.map((line) => line.displayOrder), [1, 2, 3, 4]);
+      expect(lines[1].id, selected.id);
+      expect(lines[2].description, 'Selected flexible duct');
+      expect(lines[2].brandOrigin, 'Yorks');
+      expect(lines[2].size, '12 inch');
+      expect(lines[2].unit, 'Meter');
+      expect(lines[2].quantity, isEmpty);
+      expect(lines[2].model, isNull);
+      expect(lines[2].source, YorksV1MaterialRequestLineSource.custom);
+      expect(lines[2].sourceBoqRowId, isNull);
+    });
+
     test(
       'keeps draft recovery private and submits one versioned command',
       () async {
@@ -634,6 +676,116 @@ void main() {
           'Engineer-corrected request',
         );
         expect(repository.saveInputs, isEmpty);
+      },
+    );
+
+    test(
+      'returned request resubmission accepts a custom non-inventory line and clears stale recovery',
+      () async {
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final repository = _FakeRequestRepository();
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+        final returnedRequest = YorksV1MaterialRequest.fromRpcJson({
+          'id': _draftId,
+          'project_id': _projectId,
+          'project_ref': 'B5-TEST',
+          'project_name': 'Test Project',
+          'scope_id': _scopeId,
+          'scope_name': 'Common',
+          'state': 'changes_requested',
+          'record_version': 5,
+          'created_at': '2026-08-13T00:00:00Z',
+          'updated_at': '2026-08-13T00:05:00Z',
+          'timing': 'normal',
+          'can_edit_before_approval': true,
+          'lines': [
+            {
+              'id': '73000000-0000-4000-8000-000000000020',
+              'display_order': 1,
+              'source_kind': 'custom',
+              'item_description': 'Existing requested item',
+              'requested_qty': '1',
+              'unit': 'Nos',
+            },
+          ],
+        });
+
+        await controller.hydrateFromServer(returnedRequest);
+        await controller.addCustomLine();
+        final addedLine = controller.state.draft.lines.last;
+        await controller.updateLine(
+          addedLine.id,
+          (line) => line.copyWith(
+            description: 'Material not currently in inventory',
+            quantity: '2',
+            unit: 'Set',
+          ),
+        );
+
+        final resubmitted = await controller.submit();
+
+        expect(resubmitted, isNotNull);
+        expect(repository.updateForApprovalInputs, hasLength(1));
+        final input = repository.updateForApprovalInputs.single;
+        expect(input.draft.serverRecordVersion, 5);
+        expect(input.draft.lines, hasLength(2));
+        expect(
+          input.draft.lines.last.source,
+          YorksV1MaterialRequestLineSource.custom,
+        );
+        expect(
+          input.draft.lines.last.toRpcJson(),
+          isNot(contains('inventory_item_id')),
+        );
+        expect(store.readAll(), isEmpty);
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.submitted,
+        );
+
+        // A later return opens a fresh editor and must use the newer server
+        // version instead of reviving the just-submitted version from local
+        // recovery.
+        final reopened = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(reopened.dispose);
+        await reopened.hydrateFromServer(
+          YorksV1MaterialRequest.fromRpcJson({
+            'id': _draftId,
+            'project_id': _projectId,
+            'project_ref': 'B5-TEST',
+            'project_name': 'Test Project',
+            'scope_id': _scopeId,
+            'scope_name': 'Common',
+            'state': 'changes_requested',
+            'record_version': 7,
+            'created_at': '2026-08-13T00:00:00Z',
+            'updated_at': '2026-08-13T00:10:00Z',
+            'timing': 'normal',
+            'can_edit_before_approval': true,
+            'lines': [for (final line in input.draft.lines) line.toRpcJson()],
+          }),
+        );
+
+        expect((await reopened.submit()), isNotNull);
+        expect(repository.updateForApprovalInputs, hasLength(2));
+        expect(
+          repository.updateForApprovalInputs.last.draft.serverRecordVersion,
+          7,
+        );
+        expect(store.readAll(), isEmpty);
       },
     );
   });

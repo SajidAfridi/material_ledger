@@ -251,33 +251,34 @@ class YorksV1MaterialRequestDraftController
 
   Future<void> addBlankLine() => addCustomLine();
 
-  /// Inserts a directly editable copy of the last line without retaining a
-  /// BOQ source pointer. This keeps a Similar Row useful for repeated items
-  /// while preventing an accidental second request against the same source
-  /// snapshot.
-  Future<void> addSimilarLine() async {
+  /// Inserts a directly editable copy immediately after the selected line
+  /// without retaining a BOQ source pointer. This keeps a Similar Row useful
+  /// for repeated items while preventing an accidental second request against
+  /// the same source snapshot.
+  Future<void> addSimilarLine({String? afterLineId}) async {
     final draft = state.draft;
-    final source = draft.lines.lastOrNull;
+    final sourceIndex = afterLineId == null
+        ? draft.lines.length - 1
+        : draft.lines.indexWhere((line) => line.id == afterLineId);
+    final source = sourceIndex < 0 ? null : draft.lines[sourceIndex];
     if (source == null) return addBlankLine();
-    await _replace(
-      draft.copyWith(
-        lines: [
-          ...draft.lines,
-          YorksV1MaterialRequestLine(
-            id: _uuidFactory(),
-            displayOrder: draft.lines.length + 1,
-            source: YorksV1MaterialRequestLineSource.custom,
-            description: source.description,
-            brandOrigin: source.brandOrigin,
-            size: source.size,
-            // Model/tag and quantity identify the original equipment; a
-            // Similar MR row must not accidentally request a second unit.
-            quantity: '',
-            unit: source.unit,
-          ),
-        ],
-      ),
-    );
+    final lines = [...draft.lines]
+      ..insert(
+        sourceIndex + 1,
+        YorksV1MaterialRequestLine(
+          id: _uuidFactory(),
+          displayOrder: sourceIndex + 2,
+          source: YorksV1MaterialRequestLineSource.custom,
+          description: source.description,
+          brandOrigin: source.brandOrigin,
+          size: source.size,
+          // Model/tag and quantity identify the original equipment; a
+          // Similar MR row must not accidentally request a second unit.
+          quantity: '',
+          unit: source.unit,
+        ),
+      );
+    await _replace(draft.copyWith(lines: _reindexLines(lines)));
   }
 
   Future<void> addBoqRows({
@@ -439,30 +440,33 @@ class YorksV1MaterialRequestDraftController
     final remaining = state.draft.lines
         .where((line) => line.id != lineId)
         .toList(growable: false);
-    await _replace(
-      state.draft.copyWith(
-        lines: [
-          for (var index = 0; index < remaining.length; index++)
-            YorksV1MaterialRequestLine(
-              id: remaining[index].id,
-              displayOrder: index + 1,
-              source: remaining[index].source,
-              description: remaining[index].description,
-              brandOrigin: remaining[index].brandOrigin,
-              size: remaining[index].size,
-              model: remaining[index].model,
-              equipmentTag: remaining[index].equipmentTag,
-              planningModelTag: remaining[index].planningModelTag,
-              quantityIsSuggested: remaining[index].quantityIsSuggested,
-              quantity: remaining[index].quantity,
-              unit: remaining[index].unit,
-              sourceBoqGroupId: remaining[index].sourceBoqGroupId,
-              sourceBoqRowId: remaining[index].sourceBoqRowId,
-            ),
-        ],
-      ),
-    );
+    await _replace(state.draft.copyWith(lines: _reindexLines(remaining)));
   }
+
+  List<YorksV1MaterialRequestLine> _reindexLines(
+    List<YorksV1MaterialRequestLine> lines,
+  ) => [
+    for (var index = 0; index < lines.length; index++)
+      YorksV1MaterialRequestLine(
+        id: lines[index].id,
+        displayOrder: index + 1,
+        source: lines[index].source,
+        description: lines[index].description,
+        brandOrigin: lines[index].brandOrigin,
+        size: lines[index].size,
+        model: lines[index].model,
+        equipmentTag: lines[index].equipmentTag,
+        planningModelTag: lines[index].planningModelTag,
+        quantityIsSuggested: lines[index].quantityIsSuggested,
+        quantity: lines[index].quantity,
+        unit: lines[index].unit,
+        sourceBoqGroupId: lines[index].sourceBoqGroupId,
+        sourceBoqRowId: lines[index].sourceBoqRowId,
+        unitCost: lines[index].unitCost,
+        totalCost: lines[index].totalCost,
+        currencyCode: lines[index].currencyCode,
+      ),
+  ];
 
   /// Saves the current draft without pretending that an incomplete draft was
   /// accepted by the server.  Incomplete input is still durable on this
@@ -562,6 +566,18 @@ class YorksV1MaterialRequestDraftController
     if (_editingBeforeApproval) {
       final saved = await _saveConnected();
       if (saved != null) {
+        // A returned request may pass through this edit/approval cycle more
+        // than once. Once this version reaches the server, its local recovery
+        // copy must not survive as the starting point for a later return: the
+        // next editor visit must hydrate the newer authoritative record
+        // version. The auto-disposed family provider drops the in-memory
+        // session when the route closes; this removes its persisted twin.
+        try {
+          await discardLocal();
+        } catch (_) {
+          // The connected command already committed. As with first submit,
+          // local cleanup is best effort and cannot turn it into a failure.
+        }
         state = YorksV1MaterialRequestDraftState(
           draft: state.draft,
           status: YorksV1MaterialRequestDraftSyncStatus.submitted,

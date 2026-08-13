@@ -41,8 +41,9 @@ class YorksV1MaterialRequestDraftKey {
   int get hashCode => Object.hash(ownerAuthUserId, draftId);
 }
 
-final yorksV1MaterialRequestDraftControllerProvider =
-    StateNotifierProvider.family<
+final yorksV1MaterialRequestDraftControllerProvider = StateNotifierProvider
+    .autoDispose
+    .family<
       YorksV1MaterialRequestDraftController,
       YorksV1MaterialRequestDraftState,
       YorksV1MaterialRequestDraftKey
