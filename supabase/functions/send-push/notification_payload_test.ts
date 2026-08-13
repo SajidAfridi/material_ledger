@@ -42,6 +42,28 @@ Deno.test("deep link accepts only a resolved UUID request id", () => {
   assertEquals(routeFor(claim(null)), "/notifications");
 });
 
+Deno.test("project membership alerts use the protected project route", () => {
+  assertEquals(
+    routeFor({
+      ...claim(null),
+      entityType: "project_member",
+      projectId: "15000000-0000-4000-8000-000000000001",
+    }),
+    "/yorks/projects/15000000-0000-4000-8000-000000000001",
+  );
+});
+
+Deno.test("approval-first and return events have specific safe copy", () => {
+  assertEquals(
+    safePushCopy("material_request_approval_required").title,
+    "Material request approval required",
+  );
+  assertEquals(
+    safePushCopy("material_return_confirmed").title,
+    "Material return confirmed",
+  );
+});
+
 Deno.test("web link is absolute HTTPS and rejects unsafe configuration", () => {
   assertEquals(
     webLinkFor(

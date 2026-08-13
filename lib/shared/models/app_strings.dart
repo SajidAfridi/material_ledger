@@ -1958,6 +1958,90 @@ abstract final class AppStrings {
     ur: 'اطلاعات کی کارکردگی',
     hi: 'अधिसूचना स्वास्थ्य',
   );
+  static const alertsOn = TranslatableString(
+    en: 'Device alerts are on',
+    ar: 'تنبيهات الجهاز مفعلة',
+    ur: 'ڈیوائس الرٹس آن ہیں',
+    hi: 'डिवाइस अलर्ट चालू हैं',
+  );
+  static const alertsOnBody = TranslatableString(
+    en: 'Pop-ups are enabled. Sound follows this device and browser settings.',
+    ar: 'تم تفعيل النوافذ المنبثقة. يتبع الصوت إعدادات الجهاز والمتصفح.',
+    ur: 'پاپ اپ فعال ہیں۔ آواز ڈیوائس اور براؤزر کی ترتیبات کے مطابق ہے۔',
+    hi: 'पॉप-अप चालू हैं। ध्वनि डिवाइस और ब्राउज़र सेटिंग के अनुसार होगी।',
+  );
+  static const enableAlerts = TranslatableString(
+    en: 'Enable device alerts',
+    ar: 'تفعيل تنبيهات الجهاز',
+    ur: 'ڈیوائس الرٹس فعال کریں',
+    hi: 'डिवाइस अलर्ट चालू करें',
+  );
+  static const enableAlertsBody = TranslatableString(
+    en: 'Allow Yorks to show workflow pop-ups even when this screen is not open.',
+    ar: 'اسمح ليوركس بإظهار تنبيهات سير العمل حتى عندما لا تكون هذه الشاشة مفتوحة.',
+    ur: 'یورکس کو ورک فلو پاپ اپ دکھانے دیں، چاہے یہ اسکرین کھلی نہ ہو۔',
+    hi: 'इस स्क्रीन के बंद होने पर भी यॉर्क्स को कार्यप्रवाह पॉप-अप दिखाने दें।',
+  );
+  static const alertsBlocked = TranslatableString(
+    en: 'Device alerts are blocked',
+    ar: 'تنبيهات الجهاز محظورة',
+    ur: 'ڈیوائس الرٹس بلاک ہیں',
+    hi: 'डिवाइस अलर्ट अवरुद्ध हैं',
+  );
+  static const alertsBlockedBody = TranslatableString(
+    en: 'Allow notifications in the browser or device settings, then check again. In-app alerts remain active.',
+    ar: 'اسمح بالإشعارات من إعدادات المتصفح أو الجهاز ثم تحقق مجدداً. تبقى تنبيهات التطبيق مفعلة.',
+    ur: 'براؤزر یا ڈیوائس سیٹنگز میں اطلاعات کی اجازت دیں، پھر دوبارہ چیک کریں۔ اِن ایپ الرٹس فعال رہیں گے۔',
+    hi: 'ब्राउज़र या डिवाइस सेटिंग में सूचनाएं चालू करें, फिर दोबारा जांचें। इन-ऐप अलर्ट सक्रिय रहेंगे।',
+  );
+  static const alertsUnavailable = TranslatableString(
+    en: 'System alerts are unavailable here',
+    ar: 'تنبيهات النظام غير متاحة هنا',
+    ur: 'سسٹم الرٹس یہاں دستیاب نہیں',
+    hi: 'सिस्टम अलर्ट यहां उपलब्ध नहीं हैं',
+  );
+  static const alertsUnavailableBody = TranslatableString(
+    en: 'The in-app notification center and foreground alerts remain active.',
+    ar: 'يبقى مركز إشعارات التطبيق والتنبيهات الأمامية مفعلاً.',
+    ur: 'اِن ایپ نوٹیفکیشن سینٹر اور سامنے آنے والے الرٹس فعال رہیں گے۔',
+    hi: 'इन-ऐप सूचना केंद्र और अग्रभूमि अलर्ट सक्रिय रहेंगे।',
+  );
+  static const alertSetupNeedsAttention = TranslatableString(
+    en: 'Alert setup needs attention',
+    ar: 'إعداد التنبيهات يحتاج إلى مراجعة',
+    ur: 'الرٹ سیٹ اپ پر توجہ درکار ہے',
+    hi: 'अलर्ट सेटअप पर ध्यान आवश्यक है',
+  );
+  static const alertSetupNeedsAttentionBody = TranslatableString(
+    en: 'Check the connection and try again. The notification center still keeps every authorized update.',
+    ar: 'تحقق من الاتصال وحاول مجدداً. يحتفظ مركز الإشعارات بكل تحديث مصرح به.',
+    ur: 'کنکشن چیک کر کے دوبارہ کوشش کریں۔ نوٹیفکیشن سینٹر ہر مجاز اپ ڈیٹ محفوظ رکھتا ہے۔',
+    hi: 'कनेक्शन जांचकर फिर प्रयास करें। सूचना केंद्र हर अधिकृत अपडेट सुरक्षित रखता है।',
+  );
+  static const checkingAlertDelivery = TranslatableString(
+    en: 'Checking alert delivery…',
+    ar: 'جارٍ التحقق من تسليم التنبيهات…',
+    ur: 'الرٹ ڈیلیوری چیک ہو رہی ہے…',
+    hi: 'अलर्ट डिलीवरी जांची जा रही है…',
+  );
+  static const checkAgain = TranslatableString(
+    en: 'Check again',
+    ar: 'تحقق مجدداً',
+    ur: 'دوبارہ چیک کریں',
+    hi: 'फिर जांचें',
+  );
+  static const recentNotifications = TranslatableString(
+    en: 'Recent notifications',
+    ar: 'الإشعارات الأخيرة',
+    ur: 'حالیہ اطلاعات',
+    hi: 'हाल की सूचनाएं',
+  );
+  static const viewAllNotifications = TranslatableString(
+    en: 'View all notifications',
+    ar: 'عرض جميع الإشعارات',
+    ur: 'تمام اطلاعات دیکھیں',
+    hi: 'सभी सूचनाएं देखें',
+  );
   static const latestActivity = TranslatableString(
     en: 'Latest Activity',
     ar: 'أحدث النشاطات',
@@ -2017,6 +2101,18 @@ abstract final class AppStrings {
     ar: 'لا توجد إشعارات تتطابق مع هذا الفلتر',
     ur: 'اس فلٹر سے کوئی اطلاع مطابقت نہیں رکھتی',
     hi: 'इस फ़िल्टर से कोई सूचना मेल नहीं खाती',
+  );
+  static const couldNotLoadNotifications = TranslatableString(
+    en: 'Could not refresh notifications',
+    ar: 'تعذر تحديث الإشعارات',
+    ur: 'اطلاعات ریفریش نہیں ہو سکیں',
+    hi: 'सूचनाएं रीफ़्रेश नहीं हो सकीं',
+  );
+  static const retry = TranslatableString(
+    en: 'Retry',
+    ar: 'إعادة المحاولة',
+    ur: 'دوبارہ کوشش کریں',
+    hi: 'पुनः प्रयास',
   );
 
   // ─── Engineer — New Request Form ────────────────────────────────

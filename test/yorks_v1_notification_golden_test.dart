@@ -7,6 +7,7 @@ import 'package:material_ledger/shared/models/app_notification.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/notification_provider.dart';
 import 'package:material_ledger/shared/screens/notifications_screen.dart';
+import 'package:material_ledger/shared/services/push_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -46,6 +47,7 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            pushServiceProvider.overrideWithValue(const NoopPushService()),
             visibleNotificationsProvider.overrideWithValue([notification]),
             unreadNotificationCountProvider.overrideWithValue(1),
           ],

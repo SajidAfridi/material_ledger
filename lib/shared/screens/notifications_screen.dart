@@ -10,6 +10,8 @@ import '../models/app_notification.dart';
 import '../models/app_strings.dart';
 import '../providers/language_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/yorks_v1_notification_provider.dart';
+import '../widgets/notification_delivery_card.dart';
 
 /// Notification centre (SRS §4.6) — a simple, single list of lifecycle alerts
 /// with read/unread status. Accessible by all roles. Tap to mark read; swipe to
@@ -31,20 +33,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     // Role-scoped: each role only sees alerts meant for them (admin sees all).
     final notifications = ref.watch(visibleNotificationsProvider);
     final unread = ref.watch(unreadNotificationCountProvider);
+    final serverState = ref.watch(yorksV1NotificationsProvider);
     final mobile = YorksMobileUi.isActive(context);
+    final visible = switch (_filter) {
+      _NotificationFilter.all => notifications,
+      _NotificationFilter.unread =>
+        notifications.where((notification) => !notification.isRead).toList(),
+      _NotificationFilter.urgent =>
+        notifications
+            .where(
+              (notification) => notification.type == NotificationType.stock,
+            )
+            .toList(),
+    };
 
     if (mobile) {
-      final visible = switch (_filter) {
-        _NotificationFilter.all => notifications,
-        _NotificationFilter.unread =>
-          notifications.where((notification) => !notification.isRead).toList(),
-        _NotificationFilter.urgent =>
-          notifications
-              .where(
-                (notification) => notification.type == NotificationType.stock,
-              )
-              .toList(),
-      };
       return Scaffold(
         backgroundColor: AppColors.mobileSurface,
         body: Column(
@@ -87,17 +90,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 ],
               ),
             ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(14, 0, 14, 10),
+              child: NotificationDeliveryCard(compact: true),
+            ),
             Expanded(
-              child: visible.isEmpty
-                  ? _EmptyState(lang: lang)
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
-                      itemCount: visible.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) => _NotificationDismissible(
-                        notification: visible[index],
-                      ),
-                    ),
+              child: _NotificationListState(
+                notifications: visible,
+                serverState: serverState,
+                language: lang,
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+              ),
             ),
           ],
         ),
@@ -135,24 +138,120 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: ResponsiveCenter(
-          child: notifications.isEmpty
-              ? _EmptyState(lang: lang)
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenHorizontal,
-                    AppSpacing.md,
-                    AppSpacing.screenHorizontal,
-                    AppSpacing.xxl,
-                  ),
-                  itemCount: notifications.length,
-                  separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
-                  itemBuilder: (context, i) {
-                    final n = notifications[i];
-                    return _NotificationDismissible(notification: n);
-                  },
+        child: LayoutBuilder(
+          builder: (context, constraints) => Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: constraints.maxWidth.clamp(0.0, 920.0),
+              height: constraints.maxHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenHorizontal,
                 ),
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: AppSpacing.md),
+                      child: NotificationDeliveryCard(),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.md,
+                      ),
+                      child: Row(
+                        children: [
+                          for (final filter in _NotificationFilter.values) ...[
+                            ChoiceChip(
+                              label: Text(filter.label.active(lang)),
+                              selected: _filter == filter,
+                              onSelected: (_) =>
+                                  setState(() => _filter = filter),
+                            ),
+                            if (filter != _NotificationFilter.values.last)
+                              const Gap(AppSpacing.sm),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: _NotificationListState(
+                        notifications: visible,
+                        serverState: serverState,
+                        language: lang,
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _NotificationListState extends ConsumerWidget {
+  const _NotificationListState({
+    required this.notifications,
+    required this.serverState,
+    required this.language,
+    required this.padding,
+  });
+
+  final List<AppNotification> notifications;
+  final AsyncValue<Object?> serverState;
+  final AppLanguage language;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (notifications.isEmpty && serverState.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (notifications.isEmpty && serverState.hasError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_off_outlined,
+                size: 44,
+                color: AppColors.warning,
+              ),
+              const Gap(AppSpacing.md),
+              Text(
+                AppStrings.couldNotLoadNotifications.active(language),
+                style: AppTypography.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const Gap(AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: () => ref
+                    .read(yorksV1NotificationsProvider.notifier)
+                    .refresh(showLoading: true),
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(AppStrings.retry.active(language)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (notifications.isEmpty) return _EmptyState(lang: language);
+    return RefreshIndicator(
+      onRefresh: () =>
+          ref.read(yorksV1NotificationsProvider.notifier).refresh(),
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: padding,
+        itemCount: notifications.length,
+        separatorBuilder: (_, _) => const Gap(AppSpacing.listItemGap),
+        itemBuilder: (context, index) =>
+            _NotificationDismissible(notification: notifications[index]),
       ),
     );
   }

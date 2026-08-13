@@ -66,6 +66,14 @@ if [[ -z "$supabase_url" || -z "$supabase_key" ]]; then
   echo "tool/r35.env.example or set SUPABASE_URL and SUPABASE_ANON_KEY." >&2
   exit 64
 fi
+if [[ "$r35_environment" == "production"
+   && ("$command" == "run" || "$command" == "build-web")
+   && -z "$firebase_web_vapid_key" ]]; then
+  echo "FIREBASE_WEB_VAPID_KEY is required for a production web build." >&2
+  echo "Copy the public Web Push certificate key from Firebase Console" >&2
+  echo "into the operator environment or ignored R35 config file." >&2
+  exit 64
+fi
 
 r35_defines=(
   "--dart-define=SUPABASE_URL=${supabase_url}"
@@ -82,8 +90,9 @@ r35_defines=(
   '--dart-define=use_arabic=true'
 )
 
-# The VAPID public key is not a secret, but it is environment-specific. Omit
-# it for CI/local builds that intentionally do not exercise browser Push API.
+# The VAPID public key is not a secret, but it is environment-specific. It is
+# mandatory for production browser commands and may be omitted by native or
+# CI/local builds that do not exercise the browser Push API.
 if [[ -n "$firebase_web_vapid_key" ]]; then
   r35_defines+=("--dart-define=FIREBASE_WEB_VAPID_KEY=${firebase_web_vapid_key}")
 fi

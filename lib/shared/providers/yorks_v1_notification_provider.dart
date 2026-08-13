@@ -52,7 +52,7 @@ class YorksV1NotificationsNotifier
   }) : _client = client,
        _repository = repository,
        _authUserId = authUserId?.trim(),
-       super(const AsyncData([]));
+       super(const AsyncLoading());
 
   final SupabaseClient? _client;
   final YorksV1NotificationRepository? _repository;

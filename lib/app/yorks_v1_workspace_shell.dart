@@ -19,6 +19,7 @@ import '../shared/providers/yorks_v1_material_request_provider.dart';
 import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/providers/yorks_v1_workspace_status_provider.dart';
+import '../shared/widgets/notification_bell.dart';
 import 'router.dart';
 import 'yorks_v1_workspace_search.dart';
 import 'yorks_v1_workspace_status_label.dart';
@@ -564,6 +565,16 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
               children: [
                 _MoreDestinationRow(
                   destination: _YorksDestination(
+                    label: AppStrings.notifications,
+                    icon: Icons.notifications_outlined,
+                    selectedIcon: Icons.notifications_rounded,
+                    path: RoutePaths.notifications,
+                  ),
+                  language: language,
+                ),
+                const Divider(height: 1),
+                _MoreDestinationRow(
+                  destination: _YorksDestination(
                     label: AppStrings.profile,
                     icon: Icons.person_outline_rounded,
                     selectedIcon: Icons.person_rounded,
@@ -728,6 +739,8 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               ),
             ],
             const Spacer(),
+            const NotificationBell(),
+            const SizedBox(width: AppSpacing.sm),
             SizedBox(
               width: 220,
               child: _YorksQuickNavigationButton(

@@ -32,7 +32,7 @@ function base64UrlEncode(bytes: Uint8Array): string {
   return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function importPrivateKey(pem: string): Promise<CryptoKey> {
+function importPrivateKey(pem: string): Promise<CryptoKey> {
   const contents = pem
     .replace("-----BEGIN PRIVATE KEY-----", "")
     .replace("-----END PRIVATE KEY-----", "")
@@ -197,6 +197,8 @@ Deno.serve(async (request) => {
         notificationId: claim.notificationId,
         eventCode: claim.eventCode,
         type: copy.type,
+        title: copy.title,
+        body: copy.body,
         refId: claim.requestId ?? claim.entityId,
         route,
       };

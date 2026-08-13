@@ -6,14 +6,19 @@ remain authoritative. The app uses the registered Yorks Firebase project
 
 ## Application behavior
 
-- Firebase initializes at application launch, requests the platform's
-  notification permission, and registers the FCM token to the signed-in Yorks
-  user only after that user is known.
+- Firebase initializes at application launch and reads the current permission
+  without opening a prompt. Chrome, Android and Apple permission is requested
+  only from the user's explicit **Enable device alerts** action in the
+  notification center so browser gesture requirements are satisfied. An
+  already-authorized FCM token is registered only after the Yorks user is
+  known; token refresh and foreground resume repeat that owner-bound step.
 - Token and message-payload diagnostics are emitted only in debug builds. FCM
   payloads must never contain commercial or other protected values.
-- Foreground messages use the Yorks Android notification channel and local
-  display. Background/terminated notifications retain the existing route
-  deep-link behavior.
+- Foreground FCM messages and recipient-scoped Realtime refreshes converge on
+  one de-duplicated in-app alert with visible copy, navigation, haptic feedback
+  and a short tone. Background/terminated notifications use the Yorks system
+  channel and retain safe deep-link behavior. Browser/OS focus and sound
+  settings remain authoritative.
 - Web uses one service worker that includes Flutter's generated cache worker
   and FCM background handler. This avoids either worker replacing the other.
 
@@ -32,18 +37,25 @@ register/unregister their own FCM token through owner-bound RPCs. If a user
 first registers after an alert was created, recent unseen `no_devices` jobs are
 requeued. The notification centre reads the same authoritative recipient rows
 through `v1_list_my_notifications`; Realtime is a refresh signal and a bounded
-poll remains as a fallback.
+poll remains as a fallback. Desktop/tablet expose a top-bar recent-alert panel,
+and every layout retains the full center with unread, delivery-health,
+enable/recovery and pull-to-refresh behavior.
 
 Current targeting follows workflow ownership:
 
 - MR submission -> active Procurement users.
 - Procurement arrangement -> assigned Project Engineers plus the two approved
   organization-wide engineering roles.
-- Approved arrangement -> Procurement.
+- Approved arrangement -> Procurement for dispatch plus the assigned/global
+  Engineering team for awareness.
 - Dispatch/receipt review -> the assigned project team plus the two approved
   organization-wide engineering roles where the workflow requires their
   review.
-- Material return -> Procurement.
+- Material return submission -> Procurement; the confirm/reject decision ->
+  the Engineering submitter.
+- Project membership assignment/revocation -> the affected user.
+- Material Request cancellation -> its requester and active Procurement users,
+  excluding the actor.
 
 FCM payloads contain only a notification UUID, event code, safe type, record
 reference and validated internal route. Quantities, costs, supplier details,
@@ -53,13 +65,13 @@ user email and other protected fields are excluded.
 
 These values must never be committed or placed in the Flutter client.
 
-1. **Web Push VAPID key**: Firebase's default Web Push key is used when no
-   custom key is supplied. For browser environments that require a non-default
-   key, sign in to Firebase Console for `yorks-48c40`, open
+1. **Web Push VAPID key**: every production web build requires the project
+   public key. Sign in to Firebase Console for `yorks-48c40`, open
    **Project settings → Cloud Messaging → Web configuration → Web Push
    certificates**, generate a key pair, then set the public key as
    `FIREBASE_WEB_VAPID_KEY` in the production build environment. The R35
-   launcher forwards it as a Dart define.
+   launcher forwards it as a Dart define and fails a production build when it
+   is missing.
 2. **iOS APNs**: in Apple Developer, enable Push Notifications for
    `com.yorks.app`, then upload the Apple Push Notification Authentication Key
    (`.p8`, key ID and team ID) in Firebase Console's Cloud Messaging settings.
@@ -73,19 +85,20 @@ These values must never be committed or placed in the Flutter client.
    `yorks_push_edge_url` in Supabase Vault. The migration creates
    `yorks_push_webhook_secret`; never expose its decrypted value to a client.
 
-After deployment, sign in once on each target and grant notification
-permission so its owner-bound token can be registered. Prove an actual Yorks
-workflow transition (for example Engineer Submit -> Procurement), not only a
-Firebase campaign. Verify the recipient receives both the FCM alert and the
-authoritative in-app row, an unrelated role receives neither, the deep link
+After deployment, sign in once on each target, open Notifications and choose
+**Enable device alerts** so its owner-bound token can be registered. Prove an
+actual Yorks workflow transition (for example Engineer Submit -> Procurement),
+not only a Firebase campaign. Verify the recipient receives both the FCM alert
+and the authoritative in-app row, an unrelated role receives neither, the deep link
 opens the intended record, and retrying the workflow does not create a
 duplicate notification. Test Android, a physical iOS device, and the HTTPS
 production web origin separately; an iOS Simulator cannot receive FCM push.
 
 ## Rollback
 
-Removing a custom `FIREBASE_WEB_VAPID_KEY` returns the web client to Firebase's
-default key. Removing `yorks_push_edge_url` from Vault stops new outbound
+Removing `FIREBASE_WEB_VAPID_KEY` prevents the next production web build; the
+previous approved artifact remains the rollback target. Removing
+`yorks_push_edge_url` from Vault stops new outbound
 invocations without affecting notification creation or the in-app feed.
 Removing `FCM_SERVICE_ACCOUNT_JSON` makes claimed delivery jobs fail safely and
 retry with bounded backoff; the in-app feed continues to function. For a full

@@ -461,6 +461,13 @@ void main() {
       expect(tester.getSize(heading).width, greaterThan(180));
       expect(find.text('Review & Approve'), findsNothing);
       expect(tester.takeException(), isNull);
+      await tester.runAsync(
+        () => precacheImage(
+          const AssetImage('assets/logo.png'),
+          tester.element(find.byType(YorksV1WorkspaceShell)),
+        ),
+      );
+      await tester.pump();
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile(

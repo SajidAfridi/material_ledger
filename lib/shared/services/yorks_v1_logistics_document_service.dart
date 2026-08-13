@@ -150,13 +150,16 @@ class YorksV1LogisticsDocumentService {
     final finalPageLines = useDedicatedSignOffPage
         ? revision.lines.sublist(revision.lines.length - finalPageLineCount)
         : const <YorksV1DeliveryOrderLine>[];
-    // Typical single-page records keep their sign-off at the lower edge of
-    // the page. For unusually long descriptions, allow the PDF engine to
-    // paginate naturally rather than risk clipping handwritten fields.
+    // Only use the bottom-anchored one-page form when every variable header
+    // field fits its normal single line. Wrapped project/contractor context
+    // needs natural pagination; forcing it into the fixed signing canvas can
+    // create a second page containing only the repeated footer.
+
     final useAnchoredSinglePageSignOff =
         !useDedicatedSignOffPage &&
-        revision.lines.length <= 11 &&
-        revision.lines.every((line) => line.description.length <= 72);
+        revision.lines.length <= 8 &&
+        revision.lines.every((line) => line.description.length <= 72) &&
+        _hasCompactDeliveryOrderHeader(workspace, revision);
     _validateDeliveryOrder(revision);
     final document = pw.Document(
       theme: theme,
@@ -639,12 +642,49 @@ class YorksV1LogisticsDocumentService {
     ),
   );
 
+  static bool _hasCompactDeliveryOrderHeader(
+    YorksV1ReturnsDocumentsWorkspace workspace,
+    YorksV1DeliveryOrderRevision revision,
+  ) {
+    final identity = revision.documentIdentity;
+    final projectName = identity?.projectName ?? workspace.projectName;
+    final jobReference =
+        identity?.jobContractReference ?? workspace.jobContractReference;
+    final qualifiedProjectName =
+        YorksV1CompanyDocumentStrings.qualifiedProjectName(
+          projectName: projectName,
+          jobContractReference: jobReference,
+        );
+    final contractor =
+        identity?.mainContractorName ??
+        workspace.mainContractorName ??
+        projectName;
+    final scope =
+        identity?.scopeCode ??
+        identity?.scopeName ??
+        workspace.scopeCode ??
+        workspace.scopeName;
+    final materialContext =
+        identity?.materialContext ??
+        workspace.materialContext ??
+        'Material delivery';
+    final dispatchedBy = [
+      identity?.dispatchedByDisplayName,
+      identity?.dispatchedByExactRole,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
+
+    return qualifiedProjectName.length <= 96 &&
+        contractor.length <= 92 &&
+        scope.length <= 100 &&
+        materialContext.length <= 100 &&
+        dispatchedBy.length <= 100;
+  }
+
   static pw.Widget _deliveryOrderAnchoredSinglePageBundle(
     List<YorksV1DeliveryOrderLine> lines,
   ) => pw.Container(
-    // First-page content space below the company/title block and above the
-    // fixed contact footer. This lets short forms keep the handover section
-    // visually attached to the footer without forcing an extra page.
+    // The fixed signing canvas is reserved for compact, single-line headers.
+    // Wrapped headers use the naturally paginated path selected above.
     height: 178 * PdfPageFormat.mm,
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,

@@ -16,6 +16,7 @@ import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
 import 'package:material_ledger/shared/screens/notifications_screen.dart';
+import 'package:material_ledger/shared/services/push_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final _fixtureUser = AppUser(
@@ -99,6 +100,7 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          pushServiceProvider.overrideWithValue(const NoopPushService()),
           currentUserProvider.overrideWithValue(_fixtureUser),
         ],
         child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),

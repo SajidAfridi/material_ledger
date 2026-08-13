@@ -41,6 +41,7 @@ class YorksV1NotificationRecord {
   AppNotification toAppNotification(AppLanguage language) {
     final copy = YorksV1NotificationCopy.forEvent(eventCode);
     final resolvedRequestId = requestId?.trim() ?? '';
+    final resolvedProjectId = projectId?.trim() ?? '';
     return AppNotification(
       id: id,
       type: copy.type,
@@ -50,9 +51,12 @@ class YorksV1NotificationRecord {
       timestamp: createdAt,
       isRead: seenAt != null,
       refId: resolvedRequestId.isNotEmpty ? resolvedRequestId : entityId,
-      route: resolvedRequestId.isEmpty
-          ? RoutePaths.notifications
-          : RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId),
+      route: resolvedRequestId.isNotEmpty
+          ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
+          : resolvedProjectId.isNotEmpty &&
+                (entityType == 'project' || entityType == 'project_member')
+          ? RoutePaths.yorksV1ProjectPath(resolvedProjectId)
+          : RoutePaths.notifications,
       origin: NotificationOrigin.yorksV1,
     );
   }
@@ -176,6 +180,18 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
     hindiTitle: 'सामग्री डिस्पैच के लिए तैयार',
     hindiBody: 'खरीद ने स्वीकृत व्यवस्था पूरी कर ली है।',
   ),
+  'arrangement_completed_unavailable': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Arrangement completed',
+    englishBody:
+        'Procurement recorded that no requested material can be provided now.',
+    arabicTitle: 'اكتمل ترتيب الطلب',
+    arabicBody: 'سجلت المشتريات أن المواد المطلوبة غير متاحة حالياً.',
+    urduTitle: 'انتظام مکمل ہو گیا',
+    urduBody: 'پروکیورمنٹ نے ریکارڈ کیا کہ مطلوبہ مواد ابھی دستیاب نہیں ہے۔',
+    hindiTitle: 'व्यवस्था पूरी हुई',
+    hindiBody: 'खरीद ने दर्ज किया कि अनुरोधित सामग्री अभी उपलब्ध नहीं है।',
+  ),
   'material_request_submitted': YorksV1NotificationCopy(
     type: NotificationType.request,
     englishTitle: 'New material request',
@@ -254,5 +270,73 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
     urduBody: 'پروجیکٹ مٹیریل ریٹرن پروکیورمنٹ تصدیق کا منتظر ہے۔',
     hindiTitle: 'सामग्री वापसी जमा हुई',
     hindiBody: 'परियोजना सामग्री वापसी खरीद पुष्टि की प्रतीक्षा में है।',
+  ),
+  'material_return_confirmed': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material return confirmed',
+    englishBody:
+        'Procurement confirmed physical receipt of the returned material.',
+    arabicTitle: 'تم تأكيد مرتجع المواد',
+    arabicBody: 'أكدت المشتريات الاستلام الفعلي للمواد المرتجعة.',
+    urduTitle: 'مٹیریل ریٹرن کی تصدیق ہو گئی',
+    urduBody: 'پروکیورمنٹ نے واپس شدہ مواد کی فزیکل وصولی کی تصدیق کر دی ہے۔',
+    hindiTitle: 'सामग्री वापसी की पुष्टि हुई',
+    hindiBody: 'खरीद ने लौटाई गई सामग्री की भौतिक प्राप्ति की पुष्टि की।',
+  ),
+  'material_return_rejected': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material return rejected',
+    englishBody: 'Procurement returned the material return with a reason.',
+    arabicTitle: 'تم رفض مرتجع المواد',
+    arabicBody: 'أعادت المشتريات مرتجع المواد مع السبب.',
+    urduTitle: 'مٹیریل ریٹرن مسترد ہو گیا',
+    urduBody: 'پروکیورمنٹ نے مٹیریل ریٹرن وجہ کے ساتھ واپس کر دیا ہے۔',
+    hindiTitle: 'सामग्री वापसी अस्वीकृत हुई',
+    hindiBody: 'खरीद ने कारण सहित सामग्री वापसी लौटा दी।',
+  ),
+  'material_request_cancelled': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material request cancelled',
+    englishBody:
+        'The material request was cancelled and open work was released.',
+    arabicTitle: 'تم إلغاء طلب المواد',
+    arabicBody: 'تم إلغاء طلب المواد وتحرير العمل المفتوح.',
+    urduTitle: 'مٹیریل ریکویسٹ منسوخ ہو گئی',
+    urduBody: 'مٹیریل ریکویسٹ منسوخ کر کے کھلا کام جاری کر دیا گیا ہے۔',
+    hindiTitle: 'सामग्री अनुरोध रद्द हुआ',
+    hindiBody: 'सामग्री अनुरोध रद्द कर दिया गया और खुला कार्य मुक्त हुआ।',
+  ),
+  'material_request_closed': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material request completed',
+    englishBody: 'The received material request was closed.',
+    arabicTitle: 'اكتمل طلب المواد',
+    arabicBody: 'تم إغلاق طلب المواد المستلم.',
+    urduTitle: 'مٹیریل ریکویسٹ مکمل ہو گئی',
+    urduBody: 'موصولہ مٹیریل ریکویسٹ بند کر دی گئی ہے۔',
+    hindiTitle: 'सामग्री अनुरोध पूरा हुआ',
+    hindiBody: 'प्राप्त सामग्री अनुरोध बंद कर दिया गया।',
+  ),
+  'project_member_assigned': YorksV1NotificationCopy(
+    type: NotificationType.project,
+    englishTitle: 'Project access assigned',
+    englishBody: 'You were assigned to a Yorks project.',
+    arabicTitle: 'تم تعيين صلاحية المشروع',
+    arabicBody: 'تم تعيينك في مشروع يوركس.',
+    urduTitle: 'پروجیکٹ رسائی تفویض ہو گئی',
+    urduBody: 'آپ کو یورکس پروجیکٹ میں تفویض کیا گیا ہے۔',
+    hindiTitle: 'परियोजना पहुंच सौंपी गई',
+    hindiBody: 'आपको यॉर्क्स परियोजना में नियुक्त किया गया है।',
+  ),
+  'project_member_revoked': YorksV1NotificationCopy(
+    type: NotificationType.project,
+    englishTitle: 'Project access changed',
+    englishBody: 'Your active assignment to a Yorks project ended.',
+    arabicTitle: 'تم تغيير صلاحية المشروع',
+    arabicBody: 'انتهى تعيينك النشط في مشروع يوركس.',
+    urduTitle: 'پروجیکٹ رسائی تبدیل ہو گئی',
+    urduBody: 'یورکس پروجیکٹ میں آپ کی فعال تفویض ختم ہو گئی ہے۔',
+    hindiTitle: 'परियोजना पहुंच बदली गई',
+    hindiBody: 'यॉर्क्स परियोजना में आपकी सक्रिय नियुक्ति समाप्त हुई।',
   ),
 };

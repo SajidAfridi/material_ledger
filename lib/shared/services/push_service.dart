@@ -12,10 +12,9 @@ import '../models/app_notification.dart';
 import '../providers/language_provider.dart' show supabaseClientProvider;
 import 'observability_service.dart';
 
-/// Optional project-specific Web Push key. Firebase supports its default VAPID
-/// key when this is absent; a release can still inject the project key for push
-/// services that require a non-default key without placing credentials in
-/// source control.
+/// Project-specific public Web Push key. Production builds enforce that this
+/// is present; local and CI builds may omit it when they do not exercise the
+/// browser Push API.
 const _webPushVapidKey = String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
 
 const _androidChannel = AndroidNotificationChannel(
@@ -30,6 +29,7 @@ const _androidChannel = AndroidNotificationChannel(
 /// so a tapped push deep-links exactly like an in-app alert).
 class PushMessage {
   const PushMessage({
+    this.notificationId = '',
     required this.type,
     required this.title,
     this.titleSecondary = '',
@@ -39,6 +39,7 @@ class PushMessage {
     this.audience = '',
   });
 
+  final String notificationId;
   final NotificationType type;
   final String title;
   final String titleSecondary;
@@ -48,6 +49,7 @@ class PushMessage {
   final String audience;
 
   factory PushMessage.fromData(Map<String, String> data) => PushMessage(
+    notificationId: data['notificationId'] ?? '',
     type: NotificationType.fromKey(data['type'] ?? 'info'),
     title: data['title'] ?? '',
     titleSecondary: data['titleSecondary'] ?? '',
@@ -55,6 +57,54 @@ class PushMessage {
     refId: data['refId'] ?? '',
     route: data['route'] ?? '',
     audience: data['audience'] ?? '',
+  );
+}
+
+enum PushAuthorizationState {
+  checking,
+  notDetermined,
+  authorized,
+  provisional,
+  denied,
+  unsupported,
+  error,
+}
+
+/// User-visible health of this installation's alert transport. It deliberately
+/// contains no registration token, backend detail or notification payload.
+class PushDeliveryStatus {
+  const PushDeliveryStatus({
+    required this.authorization,
+    this.deviceRegistered = false,
+    this.errorCode = '',
+  });
+
+  const PushDeliveryStatus.checking()
+    : authorization = PushAuthorizationState.checking,
+      deviceRegistered = false,
+      errorCode = '';
+
+  const PushDeliveryStatus.unsupported()
+    : authorization = PushAuthorizationState.unsupported,
+      deviceRegistered = false,
+      errorCode = '';
+
+  final PushAuthorizationState authorization;
+  final bool deviceRegistered;
+  final String errorCode;
+
+  bool get isAllowed =>
+      authorization == PushAuthorizationState.authorized ||
+      authorization == PushAuthorizationState.provisional;
+
+  PushDeliveryStatus copyWith({
+    PushAuthorizationState? authorization,
+    bool? deviceRegistered,
+    String? errorCode,
+  }) => PushDeliveryStatus(
+    authorization: authorization ?? this.authorization,
+    deviceRegistered: deviceRegistered ?? this.deviceRegistered,
+    errorCode: errorCode ?? this.errorCode,
   );
 }
 
@@ -69,8 +119,16 @@ class PushMessage {
 /// device and, on tap, deep-link via the payload's `route` — NOT create a
 /// second in-app notification record (that would duplicate the synced one).
 abstract interface class PushService {
-  /// Register for push + return the device token (null when unsupported / no-op).
+  /// Initializes transport and silently restores an already-granted device.
+  /// It never opens a browser or OS permission prompt.
   Future<String?> register();
+
+  /// Requests permission from a direct user action, then registers this device.
+  Future<PushDeliveryStatus> enable();
+
+  PushDeliveryStatus get status;
+
+  Stream<PushDeliveryStatus> get onStatus;
 
   /// Stream of inbound push messages (empty in the no-op).
   Stream<PushMessage> get onMessage;
@@ -81,6 +139,15 @@ class NoopPushService implements PushService {
 
   @override
   Future<String?> register() async => null;
+
+  @override
+  Future<PushDeliveryStatus> enable() async => status;
+
+  @override
+  PushDeliveryStatus get status => const PushDeliveryStatus.unsupported();
+
+  @override
+  Stream<PushDeliveryStatus> get onStatus => const Stream.empty();
 
   @override
   Stream<PushMessage> get onMessage => const Stream.empty();
@@ -139,32 +206,60 @@ class FcmPushService implements PushService {
 
   final _localPlugin = FlutterLocalNotificationsPlugin();
   final _controller = StreamController<PushMessage>.broadcast();
+  final _statusController = StreamController<PushDeliveryStatus>.broadcast();
   bool _ready = false;
+  bool _listenersAttached = false;
   Future<void>? _initializing;
+  PushDeliveryStatus _status = const PushDeliveryStatus.checking();
 
   @override
   Stream<PushMessage> get onMessage => _controller.stream;
 
   @override
+  PushDeliveryStatus get status => _status;
+
+  @override
+  Stream<PushDeliveryStatus> get onStatus => _statusController.stream;
+
+  @override
   Future<String?> register() async {
     await initialize();
-    if (!_ready) return null;
+    if (!_ready || !_status.isAllowed) return null;
     try {
       final token = await _getToken();
       if (token != null) _debugToken(token);
-      // [initialize] can run before authentication exists (so permission is
-      // requested on app launch). Repeat this owner-bound registration after a
-      // later sign-in instead of leaving a token unassociated with that user.
-      await _registerToken(token);
+      // [initialize] can run before authentication exists. Repeat this
+      // owner-bound registration after a later sign-in instead of leaving a
+      // token unassociated with that user.
+      final registered = await _registerToken(token);
+      _setStatus(_status.copyWith(deviceRegistered: registered, errorCode: ''));
       return token;
     } catch (e, st) {
-      _observe(e, st);
+      _reportFailure('TOKEN_REGISTRATION_FAILED', e, st);
       return null;
     }
   }
 
-  /// Full setup: Firebase, permission, background handler, local-notification
-  /// display for foreground pushes, tap → deep-link, and device-token
+  @override
+  Future<PushDeliveryStatus> enable() async {
+    await initialize();
+    if (!_ready) return _status;
+    try {
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      _setAuthorization(settings.authorizationStatus);
+      if (_status.isAllowed) await register();
+    } catch (e, st) {
+      _reportFailure('PERMISSION_REQUEST_FAILED', e, st);
+    }
+    return _status;
+  }
+
+  /// Full setup: Firebase, permission status, background handler, foreground
+  /// event delivery to the in-app alert host, tap → deep-link, and device-token
   /// registration (+ refresh). Call once at app start; later calls no-op.
   Future<void> initialize() {
     if (_ready) return Future<void>.value();
@@ -186,46 +281,66 @@ class FcmPushService implements PushService {
       // Unsupported desktop targets and missing native configuration must not
       // block Yorks. Android, iOS and web use the generated options above.
       _debugFailure('initialization', e, st);
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.linux)) {
+        _setStatus(const PushDeliveryStatus.unsupported());
+      } else {
+        _reportFailure('FIREBASE_INITIALIZATION_FAILED', e, st);
+      }
       return;
     }
     _ready = true;
 
     try {
-      await _localPlugin.initialize(
-        settings: const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          iOS: DarwinInitializationSettings(),
-        ),
-        onDidReceiveNotificationResponse: (resp) => _openRoute(resp.payload),
-      );
-      final android = _localPlugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      await android?.createNotificationChannel(_androidChannel);
-    } catch (e, st) {
-      _observe(e, st);
-    }
-
-    try {
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      if (kDebugMode) {
-        debugPrint('[fcm] permission: ${settings.authorizationStatus.name}');
+      if (!kIsWeb) {
+        await _localPlugin.initialize(
+          settings: const InitializationSettings(
+            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+            iOS: DarwinInitializationSettings(),
+          ),
+          onDidReceiveNotificationResponse: (resp) => _openRoute(resp.payload),
+        );
+        final android = _localPlugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        await android?.createNotificationChannel(_androidChannel);
+      }
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        await FirebaseMessaging.instance
+            .setForegroundNotificationPresentationOptions(
+              // The cross-platform in-app alert host owns foreground
+              // presentation and sound. Suppressing the parallel Apple banner
+              // prevents duplicate pop-ups for one authoritative event.
+              alert: false,
+              badge: true,
+              sound: false,
+            );
       }
     } catch (e, st) {
       _observe(e, st);
     }
 
-    // Foreground: FCM does NOT auto-display anything, so show it ourselves
-    // (a transient banner — the real record already synced into the
-    // notifications table) and publish it on [onMessage] for any observer.
+    try {
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings();
+      _setAuthorization(settings.authorizationStatus);
+      if (kDebugMode) {
+        debugPrint('[fcm] permission: ${settings.authorizationStatus.name}');
+      }
+    } catch (e, st) {
+      _reportFailure('PERMISSION_STATUS_FAILED', e, st);
+    }
+
+    if (_listenersAttached) return;
+    _listenersAttached = true;
+    // Foreground: FCM does not auto-display consistently, so publish it to the
+    // cross-platform alert host. The real record separately syncs from the
+    // protected notification table and is de-duplicated by notification ID.
     FirebaseMessaging.onMessage.listen((m) {
       _debugMessage('foreground', m);
-      _showForeground(m);
       _controller.add(_toPushMessage(m));
     });
     // Backgrounded (app alive, tapped from the tray) → deep-link.
@@ -246,8 +361,46 @@ class FcmPushService implements PushService {
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) {
       _debugToken(token);
-      _registerToken(token);
+      unawaited(
+        _registerToken(token).then((registered) {
+          _setStatus(
+            _status.copyWith(deviceRegistered: registered, errorCode: ''),
+          );
+        }),
+      );
     });
+  }
+
+  void _setAuthorization(AuthorizationStatus authorization) {
+    final mapped = switch (authorization) {
+      AuthorizationStatus.authorized => PushAuthorizationState.authorized,
+      AuthorizationStatus.provisional => PushAuthorizationState.provisional,
+      AuthorizationStatus.denied => PushAuthorizationState.denied,
+      AuthorizationStatus.notDetermined => PushAuthorizationState.notDetermined,
+    };
+    _setStatus(
+      PushDeliveryStatus(
+        authorization: mapped,
+        deviceRegistered: mapped == _status.authorization
+            ? _status.deviceRegistered
+            : false,
+      ),
+    );
+  }
+
+  void _setStatus(PushDeliveryStatus value) {
+    _status = value;
+    if (!_statusController.isClosed) _statusController.add(value);
+  }
+
+  void _reportFailure(String errorCode, Object error, StackTrace stackTrace) {
+    _setStatus(
+      PushDeliveryStatus(
+        authorization: PushAuthorizationState.error,
+        errorCode: errorCode,
+      ),
+    );
+    _observe(error, stackTrace);
   }
 
   Future<String?> _getToken() {
@@ -270,33 +423,24 @@ class FcmPushService implements PushService {
     );
   }
 
-  PushMessage _toPushMessage(RemoteMessage m) =>
-      PushMessage.fromData(m.data.map((k, v) => MapEntry(k, '$v')));
-
-  Future<void> _showForeground(RemoteMessage m) async {
-    final n = m.notification;
-    if (n == null) return;
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'yorks_push',
-        'Yorks notifications',
-        channelDescription: 'Workflow alerts and controlled-record updates.',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-      iOS: DarwinNotificationDetails(),
+  PushMessage _toPushMessage(RemoteMessage m) {
+    final fromData = PushMessage.fromData(
+      m.data.map((key, value) => MapEntry(key, '$value')),
     );
-    try {
-      await _localPlugin.show(
-        id: m.hashCode,
-        title: n.title,
-        body: n.body,
-        notificationDetails: details,
-        payload: m.data['route'] as String?,
-      );
-    } catch (e, st) {
-      _observe(e, st);
-    }
+    return PushMessage(
+      notificationId: fromData.notificationId,
+      type: fromData.type,
+      title: fromData.title.isNotEmpty
+          ? fromData.title
+          : m.notification?.title ?? '',
+      titleSecondary: fromData.titleSecondary,
+      body: fromData.body.isNotEmpty
+          ? fromData.body
+          : m.notification?.body ?? '',
+      refId: fromData.refId,
+      route: fromData.route,
+      audience: fromData.audience,
+    );
   }
 
   /// Navigates via the CURRENT router read fresh from Riverpod each time (the
@@ -315,13 +459,15 @@ class FcmPushService implements PushService {
 
   /// Registers (or refreshes) this device's token against the signed-in user.
   /// Best-effort: push is a convenience, never a requirement to use the app.
-  Future<void> _registerToken([String? currentToken]) async {
+  Future<bool> _registerToken([String? currentToken]) async {
     final client = _ref.read(supabaseClientProvider);
     final authUserId = client?.auth.currentUser?.id;
-    if (client == null || authUserId == null || authUserId.isEmpty) return;
+    if (client == null || authUserId == null || authUserId.isEmpty) {
+      return false;
+    }
     try {
       final token = currentToken ?? await _getToken();
-      if (token == null) return;
+      if (token == null) return false;
       await client.rpc(
         'v1_register_push_device',
         params: {
@@ -329,8 +475,10 @@ class FcmPushService implements PushService {
           'p_platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
         },
       );
+      return true;
     } catch (e, st) {
       _observe(e, st);
+      return false;
     }
   }
 

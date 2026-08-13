@@ -1299,11 +1299,11 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
-    expect(YorksV1MaterialRequestStrings.procurement.primary, 'Procurement');
+    expect(YorksV1MaterialRequestStrings.procurement.primary, 'Procurement by');
     expect(YorksV1MaterialRequestStrings.approvedBy.primary, 'Approved by');
     expect(
       YorksV1MaterialRequestStrings.orderedDispatched.primary,
-      'Ordered / Dispatched',
+      'Ordered / Dispatched by',
     );
     expect(
       YorksV1CompanyDocumentStrings.legalName.ar,

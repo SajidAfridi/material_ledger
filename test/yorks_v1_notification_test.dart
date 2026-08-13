@@ -59,6 +59,40 @@ void main() {
     expect(notification.route, '/yorks/material-requests/$requestId');
   });
 
+  test('project membership alert uses the protected project route', () {
+    final notification = YorksV1NotificationRecord.fromRpcJson({
+      'notification_id': '21000000-0000-4000-8000-000000000002',
+      'event_code': 'project_member_assigned',
+      'entity_type': 'project_member',
+      'entity_id': '24000000-0000-4000-8000-000000000001',
+      'request_id': null,
+      'project_id': '23000000-0000-4000-8000-000000000001',
+      'created_at': '2026-08-13T12:00:00Z',
+      'seen_at': null,
+    }).toAppNotification(AppLanguage.english);
+
+    expect(notification.title, 'Project access assigned');
+    expect(
+      notification.route,
+      '/yorks/projects/23000000-0000-4000-8000-000000000001',
+    );
+  });
+
+  test('return decisions and cancellation have specific safe copy', () {
+    expect(
+      record(
+        eventCode: 'material_return_confirmed',
+      ).toAppNotification(AppLanguage.english).title,
+      'Material return confirmed',
+    );
+    expect(
+      record(
+        eventCode: 'material_request_cancelled',
+      ).toAppNotification(AppLanguage.english).title,
+      'Material request cancelled',
+    );
+  });
+
   test('legacy JSON remains legacy while server origin round-trips', () {
     final legacy = AppNotification.fromJson({
       'id': 'legacy',

@@ -23,4 +23,46 @@ messaging.onBackgroundMessage((payload) => {
   // Business payloads must remain non-commercial by the Yorks notification
   // contract; protected values never travel in FCM data.
   console.log('[fcm][background]', payload);
+  // FCM Webpush notification payloads are displayed by the browser. Only
+  // data-only messages need an explicit fallback notification here.
+  if (payload.notification) return;
+  const data = payload.data || {};
+  const title = typeof data.title === 'string' && data.title
+    ? data.title
+    : 'Yorks workflow update';
+  const body = typeof data.body === 'string' && data.body
+    ? data.body
+    : 'A record assigned to you has changed.';
+  const route = typeof data.route === 'string' && data.route.startsWith('/')
+    && !data.route.startsWith('//')
+    ? data.route
+    : '/notifications';
+  return self.registration.showNotification(title, {
+    body,
+    icon: '/icons/Icon-192.png',
+    badge: '/icons/Icon-192.png',
+    tag: data.notificationId || undefined,
+    data: { route, yorksFallback: true },
+  });
+});
+
+self.addEventListener('notificationclick', (event) => {
+  // Firebase owns click handling for notification-payload messages (including
+  // their fcm_options.link). Handle only the data-only fallback created above.
+  if (event.notification?.data?.yorksFallback !== true) return;
+  event.notification.close();
+  const route = event.notification?.data?.route || '/notifications';
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+    for (const windowClient of windows) {
+      if ('focus' in windowClient) {
+        if ('navigate' in windowClient) await windowClient.navigate(route);
+        return windowClient.focus();
+      }
+    }
+    return self.clients.openWindow(route);
+  })());
 });

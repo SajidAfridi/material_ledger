@@ -1131,10 +1131,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'अनुरोध',
   );
   static const procurement = TranslatableString(
-    en: 'Procurement',
-    ar: 'المشتريات',
-    ur: 'پروکیورمنٹ',
-    hi: 'खरीद',
+    en: 'Procurement by',
+    ar: 'بواسطة المشتريات',
+    ur: 'پروکیورمنٹ کی طرف سے',
+    hi: 'खरीद द्वारा',
   );
   static const dispatch = TranslatableString(
     en: 'Dispatch',
@@ -1299,10 +1299,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'खरीद द्वारा आदेशित / डिस्पैच',
   );
   static const orderedDispatched = TranslatableString(
-    en: 'Ordered / Dispatched',
-    ar: 'تم الطلب / الإرسال',
-    ur: 'آرڈر / ڈسپیچ',
-    hi: 'आदेशित / डिस्पैच',
+    en: 'Ordered / Dispatched by',
+    ar: 'تم الطلب / الإرسال بواسطة',
+    ur: 'آرڈر / ڈسپیچ کرنے والا',
+    hi: 'आदेश / डिस्पैच करने वाला',
   );
   static const name = TranslatableString(
     en: 'Name',

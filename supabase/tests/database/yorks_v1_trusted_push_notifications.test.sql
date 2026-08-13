@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(23);
+select plan(27);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -39,6 +39,35 @@ select ok(
     'execute'
   ),
   'Only the service worker can claim or finish push deliveries'
+);
+
+select ok(
+  exists (
+    select 1 from pg_trigger
+    where tgname = 'v1_material_returns_notify_decision' and not tgisinternal
+  )
+  and exists (
+    select 1 from pg_trigger
+    where tgname = 'v1_material_requests_notify_cancelled' and not tgisinternal
+  )
+  and exists (
+    select 1 from pg_trigger
+    where tgname = 'v1_project_members_notify_insert' and not tgisinternal
+  ),
+  'Trusted workflow and membership transitions own their notification triggers'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated', 'public.v1_notify_material_return_decision()', 'execute'
+  )
+  and not has_function_privilege(
+    'authenticated', 'public.v1_notify_material_request_cancelled()', 'execute'
+  )
+  and not has_function_privilege(
+    'authenticated', 'public.v1_notify_project_membership_change()', 'execute'
+  ),
+  'Authenticated clients cannot invoke server notification fan-out functions'
 );
 
 set local role postgres;
@@ -116,6 +145,38 @@ insert into public.v1_notifications (
     'receipt_review_required', 'material_dispatch',
     '92000000-0000-4000-8000-000000000002', clock_timestamp()
   );
+
+insert into public.v1_notifications (
+  id, recipient_auth_user_id, event_code, entity_type, entity_id, created_at
+) values (
+  '91000000-0000-4000-8000-000000000003',
+  '10000000-0000-4000-8000-000000000001',
+  'material_request_updated_for_approval', 'material_request',
+  '92000000-0000-4000-8000-000000000003', clock_timestamp()
+);
+
+select is(
+  (select count(*) from public.v1_notifications
+   where event_code = 'material_request_updated_for_approval'
+     and entity_id = '92000000-0000-4000-8000-000000000003'
+     and recipient_auth_user_id in (
+       '10000000-0000-4000-8000-000000000009',
+       '10000000-0000-4000-8000-000000000010'
+     )),
+  2::bigint,
+  'Approval edits notify both organization-wide Project Engineer roles'
+);
+
+select is(
+  (select count(*) from public.v1_notification_push_outbox
+   where notification_id in (
+     select id from public.v1_notifications
+     where event_code = 'material_request_updated_for_approval'
+       and entity_id = '92000000-0000-4000-8000-000000000003'
+   )),
+  3::bigint,
+  'Each approval-edit recipient receives one durable push command'
+);
 
 select is(
   (select count(*) from public.v1_notification_push_outbox

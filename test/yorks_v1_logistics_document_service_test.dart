@@ -200,7 +200,71 @@ void main() {
     }
   });
 
-  test('Delivery Order keeps a typical multi-line dispatch compact', () async {
+  test(
+    'short Delivery Report with a wrapped project heading stays on one page',
+    () async {
+      final wrappedProjectWorkspace = YorksV1ReturnsDocumentsWorkspace(
+        requestId: 'request-wrapped-project',
+        projectId: 'project-wrapped-project',
+        requestNumber: 'YRA313-MR012',
+        requestState: 'received',
+        requestRecordVersion: 1,
+        projectName:
+            'N-19957.2-PROJECT NEXUS (POWER) BULK TRANSMISSION SCHEME PHASE 1: '
+            'SUPPLY AND INSTALLATION OF 132/33KV SUBSTATION & RELATED '
+            'INTERCONNECTION 132KV CABLES AT AL DHAFRA AREA '
+            '(DF3W, DF4W, DF6W, DF7W)',
+        projectReference: 'N-19957.2',
+        jobContractReference: 'N-19957.2',
+        scopeName: 'Common',
+        mainContractorName: 'M/s. Larsen & Toubro Limited- (L&T)',
+        materialContext: 'test',
+        canGenerateDeliveryOrder: true,
+        canSubmitMaterialReturn: true,
+        canConfirmMaterialReturn: true,
+        deliveryOrderDispatches: [dispatch],
+        returnCandidates: const [],
+        materialReturns: const [],
+        returnInventoryItems: const [],
+      );
+      final wrappedProjectRevision = YorksV1DeliveryOrderRevision(
+        id: 'revision-wrapped-project',
+        revisionNumber: 1,
+        isCurrent: true,
+        generatedAt: DateTime.utc(2026, 8, 14),
+        generatedByDisplayName: 'Owner',
+        generatedByRole: 'admin',
+        snapshotKind: YorksV1DeliveryOrderSnapshotKind.receiptReview,
+        lines: const [
+          YorksV1DeliveryOrderLine(
+            serialNumber: 1,
+            description: 'Nsnsns',
+            size: '10x10',
+            model: 'Sjja',
+            quantity: '1',
+            unit: 'Nos',
+          ),
+        ],
+      );
+
+      final bytes = await service.buildDeliveryOrderPdf(
+        workspace: wrappedProjectWorkspace,
+        dispatch: dispatch,
+        revision: wrappedProjectRevision,
+        format: PdfPageFormat.a4,
+      );
+
+      expect(_generatedPdfPageCount(bytes), 1);
+      if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
+        await Directory('output/pdf').create(recursive: true);
+        await File(
+          'output/pdf/r35-delivery-report-wrapped-project.pdf',
+        ).writeAsBytes(bytes, flush: true);
+      }
+    },
+  );
+
+  test('Delivery Order paginates 11 rows without clipping sign-off', () async {
     final multiLineRevision = YorksV1DeliveryOrderRevision(
       id: 'revision-compact',
       revisionNumber: 3,
@@ -226,6 +290,7 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    expect(_generatedPdfPageCount(bytes), 2);
     if (const bool.fromEnvironment('R35_CAPTURE_EVIDENCE')) {
       await Directory('output/pdf').create(recursive: true);
       await File(
@@ -272,3 +337,7 @@ void main() {
     },
   );
 }
+
+int _generatedPdfPageCount(List<int> bytes) => RegExp(
+  r'/Type/Page(?=/)',
+).allMatches(latin1.decode(bytes, allowInvalid: true)).length;
