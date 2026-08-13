@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -186,7 +187,8 @@ final yorksV1MaterialRequestLiveRefreshProvider = Provider.autoDispose<void>((
   ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
 });
 
-class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int> {
+class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
+    with WidgetsBindingObserver {
   YorksV1MaterialRequestRealtimeNotifier({
     required bool enabled,
     required String? authUserId,
@@ -211,13 +213,17 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int> {
   Timer? _fallbackTimer;
   bool _started = false;
   bool _disposed = false;
+  bool _observingLifecycle = false;
+  bool _leftForeground = false;
 
-  /// Starts the safe notification signal. Periodic reads are used only while
-  /// Realtime is unavailable; a healthy channel must not repaint an otherwise
-  /// unchanged workspace every few seconds.
+  /// Starts the safe notification signal and a low-frequency authorized read.
+  /// The latter closes mobile/browser suspension gaps without replacing the
+  /// current projection or treating Realtime as workflow authority.
   Future<void> start() async {
     if (!_enabled || _disposed || _started) return;
     _started = true;
+    WidgetsBinding.instance.addObserver(this);
+    _observingLifecycle = true;
     final subscription = _signalSubscription ?? _subscribeToNotificationSignals;
     final subscribed = await subscription(
       onSignal: _refreshAuthorizedProjections,
@@ -227,14 +233,33 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int> {
     // Re-fetch once a channel has joined. That closes the gap between the
     // initial list/detail RPC and a successful subscription registration.
     if (subscribed) {
-      _fallbackTimer?.cancel();
-      _fallbackTimer = null;
       await _refreshAuthorizedProjections(
         YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
       );
-    } else {
-      _ensureFallbackTimer();
     }
+    // Mobile operating systems and browser tabs can suspend a healthy socket
+    // without immediately reporting a channel error. Keep a low-frequency
+    // authorized re-fetch as a safety net on every platform. Dependants retain
+    // their current data while refreshing, so this does not flash a loading
+    // screen or make Realtime a transaction authority.
+    _ensureFallbackTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_enabled || _disposed) return;
+    if (state == AppLifecycleState.resumed) {
+      if (_leftForeground) {
+        unawaited(
+          _refreshAuthorizedProjections(
+            YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
+          ),
+        );
+      }
+      _leftForeground = false;
+      return;
+    }
+    _leftForeground = true;
   }
 
   /// Maps an already RLS-filtered notification envelope to a refresh only.
@@ -367,6 +392,10 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int> {
   @override
   void dispose() {
     _disposed = true;
+    if (_observingLifecycle) {
+      WidgetsBinding.instance.removeObserver(this);
+      _observingLifecycle = false;
+    }
     _fallbackTimer?.cancel();
     _fallbackTimer = null;
     unawaited(_authSubscription?.cancel() ?? Future<void>.value());
@@ -416,6 +445,43 @@ final yorksV1MaterialRequestScopesProvider = FutureProvider.autoDispose
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .listScopes(projectId);
+    });
+
+final yorksV1MaterialRequestMentionCandidatesProvider = FutureProvider
+    .autoDispose
+    .family<List<YorksV1MaterialRequestMention>, String>((ref, requestId) {
+      return ref
+          .watch(yorksV1MaterialRequestRepositoryProvider)
+          .listMentionCandidates(requestId);
+    });
+
+class YorksV1MaterialRequestInventorySearchKey {
+  const YorksV1MaterialRequestInventorySearchKey({
+    required this.projectId,
+    required this.query,
+  });
+
+  final String projectId;
+  final String query;
+
+  @override
+  bool operator ==(Object other) =>
+      other is YorksV1MaterialRequestInventorySearchKey &&
+      other.projectId == projectId &&
+      other.query == query;
+
+  @override
+  int get hashCode => Object.hash(projectId, query);
+}
+
+final yorksV1MaterialRequestInventorySearchProvider = FutureProvider.autoDispose
+    .family<
+      List<YorksV1MaterialRequestInventorySuggestion>,
+      YorksV1MaterialRequestInventorySearchKey
+    >((ref, key) {
+      return ref
+          .watch(yorksV1MaterialRequestRepositoryProvider)
+          .searchInventory(projectId: key.projectId, query: key.query);
     });
 
 final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose

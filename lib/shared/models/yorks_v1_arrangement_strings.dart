@@ -28,10 +28,10 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'अनुरोधित सामग्री व्यवस्थित करें',
   );
   static const decideEveryLine = TranslatableString(
-    en: 'Decide each line before sending the arrangement to Project Engineers.',
-    ar: 'حدّد قرار كل بند قبل إرسال الترتيب إلى مهندسي المشروع.',
-    ur: 'انتظام پروجیکٹ انجینئرز کو بھیجنے سے پہلے ہر لائن کا فیصلہ کریں۔',
-    hi: 'व्यवस्था प्रोजेक्ट इंजीनियरों को भेजने से पहले प्रत्येक पंक्ति तय करें।',
+    en: 'Decide each line before saving the arrangement.',
+    ar: 'حدّد قرار كل بند قبل حفظ الترتيب.',
+    ur: 'انتظام محفوظ کرنے سے پہلے ہر لائن کا فیصلہ کریں۔',
+    hi: 'व्यवस्था सहेजने से पहले प्रत्येक पंक्ति तय करें।',
   );
   static const arrangeItem = TranslatableString(
     en: 'Arrange Item',
@@ -58,22 +58,22 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'सहेजें और अगला',
   );
   static const arrangementReview = TranslatableString(
-    en: 'Arrangement Review',
-    ar: 'مراجعة الترتيب',
-    ur: 'انتظام کا جائزہ',
-    hi: 'व्यवस्था समीक्षा',
+    en: 'Arrangement Summary',
+    ar: 'ملخص الترتيب',
+    ur: 'انتظام کا خلاصہ',
+    hi: 'व्यवस्था सारांश',
   );
   static const readyForProjectEngineer = TranslatableString(
-    en: 'Ready for Project Engineer',
-    ar: 'جاهز لمهندس المشروع',
-    ur: 'پروجیکٹ انجینئر کے لیے تیار',
-    hi: 'प्रोजेक्ट इंजीनियर के लिए तैयार',
+    en: 'Ready for delivery',
+    ar: 'جاهز للتسليم',
+    ur: 'ڈیلیوری کے لیے تیار',
+    hi: 'डिलीवरी के लिए तैयार',
   );
   static const approvalReleasesArranged = TranslatableString(
-    en: 'Approval releases only the arranged quantities.',
-    ar: 'تعتمد الموافقة الكميات المرتبة فقط.',
-    ur: 'منظوری صرف ترتیب شدہ مقدار جاری کرتی ہے۔',
-    hi: 'मंजूरी केवल व्यवस्थित मात्राओं को जारी करती है।',
+    en: 'Saving makes only the arranged quantities available for controlled dispatch.',
+    ar: 'يجعل الحفظ الكميات المرتبة فقط متاحة للإرسال المتحكم به.',
+    ur: 'محفوظ کرنے سے صرف ترتیب شدہ مقدار کنٹرولڈ ڈسپیچ کے لیے دستیاب ہوتی ہے۔',
+    hi: 'सहेजने से केवल व्यवस्थित मात्रा नियंत्रित डिस्पैच के लिए उपलब्ध होती है।',
   );
   static const projectEngineerReview = TranslatableString(
     en: 'Project Engineer Review',
@@ -166,10 +166,10 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'व्यवस्था शुरू करें',
   );
   static const saveForApproval = TranslatableString(
-    en: 'Send to Project Engineer',
-    ar: 'إرسال لموافقة مهندس المشروع',
-    ur: 'پروجیکٹ انجینئر کی منظوری کے لیے بھیجیں',
-    hi: 'प्रोजेक्ट इंजीनियर की मंजूरी के लिए भेजें',
+    en: 'Save arrangement',
+    ar: 'حفظ الترتيب',
+    ur: 'انتظام محفوظ کریں',
+    hi: 'व्यवस्था सहेजें',
   );
   static const approveArrangement = TranslatableString(
     en: 'Approve arrangement',
@@ -266,6 +266,12 @@ abstract final class YorksV1ArrangementStrings {
     ar: 'اسم المورد (اختياري)',
     ur: 'سپلائر کا نام (اختیاری)',
     hi: 'आपूर्तिकर्ता का नाम (वैकल्पिक)',
+  );
+  static const addSupplierDetails = TranslatableString(
+    en: 'Add supplier details (optional)',
+    ar: 'إضافة تفاصيل المورد (اختياري)',
+    ur: 'سپلائر کی تفصیلات شامل کریں (اختیاری)',
+    hi: 'आपूर्तिकर्ता विवरण जोड़ें (वैकल्पिक)',
   );
   static const warehouseItem = TranslatableString(
     en: 'Warehouse item',
@@ -399,6 +405,12 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'یہ انتظام محفوظ نہیں ہو سکا۔ ریفریش کریں اور موجودہ ورژن دیکھیں۔',
     hi: 'यह व्यवस्था सहेजी नहीं जा सकी। रीफ़्रेश करके वर्तमान संस्करण देखें।',
   );
+  static const stockChangedBeforeSave = TranslatableString(
+    en: 'Warehouse availability changed before the arrangement could be saved. Review the refreshed stock, reduce the quantity, or choose Partial, Cannot Provide Now, or External supplier.',
+    ar: 'تغيّر توفر المستودع قبل حفظ الترتيب. راجع المخزون المحدّث، أو قلّل الكمية، أو اختر جزئياً أو لا يمكن توفيره الآن أو مورداً خارجياً.',
+    ur: 'انتظام محفوظ ہونے سے پہلے گودام کی دستیابی بدل گئی۔ تازہ شدہ ذخیرہ دیکھیں، مقدار کم کریں، یا جزوی، ابھی فراہم نہیں کیا جا سکتا، یا بیرونی سپلائر منتخب کریں۔',
+    hi: 'व्यवस्था सहेजे जाने से पहले वेयरहाउस उपलब्धता बदल गई। अपडेट किए गए स्टॉक की समीक्षा करें, मात्रा घटाएं, या Partial, Cannot Provide Now या External supplier चुनें।',
+  );
   static const invalidLines = TranslatableString(
     en: 'Complete every line. Partial and unavailable decisions need a reason.',
     ar: 'أكمل كل بند. القرارات الجزئية وغير المتاحة تحتاج سببًا.',
@@ -464,6 +476,19 @@ abstract final class YorksV1ArrangementStrings {
         ur: '$line کو ریزرو کرنے سے پہلے گودام کی آئٹم درکار ہے۔',
         hi: '$line को आरक्षित करने से पहले वेयरहाउस आइटम चाहिए।',
       );
+
+  static TranslatableString warehouseStockShortageFor({
+    required String line,
+    required String item,
+    required String requiredQuantity,
+    required String availableQuantity,
+    required String unit,
+  }) => TranslatableString(
+    en: '$line cannot reserve $item: $requiredQuantity $unit is arranged but only $availableQuantity $unit is available. Reduce the quantity, choose Partial or Cannot Provide Now, or use External supplier.',
+    ar: 'لا يمكن لـ $line حجز $item: تم ترتيب $requiredQuantity $unit والمتاح فقط $availableQuantity $unit. قلّل الكمية، أو اختر جزئياً أو لا يمكن توفيره الآن، أو استخدم مورداً خارجياً.',
+    ur: '$line، $item ریزرو نہیں کر سکتی: $requiredQuantity $unit کا انتظام ہے لیکن صرف $availableQuantity $unit دستیاب ہے۔ مقدار کم کریں، جزوی یا ابھی فراہم نہیں کیا جا سکتا منتخب کریں، یا بیرونی سپلائر استعمال کریں۔',
+    hi: '$line, $item को आरक्षित नहीं कर सकती: $requiredQuantity $unit व्यवस्थित है, लेकिन केवल $availableQuantity $unit उपलब्ध है। मात्रा घटाएं, Partial या Cannot Provide Now चुनें, या External supplier का उपयोग करें।',
+  );
 
   static TranslatableString emptyWarehouseFor(String line) =>
       TranslatableString(

@@ -26,6 +26,39 @@ class YorksV1MaterialWorkflowCommandController {
   final YorksV1LogisticsRepository _logistics;
   final YorksV1CriticalCommandKeyStore _commandKeys;
 
+  Future<YorksV1MaterialRequest> decideMaterialRequest(
+    YorksV1DecideMaterialRequestInput input,
+  ) => _run(
+    operation: 'decide_material_request_${input.decision.wireValue}',
+    entityId: input.requestId,
+    payload: input.toRpcPayload(),
+    invoke: (key) => _materialRequests.decideRequest(
+      YorksV1DecideMaterialRequestInput(
+        requestId: input.requestId,
+        expectedVersion: input.expectedVersion,
+        decision: input.decision,
+        reason: input.reason,
+        idempotencyKey: key,
+      ),
+    ),
+  );
+
+  Future<List<YorksV1MaterialRequestComment>> addMaterialRequestComment(
+    YorksV1AddMaterialRequestCommentInput input,
+  ) => _run(
+    operation: 'add_material_request_comment',
+    entityId: input.requestId,
+    payload: input.toRpcPayload(),
+    invoke: (key) => _materialRequests.addComment(
+      YorksV1AddMaterialRequestCommentInput(
+        requestId: input.requestId,
+        body: input.body,
+        mentionedAuthUserIds: input.mentionedAuthUserIds,
+        idempotencyKey: key,
+      ),
+    ),
+  );
+
   Future<YorksV1ArrangementWorkspace> beginArrangement(
     YorksV1BeginArrangementInput input,
   ) => _run(

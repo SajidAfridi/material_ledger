@@ -163,14 +163,21 @@ class YorksV1SupabaseArrangementRepository
   static YorksV1DomainException _mapPostgrestException(
     PostgrestException error,
   ) {
-    final code = switch (error.code) {
-      '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
-      '40001' || '23505' || '55P03' => YorksV1DomainErrorCode.conflict,
-      '22023' ||
-      '22007' ||
-      '22P02' ||
-      '23514' => YorksV1DomainErrorCode.invalidInput,
-      _ => YorksV1DomainErrorCode.serverRejected,
+    final serverMessage = error.message.toUpperCase();
+    final code = switch (serverMessage) {
+      final value
+          when value.contains('V1_INVENTORY_RESERVATION_EXCEEDS_AVAILABLE') ||
+              value.contains('V1_ARRANGEMENT_INVENTORY_ITEM_INVALID') =>
+        YorksV1DomainErrorCode.insufficientStock,
+      _ => switch (error.code) {
+        '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
+        '40001' || '23505' || '55P03' => YorksV1DomainErrorCode.conflict,
+        '22023' ||
+        '22007' ||
+        '22P02' ||
+        '23514' => YorksV1DomainErrorCode.invalidInput,
+        _ => YorksV1DomainErrorCode.serverRejected,
+      },
     };
     return YorksV1DomainException(code, serverCode: error.code, cause: error);
   }

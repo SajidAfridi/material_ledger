@@ -6,6 +6,7 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
@@ -13,6 +14,8 @@ import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_document_file_service_provider.dart';
+import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
@@ -1083,7 +1086,7 @@ class _DispatchCandidateMobileCard extends StatelessWidget {
   );
 }
 
-class _DispatchCard extends StatelessWidget {
+class _DispatchCard extends ConsumerStatefulWidget {
   const _DispatchCard({
     required this.dispatch,
     required this.workspace,
@@ -1093,6 +1096,14 @@ class _DispatchCard extends StatelessWidget {
   final YorksV1MaterialDispatch dispatch;
   final YorksV1LogisticsWorkspace workspace;
   final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_DispatchCard> createState() => _DispatchCardState();
+}
+
+class _DispatchCardState extends ConsumerState<_DispatchCard> {
+  bool _uploadingPhoto = false;
+  String _photoIdempotencyKey = const Uuid().v4();
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1109,35 +1120,47 @@ class _DispatchCard extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(dispatch.number, style: AppTypography.titleSmall),
-            _StateChip(state: dispatch.state),
+            Text(widget.dispatch.number, style: AppTypography.titleSmall),
+            _StateChip(state: widget.dispatch.state),
             Text(
-              _dateLabel(dispatch.dispatchDate),
+              _dateLabel(widget.dispatch.dispatchDate),
               style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
             ),
           ],
         ),
-        if (dispatch.driverName != null ||
-            dispatch.vehicleReference != null) ...[
+        if (widget.dispatch.driverName != null ||
+            widget.dispatch.vehicleReference != null) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(
             [
-              dispatch.driverName,
-              dispatch.vehicleReference,
+              widget.dispatch.driverName,
+              widget.dispatch.vehicleReference,
             ].whereType<String>().join(' · '),
             style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
           ),
         ],
         const SizedBox(height: AppSpacing.md),
-        for (final line in dispatch.lines) _DispatchLineRow(line: line),
-        if (dispatch.receiptReview != null) ...[
+        for (final line in widget.dispatch.lines) _DispatchLineRow(line: line),
+        if (widget.dispatch.receiptReview != null) ...[
           const SizedBox(height: AppSpacing.md),
           Text(
-            dispatch.receiptReview!.reviewedByDisplayName,
+            widget.dispatch.receiptReview!.reviewedByDisplayName,
             style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SecondaryButton(
+              label: YorksV1LogisticsStrings.addSitePhoto.primary,
+              isExpanded: false,
+              icon: _uploadingPhoto
+                  ? Icons.hourglass_top_rounded
+                  : Icons.add_a_photo_outlined,
+              onPressed: _uploadingPhoto ? null : _addSitePhoto,
+            ),
+          ),
         ],
-        if (dispatch.canConfirmReceipt) ...[
+        if (widget.dispatch.canConfirmReceipt) ...[
           const SizedBox(height: AppSpacing.md),
           Align(
             alignment: Alignment.centerRight,
@@ -1156,10 +1179,75 @@ class _DispatchCard extends StatelessWidget {
   Future<void> _openReceiptReview(BuildContext context) async {
     await showYorksV1ReceiptReviewDialog(
       context,
-      workspace: workspace,
-      dispatch: dispatch,
-      onChanged: onChanged,
+      workspace: widget.workspace,
+      dispatch: widget.dispatch,
+      onChanged: widget.onChanged,
     );
+  }
+
+  Future<void> _addSitePhoto() async {
+    final review = widget.dispatch.receiptReview;
+    if (review == null || _uploadingPhoto) return;
+    setState(() => _uploadingPhoto = true);
+    final uploaded = await _selectAndUploadReceiptPhoto(
+      context: context,
+      ref: ref,
+      workspace: widget.workspace,
+      receiptReviewId: review.id,
+      idempotencyKey: _photoIdempotencyKey,
+    );
+    if (!mounted) return;
+    if (uploaded) {
+      _photoIdempotencyKey = const Uuid().v4();
+      widget.onChanged();
+    }
+    setState(() => _uploadingPhoto = false);
+  }
+}
+
+Future<bool> _selectAndUploadReceiptPhoto({
+  required BuildContext context,
+  required WidgetRef ref,
+  required YorksV1LogisticsWorkspace workspace,
+  required String receiptReviewId,
+  required String idempotencyKey,
+}) async {
+  try {
+    final selected = await ref
+        .read(yorksV1DocumentFileServiceProvider)
+        .selectImage();
+    if (selected == null) return false;
+    await ref
+        .read(yorksV1DocumentsRepositoryProvider)
+        .upload(
+          YorksV1DocumentUploadInput(
+            projectId: workspace.projectId,
+            entityType: YorksV1DocumentEntityType.receiptReview,
+            entityId: receiptReviewId,
+            classification: YorksV1DocumentClassification.operational,
+            fileName: selected.fileName,
+            mimeType: selected.mimeType,
+            bytes: selected.bytes,
+            idempotencyKey: idempotencyKey,
+          ),
+        );
+    if (context.mounted) {
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.sitePhotoUploaded.primary,
+        tone: YorksAppToastTone.success,
+      );
+    }
+    return true;
+  } catch (_) {
+    if (context.mounted) {
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.sitePhotoFailed.primary,
+        tone: YorksAppToastTone.error,
+      );
+    }
+    return false;
   }
 }
 
@@ -1204,6 +1292,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   final Map<String, TextEditingController> _notes = {};
   final Set<String> _reviewed = {};
   late String _receiptIdempotencyKey;
+  late String _photoIdempotencyKey;
   bool _allReviewed = false;
   bool _saving = false;
 
@@ -1211,6 +1300,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   void initState() {
     super.initState();
     _receiptIdempotencyKey = const Uuid().v4();
+    _photoIdempotencyKey = const Uuid().v4();
     for (final line in widget.dispatch.lines) {
       _outcomes[line.id] = YorksV1ReceiptOutcome.received;
       _goodQuantities[line.id] = TextEditingController(
@@ -1418,7 +1508,7 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
     }
     setState(() => _saving = true);
     try {
-      await ref
+      final confirmedWorkspace = await ref
           .read(yorksV1MaterialWorkflowCommandControllerProvider)
           .confirmReceipt(
             YorksV1ReceiptConfirmationInput(
@@ -1433,6 +1523,45 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
       if (!mounted) return;
       _receiptIdempotencyKey = const Uuid().v4();
       widget.onChanged();
+      YorksV1ReceiptReview? confirmedReview;
+      for (final dispatch in confirmedWorkspace.dispatches) {
+        if (dispatch.id == widget.dispatch.id) {
+          confirmedReview = dispatch.receiptReview;
+          break;
+        }
+      }
+      if (confirmedReview != null) {
+        final attachNow = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(YorksV1LogisticsStrings.receiptConfirmed.primary),
+            content: Text(YorksV1LogisticsStrings.attachPhotoPrompt.primary),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(YorksV1LogisticsStrings.attachLater.primary),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(YorksV1LogisticsStrings.addSitePhoto.primary),
+              ),
+            ],
+          ),
+        );
+        if (attachNow == true && mounted) {
+          final uploaded = await _selectAndUploadReceiptPhoto(
+            context: context,
+            ref: ref,
+            workspace: confirmedWorkspace,
+            receiptReviewId: confirmedReview.id,
+            idempotencyKey: _photoIdempotencyKey,
+          );
+          if (uploaded) _photoIdempotencyKey = const Uuid().v4();
+        }
+      }
+      if (!mounted) return;
       Navigator.of(context).pop(true);
     } on YorksV1DomainException catch (error) {
       if (mounted) {

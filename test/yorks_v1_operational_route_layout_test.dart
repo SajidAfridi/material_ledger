@@ -12,6 +12,7 @@ import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
@@ -205,7 +206,10 @@ void main() {
                 (ref) async => [],
               ),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: MaterialApp.router(
+              key: ValueKey('material-request-draft-${size.width}'),
+              routerConfig: router,
+            ),
           ),
         );
         await tester.pumpAndSettle();
@@ -297,7 +301,10 @@ void main() {
                 (ref) async => _assignedEngineerDeliveryOrderWorkspace,
               ),
             ],
-            child: MaterialApp.router(routerConfig: router),
+            child: MaterialApp.router(
+              key: ValueKey('material-request-detail-${size.width}'),
+              routerConfig: router,
+            ),
           ),
         );
         // The controlled PDF preview renders asynchronously. A finite pump
@@ -306,7 +313,11 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
-        expect(find.text('Request Status'), findsOneWidget);
+        expect(
+          find.text('Request Status'),
+          findsOneWidget,
+          reason: 'viewport $size',
+        );
         // A fully received record is closed before optional document work; the
         // router may retain an offstage copy across the viewport loop.
         expect(find.text('Close request'), findsAtLeastNWidgets(1));
@@ -316,12 +327,20 @@ void main() {
             findsOneWidget,
           );
         } else {
-          expect(
-            find.byKey(
-              const ValueKey('yorks-v1-controlled-material-request-preview'),
-            ),
-            findsOneWidget,
+          final preview = find.byKey(
+            const ValueKey('yorks-v1-controlled-material-request-preview'),
           );
+          if (preview.evaluate().isEmpty) {
+            final disclosure = find.text(
+              YorksV1MaterialRequestStrings
+                  .controlledDocumentDescription
+                  .primary,
+            );
+            await tester.ensureVisible(disclosure);
+            await tester.tap(disclosure);
+            await tester.pump(const Duration(milliseconds: 250));
+          }
+          expect(preview, findsOneWidget);
         }
         expect(tester.takeException(), isNull, reason: 'viewport $size');
       }
@@ -329,7 +348,7 @@ void main() {
   );
 
   testWidgets(
-    'approval actions stack before the Material Request heading can collapse',
+    'legacy arrangement review stays hidden without collapsing the heading',
     (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
       tester.view.devicePixelRatio = 1;
@@ -439,8 +458,8 @@ void main() {
         const ValueKey('material-request-record-heading'),
       );
       expect(heading, findsOneWidget);
-      expect(tester.getSize(heading).width, greaterThan(500));
-      expect(find.text('Review & Approve'), findsOneWidget);
+      expect(tester.getSize(heading).width, greaterThan(180));
+      expect(find.text('Review & Approve'), findsNothing);
       expect(tester.takeException(), isNull);
       await expectLater(
         find.byType(MaterialApp),

@@ -33,6 +33,9 @@ enum YorksV1MaterialRequestTiming {
 enum YorksV1MaterialRequestState {
   draft('draft'),
   submitted('submitted'),
+  awaitingRequestApproval('awaiting_request_approval'),
+  changesRequested('changes_requested'),
+  approvedForArrangement('approved_for_arrangement'),
   arranging('arranging'),
   awaitingApproval('awaiting_approval'),
   approved('approved'),
@@ -57,6 +60,133 @@ enum YorksV1MaterialRequestState {
 
   bool get isDraft => this == YorksV1MaterialRequestState.draft;
   bool get isSubmittedOrLater => !isDraft;
+}
+
+class YorksV1MaterialRequestMention {
+  const YorksV1MaterialRequestMention({
+    required this.authUserId,
+    required this.displayName,
+    required this.exactRole,
+  });
+
+  final String authUserId;
+  final String displayName;
+  final String exactRole;
+
+  factory YorksV1MaterialRequestMention.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestMention(
+    authUserId: _requiredString(json, 'auth_user_id'),
+    displayName: _requiredString(json, 'display_name'),
+    exactRole: _requiredString(json, 'exact_role'),
+  );
+}
+
+class YorksV1MaterialRequestComment {
+  YorksV1MaterialRequestComment({
+    required this.id,
+    required this.requestId,
+    required this.body,
+    required this.authorAuthUserId,
+    required this.authorRole,
+    required this.authorExactRole,
+    required this.authorDisplayName,
+    required this.createdAt,
+    required List<YorksV1MaterialRequestMention> mentions,
+  }) : mentions = List.unmodifiable(mentions);
+
+  final String id;
+  final String requestId;
+  final String body;
+  final String authorAuthUserId;
+  final String authorRole;
+  final String authorExactRole;
+  final String authorDisplayName;
+  final DateTime createdAt;
+  final List<YorksV1MaterialRequestMention> mentions;
+
+  factory YorksV1MaterialRequestComment.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestComment(
+    id: _requiredString(json, 'id'),
+    requestId: _requiredString(json, 'request_id'),
+    body: _requiredString(json, 'body'),
+    authorAuthUserId: _requiredString(json, 'author_auth_user_id'),
+    authorRole: _requiredString(json, 'author_role'),
+    authorExactRole: _requiredString(json, 'author_exact_role'),
+    authorDisplayName: _requiredString(json, 'author_display_name'),
+    createdAt: _requiredDate(json, 'created_at'),
+    mentions: _maps(
+      json['mentions'],
+    ).map(YorksV1MaterialRequestMention.fromRpcJson).toList(growable: false),
+  );
+}
+
+class YorksV1MaterialRequestDecision {
+  const YorksV1MaterialRequestDecision({
+    required this.id,
+    required this.decision,
+    required this.requestRecordVersion,
+    required this.decidedByDisplayName,
+    required this.decidedByRole,
+    required this.decidedByExactRole,
+    required this.decidedAt,
+    this.reason,
+  });
+
+  final String id;
+  final String decision;
+  final String? reason;
+  final int requestRecordVersion;
+  final String decidedByDisplayName;
+  final String decidedByRole;
+  final String decidedByExactRole;
+  final DateTime decidedAt;
+
+  factory YorksV1MaterialRequestDecision.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestDecision(
+    id: _requiredString(json, 'id'),
+    decision: _requiredString(json, 'decision'),
+    reason: _trimToNull(json['reason']),
+    requestRecordVersion: _positiveInt(json['request_record_version']),
+    decidedByDisplayName: _requiredString(json, 'decided_by_display_name'),
+    decidedByRole: _requiredString(json, 'decided_by_role'),
+    decidedByExactRole: _requiredString(json, 'decided_by_exact_role'),
+    decidedAt: _requiredDate(json, 'decided_at'),
+  );
+}
+
+class YorksV1MaterialRequestInventorySuggestion {
+  const YorksV1MaterialRequestInventorySuggestion({
+    required this.id,
+    required this.description,
+    required this.unit,
+    this.itemCode,
+    this.brandOrigin,
+    this.size,
+    this.model,
+  });
+
+  final String id;
+  final String? itemCode;
+  final String description;
+  final String? brandOrigin;
+  final String? size;
+  final String? model;
+  final String unit;
+
+  factory YorksV1MaterialRequestInventorySuggestion.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestInventorySuggestion(
+    id: _requiredString(json, 'id'),
+    itemCode: _trimToNull(json['item_code']),
+    description: _requiredString(json, 'item_description'),
+    brandOrigin: _trimToNull(json['brand_origin']),
+    size: _trimToNull(json['size']),
+    model: _trimToNull(json['model']),
+    unit: _requiredString(json, 'unit'),
+  );
 }
 
 /// The source snapshot is retained for traceability only. BOQ changes after a
@@ -401,6 +531,10 @@ class YorksV1MaterialRequest {
     required this.updatedAt,
     required List<YorksV1MaterialRequestLine> lines,
     required this.timing,
+    this.canEditBeforeApproval = false,
+    this.canDecideRequest = false,
+    this.requestDecision,
+    this.comments = const [],
     this.requestNumber,
     this.jobContractReference,
     this.title,
@@ -429,6 +563,10 @@ class YorksV1MaterialRequest {
   final DateTime createdAt;
   final DateTime updatedAt;
   final YorksV1MaterialRequestTiming timing;
+  final bool canEditBeforeApproval;
+  final bool canDecideRequest;
+  final YorksV1MaterialRequestDecision? requestDecision;
+  final List<YorksV1MaterialRequestComment> comments;
   final List<YorksV1MaterialRequestLine> lines;
   final String? requestNumber;
   final String? title;
@@ -474,6 +612,16 @@ class YorksV1MaterialRequest {
       createdAt: _requiredDate(json, 'created_at'),
       updatedAt: _requiredDate(json, 'updated_at'),
       timing: timing,
+      canEditBeforeApproval: json['can_edit_before_approval'] == true,
+      canDecideRequest: json['can_decide_request'] == true,
+      requestDecision: json['request_decision'] is Map
+          ? YorksV1MaterialRequestDecision.fromRpcJson(
+              Map<String, dynamic>.from(json['request_decision'] as Map),
+            )
+          : null,
+      comments: _maps(
+        json['comments'],
+      ).map(YorksV1MaterialRequestComment.fromRpcJson).toList(growable: false),
       lines: [
         for (final line in rawLines)
           if (line is Map)
@@ -676,6 +824,71 @@ class YorksV1SubmitMaterialRequestInput {
   Map<String, dynamic> toRpcPayload() => {
     'request_id': requestId.trim(),
     'expected_version': expectedVersion,
+  };
+}
+
+class YorksV1UpdateMaterialRequestForApprovalInput {
+  const YorksV1UpdateMaterialRequestForApprovalInput({
+    required this.draft,
+    required this.idempotencyKey,
+  });
+
+  final YorksV1MaterialRequestDraft draft;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => draft.toSaveInput().toRpcPayload();
+}
+
+enum YorksV1MaterialRequestReviewDecision {
+  approved('approved'),
+  returned('returned');
+
+  const YorksV1MaterialRequestReviewDecision(this.wireValue);
+  final String wireValue;
+}
+
+class YorksV1DecideMaterialRequestInput {
+  const YorksV1DecideMaterialRequestInput({
+    required this.requestId,
+    required this.expectedVersion,
+    required this.decision,
+    required this.idempotencyKey,
+    this.reason,
+  });
+
+  final String requestId;
+  final int expectedVersion;
+  final YorksV1MaterialRequestReviewDecision decision;
+  final String? reason;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'request_id': requestId.trim(),
+    'expected_version': expectedVersion,
+    'decision': decision.wireValue,
+    'reason': _trimToNull(reason),
+  };
+}
+
+class YorksV1AddMaterialRequestCommentInput {
+  const YorksV1AddMaterialRequestCommentInput({
+    required this.requestId,
+    required this.body,
+    required this.idempotencyKey,
+    this.mentionedAuthUserIds = const [],
+  });
+
+  final String requestId;
+  final String body;
+  final String idempotencyKey;
+  final List<String> mentionedAuthUserIds;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'request_id': requestId.trim(),
+    'body': body.trim(),
+    'mentioned_auth_user_ids': [
+      for (final id in mentionedAuthUserIds) id.trim(),
+    ],
   };
 }
 

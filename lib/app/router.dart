@@ -364,7 +364,6 @@ bool _isAllowedForRole(
     RoutePaths.about,
     RoutePaths.notifications,
     RoutePaths.yorksV1MobileMore,
-    RoutePaths.activityLog,
     RoutePaths.privacyPolicy,
     RoutePaths.termsOfService,
     RoutePaths.employeeDetail,
@@ -388,6 +387,9 @@ bool _isAllowedForRole(
   }
   if (path == RoutePaths.users) {
     return yorksV1Role?.canConfigureUsers ?? role.isAdmin;
+  }
+  if (path == RoutePaths.activityLog) {
+    return yorksV1Role == YorksV1Role.admin;
   }
   if (path == RoutePaths.goodsReceipt) return canReceiveGoods;
   if (path == RoutePaths.finance) {
@@ -1134,7 +1136,7 @@ GoRouter createAppRouter({
       GoRoute(
         path: RoutePaths.activityLog,
         pageBuilder: (context, state) =>
-            _slide(state.pageKey, const ActivityLogScreen()),
+            _yorksV1Slide(state.pageKey, const ActivityLogScreen()),
       ),
       GoRoute(
         path: RoutePaths.yorksV1MobileMore,

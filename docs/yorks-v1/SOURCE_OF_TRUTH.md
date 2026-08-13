@@ -72,7 +72,7 @@ backward visual or workflow compatibility.
 | Procurement scope | Package, RFQ, quotations and PO | Direct line arrangement, approval, dispatch and receipt; full RFQ/PO deferred |
 | Inventory | V7 multi-source/multi-warehouse direction | One warehouse in V1 |
 | Project lifecycle | Draft/Planning/Active/Archived | Draft/Active/On Hold/Completed/Archived |
-| MR lifecycle | Sourcing/order-oriented V7 states | Submitted/Arranging/Awaiting Approval/Approved/Dispatch/Receipt/Closed states |
+| MR lifecycle | Sourcing/order-oriented V7 states | Engineering request approval before Procurement arrangement, then Approved/Dispatch/Receipt/Closed states; recorded legacy post-arrangement approvals remain resolvable |
 | Request exception path | Plan/over-plan/substitution approval distinction | BOQ/import/custom MR rows use one arrangement/approval path |
 | MR delivery fields | Required-on-site date and explicit destination | Project plus Building/Common scope and Urgent/Normal/Scheduled; Scheduled requires a date |
 | Standard rows | One frozen ten-column material grid | Dynamic BOQ worksheet; seven-column controlled MR output |
@@ -124,6 +124,34 @@ Production Flutter must reproduce the approved intent while replacing:
 - hardcoded English with centralized localized strings;
 - horizontally shrunk mobile worksheets with a focused row editor;
 - undersized controls and incomplete keyboard behavior with accessible widgets.
+
+## Approved Material Request flow revision — 13 August 2026
+
+The product owner approved a forward-only revision for new Material Requests:
+
+1. a submitted request is editable by its creator and authorized Project
+   Engineers until Engineering approval;
+2. Engineering approves the request before Procurement can arrange it;
+3. normalized request comments, authorized mentions and mention notifications
+   are available from the first server-backed request stage;
+4. Engineering item entry may search a deliberately non-commercial inventory
+   projection and copy descriptive fields into a request row;
+5. assigned Project/Site Engineers and organization-wide Senior Mechanical
+   Engineers/Project Managers can read every authorized server-backed stage and
+   discussion without inheriting Procurement, stock or commercial authority;
+6. MR status, owner and next action are explicit; and
+7. confirmed receipt reviews may have authorized site photographs linked
+   through the controlled document pipeline.
+
+The same product-owner revision also permits an actively assigned Site
+Engineer to close a fully resolved `received` request through the trusted
+command. Tablet and mobile request projections re-fetch when the app returns
+to the foreground and use a low-frequency authorized safety refresh in
+addition to Realtime; the current projection stays visible during refresh.
+
+The detailed transition, migration and rollback contract is
+`MATERIAL_REQUEST_FLOW_REVISION_2026-08-13.md`. Existing in-flight Procurement
+arrangements are not rewritten or given synthetic request approvals.
 
 ## Change control
 

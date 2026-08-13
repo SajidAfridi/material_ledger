@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(19);
+select plan(24);
 
 select ok(
   has_function_privilege(
@@ -381,7 +381,80 @@ select is(
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+set local role postgres;
+select ok(
+  public.v1_can_close_material_request(
+    'd1000000-0000-4000-8000-000000000003'
+  ),
+  'An active assigned Project Engineer is authorized to close'
+);
+
+select set_config(
+  'request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select ok(
+  public.v1_can_close_material_request(
+    'd1000000-0000-4000-8000-000000000003'
+  ),
+  'An active assigned Site Engineer is authorized to close'
+);
+update public.v1_project_members
+set effective_to = clock_timestamp(),
+    revoked_by_auth_user_id = '10000000-0000-4000-8000-000000000004',
+    revoked_by_role = 'admin',
+    revoked_reason = 'Closure membership boundary proof'
+where project_id = (select project_id from v1_hard_targets)
+  and member_auth_user_id = '10000000-0000-4000-8000-000000000002'
+  and project_role = 'site_engineer'
+  and effective_to is null;
+select ok(
+  not public.v1_can_close_material_request(
+    'd1000000-0000-4000-8000-000000000003'
+  ),
+  'An inactive Site Engineer membership is not authorized to close'
+);
+update public.v1_project_members
+set effective_to = null,
+    revoked_by_auth_user_id = null,
+    revoked_by_role = null,
+    revoked_reason = null
+where project_id = (select project_id from v1_hard_targets)
+  and member_auth_user_id = '10000000-0000-4000-8000-000000000002'
+  and project_role = 'site_engineer';
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select ok(
+  not public.v1_can_close_material_request(
+    'd1000000-0000-4000-8000-000000000003'
+  ),
+  'Procurement is not authorized to close'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"role":"admin","app_user_id":"usr-local-admin"}}',
+  true
+);
+select ok(
+  public.v1_can_close_material_request(
+    'd1000000-0000-4000-8000-000000000003'
+  ),
+  'An active Admin is authorized to close'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
   true
 );
 select throws_ok(
@@ -390,13 +463,13 @@ select throws_ok(
     'd2000000-0000-4000-8000-000000000004'
   )$$,
   '42501', 'V1_MATERIAL_REQUEST_CLOSE_DENIED',
-  'A Site Engineer without Project Engineer membership cannot close the request'
+  'Procurement cannot close the request'
 );
 
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
   true
 );
 select lives_ok(
@@ -404,7 +477,7 @@ select lives_ok(
     '{"request_id":"d1000000-0000-4000-8000-000000000003","expected_version":1}'::jsonb,
     'd2000000-0000-4000-8000-000000000005'
   )$$,
-  'An assigned Project Engineer closes a fully received request'
+  'An assigned Site Engineer closes a fully received request'
 );
 select is(
   public.v1_material_request_projection(

@@ -141,6 +141,17 @@ select lives_ok(
   'Competing request receives its own submitted record'
 );
 
+-- This Batch 6 suite retains its historical post-submit arrangement contract.
+-- The approval-first path is covered by the dedicated revision suite.
+set local role postgres;
+update public.v1_material_requests
+set state = 'submitted', current_action_owner_role = 'procurement',
+    current_action_code = 'arrangement_required'
+where id in (
+  '61000000-0000-4000-8000-000000000001'::uuid,
+  '61000000-0000-4000-8000-000000000002'::uuid
+);
+
 set local role authenticated;
 select set_config(
   'request.jwt.claims',

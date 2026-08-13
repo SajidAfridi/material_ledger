@@ -235,9 +235,11 @@ select set_config(
   true
 );
 select is(
-  public.v1_list_material_requests((select project_id from v1_b5_targets)),
-  '[]'::jsonb,
-  'Creator-only drafts remain private even from an Admin projection'
+  jsonb_array_length(
+    public.v1_list_material_requests((select project_id from v1_b5_targets))
+  ),
+  1,
+  'A server-backed draft is visible to authorized Engineering/Admin participants'
 );
 
 set local role authenticated;
@@ -267,14 +269,14 @@ select is(
 );
 
 select ok(
-  (select state = 'submitted'
+  (select state = 'awaiting_request_approval'
       and requester_project_role = 'site_engineer'
       and requester_display_name = 'Local Site Engineer'
-      and current_action_owner_role = 'procurement'
-      and current_action_code = 'arrangement_required'
+      and current_action_owner_role = 'project_engineer'
+      and current_action_code = 'request_approval_required'
     from public.v1_material_requests
     where id = '52000000-0000-4000-8000-000000000001'::uuid),
-  'Submit snapshots requester identity and routes the next action to Procurement'
+  'Submit snapshots requester identity and routes the next action to Engineering'
 );
 
 select is(
@@ -285,12 +287,11 @@ select is(
   'Submit creates one append-only server audit event'
 );
 
-select is(
+select ok(
   (select count(*) from public.v1_notifications
-    where event_code = 'material_request_submitted'
-      and entity_id = '52000000-0000-4000-8000-000000000001'::uuid),
-  1::bigint,
-  'Submit creates a code-only Procurement notification'
+    where event_code = 'material_request_approval_required'
+      and entity_id = '52000000-0000-4000-8000-000000000001'::uuid) >= 1,
+  'Submit creates code-only Engineering approval notifications'
 );
 
 set local role authenticated;
@@ -387,6 +388,23 @@ insert into public.v1_material_request_line_commercials (
   125.0000, 'AED', '10000000-0000-4000-8000-000000000004'::uuid
 );
 
+-- Continue this legacy projection test from an explicitly approved request;
+-- the approval command itself is exercised by the current revision suite.
+insert into public.v1_material_request_decisions (
+  request_id, request_record_version, decision, reason,
+  decided_by_auth_user_id, decided_by_role, decided_by_exact_role,
+  decided_by_display_name_snapshot
+) values (
+  '52000000-0000-4000-8000-000000000001'::uuid, 2, 'approved', null,
+  '10000000-0000-4000-8000-000000000001'::uuid, 'project_engineer',
+  'project_engineer', 'Local Project Engineer'
+);
+update public.v1_material_requests
+set state = 'approved_for_arrangement',
+    current_action_owner_role = 'procurement',
+    current_action_code = 'arrangement_required', record_version = 3
+where id = '52000000-0000-4000-8000-000000000001'::uuid;
+
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
@@ -451,7 +469,7 @@ select lives_ok(
   $$select public.v1_cancel_material_request(
     jsonb_build_object(
       'request_id', '52000000-0000-4000-8000-000000000001',
-      'expected_version', 2,
+      'expected_version', 3,
       'reason', 'Scope quantity corrected before arranging'
     ),
     '55000000-0000-4000-8000-000000000001'::uuid

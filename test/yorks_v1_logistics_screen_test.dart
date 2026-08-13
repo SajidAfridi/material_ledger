@@ -383,6 +383,7 @@ class _FakeLogisticsRepository
     if (_dispatchCommitted) return _postDispatchLogisticsWorkspace(requestId);
     return YorksV1LogisticsWorkspace(
       requestId: requestId,
+      projectId: 'project-1',
       requestNumber: 'Y-001-MR001',
       requestState: 'approved',
       requestRecordVersion: 5,
@@ -522,6 +523,7 @@ YorksV1ReturnsDocumentsWorkspace _returnsWorkspace(String requestId) =>
 YorksV1LogisticsWorkspace _postDispatchLogisticsWorkspace(String requestId) =>
     YorksV1LogisticsWorkspace(
       requestId: requestId,
+      projectId: 'project-1',
       requestNumber: 'Y-001-MR001',
       requestState: 'dispatched',
       requestRecordVersion: 6,
@@ -644,6 +646,7 @@ const _item = YorksV1LogisticsInventoryItem(
 
 final _receiptFocusWorkspace = YorksV1LogisticsWorkspace(
   requestId: 'receipt-focus',
+  projectId: 'project-1',
   requestNumber: 'Y-001-MR001',
   requestState: 'dispatched',
   requestRecordVersion: 5,

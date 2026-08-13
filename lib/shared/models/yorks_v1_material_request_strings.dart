@@ -109,10 +109,70 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'इंजीनियर और खरीद विभाग को वही अनुरोध संख्या, आइटम क्रम और स्थिति दिखाई देती है।',
   );
   static const workflowDescription = TranslatableString(
-    en: 'Submitted → Procurement arrangement → Project Engineer approval → Dispatch → Site receipt → Return, when required.',
-    ar: 'إرسال ← ترتيب المشتريات ← موافقة مهندس المشروع ← الإرسال ← استلام الموقع ← الإرجاع عند الحاجة.',
-    ur: 'جمع کرائی گئی → پروکیورمنٹ انتظام → پروجیکٹ انجینئر منظوری → ڈسپیچ → سائٹ وصولی → ضرورت پر واپسی۔',
-    hi: 'जमा किया गया → खरीद व्यवस्था → प्रोजेक्ट इंजीनियर अनुमोदन → डिस्पैच → साइट प्राप्ति → आवश्यक होने पर वापसी।',
+    en: 'Created → Engineering approval → Procurement arrangement → Dispatch → Site receipt → Completion.',
+    ar: 'الإنشاء ← موافقة الهندسة ← ترتيب المشتريات ← الإرسال ← استلام الموقع ← الإكمال.',
+    ur: 'تخلیق → انجینئرنگ منظوری → پروکیورمنٹ انتظام → ڈسپیچ → سائٹ وصولی → تکمیل۔',
+    hi: 'निर्माण → इंजीनियरिंग अनुमोदन → खरीद व्यवस्था → डिस्पैच → साइट प्राप्ति → पूर्णता।',
+  );
+  static TranslatableString stageOfSeven(int stage) => TranslatableString(
+    en: 'Stage $stage of 7',
+    ar: 'المرحلة $stage من 7',
+    ur: '7 میں سے مرحلہ $stage',
+    hi: '7 में से चरण $stage',
+  );
+  static const requestCreated = TranslatableString(
+    en: 'Created',
+    ar: 'تم الإنشاء',
+    ur: 'تخلیق شدہ',
+    hi: 'बनाया गया',
+  );
+  static const engineeringApproval = TranslatableString(
+    en: 'Engineering Approval',
+    ar: 'موافقة الهندسة',
+    ur: 'انجینئرنگ منظوری',
+    hi: 'इंजीनियरिंग अनुमोदन',
+  );
+  static const engineeringApprovalShort = TranslatableString(
+    en: 'PE Approval',
+    ar: 'موافقة المهندس',
+    ur: 'پی ای منظوری',
+    hi: 'पीई अनुमोदन',
+  );
+  static const procurementArrangement = TranslatableString(
+    en: 'Procurement Arrangement',
+    ar: 'ترتيب المشتريات',
+    ur: 'پروکیورمنٹ انتظام',
+    hi: 'खरीद व्यवस्था',
+  );
+  static const procurementArrangementShort = TranslatableString(
+    en: 'Arrange',
+    ar: 'الترتيب',
+    ur: 'انتظام',
+    hi: 'व्यवस्था',
+  );
+  static const readyForDeliveryStage = TranslatableString(
+    en: 'Ready for Delivery',
+    ar: 'جاهز للتسليم',
+    ur: 'ڈیلیوری کے لیے تیار',
+    hi: 'डिलीवरी के लिए तैयार',
+  );
+  static const readyForDeliveryShort = TranslatableString(
+    en: 'Ready',
+    ar: 'جاهز',
+    ur: 'تیار',
+    hi: 'तैयार',
+  );
+  static const receivedStage = TranslatableString(
+    en: 'Received',
+    ar: 'تم الاستلام',
+    ur: 'وصول شدہ',
+    hi: 'प्राप्त',
+  );
+  static const completedStage = TranslatableString(
+    en: 'Completed',
+    ar: 'مكتمل',
+    ur: 'مکمل',
+    hi: 'पूर्ण',
   );
   static const workflowTitle = TranslatableString(
     en: 'One Material Request carries the complete workflow.',
@@ -139,7 +199,7 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'पंक्ति सं.',
   );
   static const serialNumber = TranslatableString(
-    en: 'S:NO',
+    en: 'S.No',
     ar: 'رقم',
     ur: 'نمبر',
     hi: 'क्र.',
@@ -179,6 +239,114 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'بانتظار الموافقة',
     ur: 'منظوری کا انتظار',
     hi: 'अनुमोदन की प्रतीक्षा',
+  );
+  static const awaitingRequestApproval = TranslatableString(
+    en: 'Awaiting Engineering approval',
+    ar: 'بانتظار موافقة الهندسة',
+    ur: 'انجینئرنگ کی منظوری کا انتظار',
+    hi: 'इंजीनियरिंग अनुमोदन की प्रतीक्षा',
+  );
+  static const changesRequested = TranslatableString(
+    en: 'Changes requested',
+    ar: 'التعديلات مطلوبة',
+    ur: 'تبدیلیاں درکار ہیں',
+    hi: 'बदलाव आवश्यक हैं',
+  );
+  static const approvedForArrangement = TranslatableString(
+    en: 'Approved for Procurement',
+    ar: 'معتمد للمشتريات',
+    ur: 'پروکیورمنٹ کے لیے منظور شدہ',
+    hi: 'खरीद व्यवस्था के लिए स्वीकृत',
+  );
+  static const editRequest = TranslatableString(
+    en: 'Edit request',
+    ar: 'تحرير الطلب',
+    ur: 'درخواست میں ترمیم کریں',
+    hi: 'अनुरोध संपादित करें',
+  );
+  static const approveForProcurement = TranslatableString(
+    en: 'Approve for Procurement',
+    ar: 'الموافقة للمشتريات',
+    ur: 'پروکیورمنٹ کے لیے منظور کریں',
+    hi: 'खरीद व्यवस्था के लिए स्वीकृत करें',
+  );
+  static const returnForChanges = TranslatableString(
+    en: 'Return for changes',
+    ar: 'إعادة للتعديل',
+    ur: 'تبدیلیوں کے لیے واپس کریں',
+    hi: 'बदलाव के लिए लौटाएँ',
+  );
+  static const requestApprovalPrompt = TranslatableString(
+    en: 'Approve this Engineering request before Procurement arranges stock or supplier sourcing.',
+    ar: 'اعتمد طلب الهندسة هذا قبل أن ترتب المشتريات المخزون أو التوريد.',
+    ur: 'پروکیورمنٹ کے اسٹاک یا سپلائر انتظام سے پہلے اس انجینئرنگ درخواست کو منظور کریں۔',
+    hi: 'खरीद विभाग द्वारा स्टॉक या आपूर्तिकर्ता व्यवस्था से पहले इस इंजीनियरिंग अनुरोध को स्वीकृत करें।',
+  );
+  static const requestUpdatedForApproval = TranslatableString(
+    en: 'Changes saved and sent for Engineering approval.',
+    ar: 'تم حفظ التعديلات وإرسالها للموافقة الهندسية.',
+    ur: 'تبدیلیاں محفوظ کر کے انجینئرنگ منظوری کے لیے بھیج دی گئی ہیں۔',
+    hi: 'बदलाव सहेजकर इंजीनियरिंग अनुमोदन के लिए भेज दिए गए हैं।',
+  );
+  static const discussion = TranslatableString(
+    en: 'Request discussion',
+    ar: 'مناقشة الطلب',
+    ur: 'درخواست پر گفتگو',
+    hi: 'अनुरोध चर्चा',
+  );
+  static const discussionDescription = TranslatableString(
+    en: 'Comments stay with this request through every stage. Mention an authorized teammate to notify them.',
+    ar: 'تبقى التعليقات مع هذا الطلب في جميع المراحل. اذكر زميلاً مخولاً لإشعاره.',
+    ur: 'تبصرے ہر مرحلے میں اس درخواست کے ساتھ رہتے ہیں۔ اطلاع کے لیے مجاز ساتھی کا ذکر کریں۔',
+    hi: 'टिप्पणियाँ हर चरण में इस अनुरोध के साथ रहती हैं। सूचना के लिए अधिकृत साथी का उल्लेख करें।',
+  );
+  static const writeComment = TranslatableString(
+    en: 'Write a comment',
+    ar: 'اكتب تعليقًا',
+    ur: 'تبصرہ لکھیں',
+    hi: 'टिप्पणी लिखें',
+  );
+  static const commentComposerHint = TranslatableString(
+    en: 'Write a comment and mention users with @',
+    ar: 'اكتب تعليقًا واذكر المستخدمين باستخدام @',
+    ur: '@ کے ساتھ تبصرہ لکھیں اور صارفین کا ذکر کریں',
+    hi: 'टिप्पणी लिखें और @ से उपयोगकर्ताओं का उल्लेख करें',
+  );
+  static const saveDraftToDiscuss = TranslatableString(
+    en: 'Save this draft to start the request discussion.',
+    ar: 'احفظ هذه المسودة لبدء مناقشة الطلب.',
+    ur: 'درخواست پر گفتگو شروع کرنے کے لیے یہ ڈرافٹ محفوظ کریں۔',
+    hi: 'अनुरोध चर्चा शुरू करने के लिए इस ड्राफ्ट को सहेजें।',
+  );
+  static const mentionNoMatches = TranslatableString(
+    en: 'No authorized teammates match this mention.',
+    ar: 'لا يوجد زملاء مخولون يطابقون هذا الذكر.',
+    ur: 'اس ذکر سے کوئی مجاز ساتھی مطابقت نہیں رکھتا۔',
+    hi: 'इस उल्लेख से कोई अधिकृत साथी मेल नहीं खाता।',
+  );
+  static const mentionTeammates = TranslatableString(
+    en: 'Mention teammates',
+    ar: 'ذكر الزملاء',
+    ur: 'ساتھیوں کا ذکر کریں',
+    hi: 'साथियों का उल्लेख करें',
+  );
+  static const postComment = TranslatableString(
+    en: 'Post comment',
+    ar: 'نشر التعليق',
+    ur: 'تبصرہ پوسٹ کریں',
+    hi: 'टिप्पणी पोस्ट करें',
+  );
+  static const noComments = TranslatableString(
+    en: 'No comments yet. Start the request discussion here.',
+    ar: 'لا توجد تعليقات بعد. ابدأ مناقشة الطلب هنا.',
+    ur: 'ابھی کوئی تبصرہ نہیں۔ درخواست پر گفتگو یہاں شروع کریں۔',
+    hi: 'अभी कोई टिप्पणी नहीं है। अनुरोध चर्चा यहाँ शुरू करें।',
+  );
+  static const searchInventory = TranslatableString(
+    en: 'Search inventory descriptions',
+    ar: 'البحث في أوصاف المخزون',
+    ur: 'انوینٹری کی تفصیل تلاش کریں',
+    hi: 'इन्वेंटरी विवरण खोजें',
   );
   static const approved = TranslatableString(
     en: 'Approved',
@@ -247,10 +415,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'सामग्री आइटम',
   );
   static const materialItemsDescription = TranslatableString(
-    en: 'Remarks are removed. The item order matches the familiar Yorks Material Request layout.',
-    ar: 'تمت إزالة الملاحظات. يطابق ترتيب البنود نموذج طلب مواد Yorks المعتاد.',
-    ur: 'ریمارکس ہٹا دیے گئے ہیں۔ آئٹم کی ترتیب Yorks کے مانوس مواد درخواست فارم کے مطابق ہے۔',
-    hi: 'टिप्पणियाँ हटा दी गई हैं। आइटम क्रम परिचित Yorks सामग्री अनुरोध फॉर्म से मेल खाता है।',
+    en: 'Type an item description to search inventory, or enter a custom item directly.',
+    ar: 'اكتب وصف الصنف للبحث في المخزون، أو أدخل صنفًا مخصصًا مباشرة.',
+    ur: 'انوینٹری میں تلاش کے لیے آئٹم کی تفصیل لکھیں، یا براہ راست کسٹم آئٹم درج کریں۔',
+    hi: 'इन्वेंटरी खोजने के लिए आइटम विवरण लिखें, या सीधे कस्टम आइटम दर्ज करें।',
   );
   static const rowTools = TranslatableString(
     en: 'Row tools',
@@ -357,10 +525,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'समीक्षा करें और जमा करें',
   );
   static const serverConfirmed = TranslatableString(
-    en: 'Your request has been submitted and is now with Procurement.',
-    ar: 'تم إرسال طلبك وهو الآن لدى المشتريات.',
-    ur: 'آپ کی درخواست جمع ہو گئی ہے اور اب پروکیورمنٹ کے پاس ہے۔',
-    hi: 'आपका अनुरोध जमा हो गया है और अब खरीद विभाग के पास है।',
+    en: 'Your request has been submitted for Engineering approval.',
+    ar: 'تم إرسال طلبك للموافقة الهندسية.',
+    ur: 'آپ کی درخواست انجینئرنگ منظوری کے لیے جمع ہو گئی ہے۔',
+    hi: 'आपका अनुरोध इंजीनियरिंग अनुमोदन के लिए जमा हो गया है।',
   );
   static const viewRequest = TranslatableString(
     en: 'View request',
@@ -698,17 +866,59 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'مسودہ محفوظ کریں',
     hi: 'ड्राफ़्ट सहेजें',
   );
+  static const leaveDraftTitle = TranslatableString(
+    en: 'Save this material request?',
+    ar: 'هل تريد حفظ طلب المواد هذا؟',
+    ur: 'کیا یہ مواد کی درخواست محفوظ کرنی ہے؟',
+    hi: 'क्या यह सामग्री अनुरोध सहेजना है?',
+  );
+  static const leaveDraftBody = TranslatableString(
+    en: 'You have changes that are not in your last saved draft. Save them to continue later, or discard them and go back.',
+    ar: 'لديك تغييرات غير موجودة في آخر مسودة محفوظة. احفظها للمتابعة لاحقًا، أو تجاهلها وارجع.',
+    ur: 'آپ کی کچھ تبدیلیاں آخری محفوظ شدہ مسودے میں نہیں ہیں۔ بعد میں جاری رکھنے کے لیے انہیں محفوظ کریں، یا رد کر کے واپس جائیں۔',
+    hi: 'आपके कुछ बदलाव अंतिम सहेजे गए ड्राफ़्ट में नहीं हैं। बाद में जारी रखने के लिए उन्हें सहेजें, या छोड़कर वापस जाएँ।',
+  );
+  static const draftRecoveryAssurance = TranslatableString(
+    en: 'Local recovery stays private until you submit for Engineering approval.',
+    ar: 'يبقى الاسترداد المحلي خاصًا حتى ترسل الطلب للموافقة الهندسية.',
+    ur: 'مقامی ریکوری انجینئرنگ منظوری کے لیے جمع کرانے تک نجی رہتی ہے۔',
+    hi: 'स्थानीय रिकवरी इंजीनियरिंग अनुमोदन के लिए जमा करने तक निजी रहती है।',
+  );
+  static const saveDraftAndLeave = TranslatableString(
+    en: 'Save draft & leave',
+    ar: 'حفظ المسودة والمغادرة',
+    ur: 'مسودہ محفوظ کریں اور جائیں',
+    hi: 'ड्राफ़्ट सहेजें और जाएँ',
+  );
+  static const discardChangesAndLeave = TranslatableString(
+    en: 'Discard changes & leave',
+    ar: 'تجاهل التغييرات والمغادرة',
+    ur: 'تبدیلیاں رد کریں اور جائیں',
+    hi: 'बदलाव छोड़ें और जाएँ',
+  );
+  static const draftExitSaveFailed = TranslatableString(
+    en: 'The draft could not be saved. Your editor is still open—check your connection and try again.',
+    ar: 'تعذر حفظ المسودة. لا يزال المحرر مفتوحًا—تحقق من الاتصال وحاول مرة أخرى.',
+    ur: 'مسودہ محفوظ نہیں ہو سکا۔ ایڈیٹر اب بھی کھلا ہے—کنکشن چیک کریں اور دوبارہ کوشش کریں۔',
+    hi: 'ड्राफ़्ट सहेजा नहीं जा सका। संपादक अभी खुला है—कनेक्शन जाँचें और फिर प्रयास करें।',
+  );
+  static const draftExitDiscardFailed = TranslatableString(
+    en: 'The changes could not be discarded safely. Nothing was closed; try again.',
+    ar: 'تعذر تجاهل التغييرات بأمان. لم يتم إغلاق أي شيء؛ حاول مرة أخرى.',
+    ur: 'تبدیلیاں محفوظ طریقے سے رد نہیں ہو سکیں۔ کچھ بند نہیں ہوا؛ دوبارہ کوشش کریں۔',
+    hi: 'बदलाव सुरक्षित रूप से नहीं छोड़े जा सके। कुछ भी बंद नहीं हुआ; फिर प्रयास करें।',
+  );
   static const submitToProcurement = TranslatableString(
-    en: 'Submit to Procurement',
-    ar: 'إرسال إلى المشتريات',
-    ur: 'پروکیورمنٹ کو جمع کرائیں',
-    hi: 'खरीद विभाग को भेजें',
+    en: 'Submit for Engineering approval',
+    ar: 'إرسال للموافقة الهندسية',
+    ur: 'انجینئرنگ منظوری کے لیے جمع کرائیں',
+    hi: 'इंजीनियरिंग अनुमोदन के लिए जमा करें',
   );
   static const submitted = TranslatableString(
-    en: 'Submitted to Procurement',
-    ar: 'تم الإرسال إلى المشتريات',
-    ur: 'پروکیورمنٹ کو جمع کرایا گیا',
-    hi: 'खरीद विभाग को भेजा गया',
+    en: 'Submitted',
+    ar: 'تم الإرسال',
+    ur: 'جمع کرایا گیا',
+    hi: 'जमा किया गया',
   );
   static const saved = TranslatableString(
     en: 'Draft saved',
@@ -891,10 +1101,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'अनुरोध स्थिति',
   );
   static const requestStatusDescription = TranslatableString(
-    en: 'Engineer and Procurement follow the same five-step record.',
-    ar: 'يتبع المهندس والمشتريات نفس السجل ذي الخطوات الخمس.',
-    ur: 'انجینئر اور پروکیورمنٹ ایک ہی پانچ مرحلے کے ریکارڈ پر عمل کرتے ہیں۔',
-    hi: 'इंजीनियर और खरीद विभाग एक ही पांच-चरण रिकॉर्ड का पालन करते हैं।',
+    en: 'One clear lifecycle from creation to completion.',
+    ar: 'دورة عمل واضحة واحدة من الإنشاء إلى الإكمال.',
+    ur: 'تخلیق سے تکمیل تک ایک واضح لائف سائیکل۔',
+    hi: 'निर्माण से पूर्णता तक एक स्पष्ट जीवनचक्र।',
   );
   static const request = TranslatableString(
     en: 'Request',
@@ -998,6 +1208,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'یورکس کے کاغذی فارم جیسا ہی کالم آرڈر، بغیر ریمارکس کے۔',
     hi: 'Yorks पेपर फॉर्म जैसा ही कॉलम क्रम, Remarks के बिना।',
   );
+  static const controlledDocumentDescription = TranslatableString(
+    en: 'Open the formal preview used for PDF and print.',
+    ar: 'افتح المعاينة الرسمية المستخدمة لملف PDF والطباعة.',
+    ur: 'PDF اور پرنٹ کے لیے رسمی پیش نظارہ کھولیں۔',
+    hi: 'PDF और प्रिंट के लिए औपचारिक पूर्वावलोकन खोलें।',
+  );
   static const materialRequestForm = TranslatableString(
     en: 'MATERIAL REQUEST FORM',
     ar: 'طلب المواد',
@@ -1052,11 +1268,23 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'پراجیکٹ انجینئر نے منظور کیا',
     hi: 'प्रोजेक्ट इंजीनियर द्वारा स्वीकृत',
   );
+  static const approvedBy = TranslatableString(
+    en: 'Approved by',
+    ar: 'معتمد من',
+    ur: 'منظور کرنے والا',
+    hi: 'अनुमोदित करने वाला',
+  );
   static const dispatchedByProcurement = TranslatableString(
     en: 'Ordered / Dispatched by (Procurement)',
     ar: 'تم الطلب / الإرسال بواسطة المشتريات',
     ur: 'پروکیورمنٹ نے آرڈر / ڈسپیچ کیا',
     hi: 'खरीद द्वारा आदेशित / डिस्पैच',
+  );
+  static const orderedDispatched = TranslatableString(
+    en: 'Ordered / Dispatched',
+    ar: 'تم الطلب / الإرسال',
+    ur: 'آرڈر / ڈسپیچ',
+    hi: 'आदेशित / डिस्पैच',
   );
   static const name = TranslatableString(
     en: 'Name',
@@ -1119,10 +1347,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'अभी कोई डिस्पैच नहीं',
   );
   static const dispatchPendingDescription = TranslatableString(
-    en: 'Procurement can dispatch after a Project Engineer approves the arrangement.',
-    ar: 'يمكن للمشتريات الإرسال بعد موافقة مهندس المشروع على الترتيب.',
-    ur: 'پروکیورمنٹ پراجیکٹ انجینئر کی منظوری کے بعد ڈسپیچ کر سکتی ہے۔',
-    hi: 'प्रोजेक्ट इंजीनियर के व्यवस्था अनुमोदन के बाद खरीद डिस्पैच कर सकता है।',
+    en: 'Procurement can dispatch after the approved request arrangement is saved.',
+    ar: 'يمكن للمشتريات الإرسال بعد حفظ ترتيب الطلب المعتمد.',
+    ur: 'منظور شدہ درخواست کا انتظام محفوظ ہونے کے بعد پروکیورمنٹ ڈسپیچ کر سکتی ہے۔',
+    hi: 'स्वीकृत अनुरोध की व्यवस्था सहेजे जाने के बाद खरीद विभाग डिस्पैच कर सकता है।',
   );
   static const dispatchReadyDescription = TranslatableString(
     en: 'Approved quantities can now be prepared for controlled dispatch.',
@@ -1201,6 +1429,12 @@ TranslatableString yorksV1MaterialRequestStateCopy(
   YorksV1MaterialRequestState.draft => YorksV1MaterialRequestStrings.draft,
   YorksV1MaterialRequestState.submitted =>
     YorksV1MaterialRequestStrings.submitted,
+  YorksV1MaterialRequestState.awaitingRequestApproval =>
+    YorksV1MaterialRequestStrings.awaitingRequestApproval,
+  YorksV1MaterialRequestState.changesRequested =>
+    YorksV1MaterialRequestStrings.changesRequested,
+  YorksV1MaterialRequestState.approvedForArrangement =>
+    YorksV1MaterialRequestStrings.approvedForArrangement,
   YorksV1MaterialRequestState.arranging =>
     YorksV1MaterialRequestStrings.arranging,
   YorksV1MaterialRequestState.awaitingApproval =>

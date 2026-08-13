@@ -25,6 +25,7 @@ enum YorksV1DocumentEntityType {
   boqGroup('boq_group'),
   materialRequest('material_request'),
   dispatch('dispatch'),
+  receiptReview('receipt_review'),
   materialReturn('material_return'),
   deliveryOrder('delivery_order'),
   rentalProperty('rental_property');

@@ -203,6 +203,7 @@ void main() {
 
 Map<String, dynamic> _workspaceJson() => {
   'request_id': 'request-1',
+  'project_id': 'project-1',
   'request_number': 'Y-001-MR001',
   'request_state': 'partially_received',
   'request_record_version': 7,

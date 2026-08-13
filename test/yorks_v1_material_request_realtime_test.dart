@@ -1,7 +1,10 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('Yorks V1 Material Request Realtime refresh', () {
     test(
       'uses a safe signal only to invalidate authorized projections',
@@ -81,7 +84,7 @@ void main() {
     });
 
     test(
-      'a healthy Realtime channel does not run periodic refreshes',
+      'a healthy channel retains a mobile suspension safety refresh',
       () async {
         final notifier = YorksV1MaterialRequestRealtimeNotifier(
           enabled: true,
@@ -97,7 +100,32 @@ void main() {
         await notifier.start();
         await Future<void>.delayed(const Duration(milliseconds: 20));
 
+        expect(notifier.state, greaterThan(1));
+      },
+    );
+
+    test(
+      'returning to the foreground refreshes authorized projections',
+      () async {
+        final notifier = YorksV1MaterialRequestRealtimeNotifier(
+          enabled: true,
+          authUserId: '10000000-0000-4000-8000-000000000001',
+          client: null,
+          signalSubscription: ({required onSignal, required onUnavailable}) {
+            return Future.value(true);
+          },
+          fallbackInterval: const Duration(days: 1),
+        );
+        addTearDown(notifier.dispose);
+
+        await notifier.start();
         expect(notifier.state, 1);
+
+        notifier.didChangeAppLifecycleState(AppLifecycleState.paused);
+        notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(notifier.state, 2);
       },
     );
 

@@ -425,10 +425,10 @@ select set_config(
 );
 set local role postgres;
 select ok(
-  not public.v1_can_close_material_request(
+  public.v1_can_close_material_request(
     'e1000000-0000-4000-8000-000000000001'
   ),
-  'Site Engineer cannot close a Material Request'
+  'An active assigned Site Engineer passes close authority; the command still validates state'
 );
 
 set local role postgres;

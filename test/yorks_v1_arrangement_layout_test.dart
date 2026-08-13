@@ -71,13 +71,13 @@ void main() {
       expect(find.text('Arrange Material Request'), findsOneWidget);
       expect(find.text('Start arrangement'), findsNothing);
       expect(find.text('REQUESTED ITEM'), findsOneWidget);
-      expect(find.text('Send to Project Engineer'), findsOneWidget);
+      expect(find.text('Save arrangement'), findsOneWidget);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/r35/arrange_material_request_desktop.png'),
       );
 
-      await tester.tap(find.text('Send to Project Engineer'));
+      await tester.tap(find.text('Save arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -124,7 +124,7 @@ void main() {
 
       expect(find.text('Unit Cost'), findsNothing);
       expect(find.text('110.29'), findsNothing);
-      await tester.tap(find.text('Send to Project Engineer'));
+      await tester.tap(find.text('Save arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -169,7 +169,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Supplier name optional'), findsOneWidget);
+    expect(find.text('Add supplier details (optional)'), findsOneWidget);
+    expect(find.text('Supplier name optional'), findsNothing);
     expect(
       find.byKey(const ValueKey('reason-arrangement-line-2-full')),
       findsNothing,
@@ -180,7 +181,7 @@ void main() {
         'goldens/r35/arrange_external_supplier_optional_desktop.png',
       ),
     );
-    await tester.tap(find.text('Send to Project Engineer'));
+    await tester.tap(find.text('Save arrangement'));
     await tester.pumpAndSettle();
 
     expect(repository.saveInputs, hasLength(1));
@@ -292,7 +293,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('MSD-ALT · Motorized smoke damper alternate'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Send to Project Engineer'));
+      await tester.tap(find.text('Save arrangement'));
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
@@ -300,6 +301,118 @@ void main() {
         repository.saveInputs.single.lines.single.inventoryItemId,
         'inventory-2',
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'zero warehouse availability blocks save with an actionable message',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _ArrangementRepository();
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            canManageCommercialsProvider.overrideWithValue(true),
+            canViewCommercialsProvider.overrideWithValue(true),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => _workingWorkspace),
+            yorksV1ArrangementInventoryProvider.overrideWith(
+              (ref) async => const [
+                YorksV1InventoryItem(
+                  id: 'inventory-1',
+                  itemCode: 'MSD-600',
+                  description: 'Motorized smoke damper',
+                  unit: 'Nos',
+                  onHandQuantity: '0',
+                  reservedQuantity: '0',
+                  availableQuantity: '0',
+                  recordVersion: 2,
+                ),
+              ],
+            ),
+          ],
+          child: const MaterialApp(
+            home: YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.warning_amber_rounded), findsWidgets);
+      await tester.tap(find.text('Save arrangement'));
+      await tester.pumpAndSettle();
+
+      expect(repository.saveInputs, isEmpty);
+      expect(
+        find.textContaining('11 Nos is arranged but only 0 Nos is available'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 5));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a retained request reservation remains available to its replacement',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _ArrangementRepository();
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => _replacementWorkspace),
+            yorksV1ArrangementInventoryProvider.overrideWith(
+              (ref) async => const [
+                YorksV1InventoryItem(
+                  id: 'inventory-1',
+                  description: 'Motorized smoke damper',
+                  unit: 'Nos',
+                  onHandQuantity: '11',
+                  reservedQuantity: '11',
+                  availableQuantity: '0',
+                  recordVersion: 2,
+                ),
+              ],
+            ),
+          ],
+          child: const MaterialApp(
+            home: YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save arrangement'));
+      await tester.pumpAndSettle();
+
+      expect(repository.saveInputs, hasLength(1));
       expect(tester.takeException(), isNull);
     },
   );
@@ -581,6 +694,66 @@ final _externalSupplierWorkspace = YorksV1ArrangementWorkspace(
           source: YorksV1ArrangementSource.externalSupplier,
           decision: YorksV1ArrangementDecision.full,
           arrangedQuantity: '50.0000',
+        ),
+      ],
+    ),
+  ],
+);
+
+final _replacementWorkspace = YorksV1ArrangementWorkspace(
+  requestId: 'request-1',
+  requestNumber: 'YRAASDF12-MR103',
+  requestState: 'arranging',
+  requestRecordVersion: 4,
+  canBegin: false,
+  canSave: true,
+  canDecide: false,
+  arrangements: [
+    YorksV1ProcurementArrangement(
+      id: 'arrangement-3',
+      version: 2,
+      status: YorksV1ArrangementStatus.working,
+      isCurrent: false,
+      recordVersion: 1,
+      startedByDisplayName: 'Procurement User',
+      startedAt: DateTime.utc(2026, 8, 13),
+      lines: const [
+        YorksV1ArrangementLine(
+          id: 'arrangement-line-3',
+          requestLineId: 'request-line-1',
+          displayOrder: 1,
+          description: 'Motorized smoke damper',
+          requestedQuantity: '11',
+          unit: 'Nos',
+          source: YorksV1ArrangementSource.warehouse,
+          inventoryItemId: 'inventory-1',
+          decision: YorksV1ArrangementDecision.full,
+          arrangedQuantity: '11',
+        ),
+      ],
+    ),
+    YorksV1ProcurementArrangement(
+      id: 'arrangement-1',
+      version: 1,
+      status: YorksV1ArrangementStatus.returned,
+      isCurrent: true,
+      recordVersion: 2,
+      startedByDisplayName: 'Procurement User',
+      startedAt: DateTime.utc(2026, 8, 12),
+      lines: const [
+        YorksV1ArrangementLine(
+          id: 'arrangement-line-1',
+          requestLineId: 'request-line-1',
+          displayOrder: 1,
+          description: 'Motorized smoke damper',
+          requestedQuantity: '11',
+          unit: 'Nos',
+          source: YorksV1ArrangementSource.warehouse,
+          inventoryItemId: 'inventory-1',
+          decision: YorksV1ArrangementDecision.full,
+          arrangedQuantity: '11',
+          reservationState: 'active',
+          reservedQuantity: '11',
         ),
       ],
     ),

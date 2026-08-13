@@ -230,13 +230,16 @@ New MR fields:
 - Urgent, Normal or Scheduled timing;
 - scheduled date only when Scheduled;
 - optional delivery note;
-- rows from BOQ, Excel or custom entry.
+- rows from BOQ, Excel or custom entry;
+- inventory-assisted custom entry that fills only descriptive fields.
 
 The draft screen makes “Draft — visible only to you” explicit. Selecting BOQ
 content never submits and shows only folders in the chosen Common/building
 scope. Changing scope confirms removal of incompatible BOQ-derived rows while
-retaining custom/Excel rows. “Submit to Procurement” is the unambiguous
-connected primary action with validation and connectivity state.
+retaining custom/Excel rows. “Submit for Engineering Approval” is the
+unambiguous connected primary action with validation and connectivity state.
+Before approval, the creator and authorized Project Engineer can reopen the
+same consistent editor; status and version conflict remain visible.
 
 MR detail shows:
 
@@ -246,11 +249,16 @@ MR detail shows:
 - current arrangement and earlier versions;
 - approval decision;
 - dispatch/receipt/DO/return chain;
-- activity/documents appropriate to access.
+- activity/documents appropriate to access;
+- a chronological comment thread, @mention picker and composer.
 
 Unauthorized viewers receive a non-commercial table with no cost columns.
 
-## 9. Procurement arrangement and approval
+## 9. Engineering approval and Procurement arrangement
+
+Engineering approval appears before the arrangement UI. It reviews the full
+requested line snapshot and offers Approve for Procurement or Return for
+Changes with a required reason. The header retains Edit Request until approval.
 
 Arrangement screen columns:
 
@@ -266,10 +274,34 @@ Partial rows use a warning treatment; unavailable rows remain visibly crossed
 or exception-styled and are never hidden. The page summarizes reserved stock and
 the effect of replacing the current version.
 
-Project Engineer approval is a review screen, not an editable Procurement form.
-It shows every line, all partial/unavailable reasons, reservation summary,
-version and Procurement actor/time. Actions are Approve and Return to
-Procurement with reason.
+Once Engineering approval commits, Procurement can arrange. Saving the complete
+arrangement makes its positive lines dispatch-ready; there is no second
+approval prompt for new requests. Existing legacy post-arrangement approvals
+retain their recorded review UI until resolved.
+
+### Industrial-density refinement — 13 August 2026
+
+The Material Request creation, record and arrangement workspaces use the
+product-owner supplied classic-modern office references as a visual direction,
+without copying prototype-only controls or changing server workflow authority:
+
+- a compact page heading carries the current stage and the single primary
+  action; duplicate hero/action cards are removed;
+- desktop uses a wide operational canvas plus a stable status/discussion rail,
+  while mobile retains focused cards and safe-area actions;
+- Request Information, Material Items, approval, arrangement and lifecycle
+  facts use aligned section headers, restrained white surfaces, thin dividers
+  and dense tables rather than oversized decorative cards;
+- the lifecycle is presented as seven human stages derived from the canonical
+  state: Created, Engineering Approval, Procurement Arrangement, Ready for
+  Delivery, Dispatched, Received and Completed;
+- requested items stay visible as a role-safe table; controlled document
+  preview/export remains available without becoming the only readable record
+  surface; and
+- choosing External Supplier is sufficient for a Full arrangement. Supplier
+  name and the overall Procurement note are optional disclosures. Partial and
+  Cannot Provide Now still require the decision reason needed to preserve
+  quantity truth.
 
 ## 10. Inventory, dispatch and receipt
 
@@ -290,6 +322,21 @@ Receipt editor requires every line outcome:
 
 It includes an explicit all-lines-reviewed confirmation and shows the resulting
 replacement eligibility before commit.
+
+When the server-confirmed request reaches Received, an actively assigned
+Project Engineer or Site Engineer, either organization-wide Project Engineer
+role, or Admin sees **Close request**. The trusted close command remains the
+membership, state, quantity and version authority; Procurement never receives
+that action.
+
+Tablet and mobile Material Request registers support pull-to-refresh. They also
+re-fetch after returning to the foreground and on a low-frequency safety
+interval so a suspended socket cannot leave a stale workflow on screen. The
+last authorized projection remains visible while these reads complete.
+
+After confirmation, the receipt card offers Add site photos using the normal
+operational document picker. It accepts JPEG and PNG, shows upload
+progress/failure without changing receipt state, and lists linked evidence.
 
 ## 11. Delivery Order and returns
 

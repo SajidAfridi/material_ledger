@@ -162,31 +162,56 @@ class YorksV1MaterialRequestLineLifecycle {
   );
 
   String get compactSummary {
-    final facts = <String>[
-      if (arrangementStatus != null)
-        '${yorksV1DisplayQuantity(arrangedQuantity)} / '
-            '${yorksV1DisplayQuantity(requestedQuantity)} arranged',
-      if (_isPositive(cannotProvideQuantity))
-        '${yorksV1DisplayQuantity(cannotProvideQuantity)} cannot provide',
-      if (_isPositive(approvedQuantity))
-        '${yorksV1DisplayQuantity(approvedQuantity)} approved',
-      '${yorksV1DisplayQuantity(dispatchedQuantity)} / '
+    final facts = <String>[];
+    if (_isPositive(missingQuantity) ||
+        _isPositive(damagedQuantity) ||
+        _isPositive(replacementEligibleQuantity)) {
+      facts.add(
+        '${yorksV1DisplayQuantity(goodQuantity)} / '
+        '${yorksV1DisplayQuantity(approvedQuantity)} received',
+      );
+      if (_isPositive(missingQuantity)) {
+        facts.add('${yorksV1DisplayQuantity(missingQuantity)} missing');
+      }
+      if (_isPositive(damagedQuantity)) {
+        facts.add('${yorksV1DisplayQuantity(damagedQuantity)} damaged');
+      }
+      if (_isPositive(replacementEligibleQuantity)) {
+        facts.add(
+          '${yorksV1DisplayQuantity(replacementEligibleQuantity)} replacement',
+        );
+      }
+    } else if (_isPositive(inTransitQuantity)) {
+      facts
+        ..add(
+          '${yorksV1DisplayQuantity(dispatchedQuantity)} / '
           '${yorksV1DisplayQuantity(approvedQuantity)} dispatched',
-      if (_isPositive(goodQuantity))
-        '${yorksV1DisplayQuantity(goodQuantity)} good',
-      if (_isPositive(missingQuantity))
-        '${yorksV1DisplayQuantity(missingQuantity)} missing',
-      if (_isPositive(damagedQuantity))
-        '${yorksV1DisplayQuantity(damagedQuantity)} damaged',
-      if (_isPositive(inTransitQuantity))
-        '${yorksV1DisplayQuantity(inTransitQuantity)} in transit',
-      if (_isPositive(remainingApprovedQuantity))
-        '${yorksV1DisplayQuantity(remainingApprovedQuantity)} remaining',
-      if (_isPositive(replacementEligibleQuantity))
-        '${yorksV1DisplayQuantity(replacementEligibleQuantity)} replacement',
-      ?sourceKind?.replaceAll('_', ' '),
-      ?arrangementReason,
-    ];
+        )
+        ..add('${yorksV1DisplayQuantity(inTransitQuantity)} in transit');
+    } else if (_isPositive(goodQuantity)) {
+      facts.add(
+        '${yorksV1DisplayQuantity(goodQuantity)} / '
+        '${yorksV1DisplayQuantity(approvedQuantity)} received',
+      );
+    } else if (_isPositive(dispatchedQuantity)) {
+      facts.add(
+        '${yorksV1DisplayQuantity(dispatchedQuantity)} / '
+        '${yorksV1DisplayQuantity(approvedQuantity)} dispatched',
+      );
+    } else if (_isPositive(approvedQuantity)) {
+      facts.add('${yorksV1DisplayQuantity(approvedQuantity)} approved');
+    } else if (arrangementStatus != null) {
+      facts.add(
+        '${yorksV1DisplayQuantity(arrangedQuantity)} / '
+        '${yorksV1DisplayQuantity(requestedQuantity)} arranged',
+      );
+    }
+    if (_isPositive(cannotProvideQuantity)) {
+      facts.add(
+        '${yorksV1DisplayQuantity(cannotProvideQuantity)} cannot provide',
+      );
+    }
+    if (sourceKind != null) facts.add(sourceKind!.replaceAll('_', ' '));
     if (status.isNotEmpty) facts.add(status);
     return facts.join(' · ');
   }

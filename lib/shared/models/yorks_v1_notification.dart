@@ -111,7 +111,71 @@ const _workflowUpdate = YorksV1NotificationCopy(
   hindiBody: 'आपको सौंपा गया रिकॉर्ड बदल गया है।',
 );
 
+const _requestApprovalRequired = YorksV1NotificationCopy(
+  type: NotificationType.request,
+  englishTitle: 'Material request approval required',
+  englishBody: 'A material request is ready for Engineering approval.',
+  arabicTitle: 'مطلوب اعتماد طلب المواد',
+  arabicBody: 'طلب مواد جاهز لاعتماد الهندسة.',
+  urduTitle: 'مٹیریل ریکویسٹ کی منظوری درکار ہے',
+  urduBody: 'مٹیریل ریکویسٹ انجینئرنگ منظوری کے لیے تیار ہے۔',
+  hindiTitle: 'सामग्री अनुरोध की स्वीकृति आवश्यक',
+  hindiBody: 'सामग्री अनुरोध इंजीनियरिंग स्वीकृति के लिए तैयार है।',
+);
+
+const _requestApprovedForArrangement = YorksV1NotificationCopy(
+  type: NotificationType.request,
+  englishTitle: 'Material request approved',
+  englishBody: 'Engineering approved the request for Procurement arrangement.',
+  arabicTitle: 'تم اعتماد طلب المواد',
+  arabicBody: 'اعتمدت الهندسة الطلب لترتيب المشتريات.',
+  urduTitle: 'مٹیریل ریکویسٹ منظور',
+  urduBody: 'انجینئرنگ نے پروکیورمنٹ انتظام کے لیے ریکویسٹ منظور کر لی ہے۔',
+  hindiTitle: 'सामग्री अनुरोध स्वीकृत',
+  hindiBody: 'इंजीनियरिंग ने खरीद व्यवस्था के लिए अनुरोध स्वीकृत कर दिया है।',
+);
+
+const _requestChangesRequired = YorksV1NotificationCopy(
+  type: NotificationType.request,
+  englishTitle: 'Material request changes required',
+  englishBody: 'Engineering returned the request with a reason.',
+  arabicTitle: 'مطلوب تعديل طلب المواد',
+  arabicBody: 'أعادت الهندسة الطلب مع السبب.',
+  urduTitle: 'مٹیریل ریکویسٹ میں تبدیلی درکار ہے',
+  urduBody: 'انجینئرنگ نے ریکویسٹ وجہ کے ساتھ واپس کر دی ہے۔',
+  hindiTitle: 'सामग्री अनुरोध में बदलाव आवश्यक',
+  hindiBody: 'इंजीनियरिंग ने कारण सहित अनुरोध वापस कर दिया है।',
+);
+
+const _requestMention = YorksV1NotificationCopy(
+  type: NotificationType.info,
+  englishTitle: 'You were mentioned',
+  englishBody: 'A teammate mentioned you in a material request comment.',
+  arabicTitle: 'تمت الإشارة إليك',
+  arabicBody: 'أشار إليك زميل في تعليق على طلب مواد.',
+  urduTitle: 'آپ کا ذکر کیا گیا',
+  urduBody: 'ایک ساتھی نے مٹیریل ریکویسٹ کے تبصرے میں آپ کا ذکر کیا ہے۔',
+  hindiTitle: 'आपका उल्लेख किया गया',
+  hindiBody: 'एक साथी ने सामग्री अनुरोध टिप्पणी में आपका उल्लेख किया है।',
+);
+
 const _eventCopy = <String, YorksV1NotificationCopy>{
+  'material_request_approval_required': _requestApprovalRequired,
+  'material_request_updated_for_approval': _requestApprovalRequired,
+  'material_request_approved_for_arrangement': _requestApprovedForArrangement,
+  'material_request_changes_requested': _requestChangesRequired,
+  'material_request_mentioned': _requestMention,
+  'arrangement_ready_for_dispatch': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Materials ready for dispatch',
+    englishBody: 'Procurement completed the approved arrangement.',
+    arabicTitle: 'المواد جاهزة للصرف',
+    arabicBody: 'أكملت المشتريات الترتيب المعتمد.',
+    urduTitle: 'مٹیریل ڈسپیچ کے لیے تیار ہے',
+    urduBody: 'پروکیورمنٹ نے منظور شدہ انتظام مکمل کر لیا ہے۔',
+    hindiTitle: 'सामग्री डिस्पैच के लिए तैयार',
+    hindiBody: 'खरीद ने स्वीकृत व्यवस्था पूरी कर ली है।',
+  ),
   'material_request_submitted': YorksV1NotificationCopy(
     type: NotificationType.request,
     englishTitle: 'New material request',

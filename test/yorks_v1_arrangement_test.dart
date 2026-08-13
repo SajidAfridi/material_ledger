@@ -7,6 +7,7 @@ import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_arrangement_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   test('arrangement workspace preserves non-commercial review facts only', () {
@@ -131,6 +132,68 @@ void main() {
       ),
     );
   });
+
+  test('reservation shortage keeps its actionable domain error', () async {
+    final repository = YorksV1SupabaseArrangementRepository(
+      featureFlags: const YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+      ),
+      connectivity: DefaultConnectivity(),
+      rpcClient: _FailingRpcClient(
+        const PostgrestException(
+          message: 'V1_INVENTORY_RESERVATION_EXCEEDS_AVAILABLE',
+          code: '22023',
+        ),
+      ),
+    );
+
+    await expectLater(
+      repository.getWorkspace('request-1'),
+      throwsA(
+        isA<YorksV1DomainException>().having(
+          (error) => error.code,
+          'code',
+          YorksV1DomainErrorCode.insufficientStock,
+        ),
+      ),
+    );
+  });
+
+  test('other invalid arrangement input remains a validation error', () async {
+    final repository = YorksV1SupabaseArrangementRepository(
+      featureFlags: const YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+      ),
+      connectivity: DefaultConnectivity(),
+      rpcClient: _FailingRpcClient(
+        const PostgrestException(
+          message: 'V1_ARRANGEMENT_LINE_INVALID',
+          code: '22023',
+        ),
+      ),
+    );
+
+    await expectLater(
+      repository.getWorkspace('request-1'),
+      throwsA(
+        isA<YorksV1DomainException>().having(
+          (error) => error.code,
+          'code',
+          YorksV1DomainErrorCode.invalidInput,
+        ),
+      ),
+    );
+  });
 }
 
 Map<String, dynamic> _workspaceJson() => {
@@ -196,4 +259,16 @@ class _HangingRpcClient implements YorksV1MaterialRequestRpcClient {
     required String functionName,
     required Map<String, Object?> parameters,
   }) => Completer<Object?>().future;
+}
+
+class _FailingRpcClient implements YorksV1MaterialRequestRpcClient {
+  const _FailingRpcClient(this.error);
+
+  final PostgrestException error;
+
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) => Future.error(error);
 }

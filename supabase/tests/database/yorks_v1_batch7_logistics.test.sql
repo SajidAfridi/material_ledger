@@ -105,6 +105,14 @@ select lives_ok(
   'The request is submitted to Procurement'
 );
 
+-- Model the historical Batch 7 row shape. Approval-first integration is
+-- asserted independently in the current workflow revision suite.
+set local role postgres;
+update public.v1_material_requests
+set state = 'submitted', current_action_owner_role = 'procurement',
+    current_action_code = 'arrangement_required'
+where id = '71000000-0000-4000-8000-000000000001'::uuid;
+
 set local role authenticated;
 select set_config(
   'request.jwt.claims',

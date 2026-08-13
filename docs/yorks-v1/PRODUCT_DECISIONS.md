@@ -66,11 +66,16 @@ Mechanical Engineer or Project Manager is never relabeled as a Project
 Engineer on the form even though authorization uses the normalized workflow
 role.
 
-A Project Engineer approves a Procurement arrangement only when they also hold
-an active Project Engineer membership for that project. A Site Engineer may
-create and submit an MR, but cannot approve or return its arrangement; an old
-or incorrect `project_engineer` membership label must not elevate a Site
-Engineer account into approval authority. Admin retains its audited override.
+A Project Engineer approves the submitted Material Request only when they also
+hold an active Project Engineer membership for that project. Procurement may
+arrange only after that immutable approval. Saving the arrangement then makes
+its arranged quantities dispatch-ready without a second Engineering review.
+The legacy arrangement-decision command remains server-protected only for
+historical records already in `awaiting_approval`; its UI is disabled by
+default and new records never enter that state. A Site Engineer may create and
+submit an MR, but cannot grant the request approval; an old or incorrect
+`project_engineer` membership label must not elevate a Site Engineer account
+into approval authority. Admin retains its audited override.
 
 Legacy `engineer` identities are not automatically promoted. Migration creates
 a reconciliation entry and blocks privileged Project Engineer actions until an
@@ -263,21 +268,33 @@ Submit requires connectivity and atomically:
 - snapshots requester name and project role;
 - assigns a server number;
 - freezes submitted line snapshots;
-- moves the MR to `submitted`;
+- moves the MR to `awaiting_request_approval`;
 - creates current-owner and audit/notification records.
 
-Procurement sees the request only after that transaction commits.
+Until approval, the creator and an assigned/global Project Engineer may update
+the current Engineering intent through a version-checked audited command.
+Procurement cannot read or arrange the new request until Engineering approval.
+The request discussion is available to authorized Engineering participants
+from the first server-backed stage; mentions identify a protected user ID and
+create a notification only when that user is also allowed to read the request.
+
+Custom-row item description supports a non-commercial inventory search. A
+selected suggestion copies item description, brand/origin, size, model and
+unit into the Engineering line while quantity remains deliberate user input.
+The search response contains no cost, balance, reservation, minimum-stock,
+location or other protected inventory facts.
 
 ## 8. Canonical MR lifecycle
 
 Machine states:
 
-`draft -> submitted -> arranging -> awaiting_approval -> approved -> partially_dispatched -> dispatched -> partially_received -> received -> closed`
+`draft -> awaiting_request_approval -> approved_for_arrangement -> arranging -> approved -> partially_dispatched -> dispatched -> partially_received -> received -> closed`
 
 Alternative transitions:
 
-- `awaiting_approval -> arranging` with an immutable `returned` approval
-  decision and required comment
+- `awaiting_request_approval -> draft` with an immutable `returned` request
+  decision and required reason; the request number and submission history stay
+  intact and a resubmission returns to request approval
 - eligible pre-dispatch records -> `cancelled`
 - approved but undispatched records -> `cancelled` with reason and reservation
   release
@@ -286,15 +303,19 @@ Alternative transitions:
 never been submitted. Submitted records follow controlled deletion/cancellation
 rules and preserve lines/history.
 
-The first transition to `arranging` occurs when Procurement explicitly starts
-the first arrangement version. It is server-recorded, not inferred from opening
-a screen. Return-for-changes is an approval decision, not an extra persistent
-MR state; the request returns atomically to `arranging`.
+The first transition to `arranging` occurs only after a current immutable
+request-approval decision and when Procurement explicitly starts the first
+arrangement version. It is server-recorded, not inferred from opening a screen.
+Existing requests already in `arranging` or `awaiting_approval` retain their
+recorded legacy post-arrangement approval path until resolved; no synthetic
+pre-approval is created.
 
 `closed` is explicit and allowed when all approved quantities are resolved, no
 dispatch/receipt is open, and any unavailable-at-zero lines remain preserved.
 Unavailable original requested quantity does not fabricate an outstanding
-approved quantity.
+approved quantity. An actively assigned Project Engineer or Site Engineer,
+either organization-wide Project Engineer role, or Admin may close. Procurement
+may not close its own fulfilled workflow.
 
 ## 9. Arrangement and reservation
 
@@ -316,8 +337,10 @@ Saving a complete arrangement version atomically:
 - locks affected inventory rows;
 - replaces the prior active version and reservations;
 - prevents aggregate warehouse reservations exceeding availability;
-- sends the complete version to assigned Project Engineers;
-- moves the MR to `awaiting_approval`.
+- snapshots arranged quantities as approved quantities for the already
+  approved Engineering request;
+- moves positive supply to dispatch-ready `approved`, or closes an all-
+  unavailable request without fabricating approved quantity.
 
 One `inventory_reservations` table owns the commitment. Presentation values
 such as “allocated” are derived from approved reservation status; there is no
@@ -332,13 +355,17 @@ another request from taking the stock mid-review.
 
 ## 10. Approval
 
-Only an active assigned Project Engineer or an authorized Admin override can
-approve/return the current arrangement version. Procurement self-approval is
-rejected even if the user has another editable client-side label.
+Only an active assigned Project Engineer, organization-wide Senior Mechanical
+Engineer/Project Manager, or authorized Admin override can approve/return the
+current request version before Procurement arrangement. Procurement
+self-approval is rejected even if the user has another editable client-side
+label. Approval freezes the exact Engineering version and actor role; it does
+not reserve stock or create commercial facts.
 
-Approval snapshots arranged quantities into approved quantities. Unavailable
-zero-quantity lines remain visible. Returning for changes requires a reason and
-does not erase the prior version or decision.
+The pre-revision `awaiting_approval` state remains a compatibility lane only
+for arrangements already saved before this change. Those exact legacy records
+may still be approved/returned using their historical command and are never
+silently relabeled as pre-approved requests.
 
 ## 11. Inventory and dispatch
 
@@ -390,6 +417,11 @@ split a dispatch line when those outcomes must be recorded separately.
 The review must reconcile to the dispatched quantity. Only good quantity
 increments `good_received_qty`. Missing/damaged quantity remains replacement
 eligible within the approved cap.
+
+After confirmation, an authorized receiving Engineer may attach JPEG or PNG
+site photographs to the immutable receipt-review entity. The existing
+prepare/upload/finalize document transaction and entity authorization are used;
+the receipt command itself never claims upload success.
 
 A Delivery Order snapshot may be created as soon as its dispatch is committed.
 An assigned Project/Site Engineer, either organization-wide Project Engineer

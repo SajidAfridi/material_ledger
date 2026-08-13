@@ -570,6 +570,7 @@ class YorksV1MaterialDispatch {
 class YorksV1LogisticsWorkspace {
   YorksV1LogisticsWorkspace({
     required this.requestId,
+    required this.projectId,
     required this.requestState,
     required this.requestRecordVersion,
     required this.projectName,
@@ -583,6 +584,7 @@ class YorksV1LogisticsWorkspace {
        dispatches = List.unmodifiable(dispatches);
 
   final String requestId;
+  final String projectId;
   final String? requestNumber;
   final String requestState;
   final int requestRecordVersion;
@@ -603,6 +605,7 @@ class YorksV1LogisticsWorkspace {
     }
     return YorksV1LogisticsWorkspace(
       requestId: _requiredString(json, 'request_id'),
+      projectId: _requiredString(json, 'project_id'),
       requestNumber: _trimToNull(json['request_number']),
       requestState: _requiredString(json, 'request_state'),
       requestRecordVersion: _positiveInt(json['request_record_version']),

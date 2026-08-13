@@ -116,6 +116,13 @@ void main() {
         router.routeInformationProvider.value.uri.path,
         RoutePaths.engineerHome,
       );
+
+      router.go(RoutePaths.activityLog);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerHome,
+      );
     },
   );
 
@@ -177,6 +184,7 @@ void main() {
           RoutePaths.returnStore,
           RoutePaths.yorksV1Inventory,
           RoutePaths.yorksV1Dispatches,
+          RoutePaths.activityLog,
         ]) {
           router.go(path);
           await tester.pumpAndSettle();

@@ -9,6 +9,8 @@ import '../models/yorks_v1_domain_error.dart';
 abstract interface class YorksV1DocumentFileService {
   Future<YorksV1SelectedDocument?> selectDocument();
 
+  Future<YorksV1SelectedDocument?> selectImage();
+
   Future<bool> saveDocument({
     required Uint8List bytes,
     required String fileName,
@@ -86,12 +88,33 @@ class YorksV1PlatformDocumentFileService implements YorksV1DocumentFileService {
     ],
   );
 
+  static const _imageType = XTypeGroup(
+    label: 'Site photo',
+    extensions: ['jpg', 'jpeg', 'png'],
+    mimeTypes: ['image/jpeg', 'image/png'],
+  );
+
   @override
   Future<YorksV1SelectedDocument?> selectDocument() async {
     final file = await openFile(acceptedTypeGroups: const [_type]);
     if (file == null) return null;
     final bytes = await file.readAsBytes();
     return YorksV1SelectedDocument.checked(fileName: file.name, bytes: bytes);
+  }
+
+  @override
+  Future<YorksV1SelectedDocument?> selectImage() async {
+    final file = await openFile(acceptedTypeGroups: const [_imageType]);
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    final selected = YorksV1SelectedDocument.checked(
+      fileName: file.name,
+      bytes: bytes,
+    );
+    if (selected.mimeType != 'image/jpeg' && selected.mimeType != 'image/png') {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    return selected;
   }
 
   @override

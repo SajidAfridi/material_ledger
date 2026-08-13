@@ -10,6 +10,7 @@ import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_company_document_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
 import 'package:material_ledger/shared/repositories/collection_store.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
@@ -40,6 +41,58 @@ void main() {
       expect(line.toRpcJson()['item_description'], 'Motorized smoke damper');
       expect(line.toRpcJson()['unit'], 'Ton');
       expect(line.copyWith(unit: 'Boxes').toRpcJson()['unit'], 'Boxes');
+    },
+  );
+
+  test(
+    'controlled line status summarizes current operational truth concisely',
+    () {
+      final inTransit = YorksV1MaterialRequestLineLifecycle.fromRpcJson(const {
+        'request_line_id': 'line-1',
+        'requested_qty': '10',
+        'arranged_qty': '10',
+        'cannot_provide_qty': '0',
+        'approved_qty': '10',
+        'dispatched_qty': '5',
+        'in_transit_qty': '5',
+        'reviewed_good_qty': '0',
+        'reviewed_missing_qty': '0',
+        'reviewed_damaged_qty': '0',
+        'remaining_approved_qty': '5',
+        'replacement_eligible_qty': '0',
+        'ordinary_outstanding_qty': '5',
+        'source_kind': 'external_supplier',
+        'status': 'Awaiting receipt review',
+      });
+      final replacement =
+          YorksV1MaterialRequestLineLifecycle.fromRpcJson(const {
+            'request_line_id': 'line-1',
+            'requested_qty': '10',
+            'arranged_qty': '10',
+            'cannot_provide_qty': '0',
+            'approved_qty': '10',
+            'dispatched_qty': '5',
+            'in_transit_qty': '0',
+            'reviewed_good_qty': '3',
+            'reviewed_missing_qty': '2',
+            'reviewed_damaged_qty': '0',
+            'remaining_approved_qty': '7',
+            'replacement_eligible_qty': '2',
+            'ordinary_outstanding_qty': '5',
+            'source_kind': 'external_supplier',
+            'status': 'Replacement required',
+          });
+
+      expect(
+        inTransit.compactSummary,
+        '5 / 10 dispatched · 5 in transit · external supplier · '
+        'Awaiting receipt review',
+      );
+      expect(
+        replacement.compactSummary,
+        '3 / 10 received · 2 missing · 2 replacement · external supplier · '
+        'Replacement required',
+      );
     },
   );
 
@@ -273,12 +326,62 @@ void main() {
         expect(saved, isNull);
         expect(repository.saveInputs, isEmpty);
         expect(store.readAll().single.lines.single.description, isEmpty);
+        expect(controller.acceptedDraft.lines, hasLength(1));
         expect(
           controller.state.status,
           YorksV1MaterialRequestDraftSyncStatus.local,
         );
       },
     );
+
+    test(
+      'discard restores the draft snapshot from before this editing visit',
+      () async {
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: _FakeRequestRepository(),
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.setTitle('Earlier saved title');
+        final baseline = controller.state.draft;
+        await controller.setTitle('Unsaved replacement');
+
+        await controller.restoreLocalSnapshot(baseline);
+
+        expect(controller.state.draft.title, 'Earlier saved title');
+        expect(store.readAll().single.title, 'Earlier saved title');
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.local,
+        );
+      },
+    );
+
+    test('cannot restore a draft snapshot owned by another editor', () async {
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: _FakeRequestRepository(),
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+      final foreign = YorksV1MaterialRequestDraft.empty(
+        id: _draftId,
+        ownerAuthUserId: 'someone-else',
+        submissionIdempotencyKey: 'foreign-key',
+      );
+
+      await expectLater(
+        controller.restoreLocalSnapshot(foreign),
+        throwsArgumentError,
+      );
+    });
 
     test(
       'indexes recoverable local input and restores it for the same owner',
@@ -476,6 +579,61 @@ void main() {
         expect(controller.state.draft.serverRecordVersion, 7);
         expect(controller.state.draft.lines.single.description, 'Saved damper');
         expect(store.readAll().single.lines.single.quantity, '2');
+      },
+    );
+
+    test(
+      'Project Engineer saves a shared pre-approval edit through the trusted command',
+      () async {
+        final repository = _FakeRequestRepository();
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: 'project-engineer',
+          draftId: _draftId,
+          store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+        final request = YorksV1MaterialRequest.fromRpcJson({
+          'id': _draftId,
+          'project_id': _projectId,
+          'project_ref': 'B5-TEST',
+          'project_name': 'Test Project',
+          'scope_id': _scopeId,
+          'scope_name': 'Common',
+          'state': 'awaiting_request_approval',
+          'record_version': 4,
+          'created_at': '2026-08-13T00:00:00Z',
+          'updated_at': '2026-08-13T00:00:00Z',
+          'timing': 'normal',
+          'can_edit_before_approval': true,
+          'lines': [
+            {
+              'id': 'preapproval-line',
+              'display_order': 1,
+              'source_kind': 'custom',
+              'item_description': 'Editable damper',
+              'requested_qty': '2',
+              'unit': 'Nos',
+            },
+          ],
+        });
+
+        await controller.hydrateFromServer(request);
+        await controller.setTitle('Engineer-corrected request');
+        final saved = await controller.saveConnected();
+
+        expect(saved, isNotNull);
+        expect(repository.updateForApprovalInputs, hasLength(1));
+        expect(
+          repository.updateForApprovalInputs.single.draft.serverRecordVersion,
+          4,
+        );
+        expect(
+          repository.updateForApprovalInputs.single.draft.title,
+          'Engineer-corrected request',
+        );
+        expect(repository.saveInputs, isEmpty);
       },
     );
   });
@@ -964,6 +1122,24 @@ void main() {
         .buildDocumentPdf(
           YorksV1MaterialRequestDocumentModel(
             request: request,
+            arrangement: YorksV1MaterialRequestDocumentActor(
+              displayName: 'Procurement User',
+              role: 'procurement',
+              reference: 'Arrangement v1',
+              actedAt: DateTime.utc(2026, 8, 3, 9),
+            ),
+            approval: YorksV1MaterialRequestDocumentActor(
+              displayName: 'Senior Engineer',
+              role: 'senior_mechanical_engineer',
+              reference: 'Request v2',
+              actedAt: DateTime.utc(2026, 8, 3, 8),
+            ),
+            dispatch: YorksV1MaterialRequestDocumentActor(
+              displayName: 'Procurement User',
+              role: 'procurement',
+              reference: 'YRA/DN/101/2026',
+              actedAt: DateTime.utc(2026, 8, 3, 10),
+            ),
             receiptStatuses: const {'line-1': 'received'},
           ),
           PdfPageFormat.a4,
@@ -971,6 +1147,12 @@ void main() {
 
     expect(bytes.length, greaterThan(500));
     expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+    expect(YorksV1MaterialRequestStrings.procurement.primary, 'Procurement');
+    expect(YorksV1MaterialRequestStrings.approvedBy.primary, 'Approved by');
+    expect(
+      YorksV1MaterialRequestStrings.orderedDispatched.primary,
+      'Ordered / Dispatched',
+    );
     expect(
       YorksV1CompanyDocumentStrings.legalName.ar,
       'يوركس للتكييف والتبريد - ذ.م.م - ش.ش.و',
@@ -1015,6 +1197,70 @@ void main() {
       'Senior Mechanical Engineer',
     );
   });
+
+  test(
+    'parses approval-first decision, comments, mentions and action flags',
+    () {
+      final request = YorksV1MaterialRequest.fromRpcJson({
+        'id': _draftId,
+        'project_id': _projectId,
+        'project_ref': 'YRA-123',
+        'project_name': 'Yorks Test Project',
+        'scope_id': _scopeId,
+        'scope_name': 'Common / All Buildings',
+        'state': 'awaiting_request_approval',
+        'record_version': 2,
+        'created_at': '2026-08-13T00:00:00Z',
+        'updated_at': '2026-08-13T00:00:00Z',
+        'timing': 'normal',
+        'can_edit_before_approval': true,
+        'can_decide_request': true,
+        'request_decision': {
+          'id': 'decision-1',
+          'decision': 'returned',
+          'reason': 'Clarify the model',
+          'request_record_version': 1,
+          'decided_by_display_name': 'Senior Engineer',
+          'decided_by_role': 'project_engineer',
+          'decided_by_exact_role': 'senior_mechanical_engineer',
+          'decided_at': '2026-08-13T01:00:00Z',
+        },
+        'comments': [
+          {
+            'id': 'comment-1',
+            'request_id': _draftId,
+            'body': 'Please review this item.',
+            'author_auth_user_id': 'author-1',
+            'author_role': 'project_engineer',
+            'author_exact_role': 'project_manager',
+            'author_display_name': 'Project Manager',
+            'created_at': '2026-08-13T02:00:00Z',
+            'mentions': [
+              {
+                'auth_user_id': 'mentioned-1',
+                'display_name': 'Site Engineer',
+                'exact_role': 'site_engineer',
+              },
+            ],
+          },
+        ],
+        'lines': const [],
+      });
+
+      expect(
+        request.state,
+        YorksV1MaterialRequestState.awaitingRequestApproval,
+      );
+      expect(request.canEditBeforeApproval, isTrue);
+      expect(request.canDecideRequest, isTrue);
+      expect(
+        request.requestDecision?.decidedByExactRole,
+        'senior_mechanical_engineer',
+      );
+      expect(request.comments.single.authorExactRole, 'project_manager');
+      expect(request.comments.single.mentions.single.authUserId, 'mentioned-1');
+    },
+  );
 
   test(
     'Material Request document parses truthful partial-dispatch progress',
@@ -1173,9 +1419,48 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   final List<YorksV1SaveMaterialRequestDraftInput> saveInputs = [];
   final List<YorksV1SubmitMaterialRequestInput> submitInputs = [];
   final List<YorksV1MaterialRequestDraft> saveAndSubmitInputs = [];
+  final List<YorksV1UpdateMaterialRequestForApprovalInput>
+  updateForApprovalInputs = [];
   Object? saveFailure;
   Object? submitFailure;
   Future<void>? saveDelay;
+
+  @override
+  Future<List<YorksV1MaterialRequestComment>> addComment(
+    YorksV1AddMaterialRequestCommentInput input,
+  ) async => const [];
+
+  @override
+  Future<YorksV1MaterialRequest> decideRequest(
+    YorksV1DecideMaterialRequestInput input,
+  ) async => _request(
+    requestId: input.requestId,
+    version: input.expectedVersion + 1,
+    number: 'B5TEST-MR001',
+  );
+
+  @override
+  Future<List<YorksV1MaterialRequestMention>> listMentionCandidates(
+    String requestId,
+  ) async => const [];
+
+  @override
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
+    required String projectId,
+    required String query,
+  }) async => const [];
+
+  @override
+  Future<YorksV1MaterialRequest> updateForApproval(
+    YorksV1UpdateMaterialRequestForApprovalInput input,
+  ) async {
+    updateForApprovalInputs.add(input);
+    return _request(
+      requestId: input.draft.id,
+      version: input.draft.serverRecordVersion + 1,
+      number: 'B5TEST-MR001',
+    );
+  }
 
   @override
   Future<YorksV1MaterialRequest> cancel(

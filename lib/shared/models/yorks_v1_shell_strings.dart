@@ -516,10 +516,10 @@ abstract final class YorksV1ShellStrings {
     hi: 'स्वीकृत करें',
   );
   static const approveStepDescription = TranslatableString(
-    en: 'Project Engineer reviews',
-    ar: 'يراجع مهندس المشروع',
-    ur: 'پراجیکٹ انجینئر جائزہ لیتا ہے',
-    hi: 'प्रोजेक्ट इंजीनियर समीक्षा करता है',
+    en: 'Project Engineer approves request',
+    ar: 'يعتمد مهندس المشروع الطلب',
+    ur: 'پراجیکٹ انجینئر درخواست منظور کرتا ہے',
+    hi: 'प्रोजेक्ट इंजीनियर अनुरोध स्वीकृत करता है',
   );
   static const dispatch = TranslatableString(
     en: 'Dispatch',

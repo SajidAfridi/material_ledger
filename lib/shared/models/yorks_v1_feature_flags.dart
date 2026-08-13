@@ -15,6 +15,7 @@ class YorksV1FeatureFlags {
     bool excel = false,
     bool requests = false,
     bool arrangement = false,
+    bool legacyArrangementReview = false,
     bool logistics = false,
     bool returnsDocuments = false,
     bool documents = false,
@@ -24,6 +25,7 @@ class YorksV1FeatureFlags {
        _excel = excel,
        _requests = requests,
        _arrangement = arrangement,
+       _legacyArrangementReview = legacyArrangementReview,
        _logistics = logistics,
        _returnsDocuments = returnsDocuments,
        _documents = documents;
@@ -47,6 +49,10 @@ class YorksV1FeatureFlags {
         'YORKS_V1_ARRANGEMENT',
         defaultValue: true,
       ),
+      _legacyArrangementReview = const bool.fromEnvironment(
+        'YORKS_V1_LEGACY_ARRANGEMENT_REVIEW',
+        defaultValue: false,
+      ),
       _logistics = const bool.fromEnvironment(
         'YORKS_V1_LOGISTICS',
         defaultValue: true,
@@ -66,6 +72,7 @@ class YorksV1FeatureFlags {
   final bool _excel;
   final bool _requests;
   final bool _arrangement;
+  final bool _legacyArrangementReview;
   final bool _logistics;
   final bool _returnsDocuments;
   final bool _documents;
@@ -76,6 +83,12 @@ class YorksV1FeatureFlags {
   bool get excel => boq && _excel;
   bool get requests => excel && _requests;
   bool get arrangement => requests && _arrangement;
+
+  /// Compatibility-only controls for arrangements saved before request-first
+  /// approval was introduced. New arrangements are dispatch-ready immediately
+  /// after Procurement saves them, so production keeps this surface disabled.
+  bool get legacyArrangementReview => arrangement && _legacyArrangementReview;
+
   bool get logistics => arrangement && _logistics;
   bool get returnsDocuments => logistics && _returnsDocuments;
   bool get documents => returnsDocuments && _documents;

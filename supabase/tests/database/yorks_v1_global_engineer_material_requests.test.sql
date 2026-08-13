@@ -131,10 +131,10 @@ select lives_ok(
 set local role postgres;
 select ok(
   (
-    select request.state = 'submitted'
+    select request.state = 'awaiting_request_approval'
       and request.requester_project_role = 'project_engineer'
       and request.requester_exact_role = 'senior_mechanical_engineer'
-      and request.current_action_owner_role = 'procurement'
+      and request.current_action_owner_role = 'project_engineer'
     from public.v1_material_requests request
     where request.id = 'a8100000-0000-4000-8000-000000000001'::uuid
   )
@@ -185,7 +185,7 @@ select lives_ok(
 set local role postgres;
 select ok(
   (
-    select request.state = 'submitted'
+    select request.state = 'awaiting_request_approval'
       and request.requester_project_role = 'project_engineer'
       and request.requester_exact_role = 'project_manager'
     from public.v1_material_requests request

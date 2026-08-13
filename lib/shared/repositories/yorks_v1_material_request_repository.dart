@@ -54,6 +54,27 @@ abstract interface class YorksV1MaterialRequestRepository {
     YorksV1MaterialRequestDraft draft,
   );
 
+  Future<YorksV1MaterialRequest> updateForApproval(
+    YorksV1UpdateMaterialRequestForApprovalInput input,
+  );
+
+  Future<YorksV1MaterialRequest> decideRequest(
+    YorksV1DecideMaterialRequestInput input,
+  );
+
+  Future<List<YorksV1MaterialRequestMention>> listMentionCandidates(
+    String requestId,
+  );
+
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
+    required String projectId,
+    required String query,
+  });
+
+  Future<List<YorksV1MaterialRequestComment>> addComment(
+    YorksV1AddMaterialRequestCommentInput input,
+  );
+
   Future<void> deleteDraft(String requestId);
 
   Future<YorksV1MaterialRequest> submit(
@@ -176,6 +197,87 @@ class YorksV1SupabaseMaterialRequestRepository
       },
     );
     return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> updateForApproval(
+    YorksV1UpdateMaterialRequestForApprovalInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_update_material_request_for_approval',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> decideRequest(
+    YorksV1DecideMaterialRequestInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_decide_material_request',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<List<YorksV1MaterialRequestMention>> listMentionCandidates(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_request_mention_candidates',
+      parameters: {'p_request_id': requestId},
+    );
+    return _list(
+      response,
+    ).map(YorksV1MaterialRequestMention.fromRpcJson).toList(growable: false);
+  }
+
+  @override
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
+    required String projectId,
+    required String query,
+  }) async {
+    if (query.trim().length < 2) return const [];
+    final response = await _invoke(
+      functionName: 'v1_search_material_request_inventory_items',
+      parameters: {
+        'p_project_id': projectId,
+        'p_query': query.trim(),
+        'p_limit': 12,
+      },
+    );
+    return _list(response)
+        .map(YorksV1MaterialRequestInventorySuggestion.fromRpcJson)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<YorksV1MaterialRequestComment>> addComment(
+    YorksV1AddMaterialRequestCommentInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_add_material_request_comment',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    if (response is! Map || response['comments'] is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return _list(
+      response['comments'],
+    ).map(YorksV1MaterialRequestComment.fromRpcJson).toList(growable: false);
   }
 
   @override

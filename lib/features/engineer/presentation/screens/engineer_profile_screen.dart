@@ -144,11 +144,12 @@ class EngineerProfileScreen extends ConsumerWidget {
                         subtitle: AppStrings.requestLeave.primary,
                         onTap: () => context.push(RoutePaths.myLeave),
                       ),
-                    _ProfileTile(
-                      icon: Icons.history_rounded,
-                      title: 'Activity Log',
-                      onTap: () => context.push(RoutePaths.activityLog),
-                    ),
+                    if (role.isAdmin)
+                      _ProfileTile(
+                        icon: Icons.history_rounded,
+                        title: AppStrings.auditTrail.primary,
+                        onTap: () => context.push(RoutePaths.activityLog),
+                      ),
                     if (engineeringToolsEnabled)
                       _ProfileTile(
                         icon: Icons.straighten_outlined,
@@ -421,11 +422,12 @@ class _MobileEngineerProfile extends ConsumerWidget {
                     ),
                     onTap: () => _showSyncSheet(context),
                   ),
-                  _MobileProfileTile(
-                    icon: Icons.history_rounded,
-                    title: 'Activity log',
-                    onTap: () => context.push(RoutePaths.activityLog),
-                  ),
+                  if (role.isAdmin)
+                    _MobileProfileTile(
+                      icon: Icons.history_rounded,
+                      title: AppStrings.auditTrail.primary,
+                      onTap: () => context.push(RoutePaths.activityLog),
+                    ),
                   if (!role.isAdmin)
                     _MobileProfileTile(
                       icon: Icons.event_available_outlined,

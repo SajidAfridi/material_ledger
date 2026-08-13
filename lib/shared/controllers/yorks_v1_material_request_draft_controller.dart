@@ -58,7 +58,9 @@ class YorksV1MaterialRequestDraftController
              uuidFactory: uuidFactory ?? const Uuid().v4,
            ),
          ),
-       );
+       ) {
+    _acceptedDraft = state.draft;
+  }
 
   final String _ownerAuthUserId;
   final String _draftId;
@@ -68,14 +70,23 @@ class YorksV1MaterialRequestDraftController
   final VoidCallback? _onLocalDraftsChanged;
   Future<void> _persistQueue = Future<void>.value();
   bool _connectedCommandInFlight = false;
+  bool _editingBeforeApproval = false;
+  late YorksV1MaterialRequestDraft _acceptedDraft;
 
   /// Read-only snapshot for UI callbacks that need to guard a deferred
   /// default (for example the Common scope) against a newer project choice.
   YorksV1MaterialRequestDraft get currentDraft => state.draft;
 
+  /// The most recent draft the user deliberately saved or originally opened.
+  /// Autosaved keystrokes remain recoverable but do not move this boundary,
+  /// allowing presentation code to offer an honest Discard Changes action.
+  YorksV1MaterialRequestDraft get acceptedDraft => _acceptedDraft;
+
   /// Last connected-operation error exposed without making widgets reach into
   /// StateNotifier's protected [state] member.
   YorksV1DomainErrorCode? get lastErrorCode => state.errorCode;
+
+  bool get isEditingBeforeApproval => _editingBeforeApproval;
 
   static YorksV1MaterialRequestDraft _restoreOrEmpty({
     required String ownerAuthUserId,
@@ -189,11 +200,12 @@ class YorksV1MaterialRequestDraftController
   Future<void> hydrateFromServer(YorksV1MaterialRequest request) async {
     final current = state.draft;
     if (request.id != _draftId ||
-        !request.state.isDraft ||
+        (!request.state.isDraft && !request.canEditBeforeApproval) ||
         current.serverRecordVersion != 0 ||
         current.updatedAt.millisecondsSinceEpoch != 0) {
       return;
     }
+    _editingBeforeApproval = request.canEditBeforeApproval;
     final hydrated = YorksV1MaterialRequestDraft(
       id: current.id,
       ownerAuthUserId: current.ownerAuthUserId,
@@ -208,6 +220,7 @@ class YorksV1MaterialRequestDraftController
       lines: request.lines,
       updatedAt: request.updatedAt,
     );
+    _acceptedDraft = hydrated;
     state = YorksV1MaterialRequestDraftState(
       draft: hydrated,
       status: YorksV1MaterialRequestDraftSyncStatus.saved,
@@ -459,6 +472,7 @@ class YorksV1MaterialRequestDraftController
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
       await _persist(draft);
+      _acceptedDraft = draft;
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
         status: YorksV1MaterialRequestDraftSyncStatus.local,
@@ -493,12 +507,23 @@ class YorksV1MaterialRequestDraftController
       status: YorksV1MaterialRequestDraftSyncStatus.saving,
     );
     try {
-      final saved = await _repository.saveDraft(draft.toSaveInput());
+      final saved = _editingBeforeApproval
+          ? await _repository.updateForApproval(
+              YorksV1UpdateMaterialRequestForApprovalInput(
+                draft: draft,
+                idempotencyKey: draft.submissionIdempotencyKey,
+              ),
+            )
+          : await _repository.saveDraft(draft.toSaveInput());
       final updated = draft.copyWith(
         serverRecordVersion: saved.recordVersion,
+        submissionIdempotencyKey: _editingBeforeApproval
+            ? _uuidFactory()
+            : draft.submissionIdempotencyKey,
         updatedAt: DateTime.now().toUtc(),
       );
       await _persist(updated);
+      _acceptedDraft = updated;
       state = YorksV1MaterialRequestDraftState(
         draft: updated,
         status: YorksV1MaterialRequestDraftSyncStatus.saved,
@@ -534,6 +559,16 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<YorksV1MaterialRequest?> _submitConnected() async {
+    if (_editingBeforeApproval) {
+      final saved = await _saveConnected();
+      if (saved != null) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: state.draft,
+          status: YorksV1MaterialRequestDraftSyncStatus.submitted,
+        );
+      }
+      return saved;
+    }
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
       state = YorksV1MaterialRequestDraftState(
@@ -616,6 +651,30 @@ class YorksV1MaterialRequestDraftController
         .toList(growable: false);
     await _store.writeAll(all);
     _onLocalDraftsChanged?.call();
+  }
+
+  /// Restores the last deliberately accepted draft snapshot when an editor
+  /// chooses to discard only the changes made during its current visit.
+  ///
+  /// Text fields autosave for crash recovery, so simply leaving the route
+  /// would otherwise make "Discard changes" misleading. The presentation
+  /// layer owns the baseline choice; this controller only validates ownership
+  /// and persists that immutable snapshot through the normal draft store.
+  Future<void> restoreLocalSnapshot(
+    YorksV1MaterialRequestDraft snapshot,
+  ) async {
+    if (snapshot.id != _draftId ||
+        snapshot.ownerAuthUserId != _ownerAuthUserId) {
+      throw ArgumentError('The draft snapshot does not belong to this editor.');
+    }
+    await _persist(snapshot);
+    _acceptedDraft = snapshot;
+    state = YorksV1MaterialRequestDraftState(
+      draft: snapshot,
+      status: snapshot.serverRecordVersion > 0
+          ? YorksV1MaterialRequestDraftSyncStatus.saved
+          : YorksV1MaterialRequestDraftSyncStatus.local,
+    );
   }
 
   Future<void> _replace(YorksV1MaterialRequestDraft draft) async {

@@ -12,6 +12,7 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq_workbook.dart';
@@ -52,7 +53,7 @@ void main() {
     _preferences = await SharedPreferences.getInstance();
   });
 
-  testWidgets('desktop MR draft keeps source actions and row tools distinct', (
+  testWidgets('desktop MR draft keeps compact source and row actions', (
     tester,
   ) async {
     await _setViewport(tester, const Size(1366, 768));
@@ -61,14 +62,127 @@ void main() {
     expect(find.text('Add Custom Item'), findsOneWidget);
     expect(find.text('Add from BOQ'), findsOneWidget);
     expect(find.text('Import Excel'), findsOneWidget);
-    expect(find.text('Row tools'), findsOneWidget);
+    expect(find.text('Row tools'), findsNothing);
     expect(find.text('Add Blank Row'), findsOneWidget);
+    expect(find.text('Add Similar Row'), findsNothing);
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_draft_boq_actions_desktop.png'),
     );
   });
+
+  testWidgets(
+    'desktop description typing suggests inventory and fills descriptive cells',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      final repository = await _pumpDraft(tester);
+      repository.inventorySuggestions = const [
+        YorksV1MaterialRequestInventorySuggestion(
+          id: 'inventory-duct',
+          description: 'Flexible duct',
+          brandOrigin: 'Superflex',
+          size: '12 inch',
+          model: 'FD-12',
+          unit: 'Meter',
+        ),
+      ];
+
+      await tester.tap(find.text('Add Blank Row'));
+      await tester.pumpAndSettle();
+      final description = find.descendant(
+        of: find.byType(
+          RawAutocomplete<YorksV1MaterialRequestInventorySuggestion>,
+        ),
+        matching: find.byType(TextFormField),
+      );
+      expect(description, findsOneWidget);
+      await tester.enterText(description, 'flex');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Flexible duct'), findsOneWidget);
+      await tester.tap(find.text('Flexible duct'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('12 inch'), findsWidgets);
+      expect(find.text('FD-12'), findsWidgets);
+      expect(find.text('Superflex'), findsWidgets);
+      expect(find.text('Meter'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_draft_inventory_row_desktop.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'request discussion suggests authorized users from inline @ text',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      final repository = _MaterialRequestRepositoryFixture()
+        ..mentionCandidates = const [
+          YorksV1MaterialRequestMention(
+            authUserId: 'ali-user-id',
+            displayName: 'Ali Raza',
+            exactRole: 'project_engineer',
+          ),
+        ];
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              _submittedRequest.id,
+            ).overrideWith((ref) async => _submittedRequest),
+            yorksV1MaterialRequestDocumentProvider(
+              _submittedRequest.id,
+            ).overrideWith(
+              (ref) async => YorksV1MaterialRequestDocumentModel.fromRequest(
+                _submittedRequest,
+              ),
+            ),
+          ],
+          child: const YorksV1MaterialRequestDetailScreen(
+            requestId: _submittedRequestId,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final composer = find.widgetWithText(
+        TextField,
+        YorksV1MaterialRequestStrings.commentComposerHint.primary,
+      );
+      await tester.ensureVisible(composer);
+      await tester.enterText(composer, '@ali');
+      await tester.pumpAndSettle();
+
+      expect(find.text('@aliraza'), findsOneWidget);
+      expect(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_discussion_mentions_desktop.png'),
+      );
+      await tester.tap(find.text('@aliraza'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(composer).controller!.text, '@aliraza ');
+
+      await tester.enterText(composer, '@aliraza please review');
+      await tester.tap(find.byTooltip('Post comment'));
+      await tester.pumpAndSettle();
+
+      expect(repository.addCommentInputs, hasLength(1));
+      expect(repository.addCommentInputs.single.mentionedAuthUserIds, const [
+        'ali-user-id',
+      ]);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('desktop MR BOQ picker selects scoped rows without duplicates', (
     tester,
@@ -131,6 +245,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('desktop MR Back offers keep, discard, or save before leaving', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('mr-title')),
+      'Keep this request',
+    );
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save this material request?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mr-draft-keep-editing')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('mr-draft-discard-and-leave')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mr-draft-save-and-leave')),
+      findsOneWidget,
+    );
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_draft_exit_guard_desktop.png'),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('mr-draft-keep-editing')));
+    await tester.pumpAndSettle();
+    expect(find.text('Save this material request?'), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('mr-draft-save-and-leave')));
+    await tester.pumpAndSettle();
+    expect(find.text('Save this material request?'), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Save this material request?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('desktop MR BOQ picker has a truthful empty state', (
     tester,
   ) async {
@@ -183,6 +342,7 @@ void main() {
         find.byKey(const ValueKey('mobile-material-request-register')),
         findsOneWidget,
       );
+      expect(find.byType(RefreshIndicator), findsOneWidget);
       expect(find.text('All'), findsOneWidget);
       expect(find.text('YRA-322-MR101'), findsOneWidget);
       expect(find.text('Draft'), findsWidgets);
@@ -206,6 +366,34 @@ void main() {
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/mobile_batch3/mr_information_$suffix.png'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('mobile MR Back protects draft progress $suffix', (
+      tester,
+    ) async {
+      await _setViewport(tester, size);
+      await _pumpDraft(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('mobile-mr-title')),
+        'Protected request',
+      );
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Save this material request?'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mr-draft-save-and-leave')),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/mobile_batch3/mr_draft_exit_guard_$suffix.png',
+        ),
       );
       expect(tester.takeException(), isNull);
     });
@@ -292,9 +480,7 @@ void main() {
 
       expect(repository.saveAndSubmitCount, 1);
       expect(
-        find.text(
-          'Your request has been submitted and is now with Procurement.',
-        ),
+        find.text(YorksV1MaterialRequestStrings.serverConfirmed.primary),
         findsOneWidget,
       );
       await expectLater(
@@ -665,7 +851,7 @@ final _submittedRequest = YorksV1MaterialRequest(
   projectName: 'Al Dhafra Grid Substation HVAC Works',
   scopeId: 'scope-common',
   scopeName: 'Common / All Buildings',
-  state: YorksV1MaterialRequestState.submitted,
+  state: YorksV1MaterialRequestState.approvedForArrangement,
   recordVersion: 2,
   createdAt: DateTime.utc(2026, 8, 9),
   updatedAt: DateTime.utc(2026, 8, 9),
@@ -675,6 +861,7 @@ final _submittedRequest = YorksV1MaterialRequest(
   requesterDisplayName: 'Omar Farooq',
   requesterProjectRole: 'Project Engineer',
   currentActionOwnerRole: 'procurement',
+  currentActionCode: 'arrangement_required',
   lines: const [
     YorksV1MaterialRequestLine(
       id: 'submitted-line',
@@ -709,6 +896,43 @@ final _draftRequest = YorksV1MaterialRequest(
 class _MaterialRequestRepositoryFixture
     implements YorksV1MaterialRequestRepository {
   int saveAndSubmitCount = 0;
+  final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
+  List<YorksV1MaterialRequestMention> mentionCandidates = const [];
+  List<YorksV1MaterialRequestInventorySuggestion> inventorySuggestions =
+      const [];
+
+  @override
+  Future<List<YorksV1MaterialRequestComment>> addComment(
+    YorksV1AddMaterialRequestCommentInput input,
+  ) async {
+    addCommentInputs.add(input);
+    return const [];
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> decideRequest(
+    YorksV1DecideMaterialRequestInput input,
+  ) async => _submittedRequest;
+
+  @override
+  Future<List<YorksV1MaterialRequestMention>> listMentionCandidates(
+    String requestId,
+  ) async => mentionCandidates;
+
+  @override
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
+    required String projectId,
+    required String query,
+  }) async => inventorySuggestions
+      .where(
+        (item) => item.description.toLowerCase().contains(query.toLowerCase()),
+      )
+      .toList(growable: false);
+
+  @override
+  Future<YorksV1MaterialRequest> updateForApproval(
+    YorksV1UpdateMaterialRequestForApprovalInput input,
+  ) async => _submittedRequest;
   @override
   Future<YorksV1MaterialRequest> cancel(
     YorksV1CancelMaterialRequestInput input,

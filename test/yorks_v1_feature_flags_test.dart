@@ -16,6 +16,7 @@ void main() {
       expect(flags.excel, false);
       expect(flags.requests, false);
       expect(flags.arrangement, false);
+      expect(flags.legacyArrangementReview, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
@@ -39,6 +40,7 @@ void main() {
       expect(flags.excel, false);
       expect(flags.requests, false);
       expect(flags.arrangement, false);
+      expect(flags.legacyArrangementReview, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
@@ -62,6 +64,7 @@ void main() {
       expect(flags.excel, false);
       expect(flags.requests, false);
       expect(flags.arrangement, false);
+      expect(flags.legacyArrangementReview, false);
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
@@ -86,6 +89,7 @@ void main() {
       expect(flags.excel, true);
       expect(flags.requests, true);
       expect(flags.arrangement, true);
+      expect(flags.legacyArrangementReview, false);
       expect(flags.logistics, true);
       expect(flags.returnsDocuments, true);
       expect(flags.documents, true);
@@ -116,6 +120,7 @@ void main() {
       expect(flags.excel, true);
       expect(flags.requests, true);
       expect(flags.arrangement, true);
+      expect(flags.legacyArrangementReview, false);
       expect(flags.logistics, true);
       expect(flags.returnsDocuments, true);
       expect(flags.documents, true);

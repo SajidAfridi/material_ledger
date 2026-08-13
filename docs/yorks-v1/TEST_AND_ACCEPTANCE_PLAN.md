@@ -27,10 +27,10 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | AT-06 | Whole BOQ group creates an MR draft but Procurement sees nothing until explicit Submit. | RLS/repository/integration |
 | AT-07 | Engineer selects individual BOQ and custom items only from the matching Common/building scope and submits a Scheduled MR. | widget/RPC/integration |
 | AT-08 | MR number is unique and project/requester/header data is automatic. | database concurrency/integration |
-| AT-09 | Procurement arrangement defaults Warehouse, changes one line to supplier, partially supplies one and marks one unavailable with reason. | repository/widget/RPC |
+| AT-09 | Engineering approves the submitted request first; only then Procurement arrangement defaults Warehouse, changes one line to supplier, partially supplies one and marks one unavailable with reason. | repository/widget/RPC |
 | AT-10 | Database rejects arrangement above requested and prevents double reservation. | constraint/concurrency pgTAP |
-| AT-11 | Project Engineer sees crossed unavailable line, partial line and source before approval. | widget/golden/integration |
-| AT-12 | Procurement cannot approve its own arrangement or dispatch before approval. | RPC/RLS negative/integration |
+| AT-11 | Creator and assigned/global Project Engineer can edit a submitted pre-approval request with version/audit protection; Procurement and an unrelated Site Engineer cannot. | widget/RPC/RLS/integration |
+| AT-12 | Procurement cannot approve a request or arrange/dispatch before Engineering approval. | RPC/RLS negative/integration |
 | AT-13 | Dispatch cannot exceed approved outstanding quantity or warehouse availability. | RPC/concurrency |
 | AT-14 | Engineer marks one line Received, one Missing and one Damaged; MR remains partially received. | controller/RPC/integration |
 | AT-15 | Replacement dispatch is possible only for outstanding quantity and cannot over-supply. | RPC/concurrency |
@@ -44,6 +44,11 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | AT-23 | Admin Configuration, Rentals, Users and Audit still load and operate. | regression/widget/smoke |
 | AT-24 | Duct Sizer and ESP Calculator remain available. | widget/smoke |
 | AT-25 | RLS negatives prove Procurement cannot mutate project/BOQ, unrelated assigned-role Engineers cannot access another project, and global Engineer roles receive no commercial/inventory/Admin authority. | six-role pgTAP/API |
+| AT-26 | Authorized MR comments are append-only; @mentions notify once and unauthorized/stale users cannot be mentioned or read the thread. | RPC/RLS/idempotency/widget |
+| AT-27 | Inventory-assisted MR entry returns no commercial/stock fields and fills description, brand, size, model and unit while leaving quantity deliberate. | response-shape/repository/widget |
+| AT-28 | Status, owner and next action match across desktop, mobile and the controlled MR projection for every revised stage. | unit/golden/PDF visual |
+| AT-29 | A confirmed receipt accepts authorized JPEG/PNG site evidence through the document pipeline; pre-confirmation and unrelated-project uploads fail. | Storage/RPC/RLS/widget |
+| AT-30 | An actively assigned Site Engineer can close a fully resolved received MR, Procurement cannot, and tablet/mobile request views recover after suspension through foreground and safety refreshes without clearing the visible projection. | widget/provider/RPC/pgTAP/mobile |
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope

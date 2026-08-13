@@ -164,6 +164,7 @@ YorksV1ArrangementWorkspace _arrangementWorkspace(
 YorksV1LogisticsWorkspace _logisticsWorkspace(YorksV1MaterialRequest request) =>
     YorksV1LogisticsWorkspace(
       requestId: request.id,
+      projectId: request.projectId,
       requestNumber: request.requestNumber ?? '',
       requestState: request.state.wireValue,
       requestRecordVersion: request.recordVersion,

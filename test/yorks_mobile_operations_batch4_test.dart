@@ -83,26 +83,22 @@ void main() {
       await _golden(tester, '31_arrangement_review_$suffix');
     });
 
-    testWidgets('ref32 engineer arrangement approval $suffix', (tester) async {
+    testWidgets('legacy arrangement review is read-only $suffix', (
+      tester,
+    ) async {
       await _setViewport(tester, size);
       await _pumpArrangement(tester, _approvalArrangementWorkspace);
+      expect(
+        find.byKey(const ValueKey('mobile-arrangement-read-only')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('mobile-arrangement-approval')),
-        findsOneWidget,
+        findsNothing,
       );
-      await _golden(tester, '32_arrangement_approval_$suffix');
-    });
-
-    testWidgets('ref33 return arrangement reason $suffix', (tester) async {
-      await _setViewport(tester, size);
-      await _pumpArrangement(tester, _approvalArrangementWorkspace);
-      await tester.tap(find.text('Return'));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('mobile-return-arrangement-reason')),
-        findsOneWidget,
-      );
-      await _golden(tester, '33_arrangement_return_$suffix');
+      expect(find.text('Approve arrangement'), findsNothing);
+      expect(find.text('Return'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('ref34 create dispatch $suffix', (tester) async {
@@ -700,6 +696,7 @@ class _OperationsRepository implements YorksV1LogisticsRepository {
 
 final _dispatchWorkspace = YorksV1LogisticsWorkspace(
   requestId: 'dispatch',
+  projectId: 'project-1',
   requestNumber: 'YRA-322-MR101',
   requestState: 'approved',
   requestRecordVersion: 7,
@@ -765,6 +762,7 @@ final _receiptDispatch = YorksV1MaterialDispatch(
 
 final _receiptWorkspace = YorksV1LogisticsWorkspace(
   requestId: 'receipt',
+  projectId: 'project-1',
   requestNumber: 'YRA-322-MR101',
   requestState: 'dispatched',
   requestRecordVersion: 8,

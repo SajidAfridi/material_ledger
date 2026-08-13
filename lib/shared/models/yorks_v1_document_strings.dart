@@ -274,6 +274,12 @@ String yorksV1DocumentEntityLabel(YorksV1DocumentEntityType entityType) {
       ur: 'ڈسپیچ',
       hi: 'डिस्पैच',
     ),
+    YorksV1DocumentEntityType.receiptReview => const TranslatableString(
+      en: 'Receipt review',
+      ar: 'مراجعة الاستلام',
+      ur: 'وصولی کا جائزہ',
+      hi: 'प्राप्ति समीक्षा',
+    ),
     YorksV1DocumentEntityType.materialReturn => const TranslatableString(
       en: 'Material return',
       ar: 'إرجاع المواد',

@@ -4,6 +4,42 @@ import 'yorks_v1_logistics.dart';
 
 /// Centralized user-facing copy for the Batch 7 warehouse and logistics flow.
 abstract final class YorksV1LogisticsStrings {
+  static const addSitePhoto = TranslatableString(
+    en: 'Add site photo',
+    ar: 'إضافة صورة من الموقع',
+    ur: 'سائٹ کی تصویر شامل کریں',
+    hi: 'साइट की तस्वीर जोड़ें',
+  );
+  static const sitePhotoUploaded = TranslatableString(
+    en: 'Site photo attached',
+    ar: 'تم إرفاق صورة الموقع',
+    ur: 'سائٹ کی تصویر منسلک ہو گئی',
+    hi: 'साइट की तस्वीर संलग्न हो गई',
+  );
+  static const sitePhotoFailed = TranslatableString(
+    en: 'The site photo could not be attached. Please try again.',
+    ar: 'تعذر إرفاق صورة الموقع. يرجى المحاولة مرة أخرى.',
+    ur: 'سائٹ کی تصویر منسلک نہیں ہو سکی۔ دوبارہ کوشش کریں۔',
+    hi: 'साइट की तस्वीर संलग्न नहीं हो सकी। कृपया फिर से प्रयास करें।',
+  );
+  static const receiptConfirmed = TranslatableString(
+    en: 'Receipt confirmed',
+    ar: 'تم تأكيد الاستلام',
+    ur: 'وصولی کی تصدیق ہو گئی',
+    hi: 'प्राप्ति की पुष्टि हो गई',
+  );
+  static const attachPhotoPrompt = TranslatableString(
+    en: 'Would you like to attach a site photo to this confirmed receipt?',
+    ar: 'هل ترغب في إرفاق صورة من الموقع بهذا الاستلام المؤكد؟',
+    ur: 'کیا آپ اس تصدیق شدہ وصولی کے ساتھ سائٹ کی تصویر منسلک کرنا چاہتے ہیں؟',
+    hi: 'क्या आप इस पुष्ट प्राप्ति के साथ साइट की तस्वीर संलग्न करना चाहेंगे?',
+  );
+  static const attachLater = TranslatableString(
+    en: 'Attach later',
+    ar: 'إرفاق لاحقًا',
+    ur: 'بعد میں منسلک کریں',
+    hi: 'बाद में संलग्न करें',
+  );
   static const companyName = YorksV1CompanyDocumentStrings.legalName;
   static const deliveryOrderTitle = TranslatableString(
     en: 'DELIVERY ORDER',

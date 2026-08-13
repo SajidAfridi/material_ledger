@@ -540,10 +540,10 @@ abstract final class YorksV1ProjectStrings {
     hi: 'असाइन नहीं किया गया',
   );
   static const projectTeamDescription = TranslatableString(
-    en: 'Project Engineers approve arrangements and manage Site Engineer access.',
-    ar: 'يعتمد مهندسو المشروع الترتيبات ويديرون وصول مهندسي الموقع.',
-    ur: 'پراجیکٹ انجینئر انتظامات منظور کرتے اور سائٹ انجینئر کی رسائی سنبھالتے ہیں۔',
-    hi: 'प्रोजेक्ट इंजीनियर व्यवस्थाओं को मंज़ूर करते और साइट इंजीनियर की पहुँच प्रबंधित करते हैं।',
+    en: 'Project Engineers approve requests and manage Site Engineer access.',
+    ar: 'يعتمد مهندسو المشروع الطلبات ويديرون وصول مهندسي الموقع.',
+    ur: 'پراجیکٹ انجینئر درخواستیں منظور کرتے اور سائٹ انجینئر کی رسائی سنبھالتے ہیں۔',
+    hi: 'प्रोजेक्ट इंजीनियर अनुरोध स्वीकृत करते और साइट इंजीनियर की पहुँच प्रबंधित करते हैं।',
   );
   static const buildingsDescription = TranslatableString(
     en: 'A request can be for one building or Common / All Buildings.',
@@ -582,10 +582,10 @@ abstract final class YorksV1ProjectStrings {
     hi: 'अनुमति नियम',
   );
   static const projectTeamPermissionDescription = TranslatableString(
-    en: 'Project Engineers approve procurement arrangements and manage the team. Assigned Site Engineers may prepare BOQ items, raise requests and confirm site receipt.',
-    ar: 'يعتمد مهندسو المشروع ترتيبات المشتريات ويديرون الفريق. يمكن لمهندسي الموقع المعيّنين إعداد عناصر جدول الكميات ورفع الطلبات وتأكيد استلام الموقع.',
-    ur: 'پراجیکٹ انجینئر پروکیورمنٹ انتظامات منظور کرتے اور ٹیم منظم کرتے ہیں۔ تفویض شدہ سائٹ انجینئر BOQ آئٹمز تیار، درخواستیں اور سائٹ وصولی کی تصدیق کر سکتے ہیں۔',
-    hi: 'प्रोजेक्ट इंजीनियर खरीद व्यवस्थाओं को मंज़ूर और टीम को प्रबंधित करते हैं। असाइन साइट इंजीनियर BOQ आइटम तैयार, अनुरोध और साइट प्राप्ति की पुष्टि कर सकते हैं।',
+    en: 'Project Engineers approve requests and manage the team. Assigned Site Engineers may prepare BOQ items, raise requests and confirm site receipt.',
+    ar: 'يعتمد مهندسو المشروع الطلبات ويديرون الفريق. يمكن لمهندسي الموقع المعيّنين إعداد عناصر جدول الكميات ورفع الطلبات وتأكيد استلام الموقع.',
+    ur: 'پراجیکٹ انجینئر درخواستیں منظور کرتے اور ٹیم منظم کرتے ہیں۔ تفویض شدہ سائٹ انجینئر BOQ آئٹمز تیار، درخواستیں اور سائٹ وصولی کی تصدیق کر سکتے ہیں۔',
+    hi: 'प्रोजेक्ट इंजीनियर अनुरोध स्वीकृत और टीम को प्रबंधित करते हैं। असाइन साइट इंजीनियर BOQ आइटम तैयार, अनुरोध और साइट प्राप्ति की पुष्टि कर सकते हैं।',
   );
   static const noProjectAccess = TranslatableString(
     en: 'No project access',

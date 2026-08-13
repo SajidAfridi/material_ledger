@@ -23,14 +23,16 @@ records an explicit replacement.
 | From | Command | To | Authority |
 |---|---|---|---|
 | — | Save draft | `draft` | Assigned Project/Site Engineer |
-| `draft` | Submit | `submitted` | Draft creator with active project membership |
-| `submitted` | Begin arrangement | `arranging` | Procurement/Admin |
-| `arranging` | Save arrangement | `awaiting_approval` | Procurement/Admin |
-| `awaiting_approval` | Return for changes | `arranging` | Assigned Project Engineer/Admin; immutable returned decision/comment |
-| `awaiting_approval` | Approve | `approved` | Assigned Project Engineer/Admin |
+| `draft` | Submit/resubmit | `awaiting_request_approval` | Draft creator with active project membership |
+| `awaiting_request_approval` | Edit Engineering intent | `awaiting_request_approval` | Creator or assigned/global Project Engineer/Admin; versioned and audited |
+| `awaiting_request_approval` | Return for changes | `draft` | Assigned/global Project Engineer/Admin; immutable returned decision/reason |
+| `awaiting_request_approval` | Approve request | `approved_for_arrangement` | Assigned/global Project Engineer/Admin |
+| `approved_for_arrangement` | Begin arrangement | `arranging` | Procurement/Admin |
+| `arranging` | Save pre-approved arrangement | `approved` or `closed` | Procurement/Admin |
+| Legacy `awaiting_approval` | Return/approve saved legacy arrangement | `arranging` or `approved` | Assigned/global Project Engineer/Admin; compatibility only |
 | `approved`, `partially_dispatched`, `partially_received` | Dispatch subset | `partially_dispatched` or `dispatched` | Procurement/Admin |
 | `partially_dispatched`, `dispatched`, `partially_received` | Confirm receipt review | `partially_received` or `received` | Assigned Project/Site Engineer/Admin |
-| `received` | Close | `closed` | Project Engineer/Admin when all committed work is resolved |
+| `received` | Close | `closed` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, or Admin when all committed work is resolved |
 | Eligible pre-dispatch state | Cancel | `cancelled` | Policy-defined Project Engineer/Admin with reason |
 
 State labels are not manually editable. Aggregate state is calculated by the
@@ -64,7 +66,7 @@ Only `confirmed` appends an inventory movement.
 |---|---|
 | `requested_qty >= 0` and committed quantities are positive where required | checks plus submit/command validation |
 | `arranged_qty <= requested_qty` | arrangement line check and save RPC |
-| `approved_qty <= arranged_qty` | approval RPC |
+| `approved_qty <= arranged_qty` | pre-approved arrangement save RPC |
 | `good_received_qty + in_transit_qty <= approved_qty` | dispatch and receipt RPCs under locks |
 | Warehouse reserved total cannot exceed available stock | arrangement save RPC under inventory locks |
 | Warehouse dispatch cannot exceed on-hand/available at commit | dispatch RPC under inventory locks |
@@ -91,9 +93,13 @@ tables/functions.
 | `v1_create_boq_group` | BOQ-authorized Engineer/Admin | project/origin scope/name | yes | same custom folder name materialized as independent empty groups in every active real scope; origin projection returned; one audit; no rows copied |
 | `v1_assign_legacy_boq_group_scope` | BOQ-authorized Engineer/Admin | group/version | yes | explicit legacy group-to-real-scope reconciliation, audit; submitted/conflicting history rejected |
 | `v1_submit_material_request` | Assigned Engineer draft creator | draft/project/counter/version | yes | number, snapshots, state, owner, audit/notification |
-| `v1_begin_arrangement` | Procurement/Admin | MR/version | yes | current arrangement work version, `arranging`, audit |
-| `v1_save_arrangement` | Procurement/Admin | MR, arrangement, inventory, reservations | yes | versioned lines, replacement reservations, awaiting approval, audit/notification |
-| `v1_decide_arrangement` | Assigned Project Engineer/Admin | MR/current arrangement/version | yes | approval or return decision, approved snapshots/state, audit/notification |
+| `v1_update_material_request_for_approval` | Creator or assigned/global Project Engineer/Admin | MR/version/line set; no arrangement permitted | yes | replace Engineering snapshot, retain number/submission attribution, audit/notification |
+| `v1_decide_material_request` | Assigned/global Project Engineer/Admin | MR/current Engineering version | yes | immutable approval/return decision, state/owner, exact role, audit/notification |
+| `v1_begin_arrangement` | Procurement/Admin | approved MR/version | yes | current arrangement work version, `arranging`, audit |
+| `v1_save_arrangement` | Procurement/Admin | MR, arrangement, inventory, reservations | yes | versioned lines, replacement reservations, approved snapshots/state, audit/notification |
+| `v1_decide_arrangement` | Assigned/global Project Engineer/Admin | legacy MR/current arrangement/version | yes | compatibility-only approval or return decision; retained history |
+| `v1_add_material_request_comment` | Authorized request participant | MR/text/mention IDs | yes | append-only comment, validated mentions, notifications and audit |
+| `v1_search_material_request_inventory_items` | Authorized Engineering request participant | project/query | no | non-commercial descriptive item suggestions only |
 | `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
 | `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, good/exception totals, state, audit/notification; appends receipt-reviewed Delivery Report revision when a DO exists |
 | `v1_generate_delivery_order` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, Procurement/Admin after committed dispatch | dispatch/current DO revision; optional later review link | yes | immutable dispatch-quantity revision before review, or immutable receipt-reviewed good-quantity Delivery Report revision after review; document link, audit |
@@ -103,7 +109,7 @@ tables/functions.
 | `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
 | `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
 | `v1_cancel_material_request` | Project Engineer/Admin per policy | MR, reservations, dispatch existence | yes | cancel/retain history, release remainder, audit/notification |
-| `v1_close_material_request` | Project Engineer/Admin | MR and all logistics rows | yes | validated closed state, audit |
+| `v1_close_material_request` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, or Admin | MR and all logistics rows | yes | validated closed state, audit |
 | `v1_adjust_inventory` | Procurement/Admin capability | inventory item/version | yes | append-only adjustment movement and derived balance, audit |
 | `v1_inventory_category_suggestions` | Procurement/Admin inventory capability | active category/alias library | no | ranked read-only canonical, alias and advisory fuzzy results |
 | `v1_create_inventory_category` | Procurement/Admin inventory capability | optional active parent family, canonical name | yes | stable category ID/path plus audit; no quantity effect |

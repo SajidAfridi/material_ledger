@@ -7,7 +7,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../models/yorks_v1_boq.dart';
-import '../models/yorks_v1_arrangement_strings.dart';
 import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
@@ -314,6 +313,16 @@ class YorksV1MaterialRequestDocumentService {
                   ? '—'
                   : model.projectEngineerNames.join(', '),
             ),
+            _metaRow(
+              YorksV1MaterialRequestStrings.state.primary,
+              yorksV1MaterialRequestStateCopy(request.state).primary,
+              YorksV1MaterialRequestStrings.currentOwner.primary,
+              request.currentActionOwnerRole == null
+                  ? '—'
+                  : YorksV1ProjectStrings.roleLabel(
+                      request.currentActionOwnerRole!,
+                    ).primary,
+            ),
           ],
         ),
         pw.SizedBox(height: 3 * _mm),
@@ -591,21 +600,21 @@ class YorksV1MaterialRequestDocumentService {
                   request.submittedAt ?? request.createdAt,
                 ),
                 _approvalCell(
-                  YorksV1ArrangementStrings.arrangement.primary,
+                  YorksV1MaterialRequestStrings.procurement.primary,
                   arrangement?.displayName ?? '',
                   _actorRoleLabel(arrangement),
                   arrangement?.actedAt,
                   reference: arrangement?.reference,
                 ),
                 _approvalCell(
-                  YorksV1MaterialRequestStrings.approvedByEngineer.primary,
+                  YorksV1MaterialRequestStrings.approvedBy.primary,
                   approval?.displayName ?? '',
                   _actorRoleLabel(approval),
                   approval?.actedAt,
                   reference: approval?.reference,
                 ),
                 _approvalCell(
-                  YorksV1MaterialRequestStrings.dispatchedByProcurement.primary,
+                  YorksV1MaterialRequestStrings.orderedDispatched.primary,
                   dispatch?.displayName ?? '',
                   _actorRoleLabel(dispatch),
                   dispatch?.actedAt,

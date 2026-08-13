@@ -8,7 +8,7 @@ void main() {
     test('moves Procurement from arrangement to dispatch after approval', () {
       expect(
         yorksV1MaterialRequestDetailPrimaryAction(
-          state: YorksV1MaterialRequestState.submitted,
+          state: YorksV1MaterialRequestState.approvedForArrangement,
           role: YorksV1Role.procurement,
           canArrange: true,
           canDispatch: false,
@@ -82,9 +82,16 @@ void main() {
 
     test('received requests close before optional document actions', () {
       expect(
+        yorksV1CanOfferMaterialRequestClose(
+          state: YorksV1MaterialRequestState.received,
+          role: YorksV1Role.siteEngineer,
+        ),
+        isTrue,
+      );
+      expect(
         yorksV1MaterialRequestDetailPrimaryAction(
           state: YorksV1MaterialRequestState.received,
-          role: YorksV1Role.projectManager,
+          role: YorksV1Role.siteEngineer,
           canArrange: false,
           canDispatch: false,
           canConfirmReceipt: false,
@@ -92,6 +99,13 @@ void main() {
           canClose: true,
         ),
         YorksV1MaterialRequestDetailPrimaryAction.close,
+      );
+      expect(
+        yorksV1CanOfferMaterialRequestClose(
+          state: YorksV1MaterialRequestState.received,
+          role: YorksV1Role.procurement,
+        ),
+        isFalse,
       );
     });
 

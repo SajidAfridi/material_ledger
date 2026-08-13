@@ -982,6 +982,9 @@ class _FakeDocumentFileService implements YorksV1DocumentFileService {
   }
 
   @override
+  Future<YorksV1SelectedDocument?> selectImage() async => null;
+
+  @override
   Future<bool> saveDocument({
     required Uint8List bytes,
     required String fileName,

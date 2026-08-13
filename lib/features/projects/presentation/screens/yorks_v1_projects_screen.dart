@@ -712,12 +712,12 @@ class _ProcurementWorkflowStrip extends StatelessWidget {
             YorksV1ShellStrings.requestStepDescription.primary,
           ),
           (
-            YorksV1ShellStrings.arrange.primary,
-            YorksV1ShellStrings.arrangeStepDescription.primary,
-          ),
-          (
             YorksV1ShellStrings.approve.primary,
             YorksV1ShellStrings.approveStepDescription.primary,
+          ),
+          (
+            YorksV1ShellStrings.arrange.primary,
+            YorksV1ShellStrings.arrangeStepDescription.primary,
           ),
           (
             YorksV1ShellStrings.dispatch.primary,
@@ -1668,10 +1668,13 @@ class _OverviewRetry extends StatelessWidget {
 NexusStatusTone _requestTone(YorksV1MaterialRequestState state) {
   switch (state) {
     case YorksV1MaterialRequestState.approved:
+    case YorksV1MaterialRequestState.approvedForArrangement:
     case YorksV1MaterialRequestState.received:
     case YorksV1MaterialRequestState.closed:
       return NexusStatusTone.success;
     case YorksV1MaterialRequestState.awaitingApproval:
+    case YorksV1MaterialRequestState.awaitingRequestApproval:
+    case YorksV1MaterialRequestState.changesRequested:
     case YorksV1MaterialRequestState.partiallyDispatched:
     case YorksV1MaterialRequestState.dispatched:
     case YorksV1MaterialRequestState.partiallyReceived:
