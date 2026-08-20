@@ -26,14 +26,14 @@ select ok(
     = '41000000-0000-4000-8000-000000000001'
   and (select name from public.v1_inventory_categories
        where id = '41000000-0000-4000-8000-000000000002') = 'Round',
-  'The exact seeded Round category keeps its ID and gains the Air Terminals family'
+  'The exact seeded Round category keeps its ID and gains the Air Inlet & Outlet family'
 );
 
 select is(
   (public.v1_inventory_category_projection(
     '41000000-0000-4000-8000-000000000002'
   ) ->> 'display_path'),
-  'Air Terminals › Round',
+  'Air Inlet & Outlet › Round',
   'The category projection returns the approved one-level display path'
 );
 
@@ -65,12 +65,12 @@ select set_config(
 select is(
   (public.v1_inventory_category_suggestions('round ac terminal', 8)
     -> 0 ->> 'display_path'),
-  'Air Terminals › Round',
+  'Air Inlet & Outlet › Round',
   'An exact saved alias resolves to its canonical family path'
 );
 select ok(
   (public.v1_inventory_category_suggestions('round air outlet', 8)
-    -> 0 ->> 'display_path') = 'Air Terminals › Round'
+    -> 0 ->> 'display_path') = 'Air Inlet & Outlet › Round'
   and (public.v1_inventory_category_suggestions('round air outlet', 8)
     -> 0 ->> 'match_kind') = 'related'
   and (public.v1_inventory_category_suggestions('round air outlet', 8)

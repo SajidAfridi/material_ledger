@@ -426,23 +426,23 @@ void main() {
     },
   );
 
-  test(
-    'the embedded download is the exact readable six-sheet R38.9 workbook',
-    () {
+  test('the embedded download is the streamlined readable Yorks workbook', () {
       final bytes = Uint8List.fromList(
         base64Decode(yorksV1InventoryWorkbookTemplateBase64),
       );
-      expect(bytes.lengthInBytes, 29850);
+      expect(bytes.lengthInBytes, greaterThan(10000));
       final workbook = const YorksV1BoqWorkbookCodec().decode(
         fileName: 'Yorks_Warehouse_Inventory_Import_Template.xlsx',
         bytes: bytes,
       );
-      expect(workbook.sheets, hasLength(6));
+      expect(workbook.sheets, hasLength(5));
       expect(workbook.sheets.first.name, 'Inventory Import');
-      final importHeaders = workbook.sheets.first.rows[3];
+      final importHeaders = workbook.sheets.first.rows[4];
       expect(importHeaders, contains('Item Description *'));
-      expect(importHeaders, contains('Source Type *'));
+      expect(importHeaders, isNot(contains('Source Type')));
+      expect(importHeaders, isNot(contains('Reason')));
       expect(importHeaders, contains('External Supplier Name'));
+      expect(importHeaders, contains('Notes'));
     },
   );
 

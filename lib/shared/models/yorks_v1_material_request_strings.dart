@@ -108,6 +108,264 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'انجینئر اور پروکیورمنٹ ایک ہی درخواست نمبر، آئٹم ترتیب اور حالت دیکھتے ہیں۔',
     hi: 'इंजीनियर और खरीद विभाग को वही अनुरोध संख्या, आइटम क्रम और स्थिति दिखाई देती है।',
   );
+  static const materialRequestCentre = TranslatableString(
+    en: 'Material Request Centre',
+    ar: 'مركز طلبات المواد',
+    ur: 'میٹیریل ریکویسٹ سینٹر',
+    hi: 'सामग्री अनुरोध केंद्र',
+  );
+  static const materialRequestCentreDescription = TranslatableString(
+    en: 'Manage and track material requests across all authorized projects.',
+    ar: 'إدارة وتتبع طلبات المواد عبر جميع المشاريع المصرح بها.',
+    ur: 'تمام مجاز پراجیکٹس میں میٹیریل ریکویسٹس کا انتظام اور ٹریکنگ کریں۔',
+    hi: 'सभी अधिकृत परियोजनाओं में सामग्री अनुरोधों का प्रबंधन और ट्रैक करें।',
+  );
+  static const totalRequests = TranslatableString(
+    en: 'Total Requests',
+    ar: 'إجمالي الطلبات',
+    ur: 'کل درخواستیں',
+    hi: 'कुल अनुरोध',
+  );
+  static const activeRequests = TranslatableString(
+    en: 'Active Requests',
+    ar: 'الطلبات النشطة',
+    ur: 'فعال درخواستیں',
+    hi: 'सक्रिय अनुरोध',
+  );
+  static const awaitingApprovalMetric = TranslatableString(
+    en: 'Awaiting Approval',
+    ar: 'بانتظار الموافقة',
+    ur: 'منظوری کا انتظار',
+    hi: 'अनुमोदन की प्रतीक्षा',
+  );
+  static const procurementQueue = TranslatableString(
+    en: 'Procurement',
+    ar: 'المشتريات',
+    ur: 'پروکیورمنٹ',
+    hi: 'खरीद',
+  );
+  static const inArrangement = TranslatableString(
+    en: 'In arrangement',
+    ar: 'قيد الترتيب',
+    ur: 'انتظام میں',
+    hi: 'व्यवस्था में',
+  );
+  static const dispatchedMetric = TranslatableString(
+    en: 'Dispatched',
+    ar: 'تم الإرسال',
+    ur: 'بھیجا گیا',
+    hi: 'डिस्पैच किया गया',
+  );
+  static const onTheWay = TranslatableString(
+    en: 'On the way',
+    ar: 'في الطريق',
+    ur: 'راستے میں',
+    hi: 'रास्ते में',
+  );
+  static const receivedMetric = TranslatableString(
+    en: 'Received',
+    ar: 'تم الاستلام',
+    ur: 'وصول شدہ',
+    hi: 'प्राप्त',
+  );
+  static const atSiteOrWarehouse = TranslatableString(
+    en: 'At site / warehouse',
+    ar: 'في الموقع / المستودع',
+    ur: 'سائٹ / گودام پر',
+    hi: 'साइट / गोदाम में',
+  );
+  static const closedMetric = TranslatableString(
+    en: 'Closed',
+    ar: 'مغلق',
+    ur: 'بند',
+    hi: 'बंद',
+  );
+  static const completed = TranslatableString(
+    en: 'Completed',
+    ar: 'مكتمل',
+    ur: 'مکمل',
+    hi: 'पूर्ण',
+  );
+  static const projectFolders = TranslatableString(
+    en: 'Project Folders',
+    ar: 'مجلدات المشاريع',
+    ur: 'پراجیکٹ فولڈرز',
+    hi: 'परियोजना फ़ोल्डर',
+  );
+  static const allRequests = TranslatableString(
+    en: 'All Requests',
+    ar: 'كل الطلبات',
+    ur: 'تمام درخواستیں',
+    hi: 'सभी अनुरोध',
+  );
+  static const attentionRequired = TranslatableString(
+    en: 'Attention Required',
+    ar: 'يتطلب اهتمامًا',
+    ur: 'توجہ درکار',
+    hi: 'ध्यान आवश्यक',
+  );
+  static const closedArchive = TranslatableString(
+    en: 'Closed Archive',
+    ar: 'أرشيف الطلبات المغلقة',
+    ur: 'بند شدہ آرکائیو',
+    hi: 'बंद संग्रह',
+  );
+  static const searchRequests = TranslatableString(
+    en: 'Search projects, requests, items…',
+    ar: 'ابحث في المشاريع والطلبات والمواد…',
+    ur: 'پراجیکٹس، درخواستیں، آئٹمز تلاش کریں…',
+    hi: 'परियोजनाएं, अनुरोध, आइटम खोजें…',
+  );
+  static const searchProjects = TranslatableString(
+    en: 'Search projects…',
+    ar: 'ابحث في المشاريع…',
+    ur: 'پراجیکٹس تلاش کریں…',
+    hi: 'परियोजनाएं खोजें…',
+  );
+  static const sortBy = TranslatableString(
+    en: 'Sort by',
+    ar: 'ترتيب حسب',
+    ur: 'ترتیب',
+    hi: 'इसके अनुसार क्रमबद्ध करें',
+  );
+  static const latestActivity = TranslatableString(
+    en: 'Latest Activity',
+    ar: 'أحدث نشاط',
+    ur: 'تازہ ترین سرگرمی',
+    hi: 'नवीनतम गतिविधि',
+  );
+  static const oldestActivity = TranslatableString(
+    en: 'Oldest Activity',
+    ar: 'أقدم نشاط',
+    ur: 'قدیم ترین سرگرمی',
+    hi: 'सबसे पुरानी गतिविधि',
+  );
+  static const filters = TranslatableString(
+    en: 'Filters',
+    ar: 'عوامل التصفية',
+    ur: 'فلٹرز',
+    hi: 'फ़िल्टर',
+  );
+  static const clearAll = TranslatableString(
+    en: 'Clear all',
+    ar: 'مسح الكل',
+    ur: 'سب صاف کریں',
+    hi: 'सभी साफ़ करें',
+  );
+  static const allStatuses = TranslatableString(
+    en: 'All statuses',
+    ar: 'كل الحالات',
+    ur: 'تمام اسٹیٹس',
+    hi: 'सभी स्थितियां',
+  );
+  static const allProjects = TranslatableString(
+    en: 'All projects',
+    ar: 'كل المشاريع',
+    ur: 'تمام پراجیکٹس',
+    hi: 'सभी परियोजनाएं',
+  );
+  static const allBuildings = TranslatableString(
+    en: 'All buildings',
+    ar: 'كل المباني',
+    ur: 'تمام عمارتیں',
+    hi: 'सभी भवन',
+  );
+  static const allUsers = TranslatableString(
+    en: 'All users',
+    ar: 'كل المستخدمين',
+    ur: 'تمام صارفین',
+    hi: 'सभी उपयोगकर्ता',
+  );
+  static const dateRange = TranslatableString(
+    en: 'Date range',
+    ar: 'النطاق الزمني',
+    ur: 'تاریخ کی حد',
+    hi: 'तारीख सीमा',
+  );
+  static const allTime = TranslatableString(
+    en: 'All time',
+    ar: 'كل الوقت',
+    ur: 'تمام وقت',
+    hi: 'हर समय',
+  );
+  static const last7Days = TranslatableString(
+    en: 'Last 7 days',
+    ar: 'آخر 7 أيام',
+    ur: 'گزشتہ 7 دن',
+    hi: 'पिछले 7 दिन',
+  );
+  static const last30Days = TranslatableString(
+    en: 'Last 30 days',
+    ar: 'آخر 30 يومًا',
+    ur: 'گزشتہ 30 دن',
+    hi: 'पिछले 30 दिन',
+  );
+  static const applyFilters = TranslatableString(
+    en: 'Apply filters',
+    ar: 'تطبيق عوامل التصفية',
+    ur: 'فلٹرز لاگو کریں',
+    hi: 'फ़िल्टर लागू करें',
+  );
+  static const latestRequest = TranslatableString(
+    en: 'Latest Request',
+    ar: 'أحدث طلب',
+    ur: 'تازہ ترین درخواست',
+    hi: 'नवीनतम अनुरोध',
+  );
+  static const currentWorkflowAction = TranslatableString(
+    en: 'Current workflow action',
+    ar: 'إجراء سير العمل الحالي',
+    ur: 'موجودہ ورک فلو ایکشن',
+    hi: 'वर्तमान कार्यप्रवाह क्रिया',
+  );
+  static const scopes = TranslatableString(
+    en: 'Scopes',
+    ar: 'النطاقات',
+    ur: 'اسکوپس',
+    hi: 'दायरे',
+  );
+  static const active = TranslatableString(
+    en: 'Active',
+    ar: 'نشط',
+    ur: 'فعال',
+    hi: 'सक्रिय',
+  );
+  static const updated = TranslatableString(
+    en: 'Updated',
+    ar: 'تم التحديث',
+    ur: 'اپ ڈیٹ',
+    hi: 'अपडेट किया गया',
+  );
+  static const noMatchingRequests = TranslatableString(
+    en: 'No requests match these filters.',
+    ar: 'لا توجد طلبات تطابق عوامل التصفية هذه.',
+    ur: 'ان فلٹرز سے کوئی درخواست مطابقت نہیں رکھتی۔',
+    hi: 'इन फ़िल्टरों से कोई अनुरोध मेल नहीं खाता।',
+  );
+  static const gridView = TranslatableString(
+    en: 'Grid view',
+    ar: 'عرض شبكي',
+    ur: 'گرڈ ویو',
+    hi: 'ग्रिड दृश्य',
+  );
+  static const listView = TranslatableString(
+    en: 'List view',
+    ar: 'عرض قائمة',
+    ur: 'فہرست ویو',
+    hi: 'सूची दृश्य',
+  );
+  static TranslatableString itemsCount(int count) => TranslatableString(
+    en: '$count items',
+    ar: '$count بنود',
+    ur: '$count آئٹمز',
+    hi: '$count आइटम',
+  );
+  static TranslatableString scopesCount(int count) => TranslatableString(
+    en: '$count scopes',
+    ar: '$count نطاقات',
+    ur: '$count اسکوپس',
+    hi: '$count दायरे',
+  );
   static const workflowDescription = TranslatableString(
     en: 'Created → Engineering approval → Procurement arrangement → Dispatch → Site receipt → Completion.',
     ar: 'الإنشاء ← موافقة الهندسة ← ترتيب المشتريات ← الإرسال ← استلام الموقع ← الإكمال.',

@@ -26,8 +26,8 @@ select ok(
 
 select is(
   (select count(*)::integer from public.v1_inventory_categories where is_system),
-  23,
-  'The approved Yorks and R38.9 workbook categories are seeded exactly once'
+  24,
+  'The approved Yorks inventory categories are seeded exactly once'
 );
 
 select ok(
@@ -35,13 +35,13 @@ select ok(
     select count(*) = 10
     from public.v1_inventory_categories
     where is_system and name in (
-      'Air Terminals', 'AC Unit Parts', 'Dampers & Fire Control',
-      'Electrical & Controls', 'Fans & Equipment',
-      'Ductwork & Accessories', 'Piping & Drain',
-      'Supports & Insulation', 'Tools & Consumables', 'General Items'
+      'Air Inlet & Outlet', 'AC Unit Parts', 'Dampers & Fire Control',
+      'Electrical & Controls', 'Fans & Ventilation', 'Ducting Materials',
+      'Piping & Drain', 'Supports & Insulation', 'Tools & Equipment',
+      'General Items'
     )
   ),
-  'Every canonical category printed in the R38.9 workbook is pre-seeded'
+  'The Yorks controlled category vocabulary is pre-seeded'
 );
 
 select ok(

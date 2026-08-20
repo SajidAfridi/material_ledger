@@ -193,7 +193,7 @@ void main() {
   });
 
   testWidgets(
-    'legacy workbook requires explicit Opening Balance, unit, and date review',
+    'legacy workbook requires explicit Opening Balance and date review',
     (tester) async {
       await _setViewport(tester, const Size(390, 900));
       const fileService = _LegacyOpeningBalanceFileService();
@@ -217,17 +217,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(controller.state.requiresOpeningBalanceAsOfDate, isTrue);
-      expect(controller.state.unresolvedUnitGroups, hasLength(1));
+      expect(controller.state.unresolvedUnitGroups, isEmpty);
       expect(
         find.byKey(const ValueKey('inventory-import-opening-balance-date')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('inventory-import-unit-resolution-list')),
-        findsOneWidget,
-      );
-
-      controller.resolveUnit(sourceUnitText: 'Pack', controlledUnit: 'Box');
       controller.setOpeningBalanceAsOfDate('2026-08-20');
       await tester.pumpAndSettle();
       expect(controller.state.unresolvedUnitGroups, isEmpty);

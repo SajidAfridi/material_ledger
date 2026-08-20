@@ -116,7 +116,7 @@ class YorksV1PlatformInventoryWorkbookFileService
   @override
   Future<bool> saveImportTemplate() => _save(
     bytes: base64Decode(yorksV1InventoryWorkbookTemplateBase64),
-    name: 'Yorks_Warehouse_Inventory_Import_Template_R38_9.xlsx',
+    name: 'Yorks_Warehouse_Inventory_Import_Template.xlsx',
     type: _xlsx,
     mimeType: _xlsxMime,
   );
@@ -433,11 +433,9 @@ class YorksV1PlatformInventoryWorkbookFileService
     'Serial No',
     'Brand / Origin',
     'RAL Colour',
-    'Source Type *',
     'Stock Action *',
     'Quantity *',
     'Unit *',
-    'Reason *',
     'Minimum Stock',
     'Location / Shelf',
     'External Supplier Name',
@@ -466,11 +464,9 @@ class YorksV1PlatformInventoryWorkbookFileService
     row.serialNumber,
     row.brandOrigin,
     row.ralColour,
-    row.sourceType?.displayName ?? row.rawSourceType,
     row.stockAction?.displayName ?? '',
     row.quantity,
     row.unit,
-    row.reason,
     row.minimumStock,
     row.locationBin,
     row.canonicalSupplierName ?? row.newSupplierName ?? row.supplierSourceText,
@@ -1813,6 +1809,28 @@ class YorksV1InventoryWorkbookCodec {
           mapping.treatWorkbookAsOpeningBalance &&
           YorksV1InventoryStockAction.parse(rawAction) ==
               YorksV1InventoryStockAction.addStock;
+      final effectiveAction = normalizeOpeningAction
+          ? 'Opening Balance'
+          : rawAction;
+      final declaredSourceType = raw(
+        YorksV1InventoryControlledField.sourceType,
+      ).trim();
+      final inferredSourceType = _sourceTypeForStockAction(
+        YorksV1InventoryStockAction.parse(effectiveAction),
+      );
+      final action = YorksV1InventoryStockAction.parse(effectiveAction);
+      final suppliedReason = effective(
+        YorksV1InventoryControlledField.reason,
+      ).trim();
+      final notes = effective(YorksV1InventoryControlledField.notes).trim();
+      final controlledReason = switch (action) {
+        YorksV1InventoryStockAction.openingBalance =>
+          'Inventory import: Opening Balance',
+        YorksV1InventoryStockAction.addStock => 'Inventory import: Add Stock',
+        YorksV1InventoryStockAction.noStockChange =>
+          'Inventory import: No Stock Change',
+        _ => '',
+      };
 
       rows.add(
         _RawInventoryRow(
@@ -1830,17 +1848,21 @@ class YorksV1InventoryWorkbookCodec {
           unit: mappedUnit ?? rawUnit,
           rawUnit: rawUnit,
           unitWasMapped: mappedUnit != null,
-          action: normalizeOpeningAction ? 'Opening Balance' : rawAction,
+          action: effectiveAction,
           stockActionWasNormalized: normalizeOpeningAction,
           quantity: raw(YorksV1InventoryControlledField.quantity).trim(),
-          reason: effective(YorksV1InventoryControlledField.reason).trim(),
+          reason: suppliedReason.isNotEmpty
+              ? suppliedReason
+              : notes.isNotEmpty
+              ? notes
+              : controlledReason,
           minimumStock: effective(
             YorksV1InventoryControlledField.minimumStock,
           ).trim(),
           locationBin: effective(
             YorksV1InventoryControlledField.locationShelf,
           ).trim(),
-          notes: effective(YorksV1InventoryControlledField.notes).trim(),
+          notes: notes,
           sizeText: effective(YorksV1InventoryControlledField.sizeText).trim(),
           modelTag: effective(YorksV1InventoryControlledField.modelTag).trim(),
           serialNumber: effective(
@@ -1849,9 +1871,9 @@ class YorksV1InventoryWorkbookCodec {
           ralColour: effective(
             YorksV1InventoryControlledField.ralColour,
           ).trim(),
-          sourceType: mapping.treatWorkbookAsOpeningBalance
-              ? 'Opening Balance'
-              : raw(YorksV1InventoryControlledField.sourceType),
+          sourceType: declaredSourceType.isNotEmpty
+              ? declaredSourceType
+              : inferredSourceType?.displayName ?? '',
           sourceTypeWasDefaulted: mapping.treatWorkbookAsOpeningBalance,
           supplierName: effective(
             YorksV1InventoryControlledField.externalSupplierName,
@@ -1953,6 +1975,7 @@ class YorksV1InventoryWorkbookCodec {
             suppliersByKey: suppliersByKey,
             supplierSuggestionCache: supplierSuggestionCache,
             hasR38_9SourceType:
+                mapping.requiresR38_9Fields ||
                 mapping.treatWorkbookAsOpeningBalance ||
                 mapping.indexes.containsKey(
                   YorksV1InventoryControlledField.sourceType,
@@ -2246,16 +2269,9 @@ class YorksV1InventoryWorkbookCodec {
         ),
       );
     }
-    if (hasR38_9SourceType && row.sourceType.trim().isEmpty) {
-      issues.add(
-        const YorksV1InventoryImportIssue(
-          code: YorksV1InventoryImportIssueCode.sourceTypeRequired,
-        ),
-      );
-    } else if (hasR38_9SourceType &&
-        (sourceType == null ||
-            (sourceType != YorksV1InventorySourceType.openingBalance &&
-                sourceType != YorksV1InventorySourceType.externalSupplier))) {
+    final expectedSourceType = _sourceTypeForStockAction(action);
+    if (hasR38_9SourceType &&
+        (sourceType == null || sourceType != expectedSourceType)) {
       issues.add(
         const YorksV1InventoryImportIssue(
           code: YorksV1InventoryImportIssueCode.sourceTypeInvalid,
@@ -2263,17 +2279,8 @@ class YorksV1InventoryWorkbookCodec {
       );
     }
     if (hasR38_9SourceType &&
-        sourceType == YorksV1InventorySourceType.openingBalance &&
-        action != YorksV1InventoryStockAction.openingBalance) {
-      issues.add(
-        const YorksV1InventoryImportIssue(
-          code: YorksV1InventoryImportIssueCode.sourceActionMismatch,
-        ),
-      );
-    }
-    if (hasR38_9SourceType &&
-        sourceType == YorksV1InventorySourceType.externalSupplier &&
-        action != YorksV1InventoryStockAction.addStock) {
+        expectedSourceType != null &&
+        sourceType != expectedSourceType) {
       issues.add(
         const YorksV1InventoryImportIssue(
           code: YorksV1InventoryImportIssueCode.sourceActionMismatch,
@@ -2330,7 +2337,11 @@ class YorksV1InventoryWorkbookCodec {
         ),
       );
     }
-    if (row.reason.isEmpty) {
+    final requiresUserReason =
+        action == YorksV1InventoryStockAction.removeStock ||
+        action == YorksV1InventoryStockAction.correctionIncrease ||
+        action == YorksV1InventoryStockAction.correctionDecrease;
+    if (requiresUserReason && row.reason.isEmpty) {
       issues.add(
         const YorksV1InventoryImportIssue(
           code: YorksV1InventoryImportIssueCode.reasonRequired,
@@ -2367,6 +2378,7 @@ class YorksV1InventoryWorkbookCodec {
       );
     }
     if ((action == YorksV1InventoryStockAction.removeStock ||
+            action == YorksV1InventoryStockAction.correctionIncrease ||
             action == YorksV1InventoryStockAction.correctionDecrease) &&
         item == null) {
       issues.add(
@@ -2454,7 +2466,9 @@ class YorksV1InventoryWorkbookCodec {
     YorksV1InventorySupplierResolution? supplierResolution;
     var requiresSupplierDecision = false;
     List<YorksV1InventorySupplierSuggestion> supplierSuggestions = const [];
-    if (hasR38_9SourceType) {
+    if (hasR38_9SourceType &&
+        (action == YorksV1InventoryStockAction.openingBalance ||
+            action == YorksV1InventoryStockAction.addStock)) {
       final sourceSupplier = row.supplierName.trim();
       if (yorksV1InventoryIsUnknownSupplierText(sourceSupplier)) {
         supplierId = yorksV1UnknownSupplierId;
@@ -2660,6 +2674,22 @@ class YorksV1InventoryWorkbookCodec {
       '${yorksV1InventorySearchKey(description)}|'
       '${yorksV1InventorySearchKey(brand)}|'
       '${yorksV1InventorySearchKey(unit)}';
+
+  static YorksV1InventorySourceType? _sourceTypeForStockAction(
+    YorksV1InventoryStockAction? action,
+  ) => switch (action) {
+    YorksV1InventoryStockAction.openingBalance =>
+      YorksV1InventorySourceType.openingBalance,
+    YorksV1InventoryStockAction.addStock =>
+      YorksV1InventorySourceType.externalSupplier,
+    YorksV1InventoryStockAction.removeStock ||
+    YorksV1InventoryStockAction.correctionIncrease ||
+    YorksV1InventoryStockAction.correctionDecrease =>
+      YorksV1InventorySourceType.correction,
+    YorksV1InventoryStockAction.noStockChange =>
+      YorksV1InventorySourceType.noStockChange,
+    null => null,
+  };
 
   static String _receiptLineIdentity(_RawInventoryRow row) => [
     yorksV1InventorySearchKey(row.itemCode).isNotEmpty
