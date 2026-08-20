@@ -17,6 +17,7 @@ import '../shared/services/app_config_service.dart';
 import '../shared/sync/realtime_sync.dart';
 import '../shared/sync/sync_engine.dart';
 import '../shared/widgets/notification_alert_host.dart';
+import '../shared/widgets/notification_attention_host.dart';
 import 'document_expiry_monitor.dart';
 import 'idle_request_monitor.dart';
 import 'push_bridge.dart';
@@ -150,8 +151,9 @@ class MaterialLedgerApp extends ConsumerWidget {
       routerConfig: router,
       // Overlay the lock screen above whatever is on screen (preserves
       // navigation), and reset the idle timer on any interaction.
-      builder: (context, child) =>
-          NotificationAlertHost(child: _AppChrome(child: child)),
+      builder: (context, child) => NotificationAttentionHost(
+        child: NotificationAlertHost(child: _AppChrome(child: child)),
+      ),
     );
   }
 }

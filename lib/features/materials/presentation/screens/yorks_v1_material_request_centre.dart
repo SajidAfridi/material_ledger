@@ -22,6 +22,7 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     required this.canCreate,
     required this.onCreate,
     required this.onOpen,
+    required this.onOpenProject,
     required this.onRefresh,
     this.localDraftNotice,
     this.fixedProjectId,
@@ -32,6 +33,7 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
   final bool canCreate;
   final VoidCallback onCreate;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<String> onOpenProject;
   final VoidCallback onRefresh;
   final Widget? localDraftNotice;
   final String? fixedProjectId;
@@ -54,7 +56,7 @@ class _YorksV1MaterialRequestCentreState
     extends State<YorksV1MaterialRequestCentre> {
   static const _allSelection = '__all__';
   final _searchController = TextEditingController();
-  _MaterialRequestCentreTab _tab = _MaterialRequestCentreTab.projectFolders;
+  _MaterialRequestCentreTab _tab = _MaterialRequestCentreTab.allRequests;
   _MaterialRequestCentreDateRange _dateRange =
       _MaterialRequestCentreDateRange.allTime;
   String _status = _allSelection;
@@ -138,6 +140,7 @@ class _YorksV1MaterialRequestCentreState
                   page: _page,
                   onPageChanged: (value) => setState(() => _page = value),
                   onOpen: widget.onOpen,
+                  onOpenProject: widget.onOpenProject,
                 ),
               ),
               const SizedBox(width: AppSpacing.lg),
@@ -212,6 +215,7 @@ class _YorksV1MaterialRequestCentreState
             page: _page,
             onPageChanged: (value) => setState(() => _page = value),
             onOpen: widget.onOpen,
+            onOpenProject: widget.onOpenProject,
           ),
           const SizedBox(height: AppSpacing.md),
           _RecentActivityCard(
@@ -689,6 +693,9 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _MainCentrePanel extends StatelessWidget {
+  static const _folderPageSize = 10;
+  static const _requestPageSize = 15;
+
   const _MainCentrePanel({
     required this.language,
     required this.tab,
@@ -704,6 +711,7 @@ class _MainCentrePanel extends StatelessWidget {
     required this.page,
     required this.onPageChanged,
     required this.onOpen,
+    required this.onOpenProject,
   });
 
   final AppLanguage language;
@@ -720,15 +728,19 @@ class _MainCentrePanel extends StatelessWidget {
   final int page;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<String> onOpenProject;
 
   @override
   Widget build(BuildContext context) {
     final isFolderTab = tab == _MaterialRequestCentreTab.projectFolders;
     final totalItems = isFolderTab ? folders.length : requests.length;
-    final pageCount = totalItems == 0 ? 1 : (totalItems + 4) ~/ 5;
+    final pageSize = isFolderTab ? _folderPageSize : _requestPageSize;
+    final pageCount = totalItems == 0
+        ? 1
+        : (totalItems + pageSize - 1) ~/ pageSize;
     final currentPage = page.clamp(0, pageCount - 1);
-    final start = currentPage * 5;
-    final end = (start + 5).clamp(0, totalItems);
+    final start = currentPage * pageSize;
+    final end = (start + pageSize).clamp(0, totalItems);
     final pageFolders = isFolderTab
         ? folders.sublist(start, end)
         : const <_ProjectRequestFolder>[];
@@ -851,7 +863,7 @@ class _MainCentrePanel extends StatelessWidget {
                     folders: pageFolders,
                     grid: folderGrid,
                     language: language,
-                    onOpen: onOpen,
+                    onOpenProject: onOpenProject,
                   )
                 : _RequestResults(
                     requests: pageRequests,
@@ -865,6 +877,7 @@ class _MainCentrePanel extends StatelessWidget {
               currentPage: currentPage,
               pageCount: pageCount,
               totalItems: totalItems,
+              pageSize: pageSize,
               onChanged: onPageChanged,
             ),
         ],
@@ -1046,13 +1059,13 @@ class _ProjectFolderResults extends StatelessWidget {
     required this.folders,
     required this.grid,
     required this.language,
-    required this.onOpen,
+    required this.onOpenProject,
   });
 
   final List<_ProjectRequestFolder> folders;
   final bool grid;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<String> onOpenProject;
 
   @override
   Widget build(BuildContext context) {
@@ -1063,7 +1076,7 @@ class _ProjectFolderResults extends StatelessWidget {
             _ProjectFolderCard(
               folder: folders[index],
               language: language,
-              onOpen: onOpen,
+              onOpenProject: onOpenProject,
             ),
             if (index != folders.length - 1)
               const SizedBox(height: AppSpacing.sm),
@@ -1087,7 +1100,7 @@ class _ProjectFolderResults extends StatelessWidget {
                 child: _ProjectFolderCard(
                   folder: folder,
                   language: language,
-                  onOpen: onOpen,
+                  onOpenProject: onOpenProject,
                   compact: true,
                 ),
               ),
@@ -1102,13 +1115,13 @@ class _ProjectFolderCard extends StatelessWidget {
   const _ProjectFolderCard({
     required this.folder,
     required this.language,
-    required this.onOpen,
+    required this.onOpenProject,
     this.compact = false,
   });
 
   final _ProjectRequestFolder folder;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final ValueChanged<String> onOpenProject;
   final bool compact;
 
   @override
@@ -1117,7 +1130,7 @@ class _ProjectFolderCard extends StatelessWidget {
     borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
     child: InkWell(
       key: ValueKey('material-request-project-${folder.id}'),
-      onTap: () => onOpen(folder.latest),
+      onTap: () => onOpenProject(folder.id),
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -1381,11 +1394,12 @@ class _RequestCentreRow extends StatelessWidget {
           border: Border.all(color: AppColors.line),
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 640;
+            final identity = Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: AppColors.blueContainer,
                 borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -1394,51 +1408,89 @@ class _RequestCentreRow extends StatelessWidget {
                 Icons.description_outlined,
                 color: AppColors.blue,
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
+            );
+            final details = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.requestNumber ??
+                      YorksV1MaterialRequestStrings.draft.active(language),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.blue,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  request.projectName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.titleSmall.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.18,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.lines.length).active(language)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            );
+            final state = _CentreStatePill(
+              request: request,
+              language: language,
+            );
+            if (compact) {
+              return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    request.requestNumber ??
-                        YorksV1MaterialRequestStrings.draft.active(language),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    request.title?.trim().isNotEmpty == true
-                        ? request.title!
-                        : request.projectName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.titleSmall.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.lines.length).active(language)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
-                    ),
+                  identity,
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: details),
+                  const SizedBox(width: AppSpacing.sm),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      state,
+                      const SizedBox(height: AppSpacing.xs),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.muted,
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: _CentreStatePill(request: request, language: language),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-          ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                identity,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(child: details),
+                const SizedBox(width: AppSpacing.lg),
+                SizedBox(
+                  width: 144,
+                  child: Align(alignment: Alignment.centerLeft, child: state),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const SizedBox(
+                  width: AppSpacing.minTapTarget,
+                  height: AppSpacing.minTapTarget,
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     ),
@@ -1524,6 +1576,7 @@ class _Pagination extends StatelessWidget {
     required this.currentPage,
     required this.pageCount,
     required this.totalItems,
+    required this.pageSize,
     required this.onChanged,
   });
 
@@ -1531,6 +1584,7 @@ class _Pagination extends StatelessWidget {
   final int currentPage;
   final int pageCount;
   final int totalItems;
+  final int pageSize;
   final ValueChanged<int> onChanged;
 
   @override
@@ -1545,11 +1599,12 @@ class _Pagination extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            '${currentPage * 5 + 1}–${((currentPage + 1) * 5).clamp(0, totalItems)} / $totalItems',
+            '${currentPage * pageSize + 1}–${((currentPage + 1) * pageSize).clamp(0, totalItems)} / $totalItems',
             style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
           ),
         ),
         IconButton(
+          key: const ValueKey('material-request-centre-page-previous'),
           tooltip: MaterialLocalizations.of(context).previousPageTooltip,
           onPressed: currentPage == 0 ? null : () => onChanged(currentPage - 1),
           icon: const Icon(Icons.chevron_left_rounded),
@@ -1559,6 +1614,7 @@ class _Pagination extends StatelessWidget {
           style: AppTypography.labelLarge,
         ),
         IconButton(
+          key: const ValueKey('material-request-centre-page-next'),
           tooltip: MaterialLocalizations.of(context).nextPageTooltip,
           onPressed: currentPage >= pageCount - 1
               ? null

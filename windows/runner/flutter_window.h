@@ -15,6 +15,12 @@ class FlutterWindow : public Win32Window {
   explicit FlutterWindow(const flutter::DartProject& project);
   virtual ~FlutterWindow();
 
+  // Mirrors the server-authoritative unread total onto the native window.
+  // Installed browser/PWA builds use the Web App Badging API; this covers the
+  // separately packaged Windows application with a persistent title and a
+  // non-focus-stealing taskbar flash when new attention arrives.
+  void SetApplicationAttention(int unread_count, bool attention_raised);
+
  protected:
   // Win32Window:
   bool OnCreate() override;

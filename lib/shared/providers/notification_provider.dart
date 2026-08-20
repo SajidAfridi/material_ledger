@@ -10,7 +10,9 @@ import '../sync/sync_engine.dart';
 import 'language_provider.dart' show supabaseClientProvider;
 import 'session_provider.dart';
 import 'users_provider.dart';
+import 'yorks_v1_feature_flags_provider.dart';
 import 'yorks_v1_notification_provider.dart';
+import 'yorks_v1_team_chat_provider.dart';
 
 const _kNotificationsKey = 'notifications_list_v3';
 const _uuid = Uuid();
@@ -66,6 +68,20 @@ final visibleNotificationsProvider = Provider<List<AppNotification>>((ref) {
 /// Count of unread notifications for the current role (drives the badge dot).
 final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref.watch(visibleNotificationsProvider).where((n) => !n.isRead).length;
+});
+
+/// Combined unresolved attention for surfaces outside Yorks itself (browser
+/// title, installed-PWA icon and native desktop badge). Workflow alerts and
+/// Team Chat intentionally remain separate inside the app: Team Chat never
+/// enters the workflow bell, but an unread conversation should still make the
+/// Yorks application visibly ask for the user's attention.
+final yorksApplicationUnreadCountProvider = Provider<int>((ref) {
+  final workflowUnread = ref.watch(unreadNotificationCountProvider);
+  final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
+  final chatUnread = teamChatEnabled
+      ? ref.watch(yorksV1TeamChatUnreadProvider)
+      : 0;
+  return workflowUnread + chatUnread;
 });
 
 final notificationActionsProvider = Provider<NotificationActions>(
