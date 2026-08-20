@@ -8,6 +8,8 @@ enum YorksV1Role {
   siteEngineer('site_engineer'),
   seniorMechanicalEngineer('senior_mechanical_engineer'),
   projectManager('project_manager'),
+  workshopInCharge('workshop_in_charge'),
+  documentController('document_controller'),
   procurement('procurement'),
   admin('admin');
 
@@ -51,12 +53,22 @@ enum YorksV1Role {
   bool get canConfigureUsers =>
       this == admin || this == seniorMechanicalEngineer;
 
-  /// Senior Mechanical Engineer and Project Manager are organization-wide
-  /// Project Engineer roles. The trusted database maps both exact claims to
+  /// These organization-wide roles share Project Engineer workflow authority.
+  /// The trusted database maps each exact claim to
   /// Project Engineer workflow authority and grants project access without a
   /// dated per-project membership row.
   bool get isGlobalProjectEngineer =>
-      this == seniorMechanicalEngineer || this == projectManager;
+      this == seniorMechanicalEngineer ||
+      this == projectManager ||
+      this == workshopInCharge ||
+      this == documentController;
+
+  /// Stock mutations remain Procurement/Admin-only. The approved Senior
+  /// Mechanical Engineer exception is a read-only warehouse workspace grant.
+  bool get canBrowseInventory =>
+      this == seniorMechanicalEngineer || this == procurement || this == admin;
+
+  bool get canManageInventory => this == procurement || this == admin;
 
   bool get isEngineering =>
       this == projectEngineer ||

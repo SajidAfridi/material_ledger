@@ -372,61 +372,80 @@ class _AuthPhoneLayout extends StatelessWidget {
   final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF041E42), Color(0xFF00183A), Color(0xFF000E26)],
-        stops: [0, .54, 1],
+  Widget build(BuildContext context) => SizedBox.expand(
+    child: DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF041E42), Color(0xFF00183A), Color(0xFF000E26)],
+          stops: [0, .54, 1],
+        ),
       ),
-    ),
-    child: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            28,
-            constraints.maxHeight < 760 ? 40 : 72,
-            28,
-            20 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          child: Column(
-            children: [
-              const BrandLogo(size: 92, shadow: true),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    YorksV1ShellStrings.companyName.primary,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.headlineMedium.copyWith(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1.18,
-                      letterSpacing: -0.6,
-                    ),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final shortViewport = constraints.maxHeight < 720;
+            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+            final topPadding = shortViewport ? 24.0 : 44.0;
+            final bottomPadding = keyboardInset > 0 ? 16.0 : 24.0;
+            final minimumContentHeight =
+                (constraints.maxHeight - topPadding - bottomPadding)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(
+                28,
+                topPadding,
+                28,
+                bottomPadding + keyboardInset,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: minimumContentHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      BrandLogo(size: shortViewport ? 72 : 84, shadow: true),
+                      SizedBox(height: shortViewport ? 12 : 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            YorksV1ShellStrings.companyName.primary,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.headlineMedium.copyWith(
+                              color: Colors.white,
+                              fontSize: shortViewport ? 25 : 27,
+                              fontWeight: FontWeight.w800,
+                              height: 1.18,
+                              letterSpacing: -0.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        YorksV1ShellStrings.companyLegalNameCompact.primary,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyLarge.copyWith(
+                          color: Colors.white.withValues(alpha: .72),
+                          fontSize: shortViewport ? 14 : 15,
+                          height: 1.42,
+                        ),
+                      ),
+                      SizedBox(height: shortViewport ? 22 : 30),
+                      _AuthForm(owner: owner, language: language, mobile: true),
+                      SizedBox(height: shortViewport ? 28 : 40),
+                      const Spacer(),
+                      _MobileAuthFooter(compact: shortViewport),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                YorksV1ShellStrings.companyLegalNameCompact.primary,
-                textAlign: TextAlign.center,
-                style: AppTypography.bodyLarge.copyWith(
-                  color: Colors.white.withValues(alpha: .72),
-                  fontSize: 16,
-                  height: 1.52,
-                ),
-              ),
-              const SizedBox(height: 0),
-              _AuthForm(owner: owner, language: language, mobile: true),
-              SizedBox(height: constraints.maxHeight < 760 ? 85 : 143),
-              const _MobileAuthFooter(),
-            ],
-          ),
+            );
+          },
         ),
       ),
     ),
@@ -493,7 +512,9 @@ class _AuthTabletLayout extends StatelessWidget {
 }
 
 class _MobileAuthFooter extends StatelessWidget {
-  const _MobileAuthFooter();
+  const _MobileAuthFooter({this.compact = false});
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -503,10 +524,10 @@ class _MobileAuthFooter extends StatelessWidget {
         textAlign: TextAlign.center,
         style: AppTypography.bodyMedium.copyWith(
           color: Colors.white.withValues(alpha: .58),
-          fontSize: 13,
+          fontSize: compact ? 12 : 13,
         ),
       ),
-      const SizedBox(height: 2),
+      const SizedBox(height: 4),
       Text(
         '${AppStrings.termsOfService.primary} '
         '${YorksV1ShellStrings.and.primary} '
@@ -514,16 +535,16 @@ class _MobileAuthFooter extends StatelessWidget {
         textAlign: TextAlign.center,
         style: AppTypography.bodyMedium.copyWith(
           color: const Color(0xFF478EFF),
-          fontSize: 13,
+          fontSize: compact ? 12 : 13,
           fontWeight: FontWeight.w700,
         ),
       ),
-      const SizedBox(height: 26),
+      SizedBox(height: compact ? 14 : 20),
       Text(
         'v$_displayVersion',
         style: AppTypography.bodyMedium.copyWith(
           color: Colors.white.withValues(alpha: .58),
-          fontSize: 13,
+          fontSize: compact ? 12 : 13,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -700,7 +721,7 @@ class _AuthForm extends StatelessWidget {
           onFieldSubmitted: (_) => owner._handleLogin(),
           validator: owner._validatePassword,
         ),
-        SizedBox(height: mobile ? 0 : AppSpacing.sm),
+        SizedBox(height: mobile ? 8 : AppSpacing.sm),
         Row(
           children: [
             SizedBox(
@@ -744,7 +765,7 @@ class _AuthForm extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: mobile ? 5 : AppSpacing.sm),
+        SizedBox(height: mobile ? 10 : AppSpacing.sm),
         SizedBox(
           height: mobile ? 52 : 48,
           child: mobile

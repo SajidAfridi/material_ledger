@@ -1636,6 +1636,13 @@ class YorksV1InventoryImportResult {
     required this.createdItems,
     required this.updatedItems,
     required this.createdCategories,
+    this.createdSuppliers = 0,
+    this.receiptBatches = 0,
+    this.movements = 0,
+    this.warningCount = 0,
+    this.excludedCount = 0,
+    this.unknownSupplierRows = 0,
+    this.unitTotals = const [],
   });
 
   final String importBatchId;
@@ -1643,6 +1650,13 @@ class YorksV1InventoryImportResult {
   final int createdItems;
   final int updatedItems;
   final int createdCategories;
+  final int createdSuppliers;
+  final int receiptBatches;
+  final int movements;
+  final int warningCount;
+  final int excludedCount;
+  final int unknownSupplierRows;
+  final List<YorksV1InventoryImportUnitTotal> unitTotals;
 
   factory YorksV1InventoryImportResult.fromRpcJson(Map<String, dynamic> json) =>
       YorksV1InventoryImportResult(
@@ -1651,7 +1665,41 @@ class YorksV1InventoryImportResult {
         createdItems: _nonNegativeInt(json['created_items']),
         updatedItems: _nonNegativeInt(json['updated_items']),
         createdCategories: _nonNegativeInt(json['created_categories']),
+        createdSuppliers: _nonNegativeInt(json['created_suppliers'] ?? 0),
+        receiptBatches: _nonNegativeInt(json['receipt_batches'] ?? 0),
+        movements: _nonNegativeInt(json['movements'] ?? 0),
+        warningCount: _nonNegativeInt(json['warning_count'] ?? 0),
+        excludedCount: _nonNegativeInt(json['excluded_count'] ?? 0),
+        unknownSupplierRows: _nonNegativeInt(
+          json['unknown_supplier_rows'] ?? 0,
+        ),
+        unitTotals: _jsonList(json['unit_totals'])
+            .map(YorksV1InventoryImportUnitTotal.fromRpcJson)
+            .toList(growable: false),
       );
+}
+
+class YorksV1InventoryImportUnitTotal {
+  const YorksV1InventoryImportUnitTotal({
+    required this.unit,
+    required this.acceptedQuantity,
+    required this.damagedQuantity,
+    required this.rejectedQuantity,
+  });
+
+  final String unit;
+  final String acceptedQuantity;
+  final String damagedQuantity;
+  final String rejectedQuantity;
+
+  factory YorksV1InventoryImportUnitTotal.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1InventoryImportUnitTotal(
+    unit: _requiredString(json, 'unit'),
+    acceptedQuantity: _string(json['accepted_qty']),
+    damagedQuantity: _string(json['damaged_qty']),
+    rejectedQuantity: _string(json['rejected_qty']),
+  );
 }
 
 class YorksV1InventoryItemStateInput {
@@ -2016,4 +2064,22 @@ DateTime _requiredDate(Map<String, dynamic> json, String key) {
 DateTime? _nullableDate(Object? value) {
   if (value is! String || value.trim().isEmpty) return null;
   return DateTime.tryParse(value)?.toUtc();
+}
+
+List<Map<String, dynamic>> _jsonList(Object? value) {
+  if (value == null) return const [];
+  if (value is! List) {
+    throw const YorksV1DomainException(
+      YorksV1DomainErrorCode.unexpectedResponse,
+    );
+  }
+  return [
+    for (final entry in value)
+      if (entry is Map)
+        Map<String, dynamic>.from(entry)
+      else
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.unexpectedResponse,
+        ),
+  ];
 }

@@ -21,9 +21,12 @@ import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
+import '../../../../shared/models/yorks_v1_team_chat.dart';
+import '../../../../shared/models/yorks_v1_team_chat_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_provider.dart';
 import '../../../../shared/providers/yorks_v1_documents_provider.dart';
@@ -31,6 +34,7 @@ import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
+import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import 'yorks_v1_boq_screens.dart';
 
 /// The normalized, R35-aligned project portfolio.
@@ -1868,6 +1872,7 @@ class _YorksV1ProjectWorkspaceScreenState
       required Widget child,
       bool details = false,
       bool showMenu = false,
+      VoidCallback? onOpenChat,
       VoidCallback? onBack,
     }) {
       if (!mobile) return child;
@@ -1895,14 +1900,26 @@ class _YorksV1ProjectWorkspaceScreenState
                         ? context.pop()
                         : context.go(RoutePaths.yorksV1Projects),
                   ),
-            trailing: showMenu
-                ? YorksMobileIconButton(
-                    icon: Icons.menu_rounded,
-                    tooltip: YorksV1ProjectStrings.projectDetails.primary,
-                    onPressed: () => setState(() {
-                      _mobileDetailTab = _MobileProjectDetailTab.team;
-                      _showMobileDetails = true;
-                    }),
+            trailing: showMenu || onOpenChat != null
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (onOpenChat != null)
+                        YorksMobileIconButton(
+                          icon: Icons.forum_outlined,
+                          tooltip: YorksV1TeamChatStrings.openChat.primary,
+                          onPressed: onOpenChat,
+                        ),
+                      if (showMenu)
+                        YorksMobileIconButton(
+                          icon: Icons.menu_rounded,
+                          tooltip: YorksV1ProjectStrings.projectDetails.primary,
+                          onPressed: () => setState(() {
+                            _mobileDetailTab = _MobileProjectDetailTab.team;
+                            _showMobileDetails = true;
+                          }),
+                        ),
+                    ],
                   )
                 : null,
           ),
@@ -1959,6 +1976,9 @@ class _YorksV1ProjectWorkspaceScreenState
               );
             }
             final selectedProject = project;
+            final teamChatEnabled = ref
+                .watch(yorksV1FeatureFlagsProvider)
+                .teamChat;
             final projectStateIsEditable =
                 selectedProject.project.state ==
                     YorksV1ProjectLifecycle.draft ||
@@ -2017,6 +2037,9 @@ class _YorksV1ProjectWorkspaceScreenState
                         YorksV1ProjectLifecycle.archived
                 ? () => _confirmSafeArchive(selectedProject.project)
                 : null;
+            final VoidCallback? openChatAction = teamChatEnabled
+                ? () => _openProjectChat(selectedProject.project.id)
+                : null;
             final workspace = _showMobileDetails && mobile
                 ? _MobileProjectDetails(
                     item: selectedProject,
@@ -2044,6 +2067,7 @@ class _YorksV1ProjectWorkspaceScreenState
                     onNewRequest: newRequestAction,
                     onEdit: editAction,
                     onArchive: archiveAction,
+                    onOpenChat: openChatAction,
                     onRetryRequests: () => ref.invalidate(
                       yorksV1MaterialRequestListProvider(widget.projectId),
                     ),
@@ -2068,6 +2092,7 @@ class _YorksV1ProjectWorkspaceScreenState
               showMenu:
                   !_showMobileDetails &&
                   _tab == YorksV1ProjectWorkspaceTab.overview,
+              onOpenChat: _showMobileDetails ? null : openChatAction,
               onBack:
                   !_showMobileDetails &&
                       _tab != YorksV1ProjectWorkspaceTab.overview
@@ -2081,6 +2106,20 @@ class _YorksV1ProjectWorkspaceScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _openProjectChat(String projectId) async {
+    final conversation = await ref
+        .read(yorksV1TeamChatProvider.notifier)
+        .createConversation(
+          YorksV1ChatCreateInput(
+            kind: YorksV1ChatKind.project,
+            idempotencyKey: const Uuid().v4(),
+            projectId: projectId,
+          ),
+        );
+    if (!mounted || conversation == null) return;
+    context.go(RoutePaths.yorksV1TeamChatPath(conversation.id));
   }
 
   Future<void> _activateProject(YorksV1Project project) async {
@@ -2952,6 +2991,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     required this.onNewRequest,
     required this.onEdit,
     required this.onArchive,
+    required this.onOpenChat,
     required this.onRetryRequests,
     required this.onTabChanged,
   });
@@ -2970,6 +3010,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
   final VoidCallback? onNewRequest;
   final VoidCallback? onEdit;
   final VoidCallback? onArchive;
+  final VoidCallback? onOpenChat;
   final VoidCallback onRetryRequests;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
 
@@ -3020,6 +3061,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                   onNewRequest: onNewRequest,
                   onEdit: onEdit,
                   onArchive: onArchive,
+                  onOpenChat: onOpenChat,
                 ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -4619,6 +4661,12 @@ bool _requestNeedsAttention(
           actorRole == YorksV1Role.seniorMechanicalEngineer,
     'project_manager' =>
       actorRole == YorksV1Role.admin || actorRole == YorksV1Role.projectManager,
+    'workshop_in_charge' =>
+      actorRole == YorksV1Role.admin ||
+          actorRole == YorksV1Role.workshopInCharge,
+    'document_controller' =>
+      actorRole == YorksV1Role.admin ||
+          actorRole == YorksV1Role.documentController,
     'site_engineer' =>
       actorRole == YorksV1Role.admin ||
           (activeMember &&
@@ -4646,6 +4694,7 @@ class _ProjectR35Hero extends StatelessWidget {
     required this.onNewRequest,
     required this.onEdit,
     required this.onArchive,
+    required this.onOpenChat,
   });
 
   final YorksV1Project project;
@@ -4655,6 +4704,7 @@ class _ProjectR35Hero extends StatelessWidget {
   final VoidCallback? onNewRequest;
   final VoidCallback? onEdit;
   final VoidCallback? onArchive;
+  final VoidCallback? onOpenChat;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -4705,6 +4755,19 @@ class _ProjectR35Hero extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
+                if (onOpenChat != null)
+                  SizedBox(
+                    height: AppSpacing.minTapTarget,
+                    child: OutlinedButton.icon(
+                      onPressed: onOpenChat,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.onPrimary,
+                        side: const BorderSide(color: AppColors.lineStrong),
+                      ),
+                      icon: const Icon(Icons.forum_outlined),
+                      label: Text(YorksV1TeamChatStrings.openChat.primary),
+                    ),
+                  ),
                 if (onActivate != null)
                   SizedBox(
                     height: AppSpacing.minTapTarget,

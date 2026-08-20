@@ -298,6 +298,18 @@ String yorksV1DocumentEntityLabel(YorksV1DocumentEntityType entityType) {
       ur: 'کرائے کی جائیداد',
       hi: 'किराये की संपत्ति',
     ),
+    YorksV1DocumentEntityType.supplier => const TranslatableString(
+      en: 'Supplier',
+      ar: 'المورد',
+      ur: 'سپلائر',
+      hi: 'आपूर्तिकर्ता',
+    ),
+    YorksV1DocumentEntityType.supplierReceiptBatch => const TranslatableString(
+      en: 'Supplier receipt batch',
+      ar: 'دفعة استلام المورد',
+      ur: 'سپلائر وصولی بیچ',
+      hi: 'आपूर्तिकर्ता रसीद बैच',
+    ),
   };
   return copy.primary;
 }

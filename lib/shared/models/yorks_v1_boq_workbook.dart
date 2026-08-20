@@ -19,12 +19,14 @@ class YorksV1BoqWorkbookSheet {
   YorksV1BoqWorkbookSheet({
     required this.name,
     required List<List<String>> rows,
+    this.isHidden = false,
   }) : rows = List.unmodifiable([
          for (final row in rows) List<String>.unmodifiable(row),
        ]);
 
   final String name;
   final List<List<String>> rows;
+  final bool isHidden;
 
   List<int> get nonEmptyRowIndexes => [
     for (var index = 0; index < rows.length; index++)

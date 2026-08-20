@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  isTeamChatEvent,
   type PushClaim,
   routeFor,
   safePushCopy,
@@ -53,6 +54,40 @@ Deno.test("project membership alerts use the protected project route", () => {
   );
 });
 
+Deno.test("Team Chat alerts use trusted copy and the exact conversation route", () => {
+  const conversationId = "16000000-0000-4000-8000-000000000001";
+  assertEquals(safePushCopy("team_chat_message"), {
+    title: "New Team Chat message",
+    body: "A conversation you participate in has a new message.",
+    type: "info",
+  });
+  assertEquals(
+    safePushCopy("team_chat_mention").title,
+    "You were mentioned in Team Chat",
+  );
+  assertEquals(isTeamChatEvent("team_chat_message"), true);
+  assertEquals(isTeamChatEvent("team_chat_mention"), true);
+  // Preserved pre-Team-Chat Material Request mentions keep their workflow
+  // event; all new contextual Chat mentions use Team Chat's own code.
+  assertEquals(isTeamChatEvent("material_request_mentioned"), false);
+  assertEquals(isTeamChatEvent("material_request_submitted"), false);
+  assertEquals(
+    routeFor({
+      ...claim(null),
+      entityType: "chat_conversation",
+      chatConversationId: conversationId,
+    }),
+    `/yorks/team-chat/${conversationId}`,
+  );
+  assertEquals(
+    routeFor({
+      ...claim(null),
+      chatConversationId: "//attacker.example",
+    }),
+    "/notifications",
+  );
+});
+
 Deno.test("approval-first and return events have specific safe copy", () => {
   assertEquals(
     safePushCopy("material_request_approval_required").title,
@@ -69,8 +104,9 @@ Deno.test("web link is absolute HTTPS and rejects unsafe configuration", () => {
     webLinkFor(
       "/yorks/material-requests/14000000-0000-4000-8000-000000000001",
       "https://yorks-r35.vercel.app",
+      "11000000-0000-4000-8000-000000000001",
     ),
-    "https://yorks-r35.vercel.app/yorks/material-requests/14000000-0000-4000-8000-000000000001",
+    "https://yorks-r35.vercel.app/#/yorks/material-requests/14000000-0000-4000-8000-000000000001?notificationId=11000000-0000-4000-8000-000000000001",
   );
   assertEquals(
     webLinkFor("//attacker.example", "https://yorks-r35.vercel.app"),

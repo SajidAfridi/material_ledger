@@ -19,6 +19,8 @@ class YorksV1FeatureFlags {
     bool logistics = false,
     bool returnsDocuments = false,
     bool documents = false,
+    bool teamChat = false,
+    bool inventorySuppliers = false,
   }) : _foundation = foundation,
        _projects = projects,
        _boq = boq,
@@ -28,7 +30,9 @@ class YorksV1FeatureFlags {
        _legacyArrangementReview = legacyArrangementReview,
        _logistics = logistics,
        _returnsDocuments = returnsDocuments,
-       _documents = documents;
+       _documents = documents,
+       _teamChat = teamChat,
+       _inventorySuppliers = inventorySuppliers;
 
   const YorksV1FeatureFlags.fromEnvironment()
     : _foundation = const bool.fromEnvironment(
@@ -64,6 +68,14 @@ class YorksV1FeatureFlags {
       _documents = const bool.fromEnvironment(
         'YORKS_V1_DOCUMENTS',
         defaultValue: true,
+      ),
+      _teamChat = const bool.fromEnvironment(
+        'YORKS_R38_TEAM_CHAT',
+        defaultValue: false,
+      ),
+      _inventorySuppliers = const bool.fromEnvironment(
+        'YORKS_R38_9_INVENTORY_SUPPLIERS',
+        defaultValue: false,
       );
 
   final bool _foundation;
@@ -76,6 +88,8 @@ class YorksV1FeatureFlags {
   final bool _logistics;
   final bool _returnsDocuments;
   final bool _documents;
+  final bool _teamChat;
+  final bool _inventorySuppliers;
 
   bool get foundation => _foundation;
   bool get projects => foundation && _projects;
@@ -92,6 +106,13 @@ class YorksV1FeatureFlags {
   bool get logistics => arrangement && _logistics;
   bool get returnsDocuments => logistics && _returnsDocuments;
   bool get documents => returnsDocuments && _documents;
+  bool get teamChat => documents && _teamChat;
+
+  /// Supplier folders include controlled receipt evidence, so the feature
+  /// cannot be enabled with only the stock kernel. Keeping the secure document
+  /// dependency in the effective getter prevents a partially functional
+  /// supplier workspace from reaching users.
+  bool get inventorySuppliers => documents && _inventorySuppliers;
 
   /// The one supported Yorks V1 R35 operational chain. Release builds must
   /// fail closed if a caller explicitly disables any dependency in this chain.

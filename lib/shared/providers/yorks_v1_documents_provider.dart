@@ -26,3 +26,19 @@ final yorksV1RentalDocumentWorkspaceProvider = FutureProvider.autoDispose
           .watch(yorksV1RentalDocumentsRepositoryProvider)
           .getRentalWorkspace(propertyId);
     });
+
+final yorksV1SupplierDocumentWorkspaceProvider = FutureProvider.autoDispose
+    .family<YorksV1DocumentWorkspace, String>((ref, supplierId) {
+      // Supplier documents share the authorized document refresh channel.
+      // Re-fetch the protected workspace when a realtime/fallback revision
+      // arrives so uploads and replacements made on another device converge.
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      return ref
+          .watch(yorksV1SupplierDocumentsRepositoryProvider)
+          .getSupplierWorkspace(supplierId);
+    });

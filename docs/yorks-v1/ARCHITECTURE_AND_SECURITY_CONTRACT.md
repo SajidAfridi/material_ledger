@@ -76,11 +76,14 @@ Authorization sources:
 2. protected capabilities for optional boundaries such as commercial access;
 3. active dated project membership for project-specific operations;
 
-The exact `senior_mechanical_engineer` and `project_manager` claims are the
-approved exception to item 3: trusted functions treat the current authenticated
-holder as a Project Engineer across every project while retaining the exact raw
-claim for display/audit. This exception grants no Procurement, stock,
-commercial or Admin capability.
+The exact `senior_mechanical_engineer`, `project_manager`,
+`workshop_in_charge` and `document_controller` claims are the approved
+exception to item 3: trusted functions treat the current authenticated holder
+as a Project Engineer across every project while retaining the exact raw claim
+for display/audit. This exception grants no Procurement, stock, commercial or
+Admin capability. Senior Mechanical Engineer separately receives the
+non-commercial inventory read projection, while every inventory mutation still
+checks Procurement/Admin stock authority.
 Before any role-dependent result is returned, the command compares that JWT
 claim with the current protected `auth.users.raw_app_meta_data.role` value and
 the active profile mirror. A stale claim is denied rather than relying on its

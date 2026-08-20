@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../shared/models/app_user.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/yorks_v1_notification_provider.dart';
 import '../shared/services/push_service.dart';
+import 'app.dart' show appRouterProvider;
 
 /// Registers this device for push whenever the signed-in user changes (login,
 /// or switching accounts on the same device) — including the case where the
@@ -19,6 +21,39 @@ final pushBridgeProvider = Provider<void>((ref) {
   // Registration is retried below once a user exists, keeping the token
   // strictly owner-bound in Supabase.
   final push = ref.read(pushServiceProvider);
+  final router = ref.watch(appRouterProvider);
+  final acknowledgedRouteIds = <String>{};
+
+  void acknowledgeCurrentRoute() {
+    if (ref.read(currentUserProvider) == null) return;
+    final id = router
+        .routeInformationProvider
+        .value
+        .uri
+        .queryParameters['notificationId']
+        ?.trim();
+    if (id == null ||
+        !RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          caseSensitive: false,
+        ).hasMatch(id) ||
+        !acknowledgedRouteIds.add(id)) {
+      return;
+    }
+    unawaited(() async {
+      try {
+        await ref.read(yorksV1NotificationsProvider.notifier).markSeen(id);
+      } catch (_) {
+        acknowledgedRouteIds.remove(id);
+      }
+    }());
+  }
+
+  router.routeInformationProvider.addListener(acknowledgeCurrentRoute);
+  ref.onDispose(
+    () =>
+        router.routeInformationProvider.removeListener(acknowledgeCurrentRoute),
+  );
   unawaited(push.register());
   ref.listen<AppUser?>(currentUserProvider, (previous, next) {
     if (next == null) {
@@ -28,6 +63,7 @@ final pushBridgeProvider = Provider<void>((ref) {
       return;
     }
     unawaited(push.register());
+    acknowledgeCurrentRoute();
   }, fireImmediately: true);
 });
 

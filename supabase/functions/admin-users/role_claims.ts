@@ -23,6 +23,8 @@ export const DEFAULT_CAPS: Readonly<Record<string, readonly string[]>> = {
   site_engineer: [],
   senior_mechanical_engineer: [],
   project_manager: [],
+  workshop_in_charge: [],
+  document_controller: [],
 };
 
 const PROVISIONABLE_ROLES = new Set(Object.keys(DEFAULT_CAPS));

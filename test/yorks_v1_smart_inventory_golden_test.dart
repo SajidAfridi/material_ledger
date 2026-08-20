@@ -7,8 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
+import 'package:material_ledger/shared/controllers/yorks_v1_inventory_import_controller.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_inventory_workbook_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
@@ -47,6 +52,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -74,6 +82,196 @@ void main() {
   }
 
   for (final evidence in <({String suffix, Size size})>[
+    (suffix: 'desktop_1440', size: const Size(1440, 900)),
+    (suffix: 'mobile_360', size: const Size(360, 800)),
+  ]) {
+    testWidgets('R38.9 supplier-aware inventory overview — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
+            yorksV1FeatureFlagsProvider.overrideWithValue(
+              const YorksV1FeatureFlags(
+                foundation: true,
+                projects: true,
+                boq: true,
+                excel: true,
+                requests: true,
+                arrangement: true,
+                logistics: true,
+                returnsDocuments: true,
+                documents: true,
+                inventorySuppliers: true,
+              ),
+            ),
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Suppliers'), findsWidgets);
+      expect(find.text('Import Inventory'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r38_9/inventory_overview_${evidence.suffix}.png',
+        ),
+      );
+    });
+  }
+
+  for (final evidence in <({String suffix, Size size, double scroll})>[
+    (suffix: 'desktop', size: const Size(1366, 768), scroll: 520),
+    (suffix: 'mobile', size: const Size(360, 800), scroll: 1420),
+  ]) {
+    testWidgets('R38.3 bounded overview lists — ${evidence.size}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = evidence.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        Offset(0, -evidence.scroll),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('inventory-category-list')), findsOne);
+      expect(
+        find.byKey(const ValueKey('inventory-recent-movement-list')),
+        findsOne,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/smart_inventory_lists_${evidence.suffix}.png',
+        ),
+      );
+    });
+  }
+
+  testWidgets(
+    'warehouse overview keeps large operational lists bounded and aligned',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _LargeInventoryRepository(),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final attentionPanel = find.byKey(
+        const ValueKey('inventory-attention-panel'),
+      );
+      final quickToolsPanel = find.byKey(
+        const ValueKey('inventory-quick-tools-panel'),
+      );
+      final categoryPanel = find.byKey(
+        const ValueKey('inventory-category-panel'),
+      );
+      final movementPanel = find.byKey(
+        const ValueKey('inventory-recent-movements-panel'),
+      );
+      expect(
+        tester.getSize(attentionPanel).height,
+        tester.getSize(quickToolsPanel).height,
+      );
+      expect(
+        tester.getSize(categoryPanel).height,
+        tester.getSize(movementPanel).height,
+      );
+
+      for (final key in const [
+        'inventory-attention-list',
+        'inventory-category-list',
+        'inventory-recent-movement-list',
+      ]) {
+        final scrollable = find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(Scrollable),
+        );
+        expect(scrollable, findsOneWidget);
+        expect(
+          tester.state<ScrollableState>(scrollable).position.maxScrollExtent,
+          greaterThan(0),
+        );
+      }
+
+      final lastTool = find.byKey(const ValueKey('inventory-quick-tool-4'));
+      expect(
+        tester.getCenter(lastTool).dx,
+        closeTo(tester.getCenter(quickToolsPanel).dx, 1),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final evidence in <({String suffix, Size size})>[
     (suffix: 'desktop', size: const Size(1366, 768)),
     (suffix: 'mobile', size: const Size(360, 800)),
   ]) {
@@ -90,6 +288,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -156,6 +357,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -205,6 +409,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -257,6 +464,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -301,6 +511,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1LogisticsRepositoryProvider.overrideWithValue(repository),
         ],
@@ -385,6 +596,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -431,6 +645,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -438,6 +655,13 @@ void main() {
             yorksV1InventoryWorkbookFileServiceProvider.overrideWithValue(
               const _GoldenInventoryWorkbookFileService(),
             ),
+            yorksV1InventoryImportControllerProvider.overrideWith((ref) {
+              return YorksV1InventoryImportController(
+                repository: const _GoldenInventoryRepository(),
+                fileService: const _GoldenInventoryWorkbookFileService(),
+                codec: const YorksV1InventoryWorkbookCodec(),
+              );
+            }),
           ],
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
@@ -477,6 +701,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
@@ -484,6 +711,13 @@ void main() {
             yorksV1InventoryWorkbookFileServiceProvider.overrideWithValue(
               const _GoldenInventoryWorkbookFileService(),
             ),
+            yorksV1InventoryImportControllerProvider.overrideWith((ref) {
+              return YorksV1InventoryImportController(
+                repository: const _GoldenInventoryRepository(),
+                fileService: const _GoldenInventoryWorkbookFileService(),
+                codec: const YorksV1InventoryWorkbookCodec(),
+              );
+            }),
           ],
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
@@ -526,6 +760,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
           sharedPreferencesProvider.overrideWithValue(preferences),
           yorksV1LogisticsRepositoryProvider.overrideWithValue(
             const _GoldenInventoryRepository(),
@@ -548,6 +783,60 @@ void main() {
     expect(find.textContaining('GI duct sheet 24 gauge'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'inventory file actions download the format and export the register',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final files = _RecordingInventoryWorkbookFileService();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.procurement,
+            ),
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1LogisticsRepositoryProvider.overrideWithValue(
+              const _GoldenInventoryRepository(),
+            ),
+            yorksV1InventoryWorkbookFileServiceProvider.overrideWithValue(
+              files,
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            home: const YorksV1InventoryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Download Format').first);
+      await tester.pump();
+      expect(files.templateDownloads, 1);
+      expect(
+        find.text('The controlled import format was downloaded.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Export register').first);
+      await tester.pump();
+      expect(files.registerExports, 1);
+      expect(
+        find.text('The current stock register was exported.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(seconds: 6));
+    },
+  );
 }
 
 Directory _flutterCacheDirectory() {
@@ -580,6 +869,65 @@ class _GoldenInventoryRepository implements YorksV1LogisticsRepository {
       movements: _workspace.recentMovements
           .where((movement) => movement.inventoryItemId == inventoryItemId)
           .toList(growable: false),
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _LargeInventoryRepository implements YorksV1LogisticsRepository {
+  const _LargeInventoryRepository();
+
+  @override
+  Future<YorksV1InventoryWorkspace> getInventory({String? search}) async {
+    final items = List.generate(
+      100,
+      (index) => YorksV1LogisticsInventoryItem(
+        id: 'large-item-$index',
+        itemCode: 'WH-LARGE-$index',
+        description: 'Attention item $index',
+        unit: 'Nos',
+        minimumStock: '2',
+        isActive: true,
+        onHandQuantity: '0',
+        reservedQuantity: '0',
+        availableQuantity: '0',
+        recordVersion: 1,
+        metadataRecordVersion: 1,
+      ),
+    );
+    return YorksV1InventoryWorkspace(
+      items: items,
+      categories: List.generate(
+        100,
+        (index) => _category(
+          'large-category-$index',
+          'Catalogue category ${index + 1}',
+          index % 8,
+        ),
+      ),
+      recentMovements: List.generate(
+        100,
+        (index) => YorksV1InventoryMovement(
+          id: 'large-movement-$index',
+          inventoryItemId: items[index].id,
+          itemCode: items[index].itemCode,
+          itemDescription: items[index].description,
+          unit: items[index].unit,
+          movementType: index.isEven ? 'opening_balance' : 'adjustment',
+          quantityDelta: index.isEven ? '1' : '-1',
+          onHandAfterQuantity: '0',
+          reason: index.isEven ? 'Received stock' : 'Issued stock',
+          actorDisplayName: 'Warehouse Controller',
+          createdAt: DateTime.utc(
+            2026,
+            8,
+            14,
+            12,
+          ).subtract(Duration(minutes: index)),
+        ),
+      ),
     );
   }
 
@@ -642,6 +990,32 @@ WH-NEW-003,Weather louvre,Air Grille Fittings,Yorks,NOS,Opening Balance,6,Openin
     required YorksV1InventoryWorkspace workspace,
     required String suggestedName,
   }) async => true;
+}
+
+class _RecordingInventoryWorkbookFileService
+    implements YorksV1InventoryWorkbookFileService {
+  int templateDownloads = 0;
+  int registerExports = 0;
+
+  @override
+  Future<YorksV1InventorySelectedWorkbook?> selectWorkbook() async => null;
+
+  @override
+  Future<bool> saveImportTemplate() async {
+    templateDownloads += 1;
+    return true;
+  }
+
+  @override
+  Future<bool> saveStockRegister({
+    required YorksV1InventoryWorkspace workspace,
+    required String suggestedName,
+  }) async {
+    registerExports += 1;
+    expect(workspace.items, isNotEmpty);
+    expect(suggestedName, endsWith('.xlsx'));
+    return true;
+  }
 }
 
 final _workspace = YorksV1InventoryWorkspace(

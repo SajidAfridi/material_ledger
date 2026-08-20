@@ -38,7 +38,8 @@ final yorksV1AppNotificationsProvider = Provider<List<AppNotification>>((ref) {
   return ref
           .watch(yorksV1NotificationsProvider)
           .valueOrNull
-          ?.map((record) => record.toAppNotification(language))
+          ?.where((record) => !record.isChatTransport)
+          .map((record) => record.toAppNotification(language))
           .toList(growable: false) ??
       const [];
 });
@@ -76,8 +77,11 @@ class YorksV1NotificationsNotifier
     }
     await refresh(showLoading: true);
     if (_disposed) return;
-    final subscribed = await _subscribe();
-    if (!subscribed) _startFallback();
+    await _subscribe();
+    // Realtime is the fast refresh signal, while this safety refresh guarantees
+    // eventual cross-device convergence if a browser, installed PWA or mobile
+    // client silently misses an UPDATE event while suspended.
+    _startFallback();
   }
 
   Future<void> refresh({bool showLoading = false}) async {
@@ -87,7 +91,15 @@ class YorksV1NotificationsNotifier
     final previous = state.valueOrNull;
     if (showLoading && previous == null) state = const AsyncLoading();
     try {
-      state = AsyncData(await repository.listMine());
+      final records = await repository.listMine();
+      // Fail closed against an older/misconfigured backend projection: chat
+      // transport rows belong exclusively to Team Chat even if an RPC briefly
+      // returns them during a rolling deployment.
+      state = AsyncData(
+        records
+            .where((record) => !record.isChatTransport)
+            .toList(growable: false),
+      );
     } catch (error, stackTrace) {
       // Preserve the last authorized list during a temporary network failure;
       // the retry timer/Realtime reconnect will reconcile it.
@@ -105,21 +117,47 @@ class YorksV1NotificationsNotifier
     if (repository == null) return;
     final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
     final index = current.indexWhere((item) => item.id == notificationId);
-    if (index < 0 || current[index].seenAt != null) return;
-    await repository.markSeen(notificationId);
-    await refresh();
+    if (index < 0) {
+      await repository.markSeen(notificationId);
+      await refresh();
+      return;
+    }
+    if (current[index].seenAt != null) return;
+    final acknowledged = current[index].acknowledgedAt(DateTime.now());
+    state = AsyncData([
+      ...current.take(index),
+      acknowledged,
+      ...current.skip(index + 1),
+    ]);
+    try {
+      await repository.markSeen(notificationId);
+    } catch (_) {
+      if (!_disposed) state = AsyncData(current);
+      rethrow;
+    }
   }
 
   Future<void> markAllSeen() async {
-    final unread = (state.valueOrNull ?? const <YorksV1NotificationRecord>[])
-        .where((record) => record.seenAt == null)
-        .map((record) => record.id)
-        .toList(growable: false);
-    for (final id in unread) {
-      if (_disposed) return;
-      await _repository?.markSeen(id);
+    final repository = _repository;
+    if (repository == null) return;
+    final current = state.valueOrNull ?? const <YorksV1NotificationRecord>[];
+    if (!current.any((record) => record.seenAt == null)) return;
+    final acknowledgedAt = DateTime.now();
+    state = AsyncData(
+      current
+          .map(
+            (record) => record.seenAt == null
+                ? record.acknowledgedAt(acknowledgedAt)
+                : record,
+          )
+          .toList(growable: false),
+    );
+    try {
+      await repository.markAllSeen();
+    } catch (_) {
+      if (!_disposed) state = AsyncData(current);
+      rethrow;
     }
-    await refresh();
   }
 
   Future<bool> _subscribe() async {
@@ -155,13 +193,13 @@ class YorksV1NotificationsNotifier
           .subscribe((status, _) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
-              _fallbackTimer?.cancel();
-              _fallbackTimer = null;
               if (!joined.isCompleted) joined.complete(true);
               unawaited(refresh());
-            } else if (!joined.isCompleted &&
-                status == RealtimeSubscribeStatus.channelError) {
-              joined.complete(false);
+            } else if (status == RealtimeSubscribeStatus.channelError ||
+                status == RealtimeSubscribeStatus.timedOut ||
+                status == RealtimeSubscribeStatus.closed) {
+              _startFallback();
+              if (!joined.isCompleted) joined.complete(false);
             }
           });
       return joined.future.timeout(

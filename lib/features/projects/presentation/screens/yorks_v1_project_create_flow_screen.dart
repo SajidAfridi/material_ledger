@@ -3691,13 +3691,15 @@ class _ReviewStage extends StatelessWidget {
               ),
             ];
             if (!wide) return Column(children: _withGaps(cards));
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: cards[0]),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(child: cards[1]),
-              ],
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: cards[0]),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(child: cards[1]),
+                ],
+              ),
             );
           },
         ),
@@ -4066,6 +4068,7 @@ class _ReviewSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labelWidth = MediaQuery.sizeOf(context).width >= 680 ? 152.0 : 116.0;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -4083,7 +4086,8 @@ class _ReviewSummaryCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
+                SizedBox(
+                  width: labelWidth,
                   child: Text(
                     rows[index].label,
                     style: AppTypography.bodySmall.copyWith(
@@ -4091,11 +4095,11 @@ class _ReviewSummaryCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
                   child: Text(
                     rows[index].value,
-                    textAlign: TextAlign.end,
+                    textAlign: TextAlign.start,
                     style: AppTypography.labelLarge,
                   ),
                 ),

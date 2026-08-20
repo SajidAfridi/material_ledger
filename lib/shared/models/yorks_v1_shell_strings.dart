@@ -5,6 +5,12 @@ import 'app_strings.dart';
 /// Keeping the shell vocabulary here prevents the navigation and sign-in
 /// surfaces from becoming a second, prototype-only set of English strings.
 abstract final class YorksV1ShellStrings {
+  static const collaboration = TranslatableString(
+    en: 'Collaboration',
+    ar: 'التعاون',
+    ur: 'تعاون',
+    hi: 'सहयोग',
+  );
   static const companyName = TranslatableString(
     en: 'Yorks AC. & Ref.',
     ar: 'يوركس للتكييف والتبريد',

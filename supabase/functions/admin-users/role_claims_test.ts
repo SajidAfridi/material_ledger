@@ -6,7 +6,7 @@ import {
   provisionableRoles,
 } from "./role_claims.ts";
 
-Deno.test("all six exact V1 roles are accepted as primary claims", () => {
+Deno.test("all eight exact V1 roles are accepted as primary claims", () => {
   for (
     const role of [
       "admin",
@@ -15,6 +15,8 @@ Deno.test("all six exact V1 roles are accepted as primary claims", () => {
       "site_engineer",
       "senior_mechanical_engineer",
       "project_manager",
+      "workshop_in_charge",
+      "document_controller",
     ]
   ) {
     assertEquals(provisionableRole(role), role);
@@ -33,6 +35,13 @@ Deno.test("global engineer primary claims keep valid additional roles", () => {
   assertEquals(
     provisionableRoles(["project_manager", "invalid"], "project_manager"),
     null,
+  );
+  assertEquals(
+    provisionableRoles(
+      ["workshop_in_charge", "document_controller"],
+      "workshop_in_charge",
+    ),
+    ["workshop_in_charge", "document_controller"],
   );
 });
 

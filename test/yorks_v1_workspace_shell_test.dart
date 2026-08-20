@@ -92,7 +92,7 @@ void main() {
   });
 
   testWidgets(
-    'Senior Mechanical Engineer sees only the approved user configuration destination',
+    'Senior Mechanical Engineer sees approved user configuration and read-only inventory destinations',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
       for (final size in [const Size(1366, 768), const Size(360, 800)]) {
@@ -120,6 +120,14 @@ void main() {
           findsOneWidget,
         );
         expect(
+          find.text(YorksV1ShellStrings.browseInventory.primary),
+          findsOneWidget,
+        );
+        expect(
+          find.text(YorksV1ShellStrings.viewOnly.primary),
+          size.width > 1000 ? findsOneWidget : findsNothing,
+        );
+        expect(
           find.text(YorksV1ShellStrings.configuration.primary),
           findsNothing,
         );
@@ -142,6 +150,40 @@ void main() {
         expect(tester.takeException(), isNull);
       }
       addTearDown(() => _resetViewport(tester));
+    },
+  );
+
+  testWidgets(
+    'Workshop In-Charge and Document Controller use the global engineering workspace',
+    (tester) async {
+      _setViewport(tester, const Size(1366, 768));
+      addTearDown(() => _resetViewport(tester));
+      final preferences = await SharedPreferences.getInstance();
+
+      for (final role in [
+        YorksV1Role.workshopInCharge,
+        YorksV1Role.documentController,
+      ]) {
+        await tester.pumpWidget(
+          _ShellTestApp(role: role, preferences: preferences),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text(YorksV1ShellStrings.projects.primary), findsOneWidget);
+        expect(
+          find.text(YorksV1ShellStrings.materialRequests.primary),
+          findsOneWidget,
+        );
+        expect(
+          find.text(YorksV1ShellStrings.browseInventory.primary),
+          findsNothing,
+        );
+        expect(
+          find.text(YorksV1ShellStrings.userManagement.primary),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      }
     },
   );
 

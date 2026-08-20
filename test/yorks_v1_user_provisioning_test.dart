@@ -83,7 +83,7 @@ void main() {
     });
 
     test(
-      'provisions both global engineering claims without capabilities',
+      'provisions every global engineering claim without capabilities',
       () async {
         final commands = <Map<String, dynamic>>[];
         final container = await connectedContainer(
@@ -104,10 +104,24 @@ void main() {
           role: YorksV1Role.projectManager,
           password: 'temporary-password',
         );
+        final workshop = await notifier.createYorksV1User(
+          fullName: 'Taimoor Shah',
+          email: 'taimoor@yorks.ae',
+          role: YorksV1Role.workshopInCharge,
+          password: 'temporary-password',
+        );
+        final documentController = await notifier.createYorksV1User(
+          fullName: 'Jennie Ilao',
+          email: 'jennie@yorks.ae',
+          role: YorksV1Role.documentController,
+          password: 'temporary-password',
+        );
 
         expect(commands.map((command) => command['role']), [
           'senior_mechanical_engineer',
           'project_manager',
+          'workshop_in_charge',
+          'document_controller',
         ]);
         expect(
           commands.every((command) => !command.containsKey('caps')),
@@ -115,6 +129,8 @@ void main() {
         );
         expect(senior.role, UserRole.engineer);
         expect(manager.role, UserRole.engineer);
+        expect(workshop.role, UserRole.engineer);
+        expect(documentController.role, UserRole.engineer);
       },
     );
 

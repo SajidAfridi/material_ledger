@@ -26,6 +26,14 @@ protected commands. Project Manager and other engineering roles remain denied;
 this grant does not provide direct commercial visibility or unrelated Admin
 modules.
 
+Product-owner change approval on 15 August 2026 adds the exact Workshop
+In-Charge and Document Controller roles with the same organization-wide
+Project Engineer workflow authority as Project Manager. Their distinct job
+titles remain authoritative for display, controlled documents and audit.
+Senior Mechanical Engineer also gains the non-commercial Browse/Inventory read
+surface; every stock, category and import mutation remains limited to
+Procurement/Admin.
+
 ## Approved source artifacts
 
 The original review artifacts remain outside the repository. Their SHA-256
@@ -67,7 +75,7 @@ backward visual or workflow compatibility.
 |---|---|---|
 | Core planning structure | Phase 1 Material Plan and Phase 2 request | Dynamic BOQ groups/rows followed by an explicit MR draft and Submit |
 | Reservation timing | Phase 1 advisory; separate Phase 2 allocation | Procurement arrangement creates/replaces warehouse reservations |
-| Project roles | Generic Engineer plus Procurement/Admin | Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager, Procurement and Admin |
+| Project roles | Generic Engineer plus Procurement/Admin | Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager, Workshop In-Charge, Document Controller, Procurement and Admin |
 | Project wizard | Three stages | Effective R35 five stages |
 | Procurement scope | Package, RFQ, quotations and PO | Direct line arrangement, approval, dispatch and receipt; full RFQ/PO deferred |
 | Inventory | V7 multi-source/multi-warehouse direction | One warehouse in V1 |
@@ -90,6 +98,23 @@ and responsive Overview/Items/Stock Movements/Reservations surfaces. It does
 not add multiple warehouses, valuation, purchase orders or incoming-stock
 authority. Exact name/alias matches may map automatically; fuzzy matches are
 suggestions only and require Procurement/Admin confirmation.
+
+### R38.9 inventory supplier folders client review pack
+
+The 20 August 2026 product-owner instruction approves supplier receipt folders
+as a controlled extension of the existing single-warehouse inventory workspace.
+The reviewed R38.9 pack defines the responsive hierarchy, five-stage import,
+supplier directory/folders and provenance presentation. Repository security,
+transaction, migration, bilingual-copy and accessibility rules remain higher
+authority than the standalone HTML prototype.
+
+Supplier identity is optional for this rollout. Missing supplier values resolve
+to one protected system `Unknown Supplier` folder and remain visible warnings;
+they are not blockers and never create one supplier per row. External receipts
+still require reference and received date. Opening Balance evidence remains
+distinct and cannot be silently reclassified as an external supplier receipt.
+The complete frozen behavior is in
+[`R38_9_INVENTORY_SUPPLIER_FOLDERS.md`](R38_9_INVENTORY_SUPPLIER_FOLDERS.md).
 
 ## V7 safeguards that remain mandatory
 

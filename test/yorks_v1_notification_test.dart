@@ -2,8 +2,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/app_notification.dart';
 import 'package:material_ledger/shared/models/yorks_v1_notification.dart';
+import 'package:material_ledger/shared/services/push_service.dart';
 
 void main() {
+  test('push payload keeps Team Chat on its dedicated surface', () {
+    final chat = PushMessage.fromData({
+      'notificationId': '21000000-0000-4000-8000-000000000001',
+      'eventCode': 'team_chat_message',
+      'surface': 'team_chat',
+      'type': 'info',
+      'title': 'New Team Chat message',
+      'route': '/yorks/team-chat/22000000-0000-4000-8000-000000000001',
+    });
+    final workflow = PushMessage.fromData({
+      'eventCode': 'material_request_submitted',
+      'surface': 'workflow',
+      'type': 'request',
+      'title': 'New material request',
+    });
+
+    expect(chat.isTeamChat, isTrue);
+    expect(workflow.isTeamChat, isFalse);
+  });
+
   const requestId = '22000000-0000-4000-8000-000000000001';
 
   YorksV1NotificationRecord record({

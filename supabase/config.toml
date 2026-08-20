@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.finalize-document-upload]
 verify_jwt = true
+
+[functions.finalize-chat-attachment]
+verify_jwt = true

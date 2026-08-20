@@ -105,8 +105,26 @@ abstract interface class YorksV1RentalDocumentsRepository {
   });
 }
 
+/// Supplier receipt evidence reuses the immutable Yorks document/version
+/// pipeline while keeping its non-project authorization in a dedicated RPC.
+abstract interface class YorksV1SupplierDocumentsRepository {
+  Future<YorksV1DocumentWorkspace> getSupplierWorkspace(String supplierId);
+
+  Future<YorksV1DocumentWorkspace> uploadSupplier(
+    YorksV1DocumentUploadInput input,
+  );
+
+  Future<Uint8List> downloadDocument({
+    required String bucketId,
+    required String objectPath,
+  });
+}
+
 class YorksV1SupabaseDocumentsRepository
-    implements YorksV1DocumentsRepository, YorksV1RentalDocumentsRepository {
+    implements
+        YorksV1DocumentsRepository,
+        YorksV1RentalDocumentsRepository,
+        YorksV1SupplierDocumentsRepository {
   const YorksV1SupabaseDocumentsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -144,6 +162,18 @@ class YorksV1SupabaseDocumentsRepository
   }
 
   @override
+  Future<YorksV1DocumentWorkspace> getSupplierWorkspace(
+    String supplierId,
+  ) async {
+    _requireSupplierReady();
+    final response = await _invoke(
+      functionName: 'v1_supplier_document_workspace_projection',
+      parameters: {'p_supplier_id': supplierId},
+    );
+    return _workspace(response);
+  }
+
+  @override
   Future<YorksV1DocumentWorkspace> upload(YorksV1DocumentUploadInput input) =>
       _upload(
         input,
@@ -160,10 +190,25 @@ class YorksV1SupabaseDocumentsRepository
     reload: () => getRentalWorkspace(input.projectId),
   );
 
+  @override
+  Future<YorksV1DocumentWorkspace> uploadSupplier(
+    YorksV1DocumentUploadInput input,
+  ) {
+    _requireSupplierReady();
+    _validateSupplierUpload(input);
+    return _upload(
+      input,
+      prepareFunction: 'v1_prepare_supplier_document_upload',
+      reload: () => getSupplierWorkspace(input.projectId),
+      includeSupplierMetadata: true,
+    );
+  }
+
   Future<YorksV1DocumentWorkspace> _upload(
     YorksV1DocumentUploadInput input, {
     required String prepareFunction,
     required Future<YorksV1DocumentWorkspace> Function() reload,
+    bool includeSupplierMetadata = false,
   }) async {
     _requireReady();
     final rpc = _rpcClient!;
@@ -180,7 +225,9 @@ class YorksV1SupabaseDocumentsRepository
         rpc,
         functionName: prepareFunction,
         parameters: {
-          'p_payload': input.toRpcPayload(hash),
+          'p_payload': includeSupplierMetadata
+              ? input.toSupplierRpcPayload(hash)
+              : input.toRpcPayload(hash),
           'p_idempotency_key': input.idempotencyKey,
         },
       ),
@@ -324,6 +371,35 @@ class YorksV1SupabaseDocumentsRepository
       throw const YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
       );
+    }
+  }
+
+  void _requireSupplierReady() {
+    if (!_featureFlags.inventorySuppliers) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.featureDisabled,
+      );
+    }
+    _requireReady();
+  }
+
+  static void _validateSupplierUpload(YorksV1DocumentUploadInput input) {
+    final type = input.supplierDocumentType;
+    final reference = input.businessReference?.trim();
+    final notes = input.supplierDocumentNotes?.trim();
+    final referenceMissing = reference == null || reference.isEmpty;
+    final invalid =
+        type == null ||
+        (input.entityType != YorksV1DocumentEntityType.supplier &&
+            input.entityType !=
+                YorksV1DocumentEntityType.supplierReceiptBatch) ||
+        (type.requiresBusinessReference && referenceMissing) ||
+        (!referenceMissing && reference.length > 180) ||
+        (notes != null && notes.length > 1000) ||
+        (type == YorksV1SupplierDocumentType.invoice &&
+            input.classification != YorksV1DocumentClassification.commercial);
+    if (invalid) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
   }
 

@@ -407,6 +407,10 @@ void main() {
 
     expect(find.text('CON-1100C450'), findsOneWidget);
     expect(find.text('Dubai South'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.text('Dubai South')).textAlign,
+      TextAlign.start,
+    );
     await expectLater(
       find.byType(YorksV1ProjectCreateFlowScreen),
       matchesGoldenFile('goldens/r35/project_create_review_desktop.png'),

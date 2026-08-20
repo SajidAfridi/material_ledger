@@ -820,6 +820,18 @@ abstract final class AppStrings {
     ur: 'پروجیکٹ مینیجر',
     hi: 'परियोजना प्रबंधक',
   );
+  static const workshopInChargeRole = TranslatableString(
+    en: 'Workshop In-Charge',
+    ar: 'مسؤول الورشة',
+    ur: 'ورکشاپ انچارج',
+    hi: 'कार्यशाला प्रभारी',
+  );
+  static const documentControllerRole = TranslatableString(
+    en: 'Document Controller',
+    ar: 'مراقب المستندات',
+    ur: 'دستاویز کنٹرولر',
+    hi: 'दस्तावेज़ नियंत्रक',
+  );
   static const procurementRole = TranslatableString(
     en: 'Procurement',
     ar: 'المشتريات',
@@ -1977,10 +1989,10 @@ abstract final class AppStrings {
     hi: 'डिवाइस अलर्ट चालू करें',
   );
   static const enableAlertsBody = TranslatableString(
-    en: 'Allow Yorks to show workflow pop-ups even when this screen is not open.',
-    ar: 'اسمح ليوركس بإظهار تنبيهات سير العمل حتى عندما لا تكون هذه الشاشة مفتوحة.',
-    ur: 'یورکس کو ورک فلو پاپ اپ دکھانے دیں، چاہے یہ اسکرین کھلی نہ ہو۔',
-    hi: 'इस स्क्रीन के बंद होने पर भी यॉर्क्स को कार्यप्रवाह पॉप-अप दिखाने दें।',
+    en: 'Allow Yorks to show workflow and Team Chat alerts even when the app is not open.',
+    ar: 'اسمح ليوركس بإظهار تنبيهات سير العمل ومحادثة الفريق حتى عندما لا يكون التطبيق مفتوحاً.',
+    ur: 'یورکس کو ورک فلو اور ٹیم چیٹ الرٹس دکھانے دیں، چاہے ایپ کھلی نہ ہو۔',
+    hi: 'ऐप बंद होने पर भी यॉर्क्स को कार्यप्रवाह और टीम चैट अलर्ट दिखाने दें।',
   );
   static const alertsBlocked = TranslatableString(
     en: 'Device alerts are blocked',
@@ -2001,10 +2013,10 @@ abstract final class AppStrings {
     hi: 'सिस्टम अलर्ट यहां उपलब्ध नहीं हैं',
   );
   static const alertsUnavailableBody = TranslatableString(
-    en: 'The in-app notification center and foreground alerts remain active.',
-    ar: 'يبقى مركز إشعارات التطبيق والتنبيهات الأمامية مفعلاً.',
-    ur: 'اِن ایپ نوٹیفکیشن سینٹر اور سامنے آنے والے الرٹس فعال رہیں گے۔',
-    hi: 'इन-ऐप सूचना केंद्र और अग्रभूमि अलर्ट सक्रिय रहेंगे।',
+    en: 'In-app workflow and Team Chat alerts remain active.',
+    ar: 'تبقى تنبيهات سير العمل ومحادثة الفريق داخل التطبيق مفعلة.',
+    ur: 'ایپ کے اندر ورک فلو اور ٹیم چیٹ الرٹس فعال رہیں گے۔',
+    hi: 'ऐप के भीतर कार्यप्रवाह और टीम चैट अलर्ट सक्रिय रहेंगे।',
   );
   static const alertSetupNeedsAttention = TranslatableString(
     en: 'Alert setup needs attention',

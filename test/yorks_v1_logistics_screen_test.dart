@@ -5,7 +5,9 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
@@ -91,6 +93,36 @@ void main() {
     expect(find.text('Stock Movements'), findsWidgets);
     expect(find.text('Opening balance'), findsOneWidget);
   });
+
+  testWidgets(
+    'Senior Mechanical Engineer inventory workspace is visibly read-only',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      await tester.binding.setSurfaceSize(const Size(1366, 768));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          exactRole: YorksV1Role.seniorMechanicalEngineer,
+          child: const YorksV1InventoryScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add / Receive Stock'), findsNothing);
+      expect(find.text('Import Inventory'), findsNothing);
+      expect(find.text('Export register'), findsOneWidget);
+
+      await tester.tap(find.text('Items'));
+      await tester.pumpAndSettle();
+      expect(find.text('Stock'), findsNothing);
+      await tester.tap(find.textContaining('VAV Damper'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Details'), findsNothing);
+      expect(find.text('Receive / Adjust'), findsNothing);
+      expect(find.text('Close'), findsOneWidget);
+    },
+  );
 
   testWidgets('inventory detail edits metadata through its separate command', (
     tester,
@@ -266,8 +298,10 @@ Widget _testApp({
   required SharedPreferences preferences,
   required Widget child,
   YorksV1LogisticsRepository? repository,
+  YorksV1Role exactRole = YorksV1Role.procurement,
 }) => ProviderScope(
   overrides: [
+    yorksV1CurrentRoleProvider.overrideWithValue(exactRole),
     sharedPreferencesProvider.overrideWithValue(preferences),
     yorksV1LogisticsRepositoryProvider.overrideWithValue(
       repository ?? _FakeLogisticsRepository(),

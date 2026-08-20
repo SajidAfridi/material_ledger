@@ -116,8 +116,28 @@ tables/functions.
 | `v1_create_inventory_item` | Procurement/Admin inventory capability | optional category decision during catalogue reconciliation, metadata, optional opening quantity | yes | categorized or truthfully uncategorized item master, balance, optional opening movement, approved alias when applicable and audit atomically |
 | `v1_adjust_inventory_stock` | Procurement/Admin inventory capability | active item/balance version, action, quantity | yes | locked append-only movement, derived balance and audit; reservations remain read-only |
 | `v1_import_inventory` | Procurement/Admin inventory capability | reviewed workbook/category decisions/item versions | yes | atomic items/categories/aliases/movements/import result and audit |
+| `v1_supplier_directory_projection` / `v1_supplier_folder_projection` | Procurement/Admin inventory capability | exact current role plus paging/filter arguments | no | authorized supplier, receipt, document, destination and audit projections; mixed units stay separated |
+| `v1_create_supplier` | Procurement/Admin inventory capability | canonical identity, explicit aliases and idempotency key | yes | one canonical supplier master plus append-only audit; Unknown Supplier is immutable |
+| `v1_import_inventory_r38_9` | Procurement/Admin inventory capability | file SHA-256, strict mode, reviewed item/category/supplier decisions, receipt evidence, condition quantities and opening cutoff | yes | one atomic import result, suppliers/aliases, receipt batches/lines, movements, balances and audit; failed rows create nothing |
+| `v1_prepare_supplier_document_upload` / `v1_supplier_document_workspace_projection` | Procurement/Admin inventory capability plus document classification | supplier or receipt-batch target and actor-scoped upload intent | yes / no | private verified document version/link and authorized folder projection |
 | `v1_create_document_version` | Entity-authorized user | document/link target/version | yes | Storage metadata/version/link/audit after upload finalization |
 | `v1_link_document` | Entity-authorized user | document/target/version | yes | classified link and audit |
+| `v1_get_configuration_centre` / `v1_get_configuration_validation` | Active exact Admin | current published version plus inert shared draft | no | Admin-safe settings/master/history projection and authoritative validation |
+| `v1_list_configuration_units` | Any active exact Yorks role | published active unit register | no | non-commercial unit codes for future MR and Warehouse entry |
+| `v1_stage_configuration_setting` | Active exact Admin | draft revision, allowlisted setting and typed value | yes | one inert draft value and incremented draft revision |
+| `v1_stage_configuration_master_action` | Active exact Admin | draft revision, normalized category/unit action and archive reason | yes | one inert create/archive action and incremented draft revision |
+| `v1_discard_configuration_draft` / `v1_restore_configuration_defaults` | Active exact Admin | draft revision | yes | remove unpublished work or stage typed defaults; published values/history unchanged |
+| `v1_publish_configuration` | Active exact Admin | draft revision, validation result and publication reason | yes | atomic setting/master commit, immutable publication snapshot/change rows and trusted audit event |
+| `v1_list_chat_conversations` / `v1_search_chat` | Active exact role, active conversation member | current membership and server-side search scope | no | authorized conversation summaries, unread preferences and non-commercial previews only |
+| `v1_get_chat_conversation` | Active conversation member with current contextual access | conversation, current project/MR access, cursor and page size | no | participant projection plus newest/older immutable message page |
+| `v1_create_chat_conversation` | Any active role for direct/project/MR; Admin, Project Manager or Senior Mechanical Engineer for groups; Admin for announcements | canonical direct/context key and idempotency key | yes | conversation, controlled member set, creator ownership where applicable and system event |
+| `v1_update_chat_group` | Group owner or active Admin participant | group row and active member set | yes | title/description/member reconciliation plus system event; direct/context chats rejected |
+| `v1_prepare_chat_attachment` / `v1_verify_chat_attachment_upload` | Active member / service role only | actor-scoped short-lived intent, private object metadata, byte count and SHA-256 | yes | upload intent followed by server-verified attachment readiness; no message binding yet |
+| `v1_send_chat_message` | Active member; announcements are Admin-send-only | conversation, reply/link/mention/verified attachment ownership and idempotency hash | yes | one append-only message, attachment binding, mentions, hidden participant push-transport rows and audit-safe context; no workflow-bell entry |
+| `v1_mark_chat_read` / `v1_mark_chat_unread` | Active member | member preference row | no | authoritative cross-device Chat cursor plus exact hidden Chat transport acknowledgement; workflow notification seen state is untouched |
+| `v1_set_chat_preference` | Active member | member preference row | no | pin/mute/archive preference; new unmuted activity can restore archived conversation |
+| `v1_toggle_chat_acknowledgement` / `v1_toggle_chat_message_pin` | Active member | message and conversation access | no | caller acknowledgement or per-conversation pinned-message fact |
+| `v1_download_chat_attachment` | Active member with current contextual access | attachment/message/conversation access | no | private bucket/path metadata for one authorized download |
 
 Every function derives actor, role and server time. User-supplied actor/role/time
 is ignored as authority. The exact role in the JWT must match the current
@@ -143,8 +163,10 @@ membership.
 | MR commercial projection | only with capability | only with capability | R with capability | R with capability |
 | Arrangements | R assigned; decision RPC if Project Engineer | R assigned, no decision | R; create/update through RPC | R/RPC |
 | Approval decisions | R assigned; RPC if Project Engineer | R assigned | R, no write | R/RPC |
-| Inventory catalogue/balances | no general inventory workspace | no general inventory workspace | R/RPC manage | R/RPC |
+| Inventory catalogue/balances | no general inventory workspace (Senior Mechanical Engineer exception: R only) | no general inventory workspace | R/RPC manage | R/RPC |
 | Inventory categories/import batches | — | — | R; create/import via idempotent RPC | R; create/import via idempotent RPC |
+| Supplier masters/aliases/receipt batches/provenance | — | — | R/RPC inside Warehouse Inventory only | R/RPC inside Warehouse Inventory only |
+| Supplier documents | — | — | R/RPC subject to classification capability | R/RPC subject to classification capability |
 | Reservations/movements | related non-commercial summary | related non-commercial summary | R; write only via RPC | R; write only via RPC |
 | Dispatches | R assigned | R assigned | R/RPC create | R/RPC |
 | Receipt reviews | R/RPC assigned | R/RPC assigned | R, no confirm | R/RPC |
@@ -155,10 +177,24 @@ membership.
 | Notifications | own R/U seen state | own R/U seen state | own R/U seen state | own R/U seen state |
 | Audit events | related read projection | related read projection | related read projection | R; no client C/U/delete |
 | Idempotency/reference counters | — | — | — | no direct client access |
+| Configuration settings/draft/publications | — | — | — | R/RPC through exact-Admin projection and commands; no direct table access |
+| Direct Team Chat | R/RPC only as one of exactly two participants | R/RPC only as one of exactly two participants | R/RPC only as one of exactly two participants | R/RPC only when explicitly one of two participants; no invisible Admin access |
+| Project/MR Team Chat | R/RPC while current project/MR access remains valid | R/RPC while current project/MR access remains valid | R/RPC for authorized running-project context | R/RPC through the same explicit/contextual membership boundary |
+| Custom Team Chat groups | R/RPC as member; cannot create unless global role below | R/RPC as member; cannot create | R/RPC as member; cannot create | R/RPC create and manage when owner or active Admin participant |
+| Team Chat announcements | R as member; no send | R as member; no send | R as member; no send | R/RPC create/send as active Admin |
+| Team Chat attachments | R/RPC authorized private download; verified upload/send as active member | same | same | same; service-only finalization does not grant conversation access |
 
-Senior Mechanical Engineer and Project Manager follow the Project Engineer
-column across all projects without dated membership. They remain denied the
-Procurement, inventory, commercial and Admin-only cells.
+Senior Mechanical Engineer, Project Manager, Workshop In-Charge and Document
+Controller follow the Project Engineer column across all projects without
+dated membership. They remain denied Procurement, commercial and Admin-only
+cells, except for the separately approved Senior Mechanical Engineer User
+Management capability and non-commercial inventory read-only projection.
+
+For Team Chat only, Senior Mechanical Engineer, Project Manager, Workshop
+In-Charge and Document Controller may create custom groups. They do not thereby
+gain access to Direct conversations, muted or archived conversations,
+attachments, or announcements unless the relevant membership/policy
+independently permits it. These roles cannot send announcements.
 
 Direct Procurement inserts/updates/deletes on project, scope, membership and BOQ
 tables must fail even when a route or stale client attempts them.
@@ -181,6 +217,7 @@ match the request's one persisted Common/building scope at save and submit.
 | `operational` | Access to every current linked entity |
 | `commercial` | Every-linked-entity access plus `view_commercials` |
 | `admin_restricted` | Admin |
+| Team Chat attachment | Current active conversation membership plus any current project/MR context access; object must be bound to an append-only message after server verification |
 
 Upload uses a short-lived authorized path/operation. The final document row and
 link are committed by a trusted function after object metadata/hash validation.
@@ -202,6 +239,7 @@ At minimum, append events for:
 - return submit/confirm/reject;
 - document version/link change;
 - Admin user/capability change and override.
+- configuration publication with exact Admin, reason, affected areas and immutable version.
 
 Audit tables deny client insert, update and delete. Corrections append a new
 event referencing the original.
@@ -221,4 +259,19 @@ Every relevant migration/test must prove at least:
 8. repeated idempotency keys do not duplicate effects;
 9. revoked membership blocks future actions but preserves historical reads and
    attribution;
-10. Storage path knowledge does not bypass document/link access.
+10. Storage path knowledge does not bypass document/link access;
+11. non-Admin exact roles cannot read, stage, restore, discard or publish
+    organization configuration, and ordinary clients cannot mutate its tables.
+12. non-members, revoked contextual members and an uninvited Admin cannot read
+    a conversation, message, member list, search preview or attachment path;
+13. unverified, expired, wrong-hash, wrong-size or wrong-content-type chat
+    uploads cannot be bound to a message;
+14. Procurement, Project Engineer and Site Engineer cannot create custom chat
+    groups, while only Admin can create or send an announcement;
+15. non-Procurement/non-Admin roles cannot open supplier/import RPCs, tables,
+    private objects or exports, including Senior Mechanical Engineer's
+    separately allowed non-commercial inventory catalogue read;
+16. a missing supplier maps only to immutable Unknown Supplier, similar names
+    never merge automatically, duplicate file/cutoff/idempotency identities do
+    not duplicate stock, and any failed strict row leaves no partial supplier,
+    receipt, movement, balance, document or audit result.

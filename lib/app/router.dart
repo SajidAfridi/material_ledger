@@ -13,6 +13,7 @@ import '../features/admin/presentation/screens/data_sync_screen.dart';
 import '../features/admin/presentation/screens/more_hub_screen.dart';
 import '../features/admin/presentation/screens/material_masters_screen.dart';
 import '../features/admin/presentation/screens/user_management_screen.dart';
+import '../features/admin/presentation/screens/yorks_v1_configuration_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
 import '../features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
@@ -40,7 +41,9 @@ import '../features/inventory/presentation/screens/stock_history_screen.dart';
 import '../features/materials/presentation/screens/materials_hub_screen.dart';
 import '../features/materials/presentation/screens/material_line_grid_demo_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_inventory_import_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_inventory_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_inventory_supplier_screens.dart';
 import '../features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import '../features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
@@ -58,6 +61,7 @@ import '../features/projects/presentation/screens/yorks_v1_documents_screen.dart
 import '../features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
+import '../features/chat/presentation/screens/yorks_v1_team_chat_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
 import '../shared/models/app_config.dart';
 import '../shared/models/app_user.dart';
@@ -117,8 +121,16 @@ abstract final class RoutePaths {
   static const String yorksV1MaterialRequestReturnsDocuments =
       '/yorks/material-requests/:requestId/returns';
   static const String yorksV1Inventory = '/yorks/inventory';
+  static const String yorksV1InventorySuppliers = '/yorks/inventory/suppliers';
+  static const String yorksV1InventorySupplier =
+      '/yorks/inventory/suppliers/:supplierId';
+  static const String yorksV1InventoryImport = '/yorks/inventory/import';
   static const String yorksV1Dispatches = '/yorks/dispatches';
   static const String yorksV1Returns = '/yorks/returns';
+  static const String yorksV1Configuration = '/yorks/configuration';
+  static const String yorksV1TeamChat = '/yorks/team-chat';
+  static const String yorksV1TeamChatConversation =
+      '/yorks/team-chat/:conversationId';
   static const String engineerProjectsView = '/my-projects';
   static const String engineerNewRequest = '/new-request';
   static const String engineerPickMaterials = '/pick-materials';
@@ -189,6 +201,14 @@ abstract final class RoutePaths {
 
   static String yorksV1MaterialRequestPath(String requestId) =>
       '/yorks/material-requests/$requestId';
+  static String yorksV1TeamChatPath([String? conversationId]) {
+    final id = conversationId?.trim() ?? '';
+    return id.isEmpty ? yorksV1TeamChat : '/yorks/team-chat/$id';
+  }
+
+  static String yorksV1InventorySupplierPath(String supplierId) =>
+      '/yorks/inventory/suppliers/$supplierId';
+
   static String yorksV1MaterialRequestsPath({String? projectId}) {
     final trimmed = projectId?.trim();
     if (trimmed == null || trimmed.isEmpty) return yorksV1MaterialRequests;
@@ -449,7 +469,18 @@ bool _isYorksV1RouteAllowedForRole(String path, YorksV1Role? role) {
 
   if (path == RoutePaths.yorksV1Inventory ||
       path == RoutePaths.yorksV1Dispatches) {
+    if (path == RoutePaths.yorksV1Inventory) return role.canBrowseInventory;
     return role == YorksV1Role.procurement || role == YorksV1Role.admin;
+  }
+
+  if (path == RoutePaths.yorksV1InventorySuppliers ||
+      path == RoutePaths.yorksV1InventoryImport ||
+      path.startsWith('${RoutePaths.yorksV1InventorySuppliers}/')) {
+    return role == YorksV1Role.procurement || role == YorksV1Role.admin;
+  }
+
+  if (path == RoutePaths.yorksV1Configuration) {
+    return role == YorksV1Role.admin;
   }
 
   if (path.startsWith('/yorks/projects/') && path.endsWith('/edit')) {
@@ -478,6 +509,8 @@ GoRouter createAppRouter({
   bool yorksV1LogisticsEnabled = false,
   bool yorksV1ReturnsDocumentsEnabled = false,
   bool yorksV1DocumentsEnabled = false,
+  bool yorksV1TeamChatEnabled = false,
+  bool yorksV1InventorySuppliersEnabled = false,
   YorksV1Role? yorksV1Role,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
   // [refreshListenable] let route guards re-evaluate the moment an Admin edits
@@ -563,6 +596,10 @@ GoRouter createAppRouter({
 
       if (path.startsWith('/yorks/material-requests') &&
           !yorksV1RequestsEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (path.startsWith(RoutePaths.yorksV1TeamChat) &&
+          !yorksV1TeamChatEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
       if (path.startsWith('/yorks/material-requests/') &&
@@ -909,8 +946,69 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1Inventory,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1InventoryScreen(initialTab: state.uri.queryParameters['tab']),
+        ),
+      ),
+      if (yorksV1InventorySuppliersEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1InventorySuppliers,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const YorksV1InventorySupplierDirectoryScreen(),
+          ),
+        ),
+      if (yorksV1InventorySuppliersEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1InventorySupplier,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            YorksV1InventorySupplierFolderScreen(
+              supplierId: state.pathParameters['supplierId'] ?? '',
+            ),
+          ),
+        ),
+      if (yorksV1InventorySuppliersEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1InventoryImport,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            YorksV1InventoryImportScreen(
+              preselectedSupplierId: state.uri.queryParameters['supplierId'],
+              onCancel: () {
+                if (context.canPop()) {
+                  context.pop();
+                  return;
+                }
+                context.go(RoutePaths.yorksV1InventorySuppliers);
+              },
+              onReturnToSuppliers: () =>
+                  context.go(RoutePaths.yorksV1InventorySuppliers),
+              onOpenSupplier: (supplierId) => context.go(
+                RoutePaths.yorksV1InventorySupplierPath(supplierId),
+              ),
+            ),
+          ),
+        ),
+      GoRoute(
+        path: RoutePaths.yorksV1Configuration,
         pageBuilder: (context, state) =>
-            _yorksV1Slide(state.pageKey, const YorksV1InventoryScreen()),
+            _yorksV1Slide(state.pageKey, const YorksV1ConfigurationScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1TeamChat,
+        pageBuilder: (context, state) =>
+            _yorksV1Slide(state.pageKey, const YorksV1TeamChatScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1TeamChatConversation,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1TeamChatScreen(
+            initialConversationId: state.pathParameters['conversationId'],
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1Dispatches,

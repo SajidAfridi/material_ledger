@@ -58,7 +58,7 @@ snapshot upserts are not permitted for critical V1 transitions.
 
 Implement:
 
-1. Authentication, profiles, six exact roles and project membership guards
+1. Authentication, profiles, eight exact roles and project membership guards
 2. Projects, buildings/Common scope and historical team membership
 3. Twenty-nine default BOQ groups plus custom groups
 4. Dynamic BOQ columns/rows and real Excel import/export
@@ -98,13 +98,16 @@ boundaries; do not destructively remove historical records.
   its own arrangement.
 - **Admin** — controlled administration and audited overrides. Admin is not a
   substitute for missing workflow history.
-- **Senior Mechanical Engineer** and **Project Manager** — organization-wide
+- **Senior Mechanical Engineer**, **Project Manager**, **Workshop In-Charge**
+  and **Document Controller** — organization-wide
   Project Engineer roles. They can access every project and perform Project
   Engineer approvals without a per-project membership row. Senior Mechanical
   Engineer additionally has audited User Management authority, but does not
-  gain direct commercial visibility or unrelated Admin modules. Project
-  Manager does not inherit user administration. Neither role inherits
-  Procurement or stock authority.
+  gain direct commercial visibility or unrelated Admin modules. Senior
+  Mechanical Engineer also has read-only Browse/Inventory access, without any
+  stock, category or import mutation authority. Project Manager, Workshop
+  In-Charge and Document Controller do not inherit user administration. None
+  of these global engineering roles inherits Procurement or stock authority.
 
 Authorization claims come only from exact, server-controlled
 `app_metadata.role` values. Never infer privilege from email, editable user

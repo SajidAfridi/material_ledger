@@ -6,6 +6,8 @@ abstract interface class YorksV1NotificationRepository {
   Future<List<YorksV1NotificationRecord>> listMine({int limit = 100});
 
   Future<void> markSeen(String notificationId);
+
+  Future<int> markAllSeen();
 }
 
 class YorksV1SupabaseNotificationRepository
@@ -37,5 +39,15 @@ class YorksV1SupabaseNotificationRepository
       'v1_mark_notification_seen',
       params: {'p_notification_id': notificationId},
     );
+  }
+
+  @override
+  Future<int> markAllSeen() async {
+    final response = await _client.rpc('v1_mark_all_notifications_seen');
+    return switch (response) {
+      int value => value,
+      num value => value.toInt(),
+      _ => 0,
+    };
   }
 }
