@@ -9,6 +9,7 @@ import 'package:material_ledger/features/login/presentation/screens/login_screen
 import 'package:material_ledger/features/onboarding/presentation/screens/splash_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
 import 'package:material_ledger/shared/models/app_user.dart';
+import 'package:material_ledger/shared/models/app_strings.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
@@ -77,6 +78,22 @@ void main() {
       find.byType(LoginScreen),
       matchesGoldenFile('goldens/mobile_batch1/login_360.png'),
     );
+  });
+
+  testWidgets('Yorks mobile login remains balanced on a short phone', (
+    tester,
+  ) async {
+    await _pumpLogin(tester, const Size(360, 640));
+    _expectLoginFieldContrast(tester, mobile: true);
+    expect(find.text(AppStrings.signIn.primary), findsOneWidget);
+    expect(find.text('v1.0.0'), findsOneWidget);
+    await expectLater(
+      find.byType(LoginScreen),
+      matchesGoldenFile('goldens/mobile_batch1/login_360x640.png'),
+    );
+    await tester.ensureVisible(find.text('v1.0.0'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Yorks desktop login contrast — 1366×768', (tester) async {

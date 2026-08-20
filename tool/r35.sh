@@ -7,13 +7,14 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: ./tool/r35.sh <run|build-web|build-apk> [additional Flutter arguments]
+Usage: ./tool/r35.sh <run|build-web|build-apk|build-macos> [additional Flutter arguments]
 
 Examples:
   cp tool/r35.env.example .r35.env
   # Edit .r35.env once with the explicit local/staging/production backend.
   ./tool/r35.sh run
   ./tool/r35.sh build-web
+  ./tool/r35.sh build-macos
   R35_CONFIG_FILE=.r35.staging.env ./tool/r35.sh build-web
 USAGE
 }
@@ -78,6 +79,7 @@ fi
 r35_defines=(
   "--dart-define=SUPABASE_URL=${supabase_url}"
   "--dart-define=SUPABASE_ANON_KEY=${supabase_key}"
+  "--dart-define=R35_ENVIRONMENT=${r35_environment}"
   '--dart-define=YORKS_V1_FOUNDATION=true'
   '--dart-define=YORKS_V1_PROJECTS=true'
   '--dart-define=YORKS_V1_BOQ=true'
@@ -87,6 +89,8 @@ r35_defines=(
   '--dart-define=YORKS_V1_LOGISTICS=true'
   '--dart-define=YORKS_V1_RETURNS_DOCUMENTS=true'
   '--dart-define=YORKS_V1_DOCUMENTS=true'
+  '--dart-define=YORKS_R38_TEAM_CHAT=true'
+  '--dart-define=YORKS_R38_9_INVENTORY_SUPPLIERS=true'
   '--dart-define=use_arabic=true'
 )
 
@@ -114,6 +118,9 @@ case "$command" in
     ;;
   build-apk)
     exec flutter build apk --release "${r35_defines[@]}" "$@"
+    ;;
+  build-macos)
+    exec flutter build macos --release "${r35_defines[@]}" "$@"
     ;;
   *)
     usage >&2

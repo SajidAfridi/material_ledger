@@ -2,15 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/app.dart' show appRouterProvider;
+import '../../app/router.dart' show RoutePaths;
 import '../../core/widgets/yorks_app_toast.dart';
 import '../models/app_notification.dart';
 import '../models/app_strings.dart';
 import '../models/yorks_v1_notification.dart';
 import '../providers/language_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/yorks_v1_feature_flags_provider.dart';
 import '../providers/yorks_v1_notification_provider.dart';
+import '../providers/yorks_v1_team_chat_provider.dart';
 import '../services/notification_alert_sound.dart';
 import '../services/push_service.dart';
 
@@ -113,8 +117,15 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
           route: push.route,
           origin: NotificationOrigin.yorksV1,
         ),
+        icon: push.isTeamChat
+            ? Icons.chat_bubble_rounded
+            : Icons.notifications_active_rounded,
       );
-      unawaited(ref.read(yorksV1NotificationsProvider.notifier).refresh());
+      if (push.isTeamChat) {
+        _refreshChat();
+      } else {
+        unawaited(ref.read(yorksV1NotificationsProvider.notifier).refresh());
+      }
     });
   }
 
@@ -122,6 +133,7 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(ref.read(yorksV1NotificationsProvider.notifier).refresh());
+      _refreshChat();
       unawaited(ref.read(pushServiceProvider).register());
     }
   }
@@ -155,8 +167,43 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
     }
   }
 
-  void _show(AppNotification notification) {
+  void _refreshChat() {
+    if (!ref.read(yorksV1FeatureFlagsProvider).teamChat) return;
+    unawaited(ref.read(yorksV1TeamChatProvider.notifier).refresh());
+  }
+
+  String? _activeRoutePath() {
+    try {
+      return GoRouterState.of(context).uri.path;
+    } catch (_) {
+      try {
+        return ref
+            .read(appRouterProvider)
+            .routeInformationProvider
+            .value
+            .uri
+            .path;
+      } catch (_) {
+        // This host is also reusable in embedded MaterialApp trees that do
+        // not have a GoRouter ancestor. Those trees must still receive alerts.
+        return null;
+      }
+    }
+  }
+
+  void _show(
+    AppNotification notification, {
+    IconData icon = Icons.notifications_active_rounded,
+  }) {
     if (!mounted || notification.title.trim().isEmpty) return;
+    final notificationPath = notification.route.isEmpty
+        ? ''
+        : Uri.tryParse(notification.route)?.path ?? '';
+    if (notificationPath.startsWith(RoutePaths.yorksV1TeamChat) &&
+        _activeRoutePath() == notificationPath) {
+      unawaited(_markRead(notification));
+      return;
+    }
     if (notification.id.isNotEmpty) {
       if (_alertedIds.contains(notification.id)) return;
       _alertedIds.add(notification.id);
@@ -182,7 +229,7 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
         message: notification.body,
         duration: const Duration(seconds: 4),
         maxWidth: 560,
-        icon: Icons.notifications_active_rounded,
+        icon: icon,
         actionLabel: notification.route.isEmpty
             ? null
             : AppStrings.viewDetails.active(ref.read(languageProvider)),

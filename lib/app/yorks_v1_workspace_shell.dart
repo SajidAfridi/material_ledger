@@ -11,6 +11,7 @@ import '../shared/models/app_strings.dart';
 import '../shared/models/yorks_v1_project_strings.dart';
 import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
+import '../shared/models/yorks_v1_team_chat_strings.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/notification_provider.dart';
 import '../shared/providers/session_provider.dart';
@@ -18,6 +19,8 @@ import '../shared/providers/employee_provider.dart';
 import '../shared/providers/yorks_v1_material_request_provider.dart';
 import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
+import '../shared/providers/yorks_v1_feature_flags_provider.dart';
+import '../shared/providers/yorks_v1_team_chat_provider.dart';
 import '../shared/providers/yorks_v1_workspace_status_provider.dart';
 import '../shared/widgets/notification_bell.dart';
 import 'router.dart';
@@ -44,7 +47,15 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
     final location = GoRouterState.of(context).uri.path;
-    final destinations = _destinationsFor(role);
+    final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
+    final chatUnread = teamChatEnabled
+        ? ref.watch(yorksV1TeamChatUnreadProvider)
+        : 0;
+    final destinations = _destinationsFor(
+      role,
+      teamChatEnabled: teamChatEnabled,
+      chatUnread: chatUnread,
+    );
     final current = _currentDestination(destinations, location);
     final desktop =
         MediaQuery.sizeOf(context).width >=
@@ -121,6 +132,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                         breadcrumbs: breadcrumbs,
                         location: location,
                         unreadNotifications: unread,
+                        teamChatEnabled: teamChatEnabled,
+                        unreadChat: chatUnread,
                         onMenu: () => context.go(RoutePaths.yorksV1MobileMore),
                         onBack: () => context.canPop()
                             ? context.pop()
@@ -132,6 +145,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                         destinations: _mobileDestinationsFor(
                           role,
                           nativeMobile: YorksMobileUi.isActive(context),
+                          teamChatEnabled: teamChatEnabled,
+                          chatUnread: chatUnread,
                         ),
                         activePath: location,
                         language: language,
@@ -174,7 +189,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     // but do not stack the generic workspace toolbar above their own actions.
     if (location == RoutePaths.yorksV1DuctSizer ||
         location == RoutePaths.yorksV1EspCalculator ||
-        location == RoutePaths.engineerProfile) {
+        location == RoutePaths.engineerProfile ||
+        location.startsWith(RoutePaths.yorksV1TeamChat)) {
       return true;
     }
     final segments = Uri(path: location).pathSegments;
@@ -189,8 +205,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
   List<_YorksDestination> _mobileDestinationsFor(
     YorksV1Role? role, {
     required bool nativeMobile,
+    bool teamChatEnabled = true,
+    int chatUnread = 0,
   }) {
-    final all = _destinationsFor(role);
+    final all = _destinationsFor(
+      role,
+      teamChatEnabled: teamChatEnabled,
+      chatUnread: chatUnread,
+    );
     _YorksDestination path(String route) =>
         all.firstWhere((destination) => destination.path == route);
     if (!nativeMobile) {
@@ -205,13 +227,16 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           path(RoutePaths.engineerHome),
           path(RoutePaths.yorksV1MaterialRequests),
           path(RoutePaths.yorksV1Inventory),
-          path(RoutePaths.yorksV1Dispatches),
+          teamChatEnabled
+              ? path(RoutePaths.yorksV1TeamChat)
+              : path(RoutePaths.yorksV1Dispatches),
           more,
         ];
       }
       return [
         path(RoutePaths.engineerHome),
         path(RoutePaths.yorksV1Projects),
+        if (teamChatEnabled) path(RoutePaths.yorksV1TeamChat),
         path(RoutePaths.yorksV1MaterialRequests),
         more,
       ];
@@ -248,6 +273,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       Icons.receipt_long_outlined,
       Icons.receipt_long_rounded,
     );
+    final chat = teamChatEnabled
+        ? mobilePath(
+            RoutePaths.yorksV1TeamChat,
+            Icons.chat_bubble_outline_rounded,
+            Icons.chat_bubble_rounded,
+          )
+        : null;
     final more = _YorksDestination(
       label: AppStrings.more,
       icon: Icons.menu_rounded,
@@ -259,14 +291,18 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         home,
         requests,
         path(RoutePaths.yorksV1Inventory),
-        path(RoutePaths.yorksV1Dispatches),
+        if (chat != null) chat else path(RoutePaths.yorksV1Dispatches),
         more,
       ];
     }
-    return [home, projects, requests, more];
+    return [home, projects, ?chat, requests, more];
   }
 
-  List<_YorksDestination> _destinationsFor(YorksV1Role? role) {
+  List<_YorksDestination> _destinationsFor(
+    YorksV1Role? role, {
+    bool teamChatEnabled = true,
+    int chatUnread = 0,
+  }) {
     final workspace = _workspaceCopy(role);
     final shared = <_YorksDestination>[
       _YorksDestination(
@@ -289,14 +325,33 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         selectedIcon: Icons.assignment_rounded,
         path: RoutePaths.yorksV1MaterialRequests,
       ),
+      if (teamChatEnabled)
+        _YorksDestination(
+          label: YorksV1TeamChatStrings.teamChat,
+          icon: Icons.chat_bubble_outline_rounded,
+          selectedIcon: Icons.chat_bubble_rounded,
+          path: RoutePaths.yorksV1TeamChat,
+          badgeCount: chatUnread,
+          group: YorksV1ShellStrings.collaboration,
+        ),
     ];
 
     return switch (role) {
       YorksV1Role.projectEngineer ||
       YorksV1Role.siteEngineer ||
       YorksV1Role.seniorMechanicalEngineer ||
-      YorksV1Role.projectManager => [
+      YorksV1Role.projectManager ||
+      YorksV1Role.workshopInCharge ||
+      YorksV1Role.documentController => [
         ...shared,
+        if (role?.canBrowseInventory ?? false)
+          _YorksDestination(
+            label: YorksV1ShellStrings.browseInventory,
+            icon: Icons.inventory_2_outlined,
+            selectedIcon: Icons.inventory_2_rounded,
+            path: RoutePaths.yorksV1Inventory,
+            suffix: YorksV1ShellStrings.viewOnly,
+          ),
         _YorksDestination(
           label: YorksV1ShellStrings.materialReturns,
           compactLabel: YorksV1ShellStrings.returnsCompact,
@@ -332,6 +387,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       YorksV1Role.procurement => [
         shared.first,
         shared[2],
+        if (teamChatEnabled) shared.last,
         _YorksDestination(
           label: YorksV1ShellStrings.browseInventory,
           icon: Icons.inventory_2_outlined,
@@ -382,7 +438,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           label: YorksV1ShellStrings.configuration,
           icon: Icons.tune_outlined,
           selectedIcon: Icons.tune_rounded,
-          path: RoutePaths.more,
+          path: RoutePaths.yorksV1Configuration,
           group: YorksV1ShellStrings.administration,
         ),
         _YorksDestination(
@@ -423,6 +479,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
               location == RoutePaths.engineerCreateProject) ||
           (path == RoutePaths.yorksV1MaterialRequests &&
               location.startsWith('/yorks/material-requests')) ||
+          (path == RoutePaths.yorksV1TeamChat &&
+              location.startsWith(RoutePaths.yorksV1TeamChat)) ||
           (path == RoutePaths.yorksV1Projects &&
               location.startsWith('/yorks/projects'))) {
         return destination;
@@ -463,16 +521,26 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
-    final all = YorksV1WorkspaceShell(
-      child: const SizedBox.shrink(),
-    )._destinationsFor(role);
-    final primaryRoutes = <String>{
-      RoutePaths.engineerHome,
-      RoutePaths.yorksV1Projects,
-      RoutePaths.yorksV1MaterialRequests,
-      RoutePaths.yorksV1Inventory,
-      RoutePaths.yorksV1Dispatches,
-    };
+    final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
+    final chatUnread = teamChatEnabled
+        ? ref.watch(yorksV1TeamChatUnreadProvider)
+        : 0;
+    final shell = YorksV1WorkspaceShell(child: const SizedBox.shrink());
+    final all = shell._destinationsFor(
+      role,
+      teamChatEnabled: teamChatEnabled,
+      chatUnread: chatUnread,
+    );
+    final primaryRoutes = shell
+        ._mobileDestinationsFor(
+          role,
+          nativeMobile: YorksMobileUi.isActive(context),
+          teamChatEnabled: teamChatEnabled,
+          chatUnread: chatUnread,
+        )
+        .map((destination) => destination.path)
+        .whereType<String>()
+        .toSet();
     final moreDestinations = all
         .where(
           (destination) =>
@@ -707,6 +775,10 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
+    final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
+    final unreadChat = teamChatEnabled
+        ? ref.watch(yorksV1TeamChatUnreadProvider)
+        : 0;
     return Material(
       color: AppColors.workspaceChrome,
       child: Container(
@@ -739,12 +811,28 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               ),
             ],
             const Spacer(),
+            if (teamChatEnabled) ...[
+              IconButton(
+                tooltip: YorksV1TeamChatStrings.teamChat.active(language),
+                onPressed: () => context.go(RoutePaths.yorksV1TeamChat),
+                icon: Badge(
+                  isLabelVisible: unreadChat > 0,
+                  label: Text(unreadChat > 99 ? '99+' : '$unreadChat'),
+                  child: const Icon(Icons.chat_bubble_outline_rounded),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
             const NotificationBell(),
             const SizedBox(width: AppSpacing.sm),
             SizedBox(
               width: 220,
               child: _YorksQuickNavigationButton(
-                destinations: _topLevelDestinationsFor(role),
+                destinations: _topLevelDestinationsFor(
+                  role,
+                  teamChatEnabled: teamChatEnabled,
+                  chatUnread: unreadChat,
+                ),
                 language: language,
                 role: role,
               ),
@@ -763,6 +851,8 @@ class _YorksWorkspaceMobileTopBar extends StatelessWidget {
     required this.breadcrumbs,
     required this.location,
     required this.unreadNotifications,
+    required this.teamChatEnabled,
+    required this.unreadChat,
     required this.onMenu,
     required this.onBack,
   });
@@ -770,6 +860,8 @@ class _YorksWorkspaceMobileTopBar extends StatelessWidget {
   final List<TranslatableString> breadcrumbs;
   final String location;
   final int unreadNotifications;
+  final bool teamChatEnabled;
+  final int unreadChat;
   final VoidCallback onMenu;
   final VoidCallback onBack;
 
@@ -793,11 +885,23 @@ class _YorksWorkspaceMobileTopBar extends StatelessWidget {
               onPressed: focused ? onBack : onMenu,
             ),
       trailing: home
-          ? YorksMobileIconButton(
-              icon: Icons.notifications_none_rounded,
-              tooltip: AppStrings.notifications.primary,
-              badge: unreadNotifications > 0,
-              onPressed: () => context.push(RoutePaths.notifications),
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (teamChatEnabled)
+                  YorksMobileIconButton(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    tooltip: YorksV1TeamChatStrings.teamChat.primary,
+                    badge: unreadChat > 0,
+                    onPressed: () => context.go(RoutePaths.yorksV1TeamChat),
+                  ),
+                YorksMobileIconButton(
+                  icon: Icons.notifications_none_rounded,
+                  tooltip: AppStrings.notifications.primary,
+                  badge: unreadNotifications > 0,
+                  onPressed: () => context.push(RoutePaths.notifications),
+                ),
+              ],
             )
           : null,
     );
@@ -1445,7 +1549,10 @@ class _YorksMobileNavigation extends StatelessWidget {
                 (destination.path == RoutePaths.yorksV1Projects &&
                     activePath?.startsWith('/yorks/projects') == true) ||
                 (destination.path == RoutePaths.yorksV1MaterialRequests &&
-                    activePath?.startsWith('/yorks/material-requests') == true),
+                    activePath?.startsWith('/yorks/material-requests') ==
+                        true) ||
+                (destination.path == RoutePaths.yorksV1TeamChat &&
+                    activePath?.startsWith(RoutePaths.yorksV1TeamChat) == true),
             language: language,
           ),
         ),
@@ -1493,9 +1600,9 @@ class _YorksNavigationTile extends StatelessWidget {
                       ? MainAxisAlignment.center
                       : MainAxisAlignment.start,
                   children: [
-                    Icon(
-                      selected ? destination.selectedIcon : destination.icon,
-                      size: 20,
+                    _DestinationIcon(
+                      destination: destination,
+                      selected: selected,
                       color: disabled
                           ? AppColors.mutedLight
                           : selected
@@ -1568,9 +1675,9 @@ class _YorksMobileItem extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    selected ? destination.selectedIcon : destination.icon,
-                    size: 20,
+                  _DestinationIcon(
+                    destination: destination,
+                    selected: selected,
                     color: selected ? AppColors.blue : AppColors.muted,
                   ),
                   const SizedBox(height: 4),
@@ -1615,9 +1722,9 @@ class _YorksMobileItem extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    selected ? destination.selectedIcon : destination.icon,
-                    size: 20,
+                  _DestinationIcon(
+                    destination: destination,
+                    selected: selected,
                     color: selected
                         ? AppColors.onPrimary
                         : AppColors.lineStrong,
@@ -1757,6 +1864,7 @@ class _YorksDestination {
     this.path,
     this.group,
     this.suffix,
+    this.badgeCount = 0,
   });
 
   final TranslatableString label;
@@ -1766,6 +1874,65 @@ class _YorksDestination {
   final String? path;
   final TranslatableString? group;
   final TranslatableString? suffix;
+  final int badgeCount;
+}
+
+class _DestinationIcon extends StatelessWidget {
+  const _DestinationIcon({
+    required this.destination,
+    required this.selected,
+    required this.color,
+  });
+
+  final _YorksDestination destination;
+  final bool selected;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(
+      selected ? destination.selectedIcon : destination.icon,
+      size: 20,
+      color: color,
+    );
+    // Preserve the established shell geometry exactly when no badge is
+    // visible. Wrapping every destination in the wider badge canvas shifts
+    // unrelated navigation icons and creates needless visual churn.
+    if (destination.badgeCount <= 0) return icon;
+    return SizedBox(
+      width: 25,
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(left: 1, top: 2, child: icon),
+          Positioned(
+            right: -2,
+            top: -3,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: AppColors.error,
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+              child: Text(
+                destination.badgeCount > 99
+                    ? '99+'
+                    : '${destination.badgeCount}',
+                style: AppTypography.labelSmall.copyWith(
+                  color: Colors.white,
+                  fontSize: 8,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 TranslatableString _roleCopy(YorksV1Role? role) => switch (role) {
@@ -1774,6 +1941,8 @@ TranslatableString _roleCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.seniorMechanicalEngineer =>
     AppStrings.seniorMechanicalEngineerRole,
   YorksV1Role.projectManager => AppStrings.projectManagerRole,
+  YorksV1Role.workshopInCharge => AppStrings.workshopInChargeRole,
+  YorksV1Role.documentController => AppStrings.documentControllerRole,
   YorksV1Role.procurement => AppStrings.procurementRole,
   YorksV1Role.admin => AppStrings.adminRole,
   null => YorksV1ShellStrings.account,
@@ -1783,16 +1952,26 @@ TranslatableString _workspaceCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.projectEngineer ||
   YorksV1Role.siteEngineer ||
   YorksV1Role.seniorMechanicalEngineer ||
-  YorksV1Role.projectManager => YorksV1ShellStrings.engineerWorkspace,
+  YorksV1Role.projectManager ||
+  YorksV1Role.workshopInCharge ||
+  YorksV1Role.documentController => YorksV1ShellStrings.engineerWorkspace,
   YorksV1Role.procurement => YorksV1ShellStrings.procurementWorkspace,
   YorksV1Role.admin => YorksV1ShellStrings.managementWorkspace,
   null => YorksV1ShellStrings.operationalWorkspace,
 };
 
-List<_YorksDestination> _topLevelDestinationsFor(YorksV1Role? role) {
+List<_YorksDestination> _topLevelDestinationsFor(
+  YorksV1Role? role, {
+  required bool teamChatEnabled,
+  required int chatUnread,
+}) {
   final shell = YorksV1WorkspaceShell(child: const SizedBox.shrink());
   return shell
-      ._destinationsFor(role)
+      ._destinationsFor(
+        role,
+        teamChatEnabled: teamChatEnabled,
+        chatUnread: chatUnread,
+      )
       .where((item) => item.path != null)
       .toList();
 }

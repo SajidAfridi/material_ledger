@@ -28,7 +28,9 @@ enum YorksV1DocumentEntityType {
   receiptReview('receipt_review'),
   materialReturn('material_return'),
   deliveryOrder('delivery_order'),
-  rentalProperty('rental_property');
+  rentalProperty('rental_property'),
+  supplier('supplier'),
+  supplierReceiptBatch('supplier_receipt_batch');
 
   const YorksV1DocumentEntityType(this.wireValue);
 
@@ -60,6 +62,33 @@ enum YorksV1DocumentOrigin {
   }
 }
 
+/// Controlled business identity for evidence stored inside a Supplier folder.
+///
+/// This is intentionally separate from MIME type and document classification:
+/// MIME describes the file, classification controls authorization, and this
+/// value describes the supplier business record represented by the file.
+enum YorksV1SupplierDocumentType {
+  deliveryNote('delivery_note'),
+  invoice('invoice'),
+  packingList('packing_list'),
+  productDataSheet('product_data_sheet'),
+  other('other');
+
+  const YorksV1SupplierDocumentType(this.wireValue);
+
+  final String wireValue;
+
+  bool get requiresBusinessReference => this == deliveryNote || this == invoice;
+
+  static YorksV1SupplierDocumentType? fromWireValue(Object? value) {
+    if (value is! String) return null;
+    for (final type in values) {
+      if (type.wireValue == value) return type;
+    }
+    return null;
+  }
+}
+
 class YorksV1DocumentVersion {
   const YorksV1DocumentVersion({
     required this.id,
@@ -78,6 +107,9 @@ class YorksV1DocumentVersion {
     this.sourceEntityType,
     this.sourceEntityId,
     this.sourceRevision,
+    this.supplierDocumentType,
+    this.businessReference,
+    this.supplierDocumentNotes,
   });
 
   final String id;
@@ -96,10 +128,28 @@ class YorksV1DocumentVersion {
   final YorksV1DocumentEntityType? sourceEntityType;
   final String? sourceEntityId;
   final String? sourceRevision;
+  final YorksV1SupplierDocumentType? supplierDocumentType;
+  final String? businessReference;
+  final String? supplierDocumentNotes;
 
   factory YorksV1DocumentVersion.fromRpcJson(Map<String, dynamic> json) {
     final origin = YorksV1DocumentOrigin.fromWireValue(json['origin']);
+    final rawSupplierDocumentType = json['supplier_document_type'];
+    final supplierDocumentType = YorksV1SupplierDocumentType.fromWireValue(
+      rawSupplierDocumentType,
+    );
+    final businessReference = _nullableString(json['business_reference']);
+    final supplierDocumentNotes = _nullableString(
+      json['supplier_document_notes'],
+    );
     if (origin == null) _unexpected();
+    if ((rawSupplierDocumentType != null && supplierDocumentType == null) ||
+        (supplierDocumentType == null &&
+            (businessReference != null || supplierDocumentNotes != null)) ||
+        (supplierDocumentType?.requiresBusinessReference ?? false) &&
+            businessReference == null) {
+      _unexpected();
+    }
     return YorksV1DocumentVersion(
       id: _requiredString(json, 'id'),
       revisionNumber: _positiveInt(json['revision_number']),
@@ -119,6 +169,9 @@ class YorksV1DocumentVersion {
       ),
       sourceEntityId: _nullableString(json['source_entity_id']),
       sourceRevision: _nullableString(json['source_revision']),
+      supplierDocumentType: supplierDocumentType,
+      businessReference: businessReference,
+      supplierDocumentNotes: supplierDocumentNotes,
     );
   }
 }
@@ -177,11 +230,17 @@ class YorksV1Document {
     );
     final version = _jsonObject(json['current_version']);
     if (classification == null || version == null) _unexpected();
+    final currentVersion = YorksV1DocumentVersion.fromRpcJson(version);
+    if (currentVersion.supplierDocumentType ==
+            YorksV1SupplierDocumentType.invoice &&
+        classification != YorksV1DocumentClassification.commercial) {
+      _unexpected();
+    }
     return YorksV1Document(
       id: _requiredString(json, 'id'),
       classification: classification,
       createdAt: _requiredDate(json, 'created_at'),
-      currentVersion: YorksV1DocumentVersion.fromRpcJson(version),
+      currentVersion: currentVersion,
       links: _jsonList(
         json['links'],
       ).map(YorksV1DocumentLink.fromRpcJson).toList(growable: false),
@@ -304,6 +363,9 @@ class YorksV1DocumentUploadInput {
     this.sourceEntityType,
     this.sourceEntityId,
     this.sourceRevision,
+    this.supplierDocumentType,
+    this.businessReference,
+    this.supplierDocumentNotes,
   });
 
   final String projectId;
@@ -319,6 +381,9 @@ class YorksV1DocumentUploadInput {
   final YorksV1DocumentEntityType? sourceEntityType;
   final String? sourceEntityId;
   final String? sourceRevision;
+  final YorksV1SupplierDocumentType? supplierDocumentType;
+  final String? businessReference;
+  final String? supplierDocumentNotes;
 
   Map<String, Object?> toRpcPayload(String sha256) => {
     'project_id': projectId,
@@ -334,6 +399,16 @@ class YorksV1DocumentUploadInput {
     'source_entity_type': sourceEntityType?.wireValue,
     'source_entity_id': _nullableString(sourceEntityId),
     'source_revision': _nullableString(sourceRevision),
+  };
+
+  /// Supplier-only payload extension. Generic, project, and rental upload
+  /// callers continue to use [toRpcPayload] and therefore never emit these
+  /// business-metadata keys.
+  Map<String, Object?> toSupplierRpcPayload(String sha256) => {
+    ...toRpcPayload(sha256),
+    'supplier_document_type': supplierDocumentType?.wireValue,
+    'business_reference': _nullableString(businessReference),
+    'supplier_document_notes': _nullableString(supplierDocumentNotes),
   };
 }
 

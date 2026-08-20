@@ -87,8 +87,11 @@ class NotificationActions {
   }
 
   Future<void> markAllRead() async {
-    await _ref.read(notificationsProvider.notifier).markAllRead();
+    // A Yorks workflow acknowledgement is committed to the recipient-owned
+    // backend row first. This avoids presenting a device-local success when
+    // the authoritative command could not be completed.
     await _ref.read(yorksV1NotificationsProvider.notifier).markAllSeen();
+    await _ref.read(notificationsProvider.notifier).markAllRead();
   }
 
   Future<void> dismiss(AppNotification notification) async {

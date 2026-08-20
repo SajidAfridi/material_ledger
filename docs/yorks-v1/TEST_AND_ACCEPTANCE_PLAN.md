@@ -6,16 +6,17 @@
 |---|---|
 | Dart unit | State derivation, decimal input normalization, canonical column mapping, reference formatting, role/capability resolution |
 | Repository/controller | Draft recovery, typed RPC payload/result, connectivity, idempotent retry, conflict/error handling, notification refresh |
-| Flutter widget | Four-role navigation, action visibility, forms, dynamic grid, keyboard behavior, focused mobile editor, localization and responsive layouts |
+| Flutter widget | Eight-role navigation, action visibility, forms, dynamic grid, keyboard behavior, focused mobile editor, localization and responsive layouts |
 | Database/pgTAP | Constraints, RLS, RPC authority, locks, state transitions, audit attribution, protected commercial projections |
-| Concurrency/integration | Competing reservations/dispatches, duplicate commands, membership revocation and six-role end-to-end flow |
+| Concurrency/integration | Competing reservations/dispatches, duplicate commands, membership revocation and eight-role end-to-end flow |
 | Visual/manual | Effective R35 parity, Android/web layouts, Excel round-trip, PDF/print short/multi-page output |
 
 No screen-level success substitutes for a direct database negative test.
 
 ## 2. Golden acceptance scenarios
 
-These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
+AT-01–AT-25 are the preserved Rev 2.0 scenarios. Later accepted production
+slices extend the same stable sequence without renumbering those originals.
 
 | ID | Scenario | Primary automated/manual evidence |
 |---|---|---|
@@ -43,12 +44,15 @@ These are the 25 Rev 2.0 scenarios, preserved as stable IDs.
 | AT-22 | MR deletion/cancel rules are enforced by state and role. | RPC/RLS matrix |
 | AT-23 | Admin Configuration, Rentals, Users and Audit still load and operate. | regression/widget/smoke |
 | AT-24 | Duct Sizer and ESP Calculator remain available. | widget/smoke |
-| AT-25 | RLS negatives prove Procurement cannot mutate project/BOQ, unrelated assigned-role Engineers cannot access another project, and global Engineer roles receive no commercial/inventory/Admin authority. | six-role pgTAP/API |
+| AT-25 | RLS negatives prove Procurement cannot mutate project/BOQ, unrelated assigned-role Engineers cannot access another project, all four global Engineer roles receive no commercial/stock authority, and only Senior Mechanical Engineer receives the explicit non-commercial inventory-read exception. | eight-role pgTAP/API |
 | AT-26 | Authorized MR comments are append-only; @mentions notify once and unauthorized/stale users cannot be mentioned or read the thread. | RPC/RLS/idempotency/widget |
 | AT-27 | Inventory-assisted MR entry returns no commercial/stock fields and fills description, brand, size, model and unit while leaving quantity deliberate. | response-shape/repository/widget |
 | AT-28 | Status, owner and next action match across desktop, mobile and the controlled MR projection for every revised stage. | unit/golden/PDF visual |
 | AT-29 | A confirmed receipt accepts authorized JPEG/PNG site evidence through the document pipeline; pre-confirmation and unrelated-project uploads fail. | Storage/RPC/RLS/widget |
 | AT-30 | An actively assigned Site Engineer can close a fully resolved received MR, Procurement cannot, and tablet/mobile request views recover after suspension through foreground and safety refreshes without clearing the visible projection. | widget/provider/RPC/pgTAP/mobile |
+| AT-31 | Exact Admin stages typed Configuration changes and normalized category/unit actions, validates, reviews a required reason and publishes one immutable audited version; all other exact roles and direct table writes fail, while 1366px, tablet and 360px layouts remain usable without overflow. | model/repository/widget/route/pgTAP/responsive visual |
+| AT-32 | Team Chat provides authorized Direct, Project, MR, Group and Announcement conversations; group creation is limited to Admin and the four global Project Engineer roles, Direct chat has exactly two visible participants, sends and attachments are idempotent/verified, read state follows the user across devices, a message increments only Team Chat (never the workflow bell), pushes deep-link to the exact thread, and 1366px/tablet/390px/360px states match the R38.5 review hierarchy without overflow. | model/widget/golden/route/Edge payload/pgTAP/Storage/RLS |
+| AT-33 | Warehouse Inventory adds Procurement/Admin-only Supplier folders and a five-stage strict import: blank supplier identity is preserved in immutable Unknown Supplier, exact/alias/similar/new decisions are explicit, delivered equals accepted plus damaged plus rejected, external receipt evidence is required, opening balance uses one reviewed cutoff, secure documents and FIFO provenance remain linked, duplicate/failed imports create no partial stock, and desktop/tablet/390px/360px layouts stay bounded. | workbook fixtures/model/controller/widget/route/pgTAP/Storage/RLS/responsive visual |
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
@@ -80,13 +84,30 @@ Android. Add:
   the exact five-sheet client template downloads unchanged, exact aliases map,
   fuzzy categories require confirmation, failed/retried imports retain one
   command identity, and a bad later row leaves no partial item or movement.
+- AP-10: Android, physical iOS and supported installed web/PWA clients receive
+  one safe Team Chat push for unread non-muted activity (mentions still alert),
+  foreground refresh does not duplicate the message, no Chat row or count
+  enters the workflow notification centre, opening the exact thread suppresses
+  its redundant in-app alert, and marking the thread read updates the backend
+  cursor observed by the user on another device. Windows/macOS validate the
+  installed HTTPS web app; iOS/iPadOS web validates a Home Screen install on
+  16.4 or later after an explicit user alert opt-in.
+- AP-11: the R38.9 template, QA workbook and selected reconciled opening-balance
+  candidate are rehearsed in staging. Header mapping uses names rather than
+  positions; formula text is neutralized; unsupported categories/units remain
+  explicit decisions; `source = committed + quarantine/exclusions`; the two
+  alternative master workbooks cannot both commit; and 20,000-row parsing,
+  1,000-supplier search plus 10,000-line supplier-folder pagination stay
+  responsive without loading the complete result set into one widget tree.
 
-## 4. Four-role security matrix
+## 4. Eight-role security matrix
 
 Every RLS/RPC change supplies positive and negative cases using representative
 Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager,
-Procurement and Admin JWT claims. Global Engineer tests must prove all-project
-MR approval/DO generation and negative commercial, inventory and Admin access.
+Workshop In-Charge, Document Controller, Procurement and Admin JWT claims.
+Global Engineer tests must prove all-project MR approval/DO generation and
+negative commercial, stock-write and Admin access; Senior Mechanical Engineer
+also proves positive inventory read and negative inventory mutation.
 
 Required adversarial techniques:
 
@@ -175,6 +196,12 @@ For each UI batch test:
 - loading, empty, forbidden, offline, conflict and error states;
 - no overflow, covered action or unreachable control.
 
+Team Chat additionally tests the 1366px three-pane workspace, 900px two-pane
+workspace, 390px conversation list and 360px focused thread/composer. The
+desktop details pane collapses before the conversation list, mobile never
+shrinks the three-pane layout, the composer stays above safe-area/bottom
+navigation, and interactive controls retain at least 44x44 targets.
+
 BOQ specifically tests 500 rows, virtualized focus, sticky identity/header,
 Tab/Shift+Tab/arrows/Enter and mobile focused-row Previous/Next behavior.
 
@@ -201,7 +228,7 @@ Never waive a failed security/quantity test to meet the rapid-demo timebox.
 
 Batch 10 produces:
 
-- scenario result matrix for AT-01–AT-25 and AP-01–AP-08;
+- scenario result matrix for AT-01–AT-32 and AP-01–AP-10;
 - Flutter/database/concurrency/integration command logs;
 - desktop/mobile screenshots and controlled-document renders;
 - workbook round-trip fixtures/results;

@@ -9,9 +9,10 @@ remain authoritative. The app uses the registered Yorks Firebase project
 - Firebase initializes at application launch and reads the current permission
   without opening a prompt. Chrome, Android and Apple permission is requested
   only from the user's explicit **Enable device alerts** action in the
-  notification center so browser gesture requirements are satisfied. An
-  already-authorized FCM token is registered only after the Yorks user is
-  known; token refresh and foreground resume repeat that owner-bound step.
+  notification centre or Team Chat alert control so browser gesture
+  requirements are satisfied. An already-authorized FCM token is registered
+  only after the Yorks user is known; token refresh and foreground resume
+  repeat that owner-bound step.
 - Token and message-payload diagnostics are emitted only in debug builds. FCM
   payloads must never contain commercial or other protected values.
 - Foreground FCM messages and recipient-scoped Realtime refreshes converge on
@@ -24,7 +25,8 @@ remain authoritative. The app uses the registered Yorks Firebase project
 
 ## Trusted delivery path
 
-Workflow RPCs insert recipient-specific rows into `v1_notifications`. An
+Workflow RPCs and Team Chat insert recipient-specific rows into
+`v1_notifications`. An
 insert trigger creates exactly one durable `v1_notification_push_outbox` job;
 Postgres invokes `send-push` with only that notification UUID and a
 Vault-managed webhook secret. The Edge Function claims the job atomically,
@@ -35,11 +37,14 @@ retryable result. A one-minute `pg_cron` job retries failed or expired leases.
 Clients cannot choose recipients, event copy or deep links. They can only
 register/unregister their own FCM token through owner-bound RPCs. If a user
 first registers after an alert was created, recent unseen `no_devices` jobs are
-requeued. The notification centre reads the same authoritative recipient rows
-through `v1_list_my_notifications`; Realtime is a refresh signal and a bounded
-poll remains as a fallback. Desktop/tablet expose a top-bar recent-alert panel,
-and every layout retains the full center with unread, delivery-health,
-enable/recovery and pull-to-refresh behavior.
+requeued. The workflow notification centre reads its authoritative recipient
+rows through `v1_list_my_notifications`; hidden Team Chat transport rows are
+excluded because conversation-member cursors own Chat unread state. Realtime is
+a refresh signal and a bounded poll remains as a fallback. Desktop/tablet
+expose a top-bar recent-workflow-alert panel, and every layout retains the full
+centre with unread, delivery-health, enable/recovery and pull-to-refresh
+behavior. Team Chat independently exposes alert setup and its authoritative
+unread badge.
 
 Current targeting follows workflow ownership:
 
@@ -86,13 +91,24 @@ These values must never be committed or placed in the Flutter client.
    `yorks_push_webhook_secret`; never expose its decrypted value to a client.
 
 After deployment, sign in once on each target, open Notifications and choose
-**Enable device alerts** so its owner-bound token can be registered. Prove an
-actual Yorks workflow transition (for example Engineer Submit -> Procurement),
-not only a Firebase campaign. Verify the recipient receives both the FCM alert
-and the authoritative in-app row, an unrelated role receives neither, the deep link
-opens the intended record, and retrying the workflow does not create a
-duplicate notification. Test Android, a physical iOS device, and the HTTPS
-production web origin separately; an iOS Simulator cannot receive FCM push.
+**Enable device alerts** (or use the same alert control in Team Chat) so its
+owner-bound token can be registered. Prove an actual Yorks workflow transition
+and a Team Chat message, not only a Firebase campaign. A workflow event must
+produce one FCM alert and one authoritative workflow row. A Chat message must
+produce one FCM alert and only the Team Chat unread badge, never a workflow-bell
+entry. Verify exact deep links, unauthorized-role exclusion and retry
+de-duplication.
+
+Target verification matrix:
+
+- Android native and a physical iOS device use FlutterFire FCM. An iOS
+  Simulator cannot receive remote FCM push.
+- Windows and macOS use the installed HTTPS web/PWA build in a supported
+  browser. The repository does not currently configure a separate native
+  Windows or macOS push application.
+- iOS/iPadOS web push requires 16.4 or later, a Home Screen installation and
+  the user's explicit alert action. Browser and operating-system notification,
+  Focus/Do Not Disturb and sound settings remain authoritative.
 
 ## Rollback
 

@@ -66,6 +66,8 @@ String _roleTitleLabel(AppUser user, {required bool yorksV1Provisioning}) {
           YorksV1Role.siteEngineer => 'Site Engineer',
           YorksV1Role.seniorMechanicalEngineer => 'Senior Mechanical Engineer',
           YorksV1Role.projectManager => 'Project Manager',
+          YorksV1Role.workshopInCharge => 'Workshop In-Charge',
+          YorksV1Role.documentController => 'Document Controller',
           YorksV1Role.procurement => 'Procurement Engineer',
           YorksV1Role.admin => 'Operations Admin',
         };
@@ -79,6 +81,8 @@ TranslatableString _yorksV1RoleText(YorksV1Role role) => switch (role) {
   YorksV1Role.seniorMechanicalEngineer =>
     AppStrings.seniorMechanicalEngineerRole,
   YorksV1Role.projectManager => AppStrings.projectManagerRole,
+  YorksV1Role.workshopInCharge => AppStrings.workshopInChargeRole,
+  YorksV1Role.documentController => AppStrings.documentControllerRole,
   YorksV1Role.procurement => AppStrings.procurementRole,
   YorksV1Role.admin => AppStrings.adminRole,
 };

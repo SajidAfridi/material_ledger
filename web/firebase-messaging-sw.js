@@ -19,10 +19,13 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 function appUrlFor(data) {
+  const fallbackRoute = data.surface === 'team_chat'
+    ? '/yorks/team-chat'
+    : '/notifications';
   const route = typeof data.route === 'string' && data.route.startsWith('/')
     && !data.route.startsWith('//')
     ? data.route
-    : '/notifications';
+    : fallbackRoute;
   const target = new URL(route, 'https://yorks.invalid');
   if (typeof data.notificationId === 'string'
       && /^[0-9a-f-]{36}$/i.test(data.notificationId)) {
@@ -34,16 +37,14 @@ function appUrlFor(data) {
 }
 
 messaging.onBackgroundMessage((payload) => {
-  // Requested operational diagnostic: visible in the device browser's console.
-  // Business payloads must remain non-commercial by the Yorks notification
-  // contract; protected values never travel in FCM data.
-  console.log('[fcm][background]', payload);
   // FCM Webpush notification payloads are displayed by the browser. Only
   // data-only messages need an explicit fallback notification here.
   if (payload.notification) return;
   const data = payload.data || {};
   const title = typeof data.title === 'string' && data.title
     ? data.title
+    : data.surface === 'team_chat'
+    ? 'New Team Chat message'
     : 'Yorks workflow update';
   const body = typeof data.body === 'string' && data.body
     ? data.body
@@ -53,7 +54,9 @@ messaging.onBackgroundMessage((payload) => {
     icon: '/icons/Icon-192.png',
     badge: '/icons/Icon-192.png',
     tag: data.notificationId || undefined,
-    renotify: Boolean(data.notificationId),
+    // Replayed delivery of one outbox UUID replaces the existing notification
+    // silently; a genuinely new chat message has a new UUID and still alerts.
+    renotify: false,
     requireInteraction: false,
     silent: false,
     vibrate: [120, 60, 120],

@@ -138,28 +138,6 @@ class YorksV1LogisticsDocumentService {
                 ? YorksV1LogisticsStrings.deliveryReportTitle
                 : YorksV1LogisticsStrings.deliveryOrderTitle)
             .primary;
-    // A long dispatch is deliberately split into a normal table sequence and
-    // a final-page bundle. The bundle reserves a stable signing area directly
-    // above the fixed company footer, so the sign-off is never stranded on an
-    // otherwise empty page or split from the final delivered lines.
-    final useDedicatedSignOffPage = revision.lines.length > 16;
-    final finalPageLineCount = useDedicatedSignOffPage ? 6 : 0;
-    final leadingLines = useDedicatedSignOffPage
-        ? revision.lines.sublist(0, revision.lines.length - finalPageLineCount)
-        : revision.lines;
-    final finalPageLines = useDedicatedSignOffPage
-        ? revision.lines.sublist(revision.lines.length - finalPageLineCount)
-        : const <YorksV1DeliveryOrderLine>[];
-    // Only use the bottom-anchored one-page form when every variable header
-    // field fits its normal single line. Wrapped project/contractor context
-    // needs natural pagination; forcing it into the fixed signing canvas can
-    // create a second page containing only the repeated footer.
-
-    final useAnchoredSinglePageSignOff =
-        !useDedicatedSignOffPage &&
-        revision.lines.length <= 8 &&
-        revision.lines.every((line) => line.description.length <= 72) &&
-        _hasCompactDeliveryOrderHeader(workspace, revision);
     _validateDeliveryOrder(revision);
     final document = pw.Document(
       theme: theme,
@@ -189,33 +167,11 @@ class YorksV1LogisticsDocumentService {
                 documentTitle: documentTitle,
               )
             : pw.SizedBox(),
-        // The company contact panel is a true page footer. Keeping it here
-        // reserves its space on every page, rather than letting a long table
-        // push it into the document body or onto a following page.
+        // Every page reserves an equal footer band so pagination is stable.
+        // Only the final page paints the receipt/signature form in that band,
+        // immediately above the legal company footer.
         footer: _deliveryOrderFooter,
-        build: (_) => [
-          if (useDedicatedSignOffPage) ...[
-            _deliveryOrderTable(leadingLines),
-            _deliveryOrderFinalPageBundle(finalPageLines),
-          ] else if (useAnchoredSinglePageSignOff)
-            _deliveryOrderAnchoredSinglePageBundle(leadingLines)
-          else ...[
-            _deliveryOrderTable(leadingLines),
-            // Keep the handwritten receipt section together. The contact
-            // panel lives in the fixed footer above, so this block either
-            // follows the final table rows or starts cleanly on the next
-            // page as one unit.
-            pw.Inseparable(
-              child: pw.Column(
-                mainAxisSize: pw.MainAxisSize.min,
-                children: [
-                  pw.SizedBox(height: 4 * PdfPageFormat.mm),
-                  _deliveryOrderSignatureBlock(),
-                ],
-              ),
-            ),
-          ],
-        ],
+        build: (_) => [_deliveryOrderTable(revision.lines)],
       ),
     );
     return document.save(enableEventLoopBalancing: true);
@@ -626,76 +582,6 @@ class YorksV1LogisticsDocumentService {
     ],
   );
 
-  static pw.Widget _deliveryOrderFinalPageBundle(
-    List<YorksV1DeliveryOrderLine> lines,
-  ) => pw.Inseparable(
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        // The leading table's repeated heading already opens this page. The
-        // final rows are a continuation grouped with sign-off, not a second
-        // table section that should introduce another heading mid-page.
-        _deliveryOrderTable(lines, includeHeader: false),
-        pw.SizedBox(height: 5 * PdfPageFormat.mm),
-        _deliveryOrderSignatureBlock(),
-      ],
-    ),
-  );
-
-  static bool _hasCompactDeliveryOrderHeader(
-    YorksV1ReturnsDocumentsWorkspace workspace,
-    YorksV1DeliveryOrderRevision revision,
-  ) {
-    final identity = revision.documentIdentity;
-    final projectName = identity?.projectName ?? workspace.projectName;
-    final jobReference =
-        identity?.jobContractReference ?? workspace.jobContractReference;
-    final qualifiedProjectName =
-        YorksV1CompanyDocumentStrings.qualifiedProjectName(
-          projectName: projectName,
-          jobContractReference: jobReference,
-        );
-    final contractor =
-        identity?.mainContractorName ??
-        workspace.mainContractorName ??
-        projectName;
-    final scope =
-        identity?.scopeCode ??
-        identity?.scopeName ??
-        workspace.scopeCode ??
-        workspace.scopeName;
-    final materialContext =
-        identity?.materialContext ??
-        workspace.materialContext ??
-        'Material delivery';
-    final dispatchedBy = [
-      identity?.dispatchedByDisplayName,
-      identity?.dispatchedByExactRole,
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
-
-    return qualifiedProjectName.length <= 96 &&
-        contractor.length <= 92 &&
-        scope.length <= 100 &&
-        materialContext.length <= 100 &&
-        dispatchedBy.length <= 100;
-  }
-
-  static pw.Widget _deliveryOrderAnchoredSinglePageBundle(
-    List<YorksV1DeliveryOrderLine> lines,
-  ) => pw.Container(
-    // The fixed signing canvas is reserved for compact, single-line headers.
-    // Wrapped headers use the naturally paginated path selected above.
-    height: 178 * PdfPageFormat.mm,
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        _deliveryOrderTable(lines),
-        pw.Spacer(),
-        _deliveryOrderSignatureBlock(),
-      ],
-    ),
-  );
-
   static pw.Widget _deliveryTableHeader(String text) => pw.Padding(
     padding: pw.EdgeInsets.symmetric(
       horizontal: 1.5 * PdfPageFormat.mm,
@@ -864,6 +750,16 @@ class YorksV1LogisticsDocumentService {
   static pw.Widget _deliveryOrderFooter(pw.Context context) => pw.Column(
     mainAxisSize: pw.MainAxisSize.min,
     children: [
+      pw.SizedBox(
+        height: 50 * PdfPageFormat.mm,
+        child: context.pageNumber == context.pagesCount
+            ? pw.Align(
+                alignment: pw.Alignment.bottomCenter,
+                child: _deliveryOrderSignatureBlock(),
+              )
+            : pw.SizedBox(),
+      ),
+      pw.SizedBox(height: 4 * PdfPageFormat.mm),
       _companyContact(),
       pw.SizedBox(height: 1.5 * PdfPageFormat.mm),
       _pageNumber(context),

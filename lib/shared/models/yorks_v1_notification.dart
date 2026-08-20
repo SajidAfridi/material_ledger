@@ -2,6 +2,19 @@ import '../../app/router.dart' show RoutePaths;
 import 'app_language.dart';
 import 'app_notification.dart';
 
+const yorksV1ChatTransportEventCodes = <String>{
+  'team_chat_message',
+  'team_chat_mention',
+};
+
+bool yorksV1IsChatTransportEvent({
+  required String eventCode,
+  String entityType = '',
+}) =>
+    yorksV1ChatTransportEventCodes.contains(eventCode) ||
+    entityType == 'chat_message' ||
+    entityType == 'chat_conversation';
+
 class YorksV1NotificationRecord {
   const YorksV1NotificationRecord({
     required this.id,
@@ -11,6 +24,7 @@ class YorksV1NotificationRecord {
     required this.createdAt,
     this.requestId,
     this.projectId,
+    this.chatConversationId,
     this.seenAt,
   });
 
@@ -20,8 +34,15 @@ class YorksV1NotificationRecord {
   final String entityId;
   final String? requestId;
   final String? projectId;
+  final String? chatConversationId;
   final DateTime createdAt;
   final DateTime? seenAt;
+
+  /// Chat uses its member read cursor as the authoritative unread state. These
+  /// rows remain backend-only inputs to the durable FCM outbox and must never
+  /// appear in, or increment, the workflow notification centre.
+  bool get isChatTransport =>
+      yorksV1IsChatTransportEvent(eventCode: eventCode, entityType: entityType);
 
   YorksV1NotificationRecord acknowledgedAt(DateTime value) =>
       YorksV1NotificationRecord(
@@ -31,6 +52,7 @@ class YorksV1NotificationRecord {
         entityId: entityId,
         requestId: requestId,
         projectId: projectId,
+        chatConversationId: chatConversationId,
         createdAt: createdAt,
         seenAt: value,
       );
@@ -43,6 +65,7 @@ class YorksV1NotificationRecord {
       entityId: json['entity_id'] as String,
       requestId: json['request_id'] as String?,
       projectId: json['project_id'] as String?,
+      chatConversationId: json['chat_conversation_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
       seenAt: json['seen_at'] == null
           ? null
@@ -54,6 +77,7 @@ class YorksV1NotificationRecord {
     final copy = YorksV1NotificationCopy.forEvent(eventCode);
     final resolvedRequestId = requestId?.trim() ?? '';
     final resolvedProjectId = projectId?.trim() ?? '';
+    final resolvedChatConversationId = chatConversationId?.trim() ?? '';
     return AppNotification(
       id: id,
       type: copy.type,
@@ -63,7 +87,9 @@ class YorksV1NotificationRecord {
       timestamp: createdAt,
       isRead: seenAt != null,
       refId: resolvedRequestId.isNotEmpty ? resolvedRequestId : entityId,
-      route: resolvedRequestId.isNotEmpty
+      route: resolvedChatConversationId.isNotEmpty
+          ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
+          : resolvedRequestId.isNotEmpty
           ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
           : resolvedProjectId.isNotEmpty &&
                 (entityType == 'project' || entityType == 'project_member')
@@ -181,6 +207,28 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
   'material_request_approved_for_arrangement': _requestApprovedForArrangement,
   'material_request_changes_requested': _requestChangesRequired,
   'material_request_mentioned': _requestMention,
+  'team_chat_message': YorksV1NotificationCopy(
+    type: NotificationType.info,
+    englishTitle: 'New Team Chat message',
+    englishBody: 'A conversation you participate in has a new message.',
+    arabicTitle: 'رسالة جديدة في محادثة الفريق',
+    arabicBody: 'توجد رسالة جديدة في محادثة تشارك فيها.',
+    urduTitle: 'ٹیم چیٹ میں نیا پیغام',
+    urduBody: 'آپ کی شریک گفتگو میں ایک نیا پیغام ہے۔',
+    hindiTitle: 'टीम चैट में नया संदेश',
+    hindiBody: 'आपकी बातचीत में एक नया संदेश आया है।',
+  ),
+  'team_chat_mention': YorksV1NotificationCopy(
+    type: NotificationType.info,
+    englishTitle: 'You were mentioned in Team Chat',
+    englishBody: 'A teammate mentioned you in a conversation.',
+    arabicTitle: 'تمت الإشارة إليك في محادثة الفريق',
+    arabicBody: 'أشار إليك زميل في محادثة.',
+    urduTitle: 'ٹیم چیٹ میں آپ کا ذکر ہوا',
+    urduBody: 'ایک ساتھی نے گفتگو میں آپ کا ذکر کیا۔',
+    hindiTitle: 'टीम चैट में आपका उल्लेख हुआ',
+    hindiBody: 'एक साथी ने बातचीत में आपका उल्लेख किया।',
+  ),
   'arrangement_ready_for_dispatch': YorksV1NotificationCopy(
     type: NotificationType.request,
     englishTitle: 'Materials ready for dispatch',

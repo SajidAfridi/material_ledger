@@ -7,6 +7,7 @@
 // the recipient's protected device tokens, and records a retryable result.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
+  isTeamChatEvent,
   type PushClaim,
   routeFor,
   safePushCopy,
@@ -181,6 +182,10 @@ Deno.serve(async (request) => {
     const sendUrl =
       `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
     const copy = safePushCopy(claim.eventCode);
+    const surface = isTeamChatEvent(claim.eventCode) ||
+        typeof claim.chatConversationId === "string"
+      ? "team_chat"
+      : "workflow";
     const route = routeFor(claim);
     const webLink = webLinkFor(
       route,
@@ -197,6 +202,7 @@ Deno.serve(async (request) => {
       const data = {
         notificationId: claim.notificationId,
         eventCode: claim.eventCode,
+        surface,
         type: copy.type,
         title: copy.title,
         body: copy.body,
@@ -216,13 +222,16 @@ Deno.serve(async (request) => {
             ...(isWeb
               ? {
                 webpush: {
+                  headers: { Urgency: "high", TTL: "86400" },
                   notification: {
                     title: copy.title,
                     body: copy.body,
                     icon: "/icons/Icon-192.png",
                     badge: "/icons/Icon-192.png",
                     tag: claim.notificationId,
-                    renotify: true,
+                    // A retry of the same durable outbox item replaces the
+                    // existing OS notification without sounding a second time.
+                    renotify: false,
                     requireInteraction: false,
                     silent: false,
                     vibrate: [120, 60, 120],
@@ -236,12 +245,24 @@ Deno.serve(async (request) => {
                   priority: "high",
                   notification: {
                     channel_id: "yorks_push",
+                    tag: claim.notificationId,
                     sound: "default",
                     default_vibrate_timings: true,
                     notification_priority: "PRIORITY_HIGH",
                   },
                 },
-                apns: { payload: { aps: { sound: "default" } } },
+                apns: {
+                  headers: {
+                    "apns-collapse-id": claim.notificationId,
+                    "apns-priority": "10",
+                  },
+                  payload: {
+                    aps: {
+                      sound: "default",
+                      "thread-id": surface,
+                    },
+                  },
+                },
               }),
           },
         }),

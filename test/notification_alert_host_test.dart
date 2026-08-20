@@ -150,4 +150,57 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
   });
+
+  testWidgets('the open exact Team Chat thread suppresses duplicate alerts', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final router = GoRouter(
+      initialLocation: '/yorks/team-chat/conversation-1',
+      routes: [
+        GoRoute(
+          path: '/yorks/team-chat/:conversationId',
+          builder: (_, state) => Scaffold(
+            body: Text('Chat ${state.pathParameters['conversationId']}'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        pushServiceProvider.overrideWithValue(const NoopPushService()),
+        appRouterProvider.overrideWithValue(router),
+      ],
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: router,
+          builder: (_, child) => NotificationAlertHost(child: child!),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await container
+        .read(notificationsProvider.notifier)
+        .add(
+          type: NotificationType.info,
+          title: 'New chat message',
+          titleSecondary: '',
+          body: 'A teammate sent a message.',
+          route: '/yorks/team-chat/conversation-1',
+        );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat conversation-1'), findsOneWidget);
+    expect(find.text('New chat message'), findsNothing);
+    expect(container.read(notificationsProvider).first.isRead, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    container.dispose();
+  });
 }

@@ -427,19 +427,22 @@ void main() {
   );
 
   test(
-    'the embedded download is the exact readable five-sheet client workbook',
+    'the embedded download is the exact readable six-sheet R38.9 workbook',
     () {
       final bytes = Uint8List.fromList(
         base64Decode(yorksV1InventoryWorkbookTemplateBase64),
       );
-      expect(bytes.lengthInBytes, 18055);
+      expect(bytes.lengthInBytes, 29850);
       final workbook = const YorksV1BoqWorkbookCodec().decode(
         fileName: 'Yorks_Warehouse_Inventory_Import_Template.xlsx',
         bytes: bytes,
       );
-      expect(workbook.sheets, hasLength(5));
+      expect(workbook.sheets, hasLength(6));
       expect(workbook.sheets.first.name, 'Inventory Import');
-      expect(workbook.sheets.first.rows.first, contains('Item Description *'));
+      final importHeaders = workbook.sheets.first.rows[3];
+      expect(importHeaders, contains('Item Description *'));
+      expect(importHeaders, contains('Source Type *'));
+      expect(importHeaders, contains('External Supplier Name'));
     },
   );
 
@@ -539,13 +542,18 @@ void main() {
           fileName: 'stock.csv',
           bytes: Uint8List.fromList(
             utf8.encode(
-              'Item Description,Category,Brand / Origin,Unit,Stock Action,Quantity,Reason\r\n'
-              'Access panel,General & Custom,UAE,Nos,Add Stock,2,Checked receipt',
+              'Item Description,Category,Brand / Origin,Source Type,Unit,Stock Action,Quantity,Reason\r\n'
+              'Access panel,General & Custom,UAE,Opening Balance,Nos,Opening Balance,2,Checked receipt',
             ),
           ),
         ),
         YorksV1InventoryWorkspace(items: const [], categories: _categories),
       );
+
+      expect(controller.confirmMapping(), isTrue);
+      controller.setOpeningBalanceAsOfDate('2026-08-20');
+      expect(controller.continueToSupplierReceipt(), isTrue);
+      controller.confirmSupplierAndReceipt();
 
       expect(await controller.commit(), isNull);
       expect(controller.state.preview, isNotNull);

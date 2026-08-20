@@ -38,7 +38,8 @@ final yorksV1AppNotificationsProvider = Provider<List<AppNotification>>((ref) {
   return ref
           .watch(yorksV1NotificationsProvider)
           .valueOrNull
-          ?.map((record) => record.toAppNotification(language))
+          ?.where((record) => !record.isChatTransport)
+          .map((record) => record.toAppNotification(language))
           .toList(growable: false) ??
       const [];
 });
@@ -76,8 +77,11 @@ class YorksV1NotificationsNotifier
     }
     await refresh(showLoading: true);
     if (_disposed) return;
-    final subscribed = await _subscribe();
-    if (!subscribed) _startFallback();
+    await _subscribe();
+    // Realtime is the fast refresh signal, while this safety refresh guarantees
+    // eventual cross-device convergence if a browser, installed PWA or mobile
+    // client silently misses an UPDATE event while suspended.
+    _startFallback();
   }
 
   Future<void> refresh({bool showLoading = false}) async {
@@ -87,7 +91,15 @@ class YorksV1NotificationsNotifier
     final previous = state.valueOrNull;
     if (showLoading && previous == null) state = const AsyncLoading();
     try {
-      state = AsyncData(await repository.listMine());
+      final records = await repository.listMine();
+      // Fail closed against an older/misconfigured backend projection: chat
+      // transport rows belong exclusively to Team Chat even if an RPC briefly
+      // returns them during a rolling deployment.
+      state = AsyncData(
+        records
+            .where((record) => !record.isChatTransport)
+            .toList(growable: false),
+      );
     } catch (error, stackTrace) {
       // Preserve the last authorized list during a temporary network failure;
       // the retry timer/Realtime reconnect will reconcile it.
@@ -181,13 +193,13 @@ class YorksV1NotificationsNotifier
           .subscribe((status, _) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
-              _fallbackTimer?.cancel();
-              _fallbackTimer = null;
               if (!joined.isCompleted) joined.complete(true);
               unawaited(refresh());
-            } else if (!joined.isCompleted &&
-                status == RealtimeSubscribeStatus.channelError) {
-              joined.complete(false);
+            } else if (status == RealtimeSubscribeStatus.channelError ||
+                status == RealtimeSubscribeStatus.timedOut ||
+                status == RealtimeSubscribeStatus.closed) {
+              _startFallback();
+              if (!joined.isCompleted) joined.complete(false);
             }
           });
       return joined.future.timeout(

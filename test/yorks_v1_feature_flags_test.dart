@@ -20,6 +20,7 @@ void main() {
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
+      expect(flags.inventorySuppliers, false);
     });
 
     test('downstream settings fail closed when foundation is disabled', () {
@@ -44,6 +45,7 @@ void main() {
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
+      expect(flags.inventorySuppliers, false);
     });
 
     test('a missing intermediate dependency closes every later feature', () {
@@ -68,6 +70,7 @@ void main() {
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
+      expect(flags.inventorySuppliers, false);
     });
 
     test('the complete approved dependency chain can be enabled', () {
@@ -94,6 +97,34 @@ void main() {
       expect(flags.returnsDocuments, true);
       expect(flags.documents, true);
       expect(flags.isCompleteR35, true);
+    });
+
+    test('supplier folders require the secure document chain', () {
+      const withoutDocuments = YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+        logistics: true,
+        inventorySuppliers: true,
+      );
+      const complete = YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+        logistics: true,
+        returnsDocuments: true,
+        documents: true,
+        inventorySuppliers: true,
+      );
+
+      expect(withoutDocuments.inventorySuppliers, false);
+      expect(complete.inventorySuppliers, true);
     });
 
     test('production defaults enable the complete Yorks chain', () {

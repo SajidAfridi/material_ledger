@@ -26,6 +26,14 @@ updates to state, RLS, migration and acceptance documents.
   non-critical work. It is not authoritative for committed transitions.
 - Controlled-document snapshots are immutable historical truth.
 - Firebase is allowed only for FCM transport.
+- Product-owner clarification (14 August 2026): Team Chat owns message and
+  mention attention. A Chat event may use a private `v1_notifications` row as
+  the durable FCM/outbox transport source, but it never appears in or increments
+  the workflow notification centre/bell. The authoritative Chat badge and
+  cross-device read state come from the conversation-member cursor. New
+  contextual Material Request discussion uses Team Chat and follows the same
+  rule. Ordinary workflow notifications and preserved pre-Team-Chat history
+  retain their existing workflow surface.
 
 ## 2. Roles and identity
 
@@ -35,6 +43,8 @@ Canonical Auth role claims are:
 - `site_engineer`
 - `senior_mechanical_engineer`
 - `project_manager`
+- `workshop_in_charge`
+- `document_controller`
 - `procurement`
 - `admin`
 
@@ -44,17 +54,23 @@ Every server-authorized read or command compares the exact presented claim with
 the current protected Auth record. A stale JWT fails closed even when its old
 and new exact roles both normalize to the Project Engineer workflow role.
 
-`senior_mechanical_engineer` and `project_manager` are organization-wide
-Project Engineer roles approved on 7 August 2026. Trusted commands normalize
-them to Project Engineer workflow authority and allow access to every existing
-project without inserting synthetic membership history. They can approve an MR
-arrangement and generate its Delivery Order, but they do not receive
-Procurement or inventory authority. Their exact claim remains available for
-display and audit. By product-owner approval on 9 August 2026, Senior
+`senior_mechanical_engineer`, `project_manager`, `workshop_in_charge` and
+`document_controller` are organization-wide Project Engineer roles. Trusted
+commands normalize them to Project Engineer workflow authority and allow
+access to every existing project without inserting synthetic membership
+history. They can perform Project Engineer workflow actions and generate an
+authorized Delivery Order, but they do not receive Procurement or stock
+authority. Their exact claim remains available for display and audit. By
+product-owner approval on 9 August 2026, Senior
 Mechanical Engineer additionally receives audited User Management and user
 capability-configuration authority. This does not grant that actor direct
 commercial visibility or unrelated Admin modules. Project Manager retains no
-user-management or capability-management authority.
+user-management or capability-management authority; neither do Workshop
+In-Charge or Document Controller. By product-owner approval on 15 August 2026,
+Senior Mechanical Engineer also receives the full non-commercial
+Browse/Inventory read projection. Item/category edits, stock receipts and
+adjustments, imports and all other inventory writes remain Procurement/Admin
+commands.
 
 New server audit events retain both the normalized workflow role and the exact
 Auth role. Historical events keep their existing canonical role and are not
@@ -62,9 +78,9 @@ silently backfilled with an invented exact claim.
 
 A submitted MR also freezes that exact server-controlled role. Controlled
 documents and audit presentation use the immutable exact role, so a Senior
-Mechanical Engineer or Project Manager is never relabeled as a Project
-Engineer on the form even though authorization uses the normalized workflow
-role.
+Mechanical Engineer, Project Manager, Workshop In-Charge or Document Controller
+is never relabeled as a Project Engineer on the form even though authorization
+uses the normalized workflow role.
 
 A Project Engineer approves the submitted Material Request only when they also
 hold an active Project Engineer membership for that project. Procurement may
@@ -534,8 +550,32 @@ Critical actions never show success before the server commits.
 
 - Accounts and Finance navigation is unavailable in the Yorks V1 experience.
   Existing records/code remain preserved behind a disabled legacy boundary.
-- Full RFQ, quotation comparison, PO and supplier receipt are deferred. Hidden
-  prototype routes are not implemented or made reachable.
+- Full RFQ, quotation comparison, PO and supplier portal remain deferred.
+  R38.9 separately approves controlled supplier receipt provenance inside the
+  Warehouse Inventory workspace; it does not authorize purchasing workflow,
+  multi-warehouse behavior or accounting valuation.
 - Configuration, Rentals, User Management, Audit Trail, Duct Sizer and ESP
   Calculator remain and receive smoke/regression fixes only.
 - Multi-warehouse, portals, barcode/QR, AI and complex BI are deferred.
+
+## 19. R38.9 supplier identity and receipt import
+
+- Supplier folders are Procurement/Admin-only and remain nested under
+  Warehouse Inventory. Engineering inventory-read capability does not expose
+  suppliers, documents, receipt/commercial fields or supplier exports.
+- A blank, whitespace-only, `Unknown` or `N/A` supplier maps to one immutable
+  system `Unknown Supplier` identity. The original raw value and
+  `unknown_missing` resolution are retained.
+- Missing supplier is a visible warning, not a blocker. External Supplier rows
+  still require a Delivery Note/reference and Received Date. Opening Balance
+  rows may omit those fields and retain Opening Balance provenance.
+- Supplier aliases only auto-resolve on an exact approved normalized alias.
+  Similar names require an explicit Procurement/Admin decision.
+- Import stages before final confirmation are quantity-neutral. The trusted
+  commit is strict, idempotent, append-only and authoritative for supplier,
+  receipt, movement, balance and audit effects.
+- Delivered quantity equals Accepted + Damaged + Rejected. Only Accepted enters
+  usable On Hand; Damaged is quarantined and Rejected does not enter stock.
+- The two supplied master workbooks are reconciliation alternatives, not two
+  stock sources. Neither may be committed to production before signed cutoff,
+  staging rehearsal and source/commit/quarantine reconciliation.

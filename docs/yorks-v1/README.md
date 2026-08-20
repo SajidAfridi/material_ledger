@@ -42,13 +42,17 @@ explicit V7-to-V1 conflict resolution.
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
 | [`R38_4_RENTAL_PROPERTIES.md`](R38_4_RENTAL_PROPERTIES.md) | Admin-only rental property, lease, rent, cheque, import/export and controlled-document implementation |
+| [`R38_5_TEAM_CHAT_IMPLEMENTATION.md`](R38_5_TEAM_CHAT_IMPLEMENTATION.md) | R38.5 contextual Team Chat architecture, permissions, Storage, notification, responsive UI and rollback contract |
+| [`R38_9_INVENTORY_SUPPLIER_FOLDERS.md`](R38_9_INVENTORY_SUPPLIER_FOLDERS.md) | R38.9 supplier folders, Unknown Supplier, five-stage import, receipt provenance and migration safety contract |
 | [`V01_VISUAL_EVIDENCE.md`](V01_VISUAL_EVIDENCE.md) | Workspace shell, empty Overview and Project Creation convergence evidence |
 | [`MOBILE_UI_IMPLEMENTATION_GUIDE.md`](MOBILE_UI_IMPLEMENTATION_GUIDE.md) | Mobile-only authority split, guard, state/permission checklist and evidence workflow |
 | [`MOBILE_UI_SCREEN_LEDGER.md`](MOBILE_UI_SCREEN_LEDGER.md) | Delivery state for all 52 mobile design references |
 | [`FIREBASE_MESSAGING_SETUP.md`](FIREBASE_MESSAGING_SETUP.md) | Firebase Cloud Messaging client, web worker and operator credential setup |
 | [`evidence/mobile-batch-02/README.md`](evidence/mobile-batch-02/README.md) | Verified local evidence index for mobile references 12–21 |
+| [`evidence/r38-configuration-20260814/README.md`](evidence/r38-configuration-20260814/README.md) | R38 Configuration Centre security, behavior and responsive visual evidence |
+| [`evidence/r38-5-team-chat-20260814/README.md`](evidence/r38-5-team-chat-20260814/README.md) | R38.5 Team Chat desktop, tablet and mobile visual/security evidence |
 | [`MIGRATION_AND_ROLLBACK_PLAN.md`](MIGRATION_AND_ROLLBACK_PLAN.md) | Additive migration, reconciliation, quarantine and rollback |
-| [`TEST_AND_ACCEPTANCE_PLAN.md`](TEST_AND_ACCEPTANCE_PLAN.md) | Test layers, 25 scenarios and web/Android evidence |
+| [`TEST_AND_ACCEPTANCE_PLAN.md`](TEST_AND_ACCEPTANCE_PLAN.md) | Test layers, 31 scenarios and web/Android evidence |
 | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Dependency-ordered Batches 0–10 |
 | [`BATCH_00_COMPLETION.md`](BATCH_00_COMPLETION.md) | Re-baseline changes, verification and known blockers |
 | [`BATCH_02_COMPLETION.md`](BATCH_02_COMPLETION.md) | Identity, projects, audit/RLS hardening and verification |

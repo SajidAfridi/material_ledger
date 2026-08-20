@@ -98,8 +98,13 @@ class YorksV1BoqWorkbookCodec {
   YorksV1BoqParsedWorkbook decode({
     required Uint8List bytes,
     required String fileName,
+    int maxWorkbookBytes = _maxWorkbookBytes,
+    int maxRowsPerSheet = _maxRowsPerSheet,
   }) {
-    if (bytes.isEmpty || bytes.lengthInBytes > _maxWorkbookBytes) {
+    if (maxWorkbookBytes <= 0 ||
+        maxRowsPerSheet <= 0 ||
+        bytes.isEmpty ||
+        bytes.lengthInBytes > maxWorkbookBytes) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
     try {
@@ -126,6 +131,7 @@ class YorksV1BoqWorkbookCodec {
           );
         }
         final name = _attribute(element, 'name')?.trim() ?? '';
+        final sheetState = _attribute(element, 'state')?.trim().toLowerCase();
         final relationshipId = _attribute(element, 'id')?.trim() ?? '';
         final target = relationships[relationshipId];
         if (name.isEmpty || target == null) continue;
@@ -134,7 +140,12 @@ class YorksV1BoqWorkbookCodec {
         sheets.add(
           YorksV1BoqWorkbookSheet(
             name: name,
-            rows: _decodeSheetRows(sheetXml, sharedStrings),
+            isHidden: sheetState == 'hidden' || sheetState == 'veryhidden',
+            rows: _decodeSheetRows(
+              sheetXml,
+              sharedStrings,
+              maxRowsPerSheet: maxRowsPerSheet,
+            ),
           ),
         );
       }
@@ -368,8 +379,9 @@ class YorksV1BoqWorkbookCodec {
 
   List<List<String>> _decodeSheetRows(
     String sheetXml,
-    List<String> sharedStrings,
-  ) {
+    List<String> sharedStrings, {
+    required int maxRowsPerSheet,
+  }) {
     final document = XmlDocument.parse(sheetXml);
     final cells = <int, Map<int, String>>{};
     var maxRow = -1;
@@ -378,7 +390,7 @@ class YorksV1BoqWorkbookCodec {
       (element) => element.name.local == 'row',
     )) {
       final rowIndex = (_integer(_attribute(row, 'r')) ?? (maxRow + 2)) - 1;
-      if (rowIndex < 0 || rowIndex >= _maxRowsPerSheet) {
+      if (rowIndex < 0 || rowIndex >= maxRowsPerSheet) {
         throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
       }
       var nextColumn = 0;

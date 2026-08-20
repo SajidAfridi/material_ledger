@@ -31,3 +31,12 @@ final yorksV1RentalDocumentsRepositoryProvider =
       }
       return repository as YorksV1RentalDocumentsRepository;
     });
+
+final yorksV1SupplierDocumentsRepositoryProvider =
+    Provider<YorksV1SupplierDocumentsRepository>((ref) {
+      final repository = ref.watch(yorksV1DocumentsRepositoryProvider);
+      if (repository is! YorksV1SupplierDocumentsRepository) {
+        throw StateError('Supplier document repository is unavailable.');
+      }
+      return repository as YorksV1SupplierDocumentsRepository;
+    });

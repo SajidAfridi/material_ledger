@@ -31,14 +31,18 @@ import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
+import '../../../../shared/models/yorks_v1_team_chat.dart';
+import '../../../../shared/models/yorks_v1_team_chat_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
+import '../../../../shared/providers/yorks_v1_configuration_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
+import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
@@ -2890,120 +2894,132 @@ class _YorksMobileMaterialRequestDraftFlowState
     );
   }
 
-  Widget _customMaterialBody() => Column(
-    children: [
-      Expanded(
-        child: ListView(
-          key: const ValueKey('mobile-mr-custom-material'),
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
-          children: [
-            Text(
-              YorksV1MaterialRequestStrings.unplannedMaterial.primary,
-              style: AppTypography.headlineMedium.copyWith(
-                fontSize: 25,
-                fontWeight: FontWeight.w800,
+  Widget _customMaterialBody() {
+    final configuredUnits = ref
+        .watch(yorksV1ConfigurationUnitCodesProvider)
+        .valueOrNull;
+    final unitOptions = configuredUnits == null || configuredUnits.isEmpty
+        ? _mrUnitOptions
+        : configuredUnits;
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            key: const ValueKey('mobile-mr-custom-material'),
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+            children: [
+              Text(
+                YorksV1MaterialRequestStrings.unplannedMaterial.primary,
+                style: AppTypography.headlineMedium.copyWith(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              YorksV1MaterialRequestStrings.requestScopeDescription.primary,
-              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-            ),
-            const SizedBox(height: 14),
-            YorksMobileCard(
-              child: Column(
-                children: [
-                  _MobileInventoryDescriptionField(
-                    controller: _customDescription,
-                    projectId: _draft.projectId,
-                    enabled: !_busy,
-                    onSelected: (suggestion) => setState(() {
-                      _customBrand.text = suggestion.brandOrigin ?? '';
-                      _customSize.text = suggestion.size ?? '';
-                      _customModel.text = suggestion.model ?? '';
-                      _customUnit = suggestion.unit;
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _customBrand,
-                    decoration: InputDecoration(
-                      labelText:
-                          YorksV1MaterialRequestStrings.brandOrigin.primary,
+              const SizedBox(height: 4),
+              Text(
+                YorksV1MaterialRequestStrings.requestScopeDescription.primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+              const SizedBox(height: 14),
+              YorksMobileCard(
+                child: Column(
+                  children: [
+                    _MobileInventoryDescriptionField(
+                      controller: _customDescription,
+                      projectId: _draft.projectId,
+                      enabled: !_busy,
+                      onSelected: (suggestion) => setState(() {
+                        _customBrand.text = suggestion.brandOrigin ?? '';
+                        _customSize.text = suggestion.size ?? '';
+                        _customModel.text = suggestion.model ?? '';
+                        _customUnit = suggestion.unit;
+                      }),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _customSize,
-                    decoration: InputDecoration(
-                      labelText: YorksV1MaterialRequestStrings.size.primary,
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _customBrand,
+                      decoration: InputDecoration(
+                        labelText:
+                            YorksV1MaterialRequestStrings.brandOrigin.primary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _customModel,
-                    decoration: InputDecoration(
-                      labelText: YorksV1MaterialRequestStrings
-                          .planningModelTag
-                          .primary,
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _customSize,
+                      decoration: InputDecoration(
+                        labelText: YorksV1MaterialRequestStrings.size.primary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _customQuantity,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: InputDecoration(
-                            labelText:
-                                YorksV1MaterialRequestStrings.quantity.primary,
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _customModel,
+                      decoration: InputDecoration(
+                        labelText: YorksV1MaterialRequestStrings
+                            .planningModelTag
+                            .primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _customQuantity,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: YorksV1MaterialRequestStrings
+                                  .quantity
+                                  .primary,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _customUnit,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            labelText:
-                                YorksV1MaterialRequestStrings.unit.primary,
-                          ),
-                          items: [
-                            for (final unit in _mrUnitOptions)
-                              DropdownMenuItem(value: unit, child: Text(unit)),
-                          ],
-                          onChanged: _busy
-                              ? null
-                              : (value) => setState(
-                                  () => _customUnit = value ?? _customUnit,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _customUnit,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText:
+                                  YorksV1MaterialRequestStrings.unit.primary,
+                            ),
+                            items: [
+                              for (final unit in unitOptions)
+                                DropdownMenuItem(
+                                  value: unit,
+                                  child: Text(unit),
                                 ),
+                            ],
+                            onChanged: _busy
+                                ? null
+                                : (value) => setState(
+                                    () => _customUnit = value ?? _customUnit,
+                                  ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-      _MobileMrStickyActions(
-        secondaryLabel: YorksV1MaterialRequestStrings.back.primary,
-        onSecondary: () => unawaited(_closeCustomMaterialEditor()),
-        primaryLabel: _editingCustomLineId == null
-            ? YorksV1MaterialRequestStrings.addCustomItem.primary
-            : AppStrings.saveChanges.primary,
-        primaryIcon: _editingCustomLineId == null
-            ? Icons.add_rounded
-            : Icons.check_rounded,
-        onPrimary: _busy ? null : _addCustomMaterial,
-      ),
-    ],
-  );
+        _MobileMrStickyActions(
+          secondaryLabel: YorksV1MaterialRequestStrings.back.primary,
+          onSecondary: () => unawaited(_closeCustomMaterialEditor()),
+          primaryLabel: _editingCustomLineId == null
+              ? YorksV1MaterialRequestStrings.addCustomItem.primary
+              : AppStrings.saveChanges.primary,
+          primaryIcon: _editingCustomLineId == null
+              ? Icons.add_rounded
+              : Icons.check_rounded,
+          onPrimary: _busy ? null : _addCustomMaterial,
+        ),
+      ],
+    );
+  }
 
   Widget _successPage(
     BuildContext context,
@@ -6064,7 +6080,7 @@ class _MrSimilarButton extends StatelessWidget {
   );
 }
 
-class _LineUnitDropdown extends StatelessWidget {
+class _LineUnitDropdown extends ConsumerWidget {
   const _LineUnitDropdown({
     required this.fieldKey,
     required this.initialValue,
@@ -6078,11 +6094,17 @@ class _LineUnitDropdown extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final value = initialValue.trim();
+    final configuredUnits = ref
+        .watch(yorksV1ConfigurationUnitCodesProvider)
+        .valueOrNull;
+    final unitOptions = configuredUnits == null || configuredUnits.isEmpty
+        ? _mrUnitOptions
+        : configuredUnits;
     final options = <String>{
-      if (value.isNotEmpty && !_mrUnitOptions.contains(value)) value,
-      ..._mrUnitOptions,
+      if (value.isNotEmpty && !unitOptions.contains(value)) value,
+      ...unitOptions,
     }.toList(growable: false);
     return DropdownButtonFormField<String>(
       key: fieldKey,
@@ -6336,7 +6358,7 @@ class _LineTextFieldState extends State<_LineTextField> {
   );
 }
 
-class _LineLabeledUnitDropdown extends StatelessWidget {
+class _LineLabeledUnitDropdown extends ConsumerWidget {
   const _LineLabeledUnitDropdown({
     required this.fieldKey,
     required this.label,
@@ -6352,11 +6374,17 @@ class _LineLabeledUnitDropdown extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final value = initialValue.trim();
+    final configuredUnits = ref
+        .watch(yorksV1ConfigurationUnitCodesProvider)
+        .valueOrNull;
+    final unitOptions = configuredUnits == null || configuredUnits.isEmpty
+        ? _mrUnitOptions
+        : configuredUnits;
     final options = <String>{
-      if (value.isNotEmpty && !_mrUnitOptions.contains(value)) value,
-      ..._mrUnitOptions,
+      if (value.isNotEmpty && !unitOptions.contains(value)) value,
+      ...unitOptions,
     }.toList(growable: false);
     return DropdownButtonFormField<String>(
       key: fieldKey,
@@ -8061,6 +8089,7 @@ class _MaterialRequestDiscussionState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
     final candidates = ref.watch(
       yorksV1MaterialRequestMentionCandidatesProvider(widget.request.id),
     );
@@ -8092,6 +8121,17 @@ class _MaterialRequestDiscussionState
                 ),
               ),
             ),
+            if (teamChatEnabled)
+              IconButton(
+                key: const ValueKey('material-request-open-team-chat'),
+                tooltip: YorksV1TeamChatStrings.openChat.active(language),
+                onPressed: _posting ? null : _openChat,
+                icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                color: AppColors.blue,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(AppSpacing.minTapTarget),
+                ),
+              ),
             TextButton(
               key: const ValueKey('material-request-add-comment'),
               onPressed: _posting ? null : _focusComposer,
@@ -8203,10 +8243,12 @@ class _MaterialRequestDiscussionState
               ),
               IconButton(
                 key: const ValueKey('material-request-attachment-action'),
-                tooltip: YorksV1MaterialRequestStrings
-                    .commentAttachmentsUnavailable
-                    .primary,
-                onPressed: null,
+                tooltip: teamChatEnabled
+                    ? YorksV1TeamChatStrings.openChat.active(language)
+                    : YorksV1MaterialRequestStrings
+                          .commentAttachmentsUnavailable
+                          .primary,
+                onPressed: teamChatEnabled && !_posting ? _openChat : null,
                 icon: const Icon(Icons.attach_file_rounded, size: 20),
                 disabledColor: AppColors.mutedLight,
                 style: IconButton.styleFrom(
@@ -8318,6 +8360,20 @@ class _MaterialRequestDiscussionState
     } finally {
       if (mounted) setState(() => _posting = false);
     }
+  }
+
+  Future<void> _openChat() async {
+    final conversation = await ref
+        .read(yorksV1TeamChatProvider.notifier)
+        .createConversation(
+          YorksV1ChatCreateInput(
+            kind: YorksV1ChatKind.materialRequest,
+            idempotencyKey: const Uuid().v4(),
+            materialRequestId: widget.request.id,
+          ),
+        );
+    if (!mounted || conversation == null) return;
+    context.go(RoutePaths.yorksV1TeamChatPath(conversation.id));
   }
 }
 

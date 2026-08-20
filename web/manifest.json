@@ -1,6 +1,8 @@
 {
     "name": "Yorks AC. & Ref.",
     "short_name": "Yorks AC. & Ref.",
+    "id": "/",
+    "scope": "/",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F7F3E8",

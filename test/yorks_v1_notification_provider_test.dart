@@ -50,6 +50,41 @@ void main() {
     expect(repository.markAllSeenCalls, 1);
     expect(repository.markSeenCalls, 0);
   });
+
+  test('Team Chat transport rows never enter the workflow centre', () async {
+    final repository = _FakeNotificationRepository([
+      _record(
+        '11000000-0000-4000-8000-000000000001',
+        eventCode: 'material_request_approval_required',
+      ),
+      _record(
+        '11000000-0000-4000-8000-000000000002',
+        eventCode: 'team_chat_message',
+        entityType: 'chat_message',
+      ),
+      _record(
+        '11000000-0000-4000-8000-000000000003',
+        eventCode: 'team_chat_mention',
+        entityType: 'chat_message',
+      ),
+      _record(
+        '11000000-0000-4000-8000-000000000004',
+        eventCode: 'material_request_mentioned',
+      ),
+    ]);
+    final notifier = _notifier(repository);
+    addTearDown(notifier.dispose);
+    await notifier.start();
+
+    expect(notifier.state.valueOrNull, hasLength(2));
+    expect(
+      notifier.state.valueOrNull!.map((record) => record.eventCode),
+      containsAll(<String>[
+        'material_request_approval_required',
+        'material_request_mentioned',
+      ]),
+    );
+  });
 }
 
 YorksV1NotificationsNotifier _notifier(
@@ -60,10 +95,14 @@ YorksV1NotificationsNotifier _notifier(
   authUserId: '10000000-0000-4000-8000-000000000001',
 );
 
-YorksV1NotificationRecord _record(String id) => YorksV1NotificationRecord(
+YorksV1NotificationRecord _record(
+  String id, {
+  String eventCode = 'material_request_approval_required',
+  String entityType = 'material_request',
+}) => YorksV1NotificationRecord(
   id: id,
-  eventCode: 'material_request_mentioned',
-  entityType: 'material_request',
+  eventCode: eventCode,
+  entityType: entityType,
   entityId: '12000000-0000-4000-8000-000000000001',
   createdAt: DateTime(2026, 8, 14),
 );

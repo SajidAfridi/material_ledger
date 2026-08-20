@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app.dart' show appRouterProvider;
 import '../../firebase_options.dart';
 import '../models/app_notification.dart';
+import '../models/yorks_v1_notification.dart';
 import '../providers/language_provider.dart' show supabaseClientProvider;
 import '../providers/yorks_v1_notification_provider.dart';
 import 'observability_service.dart';
@@ -21,7 +22,7 @@ const _webPushVapidKey = String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
 const _androidChannel = AndroidNotificationChannel(
   'yorks_push',
   'Yorks notifications',
-  description: 'Workflow alerts and controlled-record updates.',
+  description: 'Workflow and Team Chat alerts.',
   importance: Importance.high,
 );
 
@@ -31,6 +32,8 @@ const _androidChannel = AndroidNotificationChannel(
 class PushMessage {
   const PushMessage({
     this.notificationId = '',
+    this.eventCode = '',
+    this.surface = '',
     required this.type,
     required this.title,
     this.titleSecondary = '',
@@ -41,6 +44,8 @@ class PushMessage {
   });
 
   final String notificationId;
+  final String eventCode;
+  final String surface;
   final NotificationType type;
   final String title;
   final String titleSecondary;
@@ -49,8 +54,14 @@ class PushMessage {
   final String route;
   final String audience;
 
+  bool get isTeamChat =>
+      surface == 'team_chat' ||
+      yorksV1IsChatTransportEvent(eventCode: eventCode);
+
   factory PushMessage.fromData(Map<String, String> data) => PushMessage(
     notificationId: data['notificationId'] ?? '',
+    eventCode: data['eventCode'] ?? '',
+    surface: data['surface'] ?? '',
     type: NotificationType.fromKey(data['type'] ?? 'info'),
     title: data['title'] ?? '',
     titleSecondary: data['titleSecondary'] ?? '',
@@ -430,6 +441,8 @@ class FcmPushService implements PushService {
     );
     return PushMessage(
       notificationId: fromData.notificationId,
+      eventCode: fromData.eventCode,
+      surface: fromData.surface,
       type: fromData.type,
       title: fromData.title.isNotEmpty
           ? fromData.title

@@ -1444,6 +1444,8 @@ abstract final class YorksV1ProjectStrings {
       'site_engineer' => siteEngineerRole,
       'senior_mechanical_engineer' => AppStrings.seniorMechanicalEngineerRole,
       'project_manager' => AppStrings.projectManagerRole,
+      'workshop_in_charge' => AppStrings.workshopInChargeRole,
+      'document_controller' => AppStrings.documentControllerRole,
       'procurement' => procurementRole,
       'admin' => adminRole,
       _ => projectTeam,

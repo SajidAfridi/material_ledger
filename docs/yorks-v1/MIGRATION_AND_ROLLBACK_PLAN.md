@@ -110,6 +110,15 @@ Legacy role handling:
   movements, dispatches, reviews, DOs and returns.
 - Reconcile on-hand as opening balance plus normalized movements; report every
   difference before enabling logistics.
+- R38.9 supplier provenance is additive: preserve raw supplier text, workbook
+  fingerprint, source sheet/row and every mapping/quarantine decision. Missing
+  supplier identity resolves to the protected Unknown Supplier record; it does
+  not authorize inventing aliases or external receipt evidence.
+- The pack's 1,240-row Opening Balance workbook and the separately supplied
+  1,154-row ready/reconciled workbook are alternative migration candidates.
+  Never import both. Reconcile `source = committed + quarantine/exclusions`,
+  verify no fingerprint or opening-balance command has already committed, and
+  rehearse against a staging snapshot before any production stock command.
 - Receipt-reviewed Delivery Report support is additive: existing Delivery Order
   revisions are classified as immutable `dispatch` evidence, and no historical
   review is silently converted. A current receipt-reviewed report is created
@@ -223,6 +232,12 @@ batch and import-row audit records. Any committed imported quantity is reversed
 only by an authorized compensating stock movement, never by deleting the batch
 or copying an older balance.
 
+R38.9 supplier-folder rollback follows the same rule. Revoke the new
+supplier/import RPC grants and redeploy the prior approved build while retaining
+all supplier, alias, receipt-batch, receipt-line, document-link, import-result
+and audit rows. Never delete a receipt batch to change stock; use an authorized
+compensating movement and retain the original provenance.
+
 Migration `20260809174308_yorks_v1_inventory_category_families_commands.sql`
 adds one nullable parent-family link plus size/model metadata and a separate
 metadata version. It preserves every inventory, balance, reservation, movement
@@ -265,6 +280,83 @@ is anchor-checked and repeatable; it fails before mutation if the deployed
 function has drifted. Rollback restores the prior trusted function definition
 and redeploys the prior client. Existing arrangements with a null supplier name
 remain truthful history and must not be fabricated or destructively rewritten.
+
+Migration `20260814090919_yorks_r38_configuration_centre.sql` is additive. It
+introduces an exact-Admin configuration catalogue, one server-versioned shared
+draft, normalized controlled units, staged category/unit actions and immutable
+publication/change history. It seeds missing defaults with `ON CONFLICT DO
+NOTHING`; it does not replace an existing value, project, BOQ, request,
+inventory quantity, document or audit record. Draft changes are inert until
+`v1_publish_configuration` validates and commits them in one transaction.
+Category and unit retirement changes only future selection (`is_active`); all
+historical references remain intact. Re-running is deterministic because
+stable seed IDs/keys conflict safely and every command requires an idempotency
+key plus the current draft revision.
+
+Rollback revokes the eight public configuration RPC grants and redeploys the
+prior client while retaining all settings, drafts, master actions,
+publications, publication changes and audit evidence. A published mistake is
+corrected by a later audited publication. Never delete or update immutable
+publication history, reactivate/archive master data by direct table write, or
+copy a stale configuration snapshot over newer operational facts.
+
+Migration `20260814114626_yorks_r38_5_team_chat.sql` is additive. It introduces
+normalized conversation, membership, append-only message, mention,
+acknowledgement, pin, upload-intent and attachment relations; a private
+`yorks-chat-attachments` bucket; trusted member-scoped RPCs; Realtime refresh
+publication; and Team Chat notification projections. Existing Project and
+Material Request discussion history is retained. The compatibility comment
+RPC now writes the one canonical MR Team Chat stream while preserving the
+existing immutable comment identifiers/read projection for older clients.
+Workflow audit facts create best-effort system messages and are guarded so a
+chat projection failure can never abort the source workflow command.
+
+Direct conversations have a canonical unordered participant key and remain
+exactly two-person. Project/MR conversations use one canonical context key,
+derive participants from current server authority and re-check that contextual
+access at every read/send/download boundary. Message retries retain a unique
+idempotency key and payload hash. Attachment objects remain private and inert
+until the authenticated caller obtains a short-lived actor-scoped intent, the
+`finalize-chat-attachment` Edge Function verifies object byte count, content
+type and SHA-256 with service authority, and the send RPC atomically binds the
+verified object to an append-only message.
+
+Rollback revokes the Team Chat RPC grants, disables `YORKS_R38_TEAM_CHAT` in a
+replacement complete build and redeploys the prior client/functions. Retain
+all conversations, members, messages, notification cursors, upload intents,
+attachments and audit facts. Do not drop the private bucket or rewrite MR
+comments after users have created chat activity. Unbound expired upload objects
+may be removed only through a separately reviewed retention job; bound message
+attachments are retained under the document/audit policy. Re-enabling the same
+migration/build resumes from the preserved authoritative state without local
+unread reconstruction.
+
+Migration `20260814153746_separate_team_chat_notification_surface.sql` is an
+additive presentation/command-boundary correction. It preserves Chat
+notification and outbox rows for idempotent push delivery, but excludes those
+transport rows from `v1_list_my_notifications` and workflow **Mark all read**.
+All new Chat mentions, including contextual MR Chat, identify their exact
+`chat_message`; preserved legacy `material_request_mentioned` history keeps its
+original workflow event and request route. Chat read advances
+the authoritative membership cursor and acknowledges only the matching hidden
+transport rows. Rollback restores the prior function definitions and drops the
+classifier only; no notification, outbox, cursor or audit row is rewritten or
+deleted.
+
+Migration `20260814200329_expand_global_engineering_roles_and_sme_inventory_read.sql`
+is additive and quantity-neutral. It adds Workshop In-Charge and Document
+Controller as exact audit roles normalized to the existing organization-wide
+Project Engineer authority, expands only the exact-role constraints, and adds
+a separate inventory-read predicate for Senior Mechanical Engineer. Existing
+profiles retain the canonical Project Engineer mirror; no synthetic project
+membership, workflow row, stock, reservation, movement, document or audit event
+is rewritten. Assigning either new exact role is performed only through the
+audited `admin-users` command after the complete compatible client, Edge
+Function and schema are deployed together. Rollback first restores affected
+users to a supported exact role through the same audited command, then
+redeploys the prior complete build/functions. The expanded constraints and
+historical exact-role evidence remain in place; never erase or relabel audit or
+controlled-document history.
 
 ## 9. Migration stop conditions
 

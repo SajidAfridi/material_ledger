@@ -24,6 +24,14 @@ void main() {
     );
   });
 
+  test('Team Chat deep links use the stable conversation identifier', () {
+    expect(RoutePaths.yorksV1TeamChatPath(), RoutePaths.yorksV1TeamChat);
+    expect(
+      RoutePaths.yorksV1TeamChatPath('conversation-41'),
+      '/yorks/team-chat/conversation-41',
+    );
+  });
+
   group('createAppRouter builds a valid tree for every role', () {
     for (final role in UserRole.values) {
       test('role: ${role.name}', () {
@@ -59,6 +67,7 @@ void main() {
         yorksV1LogisticsEnabled: true,
         yorksV1ReturnsDocumentsEnabled: true,
         yorksV1DocumentsEnabled: true,
+        yorksV1InventorySuppliersEnabled: true,
         yorksV1Role: YorksV1Role.procurement,
       );
       addTearDown(router.dispose);
@@ -123,6 +132,20 @@ void main() {
         router.routeInformationProvider.value.uri.path,
         RoutePaths.engineerHome,
       );
+
+      router.go(RoutePaths.yorksV1Configuration);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerHome,
+      );
+
+      router.go(RoutePaths.yorksV1InventoryImport);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.yorksV1InventoryImport,
+      );
     },
   );
 
@@ -137,6 +160,8 @@ void main() {
         YorksV1Role.siteEngineer,
         YorksV1Role.seniorMechanicalEngineer,
         YorksV1Role.projectManager,
+        YorksV1Role.workshopInCharge,
+        YorksV1Role.documentController,
       ]) {
         final router = createAppRouter(
           isOnboarded: true,
@@ -156,6 +181,7 @@ void main() {
           yorksV1LogisticsEnabled: true,
           yorksV1ReturnsDocumentsEnabled: true,
           yorksV1DocumentsEnabled: true,
+          yorksV1InventorySuppliersEnabled: true,
           yorksV1Role: v1Role,
         );
 
@@ -169,7 +195,7 @@ void main() {
         );
         await tester.pumpAndSettle(const Duration(seconds: 5));
 
-        for (final path in [
+        final deniedPaths = <String>[
           RoutePaths.engineerProjects,
           RoutePaths.engineerProjectsView,
           RoutePaths.projectWorkspacePath('legacy-project'),
@@ -182,16 +208,32 @@ void main() {
           RoutePaths.requestDetailPath('legacy-request'),
           RoutePaths.confirmReceiptPath('legacy-request'),
           RoutePaths.returnStore,
-          RoutePaths.yorksV1Inventory,
           RoutePaths.yorksV1Dispatches,
           RoutePaths.activityLog,
-        ]) {
+          RoutePaths.yorksV1Configuration,
+          RoutePaths.yorksV1InventorySuppliers,
+          RoutePaths.yorksV1InventoryImport,
+          RoutePaths.yorksV1InventorySupplierPath('supplier-1'),
+          if (v1Role != YorksV1Role.seniorMechanicalEngineer)
+            RoutePaths.yorksV1Inventory,
+        ];
+        for (final path in deniedPaths) {
           router.go(path);
           await tester.pumpAndSettle();
           expect(
             router.routeInformationProvider.value.uri.path,
             RoutePaths.engineerHome,
             reason: '${v1Role.name} must not enter $path while V1 is enabled',
+          );
+        }
+
+        if (v1Role == YorksV1Role.seniorMechanicalEngineer) {
+          router.go(RoutePaths.yorksV1Inventory);
+          await tester.pumpAndSettle();
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            RoutePaths.yorksV1Inventory,
+            reason: 'Senior Mechanical Engineer has read-only inventory access',
           );
         }
 
@@ -234,6 +276,44 @@ void main() {
     expect(
       router.routeInformationProvider.value.uri.path,
       RoutePaths.engineerHome,
+    );
+  });
+
+  testWidgets('V1 Admin can open the controlled Configuration route', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final router = createAppRouter(
+      isOnboarded: true,
+      isLoggedIn: true,
+      role: UserRole.admin,
+      user: AppUser(
+        id: 'configuration-admin',
+        fullName: 'Configuration Admin',
+        email: 'configuration-admin@yorks.test',
+        role: UserRole.admin,
+        createdAt: DateTime.utc(2026, 8, 14),
+      ),
+      yorksV1ProjectsEnabled: true,
+      yorksV1Role: YorksV1Role.admin,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+
+    router.go(RoutePaths.yorksV1Configuration);
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      RoutePaths.yorksV1Configuration,
     );
   });
 

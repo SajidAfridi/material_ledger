@@ -197,10 +197,18 @@ select is(
 );
 select is(
   (select count(*) from public.v1_notifications
-   where event_code = 'material_request_mentioned'
-     and entity_id = 'af100000-0000-4000-8000-000000000001'::uuid),
+   where event_code = 'team_chat_mention'
+     and entity_type = 'chat_message'
+     and entity_id in (
+       select message.id
+       from public.v1_chat_messages message
+       join public.v1_chat_conversations conversation
+         on conversation.id = message.conversation_id
+       where conversation.material_request_id =
+         'af100000-0000-4000-8000-000000000001'::uuid
+     )),
   1::bigint,
-  'A validated mention creates exactly one notification'
+  'A validated contextual mention creates one hidden Team Chat push transport'
 );
 
 set local role authenticated;

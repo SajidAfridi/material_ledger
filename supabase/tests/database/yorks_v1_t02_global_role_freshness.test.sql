@@ -10,9 +10,11 @@ select ok(
   and public.v1_is_valid_role('site_engineer')
   and public.v1_is_valid_role('senior_mechanical_engineer')
   and public.v1_is_valid_role('project_manager')
+  and public.v1_is_valid_role('workshop_in_charge')
+  and public.v1_is_valid_role('document_controller')
   and public.v1_is_valid_role('procurement')
   and public.v1_is_valid_role('admin'),
-  'Exactly the six approved Auth roles are valid'
+  'Exactly the eight approved Auth roles are valid'
 );
 
 select ok(

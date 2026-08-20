@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(28);
+select plan(32);
 
 select ok(
   (select bool_and(relrowsecurity) from pg_class
@@ -26,8 +26,74 @@ select ok(
 
 select is(
   (select count(*)::integer from public.v1_inventory_categories where is_system),
-  12,
-  'The approved twelve Yorks warehouse categories are seeded exactly once'
+  23,
+  'The approved Yorks and R38.9 workbook categories are seeded exactly once'
+);
+
+select ok(
+  (
+    select count(*) = 10
+    from public.v1_inventory_categories
+    where is_system and name in (
+      'Air Terminals', 'AC Unit Parts', 'Dampers & Fire Control',
+      'Electrical & Controls', 'Fans & Equipment',
+      'Ductwork & Accessories', 'Piping & Drain',
+      'Supports & Insulation', 'Tools & Consumables', 'General Items'
+    )
+  ),
+  'Every canonical category printed in the R38.9 workbook is pre-seeded'
+);
+
+select ok(
+  (
+    with source_labels(label) as (
+      values
+        ('AC Unit'), ('AC Unit Parts'), ('Access Doors'),
+        ('Air Inlet & Outlet'), ('Dampers & Fire Control'),
+        ('Ducting Materials'), ('Electrical & Cable Management'),
+        ('Electrical & Controls'), ('Fans & Ventilation'),
+        ('Fasteners & Fixings'), ('Filters'), ('Pipe Fittings'),
+        ('Pipes & Tubes'), ('Refrigerants & Chemicals'),
+        ('Supports & Insulation'), ('Tools & Equipment'),
+        ('Valves & Strainers')
+    ), resolutions as (
+      select source.label, count(distinct candidate.category_id) match_count
+      from source_labels source
+      left join lateral (
+        select category.id category_id
+        from public.v1_inventory_categories category
+        where category.is_active
+          and category.normalized_name =
+            public.v1_inventory_category_key(source.label)
+        union all
+        select alias.category_id
+        from public.v1_inventory_category_aliases alias
+        join public.v1_inventory_categories category
+          on category.id = alias.category_id and category.is_active
+        where alias.normalized_alias =
+          public.v1_inventory_category_key(source.label)
+      ) candidate on true
+      group by source.label
+    )
+    select bool_and(match_count = 1) from resolutions
+  ),
+  'Every category label in the supplied PERFECT workbook resolves exactly once'
+);
+
+select ok(
+  exists(
+    select 1 from public.v1_inventory_categories
+    where name = 'Access Doors'
+      and parent_category_id =
+        '41000000-0000-4000-8000-000000000008'
+  )
+  and exists(
+    select 1 from public.v1_inventory_categories
+    where name = 'Pipe Fittings'
+      and parent_category_id =
+        '41000000-0000-4000-8000-000000000009'
+  ),
+  'New workbook categories retain the approved one-level catalogue hierarchy'
 );
 
 select ok(
@@ -72,10 +138,14 @@ select set_config(
   '{"sub":"10000000-0000-4000-8000-000000000009","role":"authenticated","app_metadata":{"role":"senior_mechanical_engineer","app_user_id":"usr-local-senior-mechanical-engineer"}}',
   true
 );
-select throws_ok(
+select lives_ok(
   $$select public.v1_inventory_workspace_projection(null)$$,
-  '42501', 'V1_INVENTORY_WORKSPACE_DENIED',
-  'Senior Mechanical Engineer global project authority does not grant stock authority'
+  'Senior Mechanical Engineer can read the warehouse workspace'
+);
+select throws_ok(
+  $$select public.v1_create_inventory_category('{"name":"Forbidden SME write"}'::jsonb, '91000000-0000-4000-8000-000000000009')$$,
+  '42501', 'V1_INVENTORY_CATEGORY_CREATE_DENIED',
+  'Senior Mechanical Engineer read access does not grant inventory mutation'
 );
 
 select set_config(

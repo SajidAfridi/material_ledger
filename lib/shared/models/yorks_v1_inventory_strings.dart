@@ -27,6 +27,12 @@ abstract final class YorksV1InventoryStrings {
     ur: 'لائیو اسٹاک، ریزرویشن اور حرکت کی تاریخ',
     hi: 'लाइव स्टॉक, आरक्षण और मूवमेंट इतिहास',
   );
+  static const readOnlyInventoryAccess = TranslatableString(
+    en: 'Read-only warehouse visibility. Stock and catalogue changes remain controlled by Procurement.',
+    ar: 'عرض المستودع للقراءة فقط. تظل تغييرات المخزون والفهرس تحت سيطرة المشتريات.',
+    ur: 'گودام صرف دیکھنے کے لیے دستیاب ہے۔ اسٹاک اور کیٹلاگ کی تبدیلیاں پروکیورمنٹ کے زیرِ اختیار رہیں گی۔',
+    hi: 'वेयरहाउस केवल देखने के लिए उपलब्ध है। स्टॉक और कैटलॉग बदलाव प्रोक्योरमेंट के नियंत्रण में रहते हैं।',
+  );
   static const overview = TranslatableString(
     en: 'Overview',
     ar: 'نظرة عامة',
@@ -152,6 +158,18 @@ abstract final class YorksV1InventoryStrings {
     ar: 'تنزيل النموذج',
     ur: 'فارمیٹ ڈاؤن لوڈ کریں',
     hi: 'फ़ॉर्मेट डाउनलोड करें',
+  );
+  static const downloadFormatComplete = TranslatableString(
+    en: 'The controlled import format was downloaded.',
+    ar: 'تم تنزيل نموذج الاستيراد المنضبط.',
+    ur: 'کنٹرول شدہ امپورٹ فارمیٹ ڈاؤن لوڈ ہو گیا۔',
+    hi: 'नियंत्रित इम्पोर्ट फ़ॉर्मेट डाउनलोड हो गया।',
+  );
+  static const downloadFormatFailed = TranslatableString(
+    en: 'The import format could not be downloaded. Please try again.',
+    ar: 'تعذر تنزيل نموذج الاستيراد. يرجى المحاولة مرة أخرى.',
+    ur: 'امپورٹ فارمیٹ ڈاؤن لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔',
+    hi: 'इम्पोर्ट फ़ॉर्मेट डाउनलोड नहीं हो सका। फिर प्रयास करें।',
   );
   static const downloadImportFormat = TranslatableString(
     en: 'Download Import Format',
@@ -338,6 +356,18 @@ abstract final class YorksV1InventoryStrings {
     ar: 'تصدير السجل',
     ur: 'رجسٹر ایکسپورٹ کریں',
     hi: 'रजिस्टर निर्यात करें',
+  );
+  static const exportRegisterComplete = TranslatableString(
+    en: 'The current stock register was exported.',
+    ar: 'تم تصدير سجل المخزون الحالي.',
+    ur: 'موجودہ اسٹاک رجسٹر ایکسپورٹ ہو گیا۔',
+    hi: 'मौजूदा स्टॉक रजिस्टर निर्यात हो गया।',
+  );
+  static const exportRegisterFailed = TranslatableString(
+    en: 'The stock register could not be exported. Please try again.',
+    ar: 'تعذر تصدير سجل المخزون. يرجى المحاولة مرة أخرى.',
+    ur: 'اسٹاک رجسٹر ایکسپورٹ نہیں ہو سکا۔ دوبارہ کوشش کریں۔',
+    hi: 'स्टॉक रजिस्टर निर्यात नहीं हो सका। फिर प्रयास करें।',
   );
   static const manageCategories = TranslatableString(
     en: 'Manage categories',

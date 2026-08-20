@@ -637,6 +637,8 @@ class YorksV1MaterialRequestDocumentService {
       'site_engineer' ||
       'senior_mechanical_engineer' ||
       'project_manager' ||
+      'workshop_in_charge' ||
+      'document_controller' ||
       'procurement' ||
       'admin' => YorksV1ProjectStrings.roleLabel(normalized).primary,
       _ => normalized,

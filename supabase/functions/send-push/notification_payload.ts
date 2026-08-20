@@ -6,6 +6,7 @@ export type PushClaim = {
   entityId: string;
   requestId?: string | null;
   projectId?: string | null;
+  chatConversationId?: string | null;
   attemptCount: number;
 };
 
@@ -14,6 +15,11 @@ export type PushCopy = {
   body: string;
   type: "request" | "project" | "info";
 };
+
+export function isTeamChatEvent(eventCode: string): boolean {
+  return eventCode === "team_chat_message" ||
+    eventCode === "team_chat_mention";
+}
 
 export function safePushCopy(eventCode: string): PushCopy {
   switch (eventCode) {
@@ -40,6 +46,18 @@ export function safePushCopy(eventCode: string): PushCopy {
       return {
         title: "You were mentioned",
         body: "A teammate mentioned you in a material request comment.",
+        type: "info",
+      };
+    case "team_chat_message":
+      return {
+        title: "New Team Chat message",
+        body: "A conversation you participate in has a new message.",
+        type: "info",
+      };
+    case "team_chat_mention":
+      return {
+        title: "You were mentioned in Team Chat",
+        body: "A teammate mentioned you in a conversation.",
         type: "info",
       };
     case "material_request_submitted":
@@ -144,6 +162,10 @@ export function safePushCopy(eventCode: string): PushCopy {
 }
 
 export function routeFor(claim: PushClaim): string {
+  const chatId = claim.chatConversationId;
+  if (typeof chatId === "string" && /^[0-9a-f-]{36}$/i.test(chatId)) {
+    return `/yorks/team-chat/${chatId}`;
+  }
   const id = claim.requestId;
   if (typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)) {
     return `/yorks/material-requests/${id}`;
