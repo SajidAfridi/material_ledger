@@ -50,8 +50,20 @@ const yorksV1InventoryControlledUnits = <String>[
   'Pairs',
   'Roll',
   'Box',
+  'Each',
   'Ton',
   'Boxes',
+  'Kg',
+  'Litre',
+  'Pack',
+  'Lot',
+  'Mtr',
+  'Cartridge',
+  'Coil',
+  'Cylinder',
+  'Drum',
+  'Sheet',
+  'Tin',
 ];
 
 enum YorksV1InventorySourceType {
@@ -114,11 +126,17 @@ enum YorksV1InventoryControlledField {
     'manufacturerorigin',
   ]),
   ralColour('RAL Colour', false, ['ralcolour', 'ralcolor', 'colour', 'color']),
-  sourceType('Source Type *', true, ['sourcetype', 'source']),
+  // Source is derived from Stock Action for the controlled Yorks import
+  // format. Historical files containing this column remain readable as
+  // evidence, but users must not add or maintain it in the template.
+  sourceType('Source Type', false, ['sourcetype', 'source']),
   stockAction('Stock Action *', true, ['stockaction', 'action']),
   quantity('Quantity *', true, ['quantity', 'qty']),
   unit('Unit *', true, ['unit', 'uom', 'unitofmeasure']),
-  reason('Reason *', true, ['reason', 'stockreason']),
+  // The streamlined controlled template has one optional Notes column. It is
+  // used as the auditable reason only for stock-removing/correction actions;
+  // older files with a dedicated Reason column remain readable.
+  reason('Reason', false, ['reason', 'stockreason']),
   minimumStock('Minimum Stock', false, [
     'minimumstock',
     'minstock',
@@ -151,7 +169,7 @@ enum YorksV1InventoryControlledField {
     'receivedon',
     'deliverydate',
   ]),
-  notes('Notes', false, ['notes', 'remarks', 'comments']),
+  notes('Notes', false, ['notes', 'comments']),
   unitPrice('Unit Price', false, ['unitprice', 'unitcost', 'price']),
   totalPrice('Total Price', false, ['totalprice', 'totalcost', 'linevalue']);
 
@@ -956,9 +974,24 @@ String? yorksV1InventoryCanonicalUnit(String value) {
     'pairs': 'Pairs',
     'roll': 'Roll',
     'box': 'Box',
+    'each': 'Each',
     'ton': 'Ton',
     'tons': 'Ton',
     'boxes': 'Boxes',
+    'kg': 'Kg',
+    'kilogram': 'Kg',
+    'kilograms': 'Kg',
+    'pack': 'Pack',
+    'litre': 'Litre',
+    'litres': 'Litre',
+    'lot': 'Lot',
+    'mtr': 'Mtr',
+    'cartridge': 'Cartridge',
+    'coil': 'Coil',
+    'cylinder': 'Cylinder',
+    'drum': 'Drum',
+    'sheet': 'Sheet',
+    'tin': 'Tin',
   };
   return allowed[yorksV1InventorySearchKey(value)];
 }

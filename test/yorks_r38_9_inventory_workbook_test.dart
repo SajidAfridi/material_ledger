@@ -91,7 +91,7 @@ void main() {
 
       mapping = codec.updateMapping(
         mapping: mapping,
-        field: YorksV1InventoryControlledField.sourceType,
+        field: YorksV1InventoryControlledField.description,
         sourceColumnIndex: null,
       );
       expect(mapping.canContinue, isFalse);
@@ -113,6 +113,67 @@ void main() {
         mapping.issues.map((issue) => issue.code),
         contains(YorksV1InventoryColumnMappingIssueCode.duplicateSourceColumn),
       );
+    });
+
+    test('accepts the streamlined template without Source Type or Reason', () {
+      const codec = YorksV1InventoryWorkbookCodec();
+      const headers = <String>[
+        'S:No',
+        'Category *',
+        'Item Code *',
+        'Item Description *',
+        'External Supplier Name',
+        'Stock Action *',
+        'Quantity *',
+        'Unit *',
+        'Notes',
+      ];
+      const row = <String>[
+        '1',
+        'AC Unit',
+        'ACU-001',
+        'Split AC Unit',
+        '',
+        'Opening Balance',
+        '2',
+        'Cartridge',
+        '',
+      ];
+      final source = codec.sourceFromMatrix(
+        fileName: 'streamlined.csv',
+        matrix: const [headers, row],
+      );
+      final preview = codec.previewFromSource(
+        mapping: codec.proposeMapping(source, requireR38_9Fields: true),
+        categories: [
+          YorksV1InventoryCategory(
+            id: 'ac-unit',
+            name: 'AC Unit',
+            isSystem: true,
+            isActive: true,
+            recordVersion: 1,
+            itemCount: 0,
+            aliases: [],
+            createdByDisplayName: 'Yorks',
+            createdAt: DateTime(2026, 8, 20),
+          ),
+        ],
+        inventoryItems: const [],
+        suppliers: _suppliers,
+      );
+
+      expect(
+        preview.rows.single.stockAction,
+        YorksV1InventoryStockAction.openingBalance,
+      );
+      expect(
+        preview.rows.single.sourceType,
+        YorksV1InventorySourceType.openingBalance,
+      );
+      expect(preview.rows.single.usesUnknownSupplier, isTrue);
+      expect(preview.rows.single.reason, 'Inventory import: Opening Balance');
+      expect(preview.rows.single.unit, 'Cartridge');
+      expect(preview.rows.single.hasErrors, isFalse);
     });
 
     test('rejects files above 25 MiB and sources above 20,000 rows', () {
@@ -733,7 +794,7 @@ void main() {
   );
 
   test(
-    'the attached legacy workbook requires explicit Opening Balance and units',
+    'the attached legacy workbook can explicitly be treated as Opening Balance',
     () {
       const codec = YorksV1InventoryWorkbookCodec();
       final file = File(_perfectWorkbookPath);
@@ -745,16 +806,7 @@ void main() {
       );
       var mapping = codec.proposeMapping(source, requireR38_9Fields: true);
 
-      expect(mapping.canContinue, isFalse);
-      expect(
-        mapping.issues.where(
-          (issue) =>
-              issue.code ==
-                  YorksV1InventoryColumnMappingIssueCode.missingRequiredField &&
-              issue.field == YorksV1InventoryControlledField.sourceType,
-        ),
-        isNotEmpty,
-      );
+      expect(mapping.canContinue, isTrue);
       mapping = codec.applyOpeningBalanceDefault(
         mapping: mapping,
         enabled: true,
@@ -787,42 +839,14 @@ void main() {
             'Every supplied workbook category must resolve: '
             '$unresolvedCategories',
       );
-      expect(
-        preview.unresolvedUnitGroups.map((group) => group.sourceUnitText),
-        containsAll(const [
-          'Pack',
-          'Sheet',
-          'Drum',
-          'Cartridge',
-          'Coil',
-          'Kg',
-          'Cylinder',
-          'Tin',
-        ]),
-      );
-
-      mapping = codec.applyUnitMapping(
-        mapping: mapping,
-        sourceUnitText: 'Pack',
-        controlledUnit: 'Box',
-      );
-      preview = codec.previewFromSource(
-        mapping: mapping,
-        categories: _approvedWorkbookCategories,
-        inventoryItems: const [],
-        suppliers: _suppliers,
-      );
-      expect(
-        preview.unresolvedUnitGroups.map((group) => group.sourceUnitText),
-        isNot(contains('Pack')),
-      );
+      expect(preview.unresolvedUnitGroups, isEmpty);
       final mapped = preview.rows.firstWhere(
         (row) => yorksV1InventorySearchKey(row.rawUnit) == 'pack',
       );
-      expect(mapped.unit, 'Box');
-      expect(mapped.unitWasMapped, isTrue);
+      expect(mapped.unit, 'Pack');
+      expect(mapped.unitWasMapped, isFalse);
       expect(mapped.rawSourceHeaders, hasLength(20));
-      expect(mapping.controlledUnitFor('Pack'), 'Box');
+      expect(mapping.controlledUnitFor('Pack'), isNull);
     },
     skip: !File(_perfectWorkbookPath).existsSync()
         ? 'The attached PERFECT workbook is not installed.'
@@ -1049,7 +1073,10 @@ void main() {
     const codec = YorksV1InventoryWorkbookCodec();
     final row = [..._validExternalRow]
       ..[3] = '=FORMULA-LIKE DESCRIPTION'
-      ..[13] = '';
+      ..[9] = 'Correction'
+      ..[10] = 'Correction (-)'
+      ..[13] = ''
+      ..[19] = '';
     final preview = codec.previewFromMatrix(
       fileName: '../unsafe receipt.xlsx',
       matrix: [_officialHeaders, row],
@@ -1197,21 +1224,14 @@ void main() {
         YorksV1InventoryWorkspace(items: const [], categories: _categories),
       );
 
-      expect(controller.state.mapping?.canContinue, isFalse);
-      expect(controller.state.preview, isNull);
+      expect(controller.state.mapping?.canContinue, isTrue);
+      expect(controller.state.preview, isNotNull);
       expect(controller.state.canTreatWorkbookAsOpeningBalance, isTrue);
 
       controller.setTreatWorkbookAsOpeningBalance(true);
       expect(controller.state.mapping?.canContinue, isTrue);
       expect(controller.state.treatsWorkbookAsOpeningBalance, isTrue);
       expect(controller.confirmMapping(), isTrue);
-      expect(
-        controller.state.unresolvedUnitGroups.single.sourceUnitText,
-        'Pack',
-      );
-      expect(controller.continueToSupplierReceipt(), isFalse);
-
-      controller.resolveUnit(sourceUnitText: 'Pack', controlledUnit: 'Box');
       expect(controller.state.unresolvedUnitGroups, isEmpty);
       expect(controller.state.requiresOpeningBalanceAsOfDate, isTrue);
       expect(controller.state.hasValidOpeningBalanceAsOfDate, isFalse);
@@ -1232,13 +1252,12 @@ void main() {
       final rowPayload = (payloads.single['rows']! as List).single as Map;
       expect(rowPayload['source_type'], 'opening_balance');
       expect(rowPayload['stock_action'], 'opening_balance');
-      expect(rowPayload['unit'], 'Box');
+      expect(rowPayload['unit'], 'Pack');
       final evidence = rowPayload['raw_source_values']! as Map;
       expect((evidence['headers']! as List), hasLength(18));
       expect(evidence['decisions'], {
         'source_type_default': 'opening_balance',
         'stock_action_normalized_from': 'add_stock',
-        'unit_mapping': {'source': 'Pack', 'controlled': 'Box'},
       });
     },
   );

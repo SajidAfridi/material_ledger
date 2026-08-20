@@ -58,7 +58,8 @@ class YorksV1InventoryImportState {
       mapping?.treatWorkbookAsOpeningBalance == true;
   bool get canTreatWorkbookAsOpeningBalance =>
       mapping != null &&
-      !mapping!.indexes.containsKey(YorksV1InventoryControlledField.sourceType);
+      !mapping!.indexes.containsKey(YorksV1InventoryControlledField.sourceType) &&
+      !(preview?.hasOpeningBalanceRows ?? false);
   List<YorksV1InventoryUnitReviewGroup> get unresolvedUnitGroups =>
       preview?.unresolvedUnitGroups ?? const [];
   bool get hasValidOpeningBalanceAsOfDate =>
@@ -586,19 +587,24 @@ class YorksV1InventoryImportController
       openingBalanceAsOfDate: state.openingBalanceAsOfDate,
     );
     try {
-      final result = _r38_9Commit == null
-          ? await _repository.importInventory(
+      // Supplier receipts use the provenance-aware command. Controlled stock
+      // corrections, removals and metadata-only imports deliberately use the
+      // established adjustment import command instead: they do not fabricate
+      // a supplier receipt or receipt condition record.
+      final result = _r38_9Commit != null &&
+              preview.rows.every((row) => row.isReceiptAction)
+          ? await _r38_9Commit(
+              payload: preview.toR38_9RpcPayload(
+                openingBalanceAsOfDate: state.openingBalanceAsOfDate,
+              ),
+              idempotencyKey: idempotencyKey,
+            )
+          : await _repository.importInventory(
               YorksV1InventoryImportInput(
                 fileName: preview.fileName,
                 rows: [for (final row in preview.rows) row.toRpcInput()],
                 idempotencyKey: idempotencyKey,
               ),
-            )
-          : await _r38_9Commit(
-              payload: preview.toR38_9RpcPayload(
-                openingBalanceAsOfDate: state.openingBalanceAsOfDate,
-              ),
-              idempotencyKey: idempotencyKey,
             );
       state = YorksV1InventoryImportState(
         status: YorksV1InventoryImportStatus.succeeded,
