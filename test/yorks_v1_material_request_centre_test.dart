@@ -32,10 +32,12 @@ void main() {
   ) async {
     await _setViewport(tester, const Size(1440, 1024));
     String? openedRequestId;
+    String? openedProjectId;
     var created = false;
     await _pump(
       tester,
       onOpen: (request) => openedRequestId = request.id,
+      onOpenProject: (projectId) => openedProjectId = projectId,
       onCreate: () => created = true,
     );
 
@@ -45,10 +47,14 @@ void main() {
     );
     expect(find.text('Material Request Centre'), findsOneWidget);
     expect(find.text('Project Folders'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      findsOneWidget,
+    );
     expect(find.text('Total Requests'), findsWidgets);
-    expect(find.text('YRA-322'), findsOneWidget);
-    expect(find.text('YRA-314'), findsOneWidget);
-    expect(find.text('YRA-313'), findsOneWidget);
+    expect(find.textContaining('YRA-322'), findsWidgets);
+    expect(find.textContaining('YRA-314'), findsWidgets);
+    expect(find.textContaining('YRA-313'), findsWidgets);
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_centre_desktop.png'),
@@ -59,10 +65,13 @@ void main() {
     );
     expect(created, isTrue);
 
+    await tester.tap(find.text('Project Folders'));
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('material-request-project-project-322')),
     );
-    expect(openedRequestId, 'mr-322-closed');
+    expect(openedProjectId, 'project-322');
+    expect(openedRequestId, isNull);
 
     await tester.tap(find.text('All Requests'));
     await tester.pumpAndSettle();
@@ -126,11 +135,87 @@ void main() {
     expect(openedRequestId, 'mr-322-closed');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('All Requests uses fifteen-row pages', (tester) async {
+    await _setViewport(tester, const Size(1280, 3200));
+    final requests = List.generate(
+      16,
+      (index) => _request(
+        id: 'mr-page-$index',
+        projectId: 'project-page-${index % 3}',
+        reference: 'YRA-${320 + index % 3}',
+        projectName: 'Project ${index + 1}',
+        number: 'YRA-${320 + index % 3}-MR${index + 1}',
+        title: 'Material request ${index + 1}',
+        scope: 'Common / All Buildings',
+        state: YorksV1MaterialRequestState.submitted,
+        updatedAt: DateTime.utc(2026, 8, 20).subtract(Duration(minutes: index)),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: requests,
+            language: AppLanguage.english,
+            canCreate: true,
+            onCreate: () {},
+            onOpen: (_) {},
+            onOpenProject: (_) {},
+            onRefresh: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1–15 / 16'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-page-14')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-page-15')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-centre-page-next')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('16–16 / 16'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-page-15')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrow centre keeps the default request register usable', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pump(tester);
+
+    expect(find.text('All Requests'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      findsOneWidget,
+    );
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_centre_mobile_360.png'),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pump(
   WidgetTester tester, {
   ValueChanged<YorksV1MaterialRequest>? onOpen,
+  ValueChanged<String>? onOpenProject,
   VoidCallback? onCreate,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -144,6 +229,7 @@ Future<void> _pump(
         onCreate: onCreate ?? () {},
         onRefresh: () {},
         onOpen: onOpen ?? (_) {},
+        onOpenProject: onOpenProject ?? (_) {},
       ),
     ),
   ),

@@ -122,6 +122,11 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
             ),
             onOpen: (request) =>
                 context.push(_materialRequestOpenPath(request)),
+            onOpenProject: (selectedProjectId) => context.push(
+              RoutePaths.yorksV1MaterialRequestsPath(
+                projectId: selectedProjectId,
+              ),
+            ),
             onRefresh: () => ref.invalidate(yorksV1MaterialRequestListProvider),
             localDraftNotice: canCreate && localDrafts.isNotEmpty
                 ? _RecoverableMaterialDraftNotice(

@@ -12,5 +12,21 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let applicationAttentionChannel = FlutterMethodChannel(
+      name: "com.yorks.app/application_attention",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    applicationAttentionChannel.setMethodCallHandler { call, result in
+      guard call.method == "setAttention" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let arguments = call.arguments as? [String: Any]
+      let unreadCount = max(0, arguments?["unreadCount"] as? Int ?? 0)
+      DispatchQueue.main.async {
+        UIApplication.shared.applicationIconBadgeNumber = unreadCount
+        result(nil)
+      }
+    }
   }
 }
