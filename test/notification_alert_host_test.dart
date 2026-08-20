@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/app.dart' show appRouterProvider;
 import 'package:material_ledger/core/widgets/yorks_app_toast.dart';
 import 'package:material_ledger/shared/models/app_notification.dart';
+import 'package:material_ledger/shared/models/yorks_v1_notification.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/notification_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_notification_provider.dart';
 import 'package:material_ledger/shared/services/push_service.dart';
 import 'package:material_ledger/shared/widgets/notification_alert_host.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -203,4 +205,66 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     container.dispose();
   });
+
+  testWidgets(
+    'authoritative Team Chat transport produces a chat alert without entering the workflow centre',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final server = _FakeServerNotificationsNotifier();
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          pushServiceProvider.overrideWithValue(const NoopPushService()),
+          yorksV1NotificationsProvider.overrideWith((_) => server),
+        ],
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: NotificationAlertHost(
+              child: Scaffold(body: Text('Workspace')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      server.publish(
+        YorksV1NotificationRecord(
+          id: 'chat-notification-1',
+          eventCode: 'team_chat_message',
+          entityType: 'chat_message',
+          entityId: 'message-1',
+          chatConversationId: 'conversation-2',
+          createdAt: DateTime(2026, 8, 20),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('New Team Chat message'), findsOneWidget);
+      expect(find.byIcon(Icons.chat_bubble_rounded), findsOneWidget);
+      expect(container.read(yorksV1AppNotificationsProvider), isEmpty);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+    },
+  );
+}
+
+class _FakeServerNotificationsNotifier extends YorksV1NotificationsNotifier {
+  _FakeServerNotificationsNotifier()
+    : super(client: null, repository: null, authUserId: null) {
+    state = const AsyncData([]);
+  }
+
+  void publish(YorksV1NotificationRecord record) {
+    state = AsyncData([record, ...state.requireValue]);
+  }
 }

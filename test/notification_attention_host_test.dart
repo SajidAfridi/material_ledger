@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/models/app_user.dart';
+import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/providers/notification_provider.dart';
+import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_team_chat_provider.dart';
 import 'package:material_ledger/shared/services/application_attention_service.dart';
@@ -27,7 +30,8 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           yorksV1FeatureFlagsProvider.overrideWithValue(_chatEnabledFlags),
-          unreadNotificationCountProvider.overrideWith(
+          currentUserProvider.overrideWithValue(_signedInUser),
+          yorksV1WorkflowUnreadCountProvider.overrideWith(
             (ref) => ref.watch(_workflowUnreadOverride),
           ),
           yorksV1TeamChatUnreadProvider.overrideWith(
@@ -77,6 +81,14 @@ const _chatEnabledFlags = YorksV1FeatureFlags(
   returnsDocuments: true,
   documents: true,
   teamChat: true,
+);
+
+final _signedInUser = AppUser(
+  id: 'user-1',
+  fullName: 'Test User',
+  email: 'test@yorks.invalid',
+  role: UserRole.admin,
+  createdAt: DateTime(2026, 8, 20),
 );
 
 class _FakeApplicationAttentionService

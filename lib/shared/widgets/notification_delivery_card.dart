@@ -148,6 +148,7 @@ class _NotificationDeliveryCardState
           color: AppColors.error,
           title: AppStrings.alertsBlocked.active(language),
           body: AppStrings.alertsBlockedBody.active(language),
+          actionLabel: AppStrings.checkAgain.active(language),
         );
       case PushAuthorizationState.unsupported:
         return _DeliveryPresentation(

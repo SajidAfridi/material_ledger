@@ -8,20 +8,25 @@ remain authoritative. The app uses the registered Yorks Firebase project
 
 - Firebase initializes at application launch and reads the current permission
   without opening a prompt. Chrome, Android and Apple permission is requested
-  only from the user's explicit **Enable device alerts** action in the
-  notification centre or Team Chat alert control so browser gesture
-  requirements are satisfied. An already-authorized FCM token is registered
-  only after the Yorks user is known; token refresh and foreground resume
-  repeat that owner-bound step.
+  only from the user's explicit **Enable device alerts** action so browser
+  gesture requirements are satisfied. Every signed-in, supported but
+  unregistered installation receives a global, session-dismissible setup
+  banner; the same recovery control remains available in the notification
+  centre and Team Chat. An already-authorized FCM token is registered only
+  after the Yorks user is known; token refresh and foreground resume repeat
+  that owner-bound step.
 - Token and message-payload diagnostics are emitted only in debug builds. FCM
   payloads must never contain commercial or other protected values.
 - Foreground FCM messages and recipient-scoped Realtime refreshes converge on
   one de-duplicated in-app alert with visible copy, navigation, haptic feedback
   and a short tone. Background/terminated notifications use the Yorks system
-  channel and retain safe deep-link behavior. Browser/OS focus and sound
-  settings remain authoritative.
+  channel and retain safe deep-link behavior. A foreground Team Chat transport
+  row also produces its alert from the protected Supabase feed, so a temporary
+  FCM registration failure does not make an open app silent. Browser/OS focus,
+  notification and sound settings remain authoritative.
 - Web uses one service worker that includes Flutter's generated cache worker
   and FCM background handler. This avoids either worker replacing the other.
+  The worker updates the installed-PWA badge while the app is closed.
 
 ## Trusted delivery path
 
@@ -33,6 +38,11 @@ Vault-managed webhook secret. The Edge Function claims the job atomically,
 derives the recipient and non-commercial copy from protected server data,
 sends through FCM HTTP v1, removes stale tokens and records a terminal or
 retryable result. A one-minute `pg_cron` job retries failed or expired leases.
+The claim derives the recipient's current workflow plus unmuted Team Chat
+unread count on the server. Android receives `notification_count`, Apple
+receives `aps.badge`, and web receives the same count for its service-worker
+Badging API update. Device-local compatibility rows never drive those external
+badges.
 
 Clients cannot choose recipients, event copy or deep links. They can only
 register/unregister their own FCM token through owner-bound RPCs. If a user
@@ -90,22 +100,38 @@ These values must never be committed or placed in the Flutter client.
    `yorks_push_edge_url` in Supabase Vault. The migration creates
    `yorks_push_webhook_secret`; never expose its decrypted value to a client.
 
-After deployment, sign in once on each target, open Notifications and choose
-**Enable device alerts** (or use the same alert control in Team Chat) so its
-owner-bound token can be registered. Prove an actual Yorks workflow transition
-and a Team Chat message, not only a Firebase campaign. A workflow event must
-produce one FCM alert and one authoritative workflow row. A Chat message must
-produce one FCM alert and only the Team Chat unread badge, never a workflow-bell
-entry. Verify exact deep links, unauthorized-role exclusion and retry
-de-duplication.
+After deployment, sign in once on each target and choose **Enable device
+alerts** from the global setup banner. Permission cannot be granted silently by
+a web page or application; every browser profile or installed device must be
+enrolled once. Prove an actual Yorks workflow transition and a Team Chat
+message, not only a Firebase campaign. A workflow event must produce one FCM
+alert and one authoritative workflow row. A Chat message must produce one FCM
+alert and only the Team Chat unread badge, never a workflow-bell entry. Verify
+exact deep links, unauthorized-role exclusion and retry de-duplication.
+
+Before approving a rollout, the operator must verify all three layers instead
+of relying on a successful Edge invocation alone:
+
+1. `v1_push_device_tokens` contains a current owner-bound row for each enrolled
+   test installation.
+2. A new workflow and Chat event each leave `no_devices` and finish as `sent`
+   in `v1_notification_push_outbox`.
+3. With the app foregrounded, backgrounded and terminated, the target receives
+   one alert, the correct sound permitted by its OS settings, the current app
+   badge and the exact protected deep link.
 
 Target verification matrix:
 
 - Android native and a physical iOS device use FlutterFire FCM. An iOS
   Simulator cannot receive remote FCM push.
 - Windows and macOS use the installed HTTPS web/PWA build in a supported
-  browser. The repository does not currently configure a separate native
-  Windows or macOS push application.
+  browser for background and terminated delivery. The native macOS and Windows
+  Flutter builds receive protected Realtime alerts, tone and application
+  attention while running, but the repository does not configure a separately
+  signed native macOS APNs application or a Windows Push Notification Services
+  application. Claiming closed-app native desktop push without those external
+  identities would be false; use the installed PWA until those release inputs
+  are provisioned.
 - iOS/iPadOS web push requires 16.4 or later, a Home Screen installation and
   the user's explicit alert action. Browser and operating-system notification,
   Focus/Do Not Disturb and sound settings remain authoritative.

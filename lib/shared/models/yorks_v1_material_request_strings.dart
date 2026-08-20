@@ -126,6 +126,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'کل درخواستیں',
     hi: 'कुल अनुरोध',
   );
+  static const totalMaterialRequests = TranslatableString(
+    en: 'Total Material Requests',
+    ar: 'إجمالي طلبات المواد',
+    ur: 'کل میٹیریل ریکویسٹس',
+    hi: 'कुल सामग्री अनुरोध',
+  );
   static const activeRequests = TranslatableString(
     en: 'Active Requests',
     ar: 'الطلبات النشطة',
@@ -215,6 +221,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'مجلدات المشاريع',
     ur: 'پراجیکٹ فولڈرز',
     hi: 'परियोजना फ़ोल्डर',
+  );
+  static const projects = TranslatableString(
+    en: 'Projects',
+    ar: 'المشاريع',
+    ur: 'پراجیکٹس',
+    hi: 'परियोजनाएं',
   );
   static const allRequests = TranslatableString(
     en: 'All Requests',

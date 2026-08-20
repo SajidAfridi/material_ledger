@@ -92,14 +92,12 @@ class YorksV1NotificationsNotifier
     if (showLoading && previous == null) state = const AsyncLoading();
     try {
       final records = await repository.listMine();
-      // Fail closed against an older/misconfigured backend projection: chat
-      // transport rows belong exclusively to Team Chat even if an RPC briefly
-      // returns them during a rolling deployment.
-      state = AsyncData(
-        records
-            .where((record) => !record.isChatTransport)
-            .toList(growable: false),
-      );
+      // Retain the recipient's protected transport rows in this internal feed
+      // so the global alert host can provide a foreground Team Chat tone/toast
+      // even before FCM permission is granted. Public notification-centre
+      // projections still filter Chat: its member cursor remains the only
+      // unread authority and Chat never enters the workflow bell.
+      state = AsyncData(records);
     } catch (error, stackTrace) {
       // Preserve the last authorized list during a temporary network failure;
       // the retry timer/Realtime reconnect will reconcile it.

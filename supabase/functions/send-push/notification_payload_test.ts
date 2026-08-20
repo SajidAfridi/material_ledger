@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   isTeamChatEvent,
+  normalizedUnreadCount,
   type PushClaim,
   routeFor,
   safePushCopy,
@@ -15,6 +16,14 @@ const claim = (requestId?: string | null): PushClaim => ({
   entityId: "13000000-0000-4000-8000-000000000001",
   requestId,
   attemptCount: 1,
+});
+
+Deno.test("badge counts are finite server-owned integers", () => {
+  assertEquals(normalizedUnreadCount(12.8), 12);
+  assertEquals(normalizedUnreadCount(1200), 999);
+  assertEquals(normalizedUnreadCount(-4), 0);
+  assertEquals(normalizedUnreadCount("17"), 0);
+  assertEquals(normalizedUnreadCount(undefined), 0);
 });
 
 Deno.test("trusted event copy is server-owned and non-commercial", () => {

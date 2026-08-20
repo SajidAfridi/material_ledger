@@ -50,6 +50,11 @@ void RegisterApplicationAttentionChannel(
           registrar->messenger(), "com.yorks.app/application_attention",
           &flutter::StandardMethodCodec::GetInstance());
   channel->SetMethodCallHandler([window](const auto& call, auto result) {
+    if (call.method_name() == "playNotificationAlert") {
+      MessageBeep(MB_ICONASTERISK);
+      result->Success();
+      return;
+    }
     if (call.method_name() != "setAttention") {
       result->NotImplemented();
       return;

@@ -52,6 +52,8 @@ enum _MaterialRequestMetricFilter {
   closed,
 }
 
+enum _MaterialRequestCentreView { allRequests, projects }
+
 class _YorksV1MaterialRequestCentreState
     extends State<YorksV1MaterialRequestCentre> {
   static const _allSelection = '__all__';
@@ -65,7 +67,7 @@ class _YorksV1MaterialRequestCentreState
   String _requester = _allSelection;
   bool _attentionOnly = false;
   bool _newestFirst = true;
-  bool _folderGrid = true;
+  _MaterialRequestCentreView _view = _MaterialRequestCentreView.allRequests;
   bool _filtersExpanded = false;
   final Set<String> _expandedProjectIds = <String>{};
   int _page = 0;
@@ -124,7 +126,10 @@ class _YorksV1MaterialRequestCentreState
           metrics: metrics,
           language: widget.language,
           selected: _metricFilter,
-          onSelected: (value) => _update(() => _metricFilter = value),
+          onSelected: (value) => _update(() {
+            _metricFilter = value;
+            _view = _MaterialRequestCentreView.allRequests;
+          }),
         ),
         const SizedBox(height: AppSpacing.lg),
         _MainCentrePanel(
@@ -133,8 +138,8 @@ class _YorksV1MaterialRequestCentreState
           onSearchChanged: (_) => _update(() {}),
           newestFirst: _newestFirst,
           onSortChanged: (value) => _update(() => _newestFirst = value),
-          folderGrid: _folderGrid,
-          onFolderGridChanged: (value) => _update(() => _folderGrid = value),
+          view: _view,
+          onViewChanged: (value) => _update(() => _view = value),
           filtersExpanded: _filtersExpanded,
           onFiltersExpandedChanged: (value) =>
               setState(() => _filtersExpanded = value),
@@ -536,7 +541,7 @@ class _MetricsGrid extends StatelessWidget {
       final cardWidth = (width - (columns - 1) * gap) / columns;
       final tiles = [
         _MetricData(
-          YorksV1MaterialRequestStrings.totalRequests,
+          YorksV1MaterialRequestStrings.totalMaterialRequests,
           YorksV1MaterialRequestStrings.allTime,
           metrics.total,
           Icons.description_outlined,
@@ -645,77 +650,105 @@ class _MetricCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    selected: selected,
-    child: Material(
-      color: AppColors.surfaceContainerLowest,
-      elevation: selected ? 2 : 1,
-      shadowColor: AppColors.shadow,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-          color: selected ? data.foreground : AppColors.line,
-          width: selected ? 1.5 : 1,
-        ),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+  Widget build(BuildContext context) {
+    final icon = Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: data.background,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
-      child: InkWell(
-        key: ValueKey('material-request-metric-${data.filter.name}'),
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: data.background,
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                ),
-                child: Icon(data.icon, color: data.foreground, size: 21),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: Icon(data.icon, color: data.foreground, size: 21),
+    );
+    final value = Text(
+      '${data.value}',
+      style: AppTypography.headlineSmall.copyWith(
+        color: AppColors.ink,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+    final label = YorksV1ActiveText(
+      copy: data.label,
+      language: language,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
+    );
+    final hint = YorksV1ActiveText(
+      copy: data.hint,
+      language: language,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+    );
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: AppColors.surfaceContainerLowest,
+        elevation: selected ? 2 : 1,
+        shadowColor: AppColors.shadow,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(
+            color: selected ? data.foreground : AppColors.line,
+            width: selected ? 1.5 : 1,
+          ),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        ),
+        child: InkWell(
+          key: ValueKey('material-request-metric-${data.filter.name}'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 170) {
+                  final compactLabel = YorksV1ActiveText(
+                    copy: data.label,
+                    language: language,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  );
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(children: [icon, const Spacer(), value]),
+                      const SizedBox(height: AppSpacing.xs),
+                      compactLabel,
+                      const SizedBox(height: 2),
+                      hint,
+                    ],
+                  );
+                }
+                return Row(
                   children: [
-                    YorksV1ActiveText(
-                      copy: data.label,
-                      language: language,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.labelMedium.copyWith(
-                        color: AppColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${data.value}',
-                      style: AppTypography.headlineSmall.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    YorksV1ActiveText(
-                      copy: data.hint,
-                      language: language,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.muted,
+                    icon,
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          label,
+                          const SizedBox(height: 2),
+                          value,
+                          hint,
+                        ],
                       ),
                     ),
                   ],
-                ),
-              ),
-            ],
+                );
+              },
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _MainCentrePanel extends StatelessWidget {
@@ -728,8 +761,8 @@ class _MainCentrePanel extends StatelessWidget {
     required this.onSearchChanged,
     required this.newestFirst,
     required this.onSortChanged,
-    required this.folderGrid,
-    required this.onFolderGridChanged,
+    required this.view,
+    required this.onViewChanged,
     required this.filtersExpanded,
     required this.onFiltersExpandedChanged,
     required this.activeFilterCount,
@@ -748,8 +781,8 @@ class _MainCentrePanel extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final bool newestFirst;
   final ValueChanged<bool> onSortChanged;
-  final bool folderGrid;
-  final ValueChanged<bool> onFolderGridChanged;
+  final _MaterialRequestCentreView view;
+  final ValueChanged<_MaterialRequestCentreView> onViewChanged;
   final bool filtersExpanded;
   final ValueChanged<bool> onFiltersExpandedChanged;
   final int activeFilterCount;
@@ -764,18 +797,19 @@ class _MainCentrePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalItems = folderGrid ? folders.length : requests.length;
-    final pageSize = folderGrid ? _folderPageSize : _requestPageSize;
+    final showProjects = view == _MaterialRequestCentreView.projects;
+    final totalItems = showProjects ? folders.length : requests.length;
+    final pageSize = showProjects ? _folderPageSize : _requestPageSize;
     final pageCount = totalItems == 0
         ? 1
         : (totalItems + pageSize - 1) ~/ pageSize;
     final currentPage = page.clamp(0, pageCount - 1);
     final start = currentPage * pageSize;
     final end = (start + pageSize).clamp(0, totalItems);
-    final pageFolders = folderGrid
+    final pageFolders = showProjects
         ? folders.sublist(start, end)
         : const <_ProjectRequestFolder>[];
-    final pageRequests = folderGrid
+    final pageRequests = showProjects
         ? const <YorksV1MaterialRequest>[]
         : requests.sublist(start, end);
 
@@ -788,7 +822,7 @@ class _MainCentrePanel extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.md),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 630;
+                final compact = constraints.maxWidth < 820;
                 final search = TextField(
                   key: const ValueKey('material-request-centre-search'),
                   controller: searchController,
@@ -810,39 +844,31 @@ class _MainCentrePanel extends StatelessWidget {
                           ),
                   ),
                 );
+                final sort = _SortControl(
+                  language: language,
+                  newestFirst: newestFirst,
+                  onChanged: onSortChanged,
+                );
+                final viewSwitcher = _CentreViewSwitcher(
+                  language: language,
+                  selected: view,
+                  onChanged: onViewChanged,
+                );
+                final filterButton = _FilterButton(
+                  language: language,
+                  compact: compact,
+                  expanded: filtersExpanded,
+                  count: activeFilterCount,
+                  onPressed: () => onFiltersExpandedChanged(!filtersExpanded),
+                );
                 final controls = Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _SortControl(
-                      language: language,
-                      newestFirst: newestFirst,
-                      onChanged: onSortChanged,
-                    ),
+                    sort,
                     const SizedBox(width: AppSpacing.xs),
-                    _ViewModeButton(
-                      tooltip: YorksV1MaterialRequestStrings.projectFolders
-                          .active(language),
-                      selected: folderGrid,
-                      icon: Icons.folder_outlined,
-                      onPressed: () => onFolderGridChanged(true),
-                    ),
-                    _ViewModeButton(
-                      tooltip: YorksV1MaterialRequestStrings.allRequests.active(
-                        language,
-                      ),
-                      selected: !folderGrid,
-                      icon: Icons.view_list_rounded,
-                      onPressed: () => onFolderGridChanged(false),
-                    ),
+                    viewSwitcher,
                     const SizedBox(width: AppSpacing.xs),
-                    _FilterButton(
-                      language: language,
-                      compact: compact,
-                      expanded: filtersExpanded,
-                      count: activeFilterCount,
-                      onPressed: () =>
-                          onFiltersExpandedChanged(!filtersExpanded),
-                    ),
+                    filterButton,
                   ],
                 );
                 if (compact) {
@@ -851,10 +877,11 @@ class _MainCentrePanel extends StatelessWidget {
                     children: [
                       search,
                       const SizedBox(height: AppSpacing.sm),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: controls,
+                      Row(
+                        children: [viewSwitcher, const Spacer(), filterButton],
                       ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Align(alignment: Alignment.centerLeft, child: sort),
                     ],
                   );
                 }
@@ -889,7 +916,7 @@ class _MainCentrePanel extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.md),
             child: totalItems == 0
                 ? _NoMatchingRequests(language: language)
-                : folderGrid
+                : showProjects
                 ? _ProjectFolderResults(
                     folders: pageFolders,
                     language: language,
@@ -916,6 +943,101 @@ class _MainCentrePanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CentreViewSwitcher extends StatelessWidget {
+  const _CentreViewSwitcher({
+    required this.language,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final AppLanguage language;
+  final _MaterialRequestCentreView selected;
+  final ValueChanged<_MaterialRequestCentreView> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: AppSpacing.minTapTarget,
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _CentreViewOption(
+          key: const ValueKey('material-request-centre-view-all'),
+          icon: Icons.view_list_rounded,
+          label: YorksV1MaterialRequestStrings.allRequests.active(language),
+          selected: selected == _MaterialRequestCentreView.allRequests,
+          onPressed: () => onChanged(_MaterialRequestCentreView.allRequests),
+        ),
+        _CentreViewOption(
+          key: const ValueKey('material-request-centre-view-projects'),
+          icon: Icons.folder_outlined,
+          label: YorksV1MaterialRequestStrings.projects.active(language),
+          selected: selected == _MaterialRequestCentreView.projects,
+          onPressed: () => onChanged(_MaterialRequestCentreView.projects),
+        ),
+      ],
+    ),
+  );
+}
+
+class _CentreViewOption extends StatelessWidget {
+  const _CentreViewOption({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: Material(
+      color: selected ? AppColors.surfaceContainerLowest : Colors.transparent,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        child: Container(
+          constraints: const BoxConstraints(
+            minHeight: AppSpacing.minTapTarget - 8,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? AppColors.blue : AppColors.muted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.labelMedium.copyWith(
+                  color: selected ? AppColors.blue : AppColors.muted,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _SortControl extends StatelessWidget {
@@ -1199,6 +1321,9 @@ class _ExpandableProjectFolder extends StatelessWidget {
                         _FolderCountBadge(count: folder.requests.length),
                         const SizedBox(width: AppSpacing.xs),
                         Icon(
+                          key: ValueKey(
+                            'material-request-project-arrow-${folder.id}',
+                          ),
                           expanded
                               ? Icons.keyboard_arrow_up_rounded
                               : Icons.keyboard_arrow_down_rounded,
@@ -1216,6 +1341,9 @@ class _ExpandableProjectFolder extends StatelessWidget {
                       Expanded(flex: 3, child: latest),
                       const SizedBox(width: AppSpacing.sm),
                       Icon(
+                        key: ValueKey(
+                          'material-request-project-arrow-${folder.id}',
+                        ),
                         expanded
                             ? Icons.keyboard_arrow_up_rounded
                             : Icons.keyboard_arrow_down_rounded,
@@ -1640,23 +1768,28 @@ class _RequestCentreRow extends StatelessWidget {
               language: language,
             );
             if (compact) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  identity,
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(child: details),
-                  const SizedBox(width: AppSpacing.sm),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      state,
-                      const SizedBox(height: AppSpacing.xs),
+                      identity,
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: details),
+                      const SizedBox(width: AppSpacing.xs),
                       const Icon(
                         Icons.chevron_right_rounded,
                         color: AppColors.muted,
                       ),
                     ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: AppSpacing.minTapTarget + AppSpacing.sm,
+                    ),
+                    child: Align(alignment: Alignment.centerLeft, child: state),
                   ),
                 ],
               );

@@ -1,5 +1,7 @@
 package com.yorks.app
 
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,6 +19,7 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterFragmentActivity() {
     private var channel: MethodChannel? = null
+    private var notificationRingtone: Ringtone? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -24,6 +27,29 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "material_ledger/hardware",
         )
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.yorks.app/application_attention",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "playNotificationAlert") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            try {
+                val uri = RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_NOTIFICATION,
+                )
+                notificationRingtone?.stop()
+                notificationRingtone = RingtoneManager.getRingtone(
+                    applicationContext,
+                    uri,
+                )
+                notificationRingtone?.play()
+                result.success(null)
+            } catch (error: Exception) {
+                result.error("ALERT_SOUND_UNAVAILABLE", error.message, null)
+            }
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

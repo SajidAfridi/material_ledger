@@ -7,6 +7,7 @@ export type PushClaim = {
   requestId?: string | null;
   projectId?: string | null;
   chatConversationId?: string | null;
+  unreadCount?: number;
   attemptCount: number;
 };
 
@@ -19,6 +20,14 @@ export type PushCopy = {
 export function isTeamChatEvent(eventCode: string): boolean {
   return eventCode === "team_chat_message" ||
     eventCode === "team_chat_mention";
+}
+
+/// Keeps every platform-specific badge within the same safe, compact range.
+/// A rolling database deployment may briefly omit the value, so malformed or
+/// absent claims fail to zero instead of leaking an arbitrary payload value.
+export function normalizedUnreadCount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(999, Math.trunc(value)));
 }
 
 export function safePushCopy(eventCode: string): PushCopy {

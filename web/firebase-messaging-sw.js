@@ -36,11 +36,31 @@ function appUrlFor(data) {
   return appUrl.toString();
 }
 
+function updateApplicationBadge(data) {
+  const parsed = Number.parseInt(data?.unreadCount ?? '', 10);
+  const unreadCount = Number.isFinite(parsed)
+    ? Math.max(0, Math.min(999, parsed))
+    : 0;
+  try {
+    if (unreadCount > 0 && 'setAppBadge' in self.navigator) {
+      return self.navigator.setAppBadge(unreadCount).catch(() => undefined);
+    }
+    if (unreadCount === 0 && 'clearAppBadge' in self.navigator) {
+      return self.navigator.clearAppBadge().catch(() => undefined);
+    }
+  } catch (_) {
+    // Browser, installation and OS notification policy remain authoritative.
+  }
+  return Promise.resolve();
+}
+
 messaging.onBackgroundMessage((payload) => {
-  // FCM Webpush notification payloads are displayed by the browser. Only
-  // data-only messages need an explicit fallback notification here.
-  if (payload.notification) return;
   const data = payload.data || {};
+  const badgeUpdate = updateApplicationBadge(data);
+  // FCM Webpush notification payloads are displayed by the browser. Only
+  // data-only messages need an explicit fallback notification here. The badge
+  // is updated in both paths so installed PWAs remain visible while closed.
+  if (payload.notification) return badgeUpdate;
   const title = typeof data.title === 'string' && data.title
     ? data.title
     : data.surface === 'team_chat'
@@ -49,19 +69,22 @@ messaging.onBackgroundMessage((payload) => {
   const body = typeof data.body === 'string' && data.body
     ? data.body
     : 'A record assigned to you has changed.';
-  return self.registration.showNotification(title, {
-    body,
-    icon: '/icons/Icon-192.png',
-    badge: '/icons/Icon-192.png',
-    tag: data.notificationId || undefined,
-    // Replayed delivery of one outbox UUID replaces the existing notification
-    // silently; a genuinely new chat message has a new UUID and still alerts.
-    renotify: false,
-    requireInteraction: false,
-    silent: false,
-    vibrate: [120, 60, 120],
-    data: { appUrl: appUrlFor(data), yorksFallback: true },
-  });
+  return Promise.all([
+    badgeUpdate,
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icons/Icon-192.png',
+      badge: '/icons/Icon-192.png',
+      tag: data.notificationId || undefined,
+      // Replayed delivery of one outbox UUID replaces the existing notification
+      // silently; a genuinely new chat message has a new UUID and still alerts.
+      renotify: false,
+      requireInteraction: false,
+      silent: false,
+      vibrate: [120, 60, 120],
+      data: { appUrl: appUrlFor(data), yorksFallback: true },
+    }),
+  ]);
 });
 
 self.addEventListener('notificationclick', (event) => {

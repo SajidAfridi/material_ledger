@@ -18,6 +18,11 @@ class MainFlutterWindow: NSWindow {
       name: "com.yorks.app/application_attention",
       binaryMessenger: registrar.messenger)
     applicationAttentionChannel?.setMethodCallHandler { [weak self] call, result in
+      if call.method == "playNotificationAlert" {
+        NSSound.beep()
+        result(nil)
+        return
+      }
       guard call.method == "setAttention" else {
         result(FlutterMethodNotImplemented)
         return

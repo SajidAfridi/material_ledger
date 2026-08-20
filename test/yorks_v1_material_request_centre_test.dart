@@ -46,9 +46,13 @@ void main() {
     expect(find.text('Material Request Centre'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-project-project-322')),
       findsNothing,
     );
-    expect(find.text('Total Requests'), findsWidgets);
+    expect(find.text('Total Material Requests'), findsOneWidget);
     expect(find.textContaining('YRA-322'), findsWidgets);
     expect(find.textContaining('YRA-314'), findsWidgets);
     expect(find.textContaining('YRA-313'), findsWidgets);
@@ -77,7 +81,11 @@ void main() {
     expect(created, isTrue);
 
     await tester.tap(
-      find.byKey(const ValueKey('material-request-project-project-322')),
+      find.byKey(const ValueKey('material-request-centre-view-projects')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-project-arrow-project-322')),
     );
     await tester.pumpAndSettle();
     expect(
@@ -163,14 +171,6 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(closedMetric);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('material-request-project-project-322')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('material-request-project-project-322')),
-    );
-    await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('material-request-row-mr-322-closed')),
       findsOneWidget,
@@ -221,9 +221,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('All Requests'));
-    await tester.pumpAndSettle();
-
     expect(find.text('1–15 / 16'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('material-request-row-mr-page-14')),
@@ -242,6 +239,51 @@ void main() {
     expect(
       find.byKey(const ValueKey('material-request-row-mr-page-15')),
       findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('summary metrics return to latest all-request rows', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1280, 1100));
+    await _pump(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-centre-view-projects')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('material-request-project-project-322')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('material-request-metric-all')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('material-request-project-project-322')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+          )
+          .dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.byKey(
+                const ValueKey('material-request-row-mr-314-dispatched'),
+              ),
+            )
+            .dy,
+      ),
     );
     expect(tester.takeException(), isNull);
   });
@@ -267,6 +309,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-centre-view-projects')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey('material-request-project-project-322')),
       );
@@ -306,24 +352,28 @@ void main() {
     },
   );
 
-  testWidgets('narrow centre keeps the default folder hierarchy usable', (
+  testWidgets('narrow centre defaults to all requests and expands projects', (
     tester,
   ) async {
     await _setViewport(tester, const Size(360, 800));
     await _pump(tester);
 
     expect(
-      find.byKey(const ValueKey('material-request-project-project-322')),
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      find.byKey(const ValueKey('material-request-project-project-322')),
       findsNothing,
     );
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_centre_mobile_360.png'),
     );
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-centre-view-projects')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('material-request-project-project-322')),
     );

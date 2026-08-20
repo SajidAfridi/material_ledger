@@ -1,3 +1,4 @@
+import AudioToolbox
 import Flutter
 import UIKit
 
@@ -17,6 +18,13 @@ import UIKit
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
     applicationAttentionChannel.setMethodCallHandler { call, result in
+      if call.method == "playNotificationAlert" {
+        DispatchQueue.main.async {
+          AudioServicesPlayAlertSound(SystemSoundID(1007))
+          result(nil)
+        }
+        return
+      }
       guard call.method == "setAttention" else {
         result(FlutterMethodNotImplemented)
         return

@@ -70,13 +70,27 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref.watch(visibleNotificationsProvider).where((n) => !n.isRead).length;
 });
 
+/// Server-authoritative workflow unread count used by operating-system
+/// attention surfaces. The in-app centre may still merge preserved legacy
+/// records during rollout, but a device-local compatibility row must never
+/// create a browser-tab, PWA or native application badge on another account.
+final yorksV1WorkflowUnreadCountProvider = Provider<int>((ref) {
+  return ref
+      .watch(yorksV1AppNotificationsProvider)
+      .where((notification) => !notification.isRead)
+      .length;
+});
+
 /// Combined unresolved attention for surfaces outside Yorks itself (browser
 /// title, installed-PWA icon and native desktop badge). Workflow alerts and
 /// Team Chat intentionally remain separate inside the app: Team Chat never
 /// enters the workflow bell, but an unread conversation should still make the
 /// Yorks application visibly ask for the user's attention.
 final yorksApplicationUnreadCountProvider = Provider<int>((ref) {
-  final workflowUnread = ref.watch(unreadNotificationCountProvider);
+  // Never carry the previous account's application badge onto the signed-out
+  // shell while local compatibility notifications are still hydrated.
+  if (ref.watch(currentUserProvider) == null) return 0;
+  final workflowUnread = ref.watch(yorksV1WorkflowUnreadCountProvider);
   final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
   final chatUnread = teamChatEnabled
       ? ref.watch(yorksV1TeamChatUnreadProvider)

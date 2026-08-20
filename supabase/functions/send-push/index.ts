@@ -8,6 +8,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   isTeamChatEvent,
+  normalizedUnreadCount,
   type PushClaim,
   routeFor,
   safePushCopy,
@@ -187,6 +188,7 @@ Deno.serve(async (request) => {
       ? "team_chat"
       : "workflow";
     const route = routeFor(claim);
+    const unreadCount = normalizedUnreadCount(claim.unreadCount);
     const webLink = webLinkFor(
       route,
       Deno.env.get("YORKS_WEB_ORIGIN") ?? "",
@@ -208,6 +210,7 @@ Deno.serve(async (request) => {
         body: copy.body,
         refId: claim.requestId ?? claim.entityId,
         route,
+        unreadCount: String(unreadCount),
       };
       const response = await fetch(sendUrl, {
         method: "POST",
@@ -249,15 +252,19 @@ Deno.serve(async (request) => {
                     sound: "default",
                     default_vibrate_timings: true,
                     notification_priority: "PRIORITY_HIGH",
+                    notification_count: unreadCount,
                   },
                 },
                 apns: {
                   headers: {
                     "apns-collapse-id": claim.notificationId,
                     "apns-priority": "10",
+                    "apns-push-type": "alert",
                   },
                   payload: {
                     aps: {
+                      alert: { title: copy.title, body: copy.body },
+                      badge: unreadCount,
                       sound: "default",
                       "thread-id": surface,
                     },

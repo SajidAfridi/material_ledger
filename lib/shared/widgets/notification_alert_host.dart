@@ -45,7 +45,6 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   StreamSubscription<PushMessage>? _pushSubscription;
   bool _serverPrimed = false;
   bool _legacyPrimed = false;
-  bool _soundPrepared = false;
   Future<bool>? _soundPreparation;
   DateTime? _lastSoundAt;
 
@@ -73,7 +72,12 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
       _knownServerIds.addAll(records.map((record) => record.id));
       final language = ref.read(languageProvider);
       for (final record in newRecords.reversed) {
-        _show(record.toAppNotification(language));
+        _show(
+          record.toAppNotification(language),
+          icon: record.isChatTransport
+              ? Icons.chat_bubble_rounded
+              : Icons.notifications_active_rounded,
+        );
       }
     }, fireImmediately: true);
     _legacySubscription = ref.listenManual(notificationsProvider, (_, next) {
@@ -132,6 +136,10 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Web Audio contexts and native audio sessions can be suspended while
+      // the app is backgrounded. Re-prepare on resume and on the next pointer
+      // gesture so a successful first alert does not make later alerts silent.
+      unawaited(_prepareSound());
       unawaited(ref.read(yorksV1NotificationsProvider.notifier).refresh());
       _refreshChat();
       unawaited(ref.read(pushServiceProvider).register());
@@ -139,18 +147,12 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
   }
 
   Future<bool> _prepareSound() {
-    if (_soundPrepared) return Future<bool>.value(true);
     final inFlight = _soundPreparation;
     if (inFlight != null) return inFlight;
     late final Future<bool> attempt;
-    attempt = prepareNotificationAlertSound()
-        .then((prepared) {
-          _soundPrepared = prepared;
-          return prepared;
-        })
-        .whenComplete(() {
-          if (identical(_soundPreparation, attempt)) _soundPreparation = null;
-        });
+    attempt = prepareNotificationAlertSound().whenComplete(() {
+      if (identical(_soundPreparation, attempt)) _soundPreparation = null;
+    });
     _soundPreparation = attempt;
     return attempt;
   }
