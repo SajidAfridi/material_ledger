@@ -32,12 +32,10 @@ void main() {
   ) async {
     await _setViewport(tester, const Size(1440, 1024));
     String? openedRequestId;
-    String? openedProjectId;
     var created = false;
     await _pump(
       tester,
       onOpen: (request) => openedRequestId = request.id,
-      onOpenProject: (projectId) => openedProjectId = projectId,
       onCreate: () => created = true,
     );
 
@@ -46,10 +44,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Material Request Centre'), findsOneWidget);
-    expect(find.text('Project Folders'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('material-request-row-mr-322-closed')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Total Requests'), findsWidgets);
     expect(find.textContaining('YRA-322'), findsWidgets);
@@ -61,26 +58,60 @@ void main() {
     );
 
     await tester.tap(
+      find.byKey(const ValueKey('material-request-centre-filter-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Apply filters'), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_centre_desktop_filters.png'),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-centre-apply-filters')).last,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
       find.byKey(const ValueKey('material-request-centre-create')),
     );
     expect(created, isTrue);
 
-    await tester.tap(find.text('Project Folders'));
-    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('material-request-project-project-322')),
     );
-    expect(openedProjectId, 'project-322');
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey('material-request-project-contents-project-322'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      findsOneWidget,
+    );
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_centre_desktop_expanded.png'),
+    );
     expect(openedRequestId, isNull);
 
-    await tester.tap(find.text('All Requests'));
-    await tester.pumpAndSettle();
-    expect(find.text('YRA-322-MR004'), findsWidgets);
-    expect(find.text('YRA-314-MR006'), findsWidgets);
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+    );
+    expect(openedRequestId, 'mr-322-closed');
 
     await tester.enterText(
       find.byKey(const ValueKey('material-request-centre-search')),
       'Electrical',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('material-request-project-project-314')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-project-project-314')),
     );
     await tester.pumpAndSettle();
     expect(
@@ -95,7 +126,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('compact centre keeps filters, archive and actions usable', (
+  testWidgets('compact centre keeps filters and closed requests usable', (
     tester,
   ) async {
     await _setViewport(tester, const Size(390, 844));
@@ -104,7 +135,7 @@ void main() {
 
     expect(find.text('Material Request Centre'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('material-request-centre-filter-expansion')),
+      find.byKey(const ValueKey('material-request-centre-filter-button')),
       findsOneWidget,
     );
     await expectLater(
@@ -112,13 +143,33 @@ void main() {
       matchesGoldenFile('goldens/r35/mr_centre_mobile_390.png'),
     );
     await tester.tap(
-      find.byKey(const ValueKey('material-request-centre-filter-expansion')),
+      find.byKey(const ValueKey('material-request-centre-filter-button')),
     );
     await tester.pumpAndSettle();
     expect(find.text('Apply filters'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Closed Archive'), 260);
-    await tester.tap(find.text('Closed Archive'));
+    final applyFilters = find
+        .byKey(const ValueKey('material-request-centre-apply-filters'))
+        .at(0);
+    await tester.ensureVisible(applyFilters);
+    await tester.pumpAndSettle();
+    await tester.tap(applyFilters);
+    await tester.pumpAndSettle();
+
+    final closedMetric = find
+        .byKey(const ValueKey('material-request-metric-closed'))
+        .at(0);
+    await tester.ensureVisible(closedMetric);
+    await tester.pumpAndSettle();
+    await tester.tap(closedMetric);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('material-request-project-project-322')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-project-project-322')),
+    );
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('material-request-row-mr-322-closed')),
@@ -163,12 +214,14 @@ void main() {
             canCreate: true,
             onCreate: () {},
             onOpen: (_) {},
-            onOpenProject: (_) {},
             onRefresh: () {},
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('All Requests'));
     await tester.pumpAndSettle();
 
     expect(find.text('1–15 / 16'), findsOneWidget);
@@ -193,20 +246,91 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('narrow centre keeps the default request register usable', (
+  testWidgets(
+    'attention filter and activity sort update the folder hierarchy',
+    (tester) async {
+      await _setViewport(tester, const Size(1280, 1100));
+      await _pump(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-centre-filter-button')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-filter-attention')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(const ValueKey('material-request-centre-apply-filters'))
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-project-project-322')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('material-request-row-mr-322-approval')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('Latest Activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Oldest Activity').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(
+                const ValueKey('material-request-project-project-313'),
+              ),
+            )
+            .dy,
+        lessThan(
+          tester
+              .getTopLeft(
+                find.byKey(
+                  const ValueKey('material-request-project-project-322'),
+                ),
+              )
+              .dy,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('narrow centre keeps the default folder hierarchy usable', (
     tester,
   ) async {
     await _setViewport(tester, const Size(360, 800));
     await _pump(tester);
 
-    expect(find.text('All Requests'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-project-project-322')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('material-request-row-mr-322-closed')),
-      findsOneWidget,
+      findsNothing,
     );
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_centre_mobile_360.png'),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-project-project-322')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('material-request-row-mr-322-closed')),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
@@ -215,7 +339,6 @@ void main() {
 Future<void> _pump(
   WidgetTester tester, {
   ValueChanged<YorksV1MaterialRequest>? onOpen,
-  ValueChanged<String>? onOpenProject,
   VoidCallback? onCreate,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -229,7 +352,6 @@ Future<void> _pump(
         onCreate: onCreate ?? () {},
         onRefresh: () {},
         onOpen: onOpen ?? (_) {},
-        onOpenProject: onOpenProject ?? (_) {},
       ),
     ),
   ),

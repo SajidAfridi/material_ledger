@@ -22,7 +22,6 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     required this.canCreate,
     required this.onCreate,
     required this.onOpen,
-    required this.onOpenProject,
     required this.onRefresh,
     this.localDraftNotice,
     this.fixedProjectId,
@@ -33,7 +32,6 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
   final bool canCreate;
   final VoidCallback onCreate;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
-  final ValueChanged<String> onOpenProject;
   final VoidCallback onRefresh;
   final Widget? localDraftNotice;
   final String? fixedProjectId;
@@ -43,28 +41,33 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
       _YorksV1MaterialRequestCentreState();
 }
 
-enum _MaterialRequestCentreTab {
-  projectFolders,
-  allRequests,
-  attention,
-  archive,
-}
-
 enum _MaterialRequestCentreDateRange { allTime, sevenDays, thirtyDays }
+
+enum _MaterialRequestMetricFilter {
+  all,
+  open,
+  inProgress,
+  dispatched,
+  received,
+  closed,
+}
 
 class _YorksV1MaterialRequestCentreState
     extends State<YorksV1MaterialRequestCentre> {
   static const _allSelection = '__all__';
   final _searchController = TextEditingController();
-  _MaterialRequestCentreTab _tab = _MaterialRequestCentreTab.allRequests;
   _MaterialRequestCentreDateRange _dateRange =
       _MaterialRequestCentreDateRange.allTime;
+  _MaterialRequestMetricFilter _metricFilter = _MaterialRequestMetricFilter.all;
   String _status = _allSelection;
   String _project = _allSelection;
   String _scope = _allSelection;
   String _requester = _allSelection;
+  bool _attentionOnly = false;
   bool _newestFirst = true;
-  bool _folderGrid = false;
+  bool _folderGrid = true;
+  bool _filtersExpanded = false;
+  final Set<String> _expandedProjectIds = <String>{};
   int _page = 0;
 
   @override
@@ -84,16 +87,16 @@ class _YorksV1MaterialRequestCentreState
     _project = _allSelection;
     _scope = _allSelection;
     _requester = _allSelection;
+    _attentionOnly = false;
     _dateRange = _MaterialRequestCentreDateRange.allTime;
+    _metricFilter = _MaterialRequestMetricFilter.all;
   });
 
   @override
   Widget build(BuildContext context) {
     final visible = _visibleRequests();
-    final folders = _foldersFor(visible);
+    final folders = _foldersFor(visible, newestFirst: _newestFirst);
     final metrics = _MaterialRequestCentreMetrics.fromRequests(widget.requests);
-    final isWide =
-        MediaQuery.sizeOf(context).width >= AppSpacing.wideBreakpoint;
     final isCompact =
         MediaQuery.sizeOf(context).width < AppSpacing.compactBreakpoint;
 
@@ -117,116 +120,70 @@ class _YorksV1MaterialRequestCentreState
           widget.localDraftNotice!,
         ],
         const SizedBox(height: AppSpacing.xl),
-        _MetricsGrid(metrics: metrics, language: widget.language),
+        _MetricsGrid(
+          metrics: metrics,
+          language: widget.language,
+          selected: _metricFilter,
+          onSelected: (value) => _update(() => _metricFilter = value),
+        ),
         const SizedBox(height: AppSpacing.lg),
-        if (isWide)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _MainCentrePanel(
-                  language: widget.language,
-                  tab: _tab,
-                  onTabChanged: (value) => _update(() => _tab = value),
-                  searchController: _searchController,
-                  onSearchChanged: (_) => _update(() {}),
-                  newestFirst: _newestFirst,
-                  onSortChanged: (value) => _update(() => _newestFirst = value),
-                  folderGrid: _folderGrid,
-                  onFolderGridChanged: (value) =>
-                      _update(() => _folderGrid = value),
-                  folders: folders,
-                  requests: visible,
-                  page: _page,
-                  onPageChanged: (value) => setState(() => _page = value),
-                  onOpen: widget.onOpen,
-                  onOpenProject: widget.onOpenProject,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              SizedBox(
-                width: 280,
-                child: Column(
-                  children: [
-                    _FilterCard(
-                      language: widget.language,
-                      status: _status,
-                      project: _project,
-                      scope: _scope,
-                      requester: _requester,
-                      dateRange: _dateRange,
-                      requests: widget.requests,
-                      fixedProjectId: widget.fixedProjectId,
-                      onStatusChanged: (value) =>
-                          _update(() => _status = value),
-                      onProjectChanged: (value) =>
-                          _update(() => _project = value),
-                      onScopeChanged: (value) => _update(() => _scope = value),
-                      onRequesterChanged: (value) =>
-                          _update(() => _requester = value),
-                      onDateRangeChanged: (value) =>
-                          _update(() => _dateRange = value),
-                      onClear: _clearFilters,
-                      onApply: () => _update(() {}),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    _RecentActivityCard(
-                      requests: visible,
-                      language: widget.language,
-                      onOpen: widget.onOpen,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          )
-        else ...[
-          _FilterCard(
+        _MainCentrePanel(
+          language: widget.language,
+          searchController: _searchController,
+          onSearchChanged: (_) => _update(() {}),
+          newestFirst: _newestFirst,
+          onSortChanged: (value) => _update(() => _newestFirst = value),
+          folderGrid: _folderGrid,
+          onFolderGridChanged: (value) => _update(() => _folderGrid = value),
+          filtersExpanded: _filtersExpanded,
+          onFiltersExpandedChanged: (value) =>
+              setState(() => _filtersExpanded = value),
+          activeFilterCount: _activeFilterCount,
+          filter: _FilterForm(
             language: widget.language,
             status: _status,
             project: _project,
             scope: _scope,
             requester: _requester,
             dateRange: _dateRange,
+            attentionOnly: _attentionOnly,
             requests: widget.requests,
             fixedProjectId: widget.fixedProjectId,
-            collapsible: true,
             onStatusChanged: (value) => _update(() => _status = value),
             onProjectChanged: (value) => _update(() => _project = value),
             onScopeChanged: (value) => _update(() => _scope = value),
             onRequesterChanged: (value) => _update(() => _requester = value),
             onDateRangeChanged: (value) => _update(() => _dateRange = value),
+            onAttentionOnlyChanged: (value) =>
+                _update(() => _attentionOnly = value),
             onClear: _clearFilters,
-            onApply: () => _update(() {}),
+            onApply: () => setState(() => _filtersExpanded = false),
           ),
-          const SizedBox(height: AppSpacing.md),
-          _MainCentrePanel(
-            language: widget.language,
-            tab: _tab,
-            onTabChanged: (value) => _update(() => _tab = value),
-            searchController: _searchController,
-            onSearchChanged: (_) => _update(() {}),
-            newestFirst: _newestFirst,
-            onSortChanged: (value) => _update(() => _newestFirst = value),
-            folderGrid: _folderGrid,
-            onFolderGridChanged: (value) => _update(() => _folderGrid = value),
-            folders: folders,
-            requests: visible,
-            page: _page,
-            onPageChanged: (value) => setState(() => _page = value),
-            onOpen: widget.onOpen,
-            onOpenProject: widget.onOpenProject,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _RecentActivityCard(
-            requests: visible,
-            language: widget.language,
-            onOpen: widget.onOpen,
-          ),
-        ],
+          folders: folders,
+          requests: visible,
+          expandedProjectIds: _expandedProjectIds,
+          onProjectExpanded: (projectId) => setState(() {
+            if (!_expandedProjectIds.add(projectId)) {
+              _expandedProjectIds.remove(projectId);
+            }
+          }),
+          page: _page,
+          onPageChanged: (value) => setState(() => _page = value),
+          onOpen: widget.onOpen,
+        ),
       ],
     );
   }
+
+  int get _activeFilterCount => [
+    _status != _allSelection,
+    _project != _allSelection,
+    _scope != _allSelection,
+    _requester != _allSelection,
+    _dateRange != _MaterialRequestCentreDateRange.allTime,
+    _attentionOnly,
+    _metricFilter != _MaterialRequestMetricFilter.all,
+  ].where((active) => active).length;
 
   List<YorksV1MaterialRequest> _visibleRequests() {
     final now = DateTime.now();
@@ -265,6 +222,8 @@ class _YorksV1MaterialRequestCentreState
               if (cutoff != null && request.updatedAt.isBefore(cutoff)) {
                 return false;
               }
+              if (_attentionOnly && !_requiresAttention(request)) return false;
+              if (!_matchesMetricFilter(request, _metricFilter)) return false;
               if (query.isEmpty) return true;
               final searchable = [
                 request.requestNumber,
@@ -276,16 +235,6 @@ class _YorksV1MaterialRequestCentreState
                 for (final line in request.lines) line.description,
               ].whereType<String>().join(' ').toLowerCase();
               return searchable.contains(query);
-            })
-            .where((request) {
-              return switch (_tab) {
-                _MaterialRequestCentreTab.projectFolders ||
-                _MaterialRequestCentreTab.allRequests => true,
-                _MaterialRequestCentreTab.attention => _requiresAttention(
-                  request,
-                ),
-                _MaterialRequestCentreTab.archive => _isArchived(request),
-              };
             })
             .toList(growable: false)
           ..sort(
@@ -316,21 +265,48 @@ bool _requiresAttention(YorksV1MaterialRequest request) {
       request.state == YorksV1MaterialRequestState.received;
 }
 
+bool _matchesMetricFilter(
+  YorksV1MaterialRequest request,
+  _MaterialRequestMetricFilter filter,
+) => switch (filter) {
+  _MaterialRequestMetricFilter.all => true,
+  _MaterialRequestMetricFilter.open =>
+    request.state.isDraft ||
+        request.state == YorksV1MaterialRequestState.submitted ||
+        request.state == YorksV1MaterialRequestState.awaitingRequestApproval ||
+        request.state == YorksV1MaterialRequestState.changesRequested,
+  _MaterialRequestMetricFilter.inProgress =>
+    !_isArchived(request) &&
+        !request.state.isDraft &&
+        request.state != YorksV1MaterialRequestState.submitted &&
+        request.state != YorksV1MaterialRequestState.awaitingRequestApproval &&
+        request.state != YorksV1MaterialRequestState.changesRequested &&
+        request.state != YorksV1MaterialRequestState.dispatched &&
+        request.state != YorksV1MaterialRequestState.partiallyDispatched &&
+        request.state != YorksV1MaterialRequestState.received &&
+        request.state != YorksV1MaterialRequestState.partiallyReceived,
+  _MaterialRequestMetricFilter.dispatched =>
+    request.state == YorksV1MaterialRequestState.dispatched ||
+        request.state == YorksV1MaterialRequestState.partiallyDispatched,
+  _MaterialRequestMetricFilter.received =>
+    request.state == YorksV1MaterialRequestState.received ||
+        request.state == YorksV1MaterialRequestState.partiallyReceived,
+  _MaterialRequestMetricFilter.closed => _isArchived(request),
+};
+
 class _MaterialRequestCentreMetrics {
   const _MaterialRequestCentreMetrics({
     required this.total,
-    required this.active,
-    required this.awaitingApproval,
-    required this.procurement,
+    required this.open,
+    required this.inProgress,
     required this.dispatched,
     required this.received,
     required this.closed,
   });
 
   final int total;
-  final int active;
-  final int awaitingApproval;
-  final int procurement;
+  final int open;
+  final int inProgress;
   final int dispatched;
   final int received;
   final int closed;
@@ -339,22 +315,18 @@ class _MaterialRequestCentreMetrics {
     List<YorksV1MaterialRequest> requests,
   ) => _MaterialRequestCentreMetrics(
     total: requests.length,
-    active: requests.where(_isActive).length,
-    awaitingApproval: requests
+    open: requests
         .where(
           (request) =>
-              request.state ==
-                  YorksV1MaterialRequestState.awaitingRequestApproval ||
-              request.state == YorksV1MaterialRequestState.changesRequested ||
-              request.state == YorksV1MaterialRequestState.awaitingApproval,
+              _matchesMetricFilter(request, _MaterialRequestMetricFilter.open),
         )
         .length,
-    procurement: requests
+    inProgress: requests
         .where(
-          (request) =>
-              request.state ==
-                  YorksV1MaterialRequestState.approvedForArrangement ||
-              request.state == YorksV1MaterialRequestState.arranging,
+          (request) => _matchesMetricFilter(
+            request,
+            _MaterialRequestMetricFilter.inProgress,
+          ),
         )
         .length,
     dispatched: requests
@@ -382,7 +354,10 @@ class _ProjectRequestFolder {
 
   final List<YorksV1MaterialRequest> requests;
 
-  YorksV1MaterialRequest get latest => requests.first;
+  YorksV1MaterialRequest get latest => requests.reduce(
+    (current, candidate) =>
+        candidate.updatedAt.isAfter(current.updatedAt) ? candidate : current,
+  );
   String get id => latest.projectId;
   String get reference => latest.projectReference;
   String get name => latest.projectName;
@@ -394,18 +369,29 @@ class _ProjectRequestFolder {
       requests.map((request) => request.scopeId).toSet().length;
 }
 
-List<_ProjectRequestFolder> _foldersFor(List<YorksV1MaterialRequest> requests) {
+List<_ProjectRequestFolder> _foldersFor(
+  List<YorksV1MaterialRequest> requests, {
+  required bool newestFirst,
+}) {
   final grouped = <String, List<YorksV1MaterialRequest>>{};
   for (final request in requests) {
     (grouped[request.projectId] ??= []).add(request);
   }
   return grouped.values
       .map((requests) {
-        requests.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        requests.sort(
+          (a, b) => newestFirst
+              ? b.updatedAt.compareTo(a.updatedAt)
+              : a.updatedAt.compareTo(b.updatedAt),
+        );
         return _ProjectRequestFolder(requests: List.unmodifiable(requests));
       })
       .toList(growable: false)
-    ..sort((a, b) => b.latest.updatedAt.compareTo(a.latest.updatedAt));
+    ..sort(
+      (a, b) => newestFirst
+          ? b.latest.updatedAt.compareTo(a.latest.updatedAt)
+          : a.latest.updatedAt.compareTo(b.latest.updatedAt),
+    );
 }
 
 class _CentreHeader extends StatelessWidget {
@@ -525,17 +511,24 @@ class _CentreHeader extends StatelessWidget {
 }
 
 class _MetricsGrid extends StatelessWidget {
-  const _MetricsGrid({required this.metrics, required this.language});
+  const _MetricsGrid({
+    required this.metrics,
+    required this.language,
+    required this.selected,
+    required this.onSelected,
+  });
 
   final _MaterialRequestCentreMetrics metrics;
   final AppLanguage language;
+  final _MaterialRequestMetricFilter selected;
+  final ValueChanged<_MaterialRequestMetricFilter> onSelected;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth;
       final columns = width >= AppSpacing.wideBreakpoint
-          ? 4
+          ? 6
           : width >= AppSpacing.compactBreakpoint
           ? 3
           : 2;
@@ -549,30 +542,25 @@ class _MetricsGrid extends StatelessWidget {
           Icons.description_outlined,
           AppColors.blue,
           AppColors.blueContainer,
+          _MaterialRequestMetricFilter.all,
         ),
         _MetricData(
-          YorksV1MaterialRequestStrings.activeRequests,
-          YorksV1MaterialRequestStrings.active,
-          metrics.active,
-          Icons.assignment_turned_in_outlined,
+          YorksV1MaterialRequestStrings.openMetric,
+          YorksV1MaterialRequestStrings.viewOpen,
+          metrics.open,
+          Icons.folder_open_outlined,
           AppColors.success,
           AppColors.successContainer,
+          _MaterialRequestMetricFilter.open,
         ),
         _MetricData(
-          YorksV1MaterialRequestStrings.awaitingApprovalMetric,
-          YorksV1MaterialRequestStrings.attentionRequired,
-          metrics.awaitingApproval,
+          YorksV1MaterialRequestStrings.inProgressMetric,
+          YorksV1MaterialRequestStrings.viewInProgress,
+          metrics.inProgress,
           Icons.schedule_rounded,
           AppColors.warning,
           AppColors.warningContainer,
-        ),
-        _MetricData(
-          YorksV1MaterialRequestStrings.procurementQueue,
-          YorksV1MaterialRequestStrings.inArrangement,
-          metrics.procurement,
-          Icons.shopping_cart_outlined,
-          AppColors.purple,
-          AppColors.purpleContainer,
+          _MaterialRequestMetricFilter.inProgress,
         ),
         _MetricData(
           YorksV1MaterialRequestStrings.dispatchedMetric,
@@ -581,6 +569,7 @@ class _MetricsGrid extends StatelessWidget {
           Icons.local_shipping_outlined,
           AppColors.blue,
           AppColors.blueContainer,
+          _MaterialRequestMetricFilter.dispatched,
         ),
         _MetricData(
           YorksV1MaterialRequestStrings.receivedMetric,
@@ -589,6 +578,7 @@ class _MetricsGrid extends StatelessWidget {
           Icons.inventory_2_outlined,
           AppColors.success,
           AppColors.successContainer,
+          _MaterialRequestMetricFilter.received,
         ),
         _MetricData(
           YorksV1MaterialRequestStrings.closedMetric,
@@ -597,6 +587,7 @@ class _MetricsGrid extends StatelessWidget {
           Icons.archive_outlined,
           AppColors.neutralText,
           AppColors.neutralContainer,
+          _MaterialRequestMetricFilter.closed,
         ),
       ];
       return Wrap(
@@ -607,7 +598,12 @@ class _MetricsGrid extends StatelessWidget {
           for (final tile in tiles)
             SizedBox(
               width: cardWidth,
-              child: _MetricCard(data: tile, language: language),
+              child: _MetricCard(
+                data: tile,
+                language: language,
+                selected: selected == tile.filter,
+                onTap: () => onSelected(tile.filter),
+              ),
             ),
         ],
       );
@@ -623,6 +619,7 @@ class _MetricData {
     this.icon,
     this.foreground,
     this.background,
+    this.filter,
   );
 
   final TranslatableString label;
@@ -631,63 +628,92 @@ class _MetricData {
   final IconData icon;
   final Color foreground;
   final Color background;
+  final _MaterialRequestMetricFilter filter;
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.data, required this.language});
+  const _MetricCard({
+    required this.data,
+    required this.language,
+    required this.selected,
+    required this.onTap,
+  });
 
   final _MetricData data;
   final AppLanguage language;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => LedgerCard(
-    padding: const EdgeInsets.all(AppSpacing.md),
-    child: Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: data.background,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          ),
-          child: Icon(data.icon, color: data.foreground, size: 21),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: Material(
+      color: AppColors.surfaceContainerLowest,
+      elevation: selected ? 2 : 1,
+      shadowColor: AppColors.shadow,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+          color: selected ? data.foreground : AppColors.line,
+          width: selected ? 1.5 : 1,
         ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: InkWell(
+        key: ValueKey('material-request-metric-${data.filter.name}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
             children: [
-              YorksV1ActiveText(
-                copy: data.label,
-                language: language,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.muted,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: data.background,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
+                child: Icon(data.icon, color: data.foreground, size: 21),
               ),
-              const SizedBox(height: 2),
-              Text(
-                '${data.value}',
-                style: AppTypography.headlineSmall.copyWith(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              YorksV1ActiveText(
-                copy: data.hint,
-                language: language,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.muted,
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    YorksV1ActiveText(
+                      copy: data.label,
+                      language: language,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${data.value}',
+                      style: AppTypography.headlineSmall.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    YorksV1ActiveText(
+                      copy: data.hint,
+                      language: language,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-      ],
+      ),
     ),
   );
 }
@@ -698,53 +724,58 @@ class _MainCentrePanel extends StatelessWidget {
 
   const _MainCentrePanel({
     required this.language,
-    required this.tab,
-    required this.onTabChanged,
     required this.searchController,
     required this.onSearchChanged,
     required this.newestFirst,
     required this.onSortChanged,
     required this.folderGrid,
     required this.onFolderGridChanged,
+    required this.filtersExpanded,
+    required this.onFiltersExpandedChanged,
+    required this.activeFilterCount,
+    required this.filter,
     required this.folders,
     required this.requests,
+    required this.expandedProjectIds,
+    required this.onProjectExpanded,
     required this.page,
     required this.onPageChanged,
     required this.onOpen,
-    required this.onOpenProject,
   });
 
   final AppLanguage language;
-  final _MaterialRequestCentreTab tab;
-  final ValueChanged<_MaterialRequestCentreTab> onTabChanged;
   final TextEditingController searchController;
   final ValueChanged<String> onSearchChanged;
   final bool newestFirst;
   final ValueChanged<bool> onSortChanged;
   final bool folderGrid;
   final ValueChanged<bool> onFolderGridChanged;
+  final bool filtersExpanded;
+  final ValueChanged<bool> onFiltersExpandedChanged;
+  final int activeFilterCount;
+  final Widget filter;
   final List<_ProjectRequestFolder> folders;
   final List<YorksV1MaterialRequest> requests;
+  final Set<String> expandedProjectIds;
+  final ValueChanged<String> onProjectExpanded;
   final int page;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
-  final ValueChanged<String> onOpenProject;
 
   @override
   Widget build(BuildContext context) {
-    final isFolderTab = tab == _MaterialRequestCentreTab.projectFolders;
-    final totalItems = isFolderTab ? folders.length : requests.length;
-    final pageSize = isFolderTab ? _folderPageSize : _requestPageSize;
+    final totalItems = folderGrid ? folders.length : requests.length;
+    final pageSize = folderGrid ? _folderPageSize : _requestPageSize;
     final pageCount = totalItems == 0
         ? 1
         : (totalItems + pageSize - 1) ~/ pageSize;
     final currentPage = page.clamp(0, pageCount - 1);
     final start = currentPage * pageSize;
     final end = (start + pageSize).clamp(0, totalItems);
-    final pageFolders = isFolderTab
+    final pageFolders = folderGrid
         ? folders.sublist(start, end)
         : const <_ProjectRequestFolder>[];
-    final pageRequests = isFolderTab
+    final pageRequests = folderGrid
         ? const <YorksV1MaterialRequest>[]
         : requests.sublist(start, end);
 
@@ -753,12 +784,6 @@ class _MainCentrePanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _CentreTabs(
-            language: language,
-            selected: tab,
-            attentionCount: requests.where(_requiresAttention).length,
-            onChanged: onTabChanged,
-          ),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: LayoutBuilder(
@@ -788,49 +813,36 @@ class _MainCentrePanel extends StatelessWidget {
                 final controls = Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<bool>(
-                        value: newestFirst,
-                        onChanged: (value) {
-                          if (value != null) onSortChanged(value);
-                        },
-                        items: [
-                          DropdownMenuItem(
-                            value: true,
-                            child: Text(
-                              YorksV1MaterialRequestStrings.latestActivity
-                                  .active(language),
-                            ),
-                          ),
-                          DropdownMenuItem(
-                            value: false,
-                            child: Text(
-                              YorksV1MaterialRequestStrings.oldestActivity
-                                  .active(language),
-                            ),
-                          ),
-                        ],
-                      ),
+                    _SortControl(
+                      language: language,
+                      newestFirst: newestFirst,
+                      onChanged: onSortChanged,
                     ),
-                    if (isFolderTab) ...[
-                      const SizedBox(width: AppSpacing.xs),
-                      _ViewModeButton(
-                        tooltip: YorksV1MaterialRequestStrings.gridView.active(
-                          language,
-                        ),
-                        selected: folderGrid,
-                        icon: Icons.grid_view_rounded,
-                        onPressed: () => onFolderGridChanged(true),
+                    const SizedBox(width: AppSpacing.xs),
+                    _ViewModeButton(
+                      tooltip: YorksV1MaterialRequestStrings.projectFolders
+                          .active(language),
+                      selected: folderGrid,
+                      icon: Icons.folder_outlined,
+                      onPressed: () => onFolderGridChanged(true),
+                    ),
+                    _ViewModeButton(
+                      tooltip: YorksV1MaterialRequestStrings.allRequests.active(
+                        language,
                       ),
-                      _ViewModeButton(
-                        tooltip: YorksV1MaterialRequestStrings.listView.active(
-                          language,
-                        ),
-                        selected: !folderGrid,
-                        icon: Icons.view_list_rounded,
-                        onPressed: () => onFolderGridChanged(false),
-                      ),
-                    ],
+                      selected: !folderGrid,
+                      icon: Icons.view_list_rounded,
+                      onPressed: () => onFolderGridChanged(false),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    _FilterButton(
+                      language: language,
+                      compact: compact,
+                      expanded: filtersExpanded,
+                      count: activeFilterCount,
+                      onPressed: () =>
+                          onFiltersExpandedChanged(!filtersExpanded),
+                    ),
                   ],
                 );
                 if (compact) {
@@ -839,7 +851,10 @@ class _MainCentrePanel extends StatelessWidget {
                     children: [
                       search,
                       const SizedBox(height: AppSpacing.sm),
-                      controls,
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: controls,
+                      ),
                     ],
                   );
                 }
@@ -853,17 +868,34 @@ class _MainCentrePanel extends StatelessWidget {
               },
             ),
           ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 180),
+            crossFadeState: filtersExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.md,
+              ),
+              child: filter,
+            ),
+          ),
           const Divider(height: 1, color: AppColors.line),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: totalItems == 0
                 ? _NoMatchingRequests(language: language)
-                : isFolderTab
+                : folderGrid
                 ? _ProjectFolderResults(
                     folders: pageFolders,
-                    grid: folderGrid,
                     language: language,
-                    onOpenProject: onOpenProject,
+                    expandedProjectIds: expandedProjectIds,
+                    onProjectExpanded: onProjectExpanded,
+                    onOpen: onOpen,
                   )
                 : _RequestResults(
                     requests: pageRequests,
@@ -886,135 +918,153 @@ class _MainCentrePanel extends StatelessWidget {
   }
 }
 
-class _CentreTabs extends StatelessWidget {
-  const _CentreTabs({
+class _SortControl extends StatelessWidget {
+  const _SortControl({
     required this.language,
-    required this.selected,
-    required this.attentionCount,
+    required this.newestFirst,
     required this.onChanged,
   });
 
   final AppLanguage language;
-  final _MaterialRequestCentreTab selected;
-  final int attentionCount;
-  final ValueChanged<_MaterialRequestCentreTab> onChanged;
+  final bool newestFirst;
+  final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    final tabs = [
-      (
-        _MaterialRequestCentreTab.projectFolders,
-        YorksV1MaterialRequestStrings.projectFolders,
-        Icons.folder_outlined,
-      ),
-      (
-        _MaterialRequestCentreTab.allRequests,
-        YorksV1MaterialRequestStrings.allRequests,
-        Icons.assignment_outlined,
-      ),
-      (
-        _MaterialRequestCentreTab.attention,
-        YorksV1MaterialRequestStrings.attentionRequired,
-        Icons.priority_high_rounded,
-      ),
-      (
-        _MaterialRequestCentreTab.archive,
-        YorksV1MaterialRequestStrings.closedArchive,
-        Icons.archive_outlined,
-      ),
-    ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Row(
-        children: [
-          for (final tab in tabs)
-            _CentreTab(
-              label: tab.$2,
-              icon: tab.$3,
-              language: language,
-              selected: selected == tab.$1,
-              count: tab.$1 == _MaterialRequestCentreTab.attention
-                  ? attentionCount
-                  : null,
-              onTap: () => onChanged(tab.$1),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CentreTab extends StatelessWidget {
-  const _CentreTab({
-    required this.label,
-    required this.icon,
-    required this.language,
-    required this.selected,
-    required this.onTap,
-    this.count,
-  });
-
-  final TranslatableString label;
-  final IconData icon;
-  final AppLanguage language;
-  final bool selected;
-  final VoidCallback onTap;
-  final int? count;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    selected: selected,
-    label: label.active(language),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-      child: Container(
-        height: AppSpacing.minTapTarget + 4,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: selected ? AppColors.blue : Colors.transparent,
-              width: 2,
+  Widget build(BuildContext context) => Container(
+    height: AppSpacing.minTapTarget,
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+    decoration: BoxDecoration(
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<bool>(
+        value: newestFirst,
+        onChanged: (value) {
+          if (value != null) onChanged(value);
+        },
+        items: [
+          DropdownMenuItem(
+            value: true,
+            child: Text(
+              YorksV1MaterialRequestStrings.latestActivity.active(language),
             ),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 17,
-              color: selected ? AppColors.blue : AppColors.muted,
+          DropdownMenuItem(
+            value: false,
+            child: Text(
+              YorksV1MaterialRequestStrings.oldestActivity.active(language),
             ),
-            const SizedBox(width: AppSpacing.xs),
-            YorksV1ActiveText(
-              copy: label,
-              language: language,
-              style: AppTypography.labelLarge.copyWith(
-                color: selected ? AppColors.blue : AppColors.muted,
-              ),
-            ),
-            if (count != null && count! > 0) ...[
-              const SizedBox(width: AppSpacing.xs),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: const BoxDecoration(
-                  color: AppColors.error,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '$count',
-                  style: AppTypography.labelSmall.copyWith(color: Colors.white),
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     ),
   );
+}
+
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({
+    required this.language,
+    required this.compact,
+    required this.expanded,
+    required this.count,
+    required this.onPressed,
+  });
+
+  final AppLanguage language;
+  final bool compact;
+  final bool expanded;
+  final int count;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Tooltip(
+        message: YorksV1MaterialRequestStrings.filters.active(language),
+        child: Stack(
+          key: const ValueKey('material-request-centre-filter-button'),
+          clipBehavior: Clip.none,
+          children: [
+            _ViewModeButton(
+              tooltip: YorksV1MaterialRequestStrings.filters.active(language),
+              selected: expanded || count > 0,
+              icon: expanded
+                  ? Icons.filter_alt_off_outlined
+                  : Icons.filter_alt_outlined,
+              onPressed: onPressed,
+            ),
+            if (count > 0)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: AppColors.blue,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$count',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      child: SizedBox(
+        height: AppSpacing.minTapTarget,
+        child: OutlinedButton.icon(
+          key: const ValueKey('material-request-centre-filter-button'),
+          onPressed: onPressed,
+          icon: Icon(
+            expanded
+                ? Icons.filter_alt_off_outlined
+                : Icons.filter_alt_outlined,
+            size: 19,
+          ),
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              YorksV1ActiveText(
+                copy: YorksV1MaterialRequestStrings.filters,
+                language: language,
+                style: AppTypography.labelLarge.copyWith(color: AppColors.blue),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: AppColors.blue,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$count',
+                    style: AppTypography.labelSmall.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ViewModeButton extends StatelessWidget {
@@ -1057,119 +1107,257 @@ class _ViewModeButton extends StatelessWidget {
 class _ProjectFolderResults extends StatelessWidget {
   const _ProjectFolderResults({
     required this.folders,
-    required this.grid,
     required this.language,
-    required this.onOpenProject,
+    required this.expandedProjectIds,
+    required this.onProjectExpanded,
+    required this.onOpen,
   });
 
   final List<_ProjectRequestFolder> folders;
-  final bool grid;
   final AppLanguage language;
-  final ValueChanged<String> onOpenProject;
+  final Set<String> expandedProjectIds;
+  final ValueChanged<String> onProjectExpanded;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
 
   @override
-  Widget build(BuildContext context) {
-    if (!grid) {
-      return Column(
-        children: [
-          for (var index = 0; index < folders.length; index++) ...[
-            _ProjectFolderCard(
-              folder: folders[index],
-              language: language,
-              onOpenProject: onOpenProject,
-            ),
-            if (index != folders.length - 1)
-              const SizedBox(height: AppSpacing.sm),
-          ],
-        ],
-      );
-    }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth >= 720;
-        final width = twoColumns
-            ? (constraints.maxWidth - AppSpacing.sm) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final folder in folders)
-              SizedBox(
-                width: width,
-                child: _ProjectFolderCard(
-                  folder: folder,
-                  language: language,
-                  onOpenProject: onOpenProject,
-                  compact: true,
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var index = 0; index < folders.length; index++) ...[
+        _ExpandableProjectFolder(
+          folder: folders[index],
+          language: language,
+          expanded: expandedProjectIds.contains(folders[index].id),
+          onExpanded: () => onProjectExpanded(folders[index].id),
+          onOpen: onOpen,
+        ),
+        if (index != folders.length - 1) const SizedBox(height: AppSpacing.sm),
+      ],
+    ],
+  );
 }
 
-class _ProjectFolderCard extends StatelessWidget {
-  const _ProjectFolderCard({
+class _ExpandableProjectFolder extends StatelessWidget {
+  const _ExpandableProjectFolder({
     required this.folder,
     required this.language,
-    required this.onOpenProject,
-    this.compact = false,
+    required this.expanded,
+    required this.onExpanded,
+    required this.onOpen,
   });
 
   final _ProjectRequestFolder folder;
   final AppLanguage language;
-  final ValueChanged<String> onOpenProject;
-  final bool compact;
+  final bool expanded;
+  final VoidCallback onExpanded;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(
+        color: expanded
+            ? AppColors.blue.withValues(alpha: 0.35)
+            : AppColors.line,
+      ),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        Material(
+          color: expanded
+              ? AppColors.blueContainer.withValues(alpha: 0.35)
+              : Colors.transparent,
+          child: InkWell(
+            key: ValueKey('material-request-project-${folder.id}'),
+            onTap: onExpanded,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final horizontal = constraints.maxWidth >= 760;
+                  final summary = _FolderSummary(
+                    folder: folder,
+                    language: language,
+                  );
+                  final latest = _FolderLatest(
+                    folder: folder,
+                    language: language,
+                  );
+                  final identity = _FolderIdentity(
+                    folder: folder,
+                    language: language,
+                    expanded: expanded,
+                  );
+                  if (!horizontal) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: identity),
+                        const SizedBox(width: AppSpacing.sm),
+                        _FolderCountBadge(count: folder.requests.length),
+                        const SizedBox(width: AppSpacing.xs),
+                        Icon(
+                          expanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.muted,
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(flex: 5, child: identity),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(flex: 3, child: summary),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(flex: 3, child: latest),
+                      const SizedBox(width: AppSpacing.sm),
+                      Icon(
+                        expanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.muted,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          child: expanded
+              ? Container(
+                  key: ValueKey(
+                    'material-request-project-contents-${folder.id}',
+                  ),
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                    AppSpacing.sm,
+                  ),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: AppColors.line)),
+                  ),
+                  child: Column(
+                    children: [
+                      for (
+                        var index = 0;
+                        index < folder.requests.length;
+                        index++
+                      ) ...[
+                        _ExplorerRequestRow(
+                          request: folder.requests[index],
+                          language: language,
+                          onOpen: onOpen,
+                        ),
+                        if (index != folder.requests.length - 1)
+                          const Divider(height: 1, color: AppColors.line),
+                      ],
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    ),
+  );
+}
+
+class _FolderCountBadge extends StatelessWidget {
+  const _FolderCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: AppColors.neutralContainer,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Text('$count', style: AppTypography.labelLarge),
+  );
+}
+
+class _ExplorerRequestRow extends StatelessWidget {
+  const _ExplorerRequestRow({
+    required this.request,
+    required this.language,
+    required this.onOpen,
+  });
+
+  final YorksV1MaterialRequest request;
+  final AppLanguage language;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
 
   @override
   Widget build(BuildContext context) => Material(
-    color: AppColors.surfaceContainerLowest,
-    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    color: Colors.transparent,
     child: InkWell(
-      key: ValueKey('material-request-project-${folder.id}'),
-      onTap: () => onOpenProject(folder.id),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.line),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final horizontal = !compact && constraints.maxWidth >= 620;
-            final summary = _FolderSummary(folder: folder, language: language);
-            final latest = _FolderLatest(folder: folder, language: language);
-            final identity = _FolderIdentity(
-              folder: folder,
-              language: language,
-            );
-            if (!horizontal) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  identity,
-                  const SizedBox(height: AppSpacing.md),
-                  summary,
-                  const SizedBox(height: AppSpacing.md),
-                  latest,
-                ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(flex: 5, child: identity),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(flex: 3, child: summary),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(flex: 3, child: latest),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-              ],
-            );
-          },
+      key: ValueKey('material-request-row-${request.id}'),
+      onTap: () => onOpen(request),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 58),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.sm,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.blueContainer,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                ),
+                child: const Icon(
+                  Icons.description_outlined,
+                  color: AppColors.blue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${request.requestNumber ?? YorksV1MaterialRequestStrings.draft.active(language)} · ${request.title?.trim().isNotEmpty == true ? request.title! : request.scopeName}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelLarge.copyWith(
+                        color: AppColors.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.lines.length).active(language)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _CentreStatePill(request: request, language: language),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
         ),
       ),
     ),
@@ -1177,10 +1365,15 @@ class _ProjectFolderCard extends StatelessWidget {
 }
 
 class _FolderIdentity extends StatelessWidget {
-  const _FolderIdentity({required this.folder, required this.language});
+  const _FolderIdentity({
+    required this.folder,
+    required this.language,
+    required this.expanded,
+  });
 
   final _ProjectRequestFolder folder;
   final AppLanguage language;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1193,8 +1386,8 @@ class _FolderIdentity extends StatelessWidget {
           color: AppColors.warningContainer,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         ),
-        child: const Icon(
-          Icons.folder_rounded,
+        child: Icon(
+          expanded ? Icons.folder_open_rounded : Icons.folder_rounded,
           color: AppColors.warning,
           size: 23,
         ),
@@ -1626,91 +1819,6 @@ class _Pagination extends StatelessWidget {
   );
 }
 
-class _FilterCard extends StatelessWidget {
-  const _FilterCard({
-    required this.language,
-    required this.status,
-    required this.project,
-    required this.scope,
-    required this.requester,
-    required this.dateRange,
-    required this.requests,
-    required this.onStatusChanged,
-    required this.onProjectChanged,
-    required this.onScopeChanged,
-    required this.onRequesterChanged,
-    required this.onDateRangeChanged,
-    required this.onClear,
-    required this.onApply,
-    this.fixedProjectId,
-    this.collapsible = false,
-  });
-
-  final AppLanguage language;
-  final String status;
-  final String project;
-  final String scope;
-  final String requester;
-  final _MaterialRequestCentreDateRange dateRange;
-  final List<YorksV1MaterialRequest> requests;
-  final String? fixedProjectId;
-  final ValueChanged<String> onStatusChanged;
-  final ValueChanged<String> onProjectChanged;
-  final ValueChanged<String> onScopeChanged;
-  final ValueChanged<String> onRequesterChanged;
-  final ValueChanged<_MaterialRequestCentreDateRange> onDateRangeChanged;
-  final VoidCallback onClear;
-  final VoidCallback onApply;
-  final bool collapsible;
-
-  @override
-  Widget build(BuildContext context) {
-    final body = _FilterForm(
-      language: language,
-      status: status,
-      project: project,
-      scope: scope,
-      requester: requester,
-      dateRange: dateRange,
-      requests: requests,
-      fixedProjectId: fixedProjectId,
-      onStatusChanged: onStatusChanged,
-      onProjectChanged: onProjectChanged,
-      onScopeChanged: onScopeChanged,
-      onRequesterChanged: onRequesterChanged,
-      onDateRangeChanged: onDateRangeChanged,
-      onClear: onClear,
-      onApply: onApply,
-    );
-    if (!collapsible) return body;
-    return Material(
-      color: AppColors.surfaceContainerLowest,
-      elevation: 1,
-      shadowColor: AppColors.shadow,
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: AppColors.line),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      ),
-      child: ExpansionTile(
-        key: const ValueKey('material-request-centre-filter-expansion'),
-        leading: const Icon(Icons.tune_rounded, color: AppColors.blue),
-        title: YorksV1ActiveText(
-          copy: YorksV1MaterialRequestStrings.filters,
-          language: language,
-          style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w800),
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          0,
-          AppSpacing.md,
-          AppSpacing.md,
-        ),
-        children: [body],
-      ),
-    );
-  }
-}
-
 class _FilterForm extends StatelessWidget {
   const _FilterForm({
     required this.language,
@@ -1719,12 +1827,14 @@ class _FilterForm extends StatelessWidget {
     required this.scope,
     required this.requester,
     required this.dateRange,
+    required this.attentionOnly,
     required this.requests,
     required this.onStatusChanged,
     required this.onProjectChanged,
     required this.onScopeChanged,
     required this.onRequesterChanged,
     required this.onDateRangeChanged,
+    required this.onAttentionOnlyChanged,
     required this.onClear,
     required this.onApply,
     this.fixedProjectId,
@@ -1736,6 +1846,7 @@ class _FilterForm extends StatelessWidget {
   final String scope;
   final String requester;
   final _MaterialRequestCentreDateRange dateRange;
+  final bool attentionOnly;
   final List<YorksV1MaterialRequest> requests;
   final String? fixedProjectId;
   final ValueChanged<String> onStatusChanged;
@@ -1743,6 +1854,7 @@ class _FilterForm extends StatelessWidget {
   final ValueChanged<String> onScopeChanged;
   final ValueChanged<String> onRequesterChanged;
   final ValueChanged<_MaterialRequestCentreDateRange> onDateRangeChanged;
+  final ValueChanged<bool> onAttentionOnlyChanged;
   final VoidCallback onClear;
   final VoidCallback onApply;
 
@@ -1763,6 +1875,116 @@ class _FilterForm extends StatelessWidget {
             .toList()
           ..sort();
     final states = YorksV1MaterialRequestState.values;
+    final fields = <Widget>[
+      _FilterDropdown<String>(
+        label: YorksV1MaterialRequestStrings.requestStatus,
+        value: status,
+        language: language,
+        onChanged: onStatusChanged,
+        entries: [
+          _FilterEntry(
+            '__all__',
+            YorksV1MaterialRequestStrings.allStatuses.active(language),
+          ),
+          for (final state in states)
+            _FilterEntry(
+              state.wireValue,
+              yorksV1MaterialRequestStateCopy(state).active(language),
+            ),
+        ],
+      ),
+      if (fixedProjectId == null || fixedProjectId!.isEmpty)
+        _FilterDropdown<String>(
+          label: YorksV1MaterialRequestStrings.project,
+          value: project,
+          language: language,
+          onChanged: onProjectChanged,
+          entries: [
+            _FilterEntry(
+              '__all__',
+              YorksV1MaterialRequestStrings.allProjects.active(language),
+            ),
+            for (final entry in projects.entries)
+              _FilterEntry(
+                entry.key,
+                '${entry.value.projectReference} · ${entry.value.projectName}',
+              ),
+          ],
+        ),
+      _FilterDropdown<String>(
+        label: YorksV1MaterialRequestStrings.scope,
+        value: scope,
+        language: language,
+        onChanged: onScopeChanged,
+        entries: [
+          _FilterEntry(
+            '__all__',
+            YorksV1MaterialRequestStrings.allBuildings.active(language),
+          ),
+          for (final entry in scopes.entries)
+            _FilterEntry(entry.key, entry.value.scopeName),
+        ],
+      ),
+      _FilterDropdown<String>(
+        label: YorksV1MaterialRequestStrings.requestedBy,
+        value: requester,
+        language: language,
+        onChanged: onRequesterChanged,
+        entries: [
+          _FilterEntry(
+            '__all__',
+            YorksV1MaterialRequestStrings.allUsers.active(language),
+          ),
+          for (final name in requesters) _FilterEntry(name, name),
+        ],
+      ),
+      _FilterDropdown<_MaterialRequestCentreDateRange>(
+        label: YorksV1MaterialRequestStrings.dateRange,
+        value: dateRange,
+        language: language,
+        onChanged: onDateRangeChanged,
+        entries: [
+          _FilterEntry(
+            _MaterialRequestCentreDateRange.allTime,
+            YorksV1MaterialRequestStrings.allTime.active(language),
+          ),
+          _FilterEntry(
+            _MaterialRequestCentreDateRange.sevenDays,
+            YorksV1MaterialRequestStrings.last7Days.active(language),
+          ),
+          _FilterEntry(
+            _MaterialRequestCentreDateRange.thirtyDays,
+            YorksV1MaterialRequestStrings.last30Days.active(language),
+          ),
+        ],
+      ),
+      Material(
+        color: attentionOnly
+            ? AppColors.warningContainer.withValues(alpha: 0.45)
+            : AppColors.surfaceContainerLowest,
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: AppColors.line),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SwitchListTile.adaptive(
+          key: const ValueKey('material-request-filter-attention'),
+          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          value: attentionOnly,
+          onChanged: onAttentionOnlyChanged,
+          title: YorksV1ActiveText(
+            copy: YorksV1MaterialRequestStrings.attentionRequired,
+            language: language,
+            style: AppTypography.labelLarge.copyWith(color: AppColors.ink),
+          ),
+          subtitle: YorksV1ActiveText(
+            copy: YorksV1MaterialRequestStrings.requiresActionOnly,
+            language: language,
+            style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+          ),
+        ),
+      ),
+    ];
 
     return LedgerCard(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1796,103 +2018,36 @@ class _FilterForm extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _FilterDropdown<String>(
-            label: YorksV1MaterialRequestStrings.requestStatus,
-            value: status,
-            language: language,
-            onChanged: onStatusChanged,
-            entries: [
-              _FilterEntry(
-                '__all__',
-                YorksV1MaterialRequestStrings.allStatuses.active(language),
-              ),
-              for (final state in states)
-                _FilterEntry(
-                  state.wireValue,
-                  yorksV1MaterialRequestStateCopy(state).active(language),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (fixedProjectId == null || fixedProjectId!.isEmpty) ...[
-            _FilterDropdown<String>(
-              label: YorksV1MaterialRequestStrings.project,
-              value: project,
-              language: language,
-              onChanged: onProjectChanged,
-              entries: [
-                _FilterEntry(
-                  '__all__',
-                  YorksV1MaterialRequestStrings.allProjects.active(language),
-                ),
-                for (final entry in projects.entries)
-                  _FilterEntry(
-                    entry.key,
-                    '${entry.value.projectReference} · ${entry.value.projectName}',
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          _FilterDropdown<String>(
-            label: YorksV1MaterialRequestStrings.scope,
-            value: scope,
-            language: language,
-            onChanged: onScopeChanged,
-            entries: [
-              _FilterEntry(
-                '__all__',
-                YorksV1MaterialRequestStrings.allBuildings.active(language),
-              ),
-              for (final entry in scopes.entries)
-                _FilterEntry(entry.key, entry.value.scopeName),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _FilterDropdown<String>(
-            label: YorksV1MaterialRequestStrings.requestedBy,
-            value: requester,
-            language: language,
-            onChanged: onRequesterChanged,
-            entries: [
-              _FilterEntry(
-                '__all__',
-                YorksV1MaterialRequestStrings.allUsers.active(language),
-              ),
-              for (final name in requesters) _FilterEntry(name, name),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _FilterDropdown<_MaterialRequestCentreDateRange>(
-            label: YorksV1MaterialRequestStrings.dateRange,
-            value: dateRange,
-            language: language,
-            onChanged: onDateRangeChanged,
-            entries: [
-              _FilterEntry(
-                _MaterialRequestCentreDateRange.allTime,
-                YorksV1MaterialRequestStrings.allTime.active(language),
-              ),
-              _FilterEntry(
-                _MaterialRequestCentreDateRange.sevenDays,
-                YorksV1MaterialRequestStrings.last7Days.active(language),
-              ),
-              _FilterEntry(
-                _MaterialRequestCentreDateRange.thirtyDays,
-                YorksV1MaterialRequestStrings.last30Days.active(language),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 720 ? 2 : 1;
+              final fieldWidth = columns == 2
+                  ? (constraints.maxWidth - AppSpacing.sm) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final field in fields)
+                    SizedBox(width: fieldWidth, child: field),
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.md),
-          SizedBox(
-            height: AppSpacing.minTapTarget,
-            child: FilledButton(
-              key: const ValueKey('material-request-centre-apply-filters'),
-              onPressed: onApply,
-              child: YorksV1ActiveText(
-                copy: YorksV1MaterialRequestStrings.applyFilters,
-                language: language,
-                style: AppTypography.titleSmall.copyWith(color: Colors.white),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: SizedBox(
+              width: 190,
+              height: AppSpacing.minTapTarget,
+              child: FilledButton(
+                key: const ValueKey('material-request-centre-apply-filters'),
+                onPressed: onApply,
+                child: YorksV1ActiveText(
+                  copy: YorksV1MaterialRequestStrings.applyFilters,
+                  language: language,
+                  style: AppTypography.titleSmall.copyWith(color: Colors.white),
+                ),
               ),
             ),
           ),
@@ -1943,153 +2098,4 @@ class _FilterDropdown<T> extends StatelessWidget {
       if (next != null) onChanged(next);
     },
   );
-}
-
-class _RecentActivityCard extends StatelessWidget {
-  const _RecentActivityCard({
-    required this.requests,
-    required this.language,
-    required this.onOpen,
-  });
-
-  final List<YorksV1MaterialRequest> requests;
-  final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final recent = [...requests]
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return LedgerCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: YorksV1ActiveText(
-                  copy: YorksV1MaterialRequestStrings.recentActivity,
-                  language: language,
-                  style: AppTypography.titleSmall.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const Icon(
-                Icons.history_rounded,
-                color: AppColors.blue,
-                size: 18,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (recent.isEmpty)
-            YorksV1ActiveText(
-              copy: AppStrings.noRecentActivity,
-              language: language,
-              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-            )
-          else
-            for (var index = 0; index < recent.take(5).length; index++) ...[
-              _ActivityRow(
-                request: recent[index],
-                language: language,
-                onOpen: onOpen,
-              ),
-              if (index != recent.take(5).length - 1)
-                const Divider(height: AppSpacing.md * 2, color: AppColors.line),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityRow extends StatelessWidget {
-  const _ActivityRow({
-    required this.request,
-    required this.language,
-    required this.onOpen,
-  });
-
-  final YorksV1MaterialRequest request;
-  final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = switch (request.state) {
-      YorksV1MaterialRequestState.awaitingRequestApproval ||
-      YorksV1MaterialRequestState.changesRequested => Icons.schedule_rounded,
-      YorksV1MaterialRequestState.approvedForArrangement ||
-      YorksV1MaterialRequestState.arranging => Icons.shopping_cart_outlined,
-      YorksV1MaterialRequestState.dispatched ||
-      YorksV1MaterialRequestState.partiallyDispatched =>
-        Icons.local_shipping_outlined,
-      YorksV1MaterialRequestState.received ||
-      YorksV1MaterialRequestState.partiallyReceived =>
-        Icons.inventory_2_outlined,
-      YorksV1MaterialRequestState.closed => Icons.archive_outlined,
-      _ => Icons.description_outlined,
-    };
-    return InkWell(
-      onTap: () => onOpen(request),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: const BoxDecoration(
-                color: AppColors.blueContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 15, color: AppColors.blue),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    request.requestNumber ??
-                        YorksV1MaterialRequestStrings.draft.active(language),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    yorksV1MaterialRequestStateCopy(
-                      request.state,
-                    ).active(language),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.inkSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    MaterialLocalizations.of(
-                      context,
-                    ).formatMediumDate(request.updatedAt.toLocal()),
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
