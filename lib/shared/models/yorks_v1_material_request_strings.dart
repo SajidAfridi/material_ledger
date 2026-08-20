@@ -132,6 +132,30 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'فعال درخواستیں',
     hi: 'सक्रिय अनुरोध',
   );
+  static const openMetric = TranslatableString(
+    en: 'Open',
+    ar: 'مفتوح',
+    ur: 'کھلی درخواستیں',
+    hi: 'खुले अनुरोध',
+  );
+  static const viewOpen = TranslatableString(
+    en: 'View open',
+    ar: 'عرض المفتوحة',
+    ur: 'کھلی دیکھیں',
+    hi: 'खुले देखें',
+  );
+  static const inProgressMetric = TranslatableString(
+    en: 'In Progress',
+    ar: 'قيد التنفيذ',
+    ur: 'جاری',
+    hi: 'प्रगति में',
+  );
+  static const viewInProgress = TranslatableString(
+    en: 'View in progress',
+    ar: 'عرض قيد التنفيذ',
+    ur: 'جاری درخواستیں دیکھیں',
+    hi: 'प्रगति में देखें',
+  );
   static const awaitingApprovalMetric = TranslatableString(
     en: 'Awaiting Approval',
     ar: 'بانتظار الموافقة',
@@ -203,6 +227,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'يتطلب اهتمامًا',
     ur: 'توجہ درکار',
     hi: 'ध्यान आवश्यक',
+  );
+  static const requiresActionOnly = TranslatableString(
+    en: 'Show only requests requiring action',
+    ar: 'عرض الطلبات التي تتطلب إجراءً فقط',
+    ur: 'صرف کارروائی کی ضرورت والی درخواستیں دکھائیں',
+    hi: 'केवल कार्रवाई वाले अनुरोध दिखाएं',
   );
   static const closedArchive = TranslatableString(
     en: 'Closed Archive',
