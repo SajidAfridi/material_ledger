@@ -278,6 +278,12 @@ abstract final class YorksV1InventorySupplierStrings {
     ur: 'سپلائر ورک اسپیس لوڈ نہیں ہو سکی۔',
     hi: 'आपूर्तिकर्ता कार्यक्षेत्र लोड नहीं हो सका।',
   );
+  static const importFailed = TranslatableString(
+    en: 'Inventory import could not be confirmed.',
+    ar: 'تعذر تأكيد استيراد المخزون.',
+    ur: 'انوینٹری امپورٹ کی تصدیق نہیں ہو سکی۔',
+    hi: 'इन्वेंटरी आयात की पुष्टि नहीं हो सकी।',
+  );
   static const active = TranslatableString(
     en: 'Active',
     ar: 'نشط',

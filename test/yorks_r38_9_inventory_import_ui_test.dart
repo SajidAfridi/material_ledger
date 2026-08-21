@@ -192,6 +192,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('commit failure is identified as an inventory import failure', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(820, 1050));
+    final controller = _controller(failCommit: true);
+    await controller.chooseFile(_workspace, suppliers: _suppliers);
+    expect(controller.confirmMapping(), isTrue);
+    expect(controller.continueToSupplierReceipt(), isTrue);
+    controller.confirmSupplierAndReceipt();
+    await controller.commit();
+    await _pump(tester, controller: controller);
+
+    expect(
+      find.text('Inventory import could not be confirmed.'),
+      findsOneWidget,
+    );
+    expect(find.text('Supplier workspace could not be loaded.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'legacy workbook requires explicit Opening Balance and date review',
     (tester) async {
@@ -541,6 +561,7 @@ Future<void> _pump(
 
 YorksV1InventoryImportController _controller({
   YorksV1InventoryWorkbookFileService fileService = const _ImportFileService(),
+  bool failCommit = false,
 }) => YorksV1InventoryImportController(
   repository: _ImportRepository(),
   fileService: fileService,
@@ -550,6 +571,9 @@ YorksV1InventoryImportController _controller({
   uuidFactory: () => '93000000-0000-4000-8000-000000000091',
   r38_9Commit: ({required payload, required idempotencyKey}) async {
     expect(payload['rows'], isA<List<Object?>>());
+    if (failCommit) {
+      throw StateError('Forced inventory import failure');
+    }
     return const YorksV1InventoryImportResult(
       importBatchId: 'batch-r38-9-ui',
       rowCount: 1,

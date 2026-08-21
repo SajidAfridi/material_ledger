@@ -4750,7 +4750,7 @@ class _ImportFailureBanner extends StatelessWidget {
       _InlineCallout(
         icon: Icons.error_outline_rounded,
         color: AppColors.error,
-        title: YorksV1InventorySupplierStrings.loadFailed.active(language),
+        title: YorksV1InventorySupplierStrings.importFailed.active(language),
         body: YorksV1InventoryStrings.savingFailed.active(language),
       ),
       if (onRetry != null) ...[
