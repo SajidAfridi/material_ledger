@@ -17,7 +17,7 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Yorks Airconditioning & Refrigeration LLC-SPC — controlled projects, materials, procurement and documents.">
 
@@ -39,15 +39,42 @@
   <title>Yorks AC. & Ref.</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    /* Keep native browser/PWA pinch and Ctrl+wheel zoom available. Flutter
-       layouts remain responsive; this is an accessibility scale, not a
-       competing in-canvas zoom layer. */
+    /* The R35 workspace owns local precision zoom. Keep normal pan/scroll
+       gestures available to Flutter while preventing the browser/PWA from
+       zooming the entire application shell. */
     html, body, flt-glass-pane {
-      touch-action: pan-x pan-y pinch-zoom;
+      touch-action: pan-x pan-y;
     }
   </style>
 </head>
 <body>
+  <script>
+    // Prevent browser-wide zoom only. The event still reaches Flutter, whose
+    // focused workspace listener handles Ctrl/Command-wheel and shortcuts.
+    (() => {
+      const isWorkspaceZoomShortcut = (event) =>
+        (event.ctrlKey || event.metaKey) &&
+        ['+', '=', '-', '_', '0'].includes(event.key);
+
+      window.addEventListener(
+        'keydown',
+        (event) => {
+          if (isWorkspaceZoomShortcut(event)) event.preventDefault();
+        },
+        { capture: true },
+      );
+      window.addEventListener(
+        'wheel',
+        (event) => {
+          if (event.ctrlKey || event.metaKey) event.preventDefault();
+        },
+        { capture: true, passive: false },
+      );
+      window.addEventListener('gesturestart', (event) => event.preventDefault(), {
+        passive: false,
+      });
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

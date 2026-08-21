@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
+import '../core/zoom/yorks_workspace_zoom.dart';
 import '../core/widgets/brand_logo.dart';
 import '../core/widgets/yorks_mobile_ui.dart';
 import '../shared/models/app_language.dart';
@@ -139,7 +140,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                             ? context.pop()
                             : context.go(RoutePaths.yorksV1Projects),
                       ),
-                    Expanded(child: child),
+                    Expanded(
+                      child: YorksWorkspaceZoomViewport(
+                        routeKey: location,
+                        language: language,
+                        child: child,
+                      ),
+                    ),
                     if (!focusedMobileRoute)
                       _YorksMobileNavigation(
                         destinations: _mobileDestinationsFor(
@@ -166,7 +173,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                         language: language,
                         role: role,
                       ),
-                      Expanded(child: child),
+                      Expanded(
+                        child: YorksWorkspaceZoomViewport(
+                          routeKey: location,
+                          language: language,
+                          child: child,
+                        ),
+                      ),
                     ],
                   ),
                 ),
