@@ -50,10 +50,10 @@ select ok(
 
 select ok(
   position(
-    '''cartridge'', ''coil'', ''cylinder'', ''drum'', ''sheet'', ''tin'''
+    'from public.v1_configuration_units controlled_unit'
     in pg_get_functiondef('public.v1_import_inventory_r38_9(jsonb,uuid)'::regprocedure)
   ) > 0,
-  'The receipt-provenance import command shares the expanded controlled units'
+  'The receipt-provenance import command uses the controlled unit master'
 );
 
 set local role authenticated;
