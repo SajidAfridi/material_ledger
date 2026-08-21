@@ -171,6 +171,8 @@ $profile_sync_rewrite$;
 do $constraint_rewrite$
 declare
   v_record record;
+  v_new_constraint_name text;
+  v_old_constraint_name text;
   v_roles text := $$array[
     'project_engineer'::text,
     'site_engineer'::text,
@@ -197,27 +199,53 @@ begin
       ('v1_receipt_reviews', 'reviewed_by_exact_role', true)
     ) as role_constraint(table_name, column_name, nullable)
   loop
+    v_new_constraint_name := left(
+      v_record.table_name || '_' || v_record.column_name || '_expanded_check',
+      63
+    );
+    v_old_constraint_name := left(
+      v_record.table_name || '_' || v_record.column_name || '_expanded_ch',
+      63
+    );
     if not exists (
       select 1
       from pg_constraint constraint_record
       where constraint_record.conrelid =
         format('public.%I', v_record.table_name)::regclass
         and constraint_record.conname =
-          v_record.table_name || '_' || v_record.column_name || '_expanded_check'
+          v_new_constraint_name
     ) then
-      execute format(
-        'alter table public.%I add constraint %I check (%I = any (%s)%s) not valid',
-        v_record.table_name,
-        v_record.table_name || '_' || v_record.column_name || '_expanded_check',
-        v_record.column_name,
-        v_roles,
-        case when v_record.nullable then ' or ' || quote_ident(v_record.column_name) || ' is null' else '' end
-      );
+      if exists (
+        select 1
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          format('public.%I', v_record.table_name)::regclass
+          and constraint_record.conname =
+            v_old_constraint_name
+      ) then
+        if v_old_constraint_name <> v_new_constraint_name then
+          execute format(
+            'alter table public.%I rename constraint %I to %I',
+            v_record.table_name,
+            v_old_constraint_name,
+            v_new_constraint_name
+          );
+        end if;
+      else
+        execute format(
+          'alter table public.%I add constraint %I check (%I = any (%s)%s) not valid',
+          v_record.table_name,
+          v_new_constraint_name,
+          v_record.column_name,
+          v_roles,
+          case when v_record.nullable then ' or ' || quote_ident(v_record.column_name) || ' is null' else '' end
+        );
+      end if;
     end if;
     execute format(
       'alter table public.%I validate constraint %I',
       v_record.table_name,
-      v_record.table_name || '_' || v_record.column_name || '_expanded_check'
+      v_new_constraint_name
     );
   end loop;
 
