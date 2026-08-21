@@ -71,6 +71,10 @@ void main() {
       expect(find.text('Arrange Material Request'), findsOneWidget);
       expect(find.text('Start arrangement'), findsNothing);
       expect(find.text('REQUESTED ITEM'), findsOneWidget);
+      expect(
+        find.text('Linked to BOQ · Building A · Dampers & Fire Control'),
+        findsOneWidget,
+      );
       expect(find.text('Save arrangement'), findsOneWidget);
       await expectLater(
         find.byType(MaterialApp),
@@ -190,6 +194,81 @@ void main() {
     expect(line.decision, YorksV1ArrangementDecision.full);
     expect(line.externalSupplier, isNull);
     expect(line.reason, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('external readiness remains complete and usable at 360px', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = _ArrangementRepository();
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          canManageCommercialsProvider.overrideWithValue(false),
+          canViewCommercialsProvider.overrideWithValue(false),
+          yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+          yorksV1ArrangementWorkspaceProvider(
+            'request-1',
+          ).overrideWith((ref) async => _externalSupplierWorkspace),
+          yorksV1ArrangementInventoryProvider.overrideWith(
+            (ref) async => const [],
+          ),
+        ],
+        child: const MaterialApp(
+          home: YorksV1ArrangementScreen(
+            requestId: 'request-1',
+            embedded: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final ready = find.byKey(
+      const ValueKey('external-ready-arrangement-line-2'),
+    );
+    final expectedDate = find.byKey(
+      const ValueKey('external-expected-arrangement-line-2'),
+    );
+    final reference = find.byKey(
+      const ValueKey('external-reference-arrangement-line-2'),
+    );
+    expect(ready, findsOneWidget);
+    expect(expectedDate, findsOneWidget);
+    expect(reference, findsOneWidget);
+
+    await tester.ensureVisible(ready);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile(
+        'goldens/r35/arrange_external_readiness_mobile_360.png',
+      ),
+    );
+    await tester.tap(ready);
+    await tester.ensureVisible(expectedDate);
+    await tester.enterText(expectedDate, '2026-09-01');
+    await tester.ensureVisible(reference);
+    await tester.enterText(reference, 'QUOTE-2026-91');
+    final save = find.text('Save arrangement');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    expect(repository.saveInputs, hasLength(1));
+    final line = repository.saveInputs.single.lines.single;
+    expect(line.externalSourceReady, isTrue);
+    expect(line.externalExpectedDate, '2026-09-01');
+    expect(line.externalReference, 'QUOTE-2026-91');
     expect(tester.takeException(), isNull);
   });
 
@@ -358,8 +437,18 @@ void main() {
 
       expect(repository.saveInputs, isEmpty);
       expect(
+        find.byKey(const ValueKey('arrangement-validation-summary')),
+        findsOneWidget,
+      );
+      expect(find.text('1 row needs attention before saving.'), findsOneWidget);
+      expect(find.text('Item 1'), findsOneWidget);
+      expect(
         find.textContaining('11 Nos is arranged but only 0 Nos is available'),
         findsOneWidget,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/arrange_inline_validation_desktop.png'),
       );
       await tester.pump(const Duration(seconds: 5));
       expect(tester.takeException(), isNull);
@@ -655,6 +744,11 @@ final _workingWorkspace = YorksV1ArrangementWorkspace(
           description: 'Motorized smoke damper',
           requestedQuantity: '11.0000',
           unit: 'Nos',
+          requestSourceKind: 'boq',
+          sourceBoqGroupId: 'boq-group-1',
+          sourceBoqRowId: 'boq-row-1',
+          sourceBoqGroupName: 'Dampers & Fire Control',
+          sourceScopeName: 'Building A',
           source: YorksV1ArrangementSource.warehouse,
           inventoryItemId: 'inventory-1',
           decision: YorksV1ArrangementDecision.full,

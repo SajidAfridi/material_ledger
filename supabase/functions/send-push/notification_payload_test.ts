@@ -108,6 +108,22 @@ Deno.test("approval-first and return events have specific safe copy", () => {
   );
 });
 
+Deno.test("coordination assignment has specific non-commercial copy", () => {
+  const copy = safePushCopy("material_request_work_assigned");
+  assertEquals(copy.title, "Material request assigned to you");
+  assertEquals(copy.type, "request");
+  assertEquals(copy.body.includes("cost"), false);
+  assertEquals(copy.body.includes("quantity"), false);
+});
+
+Deno.test("all-unavailable alert preserves the editable or cancellable state", () => {
+  const copy = safePushCopy("arrangement_completed_unavailable");
+  assertEquals(copy.title, "All items currently unavailable");
+  assertEquals(copy.body.includes("Procurement can revise"), true);
+  assertEquals(copy.body.includes("cancel the request"), true);
+  assertEquals(copy.body.toLowerCase().includes("completed"), false);
+});
+
 Deno.test("web link is absolute HTTPS and rejects unsafe configuration", () => {
   assertEquals(
     webLinkFor(

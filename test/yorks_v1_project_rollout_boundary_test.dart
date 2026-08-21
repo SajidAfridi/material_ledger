@@ -8,6 +8,7 @@ import 'package:material_ledger/features/dashboard/presentation/screens/dashboar
 import 'package:material_ledger/shared/models/app_strings.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/models/yorks_v1_overview_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
@@ -72,7 +73,10 @@ void main() {
         find.text(YorksV1ProjectStrings.newProject.primary),
         findsOneWidget,
       );
-      expect(find.text(AppStrings.activeProjects.primary), findsNothing);
+      expect(
+        find.text(YorksV1OverviewStrings.adminCommandCentre.primary),
+        findsOneWidget,
+      );
       expect(find.text(AppStrings.awaitingAction.primary), findsNothing);
       expect(tester.takeException(), isNull);
     },

@@ -1435,14 +1435,15 @@ insert into public.v1_receipt_reviews (
    '10000000-0000-4000-8000-000000000001', 'project_engineer');
 insert into public.v1_receipt_review_lines (
   id, receipt_review_id, dispatch_line_id, outcome,
-  dispatched_qty_snapshot, good_qty, exception_qty, note
+  dispatched_qty_snapshot, good_qty, exception_qty,
+  missing_qty, damaged_qty, note
 ) values
   ('98971000-0000-4000-8000-000000000001',
    '98970000-0000-4000-8000-000000000001',
-   '98960000-0000-4000-8000-000000000001', 'received', 13, 13, 0, null),
+   '98960000-0000-4000-8000-000000000001', 'received', 13, 13, 0, 0, 0, null),
   ('98971000-0000-4000-8000-000000000002',
    '98970000-0000-4000-8000-000000000002',
-   '98960000-0000-4000-8000-000000000002', 'damaged', 2, 1, 1,
+   '98960000-0000-4000-8000-000000000002', 'damaged', 2, 1, 1, 0, 1,
    'Legacy quantity review proof');
 
 select ok(
@@ -1631,11 +1632,12 @@ insert into public.v1_receipt_reviews (
 );
 insert into public.v1_receipt_review_lines (
   id, receipt_review_id, dispatch_line_id, outcome,
-  dispatched_qty_snapshot, good_qty, exception_qty, note
+  dispatched_qty_snapshot, good_qty, exception_qty,
+  missing_qty, damaged_qty, note
 ) values (
   '98971000-0000-4000-8000-000000000003',
   '98970000-0000-4000-8000-000000000003',
-  '98960000-0000-4000-8000-000000000003', 'damaged', 5, 3, 2,
+  '98960000-0000-4000-8000-000000000003', 'damaged', 5, 3, 2, 0, 2,
   'Non-duplicating allocation receipt proof'
 );
 select ok(

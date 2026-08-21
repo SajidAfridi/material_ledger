@@ -16,12 +16,15 @@ clear lifecycle presentation, and operational receipt photographs.
 | Arrangement completion | A saved arrangement waits for Engineering approval | A saved arrangement for a pre-approved request becomes dispatch-approved immediately; legacy arrangements retain their recorded post-arrangement decision path | The existing save command always creates `awaiting_approval`. It must branch on a real immutable request-approval record, never infer approval from state or role. |
 | Discussion | Normalized V1 Material Requests have no trusted discussion relation | Authorized participants can comment from the first server-backed request stage, mention authorized users and generate notifications | Legacy JSON comments are not a transaction or RLS authority. New append-only comment and mention relations/RPCs are required. |
 | Mention privacy | No scoped mention directory | Mention suggestions contain only authorized display name, exact role and opaque user ID for participants allowed to read that request | The broad profile directory is unsuitable: it excludes global Engineer roles and is not scoped to an MR/project. |
-| Inventory-assisted request entry | Engineers enter custom description fields manually | A non-commercial, project-authorized inventory search can copy item description, brand/origin, size, model and unit into a request line | Existing inventory projections expose operational stock/commercial context intended for Procurement. A new minimal search projection is required and quantity remains user-entered. |
+| Material-assisted request entry | Engineers enter custom description fields manually or search inventory only | One non-commercial project-authorized search ranks selected-scope BOQ, wider-project BOQ and then inventory; it copies descriptive data while preserving free text | BOQ scope identity must remain exact, cross-scope suggestions cannot masquerade as same-scope BOQ sources, protected stock/commercial facts remain absent and quantity remains user-entered. |
 | Engineering visibility | Submitted request visibility follows existing project/global-role reads; drafts remain creator/Admin only | Active assigned Project/Site Engineers and organization-wide Senior Mechanical Engineers/Project Managers can read all server-backed workflow stages and discussion; private local recovery input remains creator-only | Read helpers and tests must explicitly cover all four Engineering roles without widening Procurement or commercial access. |
 | Status clarity | State appears in parts of the workspace but the next owner/action is not consistently prominent | Detail and controlled form show a stable human status plus current owner and next action | Presentation currently maps the old state order and cannot distinguish pre-approval from arrangement review. |
 | Close authority | Only Project Engineer/global Project Engineer roles and Admin can close a fully received request | An actively assigned Site Engineer may also close after all server quantity and receipt checks pass | Both the private authorization helper and presentation preflight must widen; the trusted close command, membership check, version, idempotency and audit boundary remain unchanged. |
 | Tablet/mobile refresh | A healthy Realtime channel can appear subscribed after browser/app suspension while no longer delivering workflow signals | Re-fetch authorized projections on foreground resume and a low-frequency safety interval, retain the visible projection during refresh, and offer pull-to-refresh on the mobile register | Realtime remains metadata-only; every refresh reuses normal protected RPC reads and no local state transition is synthesized. |
 | Receipt evidence | Receipt review records quantities/notes only | After server confirmation, an authorized receiving Engineer may attach JPEG, PNG or WebP site photographs linked to that immutable receipt review | The generic document pipeline does not currently accept `receipt_review` as a link/upload target. The existing prepare/upload/finalize boundary will be extended rather than bypassed. |
+| Draft privacy | Assigned/global Engineering could discover another user's server-backed draft through shared project reads | Draft detail, list presence, discussion and mentions remain creator/Admin only until explicit Submit | A draft is unfinished personal work. The shared workflow begins at submission, not the first autosave. |
+| Mixed receipt exception | One line can be only Received, Missing or Damaged | One line may record exact Good, Missing and Damaged quantities together; their sum must equal dispatched quantity | Physical deliveries commonly include both missing and damaged pieces on the same dispatch line. Splitting the requested item is needless work and weakens traceability. |
+| All unavailable | A legacy all-unavailable approval could close the MR | Keep the arrangement editable by Procurement; only a deliberate Engineering/Admin cancellation with reason is terminal | Zero available supply is operational work, not evidence that the request is completed. |
 
 ## New-request state machine
 
@@ -47,6 +50,11 @@ draft
 - Saving a complete arrangement for a request with a current approval creates
   approved line quantities from arranged quantities and makes positive lines
   dispatchable. Partial and unavailable decisions remain truthful exceptions.
+- A complete arrangement with no positive line stays in Procurement work with
+  the all-unavailable reason visible and editable. It closes only through an
+  explicit, authorized cancellation, after which Procurement editing fails.
+- Receipt review supports `mixed` with separately stored Good, Missing and
+  Damaged quantities that reconcile exactly to the dispatched snapshot.
 
 ## Existing-data preservation
 
@@ -69,7 +77,8 @@ draft
 
 ## Authorization summary
 
-- Creator: edit own request before approval; comment when request-readable.
+- Creator: privately edit/comment on their own draft; after Submit, edit own
+  request before approval and comment while request-readable.
 - Assigned Project Engineer: read, edit, approve/return and comment.
 - Assigned Site Engineer: read and comment; can edit only when they are the
   creator; may close a fully resolved received request; cannot approve unless
@@ -80,6 +89,16 @@ draft
   dispatches; cannot approve or edit Engineering intent.
 - Admin: audited override within the same versioned commands; no fabricated
   actor events.
+
+Temporary adoption policies approved for Phases 1-3:
+
+- a non-Site-Engineer creator may self-approve only when they also hold valid
+  Project Engineer/global Engineering/Admin authority; Site Engineer creators
+  cannot self-approve;
+- external supplier readiness is not yet a blocking completion gate; and
+- Phase 3 exposes both policies as protected Admin configuration. Only a
+  published version affects trusted commands; draft changes remain inert and
+  prior actor, role, decision and supplier evidence is never rewritten.
 
 ## Acceptance additions
 
@@ -96,8 +115,10 @@ draft
    rewrite.
 7. Mentioned authorized users receive one notification; unauthorized or stale
    members cannot be mentioned or read the thread.
-8. Inventory search returns no costs, balances, reservations, minimum stock or
-   other protected fields and fills only descriptive request data.
+8. Ranked material search returns selected-scope BOQ, project BOQ and inventory
+   in that order; it returns no costs, balances, reservations, minimum stock or
+   other protected fields and fills only descriptive request data. No match
+   continues as unrestricted free text.
 9. Status/owner/next action are consistent across desktop, mobile and the
    controlled MR model.
 10. Receipt photograph upload is available only after confirmed receipt and is
@@ -107,3 +128,59 @@ draft
 12. Tablet/mobile projections re-fetch after foreground resume and by safety
     interval without blanking the current view; mobile also supports pull to
     refresh.
+13. Another Engineering participant cannot list, open, comment on or mention
+    from a creator's draft; access begins only after Submit.
+14. A mixed receipt stores separate Good/Missing/Damaged facts and rejects any
+    under- or over-reconciled quantity set atomically.
+15. All-unavailable remains Procurement-editable; explicit cancellation makes
+    it terminal and a later Procurement save fails.
+
+## Phase 2 collaboration and performance addendum
+
+Phase 2 improves coordination and loading behavior without changing the
+approval-first state machine:
+
+- registers load lightweight authorized summaries in server pages of 15;
+  search, filters, ordering and counts are server-authoritative, while full
+  lines/comments are fetched only when a request is opened;
+- the newest 20 comments load with the record and older comments use cursor
+  paging;
+- a valid request participant may claim responsibility or reassign it to an
+  eligible participant with a reason. This is an audited coordination marker,
+  not a state transition and not a substitute for workflow authority;
+- an unsubmitted draft may sync privately to its creator's account while the
+  existing local draft remains offline recovery. A stale server version is a
+  visible conflict and never silently overwrites newer work;
+- immutable Engineering revision snapshots derive the concise change summary
+  shown after a request is returned and edited.
+
+The temporary adoption choices above remain unchanged in Phase 2 and are
+carried into Phase 3 as explicit policy inputs.
+
+## Phase 3 policy and recovery addendum
+
+Phase 3 completes the approved adoption controls without changing the familiar
+approval-first sequence:
+
+- `requests.allow_authorized_creator_self_approval` publishes whether a valid
+  non-Site-Engineer creator may approve their own current request version. The
+  default is `true`; publishing `false` requires another authorized
+  Project Engineer/global Engineering/Admin actor. Site Engineer creators
+  remain unable to approve in either mode;
+- every positive External Supplier arrangement line can record **Source ready
+  / firmly committed**, an optional expected date and an optional reference.
+  `procurement.require_external_source_readiness` defaults to `false`; when an
+  Admin publishes `true`, the server rejects an unconfirmed external line
+  atomically. Supplier name remains optional;
+- after Engineering explicitly cancels an all-unavailable request, an
+  authorized Engineering creator may use **Create replacement request**. The
+  server creates exactly one linked private Draft, clones the immutable request
+  facts and line provenance, and leaves the source cancelled. Procurement has
+  no replacement-create authority; and
+- exact retries return the same result. A different command cannot create a
+  second replacement from the same source, and neither path fabricates
+  approval, arrangement, stock, dispatch or receipt history.
+
+Phase 3 adds no automatic cancellation. Until Engineering cancels,
+all-unavailable remains editable Procurement work exactly as established in
+Phase 1.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -11,6 +13,8 @@ import '../repositories/yorks_v1_material_request_repository.dart';
 
 enum YorksV1MaterialRequestDraftSyncStatus {
   local,
+  syncingToAccount,
+  savedToAccount,
   saving,
   saved,
   submitting,
@@ -71,6 +75,7 @@ class YorksV1MaterialRequestDraftController
   Future<void> _persistQueue = Future<void>.value();
   bool _connectedCommandInFlight = false;
   bool _editingBeforeApproval = false;
+  Timer? _privateSyncDebounce;
   late YorksV1MaterialRequestDraft _acceptedDraft;
 
   /// Read-only snapshot for UI callbacks that need to guard a deferred
@@ -88,6 +93,61 @@ class YorksV1MaterialRequestDraftController
 
   bool get isEditingBeforeApproval => _editingBeforeApproval;
 
+  YorksV1MaterialRequestPhase2Repository? get _phase2Repository =>
+      _repository is YorksV1MaterialRequestPhase2Repository
+      ? _repository as YorksV1MaterialRequestPhase2Repository
+      : null;
+
+  /// Reconciles the owner-only cross-device recovery copy before an untouched
+  /// editor starts. A newer local crash-recovery copy always wins; a newer
+  /// account copy replaces only an untouched/older device copy.
+  Future<void> hydratePrivateDraft() async {
+    final repository = _phase2Repository;
+    if (repository == null || state.draft.serverRecordVersion > 0) return;
+    final local = state.draft;
+    try {
+      final remote = await repository.getPrivateDraft(
+        draftId: _draftId,
+        ownerAuthUserId: _ownerAuthUserId,
+        submissionIdempotencyKey: local.submissionIdempotencyKey,
+      );
+      if (remote == null) {
+        if (local.hasRecoverableContent) _schedulePrivateSync();
+        return;
+      }
+      if (!local.hasRecoverableContent ||
+          remote.clientUpdatedAt.isAfter(local.updatedAt)) {
+        _acceptedDraft = remote.draft;
+        state = YorksV1MaterialRequestDraftState(
+          draft: remote.draft,
+          status: YorksV1MaterialRequestDraftSyncStatus.savedToAccount,
+        );
+        await _persist(remote.draft);
+        return;
+      }
+      final reconciled = local.copyWith(
+        privateSyncVersion: remote.syncVersion,
+        privateSyncedAt: remote.serverUpdatedAt,
+      );
+      state = YorksV1MaterialRequestDraftState(draft: reconciled);
+      await _persist(reconciled);
+      if (local.updatedAt.isAfter(remote.clientUpdatedAt)) {
+        _schedulePrivateSync();
+      }
+    } on YorksV1DomainException catch (error) {
+      if (error.code == YorksV1DomainErrorCode.conflict) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: local,
+          status: YorksV1MaterialRequestDraftSyncStatus.conflict,
+          errorCode: error.code,
+        );
+      }
+      // Offline/account-unavailable startup never threatens the device copy.
+    } catch (_) {
+      // Device-local recovery remains authoritative for this editing session.
+    }
+  }
+
   static YorksV1MaterialRequestDraft _restoreOrEmpty({
     required String ownerAuthUserId,
     required String draftId,
@@ -102,6 +162,8 @@ class YorksV1MaterialRequestDraftController
           ownerAuthUserId: draft.ownerAuthUserId,
           submissionIdempotencyKey: uuidFactory(),
           serverRecordVersion: draft.serverRecordVersion,
+          privateSyncVersion: draft.privateSyncVersion,
+          privateSyncedAt: draft.privateSyncedAt,
           projectId: draft.projectId,
           scopeId: draft.scopeId,
           title: draft.title,
@@ -654,6 +716,7 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<void> discardLocal() async {
+    _privateSyncDebounce?.cancel();
     // Complete edits that may still be flushing from a text field before the
     // confirmed submit removes the recoverable draft. Without this barrier a
     // late keystroke write could recreate a draft after submission.
@@ -667,6 +730,20 @@ class YorksV1MaterialRequestDraftController
         .toList(growable: false);
     await _store.writeAll(all);
     _onLocalDraftsChanged?.call();
+    final repository = _phase2Repository;
+    final syncVersion = state.draft.privateSyncVersion;
+    if (repository != null && syncVersion > 0) {
+      try {
+        await repository.deletePrivateDraft(
+          draftId: _draftId,
+          expectedSyncVersion: syncVersion,
+          idempotencyKey: _uuidFactory(),
+        );
+      } catch (_) {
+        // A workflow commit or explicit local discard is never reversed by a
+        // best-effort recovery cleanup failure.
+      }
+    }
   }
 
   /// Restores the last deliberately accepted draft snapshot when an editor
@@ -704,6 +781,65 @@ class YorksV1MaterialRequestDraftController
     // submitted quickly.
     state = YorksV1MaterialRequestDraftState(draft: updated);
     await _persist(updated);
+    _schedulePrivateSync();
+  }
+
+  void _schedulePrivateSync() {
+    if (_phase2Repository == null || state.draft.serverRecordVersion > 0) {
+      return;
+    }
+    _privateSyncDebounce?.cancel();
+    _privateSyncDebounce = Timer(
+      const Duration(milliseconds: 850),
+      () => unawaited(_syncPrivateDraft()),
+    );
+  }
+
+  Future<void> _syncPrivateDraft() async {
+    final repository = _phase2Repository;
+    final snapshot = state.draft;
+    if (repository == null || snapshot.serverRecordVersion > 0) return;
+    if (!snapshot.hasRecoverableContent) return;
+    state = YorksV1MaterialRequestDraftState(
+      draft: snapshot,
+      status: YorksV1MaterialRequestDraftSyncStatus.syncingToAccount,
+    );
+    try {
+      final remote = await repository.syncPrivateDraft(
+        YorksV1SyncPrivateMaterialRequestDraftInput(
+          draft: snapshot,
+          idempotencyKey: _uuidFactory(),
+        ),
+      );
+      final current = state.draft;
+      final reconciled = current.copyWith(
+        privateSyncVersion: remote.syncVersion,
+        privateSyncedAt: remote.serverUpdatedAt,
+      );
+      state = YorksV1MaterialRequestDraftState(
+        draft: reconciled,
+        status: current.updatedAt == snapshot.updatedAt
+            ? YorksV1MaterialRequestDraftSyncStatus.savedToAccount
+            : YorksV1MaterialRequestDraftSyncStatus.local,
+      );
+      await _persist(reconciled);
+      if (current.updatedAt != snapshot.updatedAt) _schedulePrivateSync();
+    } on YorksV1DomainException catch (error) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: snapshot,
+        status: error.code == YorksV1DomainErrorCode.conflict
+            ? YorksV1MaterialRequestDraftSyncStatus.conflict
+            : YorksV1MaterialRequestDraftSyncStatus.local,
+        errorCode: error.code == YorksV1DomainErrorCode.conflict
+            ? error.code
+            : null,
+      );
+    } catch (_) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: snapshot,
+        status: YorksV1MaterialRequestDraftSyncStatus.local,
+      );
+    }
   }
 
   Future<void> _persist(YorksV1MaterialRequestDraft draft) async {
@@ -728,6 +864,12 @@ class YorksV1MaterialRequestDraftController
     // still returning the original error to the caller.
     _persistQueue = operation.catchError((_) {});
     await operation;
+  }
+
+  @override
+  void dispose() {
+    _privateSyncDebounce?.cancel();
+    super.dispose();
   }
 
   static String _canonicalValue(

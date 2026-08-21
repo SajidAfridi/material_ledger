@@ -987,6 +987,12 @@ abstract final class YorksV1InventoryStrings {
     ur: 'جائزہ درکار',
     hi: 'समीक्षा जरूरी',
   );
+  static const readyWithWarnings = TranslatableString(
+    en: 'Ready with warnings',
+    ar: 'جاهز مع تحذيرات',
+    ur: 'تنبیہات کے ساتھ تیار',
+    hi: 'चेतावनियों के साथ तैयार',
+  );
   static const smartCategoryMappingActive = TranslatableString(
     en: 'Smart category mapping is active',
     ar: 'تعيين الفئات الذكي نشط',

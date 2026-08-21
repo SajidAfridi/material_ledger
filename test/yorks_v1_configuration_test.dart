@@ -133,6 +133,31 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
   });
 
+  testWidgets('Admin can review both published Phase 3 workflow controls', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpConfiguration(tester, preferences, repository);
+
+    await tester.tap(find.text('Material Requests').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Authorized creator may self-approve'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch).last).value, isTrue);
+
+    await tester.tap(find.text('Procurement & Inventory').first);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Require external-source readiness confirmation'),
+      findsOneWidget,
+    );
+    expect(tester.widget<Switch>(find.byType(Switch).first).value, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('non-Admin receives a fail-closed Configuration surface', (
     tester,
   ) async {
@@ -292,9 +317,19 @@ Map<String, dynamic> _configurationFixture() => {
     _setting('requests.default_timing', 'material_requests', 'normal'),
     _setting('requests.urgent_enabled', 'material_requests', true),
     _setting(
+      'requests.allow_authorized_creator_self_approval',
+      'material_requests',
+      true,
+    ),
+    _setting(
       'procurement.default_source',
       'procurement_inventory',
       'warehouse',
+    ),
+    _setting(
+      'procurement.require_external_source_readiness',
+      'procurement_inventory',
+      false,
     ),
     _setting('accounts.billing_stage_weights', 'accounts', {
       'design': 10,

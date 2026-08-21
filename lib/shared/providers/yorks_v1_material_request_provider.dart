@@ -6,10 +6,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../controllers/yorks_v1_material_request_draft_controller.dart';
+import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_role.dart';
 import '../repositories/storage.dart';
+import '../repositories/yorks_v1_material_request_repository.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 import 'language_provider.dart';
 
@@ -56,7 +58,7 @@ final yorksV1MaterialRequestDraftControllerProvider = StateNotifierProvider
             fromJson: YorksV1MaterialRequestDraft.fromJson,
           );
       const uuid = Uuid();
-      return YorksV1MaterialRequestDraftController(
+      final controller = YorksV1MaterialRequestDraftController(
         ownerAuthUserId: key.ownerAuthUserId,
         draftId: key.draftId,
         store: store,
@@ -71,6 +73,77 @@ final yorksV1MaterialRequestDraftControllerProvider = StateNotifierProvider
           revision.state++;
         },
       );
+      unawaited(controller.hydratePrivateDraft());
+      return controller;
+    });
+
+/// Lightweight server-filtered and paginated register projection. Full lines,
+/// comments and commercial-capable detail are fetched only after opening one
+/// request.
+final yorksV1MaterialRequestSummaryPageProvider = FutureProvider.autoDispose
+    .family<
+      YorksV1MaterialRequestSummaryPage,
+      YorksV1MaterialRequestSummaryQuery
+    >((ref, query) {
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestPhase2Repository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1MaterialRequestPhase2Repository)
+          .listRequestSummaries(query);
+    });
+
+final yorksV1MaterialRequestCommentPageProvider = FutureProvider.autoDispose
+    .family<
+      YorksV1MaterialRequestCommentPage,
+      ({String requestId, DateTime? beforeCreatedAt, String? beforeId})
+    >((ref, query) {
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestPhase2Repository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1MaterialRequestPhase2Repository)
+          .listComments(
+            requestId: query.requestId,
+            beforeCreatedAt: query.beforeCreatedAt,
+            beforeId: query.beforeId,
+          );
+    });
+
+final yorksV1MaterialRequestWorkAssignmentProvider = FutureProvider.autoDispose
+    .family<YorksV1MaterialRequestWorkAssignment, String>((ref, requestId) {
+      ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestPhase2Repository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1MaterialRequestPhase2Repository)
+          .getWorkAssignment(requestId);
+    });
+
+final yorksV1MaterialRequestChangeSummaryProvider = FutureProvider.autoDispose
+    .family<YorksV1MaterialRequestChangeSummary?, String>((ref, requestId) {
+      ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestPhase2Repository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1MaterialRequestPhase2Repository)
+          .getChangeSummary(requestId);
     });
 
 /// The owner-scoped index of recoverable, not-yet-server-saved Material
@@ -459,20 +532,23 @@ final yorksV1MaterialRequestMentionCandidatesProvider = FutureProvider
 class YorksV1MaterialRequestInventorySearchKey {
   const YorksV1MaterialRequestInventorySearchKey({
     required this.projectId,
+    required this.scopeId,
     required this.query,
   });
 
   final String projectId;
+  final String scopeId;
   final String query;
 
   @override
   bool operator ==(Object other) =>
       other is YorksV1MaterialRequestInventorySearchKey &&
       other.projectId == projectId &&
+      other.scopeId == scopeId &&
       other.query == query;
 
   @override
-  int get hashCode => Object.hash(projectId, query);
+  int get hashCode => Object.hash(projectId, scopeId, query);
 }
 
 final yorksV1MaterialRequestInventorySearchProvider = FutureProvider.autoDispose
@@ -482,7 +558,11 @@ final yorksV1MaterialRequestInventorySearchProvider = FutureProvider.autoDispose
     >((ref, key) {
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
-          .searchInventory(projectId: key.projectId, query: key.query);
+          .searchInventory(
+            projectId: key.projectId,
+            scopeId: key.scopeId,
+            query: key.query,
+          );
     });
 
 final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose
@@ -496,6 +576,24 @@ final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .getRequest(requestId);
+    });
+
+final yorksV1MaterialRequestPhase3PolicyProvider = FutureProvider.autoDispose
+    .family<YorksV1MaterialRequestPhase3Policy, String>((ref, requestId) {
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestPhase3Repository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1MaterialRequestPhase3Repository)
+          .getPhase3Policy(requestId);
     });
 
 final yorksV1MaterialRequestDocumentProvider = FutureProvider.autoDispose

@@ -114,6 +114,33 @@ void main() {
     );
   });
 
+  test('work assignment uses specific localized request copy', () {
+    for (final language in AppLanguage.values) {
+      final notification = record(
+        eventCode: 'material_request_work_assigned',
+      ).toAppNotification(language);
+
+      expect(notification.type, NotificationType.request);
+      expect(notification.title.trim(), isNotEmpty, reason: language.code);
+      expect(notification.body.trim(), isNotEmpty, reason: language.code);
+      expect(notification.route, '/yorks/material-requests/$requestId');
+    }
+  });
+
+  test(
+    'all-unavailable alert keeps the request open for a deliberate action',
+    () {
+      final notification = record(
+        eventCode: 'arrangement_completed_unavailable',
+      ).toAppNotification(AppLanguage.english);
+
+      expect(notification.title, 'All items currently unavailable');
+      expect(notification.body, contains('Procurement can revise'));
+      expect(notification.body, contains('cancel the request'));
+      expect(notification.body.toLowerCase(), isNot(contains('completed')));
+    },
+  );
+
   test('legacy JSON remains legacy while server origin round-trips', () {
     final legacy = AppNotification.fromJson({
       'id': 'legacy',

@@ -238,11 +238,12 @@ insert into public.v1_receipt_reviews (
 );
 insert into public.v1_receipt_review_lines (
   id, receipt_review_id, dispatch_line_id, outcome,
-  dispatched_qty_snapshot, good_qty, exception_qty, note
+  dispatched_qty_snapshot, good_qty, exception_qty,
+  missing_qty, damaged_qty, note
 ) values (
   'e1800000-0000-4000-8000-000000000001',
   'e1700000-0000-4000-8000-000000000001',
-  'e1600000-0000-4000-8000-000000000001', 'missing', 5, 3, 2,
+  'e1600000-0000-4000-8000-000000000001', 'missing', 5, 3, 2, 2, 0,
   'Two units were missing at site'
 );
 
@@ -273,7 +274,7 @@ select ok(
     "in_transit_qty":"4.0000",
     "reviewed_good_qty":"3.0000",
     "reviewed_missing_qty":"2.0000",
-    "reviewed_damaged_qty":"0",
+    "reviewed_damaged_qty":"0.0000",
     "remaining_approved_qty":"3.0000",
     "replacement_eligible_qty":"2.0000",
     "ordinary_outstanding_qty":"1.0000",

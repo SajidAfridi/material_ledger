@@ -135,6 +135,12 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'ضروری اور پروکیورمنٹ کو نظر آتا ہے۔',
     hi: 'आवश्यक और खरीद विभाग को दिखाई देता है।',
   );
+  static const dateFormatHint = TranslatableString(
+    en: 'YYYY-MM-DD',
+    ar: 'YYYY-MM-DD',
+    ur: 'YYYY-MM-DD',
+    hi: 'YYYY-MM-DD',
+  );
   static const whatHappensNext = TranslatableString(
     en: 'What happens next',
     ar: 'ما الذي يحدث بعد ذلك',
@@ -219,6 +225,18 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'درخواست کردہ آئٹم',
     hi: 'अनुरोधित आइटम',
   );
+  static const boqCorrelation = TranslatableString(
+    en: 'Linked to BOQ',
+    ar: 'مرتبط بجدول الكميات',
+    ur: 'BOQ سے منسلک',
+    hi: 'बीओक्यू से जुड़ा',
+  );
+  static const customRequestItem = TranslatableString(
+    en: 'Custom request item',
+    ar: 'بند طلب مخصص',
+    ur: 'کسٹم درخواست آئٹم',
+    hi: 'कस्टम अनुरोध आइटम',
+  );
   static const supplierSource = TranslatableString(
     en: 'Supplier / source',
     ar: 'المورد / المصدر',
@@ -272,6 +290,42 @@ abstract final class YorksV1ArrangementStrings {
     ar: 'إضافة تفاصيل المورد (اختياري)',
     ur: 'سپلائر کی تفصیلات شامل کریں (اختیاری)',
     hi: 'आपूर्तिकर्ता विवरण जोड़ें (वैकल्पिक)',
+  );
+  static const externalReadiness = TranslatableString(
+    en: 'External source readiness',
+    ar: 'جاهزية المصدر الخارجي',
+    ur: 'بیرونی ذریعہ کی تیاری',
+    hi: 'बाहरी स्रोत की तैयारी',
+  );
+  static const externalReadyConfirmed = TranslatableString(
+    en: 'Quantity is available or firmly committed',
+    ar: 'الكمية متاحة أو مؤكدة الالتزام',
+    ur: 'مقدار دستیاب ہے یا پختہ طور پر طے ہے',
+    hi: 'मात्रा उपलब्ध है या पक्की तरह प्रतिबद्ध है',
+  );
+  static const externalReadinessRecommended = TranslatableString(
+    en: 'Recommended during adoption; Admin can make this mandatory.',
+    ar: 'موصى به أثناء التطبيق؛ ويمكن للمسؤول جعله إلزامياً.',
+    ur: 'اپنانے کے دوران تجویز کردہ؛ ایڈمن اسے لازمی بنا سکتا ہے۔',
+    hi: 'अपनाने के दौरान अनुशंसित; एडमिन इसे अनिवार्य कर सकता है।',
+  );
+  static const externalReadinessRequired = TranslatableString(
+    en: 'Required by the published Procurement policy.',
+    ar: 'مطلوب وفق سياسة المشتريات المنشورة.',
+    ur: 'شائع شدہ پروکیورمنٹ پالیسی کے مطابق ضروری ہے۔',
+    hi: 'प्रकाशित खरीद नीति के अनुसार आवश्यक है।',
+  );
+  static const expectedAvailabilityDate = TranslatableString(
+    en: 'Expected date (optional)',
+    ar: 'التاريخ المتوقع (اختياري)',
+    ur: 'متوقع تاریخ (اختیاری)',
+    hi: 'अपेक्षित तारीख (वैकल्पिक)',
+  );
+  static const supplierReference = TranslatableString(
+    en: 'Commitment / reference (optional)',
+    ar: 'الالتزام / المرجع (اختياري)',
+    ur: 'کمٹمنٹ / حوالہ (اختیاری)',
+    hi: 'प्रतिबद्धता / संदर्भ (वैकल्पिक)',
   );
   static const warehouseItem = TranslatableString(
     en: 'Warehouse item',
@@ -416,6 +470,20 @@ abstract final class YorksV1ArrangementStrings {
     ar: 'أكمل كل بند. القرارات الجزئية وغير المتاحة تحتاج سببًا.',
     ur: 'ہر سطر مکمل کریں۔ جزوی اور غیر دستیاب فیصلوں کے لیے وجہ ضروری ہے۔',
     hi: 'हर पंक्ति पूरी करें। आंशिक और अनुपलब्ध निर्णयों के लिए कारण चाहिए।',
+  );
+
+  static TranslatableString rowsNeedAttention(int count) => TranslatableString(
+    en: '$count ${count == 1 ? 'row needs' : 'rows need'} attention before saving.',
+    ar: '$count ${count == 1 ? 'صف يحتاج' : 'صفوف تحتاج'} إلى المراجعة قبل الحفظ.',
+    ur: 'محفوظ کرنے سے پہلے $count ${count == 1 ? 'قطار' : 'قطاروں'} پر توجہ درکار ہے۔',
+    hi: 'सहेजने से पहले $count ${count == 1 ? 'पंक्ति' : 'पंक्तियों'} पर ध्यान देना आवश्यक है।',
+  );
+
+  static TranslatableString validationItem(int number) => TranslatableString(
+    en: 'Item $number',
+    ar: 'البند $number',
+    ur: 'آئٹم $number',
+    hi: 'आइटम $number',
   );
 
   static TranslatableString itemPosition(int item, int total) =>

@@ -411,6 +411,10 @@ void main() {
       tester.widget<Text>(find.text('Dubai South')).textAlign,
       TextAlign.start,
     );
+    expect(
+      Directionality.of(tester.element(find.text('Dubai South'))),
+      TextDirection.ltr,
+    );
     await expectLater(
       find.byType(YorksV1ProjectCreateFlowScreen),
       matchesGoldenFile('goldens/r35/project_create_review_desktop.png'),

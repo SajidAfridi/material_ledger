@@ -485,6 +485,18 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'درست مقدار',
     hi: 'अच्छी मात्रा',
   );
+  static const missingQuantity = TranslatableString(
+    en: 'Missing quantity',
+    ar: 'الكمية الناقصة',
+    ur: 'گمشدہ مقدار',
+    hi: 'लापता मात्रा',
+  );
+  static const damagedQuantity = TranslatableString(
+    en: 'Damaged quantity',
+    ar: 'الكمية التالفة',
+    ur: 'خراب مقدار',
+    hi: 'क्षतिग्रस्त मात्रा',
+  );
   static const note = TranslatableString(
     en: 'Note',
     ar: 'ملاحظة',
@@ -516,10 +528,10 @@ abstract final class YorksV1LogisticsStrings {
     hi: 'कम से कम एक पंक्ति के लिए धनात्मक मात्रा दर्ज करें।',
   );
   static const invalidReceipt = TranslatableString(
-    en: 'Review every line. Missing and damaged lines need a note.',
-    ar: 'راجع كل بند. البنود الناقصة أو التالفة تحتاج ملاحظة.',
-    ur: 'ہر لائن کا جائزہ لیں۔ گم یا خراب لائنوں کے لیے نوٹ ضروری ہے۔',
-    hi: 'हर पंक्ति की समीक्षा करें। लापता और क्षतिग्रस्त पंक्तियों के लिए नोट आवश्यक है।',
+    en: 'Review every line. Good, missing and damaged quantities must equal the dispatched quantity; exceptions need a note.',
+    ar: 'راجع كل بند. يجب أن يساوي مجموع الكميات السليمة والناقصة والتالفة الكمية المرسلة، وتتطلب الاستثناءات ملاحظة.',
+    ur: 'ہر لائن کا جائزہ لیں۔ درست، گمشدہ اور خراب مقدار کا مجموعہ ڈسپیچ مقدار کے برابر ہونا چاہیے؛ استثناء کے لیے نوٹ ضروری ہے۔',
+    hi: 'हर पंक्ति की समीक्षा करें। अच्छी, लापता और क्षतिग्रस्त मात्रा का योग भेजी गई मात्रा के बराबर होना चाहिए; अपवादों के लिए नोट आवश्यक है।',
   );
   static const deliveryOrdersAndReturns = TranslatableString(
     en: 'Delivery Orders and returns',
@@ -870,6 +882,12 @@ TranslatableString yorksV1ReceiptOutcomeCopy(YorksV1ReceiptOutcome outcome) =>
         ar: 'تالف',
         ur: 'خراب',
         hi: 'क्षतिग्रस्त',
+      ),
+      YorksV1ReceiptOutcome.mixed => const TranslatableString(
+        en: 'Mixed',
+        ar: 'مختلط',
+        ur: 'مخلوط',
+        hi: 'मिश्रित',
       ),
     };
 

@@ -1865,9 +1865,9 @@ class YorksV1InventoryWorkbookCodec {
           notes: notes,
           sizeText: effective(YorksV1InventoryControlledField.sizeText).trim(),
           modelTag: effective(YorksV1InventoryControlledField.modelTag).trim(),
-          serialNumber: effective(
-            YorksV1InventoryControlledField.serialNumber,
-          ).trim(),
+          serialNumber: yorksV1InventoryNormalizeOptionalSerial(
+            effective(YorksV1InventoryControlledField.serialNumber),
+          ),
           ralColour: effective(
             YorksV1InventoryControlledField.ralColour,
           ).trim(),

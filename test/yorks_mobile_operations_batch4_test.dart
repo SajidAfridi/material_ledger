@@ -210,6 +210,53 @@ void main() {
     );
   });
 
+  testWidgets('mixed receipt remains exact and usable at 360px', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final repository = await _pumpLogistics(
+      tester,
+      requestId: 'receipt',
+      focusReceipt: true,
+    );
+
+    await tester.tap(find.text('Mixed').first);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('mobile-receipt-exception')),
+      findsOneWidget,
+    );
+    expect(find.text('Missing quantity'), findsOneWidget);
+    expect(find.text('Damaged quantity'), findsOneWidget);
+
+    Finder field(String label) => find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == label,
+      description: '$label field',
+    );
+    await tester.enterText(field('Good quantity'), '2');
+    await tester.enterText(field('Missing quantity'), '1');
+    await tester.enterText(field('Damaged quantity'), '1');
+    await tester.enterText(field('Explanation'), 'One missing, one damaged');
+    await tester.tap(find.text('Save Review'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 2 lines reviewed'), findsOneWidget);
+    await tester.tap(find.text('Received').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Confirm receipt review'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.receipts, hasLength(1));
+    final mixed = repository.receipts.single.lines.first;
+    expect(mixed.outcome, YorksV1ReceiptOutcome.mixed);
+    expect(mixed.goodQuantity, '2');
+    expect(mixed.missingQuantity, '1');
+    expect(mixed.damagedQuantity, '1');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dispatch retry reuses one command identity', (tester) async {
     await _setViewport(tester, const Size(390, 844));
     final repository = _OperationsRepository()..dispatchFailures = 1;

@@ -20,6 +20,64 @@ import 'package:pdf/pdf.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('ranked material suggestion retains safe BOQ provenance', () {
+    final suggestion = YorksV1MaterialRequestInventorySuggestion.fromRpcJson({
+      'id': 'boq-row-1',
+      'source_kind': 'scope_boq',
+      'item_description': 'Motorized smoke damper',
+      'brand_origin': 'UAE',
+      'size': '500 x 500',
+      'model': 'MSD-500',
+      'equipment_tag': 'MSD-A1',
+      'unit': 'Nos',
+      'source_boq_group_id': 'boq-group-1',
+      'source_boq_row_id': 'boq-row-1',
+      'source_scope_id': 'scope-1',
+      'source_scope_name': 'Building A',
+      'source_group_name': 'Dampers & Fire Control',
+    });
+    const custom = YorksV1MaterialRequestLine(
+      id: 'line-1',
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: '',
+      quantity: '1',
+      unit: 'Nos',
+    );
+    final correlated = custom.copyWith(
+      source: YorksV1MaterialRequestLineSource.boq,
+      sourceBoqGroupId: suggestion.sourceBoqGroupId,
+      sourceBoqRowId: suggestion.sourceBoqRowId,
+      description: suggestion.description,
+    );
+
+    expect(
+      suggestion.source,
+      YorksV1MaterialRequestSuggestionSource.selectedScopeBoq,
+    );
+    expect(suggestion.retainsBoqProvenance, isTrue);
+    expect(suggestion.sourceScopeName, 'Building A');
+    expect(suggestion.equipmentTag, 'MSD-A1');
+    expect(correlated.source, YorksV1MaterialRequestLineSource.boq);
+    expect(correlated.sourceBoqGroupId, 'boq-group-1');
+    expect(correlated.sourceBoqRowId, 'boq-row-1');
+    expect(correlated.toRpcJson()['source_kind'], 'boq');
+  });
+
+  test('inventory suggestion defaults to a non-BOQ custom source', () {
+    final suggestion = YorksV1MaterialRequestInventorySuggestion.fromRpcJson({
+      'id': 'inventory-1',
+      'source_kind': 'inventory',
+      'item_code': 'INV-001',
+      'item_description': 'Flexible duct',
+      'unit': 'Meter',
+    });
+
+    expect(suggestion.source, YorksV1MaterialRequestSuggestionSource.inventory);
+    expect(suggestion.retainsBoqProvenance, isFalse);
+    expect(suggestion.sourceBoqRowId, isNull);
+  });
+
   test(
     'normalizes request descriptions and preserves the new controlled units',
     () {
@@ -250,6 +308,44 @@ void main() {
         ),
       );
     });
+
+    test(
+      'ranked search sends both project and selected scope context',
+      () async {
+        final connectivity = DefaultConnectivity();
+        addTearDown(connectivity.dispose);
+        final rpcClient = _CandidateSearchRpcClient();
+        final repository = YorksV1SupabaseMaterialRequestRepository(
+          featureFlags: const YorksV1FeatureFlags(
+            foundation: true,
+            projects: true,
+            boq: true,
+            excel: true,
+            requests: true,
+          ),
+          connectivity: connectivity,
+          rpcClient: rpcClient,
+        );
+
+        final results = await repository.searchInventory(
+          projectId: _projectId,
+          scopeId: _scopeId,
+          query: 'damper',
+        );
+
+        expect(rpcClient.functionName, 'v1_search_material_request_candidates');
+        expect(rpcClient.parameters, {
+          'p_project_id': _projectId,
+          'p_scope_id': _scopeId,
+          'p_query': 'damper',
+          'p_limit': 18,
+        });
+        expect(
+          results.single.source,
+          YorksV1MaterialRequestSuggestionSource.selectedScopeBoq,
+        );
+      },
+    );
 
     test('does not send overlapping connected draft commands', () async {
       final blocker = Completer<void>();
@@ -1456,6 +1552,100 @@ void main() {
       expect(model.receiptStatuses['line-1'], '5 / 10 · Partial');
     },
   );
+
+  test('Phase 2 summary stays lightweight while retaining register counts', () {
+    final page = YorksV1MaterialRequestSummaryPage.fromRpcJson({
+      'items': [
+        {
+          'id': _draftId,
+          'project_id': _projectId,
+          'project_ref': 'YRA-313',
+          'project_name': 'Phase 2 Project',
+          'scope_id': _scopeId,
+          'scope_name': 'Common / All Buildings',
+          'state': 'submitted',
+          'record_version': 2,
+          'request_number': 'YRA313-MR001',
+          'title': 'Dampers',
+          'timing': 'normal',
+          'item_count': 27,
+          'created_at': '2026-08-20T08:00:00Z',
+          'updated_at': '2026-08-21T08:00:00Z',
+          'work_assignment': {
+            'request_id': _draftId,
+            'assignment_version': 0,
+            'assignee_auth_user_id': null,
+            'assignee_display_name': null,
+            'assignee_exact_role': null,
+            'assigned_at': null,
+            'can_manage': true,
+          },
+          'change_summary': null,
+        },
+      ],
+      'total_count': 31,
+      'limit': 15,
+      'offset': 0,
+      'has_more': true,
+      'metrics': {
+        'total': 31,
+        'open': 9,
+        'in_progress': 8,
+        'dispatched': 5,
+        'received': 4,
+        'closed': 5,
+      },
+    });
+
+    final register = page.items.single.toRegisterProjection();
+    expect(page.totalCount, 31);
+    expect(page.limit, 15);
+    expect(page.hasMore, isTrue);
+    expect(register.lines, isEmpty);
+    expect(register.comments, isEmpty);
+    expect(register.displayItemCount, 27);
+    expect(register.requestNumber, 'YRA313-MR001');
+  });
+
+  test(
+    'Phase 2 draft recovery follows the owner across devices after debounce',
+    () async {
+      final repository = _Phase2FakeRequestRepository();
+      final first = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: repository,
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(first.dispose);
+
+      await first.setTitle('Cross-device dampers');
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      expect(repository.privateDraft?.syncVersion, 1);
+      expect(
+        first.state.status,
+        YorksV1MaterialRequestDraftSyncStatus.savedToAccount,
+      );
+
+      final second = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: repository,
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(second.dispose);
+      await second.hydratePrivateDraft();
+
+      expect(second.state.draft.title, 'Cross-device dampers');
+      expect(second.state.draft.privateSyncVersion, 1);
+      expect(
+        second.state.status,
+        YorksV1MaterialRequestDraftSyncStatus.savedToAccount,
+      );
+    },
+  );
 }
 
 const _siteEngineer = '10000000-0000-4000-8000-000000000002';
@@ -1599,6 +1789,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   @override
   Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
     required String projectId,
+    required String scopeId,
     required String query,
   }) async => const [];
 
@@ -1696,6 +1887,115 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   }
 }
 
+class _Phase2FakeRequestRepository extends _FakeRequestRepository
+    implements YorksV1MaterialRequestPhase2Repository {
+  YorksV1PrivateMaterialRequestDraftRecord? privateDraft;
+
+  @override
+  Future<void> deletePrivateDraft({
+    required String draftId,
+    required int expectedSyncVersion,
+    required String idempotencyKey,
+  }) async {
+    if (privateDraft?.draftId == draftId) privateDraft = null;
+  }
+
+  @override
+  Future<YorksV1MaterialRequestChangeSummary?> getChangeSummary(
+    String requestId,
+  ) async => null;
+
+  @override
+  Future<YorksV1PrivateMaterialRequestDraftRecord?> getPrivateDraft({
+    required String draftId,
+    required String ownerAuthUserId,
+    required String submissionIdempotencyKey,
+  }) async => privateDraft?.draftId == draftId ? privateDraft : null;
+
+  @override
+  Future<YorksV1MaterialRequestWorkAssignment> getWorkAssignment(
+    String requestId,
+  ) async => YorksV1MaterialRequestWorkAssignment(
+    requestId: requestId,
+    assignmentVersion: 0,
+    canManage: true,
+  );
+
+  @override
+  Future<YorksV1MaterialRequestWorkAssignment> assignWork(
+    YorksV1AssignMaterialRequestWorkInput input,
+  ) async => YorksV1MaterialRequestWorkAssignment(
+    requestId: input.requestId,
+    assignmentVersion: input.expectedAssignmentVersion + 1,
+    assigneeAuthUserId: input.assigneeAuthUserId,
+    canManage: true,
+  );
+
+  @override
+  Future<YorksV1MaterialRequestCommentPage> listComments({
+    required String requestId,
+    DateTime? beforeCreatedAt,
+    String? beforeId,
+    int limit = 20,
+  }) async =>
+      YorksV1MaterialRequestCommentPage(items: const [], hasMore: false);
+
+  @override
+  Future<List<YorksV1PrivateMaterialRequestDraftRecord>> listPrivateDrafts({
+    required String ownerAuthUserId,
+    required String Function() submissionIdempotencyKeyFactory,
+    int limit = 50,
+  }) async => [?privateDraft];
+
+  @override
+  Future<YorksV1MaterialRequestSummaryPage> listRequestSummaries(
+    YorksV1MaterialRequestSummaryQuery query,
+  ) async => YorksV1MaterialRequestSummaryPage(
+    items: const [],
+    totalCount: 0,
+    limit: query.limit,
+    offset: query.offset,
+    hasMore: false,
+    metrics: const YorksV1MaterialRequestSummaryMetrics(
+      total: 0,
+      open: 0,
+      inProgress: 0,
+      dispatched: 0,
+      received: 0,
+      closed: 0,
+    ),
+  );
+
+  @override
+  Future<List<YorksV1MaterialRequestMention>> listWorkCandidates(
+    String requestId,
+  ) async => const [];
+
+  @override
+  Future<YorksV1PrivateMaterialRequestDraftRecord> syncPrivateDraft(
+    YorksV1SyncPrivateMaterialRequestDraftInput input,
+  ) async {
+    final currentVersion = privateDraft?.syncVersion ?? 0;
+    if (input.draft.privateSyncVersion != currentVersion) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.conflict);
+    }
+    final now = DateTime.now().toUtc();
+    final version = currentVersion + 1;
+    final record = YorksV1PrivateMaterialRequestDraftRecord(
+      draftId: input.draft.id,
+      syncVersion: version,
+      draft: input.draft.copyWith(
+        privateSyncVersion: version,
+        privateSyncedAt: now,
+      ),
+      clientUpdatedAt: input.draft.updatedAt,
+      serverUpdatedAt: now,
+    );
+    privateDraft = record;
+    return record;
+  }
+}
+
 class _DelayedRpcClient implements YorksV1MaterialRequestRpcClient {
   @override
   Future<Object?> invoke({
@@ -1704,6 +2004,30 @@ class _DelayedRpcClient implements YorksV1MaterialRequestRpcClient {
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     return const [];
+  }
+}
+
+class _CandidateSearchRpcClient implements YorksV1MaterialRequestRpcClient {
+  String? functionName;
+  Map<String, Object?>? parameters;
+
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) async {
+    this.functionName = functionName;
+    this.parameters = parameters;
+    return const [
+      {
+        'id': 'boq-row-1',
+        'source_kind': 'scope_boq',
+        'item_description': 'Motorized smoke damper',
+        'unit': 'Nos',
+        'source_boq_group_id': 'boq-group-1',
+        'source_boq_row_id': 'boq-row-1',
+      },
+    ];
   }
 }
 

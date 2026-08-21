@@ -122,6 +122,382 @@ class YorksV1MaterialRequestComment {
   );
 }
 
+class YorksV1MaterialRequestCommentPage {
+  YorksV1MaterialRequestCommentPage({
+    required List<YorksV1MaterialRequestComment> items,
+    required this.hasMore,
+    this.nextBeforeCreatedAt,
+    this.nextBeforeId,
+  }) : items = List.unmodifiable(items);
+
+  final List<YorksV1MaterialRequestComment> items;
+  final bool hasMore;
+  final DateTime? nextBeforeCreatedAt;
+  final String? nextBeforeId;
+
+  factory YorksV1MaterialRequestCommentPage.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestCommentPage(
+    items: _maps(
+      json['items'],
+    ).map(YorksV1MaterialRequestComment.fromRpcJson).toList(growable: false),
+    hasMore: json['has_more'] == true,
+    nextBeforeCreatedAt: _nullableDate(json['next_before_created_at']),
+    nextBeforeId: _trimToNull(json['next_before_id']),
+  );
+}
+
+class YorksV1MaterialRequestWorkAssignment {
+  const YorksV1MaterialRequestWorkAssignment({
+    required this.requestId,
+    required this.assignmentVersion,
+    required this.canManage,
+    this.assigneeAuthUserId,
+    this.assigneeDisplayName,
+    this.assigneeExactRole,
+    this.assignedAt,
+  });
+
+  final String requestId;
+  final int assignmentVersion;
+  final String? assigneeAuthUserId;
+  final String? assigneeDisplayName;
+  final String? assigneeExactRole;
+  final DateTime? assignedAt;
+  final bool canManage;
+
+  bool get isAssigned => assigneeAuthUserId != null;
+
+  factory YorksV1MaterialRequestWorkAssignment.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestWorkAssignment(
+    requestId: _requiredString(json, 'request_id'),
+    assignmentVersion: _nonNegativeInt(json['assignment_version']),
+    assigneeAuthUserId: _trimToNull(json['assignee_auth_user_id']),
+    assigneeDisplayName: _trimToNull(json['assignee_display_name']),
+    assigneeExactRole: _trimToNull(json['assignee_exact_role']),
+    assignedAt: _nullableDate(json['assigned_at']),
+    canManage: json['can_manage'] == true,
+  );
+}
+
+class YorksV1MaterialRequestChangeSummary {
+  const YorksV1MaterialRequestChangeSummary({
+    required this.fromRequestVersion,
+    required this.toRequestVersion,
+    required this.itemsAdded,
+    required this.itemsRemoved,
+    required this.quantityOrUnitChanged,
+    required this.descriptionChanged,
+    required this.titleChanged,
+    required this.timingChanged,
+    required this.deliveryNoteChanged,
+  });
+
+  final int fromRequestVersion;
+  final int toRequestVersion;
+  final int itemsAdded;
+  final int itemsRemoved;
+  final int quantityOrUnitChanged;
+  final int descriptionChanged;
+  final bool titleChanged;
+  final bool timingChanged;
+  final bool deliveryNoteChanged;
+
+  bool get hasChanges =>
+      itemsAdded > 0 ||
+      itemsRemoved > 0 ||
+      quantityOrUnitChanged > 0 ||
+      descriptionChanged > 0 ||
+      titleChanged ||
+      timingChanged ||
+      deliveryNoteChanged;
+
+  factory YorksV1MaterialRequestChangeSummary.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestChangeSummary(
+    fromRequestVersion: _positiveInt(json['from_request_version']),
+    toRequestVersion: _positiveInt(json['to_request_version']),
+    itemsAdded: _nonNegativeInt(json['items_added']),
+    itemsRemoved: _nonNegativeInt(json['items_removed']),
+    quantityOrUnitChanged: _nonNegativeInt(json['quantity_or_unit_changed']),
+    descriptionChanged: _nonNegativeInt(json['description_changed']),
+    titleChanged: json['title_changed'] == true,
+    timingChanged: json['timing_changed'] == true,
+    deliveryNoteChanged: json['delivery_note_changed'] == true,
+  );
+}
+
+class YorksV1MaterialRequestSummary {
+  const YorksV1MaterialRequestSummary({
+    required this.id,
+    required this.projectId,
+    required this.projectReference,
+    required this.projectName,
+    required this.scopeId,
+    required this.scopeName,
+    required this.state,
+    required this.recordVersion,
+    required this.timing,
+    required this.itemCount,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.workAssignment,
+    this.changeSummary,
+    this.requestNumber,
+    this.jobContractReference,
+    this.title,
+    this.scheduledDate,
+    this.deliveryNote,
+    this.requesterDisplayName,
+    this.requesterProjectRole,
+    this.requesterExactRole,
+    this.currentActionOwnerRole,
+    this.currentActionCode,
+    this.submittedAt,
+  });
+
+  final String id;
+  final String projectId;
+  final String projectReference;
+  final String projectName;
+  final String? jobContractReference;
+  final String scopeId;
+  final String scopeName;
+  final YorksV1MaterialRequestState state;
+  final int recordVersion;
+  final String? requestNumber;
+  final String? title;
+  final YorksV1MaterialRequestTiming timing;
+  final DateTime? scheduledDate;
+  final String? deliveryNote;
+  final String? requesterDisplayName;
+  final String? requesterProjectRole;
+  final String? requesterExactRole;
+  final String? currentActionOwnerRole;
+  final String? currentActionCode;
+  final int itemCount;
+  final DateTime? submittedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final YorksV1MaterialRequestWorkAssignment workAssignment;
+  final YorksV1MaterialRequestChangeSummary? changeSummary;
+
+  factory YorksV1MaterialRequestSummary.fromRpcJson(Map<String, dynamic> json) {
+    final state = YorksV1MaterialRequestState.fromWireValue(json['state']);
+    final timing = YorksV1MaterialRequestTiming.fromWireValue(json['timing']);
+    final assignment = json['work_assignment'];
+    if (state == null || timing == null || assignment is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestSummary(
+      id: _requiredString(json, 'id'),
+      projectId: _requiredString(json, 'project_id'),
+      projectReference: _requiredString(json, 'project_ref'),
+      projectName: _requiredString(json, 'project_name'),
+      jobContractReference: _trimToNull(json['job_contract_reference']),
+      scopeId: _requiredString(json, 'scope_id'),
+      scopeName: _requiredString(json, 'scope_name'),
+      state: state,
+      recordVersion: _positiveInt(json['record_version']),
+      requestNumber: _trimToNull(json['request_number']),
+      title: _trimToNull(json['title']),
+      timing: timing,
+      scheduledDate: _nullableDate(json['scheduled_date']),
+      deliveryNote: _trimToNull(json['delivery_note']),
+      requesterDisplayName: _trimToNull(json['requester_display_name']),
+      requesterProjectRole: _trimToNull(json['requester_project_role']),
+      requesterExactRole: _trimToNull(json['requester_exact_role']),
+      currentActionOwnerRole: _trimToNull(json['current_action_owner_role']),
+      currentActionCode: _trimToNull(json['current_action_code']),
+      itemCount: _nonNegativeInt(json['item_count']),
+      submittedAt: _nullableDate(json['submitted_at']),
+      createdAt: _requiredDate(json, 'created_at'),
+      updatedAt: _requiredDate(json, 'updated_at'),
+      workAssignment: YorksV1MaterialRequestWorkAssignment.fromRpcJson(
+        Map<String, dynamic>.from(assignment),
+      ),
+      changeSummary: json['change_summary'] is Map
+          ? YorksV1MaterialRequestChangeSummary.fromRpcJson(
+              Map<String, dynamic>.from(json['change_summary'] as Map),
+            )
+          : null,
+    );
+  }
+}
+
+class YorksV1MaterialRequestSummaryMetrics {
+  const YorksV1MaterialRequestSummaryMetrics({
+    required this.total,
+    required this.open,
+    required this.inProgress,
+    required this.dispatched,
+    required this.received,
+    required this.closed,
+  });
+
+  final int total;
+  final int open;
+  final int inProgress;
+  final int dispatched;
+  final int received;
+  final int closed;
+
+  factory YorksV1MaterialRequestSummaryMetrics.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestSummaryMetrics(
+    total: _nonNegativeInt(json['total']),
+    open: _nonNegativeInt(json['open']),
+    inProgress: _nonNegativeInt(json['in_progress']),
+    dispatched: _nonNegativeInt(json['dispatched']),
+    received: _nonNegativeInt(json['received']),
+    closed: _nonNegativeInt(json['closed']),
+  );
+}
+
+class YorksV1MaterialRequestSummaryPage {
+  YorksV1MaterialRequestSummaryPage({
+    required List<YorksV1MaterialRequestSummary> items,
+    required this.totalCount,
+    required this.limit,
+    required this.offset,
+    required this.hasMore,
+    required this.metrics,
+  }) : items = List.unmodifiable(items);
+
+  final List<YorksV1MaterialRequestSummary> items;
+  final int totalCount;
+  final int limit;
+  final int offset;
+  final bool hasMore;
+  final YorksV1MaterialRequestSummaryMetrics metrics;
+
+  factory YorksV1MaterialRequestSummaryPage.fromRpcJson(
+    Map<String, dynamic> json,
+  ) {
+    final metrics = json['metrics'];
+    if (metrics is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestSummaryPage(
+      items: _maps(
+        json['items'],
+      ).map(YorksV1MaterialRequestSummary.fromRpcJson).toList(growable: false),
+      totalCount: _nonNegativeInt(json['total_count']),
+      limit: _positiveInt(json['limit']),
+      offset: _nonNegativeInt(json['offset']),
+      hasMore: json['has_more'] == true,
+      metrics: YorksV1MaterialRequestSummaryMetrics.fromRpcJson(
+        Map<String, dynamic>.from(metrics),
+      ),
+    );
+  }
+}
+
+class YorksV1MaterialRequestSummaryQuery {
+  YorksV1MaterialRequestSummaryQuery({
+    this.projectId,
+    this.search,
+    List<YorksV1MaterialRequestState>? states,
+    this.scopeId,
+    this.requester,
+    this.updatedAfter,
+    this.attentionOnly = false,
+    this.metric = 'all',
+    this.newestFirst = true,
+    this.limit = 15,
+    this.offset = 0,
+  }) : states = List.unmodifiable(states ?? const []);
+
+  final String? projectId;
+  final String? search;
+  final List<YorksV1MaterialRequestState> states;
+  final String? scopeId;
+  final String? requester;
+  final DateTime? updatedAfter;
+  final bool attentionOnly;
+  final String metric;
+  final bool newestFirst;
+  final int limit;
+  final int offset;
+
+  YorksV1MaterialRequestSummaryQuery copyWith({int? limit, int? offset}) =>
+      YorksV1MaterialRequestSummaryQuery(
+        projectId: projectId,
+        search: search,
+        states: states,
+        scopeId: scopeId,
+        requester: requester,
+        updatedAfter: updatedAfter,
+        attentionOnly: attentionOnly,
+        metric: metric,
+        newestFirst: newestFirst,
+        limit: limit ?? this.limit,
+        offset: offset ?? this.offset,
+      );
+
+  Map<String, Object?> toRpcParameters() => {
+    'p_project_id': _trimToNull(projectId),
+    'p_search': _trimToNull(search),
+    'p_states': states.isEmpty
+        ? null
+        : states.map((state) => state.wireValue).toList(growable: false),
+    'p_scope_id': _trimToNull(scopeId),
+    'p_requester': _trimToNull(requester),
+    'p_updated_after': updatedAfter?.toUtc().toIso8601String(),
+    'p_attention_only': attentionOnly,
+    'p_metric': metric,
+    'p_sort': newestFirst ? 'updated_desc' : 'updated_asc',
+    'p_limit': limit,
+    'p_offset': offset,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is YorksV1MaterialRequestSummaryQuery &&
+      other.projectId == projectId &&
+      other.search == search &&
+      _sameStates(other.states, states) &&
+      other.scopeId == scopeId &&
+      other.requester == requester &&
+      other.updatedAfter == updatedAfter &&
+      other.attentionOnly == attentionOnly &&
+      other.metric == metric &&
+      other.newestFirst == newestFirst &&
+      other.limit == limit &&
+      other.offset == offset;
+
+  @override
+  int get hashCode => Object.hash(
+    projectId,
+    search,
+    Object.hashAll(states),
+    scopeId,
+    requester,
+    updatedAfter,
+    attentionOnly,
+    metric,
+    newestFirst,
+    limit,
+    offset,
+  );
+}
+
+bool _sameStates(
+  List<YorksV1MaterialRequestState> left,
+  List<YorksV1MaterialRequestState> right,
+) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
+}
+
 class YorksV1MaterialRequestDecision {
   const YorksV1MaterialRequestDecision({
     required this.id,
@@ -157,35 +533,83 @@ class YorksV1MaterialRequestDecision {
   );
 }
 
+enum YorksV1MaterialRequestSuggestionSource {
+  selectedScopeBoq('scope_boq'),
+  projectBoq('project_boq'),
+  inventory('inventory');
+
+  const YorksV1MaterialRequestSuggestionSource(this.wireValue);
+
+  final String wireValue;
+
+  static YorksV1MaterialRequestSuggestionSource fromWireValue(Object? value) =>
+      switch (value) {
+        'scope_boq' => YorksV1MaterialRequestSuggestionSource.selectedScopeBoq,
+        'project_boq' => YorksV1MaterialRequestSuggestionSource.projectBoq,
+        _ => YorksV1MaterialRequestSuggestionSource.inventory,
+      };
+}
+
+/// A non-commercial material discovery result. The historical class name is
+/// retained for source compatibility, but results may now come from the
+/// selected BOQ scope, another BOQ scope in the project, or inventory.
 class YorksV1MaterialRequestInventorySuggestion {
   const YorksV1MaterialRequestInventorySuggestion({
     required this.id,
     required this.description,
     required this.unit,
+    this.source = YorksV1MaterialRequestSuggestionSource.inventory,
     this.itemCode,
     this.brandOrigin,
     this.size,
     this.model,
+    this.equipmentTag,
+    this.sourceBoqGroupId,
+    this.sourceBoqRowId,
+    this.sourceScopeId,
+    this.sourceScopeName,
+    this.sourceGroupName,
   });
 
   final String id;
+  final YorksV1MaterialRequestSuggestionSource source;
   final String? itemCode;
   final String description;
   final String? brandOrigin;
   final String? size;
   final String? model;
+  final String? equipmentTag;
   final String unit;
+  final String? sourceBoqGroupId;
+  final String? sourceBoqRowId;
+  final String? sourceScopeId;
+  final String? sourceScopeName;
+  final String? sourceGroupName;
+
+  bool get retainsBoqProvenance =>
+      source == YorksV1MaterialRequestSuggestionSource.selectedScopeBoq &&
+      sourceBoqGroupId != null &&
+      sourceBoqRowId != null;
 
   factory YorksV1MaterialRequestInventorySuggestion.fromRpcJson(
     Map<String, dynamic> json,
   ) => YorksV1MaterialRequestInventorySuggestion(
     id: _requiredString(json, 'id'),
+    source: YorksV1MaterialRequestSuggestionSource.fromWireValue(
+      json['source_kind'],
+    ),
     itemCode: _trimToNull(json['item_code']),
     description: _requiredString(json, 'item_description'),
     brandOrigin: _trimToNull(json['brand_origin']),
     size: _trimToNull(json['size']),
     model: _trimToNull(json['model']),
+    equipmentTag: _trimToNull(json['equipment_tag']),
     unit: _requiredString(json, 'unit'),
+    sourceBoqGroupId: _trimToNull(json['source_boq_group_id']),
+    sourceBoqRowId: _trimToNull(json['source_boq_row_id']),
+    sourceScopeId: _trimToNull(json['source_scope_id']),
+    sourceScopeName: _trimToNull(json['source_scope_name']),
+    sourceGroupName: _trimToNull(json['source_group_name']),
   );
 }
 
@@ -317,6 +741,7 @@ class YorksV1MaterialRequestLine {
   final String? currencyCode;
 
   YorksV1MaterialRequestLine copyWith({
+    YorksV1MaterialRequestLineSource? source,
     String? description,
     Object? brandOrigin = _keep,
     Object? size = _keep,
@@ -326,10 +751,12 @@ class YorksV1MaterialRequestLine {
     String? quantity,
     String? unit,
     bool? quantityIsSuggested,
+    Object? sourceBoqGroupId = _keep,
+    Object? sourceBoqRowId = _keep,
   }) => YorksV1MaterialRequestLine(
     id: id,
     displayOrder: displayOrder,
-    source: source,
+    source: source ?? this.source,
     description: description == null
         ? this.description
         : normalizeYorksV1MaterialRequestItemDescription(description),
@@ -355,8 +782,12 @@ class YorksV1MaterialRequestLine {
         (quantity != null && quantity.trim() != this.quantity.trim()
             ? false
             : this.quantityIsSuggested),
-    sourceBoqGroupId: sourceBoqGroupId,
-    sourceBoqRowId: sourceBoqRowId,
+    sourceBoqGroupId: identical(sourceBoqGroupId, _keep)
+        ? this.sourceBoqGroupId
+        : _trimToNull(sourceBoqGroupId),
+    sourceBoqRowId: identical(sourceBoqRowId, _keep)
+        ? this.sourceBoqRowId
+        : _trimToNull(sourceBoqRowId),
     unitCost: unitCost,
     totalCost: totalCost,
     currencyCode: currencyCode,
@@ -531,6 +962,7 @@ class YorksV1MaterialRequest {
     required this.updatedAt,
     required List<YorksV1MaterialRequestLine> lines,
     required this.timing,
+    this.itemCount,
     this.canEditBeforeApproval = false,
     this.canDecideRequest = false,
     this.requestDecision,
@@ -568,6 +1000,8 @@ class YorksV1MaterialRequest {
   final YorksV1MaterialRequestDecision? requestDecision;
   final List<YorksV1MaterialRequestComment> comments;
   final List<YorksV1MaterialRequestLine> lines;
+  final int? itemCount;
+  int get displayItemCount => itemCount ?? lines.length;
   final String? requestNumber;
   final String? title;
   final DateTime? scheduledDate;
@@ -629,6 +1063,9 @@ class YorksV1MaterialRequest {
               Map<String, dynamic>.from(line),
             ),
       ],
+      itemCount: json['item_count'] == null
+          ? null
+          : _nonNegativeInt(json['item_count']),
       requestNumber: _trimToNull(json['request_number']),
       title: _trimToNull(json['title']),
       scheduledDate: _nullableDate(json['scheduled_date']),
@@ -646,6 +1083,39 @@ class YorksV1MaterialRequest {
   }
 }
 
+extension YorksV1MaterialRequestSummaryRegisterAdapter
+    on YorksV1MaterialRequestSummary {
+  /// Presentation-only adapter for the existing register widgets. It carries
+  /// no line/comment projection; opening the row always navigates by ID and
+  /// fetches the full authorized detail separately.
+  YorksV1MaterialRequest toRegisterProjection() => YorksV1MaterialRequest(
+    id: id,
+    projectId: projectId,
+    projectReference: projectReference,
+    projectName: projectName,
+    jobContractReference: jobContractReference,
+    scopeId: scopeId,
+    scopeName: scopeName,
+    state: state,
+    recordVersion: recordVersion,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    lines: const [],
+    itemCount: itemCount,
+    timing: timing,
+    requestNumber: requestNumber,
+    title: title,
+    scheduledDate: scheduledDate,
+    deliveryNote: deliveryNote,
+    requesterDisplayName: requesterDisplayName,
+    requesterProjectRole: requesterProjectRole,
+    requesterExactRole: requesterExactRole,
+    currentActionOwnerRole: currentActionOwnerRole,
+    currentActionCode: currentActionCode,
+    submittedAt: submittedAt,
+  );
+}
+
 /// Per-user/device recoverable input. It deliberately excludes commercial
 /// values and survives an interrupted submission until the server confirms it.
 class YorksV1MaterialRequestDraft {
@@ -655,6 +1125,8 @@ class YorksV1MaterialRequestDraft {
     required this.submissionIdempotencyKey,
     required this.updatedAt,
     this.serverRecordVersion = 0,
+    this.privateSyncVersion = 0,
+    this.privateSyncedAt,
     this.projectId,
     this.scopeId,
     this.title,
@@ -670,6 +1142,8 @@ class YorksV1MaterialRequestDraft {
   final String ownerAuthUserId;
   final String submissionIdempotencyKey;
   final int serverRecordVersion;
+  final int privateSyncVersion;
+  final DateTime? privateSyncedAt;
   final String? projectId;
   final String? scopeId;
   final String? title;
@@ -692,6 +1166,8 @@ class YorksV1MaterialRequestDraft {
 
   YorksV1MaterialRequestDraft copyWith({
     int? serverRecordVersion,
+    int? privateSyncVersion,
+    Object? privateSyncedAt = _keep,
     Object? projectId = _keep,
     Object? scopeId = _keep,
     Object? title = _keep,
@@ -708,6 +1184,10 @@ class YorksV1MaterialRequestDraft {
         ? this.submissionIdempotencyKey
         : submissionIdempotencyKey as String,
     serverRecordVersion: serverRecordVersion ?? this.serverRecordVersion,
+    privateSyncVersion: privateSyncVersion ?? this.privateSyncVersion,
+    privateSyncedAt: identical(privateSyncedAt, _keep)
+        ? this.privateSyncedAt
+        : privateSyncedAt as DateTime?,
     projectId: identical(projectId, _keep)
         ? this.projectId
         : projectId as String?,
@@ -758,6 +1238,8 @@ class YorksV1MaterialRequestDraft {
     'ownerAuthUserId': ownerAuthUserId,
     'submissionIdempotencyKey': submissionIdempotencyKey,
     'serverRecordVersion': serverRecordVersion,
+    'privateSyncVersion': privateSyncVersion,
+    'privateSyncedAt': privateSyncedAt?.toUtc().toIso8601String(),
     'projectId': projectId,
     'scopeId': scopeId,
     'title': _trimToNull(title),
@@ -774,6 +1256,8 @@ class YorksV1MaterialRequestDraft {
       ownerAuthUserId: _string(json['ownerAuthUserId']),
       submissionIdempotencyKey: _string(json['submissionIdempotencyKey']),
       serverRecordVersion: _nonNegativeInt(json['serverRecordVersion']),
+      privateSyncVersion: _nonNegativeInt(json['privateSyncVersion']),
+      privateSyncedAt: _nullableDate(json['privateSyncedAt']),
       projectId: _trimToNull(json['projectId']),
       scopeId: _trimToNull(json['scopeId']),
       title: _trimToNull(json['title']),
@@ -790,6 +1274,114 @@ class YorksV1MaterialRequestDraft {
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
+}
+
+class YorksV1PrivateMaterialRequestDraftRecord {
+  const YorksV1PrivateMaterialRequestDraftRecord({
+    required this.draftId,
+    required this.syncVersion,
+    required this.draft,
+    required this.clientUpdatedAt,
+    required this.serverUpdatedAt,
+  });
+
+  final String draftId;
+  final int syncVersion;
+  final YorksV1MaterialRequestDraft draft;
+  final DateTime clientUpdatedAt;
+  final DateTime serverUpdatedAt;
+
+  factory YorksV1PrivateMaterialRequestDraftRecord.fromRpcJson(
+    Map<String, dynamic> json, {
+    required String ownerAuthUserId,
+    required String submissionIdempotencyKey,
+  }) {
+    final data = json['draft_data'];
+    if (data is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    final draftData = Map<String, dynamic>.from(data);
+    final syncVersion = _positiveInt(json['sync_version']);
+    final serverUpdatedAt = _requiredDate(json, 'server_updated_at');
+    return YorksV1PrivateMaterialRequestDraftRecord(
+      draftId: _requiredString(json, 'draft_id'),
+      syncVersion: syncVersion,
+      clientUpdatedAt: _requiredDate(json, 'client_updated_at'),
+      serverUpdatedAt: serverUpdatedAt,
+      draft: YorksV1MaterialRequestDraft(
+        id: _requiredString(json, 'draft_id'),
+        ownerAuthUserId: ownerAuthUserId,
+        submissionIdempotencyKey: submissionIdempotencyKey,
+        privateSyncVersion: syncVersion,
+        privateSyncedAt: serverUpdatedAt,
+        projectId: _trimToNull(draftData['project_id']),
+        scopeId: _trimToNull(draftData['scope_id']),
+        title: _trimToNull(draftData['title']),
+        timing:
+            YorksV1MaterialRequestTiming.fromWireValue(draftData['timing']) ??
+            YorksV1MaterialRequestTiming.normal,
+        scheduledDate: _calendarDate(draftData['scheduled_date']),
+        deliveryNote: _trimToNull(draftData['delivery_note']),
+        lines: _maps(
+          draftData['lines'],
+        ).map(YorksV1MaterialRequestLine.fromDraftJson).toList(growable: false),
+        updatedAt: _requiredDate(json, 'client_updated_at'),
+      ),
+    );
+  }
+}
+
+class YorksV1SyncPrivateMaterialRequestDraftInput {
+  const YorksV1SyncPrivateMaterialRequestDraftInput({
+    required this.draft,
+    required this.idempotencyKey,
+  });
+
+  final YorksV1MaterialRequestDraft draft;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'draft_id': draft.id.trim(),
+    'expected_sync_version': draft.privateSyncVersion,
+    'client_updated_at': draft.updatedAt.toUtc().toIso8601String(),
+    'draft_data': {
+      'project_id': _trimToNull(draft.projectId),
+      'scope_id': _trimToNull(draft.scopeId),
+      'title': _trimToNull(draft.title),
+      'timing': draft.timing.wireValue,
+      'scheduled_date': _calendarDateText(draft.scheduledDate),
+      'delivery_note': _trimToNull(draft.deliveryNote),
+      'lines': [for (final line in draft.lines) line.toRpcJson()],
+    },
+  };
+}
+
+class YorksV1AssignMaterialRequestWorkInput {
+  const YorksV1AssignMaterialRequestWorkInput({
+    required this.requestId,
+    required this.expectedRequestVersion,
+    required this.expectedAssignmentVersion,
+    required this.idempotencyKey,
+    this.assigneeAuthUserId,
+    this.reason,
+  });
+
+  final String requestId;
+  final int expectedRequestVersion;
+  final int expectedAssignmentVersion;
+  final String? assigneeAuthUserId;
+  final String? reason;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'request_id': requestId.trim(),
+    'expected_request_version': expectedRequestVersion,
+    'expected_assignment_version': expectedAssignmentVersion,
+    'assignee_auth_user_id': _trimToNull(assigneeAuthUserId),
+    'reason': _trimToNull(reason),
+  };
 }
 
 class YorksV1SaveMaterialRequestDraftInput {
@@ -909,6 +1501,57 @@ class YorksV1CancelMaterialRequestInput {
     'request_id': requestId.trim(),
     'expected_version': expectedVersion,
     'reason': reason.trim(),
+  };
+}
+
+class YorksV1MaterialRequestPhase3Policy {
+  const YorksV1MaterialRequestPhase3Policy({
+    required this.requestId,
+    required this.allowAuthorizedCreatorSelfApproval,
+    required this.requireExternalSourceReadiness,
+    required this.canCreateReplacement,
+    required this.replacementExists,
+    this.replacementRequestId,
+    this.replacementOfRequestId,
+  });
+
+  final String requestId;
+  final bool allowAuthorizedCreatorSelfApproval;
+  final bool requireExternalSourceReadiness;
+  final bool canCreateReplacement;
+  final bool replacementExists;
+  final String? replacementRequestId;
+  final String? replacementOfRequestId;
+
+  factory YorksV1MaterialRequestPhase3Policy.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestPhase3Policy(
+    requestId: _requiredString(json, 'request_id'),
+    allowAuthorizedCreatorSelfApproval:
+        json['allow_authorized_creator_self_approval'] == true,
+    requireExternalSourceReadiness:
+        json['require_external_source_readiness'] == true,
+    canCreateReplacement: json['can_create_replacement'] == true,
+    replacementExists: json['replacement_exists'] == true,
+    replacementRequestId: _trimToNull(json['replacement_request_id']),
+    replacementOfRequestId: _trimToNull(json['replacement_of_request_id']),
+  );
+}
+
+class YorksV1CreateReplacementMaterialRequestInput {
+  const YorksV1CreateReplacementMaterialRequestInput({
+    required this.sourceRequestId,
+    required this.expectedSourceVersion,
+    required this.idempotencyKey,
+  });
+
+  final String sourceRequestId;
+  final int expectedSourceVersion;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'source_request_id': sourceRequestId.trim(),
+    'expected_source_version': expectedSourceVersion,
   };
 }
 

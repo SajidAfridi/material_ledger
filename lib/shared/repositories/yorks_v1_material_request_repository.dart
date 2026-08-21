@@ -68,6 +68,7 @@ abstract interface class YorksV1MaterialRequestRepository {
 
   Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
     required String projectId,
+    required String scopeId,
     required String query,
   });
 
@@ -88,11 +89,77 @@ abstract interface class YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> close(YorksV1CloseMaterialRequestInput input);
 }
 
+/// Additive Phase 2 collaboration boundary. Keeping it separate preserves
+/// source compatibility for existing test and rollout repositories while the
+/// production Supabase repository exposes the new server-paginated features.
+abstract interface class YorksV1MaterialRequestPhase2Repository {
+  Future<YorksV1MaterialRequestSummaryPage> listRequestSummaries(
+    YorksV1MaterialRequestSummaryQuery query,
+  );
+
+  Future<YorksV1MaterialRequestCommentPage> listComments({
+    required String requestId,
+    DateTime? beforeCreatedAt,
+    String? beforeId,
+    int limit = 20,
+  });
+
+  Future<YorksV1MaterialRequestWorkAssignment> getWorkAssignment(
+    String requestId,
+  );
+
+  Future<List<YorksV1MaterialRequestMention>> listWorkCandidates(
+    String requestId,
+  );
+
+  Future<YorksV1MaterialRequestWorkAssignment> assignWork(
+    YorksV1AssignMaterialRequestWorkInput input,
+  );
+
+  Future<YorksV1MaterialRequestChangeSummary?> getChangeSummary(
+    String requestId,
+  );
+
+  Future<YorksV1PrivateMaterialRequestDraftRecord> syncPrivateDraft(
+    YorksV1SyncPrivateMaterialRequestDraftInput input,
+  );
+
+  Future<YorksV1PrivateMaterialRequestDraftRecord?> getPrivateDraft({
+    required String draftId,
+    required String ownerAuthUserId,
+    required String submissionIdempotencyKey,
+  });
+
+  Future<List<YorksV1PrivateMaterialRequestDraftRecord>> listPrivateDrafts({
+    required String ownerAuthUserId,
+    required String Function() submissionIdempotencyKeyFactory,
+    int limit = 50,
+  });
+
+  Future<void> deletePrivateDraft({
+    required String draftId,
+    required int expectedSyncVersion,
+    required String idempotencyKey,
+  });
+}
+
+/// Additive Phase 3 policy and all-unavailable replacement boundary.
+abstract interface class YorksV1MaterialRequestPhase3Repository {
+  Future<YorksV1MaterialRequestPhase3Policy> getPhase3Policy(String requestId);
+
+  Future<YorksV1MaterialRequest> createReplacement(
+    YorksV1CreateReplacementMaterialRequestInput input,
+  );
+}
+
 /// Server-backed normalized MR repository. The only local persistence lives in
 /// a creator-owned recoverable draft controller; submitted state never falls
 /// back to the legacy collection/outbox authority.
 class YorksV1SupabaseMaterialRequestRepository
-    implements YorksV1MaterialRequestRepository {
+    implements
+        YorksV1MaterialRequestRepository,
+        YorksV1MaterialRequestPhase2Repository,
+        YorksV1MaterialRequestPhase3Repository {
   const YorksV1SupabaseMaterialRequestRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -148,10 +215,53 @@ class YorksV1SupabaseMaterialRequestRepository
   }
 
   @override
+  Future<YorksV1MaterialRequestSummaryPage> listRequestSummaries(
+    YorksV1MaterialRequestSummaryQuery query,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_request_summaries',
+      parameters: query.toRpcParameters(),
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestSummaryPage.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async {
     final response = await _invoke(
       functionName: 'v1_material_request_projection',
       parameters: {'p_request_id': requestId},
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequestPhase3Policy> getPhase3Policy(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_material_request_phase3_policy_projection',
+      parameters: {'p_request_id': requestId},
+    );
+    return YorksV1MaterialRequestPhase3Policy.fromRpcJson(_map(response));
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> createReplacement(
+    YorksV1CreateReplacementMaterialRequestInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_create_replacement_material_request',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
     );
     return _single(response);
   }
@@ -243,15 +353,17 @@ class YorksV1SupabaseMaterialRequestRepository
   @override
   Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
     required String projectId,
+    required String scopeId,
     required String query,
   }) async {
     if (query.trim().length < 2) return const [];
     final response = await _invoke(
-      functionName: 'v1_search_material_request_inventory_items',
+      functionName: 'v1_search_material_request_candidates',
       parameters: {
         'p_project_id': projectId,
+        'p_scope_id': scopeId,
         'p_query': query.trim(),
-        'p_limit': 12,
+        'p_limit': 18,
       },
     );
     return _list(response)
@@ -278,6 +390,157 @@ class YorksV1SupabaseMaterialRequestRepository
     return _list(
       response['comments'],
     ).map(YorksV1MaterialRequestComment.fromRpcJson).toList(growable: false);
+  }
+
+  @override
+  Future<YorksV1MaterialRequestCommentPage> listComments({
+    required String requestId,
+    DateTime? beforeCreatedAt,
+    String? beforeId,
+    int limit = 20,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_request_comments',
+      parameters: {
+        'p_request_id': requestId,
+        'p_before_created_at': beforeCreatedAt?.toUtc().toIso8601String(),
+        'p_before_id': beforeId,
+        'p_limit': limit,
+      },
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestCommentPage.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  @override
+  Future<YorksV1MaterialRequestWorkAssignment> getWorkAssignment(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_get_material_request_work_assignment',
+      parameters: {'p_request_id': requestId},
+    );
+    return YorksV1MaterialRequestWorkAssignment.fromRpcJson(_map(response));
+  }
+
+  @override
+  Future<List<YorksV1MaterialRequestMention>> listWorkCandidates(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_request_work_candidates',
+      parameters: {'p_request_id': requestId},
+    );
+    return _list(
+      response,
+    ).map(YorksV1MaterialRequestMention.fromRpcJson).toList(growable: false);
+  }
+
+  @override
+  Future<YorksV1MaterialRequestWorkAssignment> assignWork(
+    YorksV1AssignMaterialRequestWorkInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_assign_material_request_work',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return YorksV1MaterialRequestWorkAssignment.fromRpcJson(_map(response));
+  }
+
+  @override
+  Future<YorksV1MaterialRequestChangeSummary?> getChangeSummary(
+    String requestId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_material_request_change_summary',
+      parameters: {'p_request_id': requestId},
+    );
+    if (response == null) return null;
+    return YorksV1MaterialRequestChangeSummary.fromRpcJson(_map(response));
+  }
+
+  @override
+  Future<YorksV1PrivateMaterialRequestDraftRecord> syncPrivateDraft(
+    YorksV1SyncPrivateMaterialRequestDraftInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_sync_material_request_private_draft',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return YorksV1PrivateMaterialRequestDraftRecord.fromRpcJson(
+      _map(response),
+      ownerAuthUserId: input.draft.ownerAuthUserId,
+      submissionIdempotencyKey: input.draft.submissionIdempotencyKey,
+    );
+  }
+
+  @override
+  Future<YorksV1PrivateMaterialRequestDraftRecord?> getPrivateDraft({
+    required String draftId,
+    required String ownerAuthUserId,
+    required String submissionIdempotencyKey,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_get_my_material_request_private_draft',
+      parameters: {'p_draft_id': draftId},
+    );
+    if (response == null) return null;
+    return YorksV1PrivateMaterialRequestDraftRecord.fromRpcJson(
+      _map(response),
+      ownerAuthUserId: ownerAuthUserId,
+      submissionIdempotencyKey: submissionIdempotencyKey,
+    );
+  }
+
+  @override
+  Future<List<YorksV1PrivateMaterialRequestDraftRecord>> listPrivateDrafts({
+    required String ownerAuthUserId,
+    required String Function() submissionIdempotencyKeyFactory,
+    int limit = 50,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_list_my_material_request_private_drafts',
+      parameters: {'p_limit': limit},
+    );
+    return _list(response)
+        .map(
+          (json) => YorksV1PrivateMaterialRequestDraftRecord.fromRpcJson(
+            json,
+            ownerAuthUserId: ownerAuthUserId,
+            submissionIdempotencyKey: submissionIdempotencyKeyFactory(),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> deletePrivateDraft({
+    required String draftId,
+    required int expectedSyncVersion,
+    required String idempotencyKey,
+  }) async {
+    await _invoke(
+      functionName: 'v1_delete_my_material_request_private_draft',
+      parameters: {
+        'p_payload': {
+          'draft_id': draftId,
+          'expected_sync_version': expectedSyncVersion,
+        },
+        'p_idempotency_key': idempotencyKey,
+      },
+    );
   }
 
   @override
@@ -379,6 +642,15 @@ class YorksV1SupabaseMaterialRequestRepository
       for (final item in response)
         if (item is Map) Map<String, dynamic>.from(item),
     ];
+  }
+
+  static Map<String, dynamic> _map(Object? response) {
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return Map<String, dynamic>.from(response);
   }
 
   static YorksV1MaterialRequest _single(Object? response) {

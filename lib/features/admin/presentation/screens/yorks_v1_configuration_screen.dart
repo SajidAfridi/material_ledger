@@ -849,7 +849,20 @@ class _YorksV1ConfigurationScreenState
                 title: _t('site_photo_receipt'),
                 body: _t('site_photo_receipt_body'),
                 value: true,
-                last: true,
+              ),
+              _SwitchSetting(
+                title: _t('authorized_creator_self_approval'),
+                body: _t('authorized_creator_self_approval_body'),
+                value: configuration.boolValue(
+                  'requests.allow_authorized_creator_self_approval',
+                  true,
+                ),
+                busy: _isBusy,
+                onChanged: (value) => _stageSetting(
+                  configuration,
+                  'requests.allow_authorized_creator_self_approval',
+                  value,
+                ),
               ),
             ],
           ),
@@ -956,6 +969,20 @@ class _YorksV1ConfigurationScreenState
                     'procurement.default_source',
                     'warehouse',
                   ),
+                ),
+              ),
+              const Gap(10),
+              _SwitchSetting(
+                title: _t('external_source_readiness_required'),
+                body: _t('external_source_readiness_required_body'),
+                value: configuration.boolValue(
+                  'procurement.require_external_source_readiness',
+                ),
+                busy: _isBusy,
+                onChanged: (value) => _stageSetting(
+                  configuration,
+                  'procurement.require_external_source_readiness',
+                  value,
                 ),
               ),
               const Gap(10),

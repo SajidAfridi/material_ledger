@@ -3459,7 +3459,7 @@ class _ReviewStage extends StatelessWidget {
     final hasUnavailableMember =
         loadedDirectory != null &&
         _hasUnavailableInitialMember(draft, loadedDirectory);
-    final notProvided = YorksV1ProjectStrings.notProvided.primary;
+    final notProvided = YorksV1ProjectStrings.notProvided.active(language);
     String namesForRole(YorksV1ProjectMembershipRole role) {
       final names = [
         for (final initialMember in draft.initialMembers)
@@ -3594,49 +3594,57 @@ class _ReviewStage extends StatelessWidget {
             final wide = constraints.maxWidth >= 680;
             final cards = [
               _ReviewSummaryCard(
-                title: YorksV1ProjectStrings.projects.primary,
+                language: language,
+                title: YorksV1ProjectStrings.projects.active(language),
                 rows: [
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.yorksReference.primary,
+                    label: YorksV1ProjectStrings.yorksReference.active(
+                      language,
+                    ),
                     value: draft.reference,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.projectName.primary,
+                    label: YorksV1ProjectStrings.projectName.active(language),
                     value: draft.name,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.client.primary,
+                    label: YorksV1ProjectStrings.client.active(language),
                     value: _emptyToNull(draft.clientName) ?? notProvided,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.jobOrContractReference.primary,
+                    label: YorksV1ProjectStrings.jobOrContractReference.active(
+                      language,
+                    ),
                     value:
                         _emptyToNull(draft.jobOrContractReference) ??
                         notProvided,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.siteLocation.primary,
+                    label: YorksV1ProjectStrings.siteLocation.active(language),
                     value: _emptyToNull(draft.siteLocation) ?? notProvided,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.startDate.primary,
+                    label: YorksV1ProjectStrings.startDate.active(language),
                     value: start,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.endDate.primary,
+                    label: YorksV1ProjectStrings.endDate.active(language),
                     value: end,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.notes.primary,
+                    label: YorksV1ProjectStrings.notes.active(language),
                     value: _emptyToNull(draft.notes) ?? notProvided,
                   ),
                 ],
               ),
               _ReviewSummaryCard(
-                title: YorksV1ProjectStrings.accessAndBuildings.primary,
+                language: language,
+                title: YorksV1ProjectStrings.accessAndBuildings.active(
+                  language,
+                ),
                 rows: [
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.consultant.primary,
+                    label: YorksV1ProjectStrings.consultant.active(language),
                     value:
                         _emptyToNull(
                           _partyFor(
@@ -3647,7 +3655,9 @@ class _ReviewStage extends StatelessWidget {
                         notProvided,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.mainContractor.primary,
+                    label: YorksV1ProjectStrings.mainContractor.active(
+                      language,
+                    ),
                     value:
                         _emptyToNull(
                           _partyFor(
@@ -3658,33 +3668,39 @@ class _ReviewStage extends StatelessWidget {
                         notProvided,
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.subcontractors.primary,
+                    label: YorksV1ProjectStrings.subcontractors.active(
+                      language,
+                    ),
                     value: namesForParty(YorksV1ProjectPartyKind.subcontractor),
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.otherContractors.primary,
+                    label: YorksV1ProjectStrings.otherContractors.active(
+                      language,
+                    ),
                     value: namesForParty(
                       YorksV1ProjectPartyKind.otherContractor,
                     ),
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.projectEngineers.primary,
+                    label: YorksV1ProjectStrings.projectEngineers.active(
+                      language,
+                    ),
                     value: namesForRole(
                       YorksV1ProjectMembershipRole.projectEngineer,
                     ),
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.siteEngineers.primary,
+                    label: YorksV1ProjectStrings.siteEngineers.active(language),
                     value: namesForRole(
                       YorksV1ProjectMembershipRole.siteEngineer,
                     ),
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.buildings.primary,
+                    label: YorksV1ProjectStrings.buildings.active(language),
                     value: buildingSummary(),
                   ),
                   _ReviewSummaryRow(
-                    label: YorksV1ProjectStrings.attachments.primary,
+                    label: YorksV1ProjectStrings.attachments.active(language),
                     value: attachmentSummary(),
                   ),
                 ],
@@ -3748,170 +3764,173 @@ class _MobileReviewStage extends StatelessWidget {
               member.projectRole == YorksV1ProjectMembershipRole.siteEngineer,
         )
         .length;
-    final notProvided = YorksV1ProjectStrings.notProvided.primary;
+    final notProvided = YorksV1ProjectStrings.notProvided.active(language);
     final metrics = <_MobileReviewMetric>[
       _MobileReviewMetric(
-        label: YorksV1ProjectStrings.client.primary,
+        label: YorksV1ProjectStrings.client.active(language),
         value: _emptyToNull(draft.clientName) ?? notProvided,
       ),
       _MobileReviewMetric(
-        label: YorksV1ProjectStrings.siteLocation.primary,
+        label: YorksV1ProjectStrings.siteLocation.active(language),
         value: _emptyToNull(draft.siteLocation) ?? notProvided,
       ),
       _MobileReviewMetric(
-        label: YorksV1ProjectStrings.projectEngineers.primary,
+        label: YorksV1ProjectStrings.projectEngineers.active(language),
         value: '$projectEngineers',
       ),
       _MobileReviewMetric(
-        label: YorksV1ProjectStrings.siteEngineers.primary,
+        label: YorksV1ProjectStrings.siteEngineers.active(language),
         value: '$siteEngineers',
       ),
       _MobileReviewMetric(
-        label: YorksV1ProjectStrings.buildings.primary,
+        label: YorksV1ProjectStrings.buildings.active(language),
         value: '${draft.buildings.length}',
       ),
       _MobileReviewMetric(
-        label: YorksV1ProjectStrings.attachments.primary,
+        label: YorksV1ProjectStrings.attachments.active(language),
         value: '${draft.attachments.length}',
       ),
     ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest,
-            border: Border.all(color: AppColors.line),
-            borderRadius: BorderRadius.circular(15),
-            boxShadow: const [
-              BoxShadow(
-                color: AppColors.shadow,
-                blurRadius: 20,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: draft.reference.trim().isEmpty
-                                ? notProvided
-                                : draft.reference.trim(),
-                            style: AppTypography.titleMedium.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.ink,
-                            ),
-                          ),
-                          TextSpan(
-                            text: draft.name.trim().isEmpty
-                                ? ''
-                                : '  ${draft.name.trim()}',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.muted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (directoryLoading)
-                    const SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    _MobileReviewStatus(ready: ready),
-                ],
-              ),
-              const SizedBox(height: 12),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: metrics.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  mainAxisExtent: _mobileReviewMetricExtent(context),
+    return Directionality(
+      textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              border: Border.all(color: AppColors.line),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: const [
+                BoxShadow(
+                  color: AppColors.shadow,
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
                 ),
-                itemBuilder: (context, index) {
-                  final metric = metrics[index];
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            metric.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.labelSmall.copyWith(
-                              color: AppColors.muted,
-                              fontSize: 9,
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: draft.reference.trim().isEmpty
+                                  ? notProvided
+                                  : draft.reference.trim(),
+                              style: AppTypography.titleMedium.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink,
+                              ),
                             ),
-                          ),
-                          Text(
-                            metric.value,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.labelLarge.copyWith(
-                              fontWeight: FontWeight.w800,
+                            TextSpan(
+                              text: draft.name.trim().isEmpty
+                                  ? ''
+                                  : '  ${draft.name.trim()}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.muted,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  );
-                },
-              ),
-            ],
+                    const SizedBox(width: 8),
+                    if (directoryLoading)
+                      const SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      _MobileReviewStatus(ready: ready),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: metrics.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    mainAxisExtent: _mobileReviewMetricExtent(context),
+                  ),
+                  itemBuilder: (context, index) {
+                    final metric = metrics[index];
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              metric.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.muted,
+                                fontSize: 9,
+                              ),
+                            ),
+                            Text(
+                              metric.value,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.labelLarge.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        if (ready)
-          _MobileReviewCallout(
-            title: YorksV1ProjectStrings.whatHappensNext,
-            description: YorksV1ProjectStrings.creationScopeOutcome,
-            language: language,
-            success: true,
-          )
-        else if (hasUnavailableMember)
-          _MobileReviewCallout(
-            title: YorksV1ProjectStrings.stageNeedsAttention,
-            description: YorksV1ProjectStrings.teamMemberNoLongerAvailable,
-            language: language,
-          )
-        else if (directoryFailed)
-          _MobileReviewCallout(
-            title: YorksV1ProjectStrings.stageNeedsAttention,
-            description: YorksV1ProjectStrings.teamDirectoryUnavailable,
-            language: language,
-            actionLabel: YorksV1ProjectStrings.retry,
-            onAction: onRetryDirectory,
-          )
-        else if (showValidation)
-          _ValidationBanner(language: language),
-      ],
+          const SizedBox(height: 10),
+          if (ready)
+            _MobileReviewCallout(
+              title: YorksV1ProjectStrings.whatHappensNext,
+              description: YorksV1ProjectStrings.creationScopeOutcome,
+              language: language,
+              success: true,
+            )
+          else if (hasUnavailableMember)
+            _MobileReviewCallout(
+              title: YorksV1ProjectStrings.stageNeedsAttention,
+              description: YorksV1ProjectStrings.teamMemberNoLongerAvailable,
+              language: language,
+            )
+          else if (directoryFailed)
+            _MobileReviewCallout(
+              title: YorksV1ProjectStrings.stageNeedsAttention,
+              description: YorksV1ProjectStrings.teamDirectoryUnavailable,
+              language: language,
+              actionLabel: YorksV1ProjectStrings.retry,
+              onAction: onRetryDirectory,
+            )
+          else if (showValidation)
+            _ValidationBanner(language: language),
+        ],
+      ),
     );
   }
 }
@@ -4061,52 +4080,60 @@ class _ReviewSummaryRow {
 }
 
 class _ReviewSummaryCard extends StatelessWidget {
-  const _ReviewSummaryCard({required this.title, required this.rows});
+  const _ReviewSummaryCard({
+    required this.language,
+    required this.title,
+    required this.rows,
+  });
 
+  final AppLanguage language;
   final String title;
   final List<_ReviewSummaryRow> rows;
 
   @override
   Widget build(BuildContext context) {
     final labelWidth = MediaQuery.sizeOf(context).width >= 680 ? 152.0 : 116.0;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: AppTypography.titleMedium),
-          const SizedBox(height: AppSpacing.md),
-          for (var index = 0; index < rows.length; index++) ...[
-            if (index > 0) const Divider(height: AppSpacing.lg),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: labelWidth,
-                  child: Text(
-                    rows[index].label,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.muted,
+    return Directionality(
+      textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, style: AppTypography.titleMedium),
+            const SizedBox(height: AppSpacing.md),
+            for (var index = 0; index < rows.length; index++) ...[
+              if (index > 0) const Divider(height: AppSpacing.lg),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: labelWidth,
+                    child: Text(
+                      rows[index].label,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Text(
-                    rows[index].value,
-                    textAlign: TextAlign.start,
-                    style: AppTypography.labelLarge,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      rows[index].value,
+                      textAlign: TextAlign.start,
+                      style: AppTypography.labelLarge,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

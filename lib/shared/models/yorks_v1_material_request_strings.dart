@@ -6,6 +6,96 @@ import 'yorks_v1_material_request.dart';
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const tryAgain = TranslatableString(
+    en: 'Try again',
+    ar: 'حاول مرة أخرى',
+    ur: 'دوبارہ کوشش کریں',
+    hi: 'फिर से प्रयास करें',
+  );
+  static const loadEarlierComments = TranslatableString(
+    en: 'Load earlier comments',
+    ar: 'تحميل التعليقات السابقة',
+    ur: 'پچھلے تبصرے لوڈ کریں',
+    hi: 'पहले की टिप्पणियां लोड करें',
+  );
+  static const savedToYourAccount = TranslatableString(
+    en: 'Saved to your account',
+    ar: 'تم الحفظ في حسابك',
+    ur: 'آپ کے اکاؤنٹ میں محفوظ ہو گیا',
+    hi: 'आपके खाते में सहेजा गया',
+  );
+  static const assignedTo = TranslatableString(
+    en: 'Assigned to',
+    ar: 'مسند إلى',
+    ur: 'ذمہ دار',
+    hi: 'इन्हें सौंपा गया',
+  );
+  static const unassigned = TranslatableString(
+    en: 'Unassigned',
+    ar: 'غير مسند',
+    ur: 'غیر تفویض شدہ',
+    hi: 'असाइन नहीं किया गया',
+  );
+  static const claimRequest = TranslatableString(
+    en: 'Claim request',
+    ar: 'تولي الطلب',
+    ur: 'درخواست سنبھالیں',
+    hi: 'अनुरोध लें',
+  );
+  static const reassign = TranslatableString(
+    en: 'Reassign',
+    ar: 'إعادة الإسناد',
+    ur: 'دوبارہ تفویض کریں',
+    hi: 'फिर से असाइन करें',
+  );
+  static const changesSinceReturn = TranslatableString(
+    en: 'Changes made since this request was returned',
+    ar: 'التغييرات منذ إعادة هذا الطلب',
+    ur: 'درخواست واپس ہونے کے بعد کی تبدیلیاں',
+    hi: 'अनुरोध लौटाए जाने के बाद किए गए बदलाव',
+  );
+  static const selectAssignee = TranslatableString(
+    en: 'Select responsible person',
+    ar: 'اختر الشخص المسؤول',
+    ur: 'ذمہ دار شخص منتخب کریں',
+    hi: 'जिम्मेदार व्यक्ति चुनें',
+  );
+  static const reassignmentReason = TranslatableString(
+    en: 'Reason for reassignment',
+    ar: 'سبب إعادة الإسناد',
+    ur: 'دوبارہ تفویض کی وجہ',
+    hi: 'फिर से असाइन करने का कारण',
+  );
+  static TranslatableString itemsAdded(int count) => TranslatableString(
+    en: '$count ${count == 1 ? 'item' : 'items'} added',
+    ar: 'تمت إضافة $count من البنود',
+    ur: '$count آئٹمز شامل کیے گئے',
+    hi: '$count आइटम जोड़े गए',
+  );
+  static TranslatableString itemsRemoved(int count) => TranslatableString(
+    en: '$count ${count == 1 ? 'item' : 'items'} removed',
+    ar: 'تمت إزالة $count من البنود',
+    ur: '$count آئٹمز ہٹائے گئے',
+    hi: '$count आइटम हटाए गए',
+  );
+  static TranslatableString quantitiesChanged(int count) => TranslatableString(
+    en: '$count ${count == 1 ? 'quantity' : 'quantities'} changed',
+    ar: 'تم تغيير $count من الكميات',
+    ur: '$count مقداریں تبدیل ہوئیں',
+    hi: '$count मात्राएं बदली गईं',
+  );
+  static const deliveryNoteUpdated = TranslatableString(
+    en: 'Delivery note updated',
+    ar: 'تم تحديث ملاحظة التسليم',
+    ur: 'ڈیلیوری نوٹ اپ ڈیٹ ہوا',
+    hi: 'डिलीवरी नोट अपडेट किया गया',
+  );
+  static const requestDetailsUpdated = TranslatableString(
+    en: 'Request details updated',
+    ar: 'تم تحديث تفاصيل الطلب',
+    ur: 'درخواست کی تفصیلات اپ ڈیٹ ہوئیں',
+    hi: 'अनुरोध विवरण अपडेट किए गए',
+  );
   static const connectToContinue = TranslatableString(
     en: 'Connect to the server and try again.',
     ar: 'اتصل بالخادم وحاول مرة أخرى.',
@@ -661,10 +751,28 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'टिप्पणी अटैचमेंट उपलब्ध नहीं हैं।',
   );
   static const searchInventory = TranslatableString(
-    en: 'Search inventory descriptions',
-    ar: 'البحث في أوصاف المخزون',
-    ur: 'انوینٹری کی تفصیل تلاش کریں',
-    hi: 'इन्वेंटरी विवरण खोजें',
+    en: 'Search BOQ and inventory',
+    ar: 'البحث في جدول الكميات والمخزون',
+    ur: 'BOQ اور انوینٹری تلاش کریں',
+    hi: 'बीओक्यू और इन्वेंटरी खोजें',
+  );
+  static const selectedScopeBoq = TranslatableString(
+    en: 'Selected scope BOQ',
+    ar: 'جدول كميات النطاق المحدد',
+    ur: 'منتخب دائرہ BOQ',
+    hi: 'चयनित स्कोप बीओक्यू',
+  );
+  static const projectBoq = TranslatableString(
+    en: 'Project BOQ',
+    ar: 'جدول كميات المشروع',
+    ur: 'پراجیکٹ BOQ',
+    hi: 'प्रोजेक्ट बीओक्यू',
+  );
+  static const inventoryCatalogue = TranslatableString(
+    en: 'Inventory catalogue',
+    ar: 'دليل المخزون',
+    ur: 'انوینٹری کیٹلاگ',
+    hi: 'इन्वेंटरी कैटलॉग',
   );
   static const approved = TranslatableString(
     en: 'Approved',
@@ -733,10 +841,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'सामग्री आइटम',
   );
   static const materialItemsDescription = TranslatableString(
-    en: 'Type an item description to search inventory, or enter a custom item directly.',
-    ar: 'اكتب وصف الصنف للبحث في المخزون، أو أدخل صنفًا مخصصًا مباشرة.',
-    ur: 'انوینٹری میں تلاش کے لیے آئٹم کی تفصیل لکھیں، یا براہ راست کسٹم آئٹم درج کریں۔',
-    hi: 'इन्वेंटरी खोजने के लिए आइटम विवरण लिखें, या सीधे कस्टम आइटम दर्ज करें।',
+    en: 'Type an item description to search this scope BOQ, the project BOQ, then inventory—or enter a custom item.',
+    ar: 'اكتب وصف الصنف للبحث في جدول كميات هذا النطاق ثم المشروع ثم المخزون، أو أدخل صنفًا مخصصًا.',
+    ur: 'اس دائرے کے BOQ، پھر پراجیکٹ BOQ اور پھر انوینٹری میں تلاش کے لیے تفصیل لکھیں، یا کسٹم آئٹم درج کریں۔',
+    hi: 'इस स्कोप के बीओक्यू, फिर प्रोजेक्ट बीओक्यू और फिर इन्वेंटरी में खोजने के लिए विवरण लिखें—या कस्टम आइटम दर्ज करें।',
   );
   static const rowTools = TranslatableString(
     en: 'Row tools',
@@ -1387,6 +1495,30 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'سبب الإلغاء',
     ur: 'منسوخی کی وجہ',
     hi: 'रद्द करने का कारण',
+  );
+  static const createReplacementRequest = TranslatableString(
+    en: 'Create replacement request',
+    ar: 'إنشاء طلب بديل',
+    ur: 'متبادل درخواست بنائیں',
+    hi: 'प्रतिस्थापन अनुरोध बनाएं',
+  );
+  static const replacementRequestHelp = TranslatableString(
+    en: 'Copy every unavailable item into a new private draft. The cancelled request and its history stay unchanged.',
+    ar: 'انسخ كل عنصر غير متاح إلى مسودة خاصة جديدة. يبقى الطلب الملغى وسجله دون تغيير.',
+    ur: 'ہر غیر دستیاب آئٹم کو نئی نجی مسودہ درخواست میں نقل کریں۔ منسوخ درخواست اور اس کی تاریخ تبدیل نہیں ہوگی۔',
+    hi: 'हर अनुपलब्ध आइटम को नए निजी ड्राफ़्ट में कॉपी करें। रद्द अनुरोध और उसका इतिहास नहीं बदलेगा।',
+  );
+  static const replacementDraftCreated = TranslatableString(
+    en: 'Replacement draft created',
+    ar: 'تم إنشاء المسودة البديلة',
+    ur: 'متبادل مسودہ بنا دیا گیا',
+    hi: 'प्रतिस्थापन ड्राफ़्ट बनाया गया',
+  );
+  static const openReplacementRequest = TranslatableString(
+    en: 'Open replacement request',
+    ar: 'فتح الطلب البديل',
+    ur: 'متبادل درخواست کھولیں',
+    hi: 'प्रतिस्थापन अनुरोध खोलें',
   );
   static const importFailed = TranslatableString(
     en: 'The workbook needs Item Description, Qty and Unit columns.',

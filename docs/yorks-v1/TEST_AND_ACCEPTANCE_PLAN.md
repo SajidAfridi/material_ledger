@@ -53,6 +53,13 @@ slices extend the same stable sequence without renumbering those originals.
 | AT-31 | Exact Admin stages typed Configuration changes and normalized category/unit actions, validates, reviews a required reason and publishes one immutable audited version; all other exact roles and direct table writes fail, while 1366px, tablet and 360px layouts remain usable without overflow. | model/repository/widget/route/pgTAP/responsive visual |
 | AT-32 | Team Chat provides authorized Direct, Project, MR, Group and Announcement conversations; group creation is limited to Admin and the four global Project Engineer roles, Direct chat has exactly two visible participants, sends and attachments are idempotent/verified, read state follows the user across devices, a message increments only Team Chat (never the workflow bell), pushes deep-link to the exact thread, and 1366px/tablet/390px/360px states match the R38.5 review hierarchy without overflow. | model/widget/golden/route/Edge payload/pgTAP/Storage/RLS |
 | AT-33 | Warehouse Inventory adds Procurement/Admin-only Supplier folders and a five-stage strict import: blank supplier identity is preserved in immutable Unknown Supplier, exact/alias/similar/new decisions are explicit, delivered equals accepted plus damaged plus rejected, external receipt evidence is required, opening balance uses one reviewed cutoff, secure documents and FIFO provenance remain linked, duplicate/failed imports create no partial stock, and desktop/tablet/390px/360px layouts stay bounded. | workbook fixtures/model/controller/widget/route/pgTAP/Storage/RLS/responsive visual |
+| AT-34 | Phase 1 MR hardening keeps another user's draft absent from Engineering lists/detail/discussion until Submit; supports one mixed receipt line with exact Good/Missing/Damaged quantities; keeps all-unavailable arrangements editable by Procurement until explicit Engineering/Admin cancellation; and provides inline arrangement errors plus safe-area mobile approval actions. | model/widget/responsive visual/RPC/RLS/idempotency/pgTAP |
+| AT-35 | Phase 2 loads 15 lightweight authorized MR summaries with server search/filter/sort/paging, cursor-pages older comments, privately syncs only the creator's draft across devices, version-checks claim/reassign without changing workflow state, notifies the assignee once, and derives a concise returned-request change summary from immutable revisions. | model/controller/repository/widget/RPC/RLS/idempotency/realtime/pgTAP |
+| AT-36 | With the adoption default published, an independently authorized Project Engineer/global Engineering/Admin creator can approve their own current request; a Site Engineer creator cannot. | trusted RPC/role pgTAP |
+| AT-37 | Publishing creator self-approval off blocks the creator in the trusted command while an independent authorized manager remains able to approve; unpublished draft configuration does not alter authority. | configuration/RPC/pgTAP |
+| AT-38 | External readiness is auditable but nonblocking by default; after Admin publishes enforcement, unconfirmed positive external lines are rejected atomically and confirmed lines with optional date/reference succeed. | arrangement model/widget/RPC/atomic pgTAP |
+| AT-39 | Procurement cannot create a replacement; authorized Engineering/Admin can create one linked private Draft only after explicit cancellation of a saved all-unavailable request, with idempotent retry and exact request/line provenance. | repository/controller/RPC/RLS/idempotency/pgTAP |
+| AT-40 | Phase 3 Admin switches, desktop arrangement row, 360px editor and 360px replacement card remain localized, bounded, keyboard/touch usable and free of client-only authority. | widget/responsive visual/accessibility |
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
@@ -99,6 +106,16 @@ Android. Add:
   alternative master workbooks cannot both commit; and 20,000-row parsing,
   1,000-supplier search plus 10,000-line supplier-folder pagination stay
   responsive without loading the complete result set into one widget tree.
+- AP-12: at 360px and desktop widths, approval actions remain reachable without
+  covering the final request content; each invalid arrangement row is directly
+  reachable from the validation summary; mixed receipt quantities reject
+  under/over reconciliation; and cancelling an all-unavailable request removes
+  it from every Procurement edit path.
+- AP-13: a 100-request register never transfers full request lines/comments,
+  page navigation requests exact 15-row server windows, older discussion pages
+  remain stable while new comments arrive, two devices converge on the same
+  owner-private draft, stale draft/assignment writes fail without partial
+  effects, and assignment never changes the request state or canonical owner.
 
 ## 4. Eight-role security matrix
 
@@ -136,7 +153,8 @@ Test boundary values with Postgres numeric precision:
 - aggregate reservations equal/one increment above availability;
 - dispatch equal/above approved outstanding and available stock;
 - partial receipt followed by replacement in transit;
-- good plus missing/damaged reconciliation;
+- good plus separate missing plus damaged reconciliation, including a mixed
+  exception on one line and under/over-sum rejection;
 - two MRs for the final available stock;
 - repeated dispatch after timeout;
 - concurrent return submissions for the same remaining eligible quantity;
@@ -224,11 +242,31 @@ Every implementation batch requires:
 
 Never waive a failed security/quantity test to meet the rapid-demo timebox.
 
+## 9A. Phase 3 Material Request policy acceptance
+
+- AT-36: with the adoption default published, an independently authorized
+  Project Engineer/global Engineering/Admin creator can approve their own
+  current request; a Site Engineer creator cannot.
+- AT-37: publishing creator self-approval off blocks the creator in the trusted
+  command while an independent authorized manager remains able to approve.
+  Draft configuration changes do not alter either result.
+- AT-38: external readiness is recorded but nonblocking by default. After the
+  Admin publishes enforcement, an unconfirmed positive external line is
+  rejected without changing the request, arrangement, reservations or audit;
+  a confirmed line with date/reference succeeds.
+- AT-39: Procurement cannot create a replacement. An authorized Engineering
+  actor can create one linked private Draft only after explicit cancellation
+  of a saved all-unavailable request; an exact retry returns the same Draft,
+  source state remains cancelled and every cloned line retains its source link.
+- AT-40: the Admin switches, desktop arrangement row, 360px focused editor and
+  360px replacement card render without overflow, preserve at least 44px
+  actions and expose no client-only authority.
+
 ## 10. Release evidence package
 
 Batch 10 produces:
 
-- scenario result matrix for AT-01–AT-32 and AP-01–AP-10;
+- scenario result matrix for AT-01–AT-40 and AP-01–AP-10;
 - Flutter/database/concurrency/integration command logs;
 - desktop/mobile screenshots and controlled-document renders;
 - workbook round-trip fixtures/results;

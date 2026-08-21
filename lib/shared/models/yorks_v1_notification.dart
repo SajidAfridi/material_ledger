@@ -201,12 +201,25 @@ const _requestMention = YorksV1NotificationCopy(
   hindiBody: 'एक साथी ने सामग्री अनुरोध टिप्पणी में आपका उल्लेख किया है।',
 );
 
+const _requestWorkAssigned = YorksV1NotificationCopy(
+  type: NotificationType.request,
+  englishTitle: 'Material request assigned to you',
+  englishBody: 'A teammate assigned you responsibility for a material request.',
+  arabicTitle: 'تم إسناد طلب مواد إليك',
+  arabicBody: 'أسند إليك أحد الزملاء مسؤولية متابعة طلب مواد.',
+  urduTitle: 'مٹیریل ریکویسٹ آپ کو تفویض کی گئی',
+  urduBody: 'ایک ساتھی نے مٹیریل ریکویسٹ کی ذمہ داری آپ کو تفویض کی ہے۔',
+  hindiTitle: 'सामग्री अनुरोध आपको सौंपा गया',
+  hindiBody: 'एक सहकर्मी ने सामग्री अनुरोध की जिम्मेदारी आपको सौंपी है।',
+);
+
 const _eventCopy = <String, YorksV1NotificationCopy>{
   'material_request_approval_required': _requestApprovalRequired,
   'material_request_updated_for_approval': _requestApprovalRequired,
   'material_request_approved_for_arrangement': _requestApprovedForArrangement,
   'material_request_changes_requested': _requestChangesRequired,
   'material_request_mentioned': _requestMention,
+  'material_request_work_assigned': _requestWorkAssigned,
   'team_chat_message': YorksV1NotificationCopy(
     type: NotificationType.info,
     englishTitle: 'New Team Chat message',
@@ -242,15 +255,18 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
   ),
   'arrangement_completed_unavailable': YorksV1NotificationCopy(
     type: NotificationType.request,
-    englishTitle: 'Arrangement completed',
+    englishTitle: 'All items currently unavailable',
     englishBody:
-        'Procurement recorded that no requested material can be provided now.',
-    arabicTitle: 'اكتمل ترتيب الطلب',
-    arabicBody: 'سجلت المشتريات أن المواد المطلوبة غير متاحة حالياً.',
-    urduTitle: 'انتظام مکمل ہو گیا',
-    urduBody: 'پروکیورمنٹ نے ریکارڈ کیا کہ مطلوبہ مواد ابھی دستیاب نہیں ہے۔',
-    hindiTitle: 'व्यवस्था पूरी हुई',
-    hindiBody: 'खरीद ने दर्ज किया कि अनुरोधित सामग्री अभी उपलब्ध नहीं है।',
+        'Procurement can revise the arrangement, or an authorised reviewer can cancel the request.',
+    arabicTitle: 'جميع البنود غير متاحة حالياً',
+    arabicBody:
+        'يمكن للمشتريات تعديل الترتيب أو يمكن للمراجع المخوّل إلغاء الطلب.',
+    urduTitle: 'تمام آئٹمز فی الحال دستیاب نہیں',
+    urduBody:
+        'پروکیورمنٹ انتظام میں ترمیم کر سکتی ہے، یا مجاز جائزہ لینے والا درخواست منسوخ کر سکتا ہے۔',
+    hindiTitle: 'सभी आइटम अभी अनुपलब्ध हैं',
+    hindiBody:
+        'खरीद व्यवस्था संशोधित कर सकती है, या अधिकृत समीक्षक अनुरोध रद्द कर सकता है।',
   ),
   'material_request_submitted': YorksV1NotificationCopy(
     type: NotificationType.request,

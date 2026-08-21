@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(36);
+select plan(45);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -113,8 +113,8 @@ select set_config(
 select is(
   jsonb_array_length(public.v1_list_material_requests(
     (select project_id from v1_af_targets)
-  )), 1,
-  'Assigned Project Engineer sees the server-backed draft stage'
+  )), 0,
+  'Assigned Project Engineer cannot see another engineer draft before submit'
 );
 
 set local role authenticated;
@@ -123,11 +123,13 @@ select set_config(
   '{"sub":"10000000-0000-4000-8000-000000000009","role":"authenticated","app_metadata":{"role":"senior_mechanical_engineer","app_user_id":"usr-local-senior-mechanical-engineer"}}',
   true
 );
-select is(
+select throws_ok(
+  $$select
   public.v1_material_request_projection(
     'af100000-0000-4000-8000-000000000001'::uuid
-  ) ->> 'state', 'draft',
-  'Senior Mechanical Engineer sees the draft without project membership'
+  )$$,
+  '42501', 'V1_MATERIAL_REQUEST_NOT_READABLE',
+  'Senior Mechanical Engineer cannot see another engineer draft before submit'
 );
 
 set local role authenticated;
@@ -136,11 +138,13 @@ select set_config(
   '{"sub":"10000000-0000-4000-8000-000000000010","role":"authenticated","app_metadata":{"role":"project_manager","app_user_id":"usr-local-project-manager"}}',
   true
 );
-select is(
+select throws_ok(
+  $$select
   public.v1_material_request_projection(
     'af100000-0000-4000-8000-000000000001'::uuid
-  ) ->> 'state', 'draft',
-  'Project Manager sees the draft without project membership'
+  )$$,
+  '42501', 'V1_MATERIAL_REQUEST_NOT_READABLE',
+  'Project Manager cannot see another engineer draft before submit'
 );
 
 set local role authenticated;
@@ -163,7 +167,7 @@ select set_config(
   '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
   true
 );
-select lives_ok(
+select throws_ok(
   $$select public.v1_add_material_request_comment(
     jsonb_build_object(
       'request_id', 'af100000-0000-4000-8000-000000000001',
@@ -173,19 +177,27 @@ select lives_ok(
       )
     ), 'af200000-0000-4000-8000-000000000001'::uuid
   )$$,
-  'Project Engineer comments and mentions an authorized Site Engineer from draft'
+  '22023', 'V1_MATERIAL_REQUEST_COMMENT_INVALID',
+  'Project Engineer cannot comment on another engineer draft'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
 );
 select lives_ok(
   $$select public.v1_add_material_request_comment(
     jsonb_build_object(
       'request_id', 'af100000-0000-4000-8000-000000000001',
-      'body', 'Please confirm the delivery note.',
+      'body', 'Admin support may review this private draft.',
       'mentioned_auth_user_ids', jsonb_build_array(
-        '10000000-0000-4000-8000-000000000002'
+        '10000000-0000-4000-8000-000000000004'
       )
     ), 'af200000-0000-4000-8000-000000000001'::uuid
   )$$,
-  'A duplicate comment retry returns the original response'
+  'The draft creator can comment and mention authorized Admin support'
 );
 
 set local role postgres;
@@ -574,6 +586,159 @@ select throws_ok(
   )$$,
   '42501', 'V1_DOCUMENT_TARGET_WRITE_DENIED',
   'Procurement cannot attach receiving-engineer site evidence'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_save_material_request_draft(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000002',
+      'expected_version', 0,
+      'project_id', (select project_id from v1_af_targets),
+      'scope_id', (select scope_id from v1_af_targets),
+      'title', 'Project Engineer adoption-period request',
+      'timing', 'normal', 'scheduled_date', null,
+      'delivery_note', null,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'id', 'af110000-0000-4000-8000-000000000002',
+        'display_order', 1, 'source_kind', 'custom',
+        'source_boq_group_id', null, 'source_boq_row_id', null,
+        'item_description', 'Temporarily unavailable actuator',
+        'brand_origin', null, 'technical_attributes', '{}'::jsonb,
+        'requested_qty', '1', 'unit', 'Nos'
+      ))
+    )
+  )$$,
+  'Project Engineer creates their own private request draft'
+);
+select lives_ok(
+  $$select public.v1_submit_material_request(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000002',
+      'expected_version', 1
+    ), 'af700000-0000-4000-8000-000000000001'
+  )$$,
+  'Project Engineer submits their own request'
+);
+select lives_ok(
+  $$select public.v1_decide_material_request(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000002',
+      'expected_version', 2, 'decision', 'approved', 'reason', null
+    ), 'af700000-0000-4000-8000-000000000002'
+  )$$,
+  'Project Engineer self-approves under the temporary adoption policy'
+);
+
+set local role postgres;
+select ok(
+  (select state = 'approved_for_arrangement'
+     from public.v1_material_requests
+     where id = 'af100000-0000-4000-8000-000000000002')
+  and (select decided_by_exact_role = 'project_engineer'
+     from public.v1_material_request_decisions
+     where request_id = 'af100000-0000-4000-8000-000000000002'
+       and decision = 'approved'),
+  'Self-approval retains the exact non-Site-Engineer actor and decision'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_begin_arrangement(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000002',
+      'expected_version', 3
+    ), 'af700000-0000-4000-8000-000000000003'
+  )$$,
+  'Procurement begins the self-approved request arrangement'
+);
+
+set local role postgres;
+create temporary table v1_af_self_arrangement as
+select arrangement.id as arrangement_id,
+  arrangement_line.id as arrangement_line_id
+from public.v1_procurement_arrangements arrangement
+join public.v1_procurement_arrangement_lines arrangement_line
+  on arrangement_line.arrangement_id = arrangement.id
+where arrangement.request_id = 'af100000-0000-4000-8000-000000000002'
+  and arrangement.status = 'working';
+grant select on table v1_af_self_arrangement to authenticated;
+
+set local role authenticated;
+select lives_ok(
+  $$select public.v1_save_arrangement(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000002',
+      'arrangement_id', (select arrangement_id from v1_af_self_arrangement),
+      'expected_request_version', 4,
+      'expected_arrangement_version', 1,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'arrangement_line_id',
+          (select arrangement_line_id from v1_af_self_arrangement),
+        'source_kind', 'external_supplier',
+        'external_supplier', 'Unknown Supplier',
+        'inventory_item_id', null, 'decision', 'unavailable',
+        'arranged_qty', '0', 'reason', 'Not available today'
+      ))
+    ), 'af700000-0000-4000-8000-000000000004'
+  )$$,
+  'An all-unavailable pre-approved arrangement remains a valid save'
+);
+
+set local role postgres;
+select ok(
+  (select state = 'arranging'
+      and current_action_owner_role = 'procurement'
+      and current_action_code = 'all_items_unavailable_review'
+    from public.v1_material_requests
+    where id = 'af100000-0000-4000-8000-000000000002')
+  and (select status = 'working' and is_current
+    from public.v1_procurement_arrangements
+    where id = (select arrangement_id from v1_af_self_arrangement))
+  and not exists (
+    select 1 from public.v1_material_request_line_approvals
+    where request_line_id = 'af110000-0000-4000-8000-000000000002'
+  ),
+  'All-unavailable creates no approved quantity and stays with Procurement'
+);
+
+set local role authenticated;
+select lives_ok(
+  $$select public.v1_save_arrangement(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000002',
+      'arrangement_id', (select arrangement_id from v1_af_self_arrangement),
+      'expected_request_version', 6,
+      'expected_arrangement_version', 3,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'arrangement_line_id',
+          (select arrangement_line_id from v1_af_self_arrangement),
+        'source_kind', 'external_supplier',
+        'external_supplier', 'Unknown Supplier',
+        'inventory_item_id', null, 'decision', 'unavailable',
+        'arranged_qty', '0', 'reason', 'Supplier follow-up is still pending'
+      ))
+    ), 'af700000-0000-4000-8000-000000000005'
+  )$$,
+  'Procurement can revise the all-unavailable arrangement later'
+);
+
+set local role postgres;
+select is(
+  (select reason from public.v1_procurement_arrangement_lines
+   where id = (select arrangement_line_id from v1_af_self_arrangement)),
+  'Supplier follow-up is still pending',
+  'The revised unavailable reason is stored without closing the request'
 );
 
 select * from finish();

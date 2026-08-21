@@ -92,6 +92,14 @@ Legacy role handling:
 ### M3 — Material Requests
 
 - New submissions use normalized V1 tables only.
+- Phase 3 additively seeds published configuration values for creator
+  self-approval and external-source readiness, adds nullable readiness evidence
+  to arrangement lines, and adds request/line replacement provenance. Existing
+  requests and arrangements retain their values and state.
+- Replacement recovery is forward-only evidence: rollback hides/revokes the
+  new command and republishes the adoption defaults. Never drop provenance or
+  readiness columns after production evidence exists, and never reopen or
+  delete a cancelled source.
 - Existing legacy requests are inventoried and copied to a migration staging
   relation with raw JSON, source ID and source status.
 - Only unambiguous records may be transformed to a V1 historical projection.
@@ -357,6 +365,23 @@ users to a supported exact role through the same audited command, then
 redeploys the prior complete build/functions. The expanded constraints and
 historical exact-role evidence remain in place; never erase or relabel audit or
 controlled-document history.
+
+Migration `20260820233221_yorks_v1_material_request_phase2_collaboration.sql`
+is additive and quantity-neutral. It adds owner-private draft recovery,
+versioned coordination assignments, immutable Engineering revision snapshots,
+lightweight server-paged request summaries, cursor-paged comments and
+server-derived change summaries. It does not alter the Material Request state
+machine, request quantities, reservations, approvals, dispatches, receipts or
+returns. Direct table access is revoked; trusted functions re-check the actor,
+request/project visibility, version and idempotency identity. Existing requests
+are backfilled only with immutable revision evidence derived from their current
+stored Engineering facts.
+
+Rollback first deploys the prior client, then revokes the Phase 2 RPC grants in
+a corrective migration. Retain private recovery rows, assignment/audit history
+and revision snapshots so a later compatible client can resume safely. Do not
+drop or rewrite Phase 2 history, and do not copy a private draft into a submitted
+request outside the normal versioned submit command.
 
 ## 9. Migration stop conditions
 

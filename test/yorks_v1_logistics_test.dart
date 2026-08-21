@@ -18,9 +18,34 @@ void main() {
       expect(workspace.dispatchCandidates.single.stillNeededQuantity, '2');
       expect(
         workspace.dispatches.single.lines.single.receiptOutcome,
-        YorksV1ReceiptOutcome.missing,
+        YorksV1ReceiptOutcome.mixed,
       );
       expect(workspace.dispatches.single.lines.single.goodQuantity, '2');
+      expect(workspace.dispatches.single.lines.single.missingQuantity, '0.5');
+      expect(workspace.dispatches.single.lines.single.damagedQuantity, '0.5');
+    },
+  );
+
+  test(
+    'mixed receipt input keeps each physical exception quantity explicit',
+    () {
+      const input = YorksV1ReceiptLineInput(
+        dispatchLineId: 'dispatch-line-1',
+        outcome: YorksV1ReceiptOutcome.mixed,
+        goodQuantity: '2',
+        missingQuantity: '0.5',
+        damagedQuantity: '0.5',
+        note: 'One missing and one damaged',
+      );
+
+      expect(input.toRpcJson(), {
+        'dispatch_line_id': 'dispatch-line-1',
+        'outcome': 'mixed',
+        'good_qty': '2',
+        'missing_qty': '0.5',
+        'damaged_qty': '0.5',
+        'note': 'One missing and one damaged',
+      });
     },
   );
 
@@ -257,8 +282,10 @@ Map<String, dynamic> _workspaceJson() => {
           'external_supplier': null,
           'dispatched_qty': '3',
           'approved_qty_snapshot': '4',
-          'receipt_outcome': 'missing',
+          'receipt_outcome': 'mixed',
           'good_qty': '2',
+          'missing_qty': '0.5',
+          'damaged_qty': '0.5',
           'exception_qty': '1',
           'receipt_note': 'One item missing',
         },

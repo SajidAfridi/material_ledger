@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/app/app.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/services/app_config_service.dart';
+import 'package:material_ledger/shared/widgets/notification_delivery_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -36,6 +37,9 @@ void main() {
 
     // Verify splash/onboarding is shown with the approved Yorks branding.
     expect(find.textContaining('Yorks'), findsWidgets);
+    // Device enrollment remains available from notification settings, but it
+    // must never obscure the operational workspace as a global banner.
+    expect(find.byType(NotificationDeliveryPrompt), findsNothing);
 
     // Advance past all splash timers to avoid pending timer assertion
     await tester.pumpAndSettle(const Duration(seconds: 5));

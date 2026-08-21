@@ -387,6 +387,47 @@ void main() {
       );
     });
 
+    test('serial absence placeholders are treated as bulk stock', () {
+      const codec = YorksV1InventoryWorkbookCodec();
+      final placeholders = ['N/A', 'NA', 'Not Applicable', 'Unknown', '-', ''];
+
+      for (final placeholder in placeholders) {
+        final row = List<String>.from(_validExternalRow);
+        row[_officialHeaders.indexOf('Serial No')] = placeholder;
+        row[_officialHeaders.indexOf('Quantity *')] = '12';
+        row[_officialHeaders.indexOf('Total Price')] = '540';
+        final source = codec.sourceFromMatrix(
+          fileName: 'serial-placeholder.csv',
+          matrix: [_officialHeaders, row],
+        );
+        final preview = codec.previewFromSource(
+          mapping: codec.proposeMapping(source),
+          categories: _categories,
+          inventoryItems: const [],
+          suppliers: _suppliers,
+        );
+
+        expect(preview.rows.single.serialNumber, isEmpty);
+        expect(preview.rows.single.trackingMode, 'bulk');
+        expect(
+          preview.rows.single.issues.map((issue) => issue.code),
+          isNot(
+            contains(YorksV1InventoryImportIssueCode.duplicateSerialNumber),
+          ),
+        );
+        expect(
+          preview.rows.single.issues.map((issue) => issue.code),
+          isNot(contains(YorksV1InventoryImportIssueCode.trackingModeInvalid)),
+        );
+        expect(
+          preview.rows.single.rawSourceValues[_officialHeaders.indexOf(
+            'Serial No',
+          )],
+          placeholder,
+        );
+      }
+    });
+
     test('same catalogue item is allowed in separate receipt batches', () {
       const codec = YorksV1InventoryWorkbookCodec();
       final first = List<String>.from(_validExternalRow);

@@ -89,18 +89,24 @@ void main() {
   });
 
   testWidgets(
-    'desktop description typing suggests inventory and fills descriptive cells',
+    'desktop description typing ranks BOQ before inventory and fills descriptive cells',
     (tester) async {
       await _setViewport(tester, const Size(1366, 768));
       final repository = await _pumpDraft(tester);
       repository.inventorySuggestions = const [
         YorksV1MaterialRequestInventorySuggestion(
-          id: 'inventory-duct',
+          id: 'boq-row-duct',
+          source: YorksV1MaterialRequestSuggestionSource.selectedScopeBoq,
           description: 'Flexible duct',
           brandOrigin: 'Superflex',
           size: '12 inch',
           model: 'FD-12',
           unit: 'Meter',
+          sourceBoqGroupId: 'boq-group-duct',
+          sourceBoqRowId: 'boq-row-duct',
+          sourceScopeId: 'scope-common',
+          sourceScopeName: 'Common / All Buildings',
+          sourceGroupName: 'Ductwork & Accessories',
         ),
       ];
 
@@ -117,6 +123,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Flexible duct'), findsOneWidget);
+      expect(find.textContaining('Selected scope BOQ'), findsOneWidget);
+      expect(repository.lastSearchProjectId, _projectId);
+      expect(repository.lastSearchScopeId, 'scope-common');
       await tester.tap(find.text('Flexible duct'));
       await tester.pumpAndSettle();
 
@@ -285,6 +294,57 @@ void main() {
     await expectLater(
       find.byKey(const ValueKey('material-request-discussion-card')),
       matchesGoldenFile('goldens/r35/mr_discussion_empty_mobile_360.png'),
+    );
+  });
+
+  testWidgets('mobile request approval stays reachable in the safe-area bar', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final repository = _MaterialRequestRepositoryFixture();
+    final request = _requestVariant(
+      id: 'mobile-request-awaiting-approval',
+      state: YorksV1MaterialRequestState.awaitingRequestApproval,
+      canDecideRequest: true,
+      canEditBeforeApproval: true,
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final sticky = find.byKey(
+      const ValueKey('mobile-mr-request-approval-actions'),
+    );
+    expect(sticky, findsOneWidget);
+    expect(find.text('Approve for Procurement'), findsOneWidget);
+    expect(find.text('Return for changes'), findsOneWidget);
+    final rect = tester.getRect(sticky);
+    expect(rect.bottom, lessThanOrEqualTo(800));
+    expect(rect.height, greaterThanOrEqualTo(AppSpacing.minTapTarget));
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile(
+        'goldens/r35/mr_request_approval_sticky_mobile_360.png',
+      ),
     );
   });
 
@@ -848,8 +908,15 @@ void main() {
     await _pumpDraft(tester);
     await _addCustomMaterial(tester);
 
+    await tester.scrollUntilVisible(
+      find.byTooltip('Add Similar Row'),
+      120,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('mobile-mr-materials')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.byTooltip('Add Similar Row'), findsOneWidget);
-    await tester.ensureVisible(find.byTooltip('Add Similar Row'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Add Similar Row').hitTestable());
     await tester.pumpAndSettle();
@@ -1017,6 +1084,55 @@ void main() {
     expect(find.text('Approved'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'cancelled all-unavailable replacement action stacks cleanly at 360px',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      final request = _requestVariant(
+        id: 'cancelled-unavailable-request',
+        state: YorksV1MaterialRequestState.cancelled,
+      );
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectManager,
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              request.id,
+            ).overrideWith((ref) async => request),
+            yorksV1MaterialRequestPhase3PolicyProvider(request.id).overrideWith(
+              (ref) async => YorksV1MaterialRequestPhase3Policy(
+                requestId: request.id,
+                allowAuthorizedCreatorSelfApproval: true,
+                requireExternalSourceReadiness: false,
+                canCreateReplacement: true,
+                replacementExists: false,
+              ),
+            ),
+            yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+              (ref) async =>
+                  YorksV1MaterialRequestDocumentModel.fromRequest(request),
+            ),
+          ],
+          child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final card = find.byKey(
+        const ValueKey('material-request-replacement-card'),
+      );
+      final action = find.byKey(
+        const ValueKey('create-replacement-material-request'),
+      );
+      expect(card, findsOneWidget);
+      expect(action, findsOneWidget);
+      expect(tester.getSize(action).width, greaterThan(250));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final size in [const Size(1366, 768), const Size(360, 800)]) {
     final suffix = '${size.width.toInt()}x${size.height.toInt()}';
@@ -1267,6 +1383,8 @@ YorksV1MaterialRequest _requestVariant({
   YorksV1MaterialRequestState state =
       YorksV1MaterialRequestState.approvedForArrangement,
   List<YorksV1MaterialRequestComment> comments = const [],
+  bool canDecideRequest = false,
+  bool canEditBeforeApproval = false,
 }) => YorksV1MaterialRequest(
   id: id,
   projectId: _submittedRequest.projectId,
@@ -1283,12 +1401,20 @@ YorksV1MaterialRequest _requestVariant({
   title: _submittedRequest.title,
   requesterDisplayName: _submittedRequest.requesterDisplayName,
   requesterProjectRole: _submittedRequest.requesterProjectRole,
-  currentActionOwnerRole: state == YorksV1MaterialRequestState.closed
+  currentActionOwnerRole:
+      state == YorksV1MaterialRequestState.awaitingRequestApproval
+      ? 'project_engineer'
+      : state == YorksV1MaterialRequestState.closed
       ? null
       : _submittedRequest.currentActionOwnerRole,
-  currentActionCode: state == YorksV1MaterialRequestState.closed
+  currentActionCode:
+      state == YorksV1MaterialRequestState.awaitingRequestApproval
+      ? 'request_approval_required'
+      : state == YorksV1MaterialRequestState.closed
       ? null
       : _submittedRequest.currentActionCode,
+  canDecideRequest: canDecideRequest,
+  canEditBeforeApproval: canEditBeforeApproval,
   comments: comments,
   lines: _submittedRequest.lines,
 );
@@ -1332,6 +1458,8 @@ class _MaterialRequestRepositoryFixture
   List<YorksV1MaterialRequestMention> mentionCandidates = const [];
   List<YorksV1MaterialRequestInventorySuggestion> inventorySuggestions =
       const [];
+  String? lastSearchProjectId;
+  String? lastSearchScopeId;
 
   @override
   Future<List<YorksV1MaterialRequestComment>> addComment(
@@ -1354,12 +1482,18 @@ class _MaterialRequestRepositoryFixture
   @override
   Future<List<YorksV1MaterialRequestInventorySuggestion>> searchInventory({
     required String projectId,
+    required String scopeId,
     required String query,
-  }) async => inventorySuggestions
-      .where(
-        (item) => item.description.toLowerCase().contains(query.toLowerCase()),
-      )
-      .toList(growable: false);
+  }) async {
+    lastSearchProjectId = projectId;
+    lastSearchScopeId = scopeId;
+    return inventorySuggestions
+        .where(
+          (item) =>
+              item.description.toLowerCase().contains(query.toLowerCase()),
+        )
+        .toList(growable: false);
+  }
 
   @override
   Future<YorksV1MaterialRequest> updateForApproval(

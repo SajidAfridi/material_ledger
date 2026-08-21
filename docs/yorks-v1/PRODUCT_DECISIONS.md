@@ -290,15 +290,28 @@ Submit requires connectivity and atomically:
 Until approval, the creator and an assigned/global Project Engineer may update
 the current Engineering intent through a version-checked audited command.
 Procurement cannot read or arrange the new request until Engineering approval.
-The request discussion is available to authorized Engineering participants
-from the first server-backed stage; mentions identify a protected user ID and
-create a notification only when that user is also allowed to read the request.
+The server-backed `draft` remains private to its creator and authorized Admin
+support, including discussion. Assigned/global Engineering participants become
+readers and may participate only after explicit submission; mentions identify
+a protected user ID and create a notification only when that user is also
+allowed to read the request.
 
-Custom-row item description supports a non-commercial inventory search. A
-selected suggestion copies item description, brand/origin, size, model and
-unit into the Engineering line while quantity remains deliberate user input.
-The search response contains no cost, balance, reservation, minimum-stock,
+Custom-row item description supports one non-commercial ranked material
+search. Results are ordered from the selected Building/Common BOQ scope, then
+the remaining real scopes in the same project BOQ, then the inventory
+catalogue. A selected same-scope BOQ result retains its exact group/row source;
+a result from another project scope or inventory is copied as descriptive
+custom input because an MR may never claim a cross-scope BOQ source. Item
+description, brand/origin, size, model/tag and unit may be copied while
+quantity remains deliberate user input. No match leaves free-text entry fully
+available. The response contains no cost, balance, reservation, minimum-stock,
 location or other protected inventory facts.
+
+Procurement arrangement shows the immutable request-line BOQ correlation and
+uses it to rank warehouse candidates, but never auto-selects a stock item.
+Availability, reservation and quantity rules remain authoritative only in the
+connected arrangement command; they are not prerequisites for Engineering to
+raise a request.
 
 ## 8. Canonical MR lifecycle
 
@@ -355,8 +368,15 @@ Saving a complete arrangement version atomically:
 - prevents aggregate warehouse reservations exceeding availability;
 - snapshots arranged quantities as approved quantities for the already
   approved Engineering request;
-- moves positive supply to dispatch-ready `approved`, or closes an all-
-  unavailable request without fabricating approved quantity.
+- moves positive supply to dispatch-ready `approved`; or, when every line is
+  unavailable, retains the current arrangement as editable Procurement work in
+  `arranging` with zero approved quantity.
+
+An all-unavailable arrangement never silently completes or cancels the
+request. Procurement may revise and save the current work when supply becomes
+possible. A valid Project Engineer/global Engineering approver or Admin may
+explicitly cancel it with a reason; cancellation is terminal for Procurement
+editing and preserves the unavailable decisions and audit history.
 
 One `inventory_reservations` table owns the commitment. Presentation values
 such as “allocated” are derived from approved reservation status; there is no
@@ -377,6 +397,32 @@ current request version before Procurement arrangement. Procurement
 self-approval is rejected even if the user has another editable client-side
 label. Approval freezes the exact Engineering version and actor role; it does
 not reserve stock or create commercial facts.
+
+Temporary adoption policy: a request creator whose exact role is not Site
+Engineer may approve their own submitted request when they independently hold
+the required Project Engineer/global Engineering/Admin authority. A Site
+Engineer creator cannot self-approve. Admin may publish
+`requests.allow_authorized_creator_self_approval = false` to require an
+independent authorized approver. The trusted decision command reads only the
+published value, so a configuration draft cannot change workflow behavior and
+historical decisions are never rewritten.
+
+External supplier identity remains optional during the adoption period. This
+is a deliberate temporary policy, not proof of supplier readiness. Procurement
+may record a lightweight confirmation, expected date and commitment reference
+on each positive external line. Admin may later publish
+`procurement.require_external_source_readiness = true`; the trusted arrangement
+save then rejects any positive external line without confirmation. Supplier
+name remains optional and the control does not introduce an RFQ, quotation or
+Purchase Order workflow.
+
+A cancelled request whose latest saved arrangement records every line as
+unavailable may be copied once into a new private Engineering Draft by an
+otherwise authorized MR creator. The replacement keeps exact request- and
+line-level source links, while the cancelled source remains terminal and
+unchanged. Procurement cannot create the replacement. It must be explicitly
+reviewed and submitted through the familiar MR flow; it is never an automatic
+resubmission.
 
 The pre-revision `awaiting_approval` state remains a compatibility lane only
 for arrangements already saved before this change. Those exact legacy records
@@ -569,6 +615,11 @@ Critical actions never show success before the server commits.
 - Missing supplier is a visible warning, not a blocker. External Supplier rows
   still require a Delivery Note/reference and Received Date. Opening Balance
   rows may omit those fields and retain Opening Balance provenance.
+- Manufacturer Serial No is optional evidence and is never generated by Yorks.
+  Blank values and conventional absence markers (`N/A`, `NA`, `Unknown`,
+  `None`, `Nil` or a dash) normalize to no serial/bulk tracking while the raw
+  workbook cell remains in import evidence. Each genuine manufacturer serial
+  requires its own quantity-one row; duplicate genuine serials remain blocking.
 - Supplier aliases only auto-resolve on an exact approved normalized alias.
   Similar names require an explicit Procurement/Admin decision.
 - Import stages before final confirmation are quantity-neutral. The trusted
@@ -579,3 +630,30 @@ Critical actions never show success before the server commits.
 - The two supplied master workbooks are reconciliation alternatives, not two
   stock sources. Neither may be committed to production before signed cutoff,
   staging rehearsal and source/commit/quarantine reconciliation.
+
+## 20. Material Request Phase 2 collaboration and scale
+
+- Material Request registers use an authorized server summary projection with
+  server-side search, filter, sort and paging. The initial request page contains
+  15 rows. A summary never embeds request lines, comments, commercial values or
+  another user's private draft; full detail is fetched only after the user opens
+  one request.
+- The discussion projection returns the newest 20 comments. Older comments use
+  a stable server cursor and are loaded explicitly without reloading or
+  duplicating the newest page.
+- **Claim** and **Reassign** are version-checked responsibility markers for
+  coordination. They never approve, arrange, dispatch, cancel, change state or
+  replace the canonical workflow owner/next-action calculation. Reassignment
+  requires a reason and notifies the new assignee.
+- Private draft sync is owner-only recovery across the same user's devices. It
+  coexists with the local draft for offline recovery, shows **Saved to your
+  account** only after server confirmation, and never makes an unsubmitted
+  request visible to another participant or Procurement.
+- Returned requests expose a concise server-derived change summary from the
+  immutable Engineering revision snapshots. It highlights item additions,
+  removals, quantity changes, detail changes and delivery-note changes without
+  rewriting the decision or audit history.
+- Phase 2 preserves the temporary adoption policies: an independently
+  authorized non-Site-Engineer creator may self-approve; supplier readiness is
+  non-blocking; and an all-unavailable request stays Procurement-editable until
+  explicit authorized cancellation makes it terminal.

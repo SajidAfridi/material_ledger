@@ -384,6 +384,88 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('server summary loader pages fifteen rows without full detail', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1280, 3000));
+    final queries = <YorksV1MaterialRequestSummaryQuery>[];
+    Future<YorksV1MaterialRequestSummaryPage> load(
+      YorksV1MaterialRequestSummaryQuery query,
+    ) async {
+      queries.add(query);
+      final remaining = 16 - query.offset;
+      final count = remaining.clamp(0, query.limit);
+      return YorksV1MaterialRequestSummaryPage(
+        items: List.generate(
+          count,
+          (index) => _summary(
+            index: query.offset + index,
+            updatedAt: DateTime.utc(
+              2026,
+              8,
+              21,
+            ).subtract(Duration(minutes: query.offset + index)),
+          ),
+        ),
+        totalCount: 16,
+        limit: query.limit,
+        offset: query.offset,
+        hasMore: query.offset + count < 16,
+        metrics: const YorksV1MaterialRequestSummaryMetrics(
+          total: 16,
+          open: 16,
+          inProgress: 0,
+          dispatched: 0,
+          received: 0,
+          closed: 0,
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: const [],
+            language: AppLanguage.english,
+            canCreate: true,
+            onCreate: () {},
+            onOpen: (_) {},
+            onRefresh: () {},
+            summaryPageLoader: load,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(queries.single.limit, 15);
+    expect(queries.single.offset, 0);
+    expect(find.text('1–15 / 16'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-14')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-15')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-centre-page-next')),
+    );
+    await tester.pumpAndSettle();
+    expect(queries.last.offset, 15);
+    expect(find.text('16–16 / 16'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-15')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pump(
@@ -465,6 +547,31 @@ final _requests = <YorksV1MaterialRequest>[
     action: 'close_request',
   ),
 ];
+
+YorksV1MaterialRequestSummary _summary({
+  required int index,
+  required DateTime updatedAt,
+}) => YorksV1MaterialRequestSummary(
+  id: 'server-summary-$index',
+  projectId: 'server-project-${index % 2}',
+  projectReference: 'YRA-${330 + index % 2}',
+  projectName: 'Server project ${index % 2}',
+  scopeId: 'server-scope-${index % 2}',
+  scopeName: 'Common / All Buildings',
+  state: YorksV1MaterialRequestState.submitted,
+  recordVersion: 1,
+  requestNumber: 'YRA-MR-${index + 1}',
+  title: 'Server summary ${index + 1}',
+  timing: YorksV1MaterialRequestTiming.normal,
+  itemCount: index + 1,
+  createdAt: updatedAt,
+  updatedAt: updatedAt,
+  workAssignment: YorksV1MaterialRequestWorkAssignment(
+    requestId: 'server-summary-$index',
+    assignmentVersion: 0,
+    canManage: true,
+  ),
+);
 
 YorksV1MaterialRequest _request({
   required String id,

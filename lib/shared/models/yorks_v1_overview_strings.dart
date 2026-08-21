@@ -5,6 +5,30 @@ import 'app_strings.dart';
 /// Overview content is intentionally decision-oriented: each exact Yorks role
 /// sees the same trusted records through a role-specific operational lens.
 abstract final class YorksV1OverviewStrings {
+  static const adminCommandCentre = TranslatableString(
+    en: 'Yorks Command Centre',
+    ar: 'مركز قيادة يوركس',
+    ur: 'یارکس کمانڈ سینٹر',
+    hi: 'यॉर्क्स कमांड सेंटर',
+  );
+  static const adminCommandDescription = TranslatableString(
+    en: 'A real-time view of operations, system controls and the exceptions that need Administrator attention.',
+    ar: 'رؤية فورية للعمليات وضوابط النظام والاستثناءات التي تحتاج إلى انتباه المسؤول.',
+    ur: 'آپریشنز، سسٹم کنٹرولز اور ایڈمن کی توجہ طلب استثنائی امور کا فوری منظر۔',
+    hi: 'संचालन, सिस्टम नियंत्रण और व्यवस्थापक के ध्यान वाले अपवादों का रियल-टाइम दृश्य।',
+  );
+  static const portfolioOverview = TranslatableString(
+    en: 'Project Portfolio Overview',
+    ar: 'نظرة عامة على محفظة المشاريع',
+    ur: 'پراجیکٹ پورٹ فولیو اوورویو',
+    hi: 'प्रोजेक्ट पोर्टफोलियो अवलोकन',
+  );
+  static const portfolioOverviewDescription = TranslatableString(
+    en: 'Complete oversight of authorised projects, engineering approvals, deliveries and operational performance.',
+    ar: 'إشراف متكامل على المشاريع المصرح بها والاعتمادات الهندسية والتسليم والأداء.',
+    ur: 'مجاز پراجیکٹس، انجنئرنگ منظوریوں، ڈیلیوریز اور آپریشنل کارکردگی کی مکمل نگرانی۔',
+    hi: 'अधिकृत प्रोजेक्ट, इंजीनियरिंग अनुमोदन, डिलीवरी और संचालन प्रदर्शन का पूर्ण अवलोकन।',
+  );
   static const companyCommandCentre = TranslatableString(
     en: 'Company command centre',
     ar: 'مركز قيادة الشركة',
@@ -316,5 +340,167 @@ abstract final class YorksV1OverviewStrings {
     ar: 'الإشراف على الإيجارات',
     ur: 'رینٹل نگرانی',
     hi: 'किराया निरीक्षण',
+  );
+  static const totalProjects = TranslatableString(
+    en: 'Total projects',
+    ar: 'إجمالي المشاريع',
+    ur: 'کل پراجیکٹس',
+    hi: 'कुल प्रोजेक्ट',
+  );
+  static const projectsOnTrack = TranslatableString(
+    en: 'Projects on track',
+    ar: 'المشاريع على المسار',
+    ur: 'ٹریک پر پراجیکٹس',
+    hi: 'समय पर प्रोजेक्ट',
+  );
+  static const procurementExceptions = TranslatableString(
+    en: 'Procurement exceptions',
+    ar: 'استثناءات المشتريات',
+    ur: 'پروکیورمنٹ استثنائی امور',
+    hi: 'खरीद अपवाद',
+  );
+  static const accessAndControls = TranslatableString(
+    en: 'Access & controls',
+    ar: 'الوصول والضوابط',
+    ur: 'رسائی اور کنٹرولز',
+    hi: 'एक्सेस और नियंत्रण',
+  );
+  static const rentalAttention = TranslatableString(
+    en: 'Rental attention',
+    ar: 'تنبيهات الإيجار',
+    ur: 'رینٹل توجہ',
+    hi: 'किराया ध्यान',
+  );
+  static const operationsHealth = TranslatableString(
+    en: 'Operations health',
+    ar: 'صحة العمليات',
+    ur: 'آپریشنز ہیلتھ',
+    hi: 'संचालन स्वास्थ्य',
+  );
+  static const systemAndSecurity = TranslatableString(
+    en: 'System & security',
+    ar: 'النظام والأمان',
+    ur: 'سسٹم اور سیکیورٹی',
+    hi: 'सिस्टम और सुरक्षा',
+  );
+  static const configurationStatus = TranslatableString(
+    en: 'Configuration status',
+    ar: 'حالة التكوين',
+    ur: 'کنفیگریشن کی حالت',
+    hi: 'कॉन्फ़िगरेशन स्थिति',
+  );
+  static const recentCriticalActivity = TranslatableString(
+    en: 'Recent critical activity',
+    ar: 'النشاط الحرج الأخير',
+    ur: 'حالیہ اہم سرگرمی',
+    hi: 'हाल की महत्वपूर्ण गतिविधि',
+  );
+  static const quickLinks = TranslatableString(
+    en: 'Quick links',
+    ar: 'روابط سريعة',
+    ur: 'فوری لنکس',
+    hi: 'त्वरित लिंक',
+  );
+  static const operationalWorkspaces = TranslatableString(
+    en: 'Operational workspaces',
+    ar: 'مساحات العمل التشغيلية',
+    ur: 'آپریشنل ورک اسپیسز',
+    hi: 'ऑपरेशनल वर्कस्पेस',
+  );
+  static const activeUsers = TranslatableString(
+    en: 'Active users',
+    ar: 'المستخدمون النشطون',
+    ur: 'فعال صارفین',
+    hi: 'सक्रिय उपयोगकर्ता',
+  );
+  static const criticalEvents = TranslatableString(
+    en: 'Critical events',
+    ar: 'الأحداث الحرجة',
+    ur: 'اہم واقعات',
+    hi: 'गंभीर घटनाएं',
+  );
+  static const dataIntegrity = TranslatableString(
+    en: 'Data integrity',
+    ar: 'سلامة البيانات',
+    ur: 'ڈیٹا سالمیت',
+    hi: 'डेटा अखंडता',
+  );
+  static const currentVersion = TranslatableString(
+    en: 'Current version',
+    ar: 'الإصدار الحالي',
+    ur: 'موجودہ ورژن',
+    hi: 'वर्तमान संस्करण',
+  );
+  static const draftChanges = TranslatableString(
+    en: 'Draft changes',
+    ar: 'تغييرات المسودة',
+    ur: 'ڈرافٹ تبدیلیاں',
+    hi: 'ड्राफ़्ट बदलाव',
+  );
+  static const blockingIssues = TranslatableString(
+    en: 'Blocking issues',
+    ar: 'المشكلات المانعة',
+    ur: 'رکاوٹی مسائل',
+    hi: 'अवरोधक समस्याएं',
+  );
+  static const recommendations = TranslatableString(
+    en: 'Recommendations',
+    ar: 'التوصيات',
+    ur: 'سفارشات',
+    hi: 'सिफ़ारिशें',
+  );
+  static const published = TranslatableString(
+    en: 'Published',
+    ar: 'منشور',
+    ur: 'شائع شدہ',
+    hi: 'प्रकाशित',
+  );
+  static const allSystemsOperational = TranslatableString(
+    en: 'All systems operational',
+    ar: 'جميع الأنظمة تعمل',
+    ur: 'تمام سسٹم فعال ہیں',
+    hi: 'सभी सिस्टम चालू हैं',
+  );
+  static const noCriticalActivity = TranslatableString(
+    en: 'No critical activity in the current authorised view.',
+    ar: 'لا يوجد نشاط حرج في العرض المصرح به حالياً.',
+    ur: 'موجودہ مجاز منظر میں کوئی اہم سرگرمی نہیں۔',
+    hi: 'वर्तमान अधिकृत दृश्य में कोई गंभीर गतिविधि नहीं है।',
+  );
+  static const partialData = TranslatableString(
+    en: 'Some live modules are temporarily unavailable. Available figures remain current and usable.',
+    ar: 'بعض الوحدات المباشرة غير متاحة مؤقتاً. تظل الأرقام المتاحة محدثة وقابلة للاستخدام.',
+    ur: 'کچھ لائیو ماڈیول عارضی طور پر دستیاب نہیں۔ دستیاب اعداد اپ ٹو ڈیٹ اور قابل استعمال ہیں۔',
+    hi: 'कुछ लाइव मॉड्यूल अस्थायी रूप से उपलब्ध नहीं हैं। उपलब्ध आंकड़े वर्तमान और उपयोग योग्य हैं।',
+  );
+  static const viewAll = TranslatableString(
+    en: 'View all',
+    ar: 'عرض الكل',
+    ur: 'سب دیکھیں',
+    hi: 'सभी देखें',
+  );
+  static const openAuditTrail = TranslatableString(
+    en: 'Open audit trail',
+    ar: 'فتح سجل التدقيق',
+    ur: 'آڈٹ ٹریل کھولیں',
+    hi: 'ऑडिट ट्रेल खोलें',
+  );
+  static const deliveryAndReceipt = TranslatableString(
+    en: 'Delivery & receipt performance',
+    ar: 'أداء التسليم والاستلام',
+    ur: 'ڈیلیوری اور وصولی کی کارکردگی',
+    hi: 'डिलीवरी और प्राप्ति प्रदर्शन',
+  );
+  static const engineeringApprovals = TranslatableString(
+    en: 'Engineering approvals',
+    ar: 'الاعتمادات الهندسية',
+    ur: 'انجنئرنگ منظوریاں',
+    hi: 'इंजीनियरिंग अनुमोदन',
+  );
+  static const recentPortfolioActivity = TranslatableString(
+    en: 'Recent portfolio activity',
+    ar: 'نشاط المحفظة الأخير',
+    ur: 'حالیہ پورٹ فولیو سرگرمی',
+    hi: 'हाल की पोर्टफोलियो गतिविधि',
   );
 }

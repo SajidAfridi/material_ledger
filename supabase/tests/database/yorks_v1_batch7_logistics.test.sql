@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(30);
+select plan(31);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -356,6 +356,25 @@ select throws_ok(
   'Received outcome must reconcile to the full dispatched quantity'
 );
 
+select throws_ok(
+  $$select public.v1_confirm_receipt(
+    jsonb_build_object(
+      'request_id', '71000000-0000-4000-8000-000000000001',
+      'dispatch_id', (select dispatch_id from v1_b7_first_dispatch),
+      'expected_request_version', 6,
+      'expected_dispatch_version', (select dispatch_version from v1_b7_first_dispatch),
+      'lines', jsonb_build_array(jsonb_build_object(
+        'dispatch_line_id', (select dispatch_line_id from v1_b7_first_dispatch_lines),
+        'outcome', 'mixed', 'good_qty', '2',
+        'missing_qty', '0.75', 'damaged_qty', '0.5',
+        'note', 'Mixed exception does not reconcile'
+      ))
+    ), '77000000-0000-4000-8000-000000000004'::uuid
+  )$$,
+  '22023', 'V1_RECEIPT_LINE_INVALID',
+  'Mixed receipt quantities must reconcile exactly to dispatched quantity'
+);
+
 select lives_ok(
   $$select public.v1_confirm_receipt(
     jsonb_build_object(
@@ -365,11 +384,13 @@ select lives_ok(
       'expected_dispatch_version', (select dispatch_version from v1_b7_first_dispatch),
       'lines', jsonb_build_array(jsonb_build_object(
         'dispatch_line_id', (select dispatch_line_id from v1_b7_first_dispatch_lines),
-        'outcome', 'missing', 'good_qty', '2', 'note', 'One item missing'
+        'outcome', 'mixed', 'good_qty', '2',
+        'missing_qty', '0.5', 'damaged_qty', '0.5',
+        'note', 'One item missing and one item damaged'
       ))
     ), '77000000-0000-4000-8000-000000000003'::uuid
   )$$,
-  'Site Engineer records a reconciled Missing receipt outcome'
+  'Site Engineer records a reconciled mixed receipt outcome'
 );
 
 set local role postgres;
@@ -377,9 +398,10 @@ select ok(
   (select state = 'partially_received' and current_action_owner_role = 'procurement'
     from public.v1_material_requests
     where id = '71000000-0000-4000-8000-000000000001'::uuid)
-  and (select good_qty = 2 and exception_qty = 1 and outcome = 'missing'
+  and (select good_qty = 2 and missing_qty = 0.5 and damaged_qty = 0.5
+    and exception_qty = 1 and outcome = 'mixed'
     from public.v1_receipt_review_lines),
-  'Only good quantity is received and the missing amount becomes replacement eligible'
+  'Only good quantity is received and mixed exceptions remain exactly attributable'
 );
 
 set local role authenticated;

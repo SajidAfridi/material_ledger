@@ -3096,8 +3096,16 @@ class _ReviewDecisions extends StatelessWidget {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: _StatusPill(
-            label: YorksV1InventoryStrings.ready.active(language),
-            tone: row.hasErrors ? AppColors.error : AppColors.success,
+            label: row.hasErrors
+                ? YorksV1InventoryStrings.needReview.active(language)
+                : row.hasWarnings
+                ? YorksV1InventoryStrings.readyWithWarnings.active(language)
+                : YorksV1InventoryStrings.ready.active(language),
+            tone: row.hasErrors
+                ? AppColors.error
+                : row.hasWarnings
+                ? AppColors.warning
+                : AppColors.success,
           ),
         ),
     ],

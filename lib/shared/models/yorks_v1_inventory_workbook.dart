@@ -1004,6 +1004,19 @@ bool yorksV1InventoryIsUnknownSupplierText(String? value) {
       key == 'na';
 }
 
+/// Returns an empty value for conventional "not available" placeholders.
+///
+/// A manufacturer serial is evidence supplied by the manufacturer; Yorks must
+/// never invent one. Historical stock sheets commonly use values such as N/A
+/// or a dash for an unknown serial. Those values mean the line is bulk stock,
+/// while the untouched source cell remains available in raw import evidence.
+String yorksV1InventoryNormalizeOptionalSerial(String? value) {
+  final trimmed = value?.trim() ?? '';
+  final key = yorksV1InventorySearchKey(trimmed);
+  const absent = {'na', 'notapplicable', 'unknown', 'none', 'nil'};
+  return key.isEmpty || absent.contains(key) ? '' : trimmed;
+}
+
 String yorksV1InventorySafeSpreadsheetText(String value) =>
     value.isNotEmpty && RegExp(r'^[=+\-@]').hasMatch(value) ? "'$value" : value;
 

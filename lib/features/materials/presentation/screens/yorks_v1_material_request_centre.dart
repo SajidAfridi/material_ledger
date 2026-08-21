@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/constants.dart';
@@ -25,6 +27,8 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     required this.onRefresh,
     this.localDraftNotice,
     this.fixedProjectId,
+    this.summaryPageLoader,
+    this.refreshRevision = 0,
   });
 
   final List<YorksV1MaterialRequest> requests;
@@ -35,6 +39,11 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
   final VoidCallback onRefresh;
   final Widget? localDraftNotice;
   final String? fixedProjectId;
+  final Future<YorksV1MaterialRequestSummaryPage> Function(
+    YorksV1MaterialRequestSummaryQuery query,
+  )?
+  summaryPageLoader;
+  final int refreshRevision;
 
   @override
   State<YorksV1MaterialRequestCentre> createState() =>
@@ -71,17 +80,130 @@ class _YorksV1MaterialRequestCentreState
   bool _filtersExpanded = false;
   final Set<String> _expandedProjectIds = <String>{};
   int _page = 0;
+  YorksV1MaterialRequestSummaryPage? _serverPage;
+  Object? _serverError;
+  bool _serverLoading = false;
+  Timer? _serverSearchDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.summaryPageLoader != null) {
+      unawaited(_loadServerPage());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant YorksV1MaterialRequestCentre oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.summaryPageLoader != widget.summaryPageLoader ||
+        oldWidget.fixedProjectId != widget.fixedProjectId ||
+        oldWidget.refreshRevision != widget.refreshRevision) {
+      unawaited(_loadServerPage());
+    }
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _serverSearchDebounce?.cancel();
     super.dispose();
   }
 
-  void _update(VoidCallback update) => setState(() {
-    update();
-    _page = 0;
-  });
+  void _update(VoidCallback update, {bool search = false}) {
+    setState(() {
+      update();
+      _page = 0;
+    });
+    if (widget.summaryPageLoader == null) return;
+    _serverSearchDebounce?.cancel();
+    if (search) {
+      _serverSearchDebounce = Timer(
+        const Duration(milliseconds: 320),
+        () => unawaited(_loadServerPage()),
+      );
+    } else {
+      unawaited(_loadServerPage());
+    }
+  }
+
+  YorksV1MaterialRequestSummaryQuery get _serverQuery {
+    final cutoff = switch (_dateRange) {
+      _MaterialRequestCentreDateRange.allTime => null,
+      _MaterialRequestCentreDateRange.sevenDays =>
+        DateTime.now().toUtc().subtract(const Duration(days: 7)),
+      _MaterialRequestCentreDateRange.thirtyDays =>
+        DateTime.now().toUtc().subtract(const Duration(days: 30)),
+    };
+    return YorksV1MaterialRequestSummaryQuery(
+      projectId: widget.fixedProjectId?.trim().isNotEmpty == true
+          ? widget.fixedProjectId
+          : (_project == _allSelection ? null : _project),
+      search: _searchController.text,
+      states: _status == _allSelection
+          ? const []
+          : [YorksV1MaterialRequestState.fromWireValue(_status)!],
+      scopeId: _scope == _allSelection ? null : _scope,
+      requester: _requester == _allSelection ? null : _requester,
+      updatedAfter: cutoff,
+      attentionOnly: _attentionOnly,
+      metric: switch (_metricFilter) {
+        _MaterialRequestMetricFilter.all => 'all',
+        _MaterialRequestMetricFilter.open => 'open',
+        _MaterialRequestMetricFilter.inProgress => 'in_progress',
+        _MaterialRequestMetricFilter.dispatched => 'dispatched',
+        _MaterialRequestMetricFilter.received => 'received',
+        _MaterialRequestMetricFilter.closed => 'closed',
+      },
+      newestFirst: _newestFirst,
+      limit: _view == _MaterialRequestCentreView.projects ? 100 : 15,
+      offset: _view == _MaterialRequestCentreView.projects ? 0 : _page * 15,
+    );
+  }
+
+  Future<void> _loadServerPage() async {
+    final loader = widget.summaryPageLoader;
+    if (loader == null || !mounted) return;
+    final query = _serverQuery;
+    setState(() {
+      _serverLoading = true;
+      _serverError = null;
+    });
+    try {
+      var page = await loader(query);
+      if (_view == _MaterialRequestCentreView.projects) {
+        final items = [...page.items];
+        var nextOffset = page.offset + page.items.length;
+        var pagesLoaded = 1;
+        while (page.hasMore && pagesLoaded < 100) {
+          page = await loader(query.copyWith(offset: nextOffset));
+          items.addAll(page.items);
+          nextOffset += page.items.length;
+          pagesLoaded++;
+          if (page.items.isEmpty) break;
+        }
+        page = YorksV1MaterialRequestSummaryPage(
+          items: items,
+          totalCount: page.totalCount,
+          limit: items.length,
+          offset: 0,
+          hasMore: page.hasMore,
+          metrics: page.metrics,
+        );
+      }
+      if (!mounted || query != _serverQuery) return;
+      setState(() {
+        _serverPage = page;
+        _serverLoading = false;
+      });
+    } catch (error) {
+      if (!mounted || query != _serverQuery) return;
+      setState(() {
+        _serverError = error;
+        _serverLoading = false;
+      });
+    }
+  }
 
   void _clearFilters() => _update(() {
     _searchController.clear();
@@ -96,9 +218,17 @@ class _YorksV1MaterialRequestCentreState
 
   @override
   Widget build(BuildContext context) {
-    final visible = _visibleRequests();
+    final source = widget.summaryPageLoader == null
+        ? widget.requests
+        : (_serverPage?.items
+                  .map((summary) => summary.toRegisterProjection())
+                  .toList(growable: false) ??
+              const <YorksV1MaterialRequest>[]);
+    final visible = _visibleRequests(source);
     final folders = _foldersFor(visible, newestFirst: _newestFirst);
-    final metrics = _MaterialRequestCentreMetrics.fromRequests(widget.requests);
+    final metrics = _serverPage == null
+        ? _MaterialRequestCentreMetrics.fromRequests(source)
+        : _MaterialRequestCentreMetrics.fromSummary(_serverPage!.metrics);
     final isCompact =
         MediaQuery.sizeOf(context).width < AppSpacing.compactBreakpoint;
 
@@ -115,7 +245,9 @@ class _YorksV1MaterialRequestCentreState
           language: widget.language,
           canCreate: widget.canCreate,
           onCreate: widget.onCreate,
-          onRefresh: widget.onRefresh,
+          onRefresh: widget.summaryPageLoader == null
+              ? widget.onRefresh
+              : () => unawaited(_loadServerPage()),
         ),
         if (widget.localDraftNotice != null) ...[
           const SizedBox(height: AppSpacing.md),
@@ -132,50 +264,89 @@ class _YorksV1MaterialRequestCentreState
           }),
         ),
         const SizedBox(height: AppSpacing.lg),
-        _MainCentrePanel(
-          language: widget.language,
-          searchController: _searchController,
-          onSearchChanged: (_) => _update(() {}),
-          newestFirst: _newestFirst,
-          onSortChanged: (value) => _update(() => _newestFirst = value),
-          view: _view,
-          onViewChanged: (value) => _update(() => _view = value),
-          filtersExpanded: _filtersExpanded,
-          onFiltersExpandedChanged: (value) =>
-              setState(() => _filtersExpanded = value),
-          activeFilterCount: _activeFilterCount,
-          filter: _FilterForm(
+        if (_serverError != null && _serverPage == null)
+          _MaterialRequestCentreLoadError(
             language: widget.language,
-            status: _status,
-            project: _project,
-            scope: _scope,
-            requester: _requester,
-            dateRange: _dateRange,
-            attentionOnly: _attentionOnly,
-            requests: widget.requests,
-            fixedProjectId: widget.fixedProjectId,
-            onStatusChanged: (value) => _update(() => _status = value),
-            onProjectChanged: (value) => _update(() => _project = value),
-            onScopeChanged: (value) => _update(() => _scope = value),
-            onRequesterChanged: (value) => _update(() => _requester = value),
-            onDateRangeChanged: (value) => _update(() => _dateRange = value),
-            onAttentionOnlyChanged: (value) =>
-                _update(() => _attentionOnly = value),
-            onClear: _clearFilters,
-            onApply: () => setState(() => _filtersExpanded = false),
+            onRetry: () => unawaited(_loadServerPage()),
+          )
+        else
+          _MainCentrePanel(
+            language: widget.language,
+            searchController: _searchController,
+            onSearchChanged: (_) => _update(() {}, search: true),
+            newestFirst: _newestFirst,
+            onSortChanged: (value) => _update(() => _newestFirst = value),
+            view: _view,
+            onViewChanged: (value) => _update(() => _view = value),
+            filtersExpanded: _filtersExpanded,
+            onFiltersExpandedChanged: (value) =>
+                setState(() => _filtersExpanded = value),
+            activeFilterCount: _activeFilterCount,
+            filter: _FilterForm(
+              language: widget.language,
+              status: _status,
+              project: _project,
+              scope: _scope,
+              requester: _requester,
+              dateRange: _dateRange,
+              attentionOnly: _attentionOnly,
+              requests: source,
+              fixedProjectId: widget.fixedProjectId,
+              onStatusChanged: (value) => _update(() => _status = value),
+              onProjectChanged: (value) => _update(() => _project = value),
+              onScopeChanged: (value) => _update(() => _scope = value),
+              onRequesterChanged: (value) => _update(() => _requester = value),
+              onDateRangeChanged: (value) => _update(() => _dateRange = value),
+              onAttentionOnlyChanged: (value) =>
+                  _update(() => _attentionOnly = value),
+              onClear: _clearFilters,
+              onApply: () => setState(() => _filtersExpanded = false),
+            ),
+            folders: folders,
+            requests: visible,
+            serverTotalItems:
+                widget.summaryPageLoader != null &&
+                    _view == _MaterialRequestCentreView.allRequests
+                ? _serverPage?.totalCount
+                : null,
+            serverPageMode:
+                widget.summaryPageLoader != null &&
+                _view == _MaterialRequestCentreView.allRequests,
+            expandedProjectIds: _expandedProjectIds,
+            onProjectExpanded: (projectId) => setState(() {
+              if (!_expandedProjectIds.add(projectId)) {
+                _expandedProjectIds.remove(projectId);
+              }
+            }),
+            page: _page,
+            onPageChanged: (value) {
+              setState(() => _page = value);
+              if (widget.summaryPageLoader != null) {
+                unawaited(_loadServerPage());
+              }
+            },
+            onOpen: widget.onOpen,
           ),
-          folders: folders,
-          requests: visible,
-          expandedProjectIds: _expandedProjectIds,
-          onProjectExpanded: (projectId) => setState(() {
-            if (!_expandedProjectIds.add(projectId)) {
-              _expandedProjectIds.remove(projectId);
-            }
-          }),
-          page: _page,
-          onPageChanged: (value) => setState(() => _page = value),
-          onOpen: widget.onOpen,
-        ),
+        if (_serverLoading)
+          const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.sm),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+        if (_serverError != null && _serverPage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => unawaited(_loadServerPage()),
+                icon: const Icon(Icons.refresh_rounded),
+                label: YorksV1ActiveText(
+                  copy: YorksV1MaterialRequestStrings.tryAgain,
+                  language: widget.language,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -190,11 +361,14 @@ class _YorksV1MaterialRequestCentreState
     _metricFilter != _MaterialRequestMetricFilter.all,
   ].where((active) => active).length;
 
-  List<YorksV1MaterialRequest> _visibleRequests() {
+  List<YorksV1MaterialRequest> _visibleRequests(
+    List<YorksV1MaterialRequest> requests,
+  ) {
+    if (widget.summaryPageLoader != null) return requests;
     final now = DateTime.now();
     final query = _searchController.text.trim().toLowerCase();
     final source =
-        widget.requests
+        requests
             .where((request) {
               if (widget.fixedProjectId != null &&
                   widget.fixedProjectId!.isNotEmpty &&
@@ -249,6 +423,45 @@ class _YorksV1MaterialRequestCentreState
           );
     return source;
   }
+}
+
+class _MaterialRequestCentreLoadError extends StatelessWidget {
+  const _MaterialRequestCentreLoadError({
+    required this.language,
+    required this.onRetry,
+  });
+
+  final AppLanguage language;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => LedgerCard(
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 240),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 44,
+              color: AppColors.muted,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            FilledButton.icon(
+              key: const ValueKey('material-request-centre-retry'),
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: YorksV1ActiveText(
+                copy: YorksV1MaterialRequestStrings.tryAgain,
+                language: language,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 bool _isArchived(YorksV1MaterialRequest request) =>
@@ -351,6 +564,17 @@ class _MaterialRequestCentreMetrics {
     closed: requests
         .where((request) => request.state == YorksV1MaterialRequestState.closed)
         .length,
+  );
+
+  factory _MaterialRequestCentreMetrics.fromSummary(
+    YorksV1MaterialRequestSummaryMetrics metrics,
+  ) => _MaterialRequestCentreMetrics(
+    total: metrics.total,
+    open: metrics.open,
+    inProgress: metrics.inProgress,
+    dispatched: metrics.dispatched,
+    received: metrics.received,
+    closed: metrics.closed,
   );
 }
 
@@ -769,6 +993,8 @@ class _MainCentrePanel extends StatelessWidget {
     required this.filter,
     required this.folders,
     required this.requests,
+    this.serverTotalItems,
+    this.serverPageMode = false,
     required this.expandedProjectIds,
     required this.onProjectExpanded,
     required this.page,
@@ -789,6 +1015,8 @@ class _MainCentrePanel extends StatelessWidget {
   final Widget filter;
   final List<_ProjectRequestFolder> folders;
   final List<YorksV1MaterialRequest> requests;
+  final int? serverTotalItems;
+  final bool serverPageMode;
   final Set<String> expandedProjectIds;
   final ValueChanged<String> onProjectExpanded;
   final int page;
@@ -798,14 +1026,17 @@ class _MainCentrePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final showProjects = view == _MaterialRequestCentreView.projects;
-    final totalItems = showProjects ? folders.length : requests.length;
+    final totalItems = showProjects
+        ? folders.length
+        : (serverTotalItems ?? requests.length);
     final pageSize = showProjects ? _folderPageSize : _requestPageSize;
     final pageCount = totalItems == 0
         ? 1
         : (totalItems + pageSize - 1) ~/ pageSize;
     final currentPage = page.clamp(0, pageCount - 1);
-    final start = currentPage * pageSize;
-    final end = (start + pageSize).clamp(0, totalItems);
+    final start = serverPageMode ? 0 : currentPage * pageSize;
+    final availableItems = showProjects ? folders.length : requests.length;
+    final end = (start + pageSize).clamp(0, availableItems);
     final pageFolders = showProjects
         ? folders.sublist(start, end)
         : const <_ProjectRequestFolder>[];
@@ -1471,7 +1702,7 @@ class _ExplorerRequestRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.lines.length).active(language)}',
+                      '${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.labelSmall.copyWith(
@@ -1754,7 +1985,7 @@ class _RequestCentreRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.lines.length).active(language)}',
+                  '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySmall.copyWith(

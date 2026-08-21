@@ -1289,6 +1289,8 @@ class _ReceiptReviewSheet extends ConsumerStatefulWidget {
 class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   final Map<String, YorksV1ReceiptOutcome> _outcomes = {};
   final Map<String, TextEditingController> _goodQuantities = {};
+  final Map<String, TextEditingController> _missingQuantities = {};
+  final Map<String, TextEditingController> _damagedQuantities = {};
   final Map<String, TextEditingController> _notes = {};
   final Set<String> _reviewed = {};
   late String _receiptIdempotencyKey;
@@ -1306,6 +1308,8 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
       _goodQuantities[line.id] = TextEditingController(
         text: _displayQuantity(line.dispatchedQuantity),
       );
+      _missingQuantities[line.id] = TextEditingController(text: '0');
+      _damagedQuantities[line.id] = TextEditingController(text: '0');
       _notes[line.id] = TextEditingController();
     }
   }
@@ -1313,6 +1317,12 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
   @override
   void dispose() {
     for (final controller in _goodQuantities.values) {
+      controller.dispose();
+    }
+    for (final controller in _missingQuantities.values) {
+      controller.dispose();
+    }
+    for (final controller in _damagedQuantities.values) {
       controller.dispose();
     }
     for (final controller in _notes.values) {
@@ -1393,6 +1403,16 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
                                     .dispatch
                                     .lines[index]
                                     .id]!,
+                            missingQuantity:
+                                _missingQuantities[widget
+                                    .dispatch
+                                    .lines[index]
+                                    .id]!,
+                            damagedQuantity:
+                                _damagedQuantities[widget
+                                    .dispatch
+                                    .lines[index]
+                                    .id]!,
                             note: _notes[widget.dispatch.lines[index].id]!,
                             isDisabled: _saving,
                             onOutcomeChanged: (outcome) => setState(() {
@@ -1402,9 +1422,14 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
                               if (outcome == YorksV1ReceiptOutcome.received) {
                                 _goodQuantities[line.id]!.text =
                                     _displayQuantity(line.dispatchedQuantity);
+                                _missingQuantities[line.id]!.text = '0';
+                                _damagedQuantities[line.id]!.text = '0';
+                                _notes[line.id]!.clear();
                               } else if (_goodQuantities[line.id]!.text ==
                                   _displayQuantity(line.dispatchedQuantity)) {
                                 _goodQuantities[line.id]!.text = '0';
+                                _missingQuantities[line.id]!.text = '0';
+                                _damagedQuantities[line.id]!.text = '0';
                               }
                             }),
                           ),
@@ -1487,13 +1512,46 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
         line.dispatchedQuantity,
       );
       final goodQuantity = YorksV1DecimalQuantity.tryParse(good);
+      final missingQuantity = outcome == YorksV1ReceiptOutcome.missing
+          ? dispatched == null || goodQuantity == null
+                ? null
+                : dispatched - goodQuantity
+          : outcome == YorksV1ReceiptOutcome.mixed
+          ? YorksV1DecimalQuantity.tryParse(
+              _missingQuantities[line.id]!.text.trim(),
+            )
+          : YorksV1DecimalQuantity.zero;
+      final damagedQuantity = outcome == YorksV1ReceiptOutcome.damaged
+          ? dispatched == null || goodQuantity == null
+                ? null
+                : dispatched - goodQuantity
+          : outcome == YorksV1ReceiptOutcome.mixed
+          ? YorksV1DecimalQuantity.tryParse(
+              _damagedQuantities[line.id]!.text.trim(),
+            )
+          : YorksV1DecimalQuantity.zero;
       if (goodQuantity == null ||
           dispatched == null ||
+          missingQuantity == null ||
+          damagedQuantity == null ||
           goodQuantity.isNegative ||
+          missingQuantity.isNegative ||
+          damagedQuantity.isNegative ||
+          goodQuantity + missingQuantity + damagedQuantity != dispatched ||
           (outcome == YorksV1ReceiptOutcome.received &&
-              goodQuantity != dispatched) ||
-          (outcome != YorksV1ReceiptOutcome.received &&
-              (goodQuantity.compareTo(dispatched) >= 0 || note.isEmpty))) {
+              (goodQuantity != dispatched || note.isNotEmpty)) ||
+          (outcome == YorksV1ReceiptOutcome.missing &&
+              (!missingQuantity.isPositive ||
+                  !damagedQuantity.isZero ||
+                  note.isEmpty)) ||
+          (outcome == YorksV1ReceiptOutcome.damaged &&
+              (!missingQuantity.isZero ||
+                  !damagedQuantity.isPositive ||
+                  note.isEmpty)) ||
+          (outcome == YorksV1ReceiptOutcome.mixed &&
+              (!missingQuantity.isPositive ||
+                  !damagedQuantity.isPositive ||
+                  note.isEmpty))) {
         _showFailure(YorksV1LogisticsStrings.invalidReceipt.primary);
         return;
       }
@@ -1502,6 +1560,8 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
           dispatchLineId: line.id,
           outcome: outcome,
           goodQuantity: good,
+          missingQuantity: missingQuantity.canonicalText,
+          damagedQuantity: damagedQuantity.canonicalText,
           note: note,
         ),
       );
@@ -1590,6 +1650,8 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
         _goodQuantities[line.id]!.text = _displayQuantity(
           line.dispatchedQuantity,
         );
+        _missingQuantities[line.id]!.text = '0';
+        _damagedQuantities[line.id]!.text = '0';
         _notes[line.id]!.clear();
         _reviewed.add(line.id);
       }
@@ -1607,6 +1669,8 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
         _goodQuantities[line.id]!.text = _displayQuantity(
           line.dispatchedQuantity,
         );
+        _missingQuantities[line.id]!.text = '0';
+        _damagedQuantities[line.id]!.text = '0';
         _notes[line.id]!.clear();
         _reviewed.add(line.id);
       });
@@ -1621,6 +1685,12 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
         initialGoodQuantity: _reviewed.contains(line.id)
             ? _goodQuantities[line.id]!.text
             : '0',
+        initialMissingQuantity: _reviewed.contains(line.id)
+            ? _missingQuantities[line.id]!.text
+            : '0',
+        initialDamagedQuantity: _reviewed.contains(line.id)
+            ? _damagedQuantities[line.id]!.text
+            : '0',
         initialNote: _notes[line.id]!.text,
       ),
     );
@@ -1628,6 +1698,8 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
     setState(() {
       _outcomes[line.id] = result.outcome;
       _goodQuantities[line.id]!.text = result.goodQuantity;
+      _missingQuantities[line.id]!.text = result.missingQuantity;
+      _damagedQuantities[line.id]!.text = result.damagedQuantity;
       _notes[line.id]!.text = result.note;
       _reviewed.add(line.id);
     });
@@ -1795,11 +1867,15 @@ class _ReceiptExceptionDraft {
   const _ReceiptExceptionDraft({
     required this.outcome,
     required this.goodQuantity,
+    required this.missingQuantity,
+    required this.damagedQuantity,
     required this.note,
   });
 
   final YorksV1ReceiptOutcome outcome;
   final String goodQuantity;
+  final String missingQuantity;
+  final String damagedQuantity;
   final String note;
 }
 
@@ -1808,12 +1884,16 @@ class _MobileReceiptExceptionDialog extends StatefulWidget {
     required this.line,
     required this.initialOutcome,
     required this.initialGoodQuantity,
+    required this.initialMissingQuantity,
+    required this.initialDamagedQuantity,
     required this.initialNote,
   });
 
   final YorksV1DispatchLine line;
   final YorksV1ReceiptOutcome initialOutcome;
   final String initialGoodQuantity;
+  final String initialMissingQuantity;
+  final String initialDamagedQuantity;
   final String initialNote;
 
   @override
@@ -1825,6 +1905,8 @@ class _MobileReceiptExceptionDialogState
     extends State<_MobileReceiptExceptionDialog> {
   late YorksV1ReceiptOutcome _outcome;
   late final TextEditingController _goodQuantity;
+  late final TextEditingController _missingQuantity;
+  late final TextEditingController _damagedQuantity;
   late final TextEditingController _note;
 
   @override
@@ -1832,12 +1914,20 @@ class _MobileReceiptExceptionDialogState
     super.initState();
     _outcome = widget.initialOutcome;
     _goodQuantity = TextEditingController(text: widget.initialGoodQuantity);
+    _missingQuantity = TextEditingController(
+      text: widget.initialMissingQuantity,
+    );
+    _damagedQuantity = TextEditingController(
+      text: widget.initialDamagedQuantity,
+    );
     _note = TextEditingController(text: widget.initialNote);
   }
 
   @override
   void dispose() {
     _goodQuantity.dispose();
+    _missingQuantity.dispose();
+    _damagedQuantity.dispose();
     _note.dispose();
     super.dispose();
   }
@@ -1887,6 +1977,7 @@ class _MobileReceiptExceptionDialogState
                             for (final value in const [
                               YorksV1ReceiptOutcome.missing,
                               YorksV1ReceiptOutcome.damaged,
+                              YorksV1ReceiptOutcome.mixed,
                             ])
                               YorksMobileSegmentOption(
                                 value: value,
@@ -1903,6 +1994,22 @@ class _MobileReceiptExceptionDialogState
                           label: YorksV1LogisticsStrings.goodQuantity.primary,
                           onChanged: (_) => setState(() {}),
                         ),
+                        if (_outcome == YorksV1ReceiptOutcome.mixed) ...[
+                          const SizedBox(height: 12),
+                          _QuantityInput(
+                            controller: _missingQuantity,
+                            label:
+                                YorksV1LogisticsStrings.missingQuantity.primary,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          const SizedBox(height: 12),
+                          _QuantityInput(
+                            controller: _damagedQuantity,
+                            label:
+                                YorksV1LogisticsStrings.damagedQuantity.primary,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         TextField(
                           controller: _note,
@@ -1949,9 +2056,27 @@ class _MobileReceiptExceptionDialogState
   void _save() {
     final dispatched = _number(widget.line.dispatchedQuantity);
     final good = _decimalNumber(_goodQuantity.text);
+    final missing = _outcome == YorksV1ReceiptOutcome.missing
+        ? dispatched - (good ?? 0)
+        : _outcome == YorksV1ReceiptOutcome.mixed
+        ? _decimalNumber(_missingQuantity.text)
+        : 0.0;
+    final damaged = _outcome == YorksV1ReceiptOutcome.damaged
+        ? dispatched - (good ?? 0)
+        : _outcome == YorksV1ReceiptOutcome.mixed
+        ? _decimalNumber(_damagedQuantity.text)
+        : 0.0;
     if (good == null ||
+        missing == null ||
+        damaged == null ||
         good < 0 ||
-        good >= dispatched ||
+        missing < 0 ||
+        damaged < 0 ||
+        (good + missing + damaged - dispatched).abs() > .0001 ||
+        (_outcome == YorksV1ReceiptOutcome.missing && missing <= 0) ||
+        (_outcome == YorksV1ReceiptOutcome.damaged && damaged <= 0) ||
+        (_outcome == YorksV1ReceiptOutcome.mixed &&
+            (missing <= 0 || damaged <= 0)) ||
         _note.text.trim().isEmpty) {
       YorksAppToast.show(
         context,
@@ -1964,6 +2089,8 @@ class _MobileReceiptExceptionDialogState
       _ReceiptExceptionDraft(
         outcome: _outcome,
         goodQuantity: _goodQuantity.text.trim(),
+        missingQuantity: _quantityText(missing),
+        damagedQuantity: _quantityText(damaged),
         note: _note.text.trim(),
       ),
     );
@@ -1976,6 +2103,8 @@ class _ReceiptLineEditor extends StatelessWidget {
     required this.line,
     required this.outcome,
     required this.goodQuantity,
+    required this.missingQuantity,
+    required this.damagedQuantity,
     required this.note,
     required this.isDisabled,
     required this.onOutcomeChanged,
@@ -1985,6 +2114,8 @@ class _ReceiptLineEditor extends StatelessWidget {
   final YorksV1DispatchLine line;
   final YorksV1ReceiptOutcome outcome;
   final TextEditingController goodQuantity;
+  final TextEditingController missingQuantity;
+  final TextEditingController damagedQuantity;
   final TextEditingController note;
   final bool isDisabled;
   final ValueChanged<YorksV1ReceiptOutcome> onOutcomeChanged;
@@ -2012,6 +2143,8 @@ class _ReceiptLineEditor extends StatelessWidget {
         final inputs = _ReceiptLineInputs(
           outcome: outcome,
           goodQuantity: goodQuantity,
+          missingQuantity: missingQuantity,
+          damagedQuantity: damagedQuantity,
           note: note,
           disabled: isDisabled,
         );
@@ -2219,12 +2352,16 @@ class _ReceiptLineInputs extends StatelessWidget {
   const _ReceiptLineInputs({
     required this.outcome,
     required this.goodQuantity,
+    required this.missingQuantity,
+    required this.damagedQuantity,
     required this.note,
     required this.disabled,
   });
 
   final YorksV1ReceiptOutcome outcome;
   final TextEditingController goodQuantity;
+  final TextEditingController missingQuantity;
+  final TextEditingController damagedQuantity;
   final TextEditingController note;
   final bool disabled;
 
@@ -2240,6 +2377,24 @@ class _ReceiptLineInputs extends StatelessWidget {
             enabled: !disabled && outcome != YorksV1ReceiptOutcome.received,
           ),
         ),
+        if (outcome == YorksV1ReceiptOutcome.mixed)
+          SizedBox(
+            width: constraints.maxWidth >= 330 ? 150 : double.infinity,
+            child: _QuantityInput(
+              controller: missingQuantity,
+              label: YorksV1LogisticsStrings.missingQuantity.primary,
+              enabled: !disabled,
+            ),
+          ),
+        if (outcome == YorksV1ReceiptOutcome.mixed)
+          SizedBox(
+            width: constraints.maxWidth >= 330 ? 150 : double.infinity,
+            child: _QuantityInput(
+              controller: damagedQuantity,
+              label: YorksV1LogisticsStrings.damagedQuantity.primary,
+              enabled: !disabled,
+            ),
+          ),
         SizedBox(
           width: constraints.maxWidth >= 330 ? 196 : double.infinity,
           child: _TextInput(

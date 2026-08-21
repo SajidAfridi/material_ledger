@@ -57,6 +57,12 @@ export function safePushCopy(eventCode: string): PushCopy {
         body: "A teammate mentioned you in a material request comment.",
         type: "info",
       };
+    case "material_request_work_assigned":
+      return {
+        title: "Material request assigned to you",
+        body: "A teammate assigned you responsibility for a material request.",
+        type: "request",
+      };
     case "team_chat_message":
       return {
         title: "New Team Chat message",
@@ -101,9 +107,9 @@ export function safePushCopy(eventCode: string): PushCopy {
       };
     case "arrangement_completed_unavailable":
       return {
-        title: "Arrangement completed",
+        title: "All items currently unavailable",
         body:
-          "Procurement recorded that no requested material can be provided now.",
+          "Procurement can revise the arrangement, or an authorised reviewer can cancel the request.",
         type: "request",
       };
     case "receipt_review_required":

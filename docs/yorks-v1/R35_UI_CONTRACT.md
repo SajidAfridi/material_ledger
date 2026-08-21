@@ -231,7 +231,8 @@ New MR fields:
 - scheduled date only when Scheduled;
 - optional delivery note;
 - rows from BOQ, Excel or custom entry;
-- inventory-assisted custom entry that fills only descriptive fields.
+- ranked material-assisted entry: selected-scope BOQ first, whole-project BOQ
+  second, inventory third, with unrestricted custom entry when none applies.
 
 The draft screen makes “Draft — visible only to you” explicit. Selecting BOQ
 content never submits and shows only folders in the chosen Common/building
@@ -240,6 +241,13 @@ retaining custom/Excel rows. “Submit for Engineering Approval” is the
 unambiguous connected primary action with validation and connectivity state.
 Before approval, the creator and authorized Project Engineer can reopen the
 same consistent editor; status and version conflict remain visible.
+
+Search results visibly identify selected-scope BOQ, project BOQ or inventory.
+Only a selected-scope BOQ result is retained as a BOQ source; cross-scope and
+inventory matches are descriptive copies. Quantity remains deliberate and no
+inventory availability is shown or enforced at request creation. Arrangement
+shows the retained BOQ correlation beside the requested line while leaving
+warehouse/supplier selection manual and server-authoritative.
 
 MR detail shows:
 
@@ -251,6 +259,28 @@ MR detail shows:
 - dispatch/receipt/DO/return chain;
 - activity/documents appropriate to access;
 - a chronological comment thread, @mention picker and composer.
+
+Phase 2 keeps the familiar register and detail structure while making large
+workspaces predictable:
+
+- the request register loads 15 lightweight summaries per page and performs
+  search, filter and latest/oldest ordering on the server;
+- full request lines and discussion history are fetched only after opening a
+  record;
+- the discussion starts with the newest 20 comments and offers **Load earlier
+  comments** inside the bounded scroll region;
+- **Claim** and **Reassign** appear as a compact responsibility card. The card
+  always remains visually separate from workflow approval/arrangement actions,
+  and reassignment names the recipient and requires a reason;
+- returned requests show concise change chips for items, quantities, details
+  and delivery timing;
+- private draft recovery shows **Saved to your account** only after a confirmed
+  server sync. Offline/local recovery remains available and a sync failure does
+  not claim success or block editing.
+
+Desktop, tablet and mobile use the same facts. Mobile presents one paged list
+and 44px controls rather than shrinking the desktop table; realtime and
+foreground refresh retain the last authorized projection while updating.
 
 Unauthorized viewers receive a non-commercial table with no cost columns.
 
@@ -279,6 +309,16 @@ arrangement makes its positive lines dispatch-ready; there is no second
 approval prompt for new requests. Existing legacy post-arrangement approvals
 retain their recorded review UI until resolved.
 
+Validation is shown at the affected line and in one compact summary whose row
+actions move focus to the exact problem; save does not fail with only a generic
+snackbar. If every line is Cannot Provide Now, the workspace remains editable
+for Procurement and clearly offers Engineering/Admin cancellation as the
+terminal alternative.
+
+On mobile, Engineering approval/return actions remain in one safe-area sticky
+bar while the request content scrolls. The logistics entry point is labelled
+“Delivery Orders and returns”, matching the records it actually contains.
+
 ### Industrial-density refinement — 13 August 2026
 
 The Material Request creation, record and arrangement workspaces use the
@@ -301,7 +341,16 @@ without copying prototype-only controls or changing server workflow authority:
 - choosing External Supplier is sufficient for a Full arrangement. Supplier
   name and the overall Procurement note are optional disclosures. Partial and
   Cannot Provide Now still require the decision reason needed to preserve
-  quantity truth.
+  quantity truth;
+- a positive External Supplier line also shows a compact readiness panel with
+  **Source ready / firmly committed**, optional expected date and reference.
+  The published policy labels this evidence Recommended or Required. Desktop,
+  focused mobile editor and read-only history use the same facts; and
+- a cancelled all-unavailable request shows one calm recovery card only when
+  the server declares it eligible or already linked. On compact screens its
+  action stacks full-width below the explanation. **Create replacement
+  request** requires confirmation and opens the new private Draft; it never
+  reopens the cancelled source.
 
 ## 10. Inventory, dispatch and receipt
 
@@ -318,7 +367,12 @@ Receipt editor requires every line outcome:
 
 - Received;
 - Missing plus good quantity/note;
-- Damaged plus good quantity/note.
+- Damaged plus good quantity/note;
+- Mixed, with explicit good, missing and damaged quantities plus a note.
+
+For every outcome, `good + missing + damaged` must equal the immutable
+dispatched quantity. Desktop shows the split inline; compact mobile uses a
+focused editor without shrinking the desktop grid.
 
 It includes an explicit all-lines-reviewed confirmation and shows the resulting
 replacement eligibility before commit.

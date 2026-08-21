@@ -322,6 +322,9 @@ abstract final class YorksV1ConfigurationStrings {
     'engineering_before_procurement': 'Engineering approval before Procurement',
     'engineering_before_procurement_body':
         'Procurement cannot start arrangement until Engineering approval.',
+    'authorized_creator_self_approval': 'Authorized creator may self-approve',
+    'authorized_creator_self_approval_body':
+        'When enabled, a Project Engineer, global Engineering role or Admin who creates a request may approve it. Site Engineers never gain approval authority.',
     'editable_before_approval': 'Editable before Engineering approval',
     'editable_before_approval_body':
         'Creator and an authorized Project Engineer may correct the request before approval.',
@@ -363,6 +366,10 @@ abstract final class YorksV1ConfigurationStrings {
     'server_derived': 'Server-derived',
     'arrangement_policy_help':
         'Procurement arranges only Engineering-approved requests.',
+    'external_source_readiness_required':
+        'Require external-source readiness confirmation',
+    'external_source_readiness_required_body':
+        'When enabled, Procurement must confirm that every external quantity is available or firmly committed before saving. Supplier name remains optional.',
     'default_source': 'Default source',
     'warehouse': 'Warehouse',
     'external_supplier': 'External supplier',
@@ -573,6 +580,13 @@ abstract final class YorksV1ConfigurationStrings {
       'area.security_audit': 'الأمان والتدقيق',
       'area.numbering_data': 'الترقيم والبيانات',
       'area.history': 'سجل الإعدادات',
+      'authorized_creator_self_approval': 'يمكن للمنشئ المخوّل الاعتماد ذاتياً',
+      'authorized_creator_self_approval_body':
+          'عند التفعيل، يجوز لمهندس المشروع أو دور هندسي عام أو مسؤول إداري أن يعتمد الطلب الذي أنشأه. لا يحصل مهندس الموقع على صلاحية الاعتماد.',
+      'external_source_readiness_required':
+          'اشتراط تأكيد جاهزية المصدر الخارجي',
+      'external_source_readiness_required_body':
+          'عند التفعيل، يجب أن تؤكد المشتريات أن كل كمية خارجية متاحة أو ملتزم بتوفيرها قبل الحفظ. يبقى اسم المورد اختيارياً.',
       'organisation_identity': 'هوية المؤسسة',
       'regional_language': 'الإعدادات الإقليمية واللغة',
       'master_categories': 'فئات المواد',
@@ -608,6 +622,14 @@ abstract final class YorksV1ConfigurationStrings {
       'area.security_audit': 'سیکیورٹی اور آڈٹ',
       'area.numbering_data': 'نمبرنگ اور ڈیٹا',
       'area.history': 'کنفیگریشن ہسٹری',
+      'authorized_creator_self_approval':
+          'مجاز تخلیق کنندہ خود منظوری دے سکتا ہے',
+      'authorized_creator_self_approval_body':
+          'فعال ہونے پر پروجیکٹ انجینئر، ادارہ گیر انجینئرنگ کردار یا ایڈمن اپنی بنائی ہوئی درخواست منظور کر سکتا ہے۔ سائٹ انجینئر کو منظوری کا اختیار نہیں ملتا۔',
+      'external_source_readiness_required':
+          'بیرونی ذریعہ کی تیاری کی تصدیق لازمی کریں',
+      'external_source_readiness_required_body':
+          'فعال ہونے پر پروکیورمنٹ کو محفوظ کرنے سے پہلے ہر بیرونی مقدار کی دستیابی یا پکی وابستگی کی تصدیق کرنا ہوگی۔ سپلائر کا نام اختیاری رہے گا۔',
     },
     'hi': {
       'title': 'कॉन्फ़िगरेशन केंद्र',
@@ -627,6 +649,14 @@ abstract final class YorksV1ConfigurationStrings {
       'area.security_audit': 'सुरक्षा और ऑडिट',
       'area.numbering_data': 'नंबरिंग और डेटा',
       'area.history': 'कॉन्फ़िगरेशन इतिहास',
+      'authorized_creator_self_approval':
+          'अधिकृत निर्माता स्वयं अनुमोदन कर सकता है',
+      'authorized_creator_self_approval_body':
+          'सक्षम होने पर प्रोजेक्ट इंजीनियर, संगठन-व्यापी इंजीनियरिंग भूमिका या एडमिन अपने बनाए अनुरोध को अनुमोदित कर सकता है। साइट इंजीनियर को अनुमोदन अधिकार नहीं मिलता।',
+      'external_source_readiness_required':
+          'बाहरी स्रोत की तैयारी की पुष्टि आवश्यक करें',
+      'external_source_readiness_required_body':
+          'सक्षम होने पर खरीद विभाग को सहेजने से पहले प्रत्येक बाहरी मात्रा की उपलब्धता या पक्की प्रतिबद्धता की पुष्टि करनी होगी। आपूर्तिकर्ता का नाम वैकल्पिक रहेगा।',
     },
   };
 }

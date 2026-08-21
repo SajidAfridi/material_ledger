@@ -162,7 +162,13 @@ void main() {
           reason: role.claimValue,
         );
         expect(
-          find.byKey(const ValueKey('role-overview-metrics')),
+          find.byKey(
+            ValueKey(
+              role == YorksV1Role.admin || role.isGlobalProjectEngineer
+                  ? 'executive-overview-metrics'
+                  : 'role-overview-metrics',
+            ),
+          ),
           findsOneWidget,
         );
         expect(tester.takeException(), isNull, reason: role.claimValue);
@@ -205,25 +211,19 @@ void main() {
 
       await pumpRole(YorksV1Role.admin);
       expect(
-        find.text(YorksV1OverviewStrings.controlCentre.primary),
+        find.text(YorksV1OverviewStrings.systemAndSecurity.primary),
         findsOneWidget,
       );
       expect(
-        find.text(YorksV1OverviewStrings.systemConfiguration.primary),
+        find.text(YorksV1OverviewStrings.configurationStatus.primary),
         findsOneWidget,
       );
 
       await pumpRole(YorksV1Role.seniorMechanicalEngineer);
+      expect(find.text('Browse / Inventory'), findsWidgets);
+      expect(find.text('User Management'), findsWidgets);
       expect(
-        find.text(YorksV1OverviewStrings.inventoryControl.primary),
-        findsWidgets,
-      );
-      expect(
-        find.text(YorksV1OverviewStrings.userAndAccess.primary),
-        findsOneWidget,
-      );
-      expect(
-        find.text(YorksV1OverviewStrings.systemConfiguration.primary),
+        find.text(YorksV1OverviewStrings.configurationStatus.primary),
         findsNothing,
       );
 
@@ -237,6 +237,61 @@ void main() {
         findsNothing,
       );
 
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    },
+  );
+
+  testWidgets(
+    'executive workspaces stay usable from small phone through desktop',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      for (final role in [
+        YorksV1Role.admin,
+        YorksV1Role.seniorMechanicalEngineer,
+        YorksV1Role.projectManager,
+      ]) {
+        for (final size in [
+          const Size(360, 640),
+          const Size(390, 844),
+          const Size(820, 900),
+          const Size(1024, 768),
+          const Size(1440, 900),
+        ]) {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                sharedPreferencesProvider.overrideWithValue(preferences),
+                yorksV1CurrentRoleProvider.overrideWithValue(role),
+                yorksV1ProjectPortfolioProvider.overrideWith(
+                  (ref) async => _projects,
+                ),
+                yorksV1MaterialRequestListProvider(
+                  null,
+                ).overrideWith((ref) async => _requests),
+                yorksV1InventoryWorkspaceProvider(null).overrideWith(
+                  (ref) async => YorksV1InventoryWorkspace(items: const []),
+                ),
+              ],
+              child: MaterialApp.router(routerConfig: _overviewRouter()),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const ValueKey('executive-overview-metrics')),
+            findsOneWidget,
+            reason: '${role.claimValue} at $size',
+          );
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '${role.claimValue} at $size',
+          );
+        }
+      }
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     },
@@ -295,13 +350,12 @@ GoRouter _overviewRouter() => GoRouter(
 );
 
 String _roleTitle(YorksV1Role role) => switch (role) {
-  YorksV1Role.admin => YorksV1OverviewStrings.adminTitle.primary,
-  YorksV1Role.seniorMechanicalEngineer =>
-    YorksV1OverviewStrings.seniorMechanicalTitle.primary,
-  YorksV1Role.projectManager => YorksV1OverviewStrings.managerTitle.primary,
-  YorksV1Role.workshopInCharge => YorksV1OverviewStrings.workshopTitle.primary,
+  YorksV1Role.admin => YorksV1OverviewStrings.adminCommandCentre.primary,
+  YorksV1Role.seniorMechanicalEngineer ||
+  YorksV1Role.projectManager ||
+  YorksV1Role.workshopInCharge ||
   YorksV1Role.documentController =>
-    YorksV1OverviewStrings.documentControllerTitle.primary,
+    YorksV1OverviewStrings.portfolioOverview.primary,
   YorksV1Role.siteEngineer => YorksV1OverviewStrings.siteEngineerTitle.primary,
   YorksV1Role.projectEngineer =>
     YorksV1OverviewStrings.projectEngineerTitle.primary,

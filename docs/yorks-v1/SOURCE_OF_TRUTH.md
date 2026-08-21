@@ -174,6 +174,15 @@ command. Tablet and mobile request projections re-fetch when the app returns
 to the foreground and use a low-frequency authorized safety refresh in
 addition to Realtime; the current projection stays visible during refresh.
 
+Product-owner Phase 1-3 approval on 21 August 2026 keeps independently
+authorized non-Site-Engineer creator self-approval enabled during adoption,
+keeps external-source readiness advisory until Admin publishes enforcement,
+and keeps all-unavailable requests editable by Procurement until Engineering
+explicitly cancels them. Phase 3 implements both policies as protected
+published Configuration values and adds a one-time linked replacement Draft
+only after that terminal cancellation. It does not reopen the source, grant
+Procurement Engineering authority or fabricate downstream workflow history.
+
 The detailed transition, migration and rollback contract is
 `MATERIAL_REQUEST_FLOW_REVISION_2026-08-13.md`. Existing in-flight Procurement
 arrangements are not rewritten or given synthetic request approvals.

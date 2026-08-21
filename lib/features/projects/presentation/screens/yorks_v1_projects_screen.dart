@@ -19,13 +19,19 @@ import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
+import '../../../../shared/models/yorks_v1_configuration.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_overview_strings.dart';
+import '../../../../shared/models/yorks_v1_rental.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/models/yorks_v1_team_chat.dart';
 import '../../../../shared/models/yorks_v1_team_chat_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
+import '../../../../shared/providers/users_provider.dart';
+import '../../../../shared/providers/yorks_v1_audit_provider.dart';
+import '../../../../shared/providers/yorks_v1_configuration_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
@@ -35,8 +41,10 @@ import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
+import '../../../../shared/providers/yorks_v1_rental_provider.dart';
 import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import 'yorks_v1_boq_screens.dart';
+import 'yorks_v1_executive_overview.dart';
 
 /// The normalized, R35-aligned project portfolio.
 ///
@@ -72,6 +80,10 @@ class YorksV1OverviewScreen extends ConsumerWidget {
     final canCreateRequest = role?.canCreateMaterialRequest == true;
     final procurement = role == YorksV1Role.procurement;
     final canBrowseInventory = role?.canBrowseInventory == true;
+    final executive =
+        role == YorksV1Role.admin || (role?.isGlobalProjectEngineer ?? false);
+    final admin = role == YorksV1Role.admin;
+    final canAccessRentals = admin && ref.watch(canAccessRentalsProvider);
     final AsyncValue<YorksV1InventoryWorkspace?> inventory = canBrowseInventory
         ? ref
               .watch(yorksV1InventoryWorkspaceProvider(null))
@@ -101,6 +113,52 @@ class YorksV1OverviewScreen extends ConsumerWidget {
               item.state == YorksV1MaterialRequestState.partiallyDispatched,
         )
         .length;
+
+    if (executive && role != null) {
+      final configuration = admin
+          ? ref
+                .watch(yorksV1ConfigurationCentreProvider)
+                .whenData<YorksV1ConfigurationCentre?>((value) => value)
+          : const AsyncData<YorksV1ConfigurationCentre?>(null);
+      final rentals = canAccessRentals
+          ? ref
+                .watch(yorksV1RentalPortfolioProvider)
+                .whenData<YorksV1RentalPortfolio?>((value) => value)
+          : const AsyncData<YorksV1RentalPortfolio?>(null);
+      final audit = admin ? ref.watch(yorksV1AuditControllerProvider) : null;
+      final activeUsers = admin ? ref.watch(activeUserCountProvider) : null;
+      return YorksV1ExecutiveOverview(
+        language: language,
+        role: role,
+        displayName: user?.fullName,
+        projects: projects,
+        requests: requests,
+        inventory: inventory,
+        configuration: configuration,
+        rentals: rentals,
+        audit: audit,
+        activeUsers: activeUsers,
+        canBrowseInventory: canBrowseInventory,
+        canAccessRentals: canAccessRentals,
+        onRefresh: () async {
+          final operations = <Future<Object?>>[
+            ref.refresh(yorksV1ProjectPortfolioProvider.future),
+            ref.refresh(yorksV1MaterialRequestListProvider(null).future),
+            if (canBrowseInventory)
+              ref.refresh(yorksV1InventoryWorkspaceProvider(null).future),
+            if (admin) ref.refresh(yorksV1ConfigurationCentreProvider.future),
+            if (canAccessRentals)
+              ref.refresh(yorksV1RentalPortfolioProvider.future),
+          ];
+          await Future.wait(
+            operations.map((future) => future.catchError((_) => null)),
+          );
+          if (admin) {
+            await ref.read(yorksV1AuditControllerProvider.notifier).load();
+          }
+        },
+      );
+    }
 
     return _R35OverviewPage(
       language: language,

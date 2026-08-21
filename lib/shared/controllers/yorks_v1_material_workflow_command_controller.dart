@@ -1,4 +1,5 @@
 import '../models/yorks_v1_arrangement.dart';
+import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../repositories/yorks_v1_arrangement_repository.dart';
@@ -92,6 +93,30 @@ class YorksV1MaterialWorkflowCommandController {
       ),
     ),
   );
+
+  Future<YorksV1MaterialRequest> createReplacementMaterialRequest(
+    YorksV1CreateReplacementMaterialRequestInput input,
+  ) {
+    final repository = _materialRequests;
+    if (repository is! YorksV1MaterialRequestPhase3Repository) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.featureDisabled,
+      );
+    }
+    return _run(
+      operation: 'create_replacement_material_request',
+      entityId: input.sourceRequestId,
+      payload: input.toRpcPayload(),
+      invoke: (key) => (repository as YorksV1MaterialRequestPhase3Repository)
+          .createReplacement(
+            YorksV1CreateReplacementMaterialRequestInput(
+              sourceRequestId: input.sourceRequestId,
+              expectedSourceVersion: input.expectedSourceVersion,
+              idempotencyKey: key,
+            ),
+          ),
+    );
+  }
 
   Future<YorksV1ArrangementWorkspace> decideArrangement(
     YorksV1DecideArrangementInput input,

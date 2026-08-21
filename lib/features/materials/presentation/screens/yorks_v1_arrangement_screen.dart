@@ -654,6 +654,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   final Map<String, TextEditingController> _unitCosts = {};
   final Map<String, TextEditingController> _suppliers = {};
   final Map<String, TextEditingController> _reasons = {};
+  final Map<String, GlobalKey> _lineKeys = {};
+  Map<String, List<String>> _validationIssues = const {};
   late final TextEditingController _procurementNote;
   late String _saveIdempotencyKey;
   bool _busy = false;
@@ -666,6 +668,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         line.id: _EditableArrangementLine.fromLine(line, widget.inventoryItems),
     };
     _inventoryItems = _inventoryItemsForRequest(widget.inventoryItems);
+    _initializeLineKeys();
     _initializeLineControllers();
     _procurementNote = TextEditingController(
       text: widget.arrangement.procurementNote ?? '',
@@ -686,6 +689,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           ),
       };
       _disposeLineControllers();
+      _initializeLineKeys();
       _initializeLineControllers();
       _procurementNote.text = widget.arrangement.procurementNote ?? '';
       _saveIdempotencyKey = const Uuid().v4();
@@ -716,6 +720,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           canManageCommercials: canManageCommercials,
           suppliers: _suppliers,
           reasons: _reasons,
+          validationIssues: _validationIssues,
           procurementNote: _procurementNote,
           busy: _busy,
           onChanged: _replace,
@@ -732,6 +737,15 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           _ArrangementOverview(lines: _lines.values.toList(growable: false)),
           const SizedBox(height: AppSpacing.md),
           const _ArrangementQuantityGuidance(),
+          if (_validationIssues.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            _ArrangementValidationSummary(
+              issues: _validationIssues,
+              lines: widget.arrangement.lines,
+              language: widget.language,
+              onLineTap: _revealLine,
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           LayoutBuilder(
             builder: (context, constraints) => constraints.maxWidth >= 980
@@ -747,6 +761,11 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                     enabled: !_busy,
                     onChanged: _replace,
                     onCreateInventoryItem: _createInventoryItem,
+                    validationIssues: _validationIssues,
+                    lineKeys: _lineKeys,
+                    language: widget.language,
+                    readinessRequired:
+                        widget.workspace.externalSourceReadinessRequired,
                   )
                 : Column(
                     children: [
@@ -763,6 +782,12 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                           enabled: !_busy,
                           onChanged: _replace,
                           onCreateInventoryItem: _createInventoryItem,
+                          validationMessages:
+                              _validationIssues[line.id] ?? const [],
+                          language: widget.language,
+                          readinessRequired:
+                              widget.workspace.externalSourceReadinessRequired,
+                          key: _lineKeys[line.id],
                         ),
                         const SizedBox(height: AppSpacing.md),
                       ],
@@ -821,7 +846,11 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         previous?.decision != YorksV1ArrangementDecision.unavailable) {
       _arrangedQuantities[value.arrangementLineId]?.text = '0';
     }
-    setState(() => _lines = {..._lines, value.arrangementLineId: value});
+    setState(() {
+      _lines = {..._lines, value.arrangementLineId: value};
+      _validationIssues = {..._validationIssues}
+        ..remove(value.arrangementLineId);
+    });
   }
 
   Future<void> _createInventoryItem(
@@ -914,9 +943,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
             )
             .toInput(),
     ];
-    final validationMessage = _validationMessage(inputs);
-    if (validationMessage != null) {
-      _showMessage(context, validationMessage);
+    final validationIssues = _validateLines(inputs);
+    if (validationIssues.isNotEmpty) {
+      setState(() => _validationIssues = validationIssues);
       return;
     }
     var saved = false;
@@ -970,6 +999,44 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       );
       _reasons[line.arrangementLineId] = TextEditingController(
         text: line.reason ?? '',
+      );
+      for (final controller in [
+        _arrangedQuantities[line.arrangementLineId]!,
+        _unitCosts[line.arrangementLineId]!,
+        _suppliers[line.arrangementLineId]!,
+        _reasons[line.arrangementLineId]!,
+      ]) {
+        controller.addListener(
+          () => _clearValidationForLine(line.arrangementLineId),
+        );
+      }
+    }
+  }
+
+  void _initializeLineKeys() {
+    _lineKeys
+      ..clear()
+      ..addEntries(
+        widget.arrangement.lines.map((line) => MapEntry(line.id, GlobalKey())),
+      );
+    _validationIssues = const {};
+  }
+
+  void _clearValidationForLine(String lineId) {
+    if (!mounted || !_validationIssues.containsKey(lineId)) return;
+    setState(() {
+      _validationIssues = {..._validationIssues}..remove(lineId);
+    });
+  }
+
+  void _revealLine(String lineId) {
+    final lineContext = _lineKeys[lineId]?.currentContext;
+    if (lineContext != null) {
+      Scrollable.ensureVisible(
+        lineContext,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        alignment: .15,
       );
     }
   }
@@ -1036,7 +1103,15 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     ];
   }
 
-  String? _validationMessage(List<YorksV1ArrangementLineInput> lines) {
+  Map<String, List<String>> _validateLines(
+    List<YorksV1ArrangementLineInput> lines,
+  ) {
+    final issues = <String, List<String>>{};
+    void add(String lineId, String message) {
+      final lineIssues = issues.putIfAbsent(lineId, () => <String>[]);
+      if (!lineIssues.contains(message)) lineIssues.add(message);
+    }
+
     final reservedByInventoryItem = <String, YorksV1DecimalQuantity>{};
     final firstLineByInventoryItem = <String, YorksV1ArrangementLine>{};
     for (var index = 0; index < lines.length; index++) {
@@ -1048,17 +1123,24 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           '${YorksV1ArrangementStrings.rowNumber.primary} ${arrangedLine.displayOrder}';
       final quantity = YorksV1DecimalQuantity.tryParse(line.arrangedQuantity);
       if (quantity == null || quantity.isNegative) {
-        return YorksV1ArrangementStrings.invalidQuantityFor(
-          label,
-        ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.invalidQuantityFor(
+            label,
+          ).active(widget.language),
+        );
+        continue;
       }
       if (line.decision == YorksV1ArrangementDecision.unavailable) {
         if (!quantity.isZero ||
             line.reason == null ||
             line.reason!.trim().isEmpty) {
-          return YorksV1ArrangementStrings.unavailableReasonFor(
-            label,
-          ).active(widget.language);
+          add(
+            line.arrangementLineId,
+            YorksV1ArrangementStrings.unavailableReasonFor(
+              label,
+            ).active(widget.language),
+          );
         }
         continue;
       }
@@ -1066,43 +1148,61 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         arrangedLine.requestedQuantity,
       );
       if (requestedQuantity == null) {
-        return YorksV1ArrangementStrings.invalidQuantityFor(
-          label,
-        ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.invalidQuantityFor(
+            label,
+          ).active(widget.language),
+        );
+        continue;
       }
       if (line.decision == YorksV1ArrangementDecision.full &&
           quantity != requestedQuantity) {
-        return YorksV1ArrangementStrings.fullQuantityFor(
-          label,
-        ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.fullQuantityFor(
+            label,
+          ).active(widget.language),
+        );
       }
       if (line.decision == YorksV1ArrangementDecision.partial &&
           (!quantity.isPositive ||
               quantity.compareTo(requestedQuantity) >= 0)) {
-        return YorksV1ArrangementStrings.partialQuantityFor(
-          label,
-        ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.partialQuantityFor(
+            label,
+          ).active(widget.language),
+        );
       }
       final unitCost = line.unitCost?.trim() ?? '';
       if (unitCost.isNotEmpty &&
           (YorksV1DecimalQuantity.tryParse(unitCost) == null ||
               YorksV1DecimalQuantity.tryParse(unitCost)!.isNegative)) {
-        return YorksV1ArrangementStrings.invalidUnitCostFor(
-          label,
-        ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.invalidUnitCostFor(
+            label,
+          ).active(widget.language),
+        );
       }
       if (line.source == YorksV1ArrangementSource.warehouse &&
           (line.inventoryItemId == null ||
               line.inventoryItemId!.trim().isEmpty)) {
-        return _inventoryItems.isEmpty
-            ? YorksV1ArrangementStrings.emptyWarehouseFor(
-                label,
-              ).active(widget.language)
-            : YorksV1ArrangementStrings.warehouseItemRequiredFor(
-                label,
-              ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          _inventoryItems.isEmpty
+              ? YorksV1ArrangementStrings.emptyWarehouseFor(
+                  label,
+                ).active(widget.language)
+              : YorksV1ArrangementStrings.warehouseItemRequiredFor(
+                  label,
+                ).active(widget.language),
+        );
       }
-      if (line.source == YorksV1ArrangementSource.warehouse) {
+      if (line.source == YorksV1ArrangementSource.warehouse &&
+          line.inventoryItemId != null &&
+          line.inventoryItemId!.trim().isNotEmpty) {
         final inventoryItemId = line.inventoryItemId!;
         reservedByInventoryItem[inventoryItemId] =
             (reservedByInventoryItem[inventoryItemId] ??
@@ -1113,12 +1213,33 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           () => arrangedLine,
         );
       }
+      if (line.source == YorksV1ArrangementSource.externalSupplier &&
+          widget.workspace.externalSourceReadinessRequired &&
+          !line.externalSourceReady) {
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.externalReadinessRequired.active(
+            widget.language,
+          ),
+        );
+      }
+      final expectedDate = line.externalExpectedDate?.trim() ?? '';
+      if (expectedDate.isNotEmpty &&
+          !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(expectedDate)) {
+        add(
+          line.arrangementLineId,
+          '${YorksV1ArrangementStrings.expectedAvailabilityDate.active(widget.language)}: YYYY-MM-DD',
+        );
+      }
       if ((line.decision == YorksV1ArrangementDecision.partial ||
               line.decision == YorksV1ArrangementDecision.unavailable) &&
           (line.reason == null || line.reason!.trim().isEmpty)) {
-        return YorksV1ArrangementStrings.partialReasonFor(
-          label,
-        ).active(widget.language);
+        add(
+          line.arrangementLineId,
+          YorksV1ArrangementStrings.partialReasonFor(
+            label,
+          ).active(widget.language),
+        );
       }
     }
     for (final entry in reservedByInventoryItem.entries) {
@@ -1134,19 +1255,22 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         final arrangedLine = firstLineByInventoryItem[entry.key]!;
         final label =
             '${YorksV1ArrangementStrings.rowNumber.primary} ${arrangedLine.displayOrder}';
-        return YorksV1ArrangementStrings.warehouseStockShortageFor(
-          line: label,
-          item:
-              inventoryItem?.description ??
-              arrangedLine.inventoryItemDescription ??
-              arrangedLine.description,
-          requiredQuantity: entry.value.canonicalText,
-          availableQuantity: available?.canonicalText ?? '0',
-          unit: inventoryItem?.unit ?? arrangedLine.unit,
-        ).active(widget.language);
+        add(
+          arrangedLine.id,
+          YorksV1ArrangementStrings.warehouseStockShortageFor(
+            line: label,
+            item:
+                inventoryItem?.description ??
+                arrangedLine.inventoryItemDescription ??
+                arrangedLine.description,
+            requiredQuantity: entry.value.canonicalText,
+            availableQuantity: available?.canonicalText ?? '0',
+            unit: inventoryItem?.unit ?? arrangedLine.unit,
+          ).active(widget.language),
+        );
       }
     }
-    return null;
+    return issues;
   }
 
   Future<void> _refreshInventoryAfterStockFailure() async {
@@ -1178,6 +1302,7 @@ class _MobileArrangementFlow extends StatefulWidget {
     required this.canManageCommercials,
     required this.suppliers,
     required this.reasons,
+    required this.validationIssues,
     required this.procurementNote,
     required this.busy,
     required this.onChanged,
@@ -1195,6 +1320,7 @@ class _MobileArrangementFlow extends StatefulWidget {
   final bool canManageCommercials;
   final Map<String, TextEditingController> suppliers;
   final Map<String, TextEditingController> reasons;
+  final Map<String, List<String>> validationIssues;
   final TextEditingController procurementNote;
   final bool busy;
   final ValueChanged<_EditableArrangementLine> onChanged;
@@ -1243,6 +1369,15 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                 ),
                 const SizedBox(height: 14),
                 _MobileArrangementCounts(counts: counts),
+                if (widget.validationIssues.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _ArrangementValidationSummary(
+                    issues: widget.validationIssues,
+                    lines: widget.arrangement.lines,
+                    language: widget.language,
+                    onLineTap: _openLine,
+                  ),
+                ],
                 const SizedBox(height: 10),
                 for (
                   var index = 0;
@@ -1308,11 +1443,19 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                   ).active(widget.language),
                   title: line.description,
                   description: [
+                    if (line.isBoqCorrelated)
+                      _arrangementCorrelationText(line, widget.language),
                     line.brandOrigin,
                     '${YorksV1ArrangementStrings.requested.active(widget.language)} ${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
                   ].whereType<String>().join(' · '),
                 ),
                 const SizedBox(height: 16),
+                if (widget.validationIssues[line.id]?.isNotEmpty ?? false) ...[
+                  _ArrangementInlineIssue(
+                    messages: widget.validationIssues[line.id]!,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 _MobileFieldLabel(
                   label: YorksV1ArrangementStrings.decision.active(
                     widget.language,
@@ -1343,6 +1486,18 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                             ? null
                             : _keep,
                         externalSupplier:
+                            decision == YorksV1ArrangementDecision.unavailable
+                            ? null
+                            : _keep,
+                        externalSourceReady:
+                            decision == YorksV1ArrangementDecision.unavailable
+                            ? false
+                            : null,
+                        externalExpectedDate:
+                            decision == YorksV1ArrangementDecision.unavailable
+                            ? null
+                            : _keep,
+                        externalReference:
                             decision == YorksV1ArrangementDecision.unavailable
                             ? null
                             : _keep,
@@ -1378,6 +1533,21 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                       if (mounted) setState(() {});
                     },
                   ),
+                  if (draft.source ==
+                      YorksV1ArrangementSource.externalSupplier) ...[
+                    const SizedBox(height: 14),
+                    _ExternalSourceReadinessFields(
+                      value: draft,
+                      enabled: !widget.busy,
+                      language: widget.language,
+                      requiredByPolicy:
+                          widget.workspace.externalSourceReadinessRequired,
+                      onChanged: (value) {
+                        widget.onChanged(value);
+                        setState(() {});
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1492,6 +1662,15 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                 ),
                 const SizedBox(height: 14),
                 _MobileArrangementCounts(counts: counts),
+                if (widget.validationIssues.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _ArrangementValidationSummary(
+                    issues: widget.validationIssues,
+                    lines: widget.arrangement.lines,
+                    language: widget.language,
+                    onLineTap: _openLine,
+                  ),
+                ],
                 if (exceptions.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   YorksMobileCallout(
@@ -1571,6 +1750,17 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
         ),
       ],
     );
+  }
+
+  void _openLine(String lineId) {
+    final index = widget.arrangement.lines.indexWhere(
+      (line) => line.id == lineId,
+    );
+    if (index < 0) return;
+    setState(() {
+      _lineIndex = index;
+      _stage = _MobileArrangementStage.line;
+    });
   }
 
   ({int full, int partial, int unavailable}) get _counts {
@@ -2279,6 +2469,10 @@ class _DesktopArrangementEditor extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     required this.onCreateInventoryItem,
+    required this.validationIssues,
+    required this.lineKeys,
+    required this.language,
+    required this.readinessRequired,
   });
 
   final List<YorksV1ArrangementLine> lines;
@@ -2296,6 +2490,10 @@ class _DesktopArrangementEditor extends StatelessWidget {
     _EditableArrangementLine draft,
   )
   onCreateInventoryItem;
+  final Map<String, List<String>> validationIssues;
+  final Map<String, GlobalKey> lineKeys;
+  final AppLanguage language;
+  final bool readinessRequired;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -2317,6 +2515,7 @@ class _DesktopArrangementEditor extends StatelessWidget {
                 _ArrangementTableHeader(showCommercials: canManageCommercials),
                 for (final line in lines)
                   _ArrangementTableRow(
+                    key: lineKeys[line.id],
                     line: line,
                     draft: drafts[line.id]!,
                     arrangedQuantity: arrangedQuantities[line.id]!,
@@ -2328,6 +2527,9 @@ class _DesktopArrangementEditor extends StatelessWidget {
                     enabled: enabled,
                     onChanged: onChanged,
                     onCreateInventoryItem: onCreateInventoryItem,
+                    validationMessages: validationIssues[line.id] ?? const [],
+                    language: language,
+                    readinessRequired: readinessRequired,
                   ),
               ],
             ),
@@ -2509,6 +2711,112 @@ class _ArrangementQuantityGuidance extends StatelessWidget {
   );
 }
 
+class _ArrangementValidationSummary extends StatelessWidget {
+  const _ArrangementValidationSummary({
+    required this.issues,
+    required this.lines,
+    required this.language,
+    required this.onLineTap,
+  });
+
+  final Map<String, List<String>> issues;
+  final List<YorksV1ArrangementLine> lines;
+  final AppLanguage language;
+  final ValueChanged<String> onLineTap;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('arrangement-validation-summary'),
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.errorContainer.withValues(alpha: .42),
+      border: Border.all(color: AppColors.error.withValues(alpha: .45)),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: AppColors.error),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                YorksV1ArrangementStrings.rowsNeedAttention(
+                  issues.length,
+                ).active(language),
+                style: AppTypography.labelLarge.copyWith(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final line in lines)
+              if (issues.containsKey(line.id))
+                OutlinedButton.icon(
+                  onPressed: () => onLineTap(line.id),
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 17),
+                  label: Text(
+                    YorksV1ArrangementStrings.validationItem(
+                      line.displayOrder,
+                    ).active(language),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(
+                      color: AppColors.error.withValues(alpha: .45),
+                    ),
+                    minimumSize: const Size(0, AppSpacing.minTapTarget),
+                  ),
+                ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _ArrangementInlineIssue extends StatelessWidget {
+  const _ArrangementInlineIssue({required this.messages});
+
+  final List<String> messages;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('arrangement-inline-validation'),
+    width: double.infinity,
+    padding: const EdgeInsets.all(AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: AppColors.errorContainer.withValues(alpha: .5),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      border: Border.all(color: AppColors.error.withValues(alpha: .35)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final message in messages)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
 class _ArrangementTableHeader extends StatelessWidget {
   const _ArrangementTableHeader({required this.showCommercials});
 
@@ -2566,6 +2874,7 @@ class _ArrangementTableHeading extends StatelessWidget {
 
 class _ArrangementTableRow extends StatelessWidget {
   const _ArrangementTableRow({
+    super.key,
     required this.line,
     required this.draft,
     required this.arrangedQuantity,
@@ -2577,6 +2886,9 @@ class _ArrangementTableRow extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     required this.onCreateInventoryItem,
+    required this.validationMessages,
+    required this.language,
+    required this.readinessRequired,
   });
 
   final YorksV1ArrangementLine line;
@@ -2594,6 +2906,9 @@ class _ArrangementTableRow extends StatelessWidget {
     _EditableArrangementLine draft,
   )
   onCreateInventoryItem;
+  final List<String> validationMessages;
+  final AppLanguage language;
+  final bool readinessRequired;
 
   @override
   Widget build(BuildContext context) {
@@ -2683,6 +2998,21 @@ class _ArrangementTableRow extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             _ReasonField(value: draft, controller: reason, enabled: enabled),
           ],
+          if (draft.source == YorksV1ArrangementSource.externalSupplier &&
+              draft.decision != YorksV1ArrangementDecision.unavailable) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ExternalSourceReadinessFields(
+              value: draft,
+              enabled: enabled,
+              language: language,
+              requiredByPolicy: readinessRequired,
+              onChanged: onChanged,
+            ),
+          ],
+          if (validationMessages.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ArrangementInlineIssue(messages: validationMessages),
+          ],
         ],
       ),
     );
@@ -2704,6 +3034,10 @@ class _ArrangementRequestedItem extends StatelessWidget {
           line.description,
           style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
         ),
+        if (line.isBoqCorrelated) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          _ArrangementCorrelationChip(line: line),
+        ],
         if (line.brandOrigin?.trim().isNotEmpty ?? false) ...[
           const SizedBox(height: AppSpacing.xxs),
           Text(
@@ -2712,6 +3046,44 @@ class _ArrangementRequestedItem extends StatelessWidget {
           ),
         ],
       ],
+    ),
+  );
+}
+
+String _arrangementCorrelationText(
+  YorksV1ArrangementLine line,
+  AppLanguage language,
+) {
+  final label = YorksV1ArrangementStrings.boqCorrelation.active(language);
+  return <String>[
+    label,
+    ?line.sourceScopeName,
+    ?line.sourceBoqGroupName,
+  ].where((value) => value.trim().isNotEmpty).toSet().join(' · ');
+}
+
+class _ArrangementCorrelationChip extends ConsumerWidget {
+  const _ArrangementCorrelationChip({required this.line});
+
+  final YorksV1ArrangementLine line;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: line.isBoqCorrelated
+          ? AppColors.successContainer
+          : AppColors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Text(
+      _arrangementCorrelationText(line, ref.watch(languageProvider)),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.labelSmall.copyWith(
+        color: line.isBoqCorrelated ? AppColors.success : AppColors.muted,
+        fontWeight: FontWeight.w800,
+      ),
     ),
   );
 }
@@ -2777,6 +3149,7 @@ class _ArrangementSourceEditor extends StatelessWidget {
 
 class _MobileArrangementEditor extends StatelessWidget {
   const _MobileArrangementEditor({
+    super.key,
     required this.line,
     required this.draft,
     required this.arrangedQuantity,
@@ -2788,6 +3161,9 @@ class _MobileArrangementEditor extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     required this.onCreateInventoryItem,
+    required this.validationMessages,
+    required this.language,
+    required this.readinessRequired,
   });
 
   final YorksV1ArrangementLine line;
@@ -2805,6 +3181,9 @@ class _MobileArrangementEditor extends StatelessWidget {
     _EditableArrangementLine draft,
   )
   onCreateInventoryItem;
+  final List<String> validationMessages;
+  final AppLanguage language;
+  final bool readinessRequired;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -2820,6 +3199,10 @@ class _MobileArrangementEditor extends StatelessWidget {
           '${line.displayOrder}. ${line.description}',
           style: AppTypography.titleSmall,
         ),
+        if (validationMessages.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _ArrangementInlineIssue(messages: validationMessages),
+        ],
         Text(
           '${YorksV1ArrangementStrings.requested.primary}: ${yorksV1DisplayQuantity(line.requestedQuantity)} ${line.unit}',
           style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
@@ -2848,6 +3231,17 @@ class _MobileArrangementEditor extends StatelessWidget {
           onChanged: onChanged,
           onCreateInventoryItem: () => onCreateInventoryItem(line, draft),
         ),
+        if (draft.source == YorksV1ArrangementSource.externalSupplier &&
+            draft.decision != YorksV1ArrangementDecision.unavailable) ...[
+          const SizedBox(height: AppSpacing.md),
+          _ExternalSourceReadinessFields(
+            value: draft,
+            enabled: enabled,
+            language: language,
+            requiredByPolicy: readinessRequired,
+            onChanged: onChanged,
+          ),
+        ],
         if (draft.decision == YorksV1ArrangementDecision.partial ||
             draft.decision == YorksV1ArrangementDecision.unavailable) ...[
           const SizedBox(height: AppSpacing.md),
@@ -2913,6 +3307,18 @@ class _DecisionPicker extends StatelessWidget {
                         decision == YorksV1ArrangementDecision.unavailable
                         ? null
                         : _keep,
+                    externalSourceReady:
+                        decision == YorksV1ArrangementDecision.unavailable
+                        ? false
+                        : null,
+                    externalExpectedDate:
+                        decision == YorksV1ArrangementDecision.unavailable
+                        ? null
+                        : _keep,
+                    externalReference:
+                        decision == YorksV1ArrangementDecision.unavailable
+                        ? null
+                        : _keep,
                   ),
                 );
               },
@@ -2975,6 +3381,18 @@ class _SourcePicker extends StatelessWidget {
                   externalSupplier:
                       source == YorksV1ArrangementSource.externalSupplier
                       ? value.externalSupplier
+                      : null,
+                  externalSourceReady:
+                      source == YorksV1ArrangementSource.externalSupplier
+                      ? null
+                      : false,
+                  externalExpectedDate:
+                      source == YorksV1ArrangementSource.externalSupplier
+                      ? _keep
+                      : null,
+                  externalReference:
+                      source == YorksV1ArrangementSource.externalSupplier
+                      ? _keep
                       : null,
                 ),
               );
@@ -3952,6 +4370,121 @@ class _ArrangementCategoryAutocompleteState
   }
 }
 
+class _ExternalSourceReadinessFields extends StatelessWidget {
+  const _ExternalSourceReadinessFields({
+    required this.value,
+    required this.enabled,
+    required this.language,
+    required this.requiredByPolicy,
+    required this.onChanged,
+  });
+
+  final _EditableArrangementLine value;
+  final bool enabled;
+  final AppLanguage language;
+  final bool requiredByPolicy;
+  final ValueChanged<_EditableArrangementLine> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: AppColors.blueContainer.withValues(alpha: .42),
+      border: Border.all(color: AppColors.blue.withValues(alpha: .28)),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Material(
+      type: MaterialType.transparency,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CheckboxListTile(
+            key: ValueKey('external-ready-${value.arrangementLineId}'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: value.externalSourceReady,
+            onChanged: !enabled
+                ? null
+                : (ready) => onChanged(
+                    value.copyWith(externalSourceReady: ready == true),
+                  ),
+            title: Text(
+              YorksV1ArrangementStrings.externalReadyConfirmed.active(language),
+              style: AppTypography.labelLarge.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              (requiredByPolicy
+                      ? YorksV1ArrangementStrings.externalReadinessRequired
+                      : YorksV1ArrangementStrings.externalReadinessRecommended)
+                  .active(language),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stackFields = constraints.maxWidth < 540;
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  SizedBox(
+                    width: stackFields ? constraints.maxWidth : 210,
+                    child: TextFormField(
+                      key: ValueKey(
+                        'external-expected-${value.arrangementLineId}',
+                      ),
+                      initialValue: value.externalExpectedDate,
+                      enabled: enabled,
+                      keyboardType: TextInputType.datetime,
+                      decoration: InputDecoration(
+                        labelText: YorksV1ArrangementStrings
+                            .expectedAvailabilityDate
+                            .active(language),
+                        hintText: YorksV1ArrangementStrings.dateFormatHint
+                            .active(language),
+                        prefixIcon: const Icon(Icons.event_outlined),
+                      ),
+                      onChanged: (text) => onChanged(
+                        value.copyWith(
+                          externalExpectedDate: _trimmedOrNull(text),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: stackFields ? constraints.maxWidth : 300,
+                    child: TextFormField(
+                      key: ValueKey(
+                        'external-reference-${value.arrangementLineId}',
+                      ),
+                      initialValue: value.externalReference,
+                      enabled: enabled,
+                      maxLength: 180,
+                      decoration: InputDecoration(
+                        labelText: YorksV1ArrangementStrings.supplierReference
+                            .active(language),
+                        prefixIcon: const Icon(Icons.link_rounded),
+                        counterText: '',
+                      ),
+                      onChanged: (text) => onChanged(
+                        value.copyWith(externalReference: _trimmedOrNull(text)),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _ReasonField extends StatelessWidget {
   const _ReasonField({
     required this.value,
@@ -4092,7 +4625,7 @@ class _ReadOnlyDesktopTable extends StatelessWidget {
                 Text(
                   line.source == YorksV1ArrangementSource.warehouse
                       ? (line.warehouseAvailableAtSave ?? '')
-                      : (line.externalSupplier ?? ''),
+                      : _externalSourceEvidenceText(line),
                 ),
               ),
               DataCell(Text(line.reason ?? '')),
@@ -4137,12 +4670,23 @@ class _ReadOnlyLineCard extends StatelessWidget {
         Text(
           '${YorksV1ArrangementStrings.source.primary}: ${yorksV1ArrangementSourceCopy(line.source).primary}',
         ),
+        if (line.source == YorksV1ArrangementSource.externalSupplier)
+          Text(_externalSourceEvidenceText(line)),
         if (line.reason != null)
           Text('${YorksV1ArrangementStrings.reason.primary}: ${line.reason}'),
       ],
     ),
   );
 }
+
+String _externalSourceEvidenceText(YorksV1ArrangementLine line) => [
+  line.externalSupplier,
+  if (line.externalSourceReady)
+    YorksV1ArrangementStrings.externalReadyConfirmed.primary,
+  if (line.externalExpectedDate != null)
+    line.externalExpectedDate!.toIso8601String().split('T').first,
+  line.externalReference,
+].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
 
 Color _lineBackground(YorksV1ArrangementLine line) => switch (line.decision) {
   YorksV1ArrangementDecision.partial => AppColors.warningContainer,
@@ -4332,6 +4876,9 @@ class _EditableArrangementLine {
     required this.decision,
     required this.arrangedQuantity,
     this.externalSupplier,
+    this.externalSourceReady = false,
+    this.externalExpectedDate,
+    this.externalReference,
     this.inventoryItemId,
     this.reason,
     this.unitCost,
@@ -4342,6 +4889,9 @@ class _EditableArrangementLine {
   final YorksV1ArrangementDecision decision;
   final String arrangedQuantity;
   final String? externalSupplier;
+  final bool externalSourceReady;
+  final String? externalExpectedDate;
+  final String? externalReference;
   final String? inventoryItemId;
   final String? reason;
   final String? unitCost;
@@ -4372,6 +4922,12 @@ class _EditableArrangementLine {
         line.arrangedQuantity ?? line.requestedQuantity,
       ),
       externalSupplier: line.externalSupplier,
+      externalSourceReady: line.externalSourceReady,
+      externalExpectedDate: line.externalExpectedDate
+          ?.toIso8601String()
+          .split('T')
+          .first,
+      externalReference: line.externalReference,
       inventoryItemId:
           line.inventoryItemId ??
           (matchingItem.isEmpty ? null : matchingItem.first.id),
@@ -4385,6 +4941,9 @@ class _EditableArrangementLine {
     YorksV1ArrangementDecision? decision,
     String? arrangedQuantity,
     Object? externalSupplier = _keep,
+    bool? externalSourceReady,
+    Object? externalExpectedDate = _keep,
+    Object? externalReference = _keep,
     Object? inventoryItemId = _keep,
     Object? reason = _keep,
     Object? unitCost = _keep,
@@ -4396,6 +4955,13 @@ class _EditableArrangementLine {
     externalSupplier: identical(externalSupplier, _keep)
         ? this.externalSupplier
         : externalSupplier as String?,
+    externalSourceReady: externalSourceReady ?? this.externalSourceReady,
+    externalExpectedDate: identical(externalExpectedDate, _keep)
+        ? this.externalExpectedDate
+        : externalExpectedDate as String?,
+    externalReference: identical(externalReference, _keep)
+        ? this.externalReference
+        : externalReference as String?,
     inventoryItemId: identical(inventoryItemId, _keep)
         ? this.inventoryItemId
         : inventoryItemId as String?,
@@ -4409,6 +4975,9 @@ class _EditableArrangementLine {
     decision: decision,
     arrangedQuantity: arrangedQuantity,
     externalSupplier: externalSupplier,
+    externalSourceReady: externalSourceReady,
+    externalExpectedDate: externalExpectedDate,
+    externalReference: externalReference,
     inventoryItemId: inventoryItemId,
     reason: reason,
     unitCost: unitCost,

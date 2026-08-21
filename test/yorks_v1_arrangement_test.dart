@@ -21,6 +21,11 @@ void main() {
       workspace.currentArrangement?.lines.single.inventoryItemId,
       'item-1',
     );
+    expect(workspace.currentArrangement?.lines.single.isBoqCorrelated, isTrue);
+    expect(
+      workspace.currentArrangement?.lines.single.sourceBoqGroupName,
+      'Dampers & Fire Control',
+    );
     final inventory = YorksV1InventoryItem.fromRpcJson({
       'id': 'item-1',
       'item_code': 'MSD-600',
@@ -66,6 +71,9 @@ void main() {
           'arrangement_line_id': 'line-1',
           'source_kind': 'warehouse',
           'external_supplier': null,
+          'external_source_ready': false,
+          'external_expected_date': null,
+          'external_reference': null,
           'inventory_item_id': 'item-1',
           'decision': 'partial',
           'arranged_qty': '2.5',
@@ -221,6 +229,11 @@ Map<String, dynamic> _workspaceJson() => {
           'request_line_id': 'request-line-1',
           'display_order': 1,
           'item_description': 'Duct Damper',
+          'request_source_kind': 'boq',
+          'source_boq_group_id': 'boq-group-1',
+          'source_boq_row_id': 'boq-row-1',
+          'source_boq_group_name': 'Dampers & Fire Control',
+          'source_scope_name': 'Building A',
           'brand_origin': 'UAE',
           'requested_qty': '4',
           'unit': 'Nos',

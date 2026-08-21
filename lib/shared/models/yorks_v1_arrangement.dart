@@ -112,6 +112,9 @@ class YorksV1ArrangementLine {
     required this.source,
     this.brandOrigin,
     this.externalSupplier,
+    this.externalSourceReady = false,
+    this.externalExpectedDate,
+    this.externalReference,
     this.decision,
     this.arrangedQuantity,
     this.reason,
@@ -121,6 +124,11 @@ class YorksV1ArrangementLine {
     this.warehouseAvailableAtSave,
     this.reservationState,
     this.reservedQuantity,
+    this.requestSourceKind,
+    this.sourceBoqGroupId,
+    this.sourceBoqRowId,
+    this.sourceBoqGroupName,
+    this.sourceScopeName,
   });
 
   final String id;
@@ -132,6 +140,9 @@ class YorksV1ArrangementLine {
   final String unit;
   final YorksV1ArrangementSource source;
   final String? externalSupplier;
+  final bool externalSourceReady;
+  final DateTime? externalExpectedDate;
+  final String? externalReference;
   final YorksV1ArrangementDecision? decision;
   final String? arrangedQuantity;
   final String? reason;
@@ -145,6 +156,18 @@ class YorksV1ArrangementLine {
   final String? reservationState;
   final String? reservedQuantity;
 
+  /// Immutable request-line provenance. This is descriptive correlation only:
+  /// Procurement still chooses the actual warehouse item or external source,
+  /// and the server validates stock only when the arrangement is saved.
+  final String? requestSourceKind;
+  final String? sourceBoqGroupId;
+  final String? sourceBoqRowId;
+  final String? sourceBoqGroupName;
+  final String? sourceScopeName;
+
+  bool get isBoqCorrelated =>
+      requestSourceKind == 'boq' && sourceBoqRowId != null;
+
   factory YorksV1ArrangementLine.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1ArrangementLine(
       id: _requiredString(json, 'id'),
@@ -156,6 +179,9 @@ class YorksV1ArrangementLine {
       unit: _requiredString(json, 'unit'),
       source: YorksV1ArrangementSource.fromWireValue(json['source_kind']),
       externalSupplier: _trimToNull(json['external_supplier']),
+      externalSourceReady: json['external_source_ready'] == true,
+      externalExpectedDate: _nullableDate(json['external_expected_date']),
+      externalReference: _trimToNull(json['external_reference']),
       decision: YorksV1ArrangementDecision.fromWireValue(json['decision']),
       arrangedQuantity: _trimToNull(json['arranged_qty']),
       reason: _trimToNull(json['reason']),
@@ -167,6 +193,11 @@ class YorksV1ArrangementLine {
       ),
       reservationState: _trimToNull(json['reservation_state']),
       reservedQuantity: _trimToNull(json['reserved_qty']),
+      requestSourceKind: _trimToNull(json['request_source_kind']),
+      sourceBoqGroupId: _trimToNull(json['source_boq_group_id']),
+      sourceBoqRowId: _trimToNull(json['source_boq_row_id']),
+      sourceBoqGroupName: _trimToNull(json['source_boq_group_name']),
+      sourceScopeName: _trimToNull(json['source_scope_name']),
     );
   }
 }
@@ -257,6 +288,7 @@ class YorksV1ArrangementWorkspace {
     required this.canSave,
     required this.canDecide,
     required List<YorksV1ProcurementArrangement> arrangements,
+    this.externalSourceReadinessRequired = false,
     this.requestNumber,
   }) : arrangements = List.unmodifiable(arrangements);
 
@@ -267,6 +299,7 @@ class YorksV1ArrangementWorkspace {
   final bool canBegin;
   final bool canSave;
   final bool canDecide;
+  final bool externalSourceReadinessRequired;
   final List<YorksV1ProcurementArrangement> arrangements;
 
   YorksV1ProcurementArrangement? get workingArrangement {
@@ -300,6 +333,8 @@ class YorksV1ArrangementWorkspace {
       canBegin: json['can_begin'] == true,
       canSave: json['can_save'] == true,
       canDecide: json['can_decide'] == true,
+      externalSourceReadinessRequired:
+          json['external_source_readiness_required'] == true,
       arrangements: [
         for (final arrangement in rawArrangements)
           if (arrangement is Map)
@@ -318,6 +353,9 @@ class YorksV1ArrangementLineInput {
     required this.decision,
     required this.arrangedQuantity,
     this.externalSupplier,
+    this.externalSourceReady = false,
+    this.externalExpectedDate,
+    this.externalReference,
     this.inventoryItemId,
     this.reason,
     this.unitCost,
@@ -328,6 +366,9 @@ class YorksV1ArrangementLineInput {
   final YorksV1ArrangementDecision decision;
   final String arrangedQuantity;
   final String? externalSupplier;
+  final bool externalSourceReady;
+  final String? externalExpectedDate;
+  final String? externalReference;
   final String? inventoryItemId;
   final String? reason;
   final String? unitCost;
@@ -336,6 +377,9 @@ class YorksV1ArrangementLineInput {
     'arrangement_line_id': arrangementLineId,
     'source_kind': source.wireValue,
     'external_supplier': _trimToNull(externalSupplier),
+    'external_source_ready': externalSourceReady,
+    'external_expected_date': _trimToNull(externalExpectedDate),
+    'external_reference': _trimToNull(externalReference),
     'inventory_item_id': _trimToNull(inventoryItemId),
     'decision': decision.wireValue,
     'arranged_qty': arrangedQuantity.trim(),
@@ -462,5 +506,15 @@ DateTime _requiredDate(Map<String, dynamic> json, String key) {
 
 DateTime? _nullableDate(Object? value) {
   if (value is! String || value.trim().isEmpty) return null;
-  return DateTime.tryParse(value)?.toUtc();
+  final normalized = value.trim();
+  final calendarDate = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+  if (calendarDate.hasMatch(normalized)) {
+    final parts = normalized.split('-');
+    return DateTime.utc(
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+      int.parse(parts[2]),
+    );
+  }
+  return DateTime.tryParse(normalized)?.toUtc();
 }

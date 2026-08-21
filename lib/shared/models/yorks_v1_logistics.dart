@@ -34,7 +34,8 @@ enum YorksV1DispatchState {
 enum YorksV1ReceiptOutcome {
   received('received'),
   missing('missing'),
-  damaged('damaged');
+  damaged('damaged'),
+  mixed('mixed');
 
   const YorksV1ReceiptOutcome(this.wireValue);
   final String wireValue;
@@ -429,6 +430,8 @@ class YorksV1DispatchLine {
     this.externalSupplier,
     this.receiptOutcome,
     this.goodQuantity,
+    this.missingQuantity,
+    this.damagedQuantity,
     this.exceptionQuantity,
     this.receiptNote,
   });
@@ -444,6 +447,8 @@ class YorksV1DispatchLine {
   final String? externalSupplier;
   final YorksV1ReceiptOutcome? receiptOutcome;
   final String? goodQuantity;
+  final String? missingQuantity;
+  final String? damagedQuantity;
   final String? exceptionQuantity;
   final String? receiptNote;
 
@@ -464,6 +469,8 @@ class YorksV1DispatchLine {
         json['receipt_outcome'],
       ),
       goodQuantity: _trimToNull(json['good_qty']),
+      missingQuantity: _trimToNull(json['missing_qty']),
+      damagedQuantity: _trimToNull(json['damaged_qty']),
       exceptionQuantity: _trimToNull(json['exception_qty']),
       receiptNote: _trimToNull(json['receipt_note']),
     );
@@ -1777,18 +1784,24 @@ class YorksV1ReceiptLineInput {
     required this.dispatchLineId,
     required this.outcome,
     required this.goodQuantity,
+    this.missingQuantity,
+    this.damagedQuantity,
     this.note,
   });
 
   final String dispatchLineId;
   final YorksV1ReceiptOutcome outcome;
   final String goodQuantity;
+  final String? missingQuantity;
+  final String? damagedQuantity;
   final String? note;
 
   Map<String, Object?> toRpcJson() => {
     'dispatch_line_id': dispatchLineId,
     'outcome': outcome.wireValue,
     'good_qty': goodQuantity.trim(),
+    'missing_qty': _trimToNull(missingQuantity),
+    'damaged_qty': _trimToNull(damagedQuantity),
     'note': _trimToNull(note),
   };
 }

@@ -28,12 +28,13 @@ records an explicit replacement.
 | `awaiting_request_approval` | Return for changes | `draft` | Assigned/global Project Engineer/Admin; immutable returned decision/reason |
 | `awaiting_request_approval` | Approve request | `approved_for_arrangement` | Assigned/global Project Engineer/Admin |
 | `approved_for_arrangement` | Begin arrangement | `arranging` | Procurement/Admin |
-| `arranging` | Save pre-approved arrangement | `approved` or `closed` | Procurement/Admin |
+| `arranging` | Save pre-approved arrangement | `approved`, or remain `arranging` when every line is unavailable | Procurement/Admin |
 | Legacy `awaiting_approval` | Return/approve saved legacy arrangement | `arranging` or `approved` | Assigned/global Project Engineer/Admin; compatibility only |
 | `approved`, `partially_dispatched`, `partially_received` | Dispatch subset | `partially_dispatched` or `dispatched` | Procurement/Admin |
 | `partially_dispatched`, `dispatched`, `partially_received` | Confirm receipt review | `partially_received` or `received` | Assigned Project/Site Engineer/Admin |
 | `received` | Close | `closed` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, or Admin when all committed work is resolved |
 | Eligible pre-dispatch state | Cancel | `cancelled` | Policy-defined Project Engineer/Admin with reason |
+| Cancelled with latest saved all-unavailable arrangement | Create linked replacement Draft | source remains `cancelled`; new request is `draft` | Authorized Engineering MR creator/Admin; never Procurement |
 
 State labels are not manually editable. Aggregate state is calculated by the
 trusted command from line facts inside the same transaction.
@@ -97,18 +98,27 @@ tables/functions.
 | `v1_decide_material_request` | Assigned/global Project Engineer/Admin | MR/current Engineering version | yes | immutable approval/return decision, state/owner, exact role, audit/notification |
 | `v1_begin_arrangement` | Procurement/Admin | approved MR/version | yes | current arrangement work version, `arranging`, audit |
 | `v1_save_arrangement` | Procurement/Admin | MR, arrangement, inventory, reservations | yes | versioned lines, replacement reservations, approved snapshots/state, audit/notification |
+| `v1_material_request_phase3_policy_projection` | Authorized request reader | current request access plus published configuration | no | role-safe published self-approval/readiness values and replacement eligibility/link only |
+| `v1_create_replacement_material_request` | Authorized Engineering MR creator/Admin | cancelled source/version, latest all-unavailable arrangement, no dispatch, one-source uniqueness | yes | one private linked Draft, cloned line provenance and audit; source remains cancelled |
 | `v1_decide_arrangement` | Assigned/global Project Engineer/Admin | legacy MR/current arrangement/version | yes | compatibility-only approval or return decision; retained history |
 | `v1_add_material_request_comment` | Authorized request participant | MR/text/mention IDs | yes | append-only comment, validated mentions, notifications and audit |
-| `v1_search_material_request_inventory_items` | Authorized Engineering request participant | project/query | no | non-commercial descriptive item suggestions only |
+| `v1_list_material_request_summaries` | Active role within the existing request/project read boundary | server filter/sort/limit/offset | no | lightweight authorized rows plus aggregate metrics; no lines, comments, private drafts or commercial values |
+| `v1_list_material_request_comments` | Authorized request participant | request and stable cursor | no | newest/older append-only comment page without duplicate rows |
+| `v1_get_material_request_work_assignment` / `v1_list_material_request_assignment_candidates` | Authorized request participant | request and current access | no | coordination marker and eligible non-commercial participant choices only |
+| `v1_assign_material_request_work` | Authorized request participant | request/assignment versions and reason on reassignment | yes | claim/reassign marker, audit and assignee notification; no request state/owner/quantity mutation |
+| `v1_sync_material_request_private_draft` / `v1_get_material_request_private_draft` / `v1_list_my_material_request_private_drafts` / `v1_delete_material_request_private_draft` | Active draft creator only | owner/draft/version and idempotency on writes | writes only | owner-private recovery snapshot; no submission, visibility or workflow transition |
+| `v1_material_request_change_summary` | Authorized request participant | immutable Engineering revision snapshots | no | non-commercial added/removed/quantity/detail/delivery-note difference counts |
+| `v1_search_material_request_candidates` | Active project-authorized Engineering/Procurement/Admin actor | project/scope/query | no | non-commercial suggestions ranked selected-scope BOQ, project BOQ, inventory; exact source IDs only for valid same-scope correlation |
+| `v1_search_material_request_inventory_items` | Authorized Engineering request participant on an older client | project/query | no | retained compatibility-only inventory suggestions; current clients use ranked candidate search |
 | `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
-| `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, good/exception totals, state, audit/notification; appends receipt-reviewed Delivery Report revision when a DO exists |
+| `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, exact good/missing/damaged totals, state, audit/notification; appends receipt-reviewed Delivery Report revision when a DO exists |
 | `v1_generate_delivery_order` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, Procurement/Admin after committed dispatch | dispatch/current DO revision; optional later review link | yes | immutable dispatch-quantity revision before review, or immutable receipt-reviewed good-quantity Delivery Report revision after review; document link, audit |
 | `admin-users` Edge commands | Active exact Admin or Senior Mechanical Engineer | live Auth role, active actor, stable app-user target; action-specific input | yes for mutations | Auth mutation plus safe server audit; last-active-Admin invariant retained |
 | `v1_get/set_user_commercial_capability` | Active exact Admin or Senior Mechanical Engineer | live exact actor, target Auth user; reason and idempotency for writes | writes only | safe capability envelope/override plus audit; no commercial record data returned |
 | `v1_submit_material_return` | Assigned Project/Site Engineer/Admin | source receipt/return/version/counter | yes | frozen return lines, number, submitted state, audit/notification |
 | `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
 | `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
-| `v1_cancel_material_request` | Project Engineer/Admin per policy | MR, reservations, dispatch existence | yes | cancel/retain history, release remainder, audit/notification |
+| `v1_cancel_material_request` | Project Engineer/global Engineering/Admin per policy | MR/version/reservations/current arrangement | yes | terminal cancel, retain unavailable/history, release remainder, lock Procurement editing, audit/notification |
 | `v1_close_material_request` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, or Admin | MR and all logistics rows | yes | validated closed state, audit |
 | `v1_adjust_inventory` | Procurement/Admin capability | inventory item/version | yes | append-only adjustment movement and derived balance, audit |
 | `v1_inventory_category_suggestions` | Procurement/Admin inventory capability | active category/alias library | no | ranked read-only canonical, alias and advisory fuzzy results |
@@ -159,6 +169,8 @@ membership.
 | Project memberships | R; RPC manage assigned project | R, no manage after create | R, no write | R/RPC |
 | Assigned BOQ groups/columns/rows | R/C/U | R/C/U | R only | R/C/U |
 | MR drafts | own R/C/U/delete | own R/C/U/delete | — | R/support per policy |
+| MR private draft recovery | own R/RPC only | own R/RPC only | — | own R/RPC only; no invisible cross-user access |
+| MR work assignment marker | R/RPC when request-authorized | R/RPC when request-authorized | R/RPC after request enters Procurement visibility | R/RPC; cannot bypass workflow commands |
 | Submitted MR operational data | R assigned | R assigned | R all running | R |
 | MR commercial projection | only with capability | only with capability | R with capability | R with capability |
 | Arrangements | R assigned; decision RPC if Project Engineer | R assigned, no decision | R; create/update through RPC | R/RPC |

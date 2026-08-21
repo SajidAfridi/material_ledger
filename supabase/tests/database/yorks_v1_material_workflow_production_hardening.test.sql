@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(24);
+select plan(27);
 
 select ok(
   has_function_privilege(
@@ -356,26 +356,89 @@ select lives_ok(
 set local role postgres;
 select ok(
   (
-    select state = 'closed'
-      and current_action_code = 'unavailable_closed'
+    select state = 'arranging'
+      and current_action_owner_role = 'procurement'
+      and current_action_code = 'all_items_unavailable_review'
       and cancelled_at is null
       and cancelled_by_auth_user_id is null
       and cancellation_reason is null
     from public.v1_material_requests
     where id = 'd1000000-0000-4000-8000-000000000002'
   ),
-  'All-unavailable approval closes without fabricating cancellation facts'
+  'All-unavailable review stays editable for Procurement without fabricating cancellation facts'
 );
 select is(
   (
     select after_data ->> 'request_state'
     from public.v1_audit_events
     where entity_id = 'd1200000-0000-4000-8000-000000000002'
-      and event_type = 'arrangement_approved'
+      and event_type = 'all_items_unavailable_reviewed'
     order by occurred_at desc limit 1
   ),
-  'closed',
-  'All-unavailable approval audit records the actual closed state'
+  'arranging',
+  'All-unavailable review audit records the actual editable state'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_cancel_material_request(
+    jsonb_build_object(
+      'request_id', 'd1000000-0000-4000-8000-000000000002',
+      'expected_version', 2,
+      'reason', 'No currently available supply path'
+    ), 'd2000000-0000-4000-8000-000000000004'
+  )$$,
+  'Project Engineer can explicitly cancel an all-unavailable request'
+);
+
+set local role postgres;
+select ok(
+  (
+    select request_record.state = 'cancelled'
+      and request_record.current_action_owner_role = 'none'
+      and request_record.cancellation_reason = 'No currently available supply path'
+      and arrangement.status = 'cancelled'
+      and not arrangement.is_current
+    from public.v1_material_requests request_record
+    join public.v1_procurement_arrangements arrangement
+      on arrangement.request_id = request_record.id
+    where request_record.id = 'd1000000-0000-4000-8000-000000000002'
+      and arrangement.id = 'd1200000-0000-4000-8000-000000000002'
+  ),
+  'Cancellation is terminal and removes the arrangement from Procurement work'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select throws_ok(
+  $$select public.v1_save_arrangement(
+    jsonb_build_object(
+      'request_id', 'd1000000-0000-4000-8000-000000000002',
+      'arrangement_id', 'd1200000-0000-4000-8000-000000000002',
+      'expected_request_version', 3,
+      'expected_arrangement_version', 2,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'arrangement_line_id', 'd1300000-0000-4000-8000-000000000002',
+        'source_kind', 'external_supplier',
+        'external_supplier', null,
+        'inventory_item_id', null,
+        'decision', 'unavailable',
+        'arranged_qty', '0',
+        'reason', 'Still unavailable'
+      ))
+    ), 'd2000000-0000-4000-8000-000000000005'
+  )$$,
+  '22023', 'V1_ARRANGEMENT_NOT_WORKING',
+  'Procurement cannot edit after the Project Engineer cancels the request'
 );
 
 set local role authenticated;
