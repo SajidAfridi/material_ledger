@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -45,7 +46,8 @@ final yorksV1AppNotificationsProvider = Provider<List<AppNotification>>((ref) {
 });
 
 class YorksV1NotificationsNotifier
-    extends StateNotifier<AsyncValue<List<YorksV1NotificationRecord>>> {
+    extends StateNotifier<AsyncValue<List<YorksV1NotificationRecord>>>
+    with WidgetsBindingObserver {
   YorksV1NotificationsNotifier({
     required SupabaseClient? client,
     required YorksV1NotificationRepository? repository,
@@ -65,6 +67,9 @@ class YorksV1NotificationsNotifier
   bool _started = false;
   bool _disposed = false;
   bool _loading = false;
+  bool _observingLifecycle = false;
+  bool _leftForeground = false;
+  bool _hasRealtimeSubscription = false;
 
   Future<void> start() async {
     if (_started || _disposed) return;
@@ -75,13 +80,12 @@ class YorksV1NotificationsNotifier
       state = const AsyncData([]);
       return;
     }
+    WidgetsBinding.instance.addObserver(this);
+    _observingLifecycle = true;
     await refresh(showLoading: true);
     if (_disposed) return;
-    await _subscribe();
-    // Realtime is the fast refresh signal, while this safety refresh guarantees
-    // eventual cross-device convergence if a browser, installed PWA or mobile
-    // client silently misses an UPDATE event while suspended.
-    _startFallback();
+    final subscribed = await _subscribe();
+    if (!subscribed) _startFallback();
   }
 
   Future<void> refresh({bool showLoading = false}) async {
@@ -191,11 +195,20 @@ class YorksV1NotificationsNotifier
           .subscribe((status, _) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
-              if (!joined.isCompleted) joined.complete(true);
-              unawaited(refresh());
+              final reconnected = _hasRealtimeSubscription;
+              _hasRealtimeSubscription = true;
+              _stopFallback();
+              if (!joined.isCompleted) {
+                joined.complete(true);
+              } else if (reconnected) {
+                // The channel may have missed a row while reconnecting.  One
+                // authoritative fetch closes that gap without a timer loop.
+                unawaited(refresh());
+              }
             } else if (status == RealtimeSubscribeStatus.channelError ||
                 status == RealtimeSubscribeStatus.timedOut ||
                 status == RealtimeSubscribeStatus.closed) {
+              _hasRealtimeSubscription = false;
               _startFallback();
               if (!joined.isCompleted) joined.complete(false);
             }
@@ -217,10 +230,30 @@ class YorksV1NotificationsNotifier
     );
   }
 
+  void _stopFallback() {
+    _fallbackTimer?.cancel();
+    _fallbackTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_disposed) return;
+    if (state == AppLifecycleState.resumed) {
+      if (_leftForeground) unawaited(refresh());
+      _leftForeground = false;
+      return;
+    }
+    _leftForeground = true;
+  }
+
   @override
   void dispose() {
     _disposed = true;
-    _fallbackTimer?.cancel();
+    if (_observingLifecycle) {
+      WidgetsBinding.instance.removeObserver(this);
+      _observingLifecycle = false;
+    }
+    _stopFallback();
     _authSubscription?.cancel();
     final channel = _channel;
     final client = _client;

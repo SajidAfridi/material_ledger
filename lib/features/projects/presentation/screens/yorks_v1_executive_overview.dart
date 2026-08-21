@@ -879,38 +879,51 @@ class _HealthPanel extends StatelessWidget {
           : LayoutBuilder(
               builder: (context, constraints) {
                 final narrow = constraints.maxWidth < 620;
+                final totalLabel =
+                    (admin
+                            ? YorksV1OverviewStrings.openMaterialRequests
+                            : YorksV1OverviewStrings.totalProjects)
+                        .active(language);
                 final ring = SizedBox(
-                  height: 176,
+                  height: 188,
                   child: Row(
                     children: [
                       SizedBox(
                         width: 150,
-                        height: 150,
-                        child: CustomPaint(
-                          painter: _RingPainter(slices),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '$total',
-                                  style: AppTypography.headlineMedium.copyWith(
-                                    fontWeight: FontWeight.w800,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              totalLabel,
+                              key: const ValueKey(
+                                'overview-health-total-label',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: AppTypography.labelSmall.copyWith(
+                                color: AppColors.inkSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: 132,
+                              height: 132,
+                              child: CustomPaint(
+                                painter: _RingPainter(slices),
+                                child: Center(
+                                  child: Text(
+                                    '$total',
+                                    key: const ValueKey(
+                                      'overview-health-total-value',
+                                    ),
+                                    style: AppTypography.headlineMedium
+                                        .copyWith(fontWeight: FontWeight.w800),
                                   ),
                                 ),
-                                Text(
-                                  (admin
-                                          ? YorksV1OverviewStrings
-                                                .openMaterialRequests
-                                          : YorksV1OverviewStrings
-                                                .totalProjects)
-                                      .active(language),
-                                  textAlign: TextAlign.center,
-                                  style: AppTypography.labelSmall,
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                       const SizedBox(width: 16),

@@ -242,6 +242,43 @@ void main() {
     },
   );
 
+  testWidgets('operations health keeps its total label above the donut', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.admin),
+          yorksV1ProjectPortfolioProvider.overrideWith(
+            (ref) async => _projects,
+          ),
+          yorksV1MaterialRequestListProvider(
+            null,
+          ).overrideWith((ref) async => _requests),
+          yorksV1InventoryWorkspaceProvider(null).overrideWith(
+            (ref) async => YorksV1InventoryWorkspace(items: const []),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: _overviewRouter()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final label = find.byKey(const ValueKey('overview-health-total-label'));
+    final value = find.byKey(const ValueKey('overview-health-total-value'));
+    expect(label, findsOneWidget);
+    expect(value, findsOneWidget);
+    expect(tester.getTopLeft(label).dy, lessThan(tester.getTopLeft(value).dy));
+    expect(tester.takeException(), isNull);
+
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
   testWidgets(
     'executive workspaces stay usable from small phone through desktop',
     (tester) async {

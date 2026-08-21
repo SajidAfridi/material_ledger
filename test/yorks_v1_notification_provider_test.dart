@@ -8,6 +8,8 @@ import 'package:material_ledger/shared/repositories/yorks_v1_notification_reposi
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test(
     'single acknowledgement is optimistic and survives a second device',
     () async {

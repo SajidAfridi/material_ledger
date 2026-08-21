@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/hardware/hardware_action_service.dart';
 import '../core/security/session_lock.dart';
+import '../core/scroll/yorks_scroll_behavior.dart';
 import '../core/theme/app_theme.dart';
 import '../features/system/presentation/screens/lock_screen.dart';
 import '../shared/providers/language_provider.dart';
@@ -149,6 +150,7 @@ class MaterialLedgerApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: router,
+      scrollBehavior: const YorksScrollBehavior(),
       // Overlay the lock screen above whatever is on screen (preserves
       // navigation), and reset the idle timer on any interaction.
       builder: (context, child) => NotificationAttentionHost(

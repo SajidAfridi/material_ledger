@@ -84,7 +84,7 @@ void main() {
     });
 
     test(
-      'a healthy channel retains a mobile suspension safety refresh',
+      'a healthy channel does not start a redundant polling refresh',
       () async {
         final notifier = YorksV1MaterialRequestRealtimeNotifier(
           enabled: true,
@@ -100,7 +100,7 @@ void main() {
         await notifier.start();
         await Future<void>.delayed(const Duration(milliseconds: 20));
 
-        expect(notifier.state, greaterThan(1));
+        expect(notifier.state, 1);
       },
     );
 

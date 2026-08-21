@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -145,7 +146,8 @@ final yorksV1ChatAttachmentBytesProvider = FutureProvider.autoDispose
       return repository.downloadAttachment(attachmentId);
     });
 
-class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState> {
+class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
+    with WidgetsBindingObserver {
   YorksV1TeamChatController({
     required YorksV1TeamChatRepository? repository,
     required SupabaseClient? client,
@@ -166,6 +168,9 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState> {
   Timer? _fallback;
   bool _disposed = false;
   bool _refreshing = false;
+  bool _observingLifecycle = false;
+  bool _leftForeground = false;
+  bool _hasRealtimeSubscription = false;
   String _activeSearchQuery = '';
 
   Future<void> start() async {
@@ -183,12 +188,11 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState> {
       );
       return;
     }
+    WidgetsBinding.instance.addObserver(this);
+    _observingLifecycle = true;
     await refreshConversations();
-    await _subscribe();
-    _fallback = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => unawaited(refresh()),
-    );
+    final subscribed = await _subscribe();
+    if (!subscribed) _startFallback();
   }
 
   Future<void> refresh({bool includeThread = true}) async {
@@ -483,45 +487,102 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState> {
     return repository.downloadAttachment(attachmentId);
   }
 
-  Future<void> _subscribe() async {
+  Future<bool> _subscribe() async {
     final client = _client;
     final authUserId = _authUserId;
-    if (client == null || authUserId == null) return;
-    final token = client.auth.currentSession?.accessToken;
-    if (token == null) return;
-    await client.realtime.setAuth(token);
-    _authSubscription = client.auth.onAuthStateChange.listen((event) {
-      final refreshed = event.session?.accessToken;
-      if (refreshed != null) unawaited(client.realtime.setAuth(refreshed));
-    });
-    void signal(PostgresChangePayload _) => unawaited(refresh());
-    _channel = client
-        .channel('yorks-v1-team-chat:$authUserId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'v1_chat_messages',
-          callback: signal,
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'v1_chat_conversations',
-          callback: signal,
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'v1_chat_members',
-          callback: signal,
-        )
-        .subscribe();
+    if (client == null || authUserId == null) return false;
+    try {
+      final token = client.auth.currentSession?.accessToken;
+      if (token == null) return false;
+      await client.realtime.setAuth(token);
+      _authSubscription = client.auth.onAuthStateChange.listen((event) {
+        final refreshed = event.session?.accessToken;
+        if (refreshed != null) unawaited(client.realtime.setAuth(refreshed));
+      });
+      final joined = Completer<bool>();
+      void signal(PostgresChangePayload _) => unawaited(refresh());
+      _channel = client
+          .channel('yorks-v1-team-chat:$authUserId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'v1_chat_messages',
+            callback: signal,
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'v1_chat_conversations',
+            callback: signal,
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'v1_chat_members',
+            callback: signal,
+          )
+          .subscribe((status, _) {
+            if (_disposed) return;
+            if (status == RealtimeSubscribeStatus.subscribed) {
+              final reconnected = _hasRealtimeSubscription;
+              _hasRealtimeSubscription = true;
+              _stopFallback();
+              if (!joined.isCompleted) {
+                joined.complete(true);
+              } else if (reconnected) {
+                unawaited(refresh());
+              }
+              return;
+            }
+            if (status == RealtimeSubscribeStatus.channelError ||
+                status == RealtimeSubscribeStatus.timedOut ||
+                status == RealtimeSubscribeStatus.closed) {
+              _hasRealtimeSubscription = false;
+              _startFallback();
+              if (!joined.isCompleted) joined.complete(false);
+            }
+          });
+      return await joined.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => false,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _startFallback() {
+    if (_fallback != null || _disposed) return;
+    _fallback = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(refresh()),
+    );
+  }
+
+  void _stopFallback() {
+    _fallback?.cancel();
+    _fallback = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_disposed) return;
+    if (state == AppLifecycleState.resumed) {
+      if (_leftForeground) unawaited(refresh());
+      _leftForeground = false;
+      return;
+    }
+    _leftForeground = true;
   }
 
   @override
   void dispose() {
     _disposed = true;
-    _fallback?.cancel();
+    if (_observingLifecycle) {
+      WidgetsBinding.instance.removeObserver(this);
+      _observingLifecycle = false;
+    }
+    _stopFallback();
     _authSubscription?.cancel();
     final channel = _channel;
     final client = _client;

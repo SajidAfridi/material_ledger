@@ -290,9 +290,13 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   bool _observingLifecycle = false;
   bool _leftForeground = false;
 
-  /// Starts the safe notification signal and a low-frequency authorized read.
-  /// The latter closes mobile/browser suspension gaps without replacing the
-  /// current projection or treating Realtime as workflow authority.
+  /// Starts the safe notification signal.
+  ///
+  /// A successful Realtime channel is the normal refresh path.  The polling
+  /// fallback is intentionally reserved for a failed or dropped subscription:
+  /// keeping it active next to a healthy socket re-fetched every active
+  /// project/request projection on a timer and created unnecessary traffic on
+  /// the Overview screen.
   Future<void> start() async {
     if (!_enabled || _disposed || _started) return;
     _started = true;
@@ -307,16 +311,13 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     // Re-fetch once a channel has joined. That closes the gap between the
     // initial list/detail RPC and a successful subscription registration.
     if (subscribed) {
+      _stopFallbackTimer();
       await _refreshAuthorizedProjections(
         YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
       );
+    } else {
+      _ensureFallbackTimer();
     }
-    // Mobile operating systems and browser tabs can suspend a healthy socket
-    // without immediately reporting a channel error. Keep a low-frequency
-    // authorized re-fetch as a safety net on every platform. Dependants retain
-    // their current data while refreshing, so this does not flash a loading
-    // screen or make Realtime a transaction authority.
-    _ensureFallbackTimer();
   }
 
   @override
@@ -401,6 +402,7 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
           .subscribe((status, error) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
+              _stopFallbackTimer();
               if (!joined.isCompleted) {
                 joined.complete(true);
               } else {
@@ -463,6 +465,11 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     );
   }
 
+  void _stopFallbackTimer() {
+    _fallbackTimer?.cancel();
+    _fallbackTimer = null;
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -470,8 +477,7 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
       WidgetsBinding.instance.removeObserver(this);
       _observingLifecycle = false;
     }
-    _fallbackTimer?.cancel();
-    _fallbackTimer = null;
+    _stopFallbackTimer();
     unawaited(_authSubscription?.cancel() ?? Future<void>.value());
     final channel = _channel;
     final client = _client;
