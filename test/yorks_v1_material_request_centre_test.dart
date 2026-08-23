@@ -52,7 +52,7 @@ void main() {
       find.byKey(const ValueKey('material-request-project-project-322')),
       findsNothing,
     );
-    expect(find.text('Total Material Requests'), findsOneWidget);
+    expect(find.text('Total Material Requests'), findsAtLeastNWidgets(1));
     expect(find.textContaining('YRA-322'), findsWidgets);
     expect(find.textContaining('YRA-314'), findsWidgets);
     expect(find.textContaining('YRA-313'), findsWidgets);
@@ -444,6 +444,10 @@ void main() {
 
     expect(queries.single.limit, 15);
     expect(queries.single.offset, 0);
+    expect(
+      queries.single.registerView,
+      YorksV1MaterialRequestRegisterView.total,
+    );
     expect(find.text('1–15 / 16'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('material-request-row-server-summary-14')),
@@ -453,6 +457,10 @@ void main() {
       find.byKey(const ValueKey('material-request-row-server-summary-15')),
       findsNothing,
     );
+
+    await tester.tap(find.text('My Material Requests'));
+    await tester.pumpAndSettle();
+    expect(queries.last.registerView, YorksV1MaterialRequestRegisterView.mine);
 
     await tester.tap(
       find.byKey(const ValueKey('material-request-centre-page-next')),

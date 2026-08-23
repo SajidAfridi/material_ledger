@@ -69,13 +69,13 @@ select is(
     where group_record.project_id = (select project_id from v1_t03_targets)
       and not group_record.is_custom
   ),
-  87::bigint,
-  'New project materialises all 29 frozen folders independently in Common, DF3W and DF4W'
+  3::bigint,
+  'New project materialises Workshop Materials independently in Common, DF3W and DF4W'
 );
 
 select ok(
   (
-    select min(scope_group_count) = 29 and max(scope_group_count) = 29
+    select min(scope_group_count) = 1 and max(scope_group_count) = 1
     from (
       select scope_id, count(*) as scope_group_count
       from public.v1_boq_groups
@@ -113,7 +113,7 @@ select is(
   jsonb_array_length(public.v1_list_boq_groups_for_scope(
     (select project_id from v1_t03_targets), null
   )),
-  87,
+  3,
   'All returns a read-only aggregate containing every independent scope folder'
 );
 
@@ -122,15 +122,15 @@ select is(
     (select project_id from v1_t03_targets),
     (select df3w_scope_id from v1_t03_targets)
   )),
-  29,
-  'A selected building returns only its own 29 folders'
+  1,
+  'A selected building returns only its own Workshop Materials folder'
 );
 
 select is(
   jsonb_array_length(public.v1_list_boq_groups(
     (select project_id from v1_t03_targets)
   )),
-  29,
+  1,
   'The legacy one-argument BOQ projection remains a safe Common-only compatibility path'
 );
 
@@ -418,18 +418,39 @@ select is(
 alter table v1_t03_targets
   add column legacy_default_group_id uuid,
   add column target_placeholder_group_id uuid;
+
+-- Recreate a pair of untouched historical default shells to prove the legacy
+-- assignment path remains data-preserving after the seed catalogue changed.
+insert into public.v1_boq_groups (
+  project_id, scope_id, template_id, name, worksheet_title, display_order,
+  is_custom, created_by_auth_user_id
+)
+select
+  target.project_id,
+  scope_id,
+  template.id,
+  template.display_name,
+  template.display_name,
+  100,
+  false,
+  '10000000-0000-4000-8000-000000000001'::uuid
+from v1_t03_targets target
+cross join lateral (values (target.df3w_scope_id), (target.df4w_scope_id)) scopes(scope_id)
+cross join public.v1_boq_group_templates template
+where template.template_key = 'ac_units';
+
 update v1_t03_targets
 set legacy_default_group_id = (
       select id from public.v1_boq_groups
       where project_id = v1_t03_targets.project_id
         and scope_id = v1_t03_targets.df3w_scope_id
-        and display_order = 2
+        and name = 'AC Units'
     ),
     target_placeholder_group_id = (
       select id from public.v1_boq_groups
       where project_id = v1_t03_targets.project_id
         and scope_id = v1_t03_targets.df4w_scope_id
-        and display_order = 2
+        and name = 'AC Units'
     );
 update public.v1_boq_groups
 set scope_id = null

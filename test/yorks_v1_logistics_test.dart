@@ -9,6 +9,27 @@ import 'package:material_ledger/shared/repositories/yorks_v1_material_request_re
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 
 void main() {
+  test('project material movement parses only movement facts', () {
+    final movement = YorksV1ProjectMaterialMovement.fromRpcJson({
+      'id': 'movement-1',
+      'movement_kind': 'returned',
+      'reference': 'YRA-322-RT001',
+      'request_id': 'request-1',
+      'request_number': 'YRA-322-MR004',
+      'item_description': 'Copper pipe',
+      'brand_origin': 'UAE',
+      'unit': 'Mtr',
+      'quantity': '2.5',
+      'actor_display_name': 'Procurement User',
+      'occurred_at': '2026-08-23T08:00:00.000Z',
+    });
+
+    expect(movement.kind, YorksV1ProjectMaterialMovementKind.returned);
+    expect(movement.quantity, '2.5');
+    expect(movement.requestNumber, 'YRA-322-MR004');
+    expect(movement.occurredAt, DateTime.utc(2026, 8, 23, 8));
+  });
+
   test(
     'logistics workspace preserves dispatch and receipt facts without costs',
     () {

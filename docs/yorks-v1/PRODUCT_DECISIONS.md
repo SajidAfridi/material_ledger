@@ -190,16 +190,17 @@ The effective R35 five stages are approved:
 
 Draft input autosaves per user/device. Creation itself requires connectivity and
 one server transaction that creates the project, Common scope, physical
-buildings, initial membership history and 29 default BOQ groups for **each**
-real scope.
+buildings, initial membership history and one **Workshop Materials** BOQ group
+for **each** real scope.
 
 No weighted project-completeness percentage participates in V1 readiness or
 workflow. Existing progress data remains historical and isolated.
 
 ## 6. BOQ groups, columns and rows
 
-- Every Common/building scope starts with its own approved 29 ordered BOQ
-  groups. Admin-configured template changes affect new scopes only.
+- Every Common/building scope starts with one independent **Workshop
+  Materials** BOQ group. Admin-configured custom folder names remain
+  project-wide structural definitions.
 - A custom folder name is a project-wide structural definition. Creating it
   from one real scope creates an independent empty group with the same name in
   Common and every active building, and future scopes receive the name too.
@@ -217,6 +218,11 @@ workflow. Existing progress data remains historical and isolated.
 - Blank Row and Similar Row insert immediately below the active row.
 - Deleting a populated column requires confirmation and preserves its legacy
   values in revision/audit history; it does not silently discard them.
+- Saving or importing a reviewed worksheet is an atomic active-snapshot
+  replacement. Archived row/column order values never block a later import,
+  revised IDs and reordered coordinates are accepted, malformed duplicate
+  IDs/orders/headings/mappings fail before commit, and an idempotent retry does
+  not create another revision.
 - BOQ import and editing never submit an MR.
 
 Planning model/equipment tag is separate from manufacturer serial number.
@@ -224,37 +230,14 @@ Manufacturer serial is captured only at receipt/asset registration when known.
 Legacy `modelSerial` values are retained with provenance until reconciled; they
 are not guessed into either field.
 
-The approved default group order is frozen:
+The approved default group set is frozen to one folder:
 
-1. AC Units
-2. Ventilation Fans
-3. MFD, MSFD, MSD, MVCD & VCD
-4. Air Inlet & Outlet
-5. Cable Tray
-6. Sound Attenuator
-7. Electric Duct Heater
-8. Fire-Rated Duct & VCD
-9. HVAC Control Panel
-10. Aluminium Cladding Sheet
-11. Flexible Duct Connector
-12. Spring Mounts & Neoprene Pads
-13. Junction Box
-14. Power & Control Cables
-15. Glands & Accessories
-16. Electrical Material
-17. Refrigerant Pipe
-18. Container & Temporary Facilities
-19. Fire-Rated & GI Duct Draft Paper
-20. GI Ductwork
-21. Duct Insulation
-22. Chilled Water Piping
-23. Pipe Insulation
-24. Valves & Accessories
-25. Drainage Piping
-26. Supports & Accessories
-27. Filters & Consumables
-28. Testing & Commissioning Materials
-29. Miscellaneous / Common Materials
+1. Workshop Materials
+
+The former 29 templates remain preserved as inactive historical definitions.
+Existing folders carrying any row, column, controlled document or Material
+Request source remain visible; empty legacy shells are not shown in normal BOQ
+navigation and are never physically deleted by this rollout.
 
 ## 7. Material Request creation and submission
 
@@ -306,6 +289,15 @@ description, brand/origin, size, model/tag and unit may be copied while
 quantity remains deliberate user input. No match leaves free-text entry fully
 available. The response contains no cost, balance, reservation, minimum-stock,
 location or other protected inventory facts.
+
+The same ranked, non-commercial discovery is available while editing a BOQ
+description cell. Desktop keeps suggestions inside the active spreadsheet
+cell; mobile uses the focused row editor. The current row is excluded from its
+own results. Selecting a suggestion copies only mapped description,
+brand/origin, size, model/tag and unit values in one local worksheet revision;
+quantity and commercial fields remain deliberate input. Searches are
+debounced and stale responses are discarded, while unmatched free text remains
+valid.
 
 Procurement arrangement shows the immutable request-line BOQ correlation and
 uses it to rank warehouse candidates, but never auto-selects a stock item.

@@ -657,6 +657,11 @@ class _OperationsRepository implements YorksV1LogisticsRepository {
   final List<YorksV1MaterialReturnDraftInput> returnDrafts = [];
 
   @override
+  Future<List<YorksV1ProjectMaterialMovement>> getProjectMaterialMovements(
+    String projectId,
+  ) async => const [];
+
+  @override
   Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId) async =>
       requestId == 'receipt' ? _receiptWorkspace : _dispatchWorkspace;
 

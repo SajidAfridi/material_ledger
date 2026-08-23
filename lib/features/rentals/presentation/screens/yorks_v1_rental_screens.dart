@@ -288,13 +288,13 @@ class _RentalPageHeader extends StatelessWidget {
       children: [
         SecondaryButton(
           label: 'Download import format',
-          icon: Icons.download_rounded,
+          icon: YorksDataTransferIcons.downloadTemplate,
           isExpanded: false,
           onPressed: onDownloadTemplate,
         ),
         SecondaryButton(
           label: 'Import Excel',
-          icon: Icons.upload_rounded,
+          icon: YorksDataTransferIcons.importData,
           isExpanded: false,
           onPressed: onImport,
         ),
@@ -354,7 +354,7 @@ class _ExportRegistersButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.file_download_outlined,
+                YorksDataTransferIcons.exportData,
                 color: onSelected == null ? AppColors.muted : AppColors.navy,
               ),
               const SizedBox(width: 9),

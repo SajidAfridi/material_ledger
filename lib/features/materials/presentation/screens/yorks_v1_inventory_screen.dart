@@ -484,105 +484,122 @@ class _WarehouseHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final heading = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          YorksV1InventoryStrings.procurementWorkspace.active(language),
-          style: AppTypography.labelSmall.copyWith(
-            color: AppColors.blue,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          YorksV1InventoryStrings.warehouseInventory.active(language),
-          style:
-              (compact
-                      ? AppTypography.headlineMedium
-                      : AppTypography.displaySmall)
-                  .copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          YorksV1InventoryStrings.subtitle.active(language),
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
-        ),
-      ],
-    );
-    final actionButtons = <Widget>[
-      if (canManage) ...[
-        OutlinedButton.icon(
-          onPressed: onDownload,
-          icon: const Icon(Icons.download_rounded, size: 18),
-          label: Text(
-            YorksV1InventoryStrings.downloadImportFormat.active(language),
-          ),
-        ),
-        OutlinedButton.icon(
-          onPressed: onImport,
-          icon: const Icon(Icons.upload_file_rounded, size: 18),
-          label: Text(YorksV1InventoryStrings.importInventory.active(language)),
-        ),
-        if (onSuppliers != null)
-          OutlinedButton.icon(
-            onPressed: onSuppliers,
-            icon: const Icon(Icons.group_outlined, size: 18),
-            label: Text(
-              YorksV1InventorySupplierStrings.suppliers.active(language),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The office sidebar reduces the usable content width on tablets even
+        // when the overall window is wider than the mobile breakpoint.
+        final stacked = compact || constraints.maxWidth < 980;
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              YorksV1InventoryStrings.procurementWorkspace.active(language),
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.blue,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
             ),
-          ),
-        FilledButton.icon(
-          onPressed: onAdd,
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: Text(YorksV1InventoryStrings.addReceive.active(language)),
-        ),
-      ],
-      if (!compact)
-        IconButton.outlined(
-          tooltip: YorksV1LogisticsStrings.refresh.active(language),
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-    ];
-    final actions = compact
-        ? LayoutBuilder(
-            builder: (context, constraints) {
-              final width = (constraints.maxWidth - AppSpacing.sm) / 2;
-              return Wrap(
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1InventoryStrings.warehouseInventory.active(language),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  (stacked
+                          ? AppTypography.headlineMedium
+                          : AppTypography.displaySmall)
+                      .copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              YorksV1InventoryStrings.subtitle.active(language),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+            ),
+          ],
+        );
+        final actionButtons = <Widget>[
+          if (canManage) ...[
+            OutlinedButton.icon(
+              onPressed: onDownload,
+              icon: const Icon(
+                YorksDataTransferIcons.downloadTemplate,
+                size: 18,
+              ),
+              label: Text(
+                YorksV1InventoryStrings.downloadImportFormat.active(language),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: onImport,
+              icon: const Icon(YorksDataTransferIcons.importData, size: 18),
+              label: Text(
+                YorksV1InventoryStrings.importInventory.active(language),
+              ),
+            ),
+            if (onSuppliers != null)
+              OutlinedButton.icon(
+                onPressed: onSuppliers,
+                icon: const Icon(Icons.group_outlined, size: 18),
+                label: Text(
+                  YorksV1InventorySupplierStrings.suppliers.active(language),
+                ),
+              ),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text(YorksV1InventoryStrings.addReceive.active(language)),
+            ),
+          ],
+          if (!stacked)
+            IconButton.outlined(
+              tooltip: YorksV1LogisticsStrings.refresh.active(language),
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+        ];
+        final actions = stacked
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoColumns = constraints.maxWidth >= 420;
+                  final width = twoColumns
+                      ? (constraints.maxWidth - AppSpacing.sm) / 2
+                      : constraints.maxWidth;
+                  return Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (final button in actionButtons)
+                        SizedBox(width: width, height: 48, child: button),
+                    ],
+                  );
+                },
+              )
+            : Wrap(
+                alignment: WrapAlignment.end,
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
-                children: [
-                  for (final button in actionButtons)
-                    SizedBox(width: width, height: 48, child: button),
-                ],
+                children: actionButtons,
               );
-            },
-          )
-        : Wrap(
-            alignment: WrapAlignment.end,
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: actionButtons,
+        if (stacked) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              heading,
+              const SizedBox(height: AppSpacing.lg),
+              actions,
+            ],
           );
-    if (compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          heading,
-          const SizedBox(height: AppSpacing.lg),
-          actions,
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(child: heading),
-        const SizedBox(width: AppSpacing.xl),
-        actions,
-      ],
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: AppSpacing.xl),
+            actions,
+          ],
+        );
+      },
     );
   }
 }
@@ -1280,12 +1297,12 @@ class _QuickTools extends StatelessWidget {
     final tools = [
       if (canManage) ...[
         (
-          Icons.download_rounded,
+          YorksDataTransferIcons.downloadTemplate,
           YorksV1InventoryStrings.downloadFormat.active(language),
           onDownload,
         ),
         (
-          Icons.upload_file_rounded,
+          YorksDataTransferIcons.importData,
           YorksV1InventoryStrings.importInventory.active(language),
           onImport,
         ),
@@ -1296,7 +1313,7 @@ class _QuickTools extends StatelessWidget {
         ),
       ],
       (
-        Icons.file_download_outlined,
+        YorksDataTransferIcons.exportData,
         YorksV1InventoryStrings.exportRegister.active(language),
         onExport,
       ),
@@ -1835,7 +1852,7 @@ class _WarehouseItemFilters extends StatelessWidget {
                     ),
                     OutlinedButton.icon(
                       onPressed: onDownload,
-                      icon: const Icon(Icons.download_rounded),
+                      icon: const Icon(YorksDataTransferIcons.downloadTemplate),
                       label: Text(
                         YorksV1InventoryStrings.importFormat.active(language),
                       ),
@@ -4305,7 +4322,10 @@ class _InventoryImportDialog extends ConsumerWidget {
                             );
                           }
                         },
-                  icon: const Icon(Icons.download_rounded, size: 18),
+                  icon: const Icon(
+                    YorksDataTransferIcons.downloadTemplate,
+                    size: 18,
+                  ),
                   label: Text(
                     YorksV1InventoryStrings.downloadFormat.active(language),
                   ),
@@ -4391,7 +4411,7 @@ class _InventoryImportStart extends StatelessWidget {
           child: Column(
             children: [
               _ImportStartStep(
-                icon: Icons.download_rounded,
+                icon: YorksDataTransferIcons.downloadTemplate,
                 title: YorksV1InventoryStrings.downloadImportFormat.active(
                   language,
                 ),
@@ -4399,7 +4419,7 @@ class _InventoryImportStart extends StatelessWidget {
                     .active(language),
                 action: OutlinedButton.icon(
                   onPressed: enabled ? onChoose : null,
-                  icon: const Icon(Icons.upload_file_rounded, size: 18),
+                  icon: const Icon(YorksDataTransferIcons.importData, size: 18),
                   label: Text(
                     YorksV1InventoryStrings.selectFile.active(language),
                   ),

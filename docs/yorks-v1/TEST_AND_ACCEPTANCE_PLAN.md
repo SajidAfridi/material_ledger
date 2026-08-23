@@ -21,9 +21,9 @@ slices extend the same stable sequence without renumbering those originals.
 | ID | Scenario | Primary automated/manual evidence |
 |---|---|---|
 | AT-01 | Site Engineer creates a project, assigns a Project Engineer and multiple buildings; Procurement cannot create/edit it. | RPC/RLS/route/widget/integration |
-| AT-02 | New project receives 29 independent default BOQ groups for Common and each physical building; creating a custom folder name materializes an independent empty sibling in every real scope without copying rows. | database/repository/widget |
+| AT-02 | New project receives one independent Workshop Materials BOQ group for Common and each physical building; creating a custom folder name materializes an independent empty sibling in every real scope without copying rows. Historical populated template folders remain visible while untouched inactive shells are suppressed. | database/repository/widget |
 | AT-03 | MSD worksheet imports title, seven columns and all rows into the direct-edit grid. | workbook fixture/integration |
-| AT-04 | User edits/deletes a cell, row and non-protected column; export reproduces the changed worksheet. | controller/workbook round-trip |
+| AT-04 | User edits/deletes a cell, row and non-protected column; a later import may use fresh IDs and a changed column/row order without archived-key collisions, and export reproduces the changed worksheet. | controller/workbook/database round-trip |
 | AT-05 | Similar Row inserts directly below and preserves configured fields with sequential S:No. | unit/widget |
 | AT-06 | Whole BOQ group creates an MR draft but Procurement sees nothing until explicit Submit. | RLS/repository/integration |
 | AT-07 | Engineer selects individual BOQ and custom items only from the matching Common/building scope and submits a Scheduled MR. | widget/RPC/integration |
@@ -63,9 +63,9 @@ slices extend the same stable sequence without renumbering those originals.
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
-29-folder creation, Overview aggregation, project-wide custom-folder naming with
-row isolation, Procurement write denial, legacy assignment idempotency and
-save/submit MR scope negatives.
+one Workshop Materials folder per real scope, Overview aggregation,
+project-wide custom-folder naming with row isolation, Procurement write denial,
+legacy assignment idempotency and save/submit MR scope negatives.
 
 ## 3. Additional production gates
 
@@ -221,7 +221,10 @@ shrinks the three-pane layout, the composer stays above safe-area/bottom
 navigation, and interactive controls retain at least 44x44 targets.
 
 BOQ specifically tests 500 rows, virtualized focus, sticky identity/header,
-Tab/Shift+Tab/arrows/Enter and mobile focused-row Previous/Next behavior.
+Tab/Shift+Tab/arrows/Enter and mobile focused-row Previous/Next behavior. BOQ
+material assistance is covered on desktop and 360px mobile, including source
+search, current-row exclusion, one-pass mapped field placement, stale search
+suppression and preservation of user-entered quantity.
 
 ## 9. Per-batch gate
 

@@ -181,6 +181,7 @@ abstract final class RoutePaths {
     String draftId, {
     String? boqGroupId,
     String? projectId,
+    int? boqVersion,
   }) {
     if ((boqGroupId == null || boqGroupId.trim().isEmpty) &&
         (projectId == null || projectId.trim().isEmpty)) {
@@ -193,6 +194,7 @@ abstract final class RoutePaths {
     if (projectId != null && projectId.trim().isNotEmpty) {
       query['project_id'] = projectId;
     }
+    if (boqVersion != null) query['boq_version'] = '$boqVersion';
     return Uri(
       path: '/yorks/material-requests/draft/$draftId',
       queryParameters: query,
@@ -907,6 +909,9 @@ GoRouter createAppRouter({
             draftId: state.pathParameters['draftId'] ?? '',
             boqGroupId: state.uri.queryParameters['boq_group_id'],
             projectId: state.uri.queryParameters['project_id'],
+            boqVersion: int.tryParse(
+              state.uri.queryParameters['boq_version'] ?? '',
+            ),
           ),
         ),
       ),

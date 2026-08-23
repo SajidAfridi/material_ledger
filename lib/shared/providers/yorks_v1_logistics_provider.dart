@@ -47,6 +47,19 @@ final yorksV1LogisticsWorkspaceProvider = FutureProvider.autoDispose
           .getWorkspace(requestId);
     });
 
+final yorksV1ProjectMaterialMovementsProvider = FutureProvider.autoDispose
+    .family<List<YorksV1ProjectMaterialMovement>, String>((ref, projectId) {
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      return ref
+          .watch(yorksV1LogisticsRepositoryProvider)
+          .getProjectMaterialMovements(projectId);
+    });
+
 final yorksV1ReturnsDocumentsWorkspaceProvider = FutureProvider.autoDispose
     .family<YorksV1ReturnsDocumentsWorkspace, String>((ref, requestId) {
       ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (

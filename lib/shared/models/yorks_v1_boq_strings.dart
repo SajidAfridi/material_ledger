@@ -2,6 +2,30 @@ import 'app_strings.dart';
 
 /// Centralized, bilingual-capable copy for the Yorks V1 BOQ workspace.
 abstract final class YorksV1BoqStrings {
+  static const page = TranslatableString(
+    en: 'Page',
+    ar: 'صفحة',
+    ur: 'صفحہ',
+    hi: 'पृष्ठ',
+  );
+  static const of = TranslatableString(
+    en: 'of',
+    ar: 'من',
+    ur: 'از',
+    hi: 'में से',
+  );
+  static const printBoq = TranslatableString(
+    en: 'Print BOQ',
+    ar: 'طباعة جدول الكميات',
+    ur: 'BOQ پرنٹ کریں',
+    hi: 'BOQ प्रिंट करें',
+  );
+  static const printFailed = TranslatableString(
+    en: 'The BOQ print view could not be prepared.',
+    ar: 'تعذر إعداد عرض طباعة جدول الكميات.',
+    ur: 'BOQ پرنٹ ویو تیار نہیں ہو سکا۔',
+    hi: 'BOQ प्रिंट दृश्य तैयार नहीं हो सका।',
+  );
   static const serialNumber = TranslatableString(
     en: 'S:No',
     ar: 'م',
@@ -237,16 +261,22 @@ abstract final class YorksV1BoqStrings {
     hi: 'पूरे फ़ोल्डर से सामग्री अनुरोध बनाएँ',
   );
   static const sendWholeGroup = TranslatableString(
-    en: 'Send Whole Group',
-    ar: 'إرسال المجموعة كاملة',
-    ur: 'پورا گروپ بھیجیں',
-    hi: 'पूरा समूह भेजें',
+    en: 'Create request draft',
+    ar: 'إنشاء مسودة طلب',
+    ur: 'ریکویسٹ ڈرافٹ بنائیں',
+    hi: 'अनुरोध ड्राफ्ट बनाएँ',
   );
   static const createRequestFromFolderDescription = TranslatableString(
     en: 'Copies every BOQ row into a private draft. Review it before submitting to Procurement.',
     ar: 'ينسخ كل صفوف جدول الكميات إلى مسودة خاصة. راجعها قبل إرسالها إلى المشتريات.',
     ur: 'ہر BOQ قطار کو نجی ڈرافٹ میں کاپی کرتا ہے۔ پروکیورمنٹ کو بھیجنے سے پہلے جائزہ لیں۔',
     hi: 'हर BOQ पंक्ति को निजी ड्राफ्ट में कॉपी करता है। प्रोक्योरमेंट को भेजने से पहले समीक्षा करें।',
+  );
+  static const noRequestReadyRows = TranslatableString(
+    en: 'Add an item description or equipment tag to at least one row before creating a request draft.',
+    ar: 'أضف وصف مادة أو وسم معدة إلى صف واحد على الأقل قبل إنشاء مسودة الطلب.',
+    ur: 'ریکویسٹ ڈرافٹ بنانے سے پہلے کم از کم ایک قطار میں آئٹم کی تفصیل یا ایکوپمنٹ ٹیگ شامل کریں۔',
+    hi: 'अनुरोध ड्राफ्ट बनाने से पहले कम से कम एक पंक्ति में आइटम विवरण या उपकरण टैग जोड़ें।',
   );
   static const save = TranslatableString(
     en: 'Save',
@@ -321,10 +351,136 @@ abstract final class YorksV1BoqStrings {
     hi: 'सामग्री जोड़ें',
   );
   static const saveWorksheet = TranslatableString(
-    en: 'Save worksheet',
-    ar: 'حفظ ورقة العمل',
-    ur: 'ورک شیٹ محفوظ کریں',
-    hi: 'वर्कशीट सहेजें',
+    en: 'Apply to worksheet',
+    ar: 'تطبيق على ورقة العمل',
+    ur: 'ورک شیٹ پر لاگو کریں',
+    hi: 'वर्कशीट पर लागू करें',
+  );
+  static const unsavedWorksheetTitle = TranslatableString(
+    en: 'Save worksheet changes?',
+    ar: 'حفظ تغييرات ورقة العمل؟',
+    ur: 'ورک شیٹ کی تبدیلیاں محفوظ کریں؟',
+    hi: 'वर्कशीट बदलाव सहेजें?',
+  );
+  static const unsavedWorksheetBody = TranslatableString(
+    en: 'Your edits are kept on this device for recovery. Save them to the project before leaving, or discard them explicitly.',
+    ar: 'يتم الاحتفاظ بتعديلاتك على هذا الجهاز للاسترداد. احفظها في المشروع قبل المغادرة أو تجاهلها صراحةً.',
+    ur: 'آپ کی ترامیم ریکوری کے لیے اس ڈیوائس پر رکھی گئی ہیں۔ جانے سے پہلے انہیں پراجیکٹ میں محفوظ کریں یا واضح طور پر ضائع کریں۔',
+    hi: 'आपके संपादन रिकवरी के लिए इस डिवाइस पर रखे गए हैं। जाने से पहले उन्हें प्रोजेक्ट में सहेजें या स्पष्ट रूप से छोड़ें।',
+  );
+  static const saveAndContinue = TranslatableString(
+    en: 'Save and continue',
+    ar: 'حفظ ومتابعة',
+    ur: 'محفوظ کریں اور جاری رکھیں',
+    hi: 'सहेजें और जारी रखें',
+  );
+  static const outputUnsavedTitle = TranslatableString(
+    en: 'Choose the BOQ output',
+    ar: 'اختر مخرجات جدول الكميات',
+    ur: 'BOQ آؤٹ پٹ منتخب کریں',
+    hi: 'BOQ आउटपुट चुनें',
+  );
+  static const outputUnsavedBody = TranslatableString(
+    en: 'This worksheet has uncommitted edits. Save first for a controlled revision, or generate a clearly marked DRAFT copy.',
+    ar: 'تحتوي ورقة العمل على تعديلات غير معتمدة. احفظ أولاً لإصدار مضبوط أو أنشئ نسخة مسودة واضحة.',
+    ur: 'اس ورک شیٹ میں غیر کمٹ شدہ ترامیم ہیں۔ کنٹرولڈ ریویژن کے لیے پہلے محفوظ کریں یا واضح DRAFT کاپی بنائیں۔',
+    hi: 'इस वर्कशीट में असमर्थित संपादन हैं। नियंत्रित संशोधन के लिए पहले सहेजें या स्पष्ट DRAFT प्रति बनाएँ।',
+  );
+  static const draftCopy = TranslatableString(
+    en: 'Generate DRAFT copy',
+    ar: 'إنشاء نسخة مسودة',
+    ur: 'DRAFT کاپی بنائیں',
+    hi: 'DRAFT प्रति बनाएँ',
+  );
+  static const folderName = TranslatableString(
+    en: 'Folder',
+    ar: 'المجلد',
+    ur: 'فولڈر',
+    hi: 'फ़ोल्डर',
+  );
+  static const revision = TranslatableString(
+    en: 'Revision',
+    ar: 'المراجعة',
+    ur: 'ریویژن',
+    hi: 'संशोधन',
+  );
+  static const generated = TranslatableString(
+    en: 'Generated',
+    ar: 'تم الإنشاء',
+    ur: 'تیار کردہ',
+    hi: 'तैयार किया गया',
+  );
+  static const linkedWork = TranslatableString(
+    en: 'Linked work',
+    ar: 'العمل المرتبط',
+    ur: 'منسلک کام',
+    hi: 'जुड़ा कार्य',
+  );
+  static const lastEdited = TranslatableString(
+    en: 'Last edited',
+    ar: 'آخر تعديل',
+    ur: 'آخری ترمیم',
+    hi: 'अंतिम संपादन',
+  );
+  static const linkedRequests = TranslatableString(
+    en: 'linked requests',
+    ar: 'طلبات مرتبطة',
+    ur: 'منسلک ریکویسٹس',
+    hi: 'जुड़े अनुरोध',
+  );
+  static const linkedDocuments = TranslatableString(
+    en: 'documents',
+    ar: 'مستندات',
+    ur: 'دستاویزات',
+    hi: 'दस्तावेज़',
+  );
+  static const findInWorksheet = TranslatableString(
+    en: 'Find in worksheet',
+    ar: 'بحث في ورقة العمل',
+    ur: 'ورک شیٹ میں تلاش کریں',
+    hi: 'वर्कशीट में खोजें',
+  );
+  static const undo = TranslatableString(
+    en: 'Undo',
+    ar: 'تراجع',
+    ur: 'واپس کریں',
+    hi: 'पूर्ववत करें',
+  );
+  static const redo = TranslatableString(
+    en: 'Redo',
+    ar: 'إعادة',
+    ur: 'دوبارہ کریں',
+    hi: 'फिर करें',
+  );
+  static const clearFind = TranslatableString(
+    en: 'Clear search',
+    ar: 'مسح البحث',
+    ur: 'تلاش صاف کریں',
+    hi: 'खोज साफ़ करें',
+  );
+  static const possibleDuplicate = TranslatableString(
+    en: 'Possible duplicate',
+    ar: 'تكرار محتمل',
+    ur: 'ممکنہ ڈپلیکیٹ',
+    hi: 'संभावित डुप्लिकेट',
+  );
+  static const mappingOptional = TranslatableString(
+    en: 'Material Request mapping (optional)',
+    ar: 'تعيين طلب المواد (اختياري)',
+    ur: 'میٹریل ریکویسٹ میپنگ (اختیاری)',
+    hi: 'सामग्री अनुरोध मैपिंग (वैकल्पिक)',
+  );
+  static const duplicateColumnHeading = TranslatableString(
+    en: 'A column with this heading already exists.',
+    ar: 'يوجد عمود بهذا العنوان بالفعل.',
+    ur: 'اس ہیڈنگ والا کالم پہلے سے موجود ہے۔',
+    hi: 'इस शीर्षक वाला कॉलम पहले से मौजूद है।',
+  );
+  static const mappingAlreadyUsed = TranslatableString(
+    en: 'This Material Request mapping is already used by another column.',
+    ar: 'يُستخدم تعيين طلب المواد هذا بالفعل بواسطة عمود آخر.',
+    ur: 'یہ میٹریل ریکویسٹ میپنگ پہلے ہی دوسرے کالم میں استعمال ہو رہی ہے۔',
+    hi: 'यह सामग्री अनुरोध मैपिंग पहले से दूसरे कॉलम में उपयोग हो रही है।',
   );
   static const previous = TranslatableString(
     en: 'Previous',
@@ -351,10 +507,10 @@ abstract final class YorksV1BoqStrings {
     hi: 'क्या इस भरे कॉलम को हटाना है? इसके पुराने मान ऑडिटेड वर्कशीट इतिहास में रहेंगे।',
   );
   static const archiveGroup = TranslatableString(
-    en: 'Archive group',
-    ar: 'أرشفة المجموعة',
-    ur: 'گروپ آرکائیو کریں',
-    hi: 'समूह आर्काइव करें',
+    en: 'Hide folder in this scope',
+    ar: 'إخفاء المجلد في هذا النطاق',
+    ur: 'اس اسکوپ میں فولڈر چھپائیں',
+    hi: 'इस स्कोप में फ़ोल्डर छिपाएँ',
   );
   static const archived = TranslatableString(
     en: 'Archived',
@@ -399,16 +555,34 @@ abstract final class YorksV1BoqStrings {
     hi: 'रद्द करें',
   );
   static const archiveGroupConfirmation = TranslatableString(
-    en: 'Archive this custom group? Its worksheet stays available in the audit history.',
-    ar: 'أرشفة هذه المجموعة المخصصة؟ تبقى ورقة عملها متاحة في سجل التدقيق.',
-    ur: 'کیا اس کسٹم گروپ کو آرکائیو کریں؟ اس کی ورک شیٹ آڈٹ ہسٹری میں دستیاب رہے گی۔',
-    hi: 'क्या इस कस्टम समूह को आर्काइव करें? इसकी वर्कशीट ऑडिट इतिहास में उपलब्ध रहेगी।',
+    en: 'Hide this custom folder only from the current Common/building scope? Other scopes are unchanged, and this worksheet remains in audit history.',
+    ar: 'إخفاء هذا المجلد المخصص من النطاق المشترك/المبنى الحالي فقط؟ لن تتغير النطاقات الأخرى وستبقى ورقة العمل في سجل التدقيق.',
+    ur: 'کیا یہ کسٹم فولڈر صرف موجودہ کامن/بلڈنگ اسکوپ سے چھپائیں؟ دوسرے اسکوپس تبدیل نہیں ہوں گے اور یہ ورک شیٹ آڈٹ ہسٹری میں رہے گی۔',
+    hi: 'क्या इस कस्टम फ़ोल्डर को केवल वर्तमान कॉमन/बिल्डिंग स्कोप से छिपाना है? अन्य स्कोप नहीं बदलेंगे और यह वर्कशीट ऑडिट इतिहास में रहेगी।',
   );
   static const saveFailed = TranslatableString(
     en: 'Could not save this worksheet. Check the highlighted details and try again.',
     ar: 'تعذر حفظ ورقة العمل. تحقق من التفاصيل المميزة وحاول مرة أخرى.',
     ur: 'ورک شیٹ محفوظ نہیں ہو سکی۔ نمایاں تفصیلات چیک کریں اور دوبارہ کوشش کریں۔',
     hi: 'वर्कशीट सहेजी नहीं जा सकी। हाइलाइट किए गए विवरण जाँचें और फिर प्रयास करें।',
+  );
+  static const offlineSave = TranslatableString(
+    en: 'You are offline. Your worksheet is kept on this device; reconnect before applying it.',
+    ar: 'أنت غير متصل. تم الاحتفاظ بورقة العمل على هذا الجهاز؛ أعد الاتصال قبل تطبيقها.',
+    ur: 'آپ آف لائن ہیں۔ ورک شیٹ اس ڈیوائس پر محفوظ ہے؛ اطلاق سے پہلے دوبارہ کنیکٹ کریں۔',
+    hi: 'आप ऑफ़लाइन हैं। वर्कशीट इस डिवाइस पर सुरक्षित है; इसे लागू करने से पहले फिर कनेक्ट करें।',
+  );
+  static const permissionDenied = TranslatableString(
+    en: 'Your role cannot change this worksheet or its protected commercial fields.',
+    ar: 'لا يسمح دورك بتغيير ورقة العمل هذه أو حقولها التجارية المحمية.',
+    ur: 'آپ کا کردار اس ورک شیٹ یا اس کے محفوظ کمرشل فیلڈز کو تبدیل نہیں کر سکتا۔',
+    hi: 'आपकी भूमिका इस वर्कशीट या इसके सुरक्षित वाणिज्यिक फ़ील्ड नहीं बदल सकती।',
+  );
+  static const serviceUnavailable = TranslatableString(
+    en: 'The BOQ service is temporarily unavailable. Your local worksheet has not been discarded.',
+    ar: 'خدمة جدول الكميات غير متاحة مؤقتاً. لم يتم حذف ورقة العمل المحلية.',
+    ur: 'بی او کیو سروس عارضی طور پر دستیاب نہیں۔ آپ کی مقامی ورک شیٹ ضائع نہیں ہوئی۔',
+    hi: 'BOQ सेवा अस्थायी रूप से उपलब्ध नहीं है। आपकी स्थानीय वर्कशीट हटाई नहीं गई है।',
   );
   static const description = TranslatableString(
     en: 'Item description',

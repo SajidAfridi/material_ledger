@@ -177,6 +177,28 @@ final yorksV1MaterialRequestLocalDraftsProvider =
       return List.unmodifiable(drafts);
     });
 
+/// Cross-device recovery index. The database function is owner-scoped and
+/// returns only the authenticated creator's private, unsubmitted drafts.
+final yorksV1MaterialRequestPrivateDraftsProvider = FutureProvider.autoDispose
+    .family<List<YorksV1PrivateMaterialRequestDraftRecord>, String>((
+      ref,
+      ownerAuthUserId,
+    ) {
+      ref.watch(
+        yorksV1MaterialRequestLocalDraftRevisionProvider(ownerAuthUserId),
+      );
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestPhase2Repository) {
+        return const <YorksV1PrivateMaterialRequestDraftRecord>[];
+      }
+      const uuid = Uuid();
+      return (repository as YorksV1MaterialRequestPhase2Repository)
+          .listPrivateDrafts(
+            ownerAuthUserId: ownerAuthUserId,
+            submissionIdempotencyKeyFactory: uuid.v4,
+          );
+    });
+
 final yorksV1MaterialRequestListProvider = FutureProvider.autoDispose
     .family<List<YorksV1MaterialRequest>, String?>((ref, projectId) {
       // Realtime never provides a request projection. Keep the current

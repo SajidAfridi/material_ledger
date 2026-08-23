@@ -49,6 +49,80 @@ enum YorksV1ReceiptOutcome {
   }
 }
 
+enum YorksV1ProjectMaterialMovementKind {
+  dispatched('dispatched'),
+  returned('returned');
+
+  const YorksV1ProjectMaterialMovementKind(this.wireValue);
+
+  final String wireValue;
+
+  static YorksV1ProjectMaterialMovementKind? fromWireValue(Object? value) {
+    for (final kind in values) {
+      if (kind.wireValue == value) return kind;
+    }
+    return null;
+  }
+}
+
+/// Read-only project movement fact. This projection intentionally contains no
+/// stock command, valuation or mutable workflow state.
+class YorksV1ProjectMaterialMovement {
+  const YorksV1ProjectMaterialMovement({
+    required this.id,
+    required this.kind,
+    required this.reference,
+    required this.requestId,
+    required this.requestNumber,
+    required this.itemDescription,
+    required this.unit,
+    required this.quantity,
+    required this.actorDisplayName,
+    required this.occurredAt,
+    this.brandOrigin,
+  });
+
+  final String id;
+  final YorksV1ProjectMaterialMovementKind kind;
+  final String reference;
+  final String requestId;
+  final String requestNumber;
+  final String itemDescription;
+  final String? brandOrigin;
+  final String unit;
+  final String quantity;
+  final String actorDisplayName;
+  final DateTime occurredAt;
+
+  factory YorksV1ProjectMaterialMovement.fromRpcJson(
+    Map<String, dynamic> json,
+  ) {
+    final kind = YorksV1ProjectMaterialMovementKind.fromWireValue(
+      json['movement_kind'],
+    );
+    if (kind == null) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1ProjectMaterialMovement(
+      id: _requiredString(json, 'id'),
+      kind: kind,
+      reference: _requiredString(json, 'reference'),
+      requestId: _requiredString(json, 'request_id'),
+      requestNumber: _requiredString(json, 'request_number'),
+      itemDescription: normalizeYorksV1ItemDescription(
+        _requiredString(json, 'item_description'),
+      ),
+      brandOrigin: _trimToNull(json['brand_origin']),
+      unit: _requiredString(json, 'unit'),
+      quantity: _string(json['quantity']),
+      actorDisplayName: _requiredString(json, 'actor_display_name'),
+      occurredAt: _requiredDate(json, 'occurred_at'),
+    );
+  }
+}
+
 /// Operational-only warehouse item. This intentionally contains no supplier
 /// commercial record, rate, unit cost or valuation field.
 class YorksV1LogisticsInventoryItem {

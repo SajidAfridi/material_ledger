@@ -1608,7 +1608,7 @@ void main() {
   });
 
   test(
-    'Phase 2 draft recovery follows the owner across devices after debounce',
+    'Phase 2 draft recovery follows the owner and deletes across devices',
     () async {
       final repository = _Phase2FakeRequestRepository();
       final first = YorksV1MaterialRequestDraftController(
@@ -1628,10 +1628,11 @@ void main() {
         YorksV1MaterialRequestDraftSyncStatus.savedToAccount,
       );
 
+      final secondStore = _MemoryStore<YorksV1MaterialRequestDraft>();
       final second = YorksV1MaterialRequestDraftController(
         ownerAuthUserId: _siteEngineer,
         draftId: _draftId,
-        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        store: secondStore,
         repository: repository,
         uuidFactory: _Ids().next,
       );
@@ -1644,6 +1645,10 @@ void main() {
         second.state.status,
         YorksV1MaterialRequestDraftSyncStatus.savedToAccount,
       );
+
+      await second.discardLocal(requireServerConfirmation: true);
+      expect(repository.privateDraft, isNull);
+      expect(secondStore.readAll(), isEmpty);
     },
   );
 }

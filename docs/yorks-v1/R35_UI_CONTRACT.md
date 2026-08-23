@@ -220,6 +220,13 @@ Mobile BOQ is viewable and searchable. Editing opens one row in a focused full
 screen/bottom-sheet editor with Previous/Next, Save and validation. Do not make
 the 1160px desktop table the mobile editor.
 
+Mapped Item Description cells provide the same ranked material assistance as
+MR entry: current scope BOQ, remaining project BOQ, then inventory. Results
+identify their source, exclude the row currently being edited and never expose
+stock or commercial values. Selection fills only available mapped descriptive
+fields in one operation and never replaces quantity. Search is debounced,
+keyboard/touch selectable and free-text entry remains available.
+
 ## 8. Material Request experience
 
 New MR fields:

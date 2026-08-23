@@ -434,8 +434,8 @@ select is(
     where project.project_ref = 'B2-PE-001'
       and not group_record.is_custom
   ),
-  58::bigint,
-  'AT-02: project creation atomically seeds 29 default BOQ groups per Common/building scope'
+  2::bigint,
+  'AT-02: project creation atomically seeds Workshop Materials per Common/building scope'
 );
 
 select is(
@@ -449,11 +449,8 @@ select is(
         where scope.project_id = project.id and scope.scope_kind = 'common'
       )
   ),
-  array[
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29
-  ]::integer[],
-  'The frozen default BOQ order is preserved'
+  array[1]::integer[],
+  'The single frozen Workshop Materials default is first'
 );
 
 select is(

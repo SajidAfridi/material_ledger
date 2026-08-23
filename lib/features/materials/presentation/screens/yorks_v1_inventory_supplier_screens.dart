@@ -432,7 +432,7 @@ class _SupplierDirectoryHeader extends StatelessWidget {
               dimension: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.download_rounded, size: 18),
+          : const Icon(YorksDataTransferIcons.exportData, size: 18),
       label: Text(
         YorksV1InventorySupplierStrings.exportRegister.active(language),
       ),
@@ -443,7 +443,7 @@ class _SupplierDirectoryHeader extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(44, AppSpacing.minTapTarget),
       ),
-      icon: const Icon(Icons.upload_rounded, size: 18),
+      icon: const Icon(YorksDataTransferIcons.importData, size: 18),
       label: Text(
         YorksV1InventorySupplierStrings.importReceipt.active(language),
       ),
@@ -1992,7 +1992,7 @@ class _SupplierHero extends StatelessWidget {
             foregroundColor: AppColors.navy,
             backgroundColor: Colors.white,
           ),
-          icon: const Icon(Icons.upload_rounded, size: 18),
+          icon: const Icon(YorksDataTransferIcons.importData, size: 18),
           label: Text(
             YorksV1InventorySupplierStrings.importReceipt.active(language),
           ),
@@ -2615,7 +2615,7 @@ class _SupplierDocumentsSection extends ConsumerWidget {
                         onPressed: busy || onOpen == null
                             ? null
                             : () => onOpen!(document.documentId),
-                        icon: const Icon(Icons.download_rounded),
+                        icon: const Icon(YorksDataTransferIcons.exportData),
                       ),
                       IconButton.outlined(
                         key: ValueKey(
@@ -2627,7 +2627,7 @@ class _SupplierDocumentsSection extends ConsumerWidget {
                         onPressed: busy || onReplace == null
                             ? null
                             : () => onReplace!(document.documentId),
-                        icon: const Icon(Icons.upload_file_outlined),
+                        icon: const Icon(YorksDataTransferIcons.importData),
                       ),
                     ],
                   ),
@@ -3042,14 +3042,14 @@ class _SupplierReceiptBatchContent extends StatelessWidget {
                   IconButton.outlined(
                     tooltip: YorksV1DocumentStrings.download.active(language),
                     onPressed: () => onDownloadDocument(document.documentId),
-                    icon: const Icon(Icons.download_rounded),
+                    icon: const Icon(YorksDataTransferIcons.exportData),
                   ),
                   IconButton.outlined(
                     tooltip: YorksV1DocumentStrings.uploadVersion.active(
                       language,
                     ),
                     onPressed: () => onReplaceDocument(document.documentId),
-                    icon: const Icon(Icons.upload_file_outlined),
+                    icon: const Icon(YorksDataTransferIcons.importData),
                   ),
                 ],
               ),
@@ -3588,7 +3588,7 @@ class _DocumentCard extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(44, AppSpacing.minTapTarget),
         ),
-        icon: const Icon(Icons.upload_file_outlined, size: 18),
+        icon: const Icon(YorksDataTransferIcons.importData, size: 18),
         label: Text(YorksV1DocumentStrings.uploadVersion.active(language)),
       ),
     ],

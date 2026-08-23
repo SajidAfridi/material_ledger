@@ -1145,7 +1145,7 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
                     width: 120,
                     child: SecondaryButton(
                       label: YorksV1LogisticsStrings.exportExcel.primary,
-                      icon: Icons.table_view_outlined,
+                      icon: YorksDataTransferIcons.exportData,
                       onPressed: () => _export(order, current),
                     ),
                   ),
@@ -2236,7 +2236,7 @@ class _MaterialReturnCardState extends ConsumerState<_MaterialReturnCard> {
                 width: 120,
                 child: SecondaryButton(
                   label: YorksV1LogisticsStrings.exportExcel.primary,
-                  icon: Icons.table_view_outlined,
+                  icon: YorksDataTransferIcons.exportData,
                   onPressed: _working ? null : _export,
                 ),
               ),

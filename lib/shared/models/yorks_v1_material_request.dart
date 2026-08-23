@@ -398,6 +398,16 @@ class YorksV1MaterialRequestSummaryPage {
   }
 }
 
+enum YorksV1MaterialRequestRegisterView {
+  total('total'),
+  mine('mine'),
+  assigned('assigned');
+
+  const YorksV1MaterialRequestRegisterView(this.wireValue);
+
+  final String wireValue;
+}
+
 class YorksV1MaterialRequestSummaryQuery {
   YorksV1MaterialRequestSummaryQuery({
     this.projectId,
@@ -408,6 +418,7 @@ class YorksV1MaterialRequestSummaryQuery {
     this.updatedAfter,
     this.attentionOnly = false,
     this.metric = 'all',
+    this.registerView = YorksV1MaterialRequestRegisterView.total,
     this.newestFirst = true,
     this.limit = 15,
     this.offset = 0,
@@ -421,24 +432,29 @@ class YorksV1MaterialRequestSummaryQuery {
   final DateTime? updatedAfter;
   final bool attentionOnly;
   final String metric;
+  final YorksV1MaterialRequestRegisterView registerView;
   final bool newestFirst;
   final int limit;
   final int offset;
 
-  YorksV1MaterialRequestSummaryQuery copyWith({int? limit, int? offset}) =>
-      YorksV1MaterialRequestSummaryQuery(
-        projectId: projectId,
-        search: search,
-        states: states,
-        scopeId: scopeId,
-        requester: requester,
-        updatedAfter: updatedAfter,
-        attentionOnly: attentionOnly,
-        metric: metric,
-        newestFirst: newestFirst,
-        limit: limit ?? this.limit,
-        offset: offset ?? this.offset,
-      );
+  YorksV1MaterialRequestSummaryQuery copyWith({
+    int? limit,
+    int? offset,
+    YorksV1MaterialRequestRegisterView? registerView,
+  }) => YorksV1MaterialRequestSummaryQuery(
+    projectId: projectId,
+    search: search,
+    states: states,
+    scopeId: scopeId,
+    requester: requester,
+    updatedAfter: updatedAfter,
+    attentionOnly: attentionOnly,
+    metric: metric,
+    registerView: registerView ?? this.registerView,
+    newestFirst: newestFirst,
+    limit: limit ?? this.limit,
+    offset: offset ?? this.offset,
+  );
 
   Map<String, Object?> toRpcParameters() => {
     'p_project_id': _trimToNull(projectId),
@@ -451,6 +467,7 @@ class YorksV1MaterialRequestSummaryQuery {
     'p_updated_after': updatedAfter?.toUtc().toIso8601String(),
     'p_attention_only': attentionOnly,
     'p_metric': metric,
+    'p_register_view': registerView.wireValue,
     'p_sort': newestFirst ? 'updated_desc' : 'updated_asc',
     'p_limit': limit,
     'p_offset': offset,
@@ -467,6 +484,7 @@ class YorksV1MaterialRequestSummaryQuery {
       other.updatedAfter == updatedAfter &&
       other.attentionOnly == attentionOnly &&
       other.metric == metric &&
+      other.registerView == registerView &&
       other.newestFirst == newestFirst &&
       other.limit == limit &&
       other.offset == offset;
@@ -481,6 +499,7 @@ class YorksV1MaterialRequestSummaryQuery {
     updatedAfter,
     attentionOnly,
     metric,
+    registerView,
     newestFirst,
     limit,
     offset,

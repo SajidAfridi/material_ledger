@@ -53,6 +53,11 @@ class YorksV1BoqGroup {
     required this.rowCount,
     required this.columnCount,
     required this.updatedAt,
+    this.documentCount = 0,
+    this.linkedRequestCount = 0,
+    this.lastEditedBy,
+    this.lastEditedRole,
+    this.lastEditedAt,
     this.scopeId,
     this.scopeKind,
     this.scopeCode,
@@ -70,6 +75,11 @@ class YorksV1BoqGroup {
   final int version;
   final int rowCount;
   final int columnCount;
+  final int documentCount;
+  final int linkedRequestCount;
+  final String? lastEditedBy;
+  final String? lastEditedRole;
+  final DateTime? lastEditedAt;
   final DateTime updatedAt;
   final String? scopeId;
   final String? scopeKind;
@@ -99,6 +109,11 @@ class YorksV1BoqGroup {
       version: _integer(json['record_version']),
       rowCount: _integer(json['row_count']),
       columnCount: _integer(json['column_count']),
+      documentCount: _integer(json['document_count']),
+      linkedRequestCount: _integer(json['linked_request_count']),
+      lastEditedBy: _nullableString(json['last_edited_by']),
+      lastEditedRole: _nullableString(json['last_edited_role']),
+      lastEditedAt: _nullableDate(json['last_edited_at']),
       updatedAt: _date(json['updated_at']),
       scopeId: _nullableString(json['scope_id']),
       scopeKind: _nullableString(json['scope_kind']),
@@ -353,6 +368,11 @@ DateTime _date(Object? value) {
     );
   }
   return parsed.toUtc();
+}
+
+DateTime? _nullableDate(Object? value) {
+  if (value == null) return null;
+  return value is String ? DateTime.tryParse(value)?.toUtc() : null;
 }
 
 Map<String, dynamic> _requiredMap(Map<String, dynamic> json, String key) {

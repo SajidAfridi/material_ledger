@@ -33,6 +33,10 @@ abstract interface class YorksV1LogisticsRepository {
 
   Future<YorksV1LogisticsWorkspace> getWorkspace(String requestId);
 
+  Future<List<YorksV1ProjectMaterialMovement>> getProjectMaterialMovements(
+    String projectId,
+  );
+
   Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input);
 
   Future<YorksV1LogisticsWorkspace> confirmReceipt(
@@ -232,6 +236,28 @@ class YorksV1SupabaseLogisticsRepository
       parameters: {'p_request_id': requestId},
     );
     return _workspace(response);
+  }
+
+  @override
+  Future<List<YorksV1ProjectMaterialMovement>> getProjectMaterialMovements(
+    String projectId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_project_material_movements',
+      parameters: {'p_project_id': projectId},
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final row in response)
+        if (row is Map)
+          YorksV1ProjectMaterialMovement.fromRpcJson(
+            Map<String, dynamic>.from(row),
+          ),
+    ];
   }
 
   @override

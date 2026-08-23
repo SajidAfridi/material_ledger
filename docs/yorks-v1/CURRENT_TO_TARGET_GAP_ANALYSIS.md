@@ -93,8 +93,9 @@ claim mapping, route checks and matching RLS/RPC denial.
   below the active row.
 - `pubspec.yaml` has no XLSX workbook/file-picker dependency.
 
-Target: normalized project/scopes/members, transactional 29-group creation,
-dynamic BOQ, real workbook round-trip and mobile focused editor.
+Target: normalized project/scopes/members, one transactional Workshop Materials
+folder per real scope plus controlled custom folders, dynamic BOQ, real workbook
+round-trip and mobile focused editor.
 
 ## 6. Material Request and procurement gaps
 

@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/yorks_v1_boq_controller.dart';
 import '../models/yorks_v1_boq.dart';
 import 'yorks_v1_boq_repository_provider.dart';
+import 'language_provider.dart';
+import 'permissions_provider.dart';
+import 'yorks_v1_identity_provider.dart';
+import '../services/yorks_v1_boq_recovery_store.dart';
 
 final yorksV1BoqGroupsProvider = FutureProvider.autoDispose
     .family<List<YorksV1BoqGroup>, String>((ref, projectId) {
@@ -43,6 +47,11 @@ final yorksV1BoqWorksheetControllerProvider = StateNotifierProvider.autoDispose
       final controller = YorksV1BoqWorksheetController(
         groupId: groupId,
         repository: ref.watch(yorksV1BoqRepositoryProvider),
+        canManageCommercials: ref.watch(canManageCommercialsProvider),
+        recoveryStore: YorksV1BoqRecoveryStore(
+          preferences: ref.watch(sharedPreferencesProvider),
+          ownerAuthUserId: ref.watch(yorksV1AuthUserIdProvider) ?? '',
+        ),
       );
       Future<void>.microtask(controller.load);
       return controller;

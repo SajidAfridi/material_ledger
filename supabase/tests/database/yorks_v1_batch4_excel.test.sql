@@ -89,7 +89,8 @@ select
   project.id as project_id,
   (
     select group_record.id from public.v1_boq_groups group_record
-    where group_record.project_id = project.id and group_record.display_order = 3
+    where group_record.project_id = project.id
+      and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'

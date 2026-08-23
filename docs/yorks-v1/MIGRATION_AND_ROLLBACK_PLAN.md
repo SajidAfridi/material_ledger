@@ -69,9 +69,11 @@ Legacy role handling:
 ### M2 — BOQ
 
 - Create ordered groups/columns/rows for new V1 projects transactionally.
-- R38 adds `boq_groups.scope_id` and materialises the frozen 29 folders for
-  every newly created Common/building scope. It never creates an `Overview`
-  scope.
+- R38 adds `boq_groups.scope_id`; the 23 August 2026 product revision now
+  materialises only Workshop Materials for every newly created Common/building
+  scope. It never creates an `Overview` scope. The prior 29 template records
+  remain inactive historical definitions, and populated legacy folders remain
+  visible without cloning or deleting their contents.
 - The 8 August folder-structure correction additively materialises each active
   custom folder name as an empty sibling group in Common and every active
   building, and seeds those names into future scopes. Existing groups and all

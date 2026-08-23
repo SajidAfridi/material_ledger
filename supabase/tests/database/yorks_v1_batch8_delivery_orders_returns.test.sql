@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(58);
+select plan(61);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -813,6 +813,47 @@ select ok(
   and (select count(*) = 2 from public.v1_inventory_movements
     where source_entity_type = 'material_return_line'),
   'A rejected return records its decision without moving stock'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select ok(
+  jsonb_path_exists(
+    public.v1_project_material_movements(
+      (select project_id from v1_b8_targets)
+    ), '$[*] ? (@.movement_kind == "dispatched")'
+  ) and jsonb_path_exists(
+    public.v1_project_material_movements(
+      (select project_id from v1_b8_targets)
+    ), '$[*] ? (@.movement_kind == "returned")'
+  ),
+  'An associated engineer sees committed outgoing and confirmed return facts'
+);
+select is(
+  (select count(*) from jsonb_array_elements(
+    public.v1_project_material_movements(
+      (select project_id from v1_b8_targets)
+    )
+  ) movement where movement ->> 'movement_kind' = 'returned'),
+  2::bigint,
+  'Draft and rejected returns never enter the project material movement register'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000006","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-unassigned-site-engineer"}}',
+  true
+);
+select throws_ok(
+  $$select public.v1_project_material_movements(
+    (select project_id from v1_b8_targets)
+  )$$,
+  '42501', 'V1_PROJECT_MATERIAL_MOVEMENT_DENIED',
+  'An unassigned engineer cannot read another project material movement register'
 );
 
 -- Organization-wide engineering roles are exact Auth claims, but every

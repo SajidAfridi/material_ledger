@@ -21,10 +21,16 @@ enum YorksV1DomainErrorCode {
 }
 
 class YorksV1DomainException implements Exception {
-  const YorksV1DomainException(this.code, {this.serverCode, this.cause});
+  const YorksV1DomainException(
+    this.code, {
+    this.serverCode,
+    this.serverMessage,
+    this.cause,
+  });
 
   final YorksV1DomainErrorCode code;
   final String? serverCode;
+  final String? serverMessage;
   final Object? cause;
 
   @override

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ledger/core/constants/constants.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_boq_screens.dart';
 import 'package:material_ledger/shared/models/app_strings.dart';
@@ -67,7 +68,7 @@ void main() {
       expect(find.text('DF4W'), findsAtLeastNWidgets(1));
       expect(find.text(YorksV1BoqStrings.newGroup.primary), findsNothing);
       final export = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.file_download_outlined),
+        find.widgetWithIcon(IconButton, YorksDataTransferIcons.exportData),
       );
       expect(export.onPressed, isNull);
 
@@ -109,7 +110,7 @@ void main() {
       expect(find.text('Split AC Indoor Unit'), findsOneWidget);
       expect(find.text('Split AC Outdoor Unit'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('mobile-boq-row-row-3')),
+        find.byKey(const ValueKey('mobile-boq-row-row-5')),
         findsNothing,
         reason: 'The material list must stay lazily built at mobile size.',
       );
@@ -362,6 +363,38 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'focused editor inserts a similar row directly below its source',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      final harness = await _pumpWorksheet(tester);
+      final row = find.byKey(const ValueKey('mobile-boq-row-row-1'));
+      await Scrollable.ensureVisible(tester.element(row), alignment: .5);
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+
+      final similar = find.byKey(const ValueKey('boq-mobile-similar-row'));
+      final editorList = find.byType(ListView).last;
+      for (var index = 0; index < 5 && similar.evaluate().isEmpty; index++) {
+        await tester.drag(editorList, const Offset(0, -320));
+        await tester.pumpAndSettle();
+      }
+      expect(similar, findsOneWidget);
+      await tester.tap(similar);
+      await tester.pumpAndSettle();
+
+      final rows = harness.container
+          .read(yorksV1BoqWorksheetControllerProvider(_groupId))
+          .worksheet!
+          .rows;
+      expect(rows, hasLength(6));
+      expect(rows[1].valueFor('description'), 'Split AC Indoor Unit');
+      expect(rows[1].valueFor('tag'), isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('focused editor guards dirty Back and discards explicitly', (
     tester,
@@ -676,6 +709,11 @@ Future<_BoqHarness> _pumpWorksheet(
 }
 
 Future<void> _openImport(WidgetTester tester) async {
+  final more = find.byKey(const ValueKey('boq-mobile-more-actions'));
+  if (more.evaluate().isNotEmpty) {
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+  }
   await tester.tap(find.byKey(const ValueKey('boq-import-workbook')));
   await tester.pumpAndSettle();
 }

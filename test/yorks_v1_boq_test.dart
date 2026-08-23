@@ -7,8 +7,11 @@ import 'package:material_ledger/shared/controllers/yorks_v1_boq_controller.dart'
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq_workbook.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_boq_repository.dart';
+import 'package:material_ledger/shared/services/yorks_v1_boq_recovery_store.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Yorks V1 BOQ worksheet controller', () {
@@ -203,6 +206,86 @@ void main() {
     );
 
     test(
+      'material selection fills mapped details once and preserves quantity',
+      () async {
+        final source = _worksheet().copyWith(
+          columns: const [
+            YorksV1BoqColumn(
+              id: 'description',
+              heading: 'Description',
+              displayOrder: 1,
+              canonicalField: YorksV1BoqCanonicalField.description,
+            ),
+            YorksV1BoqColumn(
+              id: 'brand',
+              heading: 'Brand / Origin',
+              displayOrder: 2,
+              canonicalField: YorksV1BoqCanonicalField.brandOrigin,
+            ),
+            YorksV1BoqColumn(
+              id: 'model',
+              heading: 'Model',
+              displayOrder: 3,
+              canonicalField: YorksV1BoqCanonicalField.model,
+            ),
+            YorksV1BoqColumn(
+              id: 'quantity',
+              heading: 'Quantity',
+              displayOrder: 4,
+              canonicalField: YorksV1BoqCanonicalField.quantity,
+            ),
+            YorksV1BoqColumn(
+              id: 'unit',
+              heading: 'Unit',
+              displayOrder: 5,
+              canonicalField: YorksV1BoqCanonicalField.unit,
+            ),
+          ],
+          rows: [
+            YorksV1BoqRow(
+              id: _rowId,
+              displayOrder: 1,
+              values: const {
+                'description': '',
+                'brand': '',
+                'model': '',
+                'quantity': '25',
+                'unit': 'Nos',
+              },
+              canonicalValues: const {'quantity': '25', 'unit': 'Nos'},
+            ),
+          ],
+        );
+        final controller = YorksV1BoqWorksheetController(
+          groupId: _groupId,
+          repository: _FakeBoqRepository(source),
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.load();
+        controller.updateMaterialCells(
+          rowId: _rowId,
+          values: const {
+            YorksV1BoqCanonicalField.description: 'Motorized Smoke Damper',
+            YorksV1BoqCanonicalField.brandOrigin: 'Yorks UAE',
+            YorksV1BoqCanonicalField.model: 'MSD-500',
+            YorksV1BoqCanonicalField.unit: 'Set',
+          },
+        );
+
+        final row = controller.state.worksheet!.rows.single;
+        expect(row.valueFor('description'), 'Motorized Smoke Damper');
+        expect(row.valueFor('brand'), 'Yorks UAE');
+        expect(row.valueFor('model'), 'MSD-500');
+        expect(row.valueFor('unit'), 'Set');
+        expect(row.valueFor('quantity'), '25');
+        expect(row.canonicalValues['quantity'], '25');
+        expect(controller.state.hasUnsavedChanges, isTrue);
+      },
+    );
+
+    test(
       'keeps local edits visible when the server reports a conflict',
       () async {
         final repository = _FakeBoqRepository(
@@ -275,6 +358,211 @@ void main() {
         expect(imported.rows.single.valueFor(imported.columns.last.id), '708');
       },
     );
+
+    test(
+      'protects dirty work from an unconfirmed reload and supports undo',
+      () async {
+        final repository = _FakeBoqRepository(_worksheet());
+        final controller = YorksV1BoqWorksheetController(
+          groupId: _groupId,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        expect(await controller.load(), isTrue);
+        controller.updateTitle('Local title');
+        expect(controller.canUndo, isTrue);
+        expect(await controller.load(), isFalse);
+        expect(repository.getCalls, 1);
+        expect(controller.state.worksheet!.group.worksheetTitle, 'Local title');
+
+        controller.undo();
+        expect(
+          controller.state.worksheet!.group.worksheetTitle,
+          'Damper Schedule',
+        );
+        expect(controller.canRedo, isTrue);
+        controller.redo();
+        expect(controller.state.worksheet!.group.worksheetTitle, 'Local title');
+      },
+    );
+
+    test(
+      'recovery restores operational edits and rejoins authorized commercial data',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final preferences = await SharedPreferences.getInstance();
+        final store = YorksV1BoqRecoveryStore(
+          preferences: preferences,
+          ownerAuthUserId: 'engineer-1',
+        );
+        final source = _worksheet().copyWith(
+          columns: const [
+            YorksV1BoqColumn(
+              id: _columnId,
+              heading: 'Item Description',
+              displayOrder: 1,
+              canonicalField: YorksV1BoqCanonicalField.description,
+            ),
+            YorksV1BoqColumn(
+              id: 'unit-cost',
+              heading: 'Unit Cost',
+              displayOrder: 2,
+              canonicalField: YorksV1BoqCanonicalField.unitCost,
+              isCommercial: true,
+            ),
+          ],
+          rows: [
+            YorksV1BoqRow(
+              id: _rowId,
+              displayOrder: 1,
+              values: const {
+                _columnId: 'Motorized Smoke Damper',
+                'unit-cost': '150',
+              },
+              canonicalValues: const {
+                'description': 'Motorized Smoke Damper',
+                'unit_cost': '150',
+              },
+            ),
+          ],
+        );
+        final first = YorksV1BoqWorksheetController(
+          groupId: _groupId,
+          repository: _FakeBoqRepository(source),
+          recoveryStore: store,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(first.dispose);
+        await first.load();
+        first.updateCell(
+          rowId: _rowId,
+          columnId: _columnId,
+          value: 'Recovered damper',
+        );
+        await store.save(first.state.worksheet!);
+
+        final repository = _FakeBoqRepository(source);
+        final recovered = YorksV1BoqWorksheetController(
+          groupId: _groupId,
+          repository: repository,
+          recoveryStore: store,
+          canManageCommercials: true,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(recovered.dispose);
+
+        expect(await recovered.load(), isTrue);
+        expect(recovered.state.recoveredLocally, isTrue);
+        expect(recovered.state.status, YorksV1BoqSyncStatus.dirty);
+        expect(recovered.state.worksheet!.columns, hasLength(2));
+        expect(
+          recovered.state.worksheet!.rows.single.valueFor('unit-cost'),
+          '150',
+        );
+        expect(
+          recovered.state.worksheet!.rows.single.valueFor(_columnId),
+          'Recovered damper',
+        );
+        expect(await recovered.save(), isTrue);
+        expect(repository.saved.single.worksheet.columns, hasLength(2));
+      },
+    );
+
+    test('view-only users cannot mutate commercial worksheet fields', () async {
+      final source = _worksheet().copyWith(
+        columns: const [
+          YorksV1BoqColumn(
+            id: 'unit-cost',
+            heading: 'Unit Cost',
+            displayOrder: 1,
+            canonicalField: YorksV1BoqCanonicalField.unitCost,
+            isCommercial: true,
+          ),
+        ],
+      );
+      final controller = YorksV1BoqWorksheetController(
+        groupId: _groupId,
+        repository: _FakeBoqRepository(source),
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(
+        () => controller.updateCell(
+          rowId: _rowId,
+          columnId: 'unit-cost',
+          value: '99',
+        ),
+        throwsA(
+          isA<YorksV1DomainException>().having(
+            (error) => error.code,
+            'code',
+            YorksV1DomainErrorCode.unauthorized,
+          ),
+        ),
+      );
+      expect(
+        () => controller.removeColumn('unit-cost'),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+      expect(
+        () => controller.addColumn(
+          heading: 'Total Cost',
+          canonicalField: YorksV1BoqCanonicalField.totalCost,
+        ),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+    });
+
+    test('rejects duplicate visible headings and canonical mappings', () async {
+      final controller = YorksV1BoqWorksheetController(
+        groupId: _groupId,
+        repository: _FakeBoqRepository(_worksheet()),
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      expect(
+        () => controller.addColumn(heading: ' item description '),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+      expect(
+        () => controller.addColumn(
+          heading: 'Description 2',
+          canonicalField: YorksV1BoqCanonicalField.description,
+        ),
+        throwsA(isA<YorksV1DomainException>()),
+      );
+    });
+
+    test('uses local recovery when the server is unavailable', () async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final store = YorksV1BoqRecoveryStore(
+        preferences: preferences,
+        ownerAuthUserId: 'engineer-2',
+      );
+      await store.save(_worksheet());
+      final controller = YorksV1BoqWorksheetController(
+        groupId: _groupId,
+        repository: _FakeBoqRepository(_worksheet(), unexpectedOnLoad: true),
+        recoveryStore: store,
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+
+      expect(await controller.load(), isTrue);
+      expect(controller.state.recoveredLocally, isTrue);
+      expect(
+        controller.state.errorCode,
+        YorksV1DomainErrorCode.backendUnavailable,
+      );
+      expect(controller.state.worksheet!.rows, hasLength(1));
+    });
   });
 
   group('Yorks V1 BOQ XLSX codec', () {
@@ -851,6 +1139,85 @@ void main() {
       await tester.pump();
       expect(updates, ['$_rowId:$_columnId:Edited smoke damper']);
     });
+
+    testWidgets('desktop description autocomplete selects a safe material', (
+      tester,
+    ) async {
+      YorksV1MaterialRequestInventorySuggestion? selected;
+      String? selectedRowId;
+      await tester.binding.setSurfaceSize(const Size(1200, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _spreadsheetHarness(
+          onSearchMaterials: (query, excludedRowId) async {
+            expect(query, 'smart');
+            expect(excludedRowId, _rowId);
+            return const [_smartDamperSuggestion];
+          },
+          onApplyMaterialSuggestion: (rowId, suggestion) {
+            selectedRowId = rowId;
+            selected = suggestion;
+          },
+        ),
+      );
+
+      final cell = find.byKey(const ValueKey('boq-cell-$_rowId-$_columnId'));
+      await tester.enterText(cell, 'sm');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.enterText(cell, 'smart');
+      await tester.pump(const Duration(milliseconds: 230));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Smart Damper'), findsOneWidget);
+      await tester.tap(find.text('Smart Damper'));
+      await tester.pumpAndSettle();
+      expect(selectedRowId, _rowId);
+      expect(selected, same(_smartDamperSuggestion));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('mobile autocomplete fills details but preserves quantity', (
+      tester,
+    ) async {
+      final updates = <String, String>{};
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _spreadsheetHarness(
+          worksheet: _materialWorksheet(),
+          size: const Size(360, 700),
+          onSearchMaterials: (_, excludedRowId) async {
+            expect(excludedRowId, _rowId);
+            return const [_smartDamperSuggestion];
+          },
+          onUpdateCell: ({required rowId, required columnId, required value}) {
+            updates[columnId] = value;
+          },
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('mobile-boq-row-$_rowId')));
+      await tester.pumpAndSettle();
+      final description = find.byKey(
+        const ValueKey('mobile-boq-description-$_rowId'),
+      );
+      await tester.enterText(
+        find.descendant(of: description, matching: find.byType(TextFormField)),
+        'smart',
+      );
+      await tester.pump(const Duration(milliseconds: 230));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Smart Damper'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(updates['description'], 'Smart Damper');
+      expect(updates['brand'], 'Yorks UAE');
+      expect(updates['unit'], 'Set');
+      expect(updates['quantity'], '25');
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
@@ -858,6 +1225,58 @@ const _projectId = '10000000-0000-4000-8000-000000000010';
 const _groupId = '10000000-0000-4000-8000-000000000011';
 const _rowId = '10000000-0000-4000-8000-000000000012';
 const _columnId = '10000000-0000-4000-8000-000000000013';
+const _smartDamperSuggestion = YorksV1MaterialRequestInventorySuggestion(
+  id: 'inventory-smart-damper',
+  source: YorksV1MaterialRequestSuggestionSource.inventory,
+  itemCode: 'INV-001',
+  description: 'Smart Damper',
+  brandOrigin: 'Yorks UAE',
+  size: '500 x 500',
+  model: 'SD-500',
+  unit: 'Set',
+);
+
+YorksV1BoqWorksheet _materialWorksheet() => _worksheet().copyWith(
+  columns: const [
+    YorksV1BoqColumn(
+      id: 'description',
+      heading: 'Item Description',
+      displayOrder: 1,
+      canonicalField: YorksV1BoqCanonicalField.description,
+    ),
+    YorksV1BoqColumn(
+      id: 'brand',
+      heading: 'Brand / Origin',
+      displayOrder: 2,
+      canonicalField: YorksV1BoqCanonicalField.brandOrigin,
+    ),
+    YorksV1BoqColumn(
+      id: 'quantity',
+      heading: 'Quantity',
+      displayOrder: 3,
+      canonicalField: YorksV1BoqCanonicalField.quantity,
+    ),
+    YorksV1BoqColumn(
+      id: 'unit',
+      heading: 'Unit',
+      displayOrder: 4,
+      canonicalField: YorksV1BoqCanonicalField.unit,
+    ),
+  ],
+  rows: [
+    YorksV1BoqRow(
+      id: _rowId,
+      displayOrder: 1,
+      values: const {
+        'description': '',
+        'brand': '',
+        'quantity': '25',
+        'unit': 'Nos',
+      },
+      canonicalValues: const {'quantity': '25', 'unit': 'Nos'},
+    ),
+  ],
+);
 
 YorksV1BoqWorksheet _worksheet() {
   return YorksV1BoqWorksheet(
@@ -1012,6 +1431,16 @@ Widget _spreadsheetHarness({
     required String value,
   })?
   onUpdateCell,
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> Function(
+    String query,
+    String? excludedRowId,
+  )?
+  onSearchMaterials,
+  void Function(
+    String rowId,
+    YorksV1MaterialRequestInventorySuggestion suggestion,
+  )?
+  onApplyMaterialSuggestion,
 }) {
   final effective = worksheet ?? _worksheet();
   return MaterialApp(
@@ -1023,6 +1452,8 @@ Widget _spreadsheetHarness({
         child: YorksV1BoqSpreadsheet(
           worksheet: effective,
           editable: true,
+          onSearchMaterials: onSearchMaterials,
+          onApplyMaterialSuggestion: onApplyMaterialSuggestion,
           onUpdateCell:
               onUpdateCell ??
               ({required rowId, required columnId, required value}) {},
@@ -1039,10 +1470,16 @@ Widget _spreadsheetHarness({
 }
 
 class _FakeBoqRepository implements YorksV1BoqRepository {
-  _FakeBoqRepository(this.worksheet, {this.conflictOnSave = false});
+  _FakeBoqRepository(
+    this.worksheet, {
+    this.conflictOnSave = false,
+    this.unexpectedOnLoad = false,
+  });
 
   final YorksV1BoqWorksheet worksheet;
   final bool conflictOnSave;
+  final bool unexpectedOnLoad;
+  int getCalls = 0;
   final List<YorksV1SaveBoqWorksheetInput> saved = [];
 
   @override
@@ -1063,7 +1500,11 @@ class _FakeBoqRepository implements YorksV1BoqRepository {
   ) async => worksheet.group;
 
   @override
-  Future<YorksV1BoqWorksheet> getWorksheet(String groupId) async => worksheet;
+  Future<YorksV1BoqWorksheet> getWorksheet(String groupId) async {
+    getCalls += 1;
+    if (unexpectedOnLoad) throw StateError('network unavailable');
+    return worksheet;
+  }
 
   @override
   Future<YorksV1BoqWorksheet> importWorksheet(

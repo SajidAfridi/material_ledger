@@ -70,6 +70,23 @@
         },
         { capture: true, passive: false },
       );
+      // Prevent the browser's autoscroll/new-tab defaults for a physical
+      // middle button, while preserving propagation to Flutter. The workspace
+      // listener uses this exact gesture to pan a magnified route.
+      window.addEventListener(
+        'mousedown',
+        (event) => {
+          if (event.button === 1) event.preventDefault();
+        },
+        { capture: true },
+      );
+      window.addEventListener(
+        'auxclick',
+        (event) => {
+          if (event.button === 1) event.preventDefault();
+        },
+        { capture: true },
+      );
       window.addEventListener('gesturestart', (event) => event.preventDefault(), {
         passive: false,
       });

@@ -899,6 +899,11 @@ class _ArrangementCreationInventoryRepository
   YorksV1InventoryAdjustmentInput? createInput;
 
   @override
+  Future<List<YorksV1ProjectMaterialMovement>> getProjectMaterialMovements(
+    String projectId,
+  ) async => const [];
+
+  @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async =>
       YorksV1InventoryWorkspace(
         items: const [],

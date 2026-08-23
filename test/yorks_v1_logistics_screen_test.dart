@@ -347,6 +347,11 @@ class _FakeLogisticsRepository
   int returnsWorkspaceCalls = 0;
 
   @override
+  Future<List<YorksV1ProjectMaterialMovement>> getProjectMaterialMovements(
+    String projectId,
+  ) async => const [];
+
+  @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async =>
       YorksV1InventoryWorkspace(
         items: [_item],

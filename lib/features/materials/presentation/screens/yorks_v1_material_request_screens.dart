@@ -99,7 +99,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
     );
     final canCreate = role?.canCreateMaterialRequest ?? false;
     final ownerAuthUserId = ref.watch(yorksV1AuthUserIdProvider);
-    final localDrafts = ownerAuthUserId == null || ownerAuthUserId.isEmpty
+    final deviceDrafts = ownerAuthUserId == null || ownerAuthUserId.isEmpty
         ? const <YorksV1MaterialRequestDraft>[]
         : ref
               .watch(yorksV1MaterialRequestLocalDraftsProvider(ownerAuthUserId))
@@ -107,15 +107,41 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                 (draft) => projectId == null || draft.projectId == projectId,
               )
               .toList(growable: false);
-    final localDraftNotice = canCreate && localDrafts.isNotEmpty
+    final accountDrafts =
+        ownerAuthUserId == null ||
+            ownerAuthUserId.isEmpty ||
+            phase2Repository == null
+        ? const <YorksV1PrivateMaterialRequestDraftRecord>[]
+        : ref
+                  .watch(
+                    yorksV1MaterialRequestPrivateDraftsProvider(
+                      ownerAuthUserId,
+                    ),
+                  )
+                  .valueOrNull ??
+              const <YorksV1PrivateMaterialRequestDraftRecord>[];
+    final savedDrafts = _mergeRecoverableDrafts(
+      deviceDrafts,
+      accountDrafts.map((record) => record.draft),
+      projectId: projectId,
+    );
+    final localDraftNotice = canCreate && savedDrafts.isNotEmpty
         ? _RecoverableMaterialDraftNotice(
-            drafts: localDrafts,
+            drafts: savedDrafts,
             onResume: (draft) => context.push(
               RoutePaths.yorksV1MaterialRequestDraftPath(
                 draft.id,
                 projectId: draft.projectId,
               ),
             ),
+            onDelete: ownerAuthUserId == null
+                ? null
+                : (draft) => _deleteRecoverableDraft(
+                    context,
+                    ref,
+                    ownerAuthUserId,
+                    draft,
+                  ),
           )
         : null;
     if (phase2Repository != null) {
@@ -197,11 +223,14 @@ class _YorksMobileMaterialRequestsPage extends ConsumerStatefulWidget {
 class _YorksMobileMaterialRequestsPageState
     extends ConsumerState<_YorksMobileMaterialRequestsPage> {
   _MobileMaterialRequestFilter _filter = _MobileMaterialRequestFilter.all;
+  YorksV1MaterialRequestRegisterView _registerView =
+      YorksV1MaterialRequestRegisterView.total;
   int _page = 0;
 
   YorksV1MaterialRequestSummaryQuery get _summaryQuery =>
       YorksV1MaterialRequestSummaryQuery(
         projectId: widget.projectId,
+        registerView: _registerView,
         states: switch (_filter) {
           _MobileMaterialRequestFilter.all => const [],
           _MobileMaterialRequestFilter.draft => const [
@@ -256,7 +285,7 @@ class _YorksMobileMaterialRequestsPageState
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final canCreate = role?.canCreateMaterialRequest ?? false;
     final ownerAuthUserId = ref.watch(yorksV1AuthUserIdProvider);
-    final localDrafts = ownerAuthUserId == null || ownerAuthUserId.isEmpty
+    final deviceDrafts = ownerAuthUserId == null || ownerAuthUserId.isEmpty
         ? const <YorksV1MaterialRequestDraft>[]
         : ref
               .watch(yorksV1MaterialRequestLocalDraftsProvider(ownerAuthUserId))
@@ -268,6 +297,22 @@ class _YorksMobileMaterialRequestsPageState
               .toList(growable: false);
     final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
     final phase2 = repository is YorksV1MaterialRequestPhase2Repository;
+    final accountDrafts =
+        ownerAuthUserId == null || ownerAuthUserId.isEmpty || !phase2
+        ? const <YorksV1PrivateMaterialRequestDraftRecord>[]
+        : ref
+                  .watch(
+                    yorksV1MaterialRequestPrivateDraftsProvider(
+                      ownerAuthUserId,
+                    ),
+                  )
+                  .valueOrNull ??
+              const <YorksV1PrivateMaterialRequestDraftRecord>[];
+    final savedDrafts = _mergeRecoverableDrafts(
+      deviceDrafts,
+      accountDrafts.map((record) => record.draft),
+      projectId: widget.projectId,
+    );
     final summary = phase2
         ? ref.watch(yorksV1MaterialRequestSummaryPageProvider(_summaryQuery))
         : null;
@@ -314,7 +359,12 @@ class _YorksMobileMaterialRequestsPageState
                       : summary?.valueOrNull?.totalCount,
                   page: _page,
                   canCreate: canCreate,
-                  localDrafts: localDrafts,
+                  localDrafts: savedDrafts,
+                  registerView: _registerView,
+                  onRegisterViewChanged: (value) => setState(() {
+                    _registerView = value;
+                    _page = 0;
+                  }),
                   filter: _filter,
                   onFilterChanged: (value) => setState(() {
                     _filter = value;
@@ -339,6 +389,14 @@ class _YorksMobileMaterialRequestsPageState
                       projectId: draft.projectId,
                     ),
                   ),
+                  onDeleteDraft: ownerAuthUserId == null
+                      ? null
+                      : (draft) => _deleteRecoverableDraft(
+                          context,
+                          ref,
+                          ownerAuthUserId,
+                          draft,
+                        ),
                   onRefresh: _refreshRequests,
                 ),
               ),
@@ -357,12 +415,15 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     this.page = 0,
     required this.canCreate,
     required this.localDrafts,
+    required this.registerView,
+    required this.onRegisterViewChanged,
     required this.filter,
     required this.onFilterChanged,
     this.onPageChanged,
     required this.onCreate,
     required this.onOpen,
     required this.onResume,
+    this.onDeleteDraft,
     required this.onRefresh,
   });
 
@@ -371,12 +432,15 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final int page;
   final bool canCreate;
   final List<YorksV1MaterialRequestDraft> localDrafts;
+  final YorksV1MaterialRequestRegisterView registerView;
+  final ValueChanged<YorksV1MaterialRequestRegisterView> onRegisterViewChanged;
   final _MobileMaterialRequestFilter filter;
   final ValueChanged<_MobileMaterialRequestFilter> onFilterChanged;
   final ValueChanged<int>? onPageChanged;
   final VoidCallback? onCreate;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
   final ValueChanged<YorksV1MaterialRequestDraft> onResume;
+  final Future<void> Function(YorksV1MaterialRequestDraft draft)? onDeleteDraft;
   final Future<void> Function() onRefresh;
 
   @override
@@ -440,10 +504,52 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
             _RecoverableMaterialDraftNotice(
               drafts: localDrafts,
               onResume: onResume,
+              onDelete: onDeleteDraft,
               compact: true,
             ),
             const SizedBox(height: 14),
           ],
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _MobileRegisterViewChip(
+                  label: YorksV1MaterialRequestStrings
+                      .totalMaterialRequests
+                      .primary,
+                  selected:
+                      registerView == YorksV1MaterialRequestRegisterView.total,
+                  onTap: () => onRegisterViewChanged(
+                    YorksV1MaterialRequestRegisterView.total,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _MobileRegisterViewChip(
+                  label:
+                      YorksV1MaterialRequestStrings.myMaterialRequests.primary,
+                  selected:
+                      registerView == YorksV1MaterialRequestRegisterView.mine,
+                  onTap: () => onRegisterViewChanged(
+                    YorksV1MaterialRequestRegisterView.mine,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _MobileRegisterViewChip(
+                  label: YorksV1MaterialRequestStrings
+                      .assignedMaterialRequests
+                      .primary,
+                  selected:
+                      registerView ==
+                      YorksV1MaterialRequestRegisterView.assigned,
+                  onTap: () => onRegisterViewChanged(
+                    YorksV1MaterialRequestRegisterView.assigned,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
           SizedBox(
             height: AppSpacing.minTapTarget,
             child: SingleChildScrollView(
@@ -582,82 +688,243 @@ class _RecoverableMaterialDraftNotice extends StatelessWidget {
   const _RecoverableMaterialDraftNotice({
     required this.drafts,
     required this.onResume,
+    this.onDelete,
     this.compact = false,
   });
 
   final List<YorksV1MaterialRequestDraft> drafts;
   final ValueChanged<YorksV1MaterialRequestDraft> onResume;
+  final Future<void> Function(YorksV1MaterialRequestDraft draft)? onDelete;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final latest = drafts.first;
-    final title = latest.title?.trim();
-    final summary = title == null || title.isEmpty
-        ? YorksV1MaterialRequestStrings.materialRequestDraft.primary
-        : title;
-    final body = Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    final visibleDrafts = compact ? drafts.take(3) : drafts.take(5);
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: compact ? 36 : 42,
-          height: compact ? 36 : 42,
-          decoration: BoxDecoration(
-            color: AppColors.blueContainer,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-          ),
-          child: const Icon(Icons.restore_rounded, color: AppColors.blue),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                YorksV1MaterialRequestStrings.localDraftCount(
-                  drafts.length,
-                ).primary,
-                style: AppTypography.labelLarge.copyWith(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
+        Row(
+          children: [
+            Container(
+              width: compact ? 36 : 42,
+              height: compact ? 36 : 42,
+              decoration: BoxDecoration(
+                color: AppColors.blueContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
-              const SizedBox(height: 2),
-              Text(
-                summary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.muted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (!compact) ...[
-                const SizedBox(height: 2),
-                Text(
-                  YorksV1MaterialRequestStrings.localDraftPrivate.primary,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
+              child: const Icon(Icons.restore_rounded, color: AppColors.blue),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    YorksV1MaterialRequestStrings.localDraftCount(
+                      drafts.length,
+                    ).primary,
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
-            ],
+                  if (!compact) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      YorksV1MaterialRequestStrings.localDraftPrivate.primary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        for (final draft in visibleDrafts)
+          _RecoverableDraftRow(
+            draft: draft,
+            compact: compact,
+            onResume: () => onResume(draft),
+            onDelete: onDelete == null ? null : () => onDelete!(draft),
           ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        OutlinedButton(
-          onPressed: () => onResume(latest),
-          child: Text(YorksV1MaterialRequestStrings.resumeSavedDraft.primary),
-        ),
       ],
     );
     return LedgerCard(
       color: AppColors.surfaceContainerLow,
       padding: EdgeInsets.all(compact ? 12 : AppSpacing.md),
       child: body,
+    );
+  }
+}
+
+class _RecoverableDraftRow extends StatelessWidget {
+  const _RecoverableDraftRow({
+    required this.draft,
+    required this.compact,
+    required this.onResume,
+    this.onDelete,
+  });
+
+  final YorksV1MaterialRequestDraft draft;
+  final bool compact;
+  final VoidCallback onResume;
+  final Future<void> Function()? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = draft.title?.trim();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Material(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        child: InkWell(
+          onTap: onResume,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.edit_note_rounded, color: AppColors.blue),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    title == null || title.isEmpty
+                        ? YorksV1MaterialRequestStrings
+                              .materialRequestDraft
+                              .primary
+                        : title,
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: onResume,
+                  child: Text(
+                    YorksV1MaterialRequestStrings.resumeSavedDraft.primary,
+                  ),
+                ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: YorksV1MaterialRequestStrings.deleteDraft.primary,
+                    onPressed: () => unawaited(onDelete!()),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileRegisterViewChip extends StatelessWidget {
+  const _MobileRegisterViewChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ChoiceChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: (_) => onTap(),
+    showCheckmark: false,
+  );
+}
+
+List<YorksV1MaterialRequestDraft> _mergeRecoverableDrafts(
+  Iterable<YorksV1MaterialRequestDraft> deviceDrafts,
+  Iterable<YorksV1MaterialRequestDraft> accountDrafts, {
+  String? projectId,
+}) {
+  final byId = <String, YorksV1MaterialRequestDraft>{};
+  for (final draft in [...deviceDrafts, ...accountDrafts]) {
+    if (projectId != null && draft.projectId != projectId) continue;
+    final current = byId[draft.id];
+    if (current == null || draft.updatedAt.isAfter(current.updatedAt)) {
+      byId[draft.id] = draft;
+    }
+  }
+  final result = byId.values.toList(growable: false)
+    ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+  return List.unmodifiable(result);
+}
+
+Future<void> _deleteRecoverableDraft(
+  BuildContext context,
+  WidgetRef ref,
+  String ownerAuthUserId,
+  YorksV1MaterialRequestDraft draft,
+) async {
+  final language = ref.read(languageProvider);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(YorksV1MaterialRequestStrings.deleteDraft.active(language)),
+      content: Text(
+        YorksV1MaterialRequestStrings.deleteDraftBody.active(language),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text(YorksV1MaterialRequestStrings.cancel.active(language)),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text(
+            YorksV1MaterialRequestStrings.deleteDraft.active(language),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  final key = YorksV1MaterialRequestDraftKey(
+    ownerAuthUserId: ownerAuthUserId,
+    draftId: draft.id,
+  );
+  try {
+    final controller = ref.read(
+      yorksV1MaterialRequestDraftControllerProvider(key).notifier,
+    );
+    await controller.hydratePrivateDraft();
+    await controller.discardLocal(requireServerConfirmation: true);
+    ref.invalidate(
+      yorksV1MaterialRequestPrivateDraftsProvider(ownerAuthUserId),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          YorksV1MaterialRequestStrings.draftDeleted.active(language),
+        ),
+      ),
+    );
+  } catch (_) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          YorksV1MaterialRequestStrings.draftDeleteFailed.active(language),
+        ),
+      ),
     );
   }
 }
@@ -1179,11 +1446,13 @@ class YorksV1MaterialRequestDraftScreen extends ConsumerStatefulWidget {
     required this.draftId,
     this.boqGroupId,
     this.projectId,
+    this.boqVersion,
   });
 
   final String draftId;
   final String? boqGroupId;
   final String? projectId;
+  final int? boqVersion;
 
   @override
   ConsumerState<YorksV1MaterialRequestDraftScreen> createState() =>
@@ -1272,6 +1541,10 @@ class _YorksV1MaterialRequestDraftScreenState
       final worksheet = await ref
           .read(yorksV1BoqRepositoryProvider)
           .getWorksheet(groupId);
+      if (widget.boqVersion != null &&
+          worksheet.group.version != widget.boqVersion) {
+        throw const YorksV1DomainException(YorksV1DomainErrorCode.conflict);
+      }
       final worksheetProjectId = worksheet.group.projectId.trim();
       if (projectId != null &&
           projectId.isNotEmpty &&
@@ -1290,19 +1563,53 @@ class _YorksV1MaterialRequestDraftScreenState
           !await controller.setScope(worksheetScopeId)) {
         throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
       }
+      final requestReadyRowIds = worksheet.rows
+          .where((row) => _boqRowCanSeedMaterialRequest(worksheet, row))
+          .map((row) => row.id)
+          .toList(growable: false);
+      if (requestReadyRowIds.isEmpty) {
+        throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+      }
       await controller.addBoqRows(
         worksheet: worksheet,
-        rowIds: worksheet.rows.map((row) => row.id),
+        rowIds: requestReadyRowIds,
+      );
+    } on YorksV1DomainException catch (error) {
+      if (!mounted) return;
+      YorksAppToast.show(
+        context,
+        title: YorksV1MaterialRequestStrings.commandFailure(error.code).primary,
+        tone: YorksAppToastTone.error,
       );
     } catch (_) {
       if (!mounted) return;
       YorksAppToast.show(
         context,
-        title: YorksV1MaterialRequestStrings.saveFailed.primary,
+        title: YorksV1MaterialRequestStrings.actionFailed.primary,
         tone: YorksAppToastTone.error,
       );
     }
   }
+}
+
+bool _boqRowCanSeedMaterialRequest(
+  YorksV1BoqWorksheet worksheet,
+  YorksV1BoqRow row,
+) {
+  for (final column in worksheet.columns) {
+    final isIdentity = switch (column.canonicalField) {
+      YorksV1BoqCanonicalField.description ||
+      YorksV1BoqCanonicalField.equipmentTag => true,
+      _ => RegExp(
+        r'description|item|equipment|serving\s*area|location|tag',
+        caseSensitive: false,
+      ).hasMatch(column.heading),
+    };
+    if (isIdentity && '${row.valueFor(column.id) ?? ''}'.trim().isNotEmpty) {
+      return true;
+    }
+  }
+  return false;
 }
 
 String _materialRequestOpenPath(YorksV1MaterialRequest request) {
@@ -4990,13 +5297,13 @@ class _R35MaterialActionBar extends StatelessWidget {
       if (excelEnabled)
         _R35RequestAction(
           label: YorksV1MaterialRequestStrings.importExcel.primary,
-          icon: Icons.upload_outlined,
+          icon: YorksDataTransferIcons.importData,
           onPressed: canEdit ? onImport : null,
         ),
       if (excelEnabled)
         _R35RequestAction(
           label: YorksV1MaterialRequestStrings.exportExcel.primary,
-          icon: Icons.download_outlined,
+          icon: YorksDataTransferIcons.exportData,
           onPressed: canEdit ? onExport : null,
         ),
       _R35RequestAction(
@@ -5438,10 +5745,12 @@ class _MobileInventoryDescriptionField extends ConsumerStatefulWidget {
 class _MobileInventoryDescriptionFieldState
     extends ConsumerState<_MobileInventoryDescriptionField> {
   final FocusNode _focusNode = FocusNode();
+  int _searchEpoch = 0;
 
   Future<Iterable<YorksV1MaterialRequestInventorySuggestion>> _options(
     TextEditingValue value,
   ) async {
+    final epoch = ++_searchEpoch;
     final query = value.text.trim();
     final projectId = widget.projectId?.trim();
     final scopeId = widget.scopeId?.trim();
@@ -5453,8 +5762,12 @@ class _MobileInventoryDescriptionFieldState
         query.length < 2) {
       return const <YorksV1MaterialRequestInventorySuggestion>[];
     }
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!mounted || epoch != _searchEpoch) {
+      return const <YorksV1MaterialRequestInventorySuggestion>[];
+    }
     try {
-      return await ref.read(
+      final results = await ref.read(
         yorksV1MaterialRequestInventorySearchProvider(
           YorksV1MaterialRequestInventorySearchKey(
             projectId: projectId,
@@ -5463,6 +5776,10 @@ class _MobileInventoryDescriptionFieldState
           ),
         ).future,
       );
+      if (!mounted || epoch != _searchEpoch) {
+        return const <YorksV1MaterialRequestInventorySuggestion>[];
+      }
+      return results;
     } catch (_) {
       return const <YorksV1MaterialRequestInventorySuggestion>[];
     }
@@ -6056,6 +6373,7 @@ class _InventoryDescriptionFieldState
   late final TextEditingController _textController;
   late final FocusNode _focusNode;
   late String _lastCommitted;
+  int _searchEpoch = 0;
 
   @override
   void initState() {
@@ -6097,6 +6415,7 @@ class _InventoryDescriptionFieldState
   Future<Iterable<YorksV1MaterialRequestInventorySuggestion>> _options(
     TextEditingValue value,
   ) async {
+    final epoch = ++_searchEpoch;
     final query = value.text.trim();
     final projectId = widget.projectId?.trim();
     final scopeId = widget.scopeId?.trim();
@@ -6108,8 +6427,12 @@ class _InventoryDescriptionFieldState
         query.length < 2) {
       return const <YorksV1MaterialRequestInventorySuggestion>[];
     }
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!mounted || epoch != _searchEpoch) {
+      return const <YorksV1MaterialRequestInventorySuggestion>[];
+    }
     try {
-      return await ref.read(
+      final results = await ref.read(
         yorksV1MaterialRequestInventorySearchProvider(
           YorksV1MaterialRequestInventorySearchKey(
             projectId: projectId,
@@ -6118,6 +6441,10 @@ class _InventoryDescriptionFieldState
           ),
         ).future,
       );
+      if (!mounted || epoch != _searchEpoch) {
+        return const <YorksV1MaterialRequestInventorySuggestion>[];
+      }
+      return results;
     } catch (_) {
       return const <YorksV1MaterialRequestInventorySuggestion>[];
     }
@@ -9505,7 +9832,7 @@ class _RequestRecordHeader extends StatelessWidget {
           ?approvalActions,
           _RecordActionButton(
             label: YorksV1MaterialRequestStrings.exportExcel.primary,
-            icon: Icons.download_outlined,
+            icon: YorksDataTransferIcons.exportData,
             onPressed: onExport,
           ),
           if (onPdf != null)

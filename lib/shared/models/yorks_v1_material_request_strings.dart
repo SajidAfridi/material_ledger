@@ -324,6 +324,48 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'تمام درخواستیں',
     hi: 'सभी अनुरोध',
   );
+  static const myMaterialRequests = TranslatableString(
+    en: 'My Material Requests',
+    ar: 'طلبات المواد الخاصة بي',
+    ur: 'میری میٹیریل ریکویسٹس',
+    hi: 'मेरे सामग्री अनुरोध',
+  );
+  static const assignedMaterialRequests = TranslatableString(
+    en: 'Assigned Material Requests',
+    ar: 'طلبات المواد المسندة',
+    ur: 'تفویض شدہ میٹیریل ریکویسٹس',
+    hi: 'सौंपे गए सामग्री अनुरोध',
+  );
+  static const savedDrafts = TranslatableString(
+    en: 'Saved Drafts',
+    ar: 'المسودات المحفوظة',
+    ur: 'محفوظ شدہ ڈرافٹس',
+    hi: 'सहेजे गए ड्राफ़्ट',
+  );
+  static const deleteDraft = TranslatableString(
+    en: 'Delete draft',
+    ar: 'حذف المسودة',
+    ur: 'ڈرافٹ حذف کریں',
+    hi: 'ड्राफ़्ट हटाएं',
+  );
+  static const deleteDraftBody = TranslatableString(
+    en: 'This unfinished material request will be permanently removed from your private drafts.',
+    ar: 'ستتم إزالة طلب المواد غير المكتمل نهائيًا من مسوداتك الخاصة.',
+    ur: 'یہ نامکمل میٹیریل ریکویسٹ آپ کے نجی ڈرافٹس سے مستقل طور پر حذف ہو جائے گی۔',
+    hi: 'यह अधूरा सामग्री अनुरोध आपके निजी ड्राफ़्ट से स्थायी रूप से हटा दिया जाएगा।',
+  );
+  static const draftDeleted = TranslatableString(
+    en: 'Draft deleted',
+    ar: 'تم حذف المسودة',
+    ur: 'ڈرافٹ حذف ہو گیا',
+    hi: 'ड्राफ़्ट हटा दिया गया',
+  );
+  static const draftDeleteFailed = TranslatableString(
+    en: 'The draft could not be deleted. Please try again.',
+    ar: 'تعذر حذف المسودة. يرجى المحاولة مرة أخرى.',
+    ur: 'ڈرافٹ حذف نہیں ہو سکا۔ دوبارہ کوشش کریں۔',
+    hi: 'ड्राफ्ट हटाया नहीं जा सका। कृपया फिर से प्रयास करें।',
+  );
   static const attentionRequired = TranslatableString(
     en: 'Attention Required',
     ar: 'يتطلب اهتمامًا',

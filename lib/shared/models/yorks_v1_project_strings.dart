@@ -1157,6 +1157,36 @@ abstract final class YorksV1ProjectStrings {
     ur: 'دستاویزات',
     hi: 'दस्तावेज़',
   );
+  static const materialMovement = TranslatableString(
+    en: 'Material Movement',
+    ar: 'حركة المواد',
+    ur: 'میٹیریل موومنٹ',
+    hi: 'सामग्री आवागमन',
+  );
+  static const materialMovementDescription = TranslatableString(
+    en: 'A read-only record of materials dispatched from and returned to this project.',
+    ar: 'سجل للقراءة فقط للمواد المرسلة إلى هذا المشروع والمرتجعة منه.',
+    ur: 'اس پراجیکٹ کو بھیجے اور واپس کیے گئے میٹیریل کا صرف پڑھنے کے لیے ریکارڈ۔',
+    hi: 'इस परियोजना से भेजी और लौटाई गई सामग्री का केवल-पठन रिकॉर्ड।',
+  );
+  static const noMaterialMovements = TranslatableString(
+    en: 'No material movements have been recorded for this project.',
+    ar: 'لم يتم تسجيل أي حركة مواد لهذا المشروع.',
+    ur: 'اس پراجیکٹ کے لیے ابھی کوئی میٹیریل موومنٹ ریکارڈ نہیں ہوئی۔',
+    hi: 'इस परियोजना के लिए अभी कोई सामग्री आवागमन दर्ज नहीं हुआ है।',
+  );
+  static const dispatchedMovement = TranslatableString(
+    en: 'Dispatched',
+    ar: 'تم الإرسال',
+    ur: 'بھیجا گیا',
+    hi: 'डिस्पैच किया गया',
+  );
+  static const returnedMovement = TranslatableString(
+    en: 'Returned',
+    ar: 'تم الإرجاع',
+    ur: 'واپس کیا گیا',
+    hi: 'लौटाया गया',
+  );
   static const docs = TranslatableString(
     en: 'Docs',
     ar: 'المستندات',

@@ -265,9 +265,27 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
   }
 
   YorksV1DomainException _mapPostgrestException(PostgrestException error) {
+    final message = error.message.toUpperCase();
     final domainCode = switch (error.code) {
       '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
-      '23505' || '40001' || 'P0001' => YorksV1DomainErrorCode.conflict,
+      '40001' => YorksV1DomainErrorCode.conflict,
+      '23505' => YorksV1DomainErrorCode.invalidInput,
+      'P0001'
+          when message.contains('VERSION') ||
+              message.contains('CONFLICT') ||
+              message.contains('IDEMPOTENCY') =>
+        YorksV1DomainErrorCode.conflict,
+      'P0001'
+          when message.contains('NOT_READABLE') ||
+              message.contains('NOT_AUTHORIZED') ||
+              message.contains('PERMISSION') =>
+        YorksV1DomainErrorCode.unauthorized,
+      'P0001'
+          when message.contains('INVALID') ||
+              message.contains('DUPLICATE') ||
+              message.contains('REQUIRED') =>
+        YorksV1DomainErrorCode.invalidInput,
+      'P0001' => YorksV1DomainErrorCode.serverRejected,
       '22023' ||
       '22007' ||
       '22P02' ||
@@ -277,6 +295,7 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
     return YorksV1DomainException(
       domainCode,
       serverCode: error.code,
+      serverMessage: error.message,
       cause: error,
     );
   }

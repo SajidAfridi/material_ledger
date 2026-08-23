@@ -114,7 +114,8 @@ Implementation status: **passed.** See
 Deliver:
 
 - ordered BOQ groups/columns/rows and canonical-plus-raw values;
-- exactly 29 idempotent defaults for every new Common/building scope; dormant
+- exactly one idempotent Workshop Materials default for every new
+  Common/building scope; dormant
   project-level BOQs remain unassigned for explicit reconciliation rather than
   being backfilled by inference;
 - custom groups, direct header/cell editing, archive/delete rules;
@@ -124,9 +125,10 @@ Deliver:
   and read-only Procurement projection;
 - 500-row performance tests.
 
-Gate: 29 defaults per real scope, All is read-only, cross-scope BOQ-to-MR
-sources fail, arbitrary values survive save/reload, keyboard and 360px behavior
-pass, Procurement direct write denied, V7 plans untouched.
+Gate: one Workshop Materials default per real scope, All is read-only,
+cross-scope BOQ-to-MR sources fail, arbitrary values survive save/reload and
+changed-structure re-import after deletion, keyboard and 360px behavior pass,
+Procurement direct write denied, V7 plans untouched.
 
 Rollback: BOQ/Projects flags off; rows retained.
 

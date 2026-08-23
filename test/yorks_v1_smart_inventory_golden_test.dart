@@ -39,6 +39,7 @@ void main() {
 
   for (final evidence in <({String name, Size size})>[
     (name: 'smart_inventory_desktop.png', size: const Size(1366, 768)),
+    (name: 'smart_inventory_tablet.png', size: const Size(900, 1024)),
     (name: 'smart_inventory_mobile.png', size: const Size(360, 800)),
   ]) {
     testWidgets('R38.3 smart warehouse — ${evidence.size}', (tester) async {

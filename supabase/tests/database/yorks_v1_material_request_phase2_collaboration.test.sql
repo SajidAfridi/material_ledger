@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(36);
+select plan(39);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -252,6 +252,20 @@ select is(
   16,
   'The register reports an authoritative total beyond the current page'
 );
+select is(
+  (public.v1_list_material_request_summaries(
+    p_register_view => 'mine'
+  ) ->> 'total_count')::integer,
+  16,
+  'My Material Requests contains only the current creator owned register'
+);
+select is(
+  (public.v1_list_material_request_summaries(
+    p_register_view => 'assigned'
+  ) ->> 'total_count')::integer,
+  0,
+  'Assigned Material Requests starts empty before a responsibility claim'
+);
 select ok(
   (public.v1_list_material_request_summaries() ->> 'has_more')::boolean,
   'The first summary page declares the next page'
@@ -322,6 +336,13 @@ select is(
   ) ->> 'assignment_version')::integer,
   1,
   'Eligible current owner can claim responsibility without changing state'
+);
+select is(
+  (public.v1_list_material_request_summaries(
+    p_register_view => 'assigned'
+  ) ->> 'total_count')::integer,
+  1,
+  'Assigned Material Requests reflects the server confirmed responsibility'
 );
 select is(
   (public.v1_assign_material_request_work(

@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../shared/models/app_language.dart';
@@ -26,6 +27,13 @@ class YorksWorkspaceZoomController extends ChangeNotifier {
   final double maximumScale;
   final double step;
   final TransformationController _transformationController;
+
+  /// Flutter surfaces physical mouse wheel movement in logical pixels. A
+  /// conventional wheel notch is usually close to 72 pixels, while
+  /// high-resolution wheels split that same physical notch over multiple
+  /// smaller events. Scaling proportionally keeps both inputs predictable and
+  /// caps an unusually large free-spin event at one controlled zoom step.
+  static const double _wheelNotchDelta = 72;
 
   Size _viewportSize = Size.zero;
 
@@ -83,6 +91,37 @@ class YorksWorkspaceZoomController extends ChangeNotifier {
   void setScaleAt(double scale, Offset focalPoint) =>
       setTransformation(transformationForScaleAt(scale, focalPoint));
 
+  /// Converts a physical wheel delta into one bounded scale adjustment.
+  ///
+  /// Negative [scrollDeltaY] is wheel-up and therefore zooms in. The result is
+  /// intentionally proportional rather than one full [step] per event: a
+  /// high-resolution wheel can emit several events for a single detent without
+  /// producing an extreme jump.
+  double scaleDeltaForWheelDelta(double scrollDeltaY) {
+    if (scrollDeltaY.abs() < .001) return 0;
+    final normalizedNotches = (scrollDeltaY.abs() / _wheelNotchDelta)
+        .clamp(0, 1)
+        .toDouble();
+    return (scrollDeltaY.isNegative ? 1 : -1) * step * normalizedNotches;
+  }
+
+  /// Pans the transformed scene by a mouse drag delta. Panning is meaningful
+  /// only once the scene is magnified; at 100% it remains pinned to the normal
+  /// route layout.
+  void panBy(Offset viewportDelta) {
+    if (currentScale <= minimumScale + .001) return;
+    final translation = _transformationController.value.getTranslation();
+    setTransformation(
+      _matrixFor(
+        currentScale,
+        Offset(
+          translation.x + viewportDelta.dx,
+          translation.y + viewportDelta.dy,
+        ),
+      ),
+    );
+  }
+
   /// Lets the viewport animate a matrix without routing high-frequency gesture
   /// frames through Riverpod or rebuilding business widgets.
   void setTransformation(Matrix4 value) {
@@ -90,10 +129,6 @@ class YorksWorkspaceZoomController extends ChangeNotifier {
     if (_sameMatrix(_transformationController.value, constrained)) return;
     _transformationController.value = constrained;
   }
-
-  /// Re-clamps a native pinch/trackpad result at the end of interaction.
-  void constrainCurrentTransformation() =>
-      setTransformation(_transformationController.value);
 
   Matrix4 _constrainedTransformation(Matrix4 value) {
     final scale = value
@@ -167,6 +202,7 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   late YorksWorkspaceZoomController _controller;
   late bool _ownsController;
   AnimationController? _animationController;
+  int? _middlePanPointer;
 
   @override
   void initState() {
@@ -242,9 +278,25 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is PointerScaleEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
+        if (!mounted || resolved is! PointerScaleEvent) return;
+        _animateToScale(
+          _controller.currentScale * resolved.scale,
+          focalPoint: resolved.localPosition,
+        );
+      });
+      return;
+    }
     if (event is! PointerScrollEvent) return;
     final keyboard = HardwareKeyboard.instance;
-    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) return;
+    // Shift-wheel is a horizontal-scroll affordance in desktop browsers and
+    // tables. It must never become a surprise zoom shortcut, even if a user
+    // also happens to hold Ctrl or Command.
+    if (keyboard.isShiftPressed ||
+        (!keyboard.isControlPressed && !keyboard.isMetaPressed)) {
+      return;
+    }
     if (event.scrollDelta.dy.abs() < .01) return;
 
     // This Listener is the front-most hit-test target only for pointer
@@ -253,11 +305,40 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
     // and two-finger scrolling do not register here and stay untouched.
     GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
       if (!mounted || resolved is! PointerScrollEvent) return;
-      final nextScale =
-          _controller.currentScale +
-          (resolved.scrollDelta.dy < 0 ? _controller.step : -_controller.step);
-      _animateToScale(nextScale, focalPoint: resolved.localPosition);
+      final delta = _controller.scaleDeltaForWheelDelta(
+        resolved.scrollDelta.dy,
+      );
+      if (delta == 0) return;
+      // localPosition is the pointer's actual location in this viewport, so
+      // the value under a physical mouse cursor remains anchored as it grows.
+      _animateToScale(
+        _controller.currentScale + delta,
+        focalPoint: resolved.localPosition,
+      );
     });
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (event.kind != PointerDeviceKind.mouse ||
+        event.buttons & kMiddleMouseButton == 0 ||
+        _controller.currentScale <= _controller.minimumScale + .001) {
+      return;
+    }
+    _disposeAnimation();
+    setState(() => _middlePanPointer = event.pointer);
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (event.pointer != _middlePanPointer ||
+        event.buttons & kMiddleMouseButton == 0) {
+      return;
+    }
+    _controller.panBy(event.delta);
+  }
+
+  void _endMiddlePan(PointerEvent event) {
+    if (event.pointer != _middlePanPointer) return;
+    setState(() => _middlePanPointer = null);
   }
 
   @override
@@ -274,59 +355,173 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
         onZoomOut: () =>
             _animateToScale(_controller.currentScale - _controller.step),
         onReset: () => _animateToScale(_controller.minimumScale),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            InteractiveViewer(
-              key: const ValueKey('yorks-workspace-zoom-viewport'),
-              transformationController: _controller.transformationController,
-              minScale: _controller.minimumScale,
-              maxScale: _controller.maximumScale,
-              alignment: Alignment.topLeft,
-              boundaryMargin: EdgeInsets.zero,
-              constrained: true,
-              clipBehavior: Clip.hardEdge,
-              // One-finger scrolling belongs to the route's existing nested
-              // scrollables. A canvas pan would steal that familiar behavior.
-              panEnabled: false,
-              scaleEnabled: true,
-              // macOS/Windows two-finger swipes continue to scroll; platform
-              // PointerScaleEvents still drive native pinch zoom.
-              trackpadScrollCausesScale: false,
-              onInteractionEnd: (_) =>
-                  _controller.constrainCurrentTransformation(),
-              child: widget.child,
-            ),
-            // A transparent front listener wins only Ctrl/Command wheel input.
-            // It never claims taps, drags, pinch, hover, selection or normal
-            // scrolling, all of which continue to reach the route below.
-            Positioned.fill(
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerSignal: _handlePointerSignal,
-              ),
-            ),
-            if (showControls)
-              Positioned(
-                right: AppSpacing.lg,
-                bottom: AppSpacing.lg,
-                child: YorksWorkspaceZoomControls(
-                  controller: _controller,
-                  language: widget.language,
-                  onZoomIn: () => _animateToScale(
-                    _controller.currentScale + _controller.step,
-                  ),
-                  onZoomOut: () => _animateToScale(
-                    _controller.currentScale - _controller.step,
-                  ),
-                  onReset: () => _animateToScale(_controller.minimumScale),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => MouseRegion(
+            cursor: _middlePanPointer != null
+                ? SystemMouseCursors.grabbing
+                : _controller.currentScale > _controller.minimumScale + .001
+                ? SystemMouseCursors.grab
+                : SystemMouseCursors.basic,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                InteractiveViewer(
+                  key: const ValueKey('yorks-workspace-zoom-viewport'),
+                  transformationController:
+                      _controller.transformationController,
+                  minScale: _controller.minimumScale,
+                  maxScale: _controller.maximumScale,
+                  alignment: Alignment.topLeft,
+                  boundaryMargin: EdgeInsets.zero,
+                  constrained: true,
+                  clipBehavior: Clip.hardEdge,
+                  // One-finger scrolling belongs to the route's existing nested
+                  // scrollables. A canvas pan would steal that familiar behavior.
+                  panEnabled: false,
+                  // Mouse/trackpad scale signals are handled by the passthrough
+                  // layer so that only Ctrl/Command-wheel can zoom. Keeping the
+                  // built-in wheel scaling off is what lets normal and Shift wheel
+                  // events reach their native page/table Scrollable.
+                  scaleEnabled: false,
+                  trackpadScrollCausesScale: false,
+                  child: widget.child,
                 ),
-              ),
-          ],
+                // A transparent front listener wins only Ctrl/Command wheel input
+                // and an active middle-button drag. It does not register ordinary
+                // or Shift wheel signals, so normal nested page/table scrolling is
+                // still resolved by the route below.
+                Positioned.fill(
+                  child: _YorksPointerPassthroughLayer(
+                    onPointerSignal: _handlePointerSignal,
+                    onPointerDown: _handlePointerDown,
+                    onPointerMove: _handlePointerMove,
+                    onPointerUp: _endMiddlePan,
+                    onPointerCancel: _endMiddlePan,
+                  ),
+                ),
+                if (showControls)
+                  Positioned(
+                    right: AppSpacing.lg,
+                    bottom: AppSpacing.lg,
+                    child: YorksWorkspaceZoomControls(
+                      controller: _controller,
+                      language: widget.language,
+                      onZoomIn: () => _animateToScale(
+                        _controller.currentScale + _controller.step,
+                      ),
+                      onZoomOut: () => _animateToScale(
+                        _controller.currentScale - _controller.step,
+                      ),
+                      onReset: () => _animateToScale(_controller.minimumScale),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       );
     },
   );
+}
+
+/// Sits above the workspace in paint order without becoming its input target.
+///
+/// It deliberately adds itself to the hit-test path, then returns `false` so
+/// the normal page/table child is still hit-tested. That makes this layer the
+/// first [PointerSignalResolver] registrant for Ctrl/Command-wheel zoom while
+/// preserving every unmodified pointer event for the existing route widgets.
+class _YorksPointerPassthroughLayer extends LeafRenderObjectWidget {
+  const _YorksPointerPassthroughLayer({
+    required this.onPointerSignal,
+    required this.onPointerDown,
+    required this.onPointerMove,
+    required this.onPointerUp,
+    required this.onPointerCancel,
+  });
+
+  final PointerSignalEventListener onPointerSignal;
+  final PointerDownEventListener onPointerDown;
+  final PointerMoveEventListener onPointerMove;
+  final PointerUpEventListener onPointerUp;
+  final PointerCancelEventListener onPointerCancel;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _YorksPointerPassthroughRenderBox(
+        onPointerSignal: onPointerSignal,
+        onPointerDown: onPointerDown,
+        onPointerMove: onPointerMove,
+        onPointerUp: onPointerUp,
+        onPointerCancel: onPointerCancel,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _YorksPointerPassthroughRenderBox renderObject,
+  ) {
+    renderObject
+      ..onPointerSignal = onPointerSignal
+      ..onPointerDown = onPointerDown
+      ..onPointerMove = onPointerMove
+      ..onPointerUp = onPointerUp
+      ..onPointerCancel = onPointerCancel;
+  }
+}
+
+class _YorksPointerPassthroughRenderBox extends RenderBox {
+  _YorksPointerPassthroughRenderBox({
+    required this.onPointerSignal,
+    required this.onPointerDown,
+    required this.onPointerMove,
+    required this.onPointerUp,
+    required this.onPointerCancel,
+  });
+
+  PointerSignalEventListener onPointerSignal;
+  PointerDownEventListener onPointerDown;
+  PointerMoveEventListener onPointerMove;
+  PointerUpEventListener onPointerUp;
+  PointerCancelEventListener onPointerCancel;
+
+  @override
+  bool get sizedByParent => true;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) => constraints.biggest;
+
+  @override
+  void performResize() {
+    size = constraints.biggest;
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!size.contains(position)) return false;
+    result.add(BoxHitTestEntry(this, position));
+    // Let the Stack continue to the route content behind this visual layer.
+    return false;
+  }
+
+  @override
+  void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
+    assert(debugHandleEvent(event, entry));
+    switch (event) {
+      case PointerDownEvent():
+        onPointerDown(event);
+      case PointerMoveEvent():
+        onPointerMove(event);
+      case PointerUpEvent():
+        onPointerUp(event);
+      case PointerCancelEvent():
+        onPointerCancel(event);
+      case PointerSignalEvent():
+        onPointerSignal(event);
+      default:
+        break;
+    }
+  }
 }
 
 class YorksWorkspaceZoomShortcuts extends StatelessWidget {

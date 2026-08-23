@@ -53,6 +53,41 @@ void main() {
     expect(controller.transformationController.value, Matrix4.identity());
   });
 
+  test('wheel deltas are normalized and middle-drag panning stays bounded', () {
+    final controller = YorksWorkspaceZoomController();
+    addTearDown(controller.dispose);
+    controller.updateViewportSize(const Size(1200, 800));
+
+    // A regular wheel notch, a high-resolution stream totalling one notch and
+    // an unusually large free-spin event all stay controlled.
+    expect(controller.scaleDeltaForWheelDelta(-72), closeTo(.125, .0001));
+    expect(
+      List<double>.filled(12, -6)
+          .map(controller.scaleDeltaForWheelDelta)
+          .reduce((left, right) => left + right),
+      closeTo(.125, .0001),
+    );
+    expect(controller.scaleDeltaForWheelDelta(-720), closeTo(.125, .0001));
+    expect(controller.scaleDeltaForWheelDelta(720), closeTo(-.125, .0001));
+
+    controller.setScaleAt(2, const Offset(600, 400));
+    final beforePan = controller.transformationController.value
+        .getTranslation();
+    controller.panBy(const Offset(-180, -120));
+    final afterPan = controller.transformationController.value.getTranslation();
+    expect(afterPan.x, closeTo(beforePan.x - 180, .0001));
+    expect(afterPan.y, closeTo(beforePan.y - 120, .0001));
+
+    controller.panBy(const Offset(-10000, -10000));
+    final bounded = controller.transformationController.value.getTranslation();
+    expect(bounded.x, -1200);
+    expect(bounded.y, -800);
+
+    controller.reset();
+    controller.panBy(const Offset(-200, -200));
+    expect(controller.transformationController.value, Matrix4.identity());
+  });
+
   testWidgets('desktop controls zoom, reset and stay outside route content', (
     tester,
   ) async {
@@ -174,7 +209,125 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keyboard shortcuts and native pinch use the route viewport', (
+  testWidgets(
+    'keyboard shortcuts and native pinch signals use the route viewport',
+    (tester) async {
+      _setViewport(tester, const Size(1200, 800));
+      final controller = YorksWorkspaceZoomController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        _ZoomTestApp(
+          controller: controller,
+          routeKey: '/yorks/overview',
+          child: const _ScrollableRouteContent(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.equal);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.equal);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, greaterThan(1));
+
+      controller.reset();
+      await tester.pump();
+      const wheelFocalPoint = Offset(520, 380);
+      final beforeWheelZoom = controller.transformationController.toScene(
+        wheelFocalPoint,
+      );
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendEventToBinding(
+        const PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: wheelFocalPoint,
+          scrollDelta: Offset(0, -72),
+        ),
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, greaterThan(1));
+      final afterWheelZoom = controller.transformationController.toScene(
+        wheelFocalPoint,
+      );
+      expect(afterWheelZoom.dx, closeTo(beforeWheelZoom.dx, .0001));
+      expect(afterWheelZoom.dy, closeTo(beforeWheelZoom.dy, .0001));
+
+      controller.reset();
+      await tester.pump();
+      await tester.sendEventToBinding(
+        const PointerScaleEvent(
+          kind: PointerDeviceKind.trackpad,
+          position: Offset(260, 420),
+          scale: 1.5,
+        ),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, greaterThan(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'ordinary and Shift wheel scrolling do not zoom while Ctrl-wheel does',
+    (tester) async {
+      _setViewport(tester, const Size(1200, 800));
+      final controller = YorksWorkspaceZoomController();
+      final scrollController = ScrollController();
+      addTearDown(controller.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        _ZoomTestApp(
+          controller: controller,
+          routeKey: '/yorks/inventory',
+          child: _ScrollableRouteContent(scrollController: scrollController),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.sendEventToBinding(
+        const PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: Offset(500, 400),
+          scrollDelta: Offset(0, 72),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, 1);
+      expect(scrollController.offset, greaterThan(0));
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendEventToBinding(
+        const PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: Offset(500, 400),
+          scrollDelta: Offset(0, -720),
+        ),
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, 1);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendEventToBinding(
+        const PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: Offset(500, 400),
+          scrollDelta: Offset(0, -720),
+        ),
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, greaterThan(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('middle-button drag pans a zoomed workspace only', (
     tester,
   ) async {
     _setViewport(tester, const Size(1200, 800));
@@ -184,50 +337,41 @@ void main() {
     await tester.pumpWidget(
       _ZoomTestApp(
         controller: controller,
-        routeKey: '/yorks/overview',
+        routeKey: '/yorks/material-requests',
         child: const _ScrollableRouteContent(),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.equal);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.equal);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    controller.setScaleAt(2, const Offset(600, 400));
+    await tester.pump();
+    final beforePan = controller.transformationController.value
+        .getTranslation();
+    final middleDrag = await tester.startGesture(
+      const Offset(600, 400),
+      kind: PointerDeviceKind.mouse,
+      buttons: kMiddleMouseButton,
+    );
+    await middleDrag.moveBy(const Offset(-160, -110));
+    await tester.pump();
+    await middleDrag.up();
     await tester.pumpAndSettle();
-    expect(controller.currentScale, greaterThan(1));
+
+    final afterPan = controller.transformationController.value.getTranslation();
+    expect(afterPan.x, closeTo(beforePan.x - 160, .0001));
+    expect(afterPan.y, closeTo(beforePan.y - 110, .0001));
 
     controller.reset();
     await tester.pump();
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendEventToBinding(
-      const PointerScrollEvent(
-        position: Offset(520, 380),
-        scrollDelta: Offset(0, -72),
-      ),
+    final unzoomedDrag = await tester.startGesture(
+      const Offset(600, 400),
+      kind: PointerDeviceKind.mouse,
+      buttons: kMiddleMouseButton,
     );
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await unzoomedDrag.moveBy(const Offset(-160, -110));
+    await unzoomedDrag.up();
     await tester.pumpAndSettle();
-    expect(controller.currentScale, greaterThan(1));
-
-    controller.reset();
-    await tester.pump();
-    final firstPointer = await tester.startGesture(
-      const Offset(160, 420),
-      pointer: 1,
-    );
-    final secondPointer = await tester.startGesture(
-      const Offset(260, 420),
-      pointer: 2,
-    );
-    await tester.pump();
-    await firstPointer.moveBy(const Offset(-55, 0));
-    await secondPointer.moveBy(const Offset(55, 0));
-    await tester.pump();
-    await firstPointer.up();
-    await secondPointer.up();
-    await tester.pumpAndSettle();
-    expect(controller.currentScale, greaterThan(1));
+    expect(controller.transformationController.value, Matrix4.identity());
     expect(tester.takeException(), isNull);
   });
 
@@ -283,11 +427,14 @@ class _ZoomTestApp extends StatelessWidget {
 }
 
 class _ScrollableRouteContent extends StatelessWidget {
-  const _ScrollableRouteContent();
+  const _ScrollableRouteContent({this.scrollController});
+
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) => ListView(
     key: const ValueKey('zoom-test-scrollable'),
+    controller: scrollController,
     padding: const EdgeInsets.all(24),
     children: const [
       Text('Route content'),

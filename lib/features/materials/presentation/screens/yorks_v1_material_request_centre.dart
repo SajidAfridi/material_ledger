@@ -76,6 +76,8 @@ class _YorksV1MaterialRequestCentreState
   String _requester = _allSelection;
   bool _attentionOnly = false;
   bool _newestFirst = true;
+  YorksV1MaterialRequestRegisterView _registerView =
+      YorksV1MaterialRequestRegisterView.total;
   _MaterialRequestCentreView _view = _MaterialRequestCentreView.allRequests;
   bool _filtersExpanded = false;
   final Set<String> _expandedProjectIds = <String>{};
@@ -155,6 +157,7 @@ class _YorksV1MaterialRequestCentreState
         _MaterialRequestMetricFilter.received => 'received',
         _MaterialRequestMetricFilter.closed => 'closed',
       },
+      registerView: _registerView,
       newestFirst: _newestFirst,
       limit: _view == _MaterialRequestCentreView.projects ? 100 : 15,
       offset: _view == _MaterialRequestCentreView.projects ? 0 : _page * 15,
@@ -253,7 +256,20 @@ class _YorksV1MaterialRequestCentreState
           const SizedBox(height: AppSpacing.md),
           widget.localDraftNotice!,
         ],
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: _RegisterScopeSwitcher(
+            language: widget.language,
+            selected: _registerView,
+            onChanged: (value) => _update(() {
+              _registerView = value;
+              _view = _MaterialRequestCentreView.allRequests;
+              _metricFilter = _MaterialRequestMetricFilter.all;
+            }),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
         _MetricsGrid(
           metrics: metrics,
           language: widget.language,
@@ -423,6 +439,58 @@ class _YorksV1MaterialRequestCentreState
           );
     return source;
   }
+}
+
+class _RegisterScopeSwitcher extends StatelessWidget {
+  const _RegisterScopeSwitcher({
+    required this.language,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final AppLanguage language;
+  final YorksV1MaterialRequestRegisterView selected;
+  final ValueChanged<YorksV1MaterialRequestRegisterView> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: SegmentedButton<YorksV1MaterialRequestRegisterView>(
+      key: const ValueKey('material-request-register-scope'),
+      showSelectedIcon: false,
+      segments: [
+        ButtonSegment(
+          value: YorksV1MaterialRequestRegisterView.total,
+          icon: const Icon(Icons.all_inbox_outlined),
+          label: Text(
+            YorksV1MaterialRequestStrings.totalMaterialRequests.active(
+              language,
+            ),
+          ),
+        ),
+        ButtonSegment(
+          value: YorksV1MaterialRequestRegisterView.mine,
+          icon: const Icon(Icons.person_outline_rounded),
+          label: Text(
+            YorksV1MaterialRequestStrings.myMaterialRequests.active(language),
+          ),
+        ),
+        ButtonSegment(
+          value: YorksV1MaterialRequestRegisterView.assigned,
+          icon: const Icon(Icons.assignment_ind_outlined),
+          label: Text(
+            YorksV1MaterialRequestStrings.assignedMaterialRequests.active(
+              language,
+            ),
+          ),
+        ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (values) {
+        if (values.isNotEmpty) onChanged(values.first);
+      },
+    ),
+  );
 }
 
 class _MaterialRequestCentreLoadError extends StatelessWidget {

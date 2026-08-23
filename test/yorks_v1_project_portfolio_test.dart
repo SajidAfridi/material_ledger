@@ -15,6 +15,14 @@ import 'package:material_ledger/shared/repositories/yorks_v1_project_portfolio_r
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('project references use natural YRA ordering', () {
+    final references = ['YRA-100', 'YRA-9', 'YRA-21', 'YRA-2'];
+
+    references.sort(compareYorksProjectReferences);
+
+    expect(references, ['YRA-2', 'YRA-9', 'YRA-21', 'YRA-100']);
+  });
+
   test(
     'portfolio composes only authorized non-commercial project context',
     () async {

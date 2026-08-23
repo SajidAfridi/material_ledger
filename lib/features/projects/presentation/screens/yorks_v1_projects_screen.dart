@@ -3341,7 +3341,13 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
   }
 }
 
-enum YorksV1ProjectWorkspaceTab { overview, boq, requests, documents }
+enum YorksV1ProjectWorkspaceTab {
+  overview,
+  boq,
+  requests,
+  documents,
+  materialMovement,
+}
 
 enum _MobileProjectDetailTab { information, team, buildings }
 
@@ -3624,6 +3630,8 @@ class _YorksV1ProjectWorkspaceScreenState
                         YorksV1ProjectStrings.materialRequests.primary,
                       YorksV1ProjectWorkspaceTab.documents =>
                         YorksV1ProjectStrings.documents.primary,
+                      YorksV1ProjectWorkspaceTab.materialMovement =>
+                        YorksV1ProjectStrings.materialMovement.primary,
                     },
               details: _showMobileDetails,
               showMenu:
@@ -4557,6 +4565,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     if (YorksMobileUi.isActive(context)) {
       return _MobileProjectWorkspace(
         item: item,
+        language: language,
         tab: tab,
         requests: requests,
         scopes: scopes,
@@ -4652,6 +4661,11 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                           RoutePaths.yorksV1ProjectDocumentsPath(project.id),
                         ),
                       ),
+                      YorksV1ProjectWorkspaceTab.materialMovement =>
+                        _ProjectMaterialMovementPanel(
+                          projectId: project.id,
+                          language: language,
+                        ),
                     },
                   ),
                 ),
@@ -5379,6 +5393,7 @@ class _MobileProjectFactRow extends StatelessWidget {
 class _MobileProjectWorkspace extends StatelessWidget {
   const _MobileProjectWorkspace({
     required this.item,
+    required this.language,
     required this.tab,
     required this.requests,
     required this.scopes,
@@ -5395,6 +5410,7 @@ class _MobileProjectWorkspace extends StatelessWidget {
   });
 
   final YorksV1ProjectPortfolioItem item;
+  final AppLanguage language;
   final YorksV1ProjectWorkspaceTab tab;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
@@ -5475,6 +5491,11 @@ class _MobileProjectWorkspace extends StatelessWidget {
                 action: YorksV1ProjectStrings.openDocuments,
                 onOpen: onOpenDocuments,
               ),
+              YorksV1ProjectWorkspaceTab.materialMovement =>
+                _ProjectMaterialMovementPanel(
+                  projectId: item.project.id,
+                  language: language,
+                ),
               YorksV1ProjectWorkspaceTab.boq => const SizedBox.shrink(),
             },
           ],
@@ -5620,47 +5641,55 @@ class _MobileProjectWorkspaceTabs extends StatelessWidget {
     decoration: const BoxDecoration(
       border: Border(bottom: BorderSide(color: AppColors.line)),
     ),
-    child: Row(
-      children: [
-        for (final tab in YorksV1ProjectWorkspaceTab.values)
-          Expanded(
-            child: Semantics(
-              button: true,
-              selected: selected == tab,
-              child: InkWell(
-                key: ValueKey('yorks-mobile-project-tab-${tab.name}'),
-                onTap: () => onSelected(tab),
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minHeight: AppSpacing.minTapTarget,
-                  ),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        width: 2,
-                        color: selected == tab
-                            ? AppColors.blue
-                            : Colors.transparent,
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final tab in YorksV1ProjectWorkspaceTab.values)
+            SizedBox(
+              width: tab == YorksV1ProjectWorkspaceTab.materialMovement
+                  ? 132
+                  : 92,
+              child: Semantics(
+                button: true,
+                selected: selected == tab,
+                child: InkWell(
+                  key: ValueKey('yorks-mobile-project-tab-${tab.name}'),
+                  onTap: () => onSelected(tab),
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minHeight: AppSpacing.minTapTarget,
+                    ),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          width: 2,
+                          color: selected == tab
+                              ? AppColors.blue
+                              : Colors.transparent,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Text(
-                    _mobileProjectTabLabel(tab),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.labelSmall.copyWith(
-                      color: selected == tab ? AppColors.navy : AppColors.muted,
-                      fontWeight: selected == tab
-                          ? FontWeight.w800
-                          : FontWeight.w700,
+                    child: Text(
+                      _mobileProjectTabLabel(tab),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: selected == tab
+                            ? AppColors.navy
+                            : AppColors.muted,
+                        fontWeight: selected == tab
+                            ? FontWeight.w800
+                            : FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     ),
   );
 }
@@ -5670,6 +5699,8 @@ String _mobileProjectTabLabel(YorksV1ProjectWorkspaceTab tab) => switch (tab) {
   YorksV1ProjectWorkspaceTab.boq => YorksV1ProjectStrings.boq.primary,
   YorksV1ProjectWorkspaceTab.requests => YorksV1ProjectStrings.requests.primary,
   YorksV1ProjectWorkspaceTab.documents => YorksV1ProjectStrings.docs.primary,
+  YorksV1ProjectWorkspaceTab.materialMovement =>
+    YorksV1ProjectStrings.materialMovement.primary,
 };
 
 class _MobileProjectOverview extends StatelessWidget {
@@ -6420,7 +6451,168 @@ class _ProjectWorkspaceTabs extends StatelessWidget {
       YorksV1ProjectWorkspaceTab.requests =>
         YorksV1ProjectStrings.materialRequests,
       YorksV1ProjectWorkspaceTab.documents => YorksV1ProjectStrings.documents,
+      YorksV1ProjectWorkspaceTab.materialMovement =>
+        YorksV1ProjectStrings.materialMovement,
     };
+  }
+}
+
+class _ProjectMaterialMovementPanel extends ConsumerWidget {
+  const _ProjectMaterialMovementPanel({
+    required this.projectId,
+    required this.language,
+  });
+
+  final String projectId;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final movements = ref.watch(
+      yorksV1ProjectMaterialMovementsProvider(projectId),
+    );
+    return LedgerCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  YorksV1ProjectStrings.materialMovement.active(language),
+                  style: AppTypography.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  YorksV1ProjectStrings.materialMovementDescription.active(
+                    language,
+                  ),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          movements.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(AppSpacing.xxxl),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, _) => Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: OutlinedButton.icon(
+                onPressed: () => ref.invalidate(
+                  yorksV1ProjectMaterialMovementsProvider(projectId),
+                ),
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(
+                  YorksV1MaterialRequestStrings.tryAgain.active(language),
+                ),
+              ),
+            ),
+            data: (items) => items.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xxxl),
+                    child: Text(
+                      YorksV1ProjectStrings.noMaterialMovements.active(
+                        language,
+                      ),
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  )
+                : ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 520),
+                    child: Scrollbar(
+                      child: ListView.separated(
+                        primary: false,
+                        padding: EdgeInsets.zero,
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, index) =>
+                            _ProjectMaterialMovementRow(
+                              movement: items[index],
+                              language: language,
+                            ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectMaterialMovementRow extends StatelessWidget {
+  const _ProjectMaterialMovementRow({
+    required this.movement,
+    required this.language,
+  });
+
+  final YorksV1ProjectMaterialMovement movement;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final dispatched =
+        movement.kind == YorksV1ProjectMaterialMovementKind.dispatched;
+    final tone = dispatched ? AppColors.blue : AppColors.success;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xs,
+      ),
+      leading: CircleAvatar(
+        backgroundColor: tone.withValues(alpha: .1),
+        foregroundColor: tone,
+        child: Icon(
+          dispatched ? Icons.north_east_rounded : Icons.south_west_rounded,
+        ),
+      ),
+      title: Text(
+        movement.itemDescription,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w800),
+      ),
+      subtitle: Text(
+        '${movement.reference} · ${movement.requestNumber}\n'
+        '${movement.actorDisplayName} · '
+        '${DateFormat.yMMMd().add_jm().format(movement.occurredAt.toLocal())}',
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            '${movement.quantity} ${movement.unit}',
+            style: AppTypography.labelLarge.copyWith(
+              color: tone,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            (dispatched
+                    ? YorksV1ProjectStrings.dispatchedMovement
+                    : YorksV1ProjectStrings.returnedMovement)
+                .active(language),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
   }
 }
 

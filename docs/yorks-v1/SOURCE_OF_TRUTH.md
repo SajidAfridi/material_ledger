@@ -34,6 +34,14 @@ Senior Mechanical Engineer also gains the non-commercial Browse/Inventory read
 surface; every stock, category and import mutation remains limited to
 Procurement/Admin.
 
+Product-owner change approval on 23 August 2026 replaces the 29-folder BOQ
+seed catalogue with one universal **Workshop Materials** folder in every new
+Common/building scope. Existing BOQ history is retained: legacy template
+folders with rows, columns, documents or Material Request sources stay visible,
+while untouched inactive template shells are suppressed. BOQ import remains an
+atomic full-snapshot replacement and must allow a revised column/row structure
+after prior rows or columns were removed without reusing archived coordinates.
+
 ## Approved source artifacts
 
 The original review artifacts remain outside the repository. Their SHA-256

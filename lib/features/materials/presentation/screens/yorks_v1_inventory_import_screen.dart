@@ -994,7 +994,7 @@ class _UploadStage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const _SquareIcon(
-                  icon: Icons.upload_file_outlined,
+                  icon: YorksDataTransferIcons.importData,
                   color: AppColors.success,
                   background: AppColors.successContainer,
                 ),
@@ -1147,7 +1147,7 @@ class _UploadResourceCards extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(44, AppSpacing.minTapTarget),
           ),
-          icon: const Icon(Icons.download_outlined, size: 18),
+          icon: const Icon(YorksDataTransferIcons.downloadTemplate, size: 18),
           label: Text(
             YorksV1InventorySupplierStrings.downloadFormat.active(language),
           ),
@@ -1465,7 +1465,7 @@ class _UploadActions extends StatelessWidget {
                   color: AppColors.onPrimary,
                 ),
               )
-            : const Icon(Icons.upload_rounded, size: 18),
+            : const Icon(YorksDataTransferIcons.importData, size: 18),
         label: Text(
           YorksV1InventorySupplierStrings.chooseFile.active(language),
         ),
@@ -1482,7 +1482,7 @@ class _UploadActions extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           ),
         ),
-        icon: const Icon(Icons.download_outlined, size: 18),
+        icon: const Icon(YorksDataTransferIcons.downloadTemplate, size: 18),
         label: Text(
           YorksV1InventorySupplierStrings.downloadFormat.active(language),
         ),

@@ -65,6 +65,7 @@ void main() {
         groupId: _groupId,
         repository: repository,
         uuidFactory: _Ids().next,
+        canManageCommercials: true,
       );
       addTearDown(controller.dispose);
       await controller.load();
@@ -151,6 +152,7 @@ void main() {
       groupId: _groupId,
       repository: repository,
       uuidFactory: _Ids().next,
+      canManageCommercials: true,
     );
     addTearDown(controller.dispose);
     await controller.load();

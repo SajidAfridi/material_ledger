@@ -56,15 +56,15 @@ select is(
     join public.v1_projects project on project.id = group_record.project_id
     where project.project_ref = 'B3-BOQ-001' and not group_record.is_custom
   ),
-  58::bigint,
-  'AT-02: exactly 29 default groups exist independently for Common and the building'
+  2::bigint,
+  'AT-02: Workshop Materials exists independently for Common and the building'
 );
 
 select is(
   jsonb_array_length(public.v1_list_boq_groups(
     (select id from public.v1_projects where project_ref = 'B3-BOQ-001')
   )),
-  29,
+  1,
   'Authorised Project Engineer receives the ordered BOQ folder projection'
 );
 
@@ -74,7 +74,7 @@ select lives_ok(
       'group_id', (
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
-        where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+        where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
           and group_record.scope_id = (
             select scope.id from public.v1_project_scopes scope
             where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -131,7 +131,7 @@ select is(
     select public.v1_get_boq_worksheet(group_record.id) #>> '{group,worksheet_title}'
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
-    where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+    where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -146,7 +146,7 @@ select is(
     select jsonb_array_length(public.v1_get_boq_worksheet(group_record.id) -> 'columns')
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
-    where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+    where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -162,7 +162,7 @@ select is(
       #>> '{rows,0,canonical_values,planning_model_tag}'
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
-    where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+    where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -178,7 +178,7 @@ select is(
       #>> '{rows,0,raw_values,31000000-0000-4000-8000-000000000003}'
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
-    where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+    where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -194,7 +194,7 @@ select lives_ok(
       'group_id', (
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
-        where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+        where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
           and group_record.scope_id = (
             select scope.id from public.v1_project_scopes scope
             where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -245,7 +245,7 @@ select ok(
       #>> '{rows,0,raw_values,31000000-0000-4000-8000-000000000003}'
     from public.v1_boq_groups group_record
     join public.v1_projects project on project.id = group_record.project_id
-    where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+    where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -260,7 +260,7 @@ select throws_ok(
       'group_id', (
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
-        where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+        where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
           and group_record.scope_id = (
             select scope.id from public.v1_project_scopes scope
             where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -283,7 +283,7 @@ select throws_ok(
       'group_id', (
         select group_record.id from public.v1_boq_groups group_record
         join public.v1_projects project on project.id = group_record.project_id
-        where project.project_ref = 'B3-BOQ-001' and group_record.display_order = 3
+        where project.project_ref = 'B3-BOQ-001' and group_record.name = 'Workshop Materials'
           and group_record.scope_id = (
             select scope.id from public.v1_project_scopes scope
             where scope.project_id = project.id and scope.scope_kind = 'common'
@@ -337,8 +337,8 @@ select is(
           and scope.scope_kind = 'common'
       )
   ),
-  30,
-  'Custom group is ordered after the frozen 29 defaults'
+  2,
+  'Custom group is ordered after Workshop Materials'
 );
 
 select lives_ok(
@@ -365,7 +365,7 @@ select is(
   jsonb_array_length(public.v1_list_boq_groups(
     (select id from public.v1_projects where project_ref = 'B3-BOQ-001')
   )),
-  29,
+  1,
   'Archived custom group leaves the active folder projection unchanged'
 );
 
@@ -379,7 +379,7 @@ select
   ) as common_scope_id,
   (
     select group_record.id from public.v1_boq_groups group_record
-    where group_record.project_id = project.id and group_record.display_order = 3
+    where group_record.project_id = project.id and group_record.name = 'Workshop Materials'
       and group_record.scope_id = (
         select scope.id from public.v1_project_scopes scope
         where scope.project_id = project.id and scope.scope_kind = 'common'

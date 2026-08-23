@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../models/yorks_v1_boq.dart';
 import '../models/yorks_v1_boq_workbook.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../repositories/yorks_v1_boq_repository.dart';
+import '../services/yorks_v1_boq_recovery_store.dart';
 
 enum YorksV1BoqSyncStatus {
   loading,
@@ -23,13 +25,21 @@ class YorksV1BoqWorksheetState {
     this.status = YorksV1BoqSyncStatus.loading,
     this.worksheet,
     this.errorCode,
+    this.recoveredLocally = false,
+    this.remoteVersion,
   });
 
   final YorksV1BoqSyncStatus status;
   final YorksV1BoqWorksheet? worksheet;
   final YorksV1DomainErrorCode? errorCode;
+  final bool recoveredLocally;
+  final int? remoteVersion;
 
-  bool get hasUnsavedChanges => status == YorksV1BoqSyncStatus.dirty;
+  bool get hasUnsavedChanges =>
+      worksheet != null &&
+      (status == YorksV1BoqSyncStatus.dirty ||
+          status == YorksV1BoqSyncStatus.conflict ||
+          status == YorksV1BoqSyncStatus.failed);
   bool get isReadOnly => worksheet?.group.isArchived ?? false;
 }
 
@@ -42,33 +52,119 @@ class YorksV1BoqWorksheetController
     required String groupId,
     required YorksV1BoqRepository repository,
     String Function()? uuidFactory,
+    YorksV1BoqRecoveryStore? recoveryStore,
+    bool canManageCommercials = false,
   }) : _groupId = groupId,
        _repository = repository,
        _uuidFactory = uuidFactory ?? const Uuid().v4,
+       _recoveryStore = recoveryStore,
+       _canManageCommercials = canManageCommercials,
        super(const YorksV1BoqWorksheetState());
 
   final String _groupId;
   final YorksV1BoqRepository _repository;
   final String Function() _uuidFactory;
+  final YorksV1BoqRecoveryStore? _recoveryStore;
+  final bool _canManageCommercials;
   _PendingBoqImport? _pendingImport;
+  YorksV1BoqWorksheet? _acceptedWorksheet;
+  final List<YorksV1BoqWorksheet> _undoStack = [];
+  final List<YorksV1BoqWorksheet> _redoStack = [];
 
-  Future<void> load() async {
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  Future<bool> load({bool discardLocalChanges = false}) async {
+    if (state.hasUnsavedChanges && !discardLocalChanges) return false;
     _pendingImport = null;
+    if (discardLocalChanges) await _recoveryStore?.clear(_groupId);
     state = const YorksV1BoqWorksheetState(
       status: YorksV1BoqSyncStatus.loading,
     );
     try {
       final worksheet = await _repository.getWorksheet(_groupId);
-      state = YorksV1BoqWorksheetState(
-        status: YorksV1BoqSyncStatus.ready,
-        worksheet: worksheet,
-      );
+      _acceptedWorksheet = worksheet;
+      _undoStack.clear();
+      _redoStack.clear();
+      final recovered = discardLocalChanges
+          ? null
+          : await _recoveryStore?.load(_groupId);
+      if (recovered != null) {
+        final matchesServer =
+            recovered.group.version == worksheet.group.version;
+        final mergedRecovery = _mergeRecoveryWithServer(
+          recovered: recovered,
+          server: worksheet,
+        );
+        state = YorksV1BoqWorksheetState(
+          status: matchesServer
+              ? YorksV1BoqSyncStatus.dirty
+              : YorksV1BoqSyncStatus.conflict,
+          worksheet: mergedRecovery,
+          recoveredLocally: true,
+          remoteVersion: worksheet.group.version,
+          errorCode: matchesServer ? null : YorksV1DomainErrorCode.conflict,
+        );
+      } else {
+        state = YorksV1BoqWorksheetState(
+          status: YorksV1BoqSyncStatus.ready,
+          worksheet: worksheet,
+        );
+      }
+      return true;
     } on YorksV1DomainException catch (error) {
+      final recovered = await _recoveryStore?.load(_groupId);
       state = YorksV1BoqWorksheetState(
-        status: YorksV1BoqSyncStatus.failed,
+        status: recovered == null
+            ? YorksV1BoqSyncStatus.failed
+            : YorksV1BoqSyncStatus.dirty,
+        worksheet: recovered,
+        recoveredLocally: recovered != null,
         errorCode: error.code,
       );
+      return recovered != null;
+    } catch (_) {
+      final recovered = await _recoveryStore?.load(_groupId);
+      state = YorksV1BoqWorksheetState(
+        status: recovered == null
+            ? YorksV1BoqSyncStatus.failed
+            : YorksV1BoqSyncStatus.dirty,
+        worksheet: recovered,
+        recoveredLocally: recovered != null,
+        errorCode: YorksV1DomainErrorCode.backendUnavailable,
+      );
+      return recovered != null;
     }
+  }
+
+  Future<void> discardLocalChanges() async {
+    _pendingImport = null;
+    _undoStack.clear();
+    _redoStack.clear();
+    await _recoveryStore?.clear(_groupId);
+    final accepted = _acceptedWorksheet;
+    if (accepted == null) {
+      await load(discardLocalChanges: true);
+      return;
+    }
+    state = YorksV1BoqWorksheetState(
+      status: YorksV1BoqSyncStatus.ready,
+      worksheet: accepted,
+    );
+  }
+
+  void undo() {
+    final current = state.worksheet;
+    if (current == null || _undoStack.isEmpty) return;
+    _redoStack.add(current);
+    _setEdited(_undoStack.removeLast());
+  }
+
+  void redo() {
+    final current = state.worksheet;
+    if (current == null || _redoStack.isEmpty) return;
+    _undoStack.add(current);
+    _setEdited(_redoStack.removeLast());
   }
 
   void updateTitle(String value) {
@@ -86,6 +182,11 @@ class YorksV1BoqWorksheetController
           version: worksheet.group.version,
           rowCount: worksheet.group.rowCount,
           columnCount: worksheet.group.columnCount,
+          documentCount: worksheet.group.documentCount,
+          linkedRequestCount: worksheet.group.linkedRequestCount,
+          lastEditedBy: worksheet.group.lastEditedBy,
+          lastEditedRole: worksheet.group.lastEditedRole,
+          lastEditedAt: worksheet.group.lastEditedAt,
           updatedAt: worksheet.group.updatedAt,
           scopeId: worksheet.group.scopeId,
           scopeKind: worksheet.group.scopeKind,
@@ -104,6 +205,19 @@ class YorksV1BoqWorksheetController
     final worksheet = _editableWorksheet();
     final cleanHeading = heading.trim();
     if (cleanHeading.isEmpty) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    if (canonicalField?.isCommercial == true && !_canManageCommercials) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
+    final normalizedHeading = cleanHeading.toLowerCase();
+    if (worksheet.columns.any(
+          (column) => column.heading.trim().toLowerCase() == normalizedHeading,
+        ) ||
+        (canonicalField != null &&
+            worksheet.columns.any(
+              (column) => column.canonicalField == canonicalField,
+            ))) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
     _replace(
@@ -128,6 +242,20 @@ class YorksV1BoqWorksheetController
     if (cleanHeading.isEmpty) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
+    final target = worksheet.columns
+        .where((item) => item.id == columnId)
+        .firstOrNull;
+    if (target == null) return;
+    if (target.isCommercial && !_canManageCommercials) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
+    if (worksheet.columns.any(
+      (column) =>
+          column.id != columnId &&
+          column.heading.trim().toLowerCase() == cleanHeading.toLowerCase(),
+    )) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
     _replace(
       worksheet.copyWith(
         columns: [
@@ -143,6 +271,12 @@ class YorksV1BoqWorksheetController
 
   void removeColumn(String columnId) {
     final worksheet = _editableWorksheet();
+    final target = worksheet.columns
+        .where((item) => item.id == columnId)
+        .firstOrNull;
+    if (target?.isCommercial == true && !_canManageCommercials) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
     final next = worksheet.columns
         .where((column) => column.id != columnId)
         .toList(growable: false);
@@ -243,6 +377,9 @@ class YorksV1BoqWorksheetController
         .where((item) => item.id == columnId)
         .firstOrNull;
     if (column == null) return;
+    if (column.isCommercial && !_canManageCommercials) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized);
+    }
     final canonicalValues = <String, Object?>{};
     for (final entry in worksheet.rows) {
       if (entry.id != rowId) {
@@ -267,6 +404,51 @@ class YorksV1BoqWorksheetController
               row.copyWith(
                 values: {...row.values, columnId: value},
                 canonicalValues: canonicalValues,
+              )
+            else
+              row,
+        ],
+      ),
+    );
+  }
+
+  /// Applies one reviewed material suggestion to the mapped operational
+  /// columns in a single local revision. Quantity and commercial fields are
+  /// intentionally absent: engineers must still enter and review them.
+  void updateMaterialCells({
+    required String rowId,
+    required Map<YorksV1BoqCanonicalField, String> values,
+  }) {
+    final worksheet = _editableWorksheet();
+    final source = worksheet.rows.where((row) => row.id == rowId).firstOrNull;
+    if (source == null) return;
+
+    final nextValues = <String, Object?>{...source.values};
+    final nextCanonicalValues = <String, Object?>{...source.canonicalValues};
+    var changed = false;
+    for (final column in worksheet.columns) {
+      final canonical = column.canonicalField;
+      if (canonical == null || canonical.isCommercial) continue;
+      final value = values[canonical]?.trim();
+      if (value == null || value.isEmpty) continue;
+      if (nextValues[column.id] == value &&
+          nextCanonicalValues[canonical.wireValue] == value) {
+        continue;
+      }
+      nextValues[column.id] = value;
+      nextCanonicalValues[canonical.wireValue] = value;
+      changed = true;
+    }
+    if (!changed) return;
+
+    _replace(
+      worksheet.copyWith(
+        rows: [
+          for (final row in worksheet.rows)
+            if (row.id == rowId)
+              row.copyWith(
+                values: nextValues,
+                canonicalValues: nextCanonicalValues,
               )
             else
               row,
@@ -315,6 +497,8 @@ class YorksV1BoqWorksheetController
           idempotencyKey: _uuidFactory(),
         ),
       );
+      _acceptedWorksheet = saved;
+      await _recoveryStore?.clear(_groupId);
       state = YorksV1BoqWorksheetState(
         status: YorksV1BoqSyncStatus.saved,
         worksheet: saved,
@@ -327,6 +511,13 @@ class YorksV1BoqWorksheetController
             : YorksV1BoqSyncStatus.failed,
         worksheet: worksheet,
         errorCode: error.code,
+      );
+      return false;
+    } catch (_) {
+      state = YorksV1BoqWorksheetState(
+        status: YorksV1BoqSyncStatus.failed,
+        worksheet: worksheet,
+        errorCode: YorksV1DomainErrorCode.backendUnavailable,
       );
       return false;
     }
@@ -345,6 +536,17 @@ class YorksV1BoqWorksheetController
           errorCode: YorksV1DomainErrorCode.invalidInput,
         );
       }
+      return false;
+    }
+    if (!_canManageCommercials &&
+        preview.columns.any(
+          (column) => column.canonicalField?.isCommercial == true,
+        )) {
+      state = YorksV1BoqWorksheetState(
+        status: YorksV1BoqSyncStatus.failed,
+        worksheet: current,
+        errorCode: YorksV1DomainErrorCode.unauthorized,
+      );
       return false;
     }
     final title = preview.title.trim();
@@ -370,6 +572,8 @@ class YorksV1BoqWorksheetController
     try {
       final saved = await _repository.importWorksheet(input);
       _pendingImport = null;
+      _acceptedWorksheet = saved;
+      await _recoveryStore?.clear(_groupId);
       state = YorksV1BoqWorksheetState(
         status: YorksV1BoqSyncStatus.saved,
         worksheet: saved,
@@ -405,11 +609,22 @@ class YorksV1BoqWorksheetController
   }
 
   void _replace(YorksV1BoqWorksheet worksheet) {
+    final current = state.worksheet;
+    if (current != null) {
+      _undoStack.add(current);
+      if (_undoStack.length > 50) _undoStack.removeAt(0);
+    }
+    _redoStack.clear();
+    _setEdited(worksheet);
+  }
+
+  void _setEdited(YorksV1BoqWorksheet worksheet) {
     _pendingImport = null;
     state = YorksV1BoqWorksheetState(
       status: YorksV1BoqSyncStatus.dirty,
       worksheet: worksheet,
     );
+    unawaited(_recoveryStore?.save(worksheet));
   }
 
   YorksV1ImportBoqWorksheetInput _buildImportInput(
@@ -528,6 +743,11 @@ class YorksV1BoqWorksheetController
         version: group.version,
         rowCount: group.rowCount,
         columnCount: group.columnCount,
+        documentCount: group.documentCount,
+        linkedRequestCount: group.linkedRequestCount,
+        lastEditedBy: group.lastEditedBy,
+        lastEditedRole: group.lastEditedRole,
+        lastEditedAt: group.lastEditedAt,
         updatedAt: group.updatedAt,
         scopeId: group.scopeId,
         scopeKind: group.scopeKind,
@@ -535,6 +755,60 @@ class YorksV1BoqWorksheetController
         scopeName: group.scopeName,
         isLegacyUnassigned: group.isLegacyUnassigned,
       );
+
+  /// Recovery intentionally stores operational fields only. Rejoin any
+  /// currently authorized protected columns and values from the fresh server
+  /// projection before a recovered worksheet can be saved.
+  static YorksV1BoqWorksheet _mergeRecoveryWithServer({
+    required YorksV1BoqWorksheet recovered,
+    required YorksV1BoqWorksheet server,
+  }) {
+    final recoveredColumnIds = recovered.columns
+        .map((column) => column.id)
+        .toSet();
+    final protectedColumns = server.columns
+        .where(
+          (column) =>
+              column.isCommercial && !recoveredColumnIds.contains(column.id),
+        )
+        .toList(growable: false);
+    if (protectedColumns.isEmpty) return recovered;
+
+    final serverRows = {for (final row in server.rows) row.id: row};
+    final protectedColumnIds = protectedColumns
+        .map((column) => column.id)
+        .toSet();
+    return recovered.copyWith(
+      columns: [
+        ...recovered.columns,
+        ...protectedColumns,
+      ]..sort((left, right) => left.displayOrder.compareTo(right.displayOrder)),
+      rows: [
+        for (final row in recovered.rows)
+          row.copyWith(
+            values: {
+              ...row.values,
+              for (final entry
+                  in serverRows[row.id]?.values.entries ??
+                      const <MapEntry<String, Object?>>[])
+                if (protectedColumnIds.contains(entry.key))
+                  entry.key: entry.value,
+            },
+            canonicalValues: {
+              ...row.canonicalValues,
+              for (final entry
+                  in serverRows[row.id]?.canonicalValues.entries ??
+                      const <MapEntry<String, Object?>>[])
+                if (YorksV1BoqCanonicalField.fromWireValue(
+                      entry.key,
+                    )?.isCommercial ==
+                    true)
+                  entry.key: entry.value,
+            },
+          ),
+      ],
+    );
+  }
 
   static int _insertIndex(List<YorksV1BoqRow> rows, String? afterRowId) {
     if (afterRowId == null) return rows.length;

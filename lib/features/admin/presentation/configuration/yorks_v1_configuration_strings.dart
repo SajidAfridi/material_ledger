@@ -260,7 +260,7 @@ abstract final class YorksV1ConfigurationStrings {
     'no_search_results': 'No configuration settings match this search.',
     'open_configuration_area': 'Open this configuration area',
     'controlled_master_summary':
-        '29 BOQ folders + {categories} categories + {units} units',
+        '1 BOQ folder + {categories} categories + {units} units',
     'procurement_project_access': 'Procurement project access',
     'procurement_project_access_body':
         'Procurement may view active Projects and BOQs but cannot create or edit Engineering records.',
@@ -297,7 +297,7 @@ abstract final class YorksV1ConfigurationStrings {
     'approved_v1_exception':
         'This deliberate production exception follows the approved Yorks V1 product contract.',
     'boq_scope_rules_help':
-        'The 29 default folders and independent building workbooks remain protected.',
+        'Workshop Materials and independent building workbooks remain protected.',
     'overview_summary_only': 'Overview is summary-only',
     'overview_summary_only_body':
         'Overview never becomes a persisted scope, edit target or Material Request source.',
@@ -307,9 +307,9 @@ abstract final class YorksV1ConfigurationStrings {
     'building_owns_boq': 'Every building owns its BOQ',
     'building_owns_boq_body':
         'Rows, quantities, imports and request sources do not merge across buildings.',
-    'default_folders': '29 Yorks default folders',
+    'default_folders': 'Workshop Materials default folder',
     'default_folders_body':
-        'New real scopes receive the frozen folder baseline plus project-wide custom folder names.',
+        'Every new real scope receives Workshop Materials plus project-wide custom folder names.',
     'master_draft_help':
         'New and archived choices stay in the draft until publication.',
     'units_active_help':

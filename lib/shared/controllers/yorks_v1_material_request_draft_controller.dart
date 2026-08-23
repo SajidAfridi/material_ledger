@@ -715,12 +715,21 @@ class YorksV1MaterialRequestDraftController
     return submitted;
   }
 
-  Future<void> discardLocal() async {
+  Future<void> discardLocal({bool requireServerConfirmation = false}) async {
     _privateSyncDebounce?.cancel();
     // Complete edits that may still be flushing from a text field before the
     // confirmed submit removes the recoverable draft. Without this barrier a
     // late keystroke write could recreate a draft after submission.
     await _persistQueue;
+    final repository = _phase2Repository;
+    final syncVersion = state.draft.privateSyncVersion;
+    if (requireServerConfirmation && repository != null && syncVersion > 0) {
+      await repository.deletePrivateDraft(
+        draftId: _draftId,
+        expectedSyncVersion: syncVersion,
+        idempotencyKey: _uuidFactory(),
+      );
+    }
     final all = _store
         .readAll()
         .where(
@@ -730,9 +739,7 @@ class YorksV1MaterialRequestDraftController
         .toList(growable: false);
     await _store.writeAll(all);
     _onLocalDraftsChanged?.call();
-    final repository = _phase2Repository;
-    final syncVersion = state.draft.privateSyncVersion;
-    if (repository != null && syncVersion > 0) {
+    if (!requireServerConfirmation && repository != null && syncVersion > 0) {
       try {
         await repository.deletePrivateDraft(
           draftId: _draftId,

@@ -37,7 +37,7 @@ class SupabaseYorksV1ProjectPortfolioDataClient
           'current_action_owner_role, record_version, created_by_auth_user_id, '
           'created_at, updated_at',
         )
-        .order('updated_at', ascending: false);
+        .order('project_ref', ascending: true);
     return _rows(rows);
   }
 
@@ -159,7 +159,7 @@ class YorksV1SupabaseProjectPortfolioRepository
       final parties = _parties(results[0]);
       final buildings = _buildings(results[1]);
 
-      return [
+      final portfolio = [
         for (final project in projects)
           YorksV1ProjectPortfolioItem(
             project: project,
@@ -174,6 +174,13 @@ class YorksV1SupabaseProjectPortfolioRepository
             buildings: buildings[project.id] ?? const [],
           ),
       ];
+      portfolio.sort(
+        (left, right) => compareYorksProjectReferences(
+          left.project.reference,
+          right.project.reference,
+        ),
+      );
+      return List.unmodifiable(portfolio);
     } on YorksV1DomainException {
       rethrow;
     } on PostgrestException catch (error) {
@@ -353,6 +360,30 @@ class YorksV1SupabaseProjectPortfolioRepository
     };
     return YorksV1DomainException(domainCode, serverCode: code, cause: error);
   }
+}
+
+/// Natural project-reference ordering keeps YRA-9 before YRA-10 while still
+/// providing a stable fallback for historical non-YRA references.
+int compareYorksProjectReferences(String left, String right) {
+  final leftParts = RegExp(r'\d+|\D+').allMatches(left.trim().toUpperCase());
+  final rightParts = RegExp(r'\d+|\D+').allMatches(right.trim().toUpperCase());
+  final leftValues = [for (final match in leftParts) match.group(0)!];
+  final rightValues = [for (final match in rightParts) match.group(0)!];
+  final length = leftValues.length < rightValues.length
+      ? leftValues.length
+      : rightValues.length;
+  for (var index = 0; index < length; index++) {
+    final leftNumber = int.tryParse(leftValues[index]);
+    final rightNumber = int.tryParse(rightValues[index]);
+    final comparison = leftNumber != null && rightNumber != null
+        ? leftNumber.compareTo(rightNumber)
+        : leftValues[index].compareTo(rightValues[index]);
+    if (comparison != 0) return comparison;
+  }
+  final partComparison = leftValues.length.compareTo(rightValues.length);
+  return partComparison != 0
+      ? partComparison
+      : left.toUpperCase().compareTo(right.toUpperCase());
 }
 
 class _TeamCounts {
