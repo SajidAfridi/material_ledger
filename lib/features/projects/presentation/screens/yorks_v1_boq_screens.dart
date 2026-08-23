@@ -2531,28 +2531,20 @@ class _WorksheetBody extends ConsumerWidget {
         ref.watch(yorksV1AuthUserIdProvider) ?? 'signed-out';
     String columnWidthKey(String columnId) =>
         'yorks_v1_boq_column_width_v1:$ownerAuthUserId:${worksheet.group.id}:$columnId';
+    final compact = YorksMobileUi.isActive(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.sm,
         AppSpacing.md,
-        AppSpacing.md,
+        compact ? AppSpacing.sm : AppSpacing.md,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (showPageHeader) ...[
-            YorksR35PageHeader(
-              eyebrow: YorksV1ShellStrings.operationalWorkspace.primary,
-              title: worksheet.group.name,
-              description:
-                  worksheet.group.worksheetTitle.trim().isEmpty ||
-                      worksheet.group.worksheetTitle.trim() ==
-                          worksheet.group.name.trim()
-                  ? YorksV1BoqStrings.worksheet.primary
-                  : worksheet.group.worksheetTitle.trim(),
-            ),
-            const SizedBox(height: AppSpacing.xl),
+            _WorksheetContextBar(group: worksheet.group),
+            const SizedBox(height: AppSpacing.sm),
           ],
           _WorksheetHeader(
             worksheet: worksheet,
@@ -2587,13 +2579,14 @@ class _WorksheetBody extends ConsumerWidget {
             onRefresh: controller.load,
             onCreateRequestFromFolder: onCreateRequestFromFolder,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           _LinkedWorkStrip(
             group: worksheet.group,
+            compact: compact,
             onOpenDocuments: onOpenDocuments,
             onOpenRequests: onOpenRequests,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           if (!editable) _ReadOnlyBanner(language: language),
           if (!editable) const SizedBox(height: AppSpacing.md),
           if (state.status == YorksV1BoqSyncStatus.conflict)
@@ -2667,47 +2660,91 @@ class _WorksheetBody extends ConsumerWidget {
   }
 }
 
+class _WorksheetContextBar extends StatelessWidget {
+  const _WorksheetContextBar({required this.group});
+
+  final YorksV1BoqGroup group;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: const ValueKey('boq-worksheet-context-bar'),
+    height: AppSpacing.massive,
+    child: Row(
+      children: [
+        Container(
+          width: AppSpacing.massive,
+          height: AppSpacing.massive,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.blue.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          ),
+          child: const Icon(Icons.folder_outlined, color: AppColors.blue),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (group.scopeName?.trim().isNotEmpty == true)
+                Text(
+                  group.scopeName!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _LinkedWorkStrip extends StatelessWidget {
   const _LinkedWorkStrip({
     required this.group,
+    required this.compact,
     this.onOpenDocuments,
     this.onOpenRequests,
   });
 
   final YorksV1BoqGroup group;
+  final bool compact;
   final VoidCallback? onOpenDocuments;
   final VoidCallback? onOpenRequests;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.md,
-      vertical: AppSpacing.sm,
-    ),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLowest,
-      border: Border.all(color: AppColors.line),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-    ),
-    child: Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.xs,
+  Widget build(BuildContext context) {
+    final lastEditedAt = group.lastEditedAt?.toLocal();
+    final lastEditedLabel = lastEditedAt == null
+        ? null
+        : '${YorksV1BoqStrings.lastEdited.primary}: '
+              '${group.lastEditedBy ?? group.lastEditedRole ?? ''} · '
+              '${MaterialLocalizations.of(context).formatMediumDate(lastEditedAt)} · '
+              '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(lastEditedAt))}';
+    final metadata = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          YorksV1BoqStrings.linkedWork.primary,
-          style: AppTypography.labelLarge.copyWith(fontWeight: FontWeight.w800),
-        ),
         _CountPill(
           label: '${YorksV1BoqStrings.revision.primary} ${group.version}',
         ),
-        if (group.lastEditedAt != null)
-          _CountPill(
-            label:
-                '${YorksV1BoqStrings.lastEdited.primary}: '
-                '${group.lastEditedBy ?? group.lastEditedRole ?? ''} · '
-                '${group.lastEditedAt!.toLocal()}',
-          ),
+        if (!compact && lastEditedLabel != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          _CountPill(label: lastEditedLabel),
+        ],
+        const SizedBox(width: AppSpacing.sm),
         ActionChip(
           avatar: const Icon(Icons.assignment_outlined, size: 17),
           label: Text(
@@ -2716,6 +2753,7 @@ class _LinkedWorkStrip extends StatelessWidget {
           ),
           onPressed: onOpenRequests,
         ),
+        const SizedBox(width: AppSpacing.sm),
         ActionChip(
           avatar: const Icon(Icons.description_outlined, size: 17),
           label: Text(
@@ -2725,8 +2763,47 @@ class _LinkedWorkStrip extends StatelessWidget {
           onPressed: onOpenDocuments,
         ),
       ],
-    ),
-  );
+    );
+    final scrollableMetadata = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: lastEditedLabel == null || !compact
+          ? metadata
+          : Tooltip(message: lastEditedLabel, child: metadata),
+    );
+    return Container(
+      key: const ValueKey('boq-linked-work-strip'),
+      constraints: const BoxConstraints(
+        minHeight: AppSpacing.gigantic,
+        maxHeight: AppSpacing.colossal,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.link_rounded,
+            size: 19,
+            color: compact ? AppColors.blue : AppColors.navy,
+          ),
+          if (!compact) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              YorksV1BoqStrings.linkedWork.primary,
+              style: AppTypography.labelLarge.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: scrollableMetadata),
+        ],
+      ),
+    );
+  }
 }
 
 class _WorksheetHeader extends StatelessWidget {
@@ -2916,7 +2993,7 @@ class _MobileWorksheetHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => YorksMobileCard(
-    padding: const EdgeInsets.all(AppSpacing.md),
+    padding: const EdgeInsets.all(AppSpacing.sm),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2982,7 +3059,7 @@ class _MobileWorksheetHeader extends StatelessWidget {
             _SyncChip(copy: status, color: statusColor),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
             Expanded(
@@ -3049,8 +3126,8 @@ class _MobileWorksheetHeader extends StatelessWidget {
                   ),
               ],
               child: Container(
-                width: 54,
-                height: 54,
+                width: AppSpacing.massive,
+                height: AppSpacing.massive,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   border: Border.all(color: AppColors.line),
@@ -3062,29 +3139,32 @@ class _MobileWorksheetHeader extends StatelessWidget {
           ],
         ),
         if (editable || onCreateRequestFromFolder != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              if (editable)
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: saving ? null : onSave,
-                    icon: const Icon(Icons.save_outlined, size: 18),
-                    label: Text(YorksV1BoqStrings.saveWorksheet.primary),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: AppSpacing.massive,
+            child: Row(
+              children: [
+                if (editable)
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: saving ? null : onSave,
+                      icon: const Icon(Icons.save_outlined, size: 18),
+                      label: Text(YorksV1BoqStrings.saveWorksheet.primary),
+                    ),
                   ),
-                ),
-              if (editable && onCreateRequestFromFolder != null)
-                const SizedBox(width: AppSpacing.sm),
-              if (onCreateRequestFromFolder != null)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('boq-create-request-from-folder'),
-                    onPressed: onCreateRequestFromFolder,
-                    icon: const Icon(Icons.assignment_outlined, size: 18),
-                    label: Text(YorksV1BoqStrings.sendWholeGroup.primary),
+                if (editable && onCreateRequestFromFolder != null)
+                  const SizedBox(width: AppSpacing.sm),
+                if (onCreateRequestFromFolder != null)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('boq-create-request-from-folder'),
+                      onPressed: onCreateRequestFromFolder,
+                      icon: const Icon(Icons.assignment_outlined, size: 18),
+                      label: Text(YorksV1BoqStrings.sendWholeGroup.primary),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
       ],
@@ -3164,7 +3244,7 @@ class _MobileWorksheetAction extends StatelessWidget {
       ],
     );
     return SizedBox(
-      height: 54,
+      height: AppSpacing.massive,
       child: primary
           ? FilledButton(onPressed: onPressed, child: child)
           : OutlinedButton(onPressed: onPressed, child: child),
@@ -4834,10 +4914,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
           ),
           _CountPill(
             label:
-                '${widget.worksheet.rows.length} ${YorksV1BoqStrings.rows.primary}',
-          ),
-          _CountPill(
-            label:
+                '${widget.worksheet.rows.length} ${YorksV1BoqStrings.rows.primary} · '
                 '${widget.worksheet.columns.length} ${YorksV1BoqStrings.columns.primary}',
           ),
         ],
@@ -5133,7 +5210,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                       AppSpacing.sm,
                       AppSpacing.sm,
                       AppSpacing.sm,
-                      112,
+                      AppSpacing.xxl,
                     ),
                     separatorBuilder: (_, _) =>
                         const SizedBox(height: AppSpacing.sm),
@@ -6412,15 +6489,17 @@ class _CountPill extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
-    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+  Widget build(BuildContext context) => IntrinsicWidth(
+    child: Container(
+      constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(label, style: AppTypography.labelLarge),
     ),
-    child: Text(label, style: AppTypography.labelLarge),
   );
 }
 

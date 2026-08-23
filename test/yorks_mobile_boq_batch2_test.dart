@@ -107,6 +107,20 @@ void main() {
       await _pumpWorksheet(tester);
 
       expect(find.byKey(const ValueKey('boq-mobile-add-material')), findsOne);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('boq-linked-work-strip')))
+            .height,
+        lessThanOrEqualTo(64),
+        reason: 'Linked metadata must remain a compact, single-line strip.',
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('yorks-v1-boq-mobile-list')))
+            .height,
+        greaterThanOrEqualTo(size.height * 0.5),
+        reason: 'At least half of the mobile viewport belongs to BOQ rows.',
+      );
       expect(find.text('Split AC Indoor Unit'), findsOneWidget);
       expect(find.text('Split AC Outdoor Unit'), findsOneWidget);
       expect(
@@ -215,6 +229,39 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('desktop BOQ worksheet prioritises the editable grid', (
+    tester,
+  ) async {
+    const size = Size(1366, 768);
+    await _setViewport(tester, size);
+    await _pumpWorksheet(tester);
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('boq-worksheet-context-bar')))
+          .height,
+      AppSpacing.massive,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('boq-linked-work-strip')))
+          .height,
+      lessThanOrEqualTo(AppSpacing.colossal),
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('yorks-v1-boq-desktop-grid')))
+          .height,
+      greaterThanOrEqualTo(size.height * 0.5),
+      reason: 'The worksheet grid must remain the dominant desktop surface.',
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/boq_worksheet_desktop.png'),
+    );
+  });
 
   testWidgets(
     'Overview is summary-only and real folder filters stay truthful',
