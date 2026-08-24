@@ -149,6 +149,108 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'ڈسپیچ اور وصولی',
     hi: 'डिस्पैच और प्राप्ति',
   );
+  static const dispatchCentre = TranslatableString(
+    en: 'Dispatch Centre',
+    ar: 'مركز الإرسال',
+    ur: 'ڈسپیچ سینٹر',
+    hi: 'डिस्पैच केंद्र',
+  );
+  static const dispatchCentreDescription = TranslatableString(
+    en: 'Track dispatches, delivery documents and site receipt across authorized projects.',
+    ar: 'تتبع عمليات الإرسال ومستندات التسليم واستلام الموقع عبر المشاريع المصرح بها.',
+    ur: 'مجاز پروجیکٹس میں ڈسپیچ، ڈیلیوری دستاویزات اور سائٹ وصولی کو ٹریک کریں۔',
+    hi: 'अधिकृत परियोजनाओं में डिस्पैच, डिलीवरी दस्तावेज़ और साइट प्राप्ति को ट्रैक करें।',
+  );
+  static const totalDispatchRequests = TranslatableString(
+    en: 'Dispatch requests',
+    ar: 'طلبات الإرسال',
+    ur: 'ڈسپیچ درخواستیں',
+    hi: 'डिस्पैच अनुरोध',
+  );
+  static const readyToDispatch = TranslatableString(
+    en: 'Ready to dispatch',
+    ar: 'جاهز للإرسال',
+    ur: 'ڈسپیچ کے لیے تیار',
+    hi: 'डिस्पैच के लिए तैयार',
+  );
+  static const receiptReviewRequired = TranslatableString(
+    en: 'Receipt review required',
+    ar: 'مطلوب مراجعة الاستلام',
+    ur: 'وصولی کا جائزہ درکار ہے',
+    hi: 'प्राप्ति समीक्षा आवश्यक',
+  );
+  static const completedDeliveries = TranslatableString(
+    en: 'Completed deliveries',
+    ar: 'عمليات التسليم المكتملة',
+    ur: 'مکمل ڈیلیوریز',
+    hi: 'पूर्ण डिलीवरी',
+  );
+  static const projectFolders = TranslatableString(
+    en: 'Project folders',
+    ar: 'مجلدات المشاريع',
+    ur: 'پروجیکٹ فولڈرز',
+    hi: 'परियोजना फ़ोल्डर',
+  );
+  static const allDispatches = TranslatableString(
+    en: 'All dispatches',
+    ar: 'جميع عمليات الإرسال',
+    ur: 'تمام ڈسپیچز',
+    hi: 'सभी डिस्पैच',
+  );
+  static const attentionRequired = TranslatableString(
+    en: 'Attention required',
+    ar: 'يتطلب الانتباه',
+    ur: 'توجہ درکار ہے',
+    hi: 'ध्यान देना आवश्यक',
+  );
+  static const completedArchive = TranslatableString(
+    en: 'Completed archive',
+    ar: 'أرشيف المكتمل',
+    ur: 'مکمل آرکائیو',
+    hi: 'पूर्ण अभिलेख',
+  );
+  static const dispatchRegister = TranslatableString(
+    en: 'Dispatch register',
+    ar: 'سجل الإرسال',
+    ur: 'ڈسپیچ رجسٹر',
+    hi: 'डिस्पैच रजिस्टर',
+  );
+  static const searchDispatches = TranslatableString(
+    en: 'Search request, project, scope or requester...',
+    ar: 'البحث في الطلب أو المشروع أو النطاق أو مقدم الطلب...',
+    ur: 'درخواست، پروجیکٹ، دائرہ یا درخواست دہندہ تلاش کریں...',
+    hi: 'अनुरोध, परियोजना, दायरा या अनुरोधकर्ता खोजें...',
+  );
+  static const noDispatchMatches = TranslatableString(
+    en: 'No dispatch records match the current search and filters.',
+    ar: 'لا توجد سجلات إرسال تطابق البحث وعوامل التصفية الحالية.',
+    ur: 'موجودہ تلاش اور فلٹرز سے کوئی ڈسپیچ ریکارڈ نہیں ملا۔',
+    hi: 'वर्तमान खोज और फ़िल्टर से कोई डिस्पैच रिकॉर्ड मेल नहीं खाता।',
+  );
+  static const openDispatchWorkflow = TranslatableString(
+    en: 'Open workflow',
+    ar: 'فتح سير العمل',
+    ur: 'ورک فلو کھولیں',
+    hi: 'वर्कफ़्लो खोलें',
+  );
+  static const printMaterialRequest = TranslatableString(
+    en: 'Print Material Request',
+    ar: 'طباعة طلب المواد',
+    ur: 'میٹریل ریکویسٹ پرنٹ کریں',
+    hi: 'सामग्री अनुरोध प्रिंट करें',
+  );
+  static const printDeliveryReport = TranslatableString(
+    en: 'Print Delivery Report',
+    ar: 'طباعة تقرير التسليم',
+    ur: 'ڈیلیوری رپورٹ پرنٹ کریں',
+    hi: 'डिलीवरी रिपोर्ट प्रिंट करें',
+  );
+  static const deliveryReportUnavailable = TranslatableString(
+    en: 'Generate the Delivery Order before printing this report.',
+    ar: 'أنشئ أمر التسليم قبل طباعة هذا التقرير.',
+    ur: 'یہ رپورٹ پرنٹ کرنے سے پہلے ڈیلیوری آرڈر بنائیں۔',
+    hi: 'इस रिपोर्ट को प्रिंट करने से पहले डिलीवरी ऑर्डर बनाएं।',
+  );
   static const project = TranslatableString(
     en: 'Project',
     ar: 'المشروع',
@@ -310,6 +412,24 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'تاريخ الإرسال',
     ur: 'ڈسپیچ تاریخ',
     hi: 'डिस्पैच तारीख',
+  );
+  static const dispatchNumber = TranslatableString(
+    en: 'Dispatch no.',
+    ar: 'رقم الإرسال',
+    ur: 'ڈسپیچ نمبر',
+    hi: 'डिस्पैच नंबर',
+  );
+  static const dispatchedBy = TranslatableString(
+    en: 'Dispatched by',
+    ar: 'تم الإرسال بواسطة',
+    ur: 'ڈسپیچ کرنے والا',
+    hi: 'इसके द्वारा डिस्पैच',
+  );
+  static const source = TranslatableString(
+    en: 'Source',
+    ar: 'المصدر',
+    ur: 'ذریعہ',
+    hi: 'स्रोत',
   );
   static const deliveryReference = TranslatableString(
     en: 'Delivery Note / Dispatch Ref.',

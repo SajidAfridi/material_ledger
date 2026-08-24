@@ -39,6 +39,54 @@ void main() {
   });
 
   testWidgets(
+    'dispatch history uses a spreadsheet table on desktop and cards on phone',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          child: const YorksV1LogisticsScreen(requestId: 'receipt-focus'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('dispatch-lines-table')),
+        findsOneWidget,
+      );
+      expect(find.text('Focus damper'), findsOneWidget);
+      expect(find.text('Print Material Request'), findsOneWidget);
+      expect(find.text('Print Delivery Report'), findsOneWidget);
+      expect(find.text('Receipt review'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(YorksV1LogisticsScreen),
+        matchesGoldenFile('goldens/r35/dispatch_detail_register_1366x900.png'),
+      );
+
+      tester.view.physicalSize = const Size(360, 800);
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          child: const YorksV1LogisticsScreen(requestId: 'receipt-focus'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('dispatch-lines-table')), findsNothing);
+      expect(find.text('Focus damper'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'dispatch refreshes the Delivery Order workspace before receipt review',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
@@ -471,6 +519,7 @@ class _FakeLogisticsRepository
   ) async {
     returnsWorkspaceCalls++;
     if (requestId == 'delivery-focus') return _deliveryFocusWorkspace;
+    if (requestId == 'receipt-focus') return _receiptFocusDocumentsWorkspace;
     return _dispatchCommitted
         ? _postDispatchDeliveryWorkspace(requestId)
         : _returnsWorkspace(requestId);
@@ -744,6 +793,58 @@ final _deliveryFocusWorkspace = YorksV1ReturnsDocumentsWorkspace(
       dispatchRecordVersion: 3,
       canGenerate: true,
       receiptReviewedAt: DateTime.utc(2026, 8, 5),
+    ),
+  ],
+  returnCandidates: const [],
+  materialReturns: const [],
+  returnInventoryItems: const [],
+);
+
+final _receiptFocusDocumentsWorkspace = YorksV1ReturnsDocumentsWorkspace(
+  requestId: 'receipt-focus',
+  projectId: 'project-1',
+  requestNumber: 'Y-001-MR001',
+  requestState: 'dispatched',
+  requestRecordVersion: 5,
+  projectName: 'Yorks Project',
+  projectReference: 'Y-001',
+  scopeName: 'Building A',
+  canGenerateDeliveryOrder: true,
+  canSubmitMaterialReturn: false,
+  canConfirmMaterialReturn: false,
+  deliveryOrderDispatches: [
+    YorksV1DeliveryOrderDispatch(
+      dispatchId: 'dispatch-focus',
+      dispatchNumber: 'Y-001-DSP001',
+      dispatchDate: DateTime.utc(2026, 8, 5),
+      dispatchRecordVersion: 3,
+      canGenerate: true,
+      receiptReviewedAt: DateTime.utc(2026, 8, 5),
+      deliveryOrder: YorksV1DeliveryOrder(
+        id: 'delivery-order-focus',
+        dispatchId: 'dispatch-focus',
+        reference: 'YRA/DN/001/2026',
+        recordVersion: 1,
+        currentRevisionId: 'delivery-revision-focus',
+        revisions: [
+          YorksV1DeliveryOrderRevision(
+            id: 'delivery-revision-focus',
+            revisionNumber: 1,
+            isCurrent: true,
+            generatedAt: DateTime.utc(2026, 8, 5),
+            generatedByDisplayName: 'Project Engineer',
+            snapshotKind: YorksV1DeliveryOrderSnapshotKind.receiptReview,
+            lines: const [
+              YorksV1DeliveryOrderLine(
+                serialNumber: 1,
+                description: 'Focus damper',
+                quantity: '1',
+                unit: 'Nos',
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   ],
   returnCandidates: const [],

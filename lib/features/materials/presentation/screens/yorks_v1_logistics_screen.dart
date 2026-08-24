@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
@@ -10,6 +12,7 @@ import '../../../../shared/models/yorks_v1_document.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
+import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
@@ -19,6 +22,8 @@ import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
+import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
+import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
 
 /// Role-aware request logistics. Server-derived action flags distinguish the
 /// Procurement dispatch form from Project/Site Engineer receipt review.
@@ -319,7 +324,7 @@ class _LogisticsBody extends StatelessWidget {
   }
 }
 
-class _MobileDispatchHistory extends StatelessWidget {
+class _MobileDispatchHistory extends ConsumerWidget {
   const _MobileDispatchHistory({
     required this.workspace,
     required this.onChanged,
@@ -329,61 +334,161 @@ class _MobileDispatchHistory extends StatelessWidget {
   final VoidCallback onChanged;
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.fromLTRB(14, 18, 14, 24),
-    children: [
-      YorksMobilePageTitle(
-        eyebrow: workspace.requestNumber ?? '',
-        title: YorksV1LogisticsStrings.dispatchAndReceipt.primary,
-        description: YorksV1LogisticsStrings.dispatchHistory.primary,
-      ),
-      const SizedBox(height: 16),
-      if (workspace.dispatches.isEmpty)
-        YorksMobileCard(
-          child: Text(
-            YorksV1LogisticsStrings.noDispatch.primary,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final document = ref
+        .watch(yorksV1MaterialRequestDocumentProvider(workspace.requestId))
+        .valueOrNull;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 24),
+      children: [
+        YorksMobilePageTitle(
+          eyebrow: workspace.requestNumber ?? '',
+          title: YorksV1LogisticsStrings.dispatchAndReceipt.active(language),
+          description: YorksV1LogisticsStrings.dispatchHistory.active(language),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: AppSpacing.minTapTarget,
+          child: OutlinedButton.icon(
+            key: const ValueKey('mobile-dispatch-print-material-request'),
+            onPressed: document == null
+                ? null
+                : () => _printMaterialRequest(context, document),
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: Text(
+              YorksV1LogisticsStrings.printMaterialRequest.active(language),
+            ),
           ),
-        )
-      else
-        for (final dispatch in workspace.dispatches) ...[
-          _DispatchCard(
-            dispatch: dispatch,
-            workspace: workspace,
-            onChanged: onChanged,
-          ),
-          const SizedBox(height: 12),
-        ],
-    ],
-  );
+        ),
+        const SizedBox(height: 16),
+        if (workspace.dispatches.isEmpty)
+          YorksMobileCard(
+            child: Text(
+              YorksV1LogisticsStrings.noDispatch.active(language),
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+            ),
+          )
+        else
+          for (final dispatch in workspace.dispatches) ...[
+            _DispatchCard(
+              dispatch: dispatch,
+              workspace: workspace,
+              onChanged: onChanged,
+            ),
+            const SizedBox(height: 12),
+          ],
+      ],
+    );
+  }
+
+  Future<void> _printMaterialRequest(
+    BuildContext context,
+    YorksV1MaterialRequestDocumentModel document,
+  ) async {
+    try {
+      await const YorksV1MaterialRequestDocumentService().printDocumentPdf(
+        document,
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.savingFailed.primary,
+        tone: YorksAppToastTone.error,
+      );
+    }
+  }
 }
 
-class _WorkspaceHeader extends StatelessWidget {
+class _WorkspaceHeader extends ConsumerWidget {
   const _WorkspaceHeader({required this.workspace});
   final YorksV1LogisticsWorkspace workspace;
 
   @override
-  Widget build(BuildContext context) => NexusSectionCard(
-    child: Wrap(
-      spacing: AppSpacing.xxl,
-      runSpacing: AppSpacing.md,
-      children: [
-        _Fact(
-          label: YorksV1LogisticsStrings.dispatchAndReceipt.primary,
-          value: workspace.requestNumber ?? '',
-        ),
-        _Fact(
-          label: YorksV1LogisticsStrings.project.primary,
-          value: workspace.projectName,
-        ),
-        _Fact(
-          label: YorksV1LogisticsStrings.scope.primary,
-          value: workspace.scopeName,
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final document = ref
+        .watch(yorksV1MaterialRequestDocumentProvider(workspace.requestId))
+        .valueOrNull;
+    return NexusSectionCard(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final facts = Wrap(
+            spacing: AppSpacing.xxl,
+            runSpacing: AppSpacing.md,
+            children: [
+              _Fact(
+                label: YorksV1MaterialRequestStrings.materialRequest.active(
+                  language,
+                ),
+                value: workspace.requestNumber ?? '',
+              ),
+              _Fact(
+                label: YorksV1LogisticsStrings.project.active(language),
+                value: workspace.projectName,
+              ),
+              _Fact(
+                label: YorksV1LogisticsStrings.scope.active(language),
+                value: workspace.scopeName,
+              ),
+            ],
+          );
+          final print = SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: OutlinedButton.icon(
+              key: const ValueKey('dispatch-print-material-request'),
+              onPressed: document == null
+                  ? null
+                  : () => _printMaterialRequest(context, document),
+              icon: const Icon(Icons.print_outlined, size: 18),
+              label: Text(
+                YorksV1LogisticsStrings.printMaterialRequest.active(language),
+              ),
+            ),
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                facts,
+                const SizedBox(height: AppSpacing.md),
+                print,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: facts),
+              const SizedBox(width: AppSpacing.lg),
+              print,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _printMaterialRequest(
+    BuildContext context,
+    YorksV1MaterialRequestDocumentModel document,
+  ) async {
+    try {
+      await const YorksV1MaterialRequestDocumentService().printDocumentPdf(
+        document,
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.savingFailed.primary,
+        tone: YorksAppToastTone.error,
+      );
+    }
+  }
 }
 
 class _DispatchEditor extends ConsumerStatefulWidget {
@@ -1104,75 +1209,168 @@ class _DispatchCard extends ConsumerStatefulWidget {
 class _DispatchCardState extends ConsumerState<_DispatchCard> {
   bool _uploadingPhoto = false;
   String _photoIdempotencyKey = const Uuid().v4();
+  final _documents = const YorksV1LogisticsDocumentService();
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.lg),
-    decoration: BoxDecoration(
-      border: Border.all(color: AppColors.line),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: AppSpacing.lg,
-          runSpacing: AppSpacing.sm,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(widget.dispatch.number, style: AppTypography.titleSmall),
-            _StateChip(state: widget.dispatch.state),
-            Text(
-              _dateLabel(widget.dispatch.dispatchDate),
-              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-            ),
-          ],
-        ),
-        if (widget.dispatch.driverName != null ||
-            widget.dispatch.vehicleReference != null) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            [
-              widget.dispatch.driverName,
-              widget.dispatch.vehicleReference,
-            ].whereType<String>().join(' · '),
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        for (final line in widget.dispatch.lines) _DispatchLineRow(line: line),
-        if (widget.dispatch.receiptReview != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            widget.dispatch.receiptReview!.reviewedByDisplayName,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerRight,
-            child: SecondaryButton(
-              label: YorksV1LogisticsStrings.addSitePhoto.primary,
-              isExpanded: false,
-              icon: _uploadingPhoto
-                  ? Icons.hourglass_top_rounded
-                  : Icons.add_a_photo_outlined,
-              onPressed: _uploadingPhoto ? null : _addSitePhoto,
-            ),
-          ),
-        ],
-        if (widget.dispatch.canConfirmReceipt) ...[
-          const SizedBox(height: AppSpacing.md),
-          Align(
-            alignment: Alignment.centerRight,
-            child: SecondaryButton(
-              label: YorksV1LogisticsStrings.receiptReview.primary,
-              isExpanded: false,
-              icon: Icons.fact_check_outlined,
-              onPressed: () => _openReceiptReview(context),
+  Widget build(BuildContext context) {
+    final language = ref.watch(languageProvider);
+    final documentsWorkspace = ref
+        .watch(
+          yorksV1ReturnsDocumentsWorkspaceProvider(widget.workspace.requestId),
+        )
+        .valueOrNull;
+    final documentDispatch = _documentDispatch(documentsWorkspace);
+    final revision = documentDispatch?.deliveryOrder?.currentRevision;
+    final mobile = YorksMobileUi.isActive(context);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: AppSpacing.lg,
+                  runSpacing: AppSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      widget.dispatch.number,
+                      style: AppTypography.titleSmall.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    _StateChip(state: widget.dispatch.state),
+                    Text(
+                      _dateLabel(widget.dispatch.dispatchDate),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _DispatchFactsGrid(
+                  dispatch: widget.dispatch,
+                  language: language,
+                ),
+              ],
             ),
           ),
+          const Divider(height: 1, color: AppColors.line),
+          if (mobile)
+            _DispatchLineCards(lines: widget.dispatch.lines, language: language)
+          else
+            _DispatchLineTable(
+              lines: widget.dispatch.lines,
+              language: language,
+            ),
+          const Divider(height: 1, color: AppColors.line),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                if (widget.dispatch.receiptReview != null)
+                  SecondaryButton(
+                    label: YorksV1LogisticsStrings.addSitePhoto.active(
+                      language,
+                    ),
+                    isExpanded: false,
+                    icon: _uploadingPhoto
+                        ? Icons.hourglass_top_rounded
+                        : Icons.add_a_photo_outlined,
+                    onPressed: _uploadingPhoto ? null : _addSitePhoto,
+                  ),
+                if (revision != null && documentDispatch != null)
+                  SecondaryButton(
+                    label:
+                        (revision.snapshotKind ==
+                                    YorksV1DeliveryOrderSnapshotKind
+                                        .receiptReview
+                                ? YorksV1LogisticsStrings.printDeliveryReport
+                                : YorksV1LogisticsStrings.printDocument)
+                            .active(language),
+                    isExpanded: false,
+                    icon: Icons.print_outlined,
+                    onPressed: () => _printDeliveryReport(
+                      documentsWorkspace!,
+                      documentDispatch,
+                      revision,
+                    ),
+                  )
+                else if (documentDispatch?.canGenerate == true)
+                  SecondaryButton(
+                    label: YorksV1LogisticsStrings.generateDeliveryOrder.active(
+                      language,
+                    ),
+                    isExpanded: false,
+                    icon: Icons.receipt_long_outlined,
+                    onPressed: _openDeliveryOrder,
+                  ),
+                if (widget.dispatch.canConfirmReceipt)
+                  SecondaryButton(
+                    label: YorksV1LogisticsStrings.receiptReview.active(
+                      language,
+                    ),
+                    isExpanded: false,
+                    icon: Icons.fact_check_outlined,
+                    onPressed: () => _openReceiptReview(context),
+                  ),
+              ],
+            ),
+          ),
         ],
-      ],
+      ),
+    );
+  }
+
+  YorksV1DeliveryOrderDispatch? _documentDispatch(
+    YorksV1ReturnsDocumentsWorkspace? workspace,
+  ) {
+    if (workspace == null) return null;
+    for (final dispatch in workspace.deliveryOrderDispatches) {
+      if (dispatch.dispatchId == widget.dispatch.id) return dispatch;
+    }
+    return null;
+  }
+
+  Future<void> _printDeliveryReport(
+    YorksV1ReturnsDocumentsWorkspace workspace,
+    YorksV1DeliveryOrderDispatch dispatch,
+    YorksV1DeliveryOrderRevision revision,
+  ) async {
+    try {
+      await _documents.printDeliveryOrder(
+        workspace: workspace,
+        dispatch: dispatch,
+        revision: revision,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      YorksAppToast.show(
+        context,
+        title: YorksV1LogisticsStrings.savingFailed.primary,
+        tone: YorksAppToastTone.error,
+      );
+    }
+  }
+
+  void _openDeliveryOrder() => context.push(
+    RoutePaths.yorksV1MaterialRequestReturnsDocumentsPath(
+      widget.workspace.requestId,
+      focusDeliveryOrder: true,
+      dispatchId: widget.dispatch.id,
     ),
   );
 
@@ -1203,6 +1401,368 @@ class _DispatchCardState extends ConsumerState<_DispatchCard> {
     }
     setState(() => _uploadingPhoto = false);
   }
+}
+
+class _DispatchFactsGrid extends StatelessWidget {
+  const _DispatchFactsGrid({required this.dispatch, required this.language});
+
+  final YorksV1MaterialDispatch dispatch;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = <({String label, String value})>[
+      (
+        label: YorksV1LogisticsStrings.dispatchedBy.active(language),
+        value: dispatch.dispatchedByDisplayName,
+      ),
+      (
+        label: YorksV1LogisticsStrings.deliveryReference.active(language),
+        value:
+            dispatch.deliveryReference ??
+            YorksV1MaterialRequestStrings.notProvided.active(language),
+      ),
+      (
+        label: YorksV1LogisticsStrings.driver.active(language),
+        value:
+            dispatch.driverName ??
+            YorksV1MaterialRequestStrings.notProvided.active(language),
+      ),
+      (
+        label: YorksV1LogisticsStrings.vehicle.active(language),
+        value:
+            dispatch.vehicleReference ??
+            YorksV1MaterialRequestStrings.notProvided.active(language),
+      ),
+      if (dispatch.receiptReview != null)
+        (
+          label: YorksV1LogisticsStrings.receiptReview.active(language),
+          value:
+              '${dispatch.receiptReview!.reviewedByDisplayName} · ${_dateLabel(dispatch.receiptReview!.reviewedAt)}',
+        ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth >= 900
+            ? (constraints.maxWidth - AppSpacing.md * 3) / 4
+            : constraints.maxWidth >= 520
+            ? (constraints.maxWidth - AppSpacing.md) / 2
+            : constraints.maxWidth;
+        return Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            for (final value in values)
+              SizedBox(
+                width: width,
+                child: _DispatchFact(label: value.label, value: value.value),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DispatchFact extends StatelessWidget {
+  const _DispatchFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.muted,
+          letterSpacing: .7,
+          fontSize: 10,
+        ),
+      ),
+      const SizedBox(height: 3),
+      Text(
+        value,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.labelLarge,
+      ),
+    ],
+  );
+}
+
+class _DispatchLineTable extends StatelessWidget {
+  const _DispatchLineTable({required this.lines, required this.language});
+
+  final List<YorksV1DispatchLine> lines;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: SizedBox(
+      width: 1220,
+      child: Table(
+        key: const ValueKey('dispatch-lines-table'),
+        border: TableBorder.all(color: AppColors.line, width: 1),
+        columnWidths: const {
+          0: FixedColumnWidth(58),
+          1: FlexColumnWidth(2.4),
+          2: FlexColumnWidth(1.3),
+          3: FixedColumnWidth(130),
+          4: FixedColumnWidth(118),
+          5: FixedColumnWidth(76),
+          6: FixedColumnWidth(128),
+          7: FixedColumnWidth(92),
+          8: FixedColumnWidth(92),
+          9: FixedColumnWidth(92),
+        },
+        children: [
+          TableRow(
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceContainerLow,
+            ),
+            children: [
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.serialNumber.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.itemDescription.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.brandOrigin.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.source.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.deliveryQuantity.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.unit.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.outcome.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.goodQuantity.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.missingQuantity.active(language),
+                header: true,
+              ),
+              _DispatchGridCell(
+                YorksV1LogisticsStrings.damagedQuantity.active(language),
+                header: true,
+              ),
+            ],
+          ),
+          for (var index = 0; index < lines.length; index++)
+            TableRow(
+              children: [
+                _DispatchGridCell('${index + 1}'),
+                _DispatchGridCell(lines[index].description, emphasis: true),
+                _DispatchGridCell(
+                  lines[index].brandOrigin ??
+                      YorksV1MaterialRequestStrings.notProvided.active(
+                        language,
+                      ),
+                ),
+                _DispatchGridCell(
+                  yorksV1LogisticsSourceCopy(
+                    lines[index].source,
+                  ).active(language),
+                ),
+                _DispatchGridCell(
+                  yorksV1DisplayQuantity(lines[index].dispatchedQuantity),
+                ),
+                _DispatchGridCell(lines[index].unit),
+                _DispatchGridCell(
+                  lines[index].receiptOutcome == null
+                      ? YorksV1LogisticsStrings.pending.active(language)
+                      : yorksV1ReceiptOutcomeCopy(
+                          lines[index].receiptOutcome!,
+                        ).active(language),
+                ),
+                _DispatchGridCell(
+                  yorksV1DisplayQuantity(lines[index].goodQuantity ?? '0'),
+                ),
+                _DispatchGridCell(
+                  yorksV1DisplayQuantity(lines[index].missingQuantity ?? '0'),
+                ),
+                _DispatchGridCell(
+                  yorksV1DisplayQuantity(lines[index].damagedQuantity ?? '0'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _DispatchGridCell extends StatelessWidget {
+  const _DispatchGridCell(
+    this.value, {
+    this.header = false,
+    this.emphasis = false,
+  });
+
+  final String value;
+  final bool header;
+  final bool emphasis;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: BoxConstraints(minHeight: header ? 46 : 54),
+    alignment: AlignmentDirectional.centerStart,
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.sm,
+    ),
+    child: Text(
+      value,
+      maxLines: header ? 2 : 3,
+      overflow: TextOverflow.ellipsis,
+      style: (header ? AppTypography.labelSmall : AppTypography.bodySmall)
+          .copyWith(
+            color: header ? AppColors.muted : AppColors.ink,
+            fontWeight: header || emphasis ? FontWeight.w800 : FontWeight.w500,
+          ),
+    ),
+  );
+}
+
+class _DispatchLineCards extends StatelessWidget {
+  const _DispatchLineCards({required this.lines, required this.language});
+
+  final List<YorksV1DispatchLine> lines;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    child: Column(
+      children: [
+        for (var index = 0; index < lines.length; index++) ...[
+          _DispatchLineCard(
+            index: index + 1,
+            line: lines[index],
+            language: language,
+          ),
+          if (index != lines.length - 1) const SizedBox(height: AppSpacing.sm),
+        ],
+      ],
+    ),
+  );
+}
+
+class _DispatchLineCard extends StatelessWidget {
+  const _DispatchLineCard({
+    required this.index,
+    required this.line,
+    required this.language,
+  });
+
+  final int index;
+  final YorksV1DispatchLine line;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: AppColors.blueContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$index',
+                style: AppTypography.labelMedium.copyWith(
+                  color: AppColors.blue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    line.description,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    [
+                      line.brandOrigin,
+                      yorksV1LogisticsSourceCopy(line.source).active(language),
+                    ].whereType<String>().join(' · '),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.lg,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _DispatchFact(
+              label: YorksV1LogisticsStrings.deliveryQuantity.active(language),
+              value:
+                  '${yorksV1DisplayQuantity(line.dispatchedQuantity)} ${line.unit}',
+            ),
+            _DispatchFact(
+              label: YorksV1LogisticsStrings.outcome.active(language),
+              value: line.receiptOutcome == null
+                  ? YorksV1LogisticsStrings.pending.active(language)
+                  : yorksV1ReceiptOutcomeCopy(
+                      line.receiptOutcome!,
+                    ).active(language),
+            ),
+            if (line.receiptOutcome != null)
+              _DispatchFact(
+                label: YorksV1LogisticsStrings.goodQuantity.active(language),
+                value: yorksV1DisplayQuantity(line.goodQuantity ?? '0'),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 Future<bool> _selectAndUploadReceiptPhoto({
@@ -2410,31 +2970,6 @@ class _ReceiptLineInputs extends StatelessWidget {
         children: fields,
       );
     },
-  );
-}
-
-class _DispatchLineRow extends StatelessWidget {
-  const _DispatchLineRow({required this.line});
-  final YorksV1DispatchLine line;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(line.description, style: AppTypography.bodyMedium),
-        ),
-        Text('${_displayQuantity(line.dispatchedQuantity)} ${line.unit}'),
-        if (line.receiptOutcome != null) ...[
-          const SizedBox(width: AppSpacing.md),
-          Text(
-            yorksV1ReceiptOutcomeCopy(line.receiptOutcome!).primary,
-            style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
-          ),
-        ],
-      ],
-    ),
   );
 }
 

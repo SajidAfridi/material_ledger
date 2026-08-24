@@ -158,12 +158,54 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Dispatch Centre'), findsOneWidget);
+      expect(find.text('Project folders'), findsOneWidget);
+      expect(find.text('Completed deliveries'), findsWidgets);
+      await tester.tap(find.text('All dispatches'));
+      await tester.pumpAndSettle();
       expect(find.text('YRA123-MR-RECEIVED'), findsOneWidget);
       expect(find.text('YRA123-MR-CLOSED'), findsOneWidget);
-      expect(find.text('2'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dispatch-register-table')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Dispatch Centre remains organized at a 360px phone width', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1MaterialRequestListProvider(null).overrideWith(
+            (ref) async => [_receivedQueueRequest, _closedQueueRequest],
+          ),
+        ],
+        child: const MaterialApp(
+          home: YorksV1WorkflowQueueScreen(
+            kind: YorksV1WorkflowQueueKind.dispatches,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dispatch Centre'), findsOneWidget);
+    expect(find.byKey(const ValueKey('dispatch-search')), findsOneWidget);
+    expect(find.byKey(const ValueKey('dispatch-register-table')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'R35 new material request draft stays laid out at desktop and mobile widths',

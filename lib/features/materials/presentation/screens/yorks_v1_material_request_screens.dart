@@ -46,6 +46,7 @@ import '../../../../shared/providers/yorks_v1_material_workflow_command_provider
 import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
+import 'yorks_v1_dispatch_centre.dart';
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
 import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
 import '../../../../shared/providers/session_provider.dart';
@@ -1155,6 +1156,30 @@ class YorksV1WorkflowQueueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
+    if (kind == YorksV1WorkflowQueueKind.dispatches) {
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          top: false,
+          child: requests.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) => _RequestError(
+              language: language,
+              onRetry: () => ref.invalidate(yorksV1MaterialRequestListProvider),
+            ),
+            data: (items) => YorksV1DispatchCentre(
+              requests: items,
+              language: language,
+              onOpen: (request) => context.push(
+                RoutePaths.yorksV1MaterialRequestLogisticsPath(request.id),
+              ),
+              onRefresh: () =>
+                  ref.invalidate(yorksV1MaterialRequestListProvider),
+            ),
+          ),
+        ),
+      );
+    }
     final title = switch (kind) {
       YorksV1WorkflowQueueKind.dispatches => YorksV1ShellStrings.dispatches,
       YorksV1WorkflowQueueKind.returns => YorksV1ShellStrings.materialReturns,
