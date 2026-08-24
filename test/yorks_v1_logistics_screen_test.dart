@@ -11,9 +11,12 @@ import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_logistics_document_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -315,6 +318,7 @@ void main() {
                     workspace: initial,
                     dispatch: dispatch,
                     documents: documents,
+                    canGenerate: true,
                   ),
                   child: const Text('Open Delivery Order'),
                 ),
@@ -351,6 +355,11 @@ Widget _testApp({
 }) => ProviderScope(
   overrides: [
     yorksV1CurrentRoleProvider.overrideWithValue(exactRole),
+    yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+      (ref) => YorksV1TestPermissionController(
+        yorksV1TrustedFeaturePermissionState(role: exactRole),
+      ),
+    ),
     sharedPreferencesProvider.overrideWithValue(preferences),
     yorksV1ConfigurationUnitCodesProvider.overrideWith(
       (ref) async => const ['Nos', 'Meter', 'Set', 'Kg', 'Ton', 'Boxes'],

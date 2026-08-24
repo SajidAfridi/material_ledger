@@ -13,6 +13,7 @@ import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -21,7 +22,9 @@ import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
+import '../yorks_v1_feature_action_access.dart';
 
 /// Batch 8's request-level Delivery Order and Material Return workspace.
 /// Server-provided capabilities control every committed action; the client only
@@ -47,6 +50,7 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
     final workspace = ref.watch(
       yorksV1ReturnsDocumentsWorkspaceProvider(requestId),
     );
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final mobile = YorksMobileUi.isActive(context);
     final compactRoute =
         !mobile &&
@@ -60,13 +64,35 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
           onPressed: () => _refresh(ref),
         ),
       ),
-      data: (value) => _ReturnsDocumentsBody(
-        workspace: value,
-        onChanged: () => _refresh(ref),
-        showPageHeader: !compactRoute && !mobile,
-        focusDeliveryOrder: focusDeliveryOrder,
-        focusedDispatchId: focusedDispatchId,
-      ),
+      data: (value) {
+        final canReadRequest = yorksV1CanReadProjectRecord(
+          permissionState,
+          YorksV1CapabilityKeys.materialRequestsView,
+          legacyAllowed: true,
+          projectId: value.projectId,
+        );
+        final deliveryOrderAccess = yorksV1FeatureActionAccess(
+          permissionState,
+          YorksV1CapabilityKeys.deliveryOrdersGenerate,
+          legacyAllowed: value.deliveryOrderDispatches.any(
+            (dispatch) => dispatch.canGenerate,
+          ),
+          projectId: value.projectId,
+        );
+        return YorksV1ProjectReadBoundary(
+          allowed: canReadRequest,
+          language: language,
+          child: _ReturnsDocumentsBody(
+            workspace: value,
+            onChanged: () => _refresh(ref),
+            showPageHeader: !compactRoute && !mobile,
+            showGenerateDeliveryOrder: deliveryOrderAccess.isVisible,
+            canGenerateDeliveryOrder: deliveryOrderAccess.canWrite,
+            focusDeliveryOrder: focusDeliveryOrder,
+            focusedDispatchId: focusedDispatchId,
+          ),
+        );
+      },
     );
     if (mobile) {
       return Scaffold(
@@ -150,6 +176,8 @@ class _ReturnsDocumentsBody extends ConsumerStatefulWidget {
     required this.workspace,
     required this.onChanged,
     required this.showPageHeader,
+    required this.showGenerateDeliveryOrder,
+    required this.canGenerateDeliveryOrder,
     required this.focusDeliveryOrder,
     required this.focusedDispatchId,
   });
@@ -157,6 +185,8 @@ class _ReturnsDocumentsBody extends ConsumerStatefulWidget {
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final VoidCallback onChanged;
   final bool showPageHeader;
+  final bool showGenerateDeliveryOrder;
+  final bool canGenerateDeliveryOrder;
   final bool focusDeliveryOrder;
   final String? focusedDispatchId;
 
@@ -276,7 +306,8 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
         }
       }
       if (target == null ||
-          (!target.canGenerate && target.deliveryOrder == null)) {
+          (target.deliveryOrder == null &&
+              (!target.canGenerate || !widget.canGenerateDeliveryOrder))) {
         YorksAppToast.show(
           context,
           title: YorksV1MaterialRequestStrings.recordChanged.primary,
@@ -289,6 +320,7 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
         workspace: widget.workspace,
         dispatch: target,
         documents: _documents,
+        canGenerate: widget.canGenerateDeliveryOrder,
       );
       if (changed == true && mounted) widget.onChanged();
     });
@@ -302,6 +334,8 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
           workspace: widget.workspace,
           documents: _documents,
           onChanged: widget.onChanged,
+          showGenerate: widget.showGenerateDeliveryOrder,
+          canGenerate: widget.canGenerateDeliveryOrder,
         );
       }
       return PopScope(canPop: !_saving, child: _buildMobileReturnFlow(context));
@@ -359,6 +393,8 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
                     workspace: widget.workspace,
                     documents: _documents,
                     onChanged: widget.onChanged,
+                    showGenerate: widget.showGenerateDeliveryOrder,
+                    canGenerate: widget.canGenerateDeliveryOrder,
                   ),
                 ),
                 if (!widget.focusDeliveryOrder) ...[
@@ -730,11 +766,15 @@ class _MobileDeliveryOrderWorkspace extends StatelessWidget {
     required this.workspace,
     required this.documents,
     required this.onChanged,
+    required this.showGenerate,
+    required this.canGenerate,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final YorksV1LogisticsDocumentService documents;
   final VoidCallback onChanged;
+  final bool showGenerate;
+  final bool canGenerate;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -763,6 +803,8 @@ class _MobileDeliveryOrderWorkspace extends StatelessWidget {
             dispatch: dispatch,
             documents: documents,
             onChanged: onChanged,
+            showGenerate: showGenerate,
+            canGenerate: canGenerate,
           ),
           const SizedBox(height: 10),
         ],
@@ -1030,11 +1072,15 @@ class _DeliveryOrderList extends ConsumerWidget {
     required this.workspace,
     required this.documents,
     required this.onChanged,
+    required this.showGenerate,
+    required this.canGenerate,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final YorksV1LogisticsDocumentService documents;
   final VoidCallback onChanged;
+  final bool showGenerate;
+  final bool canGenerate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1054,6 +1100,8 @@ class _DeliveryOrderList extends ConsumerWidget {
               dispatch: dispatch,
               documents: documents,
               onChanged: onChanged,
+              showGenerate: showGenerate,
+              canGenerate: canGenerate,
             ),
           ),
       ],
@@ -1067,12 +1115,16 @@ class _DeliveryOrderCard extends ConsumerStatefulWidget {
     required this.dispatch,
     required this.documents,
     required this.onChanged,
+    required this.showGenerate,
+    required this.canGenerate,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final YorksV1DeliveryOrderDispatch dispatch;
   final YorksV1LogisticsDocumentService documents;
   final VoidCallback onChanged;
+  final bool showGenerate;
+  final bool canGenerate;
 
   @override
   ConsumerState<_DeliveryOrderCard> createState() => _DeliveryOrderCardState();
@@ -1121,13 +1173,14 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
             const SizedBox(height: AppSpacing.md),
             _FourColumnTable(lines: current.lines),
           ],
-          if (widget.dispatch.canGenerate || order != null) ...[
+          if ((widget.dispatch.canGenerate && widget.showGenerate) ||
+              order != null) ...[
             const SizedBox(height: AppSpacing.md),
             Wrap(
               spacing: AppSpacing.md,
               runSpacing: AppSpacing.sm,
               children: [
-                if (widget.dispatch.canGenerate)
+                if (widget.dispatch.canGenerate && widget.showGenerate)
                   SizedBox(
                     width: 230,
                     child: SecondaryButton(
@@ -1139,7 +1192,7 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
                                 .regenerateDeliveryOrder
                                 .primary,
                       icon: Icons.description_outlined,
-                      onPressed: _generate,
+                      onPressed: widget.canGenerate ? _generate : null,
                     ),
                   ),
                 if (order != null && current != null) ...[
@@ -1177,11 +1230,13 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
   }
 
   Future<void> _generate() async {
+    if (!widget.canGenerate) return;
     final changed = await showYorksV1DeliveryOrderGenerationDialog(
       context,
       workspace: widget.workspace,
       dispatch: widget.dispatch,
       documents: widget.documents,
+      canGenerate: widget.canGenerate,
     );
     if (changed == true && mounted) widget.onChanged();
   }
@@ -1232,6 +1287,7 @@ Future<bool?> showYorksV1DeliveryOrderGenerationDialog(
   required YorksV1ReturnsDocumentsWorkspace workspace,
   required YorksV1DeliveryOrderDispatch dispatch,
   required YorksV1LogisticsDocumentService documents,
+  required bool canGenerate,
 }) => showDialog<bool>(
   context: context,
   animationStyle: AnimationStyle.noAnimation,
@@ -1240,6 +1296,7 @@ Future<bool?> showYorksV1DeliveryOrderGenerationDialog(
     workspace: workspace,
     dispatch: dispatch,
     documents: documents,
+    canGenerate: canGenerate,
   ),
 );
 
@@ -1250,11 +1307,13 @@ class _DeliveryOrderGenerationDialog extends ConsumerStatefulWidget {
     required this.workspace,
     required this.dispatch,
     required this.documents,
+    required this.canGenerate,
   });
 
   final YorksV1ReturnsDocumentsWorkspace workspace;
   final YorksV1DeliveryOrderDispatch dispatch;
   final YorksV1LogisticsDocumentService documents;
+  final bool canGenerate;
 
   @override
   ConsumerState<_DeliveryOrderGenerationDialog> createState() =>
@@ -1378,7 +1437,7 @@ class _DeliveryOrderGenerationDialogState
                         : [
                             TextField(
                               controller: _reference,
-                              enabled: !_working,
+                              enabled: !_working && widget.canGenerate,
                               textCapitalization: TextCapitalization.characters,
                               decoration: InputDecoration(
                                 labelText: YorksV1LogisticsStrings
@@ -1426,7 +1485,7 @@ class _DeliveryOrderGenerationDialogState
                           label: YorksV1LogisticsStrings.printDocument.primary,
                           icon: Icons.print_outlined,
                           isExpanded: false,
-                          onPressed: _working
+                          onPressed: _working || !widget.canGenerate
                               ? null
                               : () => _generateAndOpen(
                                   _DeliveryOrderOutput.print,
@@ -1441,9 +1500,11 @@ class _DeliveryOrderGenerationDialogState
                             ? null
                             : showingPreview
                             ? () => _shareCurrent(order!, revision)
-                            : () => _generateAndOpen(
+                            : widget.canGenerate
+                            ? () => _generateAndOpen(
                                 _DeliveryOrderOutput.download,
-                              ),
+                              )
+                            : null,
                       ),
                       if (showingPreview && widget.dispatch.canGenerate)
                         SecondaryButton(
@@ -1452,7 +1513,7 @@ class _DeliveryOrderGenerationDialogState
                               .primary,
                           icon: Icons.restart_alt_rounded,
                           isExpanded: false,
-                          onPressed: _working
+                          onPressed: _working || !widget.canGenerate
                               ? null
                               : () => setState(() => _creatingRevision = true),
                         ),
@@ -1519,7 +1580,7 @@ class _DeliveryOrderGenerationDialogState
                       YorksMobileCard(
                         child: TextField(
                           controller: _reference,
-                          enabled: !_working,
+                          enabled: !_working && widget.canGenerate,
                           textCapitalization: TextCapitalization.characters,
                           decoration: InputDecoration(
                             labelText: YorksV1LogisticsStrings
@@ -1548,7 +1609,7 @@ class _DeliveryOrderGenerationDialogState
                           children: [
                             if (widget.dispatch.canGenerate)
                               TextButton.icon(
-                                onPressed: _working
+                                onPressed: _working || !widget.canGenerate
                                     ? null
                                     : () => setState(
                                         () => _creatingRevision = true,
@@ -1574,7 +1635,7 @@ class _DeliveryOrderGenerationDialogState
                 children: !showingPreview
                     ? [
                         OutlinedButton.icon(
-                          onPressed: _working
+                          onPressed: _working || !widget.canGenerate
                               ? null
                               : () => _generateAndOpen(
                                   _DeliveryOrderOutput.print,
@@ -1585,7 +1646,7 @@ class _DeliveryOrderGenerationDialogState
                           ),
                         ),
                         FilledButton.icon(
-                          onPressed: _working
+                          onPressed: _working || !widget.canGenerate
                               ? null
                               : () => _generateAndOpen(
                                   _DeliveryOrderOutput.download,
@@ -1657,6 +1718,7 @@ class _DeliveryOrderGenerationDialogState
   );
 
   Future<void> _generateAndOpen(_DeliveryOrderOutput output) async {
+    if (!widget.canGenerate) return;
     if (_reference.text.trim().isEmpty) {
       _showFailure(
         YorksV1LogisticsStrings.deliveryOrderReferenceRequired.primary,

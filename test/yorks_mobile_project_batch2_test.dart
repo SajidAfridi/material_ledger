@@ -28,11 +28,14 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_team_directory_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 const _authUserId = 'mobile-project-user';
 const _projectId = 'project-mobile-batch-2';
@@ -399,6 +402,13 @@ Future<ProviderContainer> _createCreationContainer(
       sharedPreferencesProvider.overrideWithValue(preferences),
       yorksV1AuthUserIdProvider.overrideWithValue(_authUserId),
       yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.projectEngineer),
+      yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+        (ref) => YorksV1TestPermissionController(
+          yorksV1TrustedFeaturePermissionState(
+            role: YorksV1Role.projectEngineer,
+          ),
+        ),
+      ),
       yorksV1ProjectRepositoryProvider.overrideWithValue(repository),
       yorksV1ProjectTeamDirectoryRepositoryProvider.overrideWithValue(
         teamDirectoryRepository,
@@ -526,6 +536,11 @@ Future<GoRouter> _pumpWorkspaceShell(
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1AuthUserIdProvider.overrideWithValue(authUserId),
         yorksV1CurrentRoleProvider.overrideWithValue(role),
+        yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+          (ref) => YorksV1TestPermissionController(
+            yorksV1TrustedFeaturePermissionState(role: role),
+          ),
+        ),
         yorksV1ProjectPortfolioProvider.overrideWith(
           (ref) async => [portfolioItem ?? _portfolioFixture],
         ),

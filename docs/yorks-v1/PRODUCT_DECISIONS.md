@@ -712,3 +712,46 @@ explicitly cleared or discarded; they are never silently published.
 Non-Admin roles may read only the narrow published runtime projection required
 by their workflow. They cannot read the Admin draft, publication detail,
 protected settings or operational delivery-health diagnostics.
+
+## 22. Scoped capability management
+
+Yorks uses a hybrid authorization model: the exact server-controlled role is
+the user's job identity and default permission template, while protected
+person-specific `allow` and `deny` assignments may refine named capabilities at
+organization or project scope. This provides flexible access without replacing
+roles or turning the Flutter UI into an authority.
+
+The initial deployment is compatibility-only. Seeded role defaults must
+reproduce the access in force immediately before migration, including existing
+commercial overrides. Existing workflow RPC/RLS checks remain authoritative
+while the new resolver runs in shadow mode. No protected consumer may cut over
+until the active-user parity report has zero unexplained differences and that
+consumer has positive, negative, direct-table, stale-claim, project-scope and
+separation-of-duties tests.
+
+Effective access is resolved server-side from active identity, non-delegable
+invariants, the most specific explicit deny/grant, role baseline, project
+membership/global Engineering authority, then record state and command
+preconditions. A grant never bypasses quantity caps, workflow state,
+separation of duties, commercial response shaping, document classification or
+immutable audit.
+
+Only capabilities with a real protected consumer and completed permission
+tests are assignable. Planned modules are visible, if needed, only as disabled
+roadmap facts. Audit mutation, secret access, RLS bypass, direct counter edits,
+fabricated workflow history and delegation-ceiling changes are never grantable.
+
+Permission administration preserves the current exact Admin and Senior
+Mechanical Engineer baseline. An administrator cannot change their own
+effective permissions, grant beyond their own delegation ceiling, or remove /
+expire the last active permission administrator. Each change is versioned,
+idempotent, reasoned and append-only audited. The complete data, UI, Realtime,
+rollout and rollback contract is
+[`SCOPED_CAPABILITY_MANAGEMENT.md`](SCOPED_CAPABILITY_MANAGEMENT.md).
+
+Exact Auth role is singular. Flexible access is represented only by protected
+person capability assignments, never by caller-supplied secondary roles or
+legacy JWT capability arrays. The four capabilities required to retain a
+permission administrator (`users.view`, `permissions.view`,
+`permissions.manage`, `permissions.delegate`) are immediate and open-ended;
+ordinary capabilities may still use reviewed validity windows.

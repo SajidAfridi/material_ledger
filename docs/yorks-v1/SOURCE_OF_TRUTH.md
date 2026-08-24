@@ -42,6 +42,16 @@ while untouched inactive template shells are suppressed. BOQ import remains an
 atomic full-snapshot replacement and must allow a revised column/row structure
 after prior rows or columns were removed without reusing archived coordinates.
 
+Product-owner change approval on 24 August 2026 adds person-specific scoped
+capability administration inside User Management. The exact eight roles remain
+server-controlled job identities and baseline templates. The first deployment
+must reproduce every user's current effective access, keep existing protected
+workflow checks authoritative during shadow parity, and cut over one tested
+server consumer at a time. Explicit grants and denies never bypass project
+scope, workflow state, quantity rules, separation of duties, commercial
+response shaping or immutable audit. The complete contract is
+[`SCOPED_CAPABILITY_MANAGEMENT.md`](SCOPED_CAPABILITY_MANAGEMENT.md).
+
 ## Approved source artifacts
 
 The original review artifacts remain outside the repository. Their SHA-256

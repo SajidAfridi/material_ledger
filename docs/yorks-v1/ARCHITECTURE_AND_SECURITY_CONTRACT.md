@@ -73,8 +73,17 @@ it and retains a unique legacy application user ID for migration.
 Authorization sources:
 
 1. exact `app_metadata.role` for platform role;
-2. protected capabilities for optional boundaries such as commercial access;
+2. protected role-template defaults and active scoped capability assignments;
 3. active dated project membership for project-specific operations;
+4. record state/source ownership for command eligibility.
+
+Capability assignments are controlled exceptions, not identity. Effective
+access is resolved on the server from active identity, hard invariants, the most
+specific explicit deny/grant, role-template baseline, project scope and record
+state. Existing workflow checks remain authoritative during the shadow-parity
+rollout described in
+[`SCOPED_CAPABILITY_MANAGEMENT.md`](SCOPED_CAPABILITY_MANAGEMENT.md). A client
+may render a server-confirmed snapshot but cannot author or infer authority.
 
 The exact `senior_mechanical_engineer`, `project_manager`,
 `workshop_in_charge` and `document_controller` claims are the approved
@@ -88,7 +97,6 @@ Before any role-dependent result is returned, the command compares that JWT
 claim with the current protected `auth.users.raw_app_meta_data.role` value and
 the active profile mirror. A stale claim is denied rather than relying on its
 normalised role alone.
-4. record state/source ownership for command eligibility.
 
 Unknown or missing roles receive no privileged application role. Email domains,
 names, editable metadata and client-provided role strings are never authority.

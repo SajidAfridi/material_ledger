@@ -10,14 +10,17 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_material_return_strings.dart';
 import '../../../../shared/models/yorks_v1_material_return_workflow.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/repositories/yorks_v1_logistics_repository.dart';
 import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
+import '../yorks_v1_feature_action_access.dart';
 
 class YorksV1MaterialReturnsScreen extends ConsumerStatefulWidget {
   const YorksV1MaterialReturnsScreen({super.key});
@@ -42,6 +45,13 @@ class _YorksV1MaterialReturnsScreenState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final createAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.returnsCreate,
+      legacyAllowed: role?.canCreateMaterialReturn == true,
+      anyProject: true,
+    );
     final query = YorksV1MaterialReturnRegisterQuery(
       state: _state,
       search: _searchController.text.trim(),
@@ -75,15 +85,17 @@ class _YorksV1MaterialReturnsScreenState
                 description: YorksV1MaterialReturnStrings.centreDescription
                     .active(language),
                 actions: [
-                  if (role?.canCreateMaterialReturn == true)
+                  if (createAccess.isVisible)
                     PrimaryButton(
                       label: YorksV1MaterialReturnStrings.newReturn.active(
                         language,
                       ),
                       icon: Icons.add_rounded,
                       isExpanded: false,
-                      onPressed: () =>
-                          context.go(RoutePaths.yorksV1MaterialReturnNew),
+                      onPressed: createAccess.canWrite
+                          ? () =>
+                                context.go(RoutePaths.yorksV1MaterialReturnNew)
+                          : null,
                     ),
                 ],
               ),
@@ -106,13 +118,25 @@ class _YorksV1MaterialReturnsScreenState
                     yorksV1MaterialReturnRegisterProvider(query),
                   ),
                 ),
-                data: (items) => items.isEmpty
-                    ? _ReturnEmpty(language: language)
-                    : _ReturnRegister(
-                        items: items,
-                        language: language,
-                        compact: compact,
-                      ),
+                data: (items) {
+                  final visibleItems = items
+                      .where(
+                        (item) => yorksV1CanReadProjectRecord(
+                          permissionState,
+                          YorksV1CapabilityKeys.returnsView,
+                          legacyAllowed: true,
+                          projectId: item.projectId,
+                        ),
+                      )
+                      .toList(growable: false);
+                  return visibleItems.isEmpty
+                      ? _ReturnEmpty(language: language)
+                      : _ReturnRegister(
+                          items: visibleItems,
+                          language: language,
+                          compact: compact,
+                        );
+                },
               ),
             ],
           ),
@@ -493,6 +517,14 @@ class _YorksV1MaterialReturnEditorScreenState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final createAccess = yorksV1FeatureActionAccess(
+      ref.watch(yorksV1CurrentPermissionSnapshotProvider),
+      YorksV1CapabilityKeys.returnsCreate,
+      legacyAllowed: role?.canCreateMaterialReturn == true,
+      projectId: _projectId,
+      anyProject: _projectId == null,
+    );
     final projects = ref.watch(yorksV1MaterialReturnProjectsProvider);
     final workspace = _projectId == null
         ? null
@@ -568,7 +600,7 @@ class _YorksV1MaterialReturnEditorScreenState
                         ),
                       ),
                   ],
-                  onChanged: _working
+                  onChanged: _working || !createAccess.canWrite
                       ? null
                       : (value) => setState(() {
                           _projectId = value;
@@ -599,8 +631,13 @@ class _YorksV1MaterialReturnEditorScreenState
                     )),
                   ),
                 ),
-                data: (value) =>
-                    _buildEditor(context, language, value, compact),
+                data: (value) => _buildEditor(
+                  context,
+                  language,
+                  value,
+                  compact,
+                  enabled: createAccess.canWrite,
+                ),
               ),
           ],
         ),
@@ -612,8 +649,9 @@ class _YorksV1MaterialReturnEditorScreenState
     BuildContext context,
     AppLanguage language,
     YorksV1MaterialReturnCreationWorkspace workspace,
-    bool compact,
-  ) {
+    bool compact, {
+    required bool enabled,
+  }) {
     final scopeId = workspace.scopes.any((scope) => scope.id == _scopeId)
         ? _scopeId
         : workspace.scopes.firstOrNull?.id;
@@ -647,13 +685,14 @@ class _YorksV1MaterialReturnEditorScreenState
                         child: Text(scope.name),
                       ),
                   ],
-                  onChanged: _working
+                  onChanged: _working || !enabled
                       ? null
                       : (value) => setState(() => _scopeId = value),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 TextField(
                   controller: _purposeController,
+                  enabled: enabled && !_working,
                   decoration: InputDecoration(
                     labelText: YorksV1MaterialReturnStrings.purpose.active(
                       language,
@@ -681,7 +720,7 @@ class _YorksV1MaterialReturnEditorScreenState
                               child: Text(scope.name),
                             ),
                         ],
-                        onChanged: _working
+                        onChanged: _working || !enabled
                             ? null
                             : (value) => setState(() => _scopeId = value),
                       ),
@@ -691,6 +730,7 @@ class _YorksV1MaterialReturnEditorScreenState
                       flex: 2,
                       child: TextField(
                         controller: _purposeController,
+                        enabled: enabled && !_working,
                         decoration: InputDecoration(
                           labelText: YorksV1MaterialReturnStrings.purpose
                               .active(language),
@@ -704,6 +744,7 @@ class _YorksV1MaterialReturnEditorScreenState
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _noteController,
+                enabled: enabled && !_working,
                 minLines: 2,
                 maxLines: 4,
                 decoration: InputDecoration(
@@ -716,7 +757,9 @@ class _YorksV1MaterialReturnEditorScreenState
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: OutlinedButton.icon(
-                  onPressed: _working ? null : () => _pickDate(context),
+                  onPressed: _working || !enabled
+                      ? null
+                      : () => _pickDate(context),
                   icon: const Icon(Icons.event_outlined),
                   label: Text(
                     _requestedDate == null
@@ -738,7 +781,7 @@ class _YorksV1MaterialReturnEditorScreenState
           customRows: _customRows,
           units: workspace.units,
           compact: compact,
-          enabled: !_working,
+          enabled: enabled && !_working,
           onAddCustom: () => setState(() {
             _customRows.add(
               _CustomReturnRow(unit: workspace.units.firstOrNull),
@@ -760,7 +803,7 @@ class _YorksV1MaterialReturnEditorScreenState
               child: SecondaryButton(
                 label: YorksV1MaterialReturnStrings.saveDraft.active(language),
                 icon: Icons.save_outlined,
-                onPressed: _working
+                onPressed: _working || !enabled
                     ? null
                     : () => _save(workspace, submit: false),
               ),
@@ -773,7 +816,7 @@ class _YorksV1MaterialReturnEditorScreenState
                 ),
                 icon: Icons.send_rounded,
                 isLoading: _working,
-                onPressed: _working
+                onPressed: _working || !enabled
                     ? null
                     : () => _save(workspace, submit: true),
               ),
@@ -838,6 +881,14 @@ class _YorksV1MaterialReturnEditorScreenState
     YorksV1MaterialReturnCreationWorkspace workspace, {
     required bool submit,
   }) async {
+    final role = ref.read(yorksV1CurrentRoleProvider);
+    final access = yorksV1FeatureActionAccess(
+      ref.read(yorksV1CurrentPermissionSnapshotProvider),
+      YorksV1CapabilityKeys.returnsCreate,
+      legacyAllowed: role?.canCreateMaterialReturn == true,
+      projectId: workspace.projectId,
+    );
+    if (!access.canWrite) return;
     final language = ref.read(languageProvider);
     if (_purposeController.text.trim().isEmpty) {
       _toast(
@@ -1370,6 +1421,7 @@ class _YorksV1MaterialReturnDetailScreenState
     final detail = ref.watch(
       yorksV1ProjectMaterialReturnProvider(widget.returnId),
     );
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final compact = MediaQuery.sizeOf(context).width < 820;
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -1388,7 +1440,16 @@ class _YorksV1MaterialReturnDetailScreenState
               yorksV1ProjectMaterialReturnProvider(widget.returnId),
             ),
           ),
-          data: (value) => _detailBody(value, language, compact),
+          data: (value) => YorksV1ProjectReadBoundary(
+            allowed: yorksV1CanReadProjectRecord(
+              permissionState,
+              YorksV1CapabilityKeys.returnsView,
+              legacyAllowed: true,
+              projectId: value.projectId,
+            ),
+            language: language,
+            child: _detailBody(value, language, compact),
+          ),
         ),
       ),
     );
@@ -1428,13 +1489,32 @@ class _YorksV1MaterialReturnDetailScreenState
     AppLanguage language,
     bool compact,
   ) {
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final createAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.returnsCreate,
+      legacyAllowed: detail.canEdit || detail.canSubmit,
+      projectId: detail.projectId,
+    );
+    final approveAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.returnsApprove,
+      legacyAllowed: detail.canApprove || detail.canReturnForChanges,
+      projectId: detail.projectId,
+    );
+    final dispatchAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.returnsDispatch,
+      legacyAllowed: detail.canDispatch,
+      projectId: detail.projectId,
+    );
     final actions = <Widget>[
-      if (detail.canEdit)
+      if (detail.canEdit && createAccess.isVisible)
         SecondaryButton(
           label: YorksV1MaterialReturnStrings.saveDraft.active(language),
           icon: Icons.edit_outlined,
           isExpanded: compact,
-          onPressed: _working
+          onPressed: _working || !createAccess.canWrite
               ? null
               : () => context.go(
                   RoutePaths.yorksV1MaterialReturnEditPath(
@@ -1443,57 +1523,61 @@ class _YorksV1MaterialReturnDetailScreenState
                   ),
                 ),
         ),
-      if (detail.canSubmit)
+      if (detail.canSubmit && createAccess.isVisible)
         PrimaryButton(
           label: YorksV1MaterialReturnStrings.submitForApproval.active(
             language,
           ),
           icon: Icons.send_rounded,
           isExpanded: compact,
-          onPressed: _working ? null : () => _submit(detail),
+          onPressed: _working || !createAccess.canWrite
+              ? null
+              : () => _submit(detail),
         ),
-      if (detail.canApprove)
+      if (detail.canApprove && approveAccess.isVisible)
         PrimaryButton(
           label: YorksV1MaterialReturnStrings.approve.active(language),
           icon: Icons.verified_outlined,
           isExpanded: compact,
-          onPressed: _working
+          onPressed: _working || !approveAccess.canWrite
               ? null
               : () =>
                     _decide(detail, YorksV1ProjectMaterialReturnState.approved),
         ),
-      if (detail.canReturnForChanges)
+      if (detail.canReturnForChanges && approveAccess.isVisible)
         SecondaryButton(
           label: YorksV1MaterialReturnStrings.returnForChanges.active(language),
           icon: Icons.undo_rounded,
           isExpanded: compact,
-          onPressed: _working
+          onPressed: _working || !approveAccess.canWrite
               ? null
               : () => _decisionWithReason(
                   detail,
                   YorksV1ProjectMaterialReturnState.returnedForChanges,
                 ),
         ),
-      if (detail.canApprove)
+      if (detail.canApprove && approveAccess.isVisible)
         SecondaryButton(
           label: YorksV1MaterialReturnStrings.reject.active(language),
           icon: Icons.close_rounded,
           isExpanded: compact,
-          onPressed: _working
+          onPressed: _working || !approveAccess.canWrite
               ? null
               : () => _decisionWithReason(
                   detail,
                   YorksV1ProjectMaterialReturnState.rejected,
                 ),
         ),
-      if (detail.canDispatch)
+      if (detail.canDispatch && dispatchAccess.isVisible)
         PrimaryButton(
           label: YorksV1MaterialReturnStrings.dispatchToWarehouse.active(
             language,
           ),
           icon: Icons.local_shipping_outlined,
           isExpanded: compact,
-          onPressed: _working ? null : () => _dispatch(detail),
+          onPressed: _working || !dispatchAccess.canWrite
+              ? null
+              : () => _dispatch(detail),
         ),
       if (detail.canConfirm)
         PrimaryButton(

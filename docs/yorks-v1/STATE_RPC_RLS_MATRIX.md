@@ -117,8 +117,14 @@ tables/functions.
 | `v1_dispatch_materials` | Procurement/Admin | MR, approved lines, reservations, inventory | yes | dispatch/lines, reservation consumption, stock movements, state, audit/notification |
 | `v1_confirm_receipt` | Assigned Project/Site Engineer/Admin | dispatch/MR/receipt version | yes | review/lines, exact good/missing/damaged totals, state, audit/notification; appends receipt-reviewed Delivery Report revision when a DO exists |
 | `v1_generate_delivery_order` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, Procurement/Admin after committed dispatch | dispatch/current DO revision; optional later review link | yes | immutable dispatch-quantity revision before review, or immutable receipt-reviewed good-quantity Delivery Report revision after review; document link, audit |
-| `admin-users` Edge commands | Active exact Admin or Senior Mechanical Engineer | live Auth role, active actor, stable app-user target; action-specific input | yes for mutations | Auth mutation plus safe server audit; last-active-Admin invariant retained |
+| `admin-users` Edge commands | Active actor with the exact action capability, bounded target hierarchy and exact Admin-only legacy recovery | live Auth/profile, stable app-user target, singular server-owned role/claims, self/target checks and HMAC-bound idempotency | yes for mutations | resumable Auth mutation plus exact actor/action audit; last-active-Admin and reconciliation invariants retained |
 | `v1_get/set_user_commercial_capability` | Active exact Admin or Senior Mechanical Engineer | live exact actor, target Auth user; reason and idempotency for writes | writes only | safe capability envelope/override plus audit; no commercial record data returned |
+| `v1_get_current_permission_snapshot` | Any active exact Yorks role | live exact actor and monotonically increasing permission revision | no | role-safe effective capability/scope projection for the authenticated actor; no target directory or commercial data |
+| `v1_get_user_permission_workspace` | Active permission administrator | live exact actor, stable target identity and delegation ceiling | no | target role baseline, active explicit assignments, effective source/scope/runtime state and revision; no protected domain records |
+| `v1_set_user_permission_assignment` | Active permission administrator within delegation ceiling | target/current revision, capability/effect/scope/project set/validity | yes | one current grant/deny assignment, normalized project scopes, incremented target revision, append-only change event and trusted audit |
+| `v1_clear_user_permission_assignment` | Active permission administrator within delegation ceiling | target/current revision and assignment | yes | retire the current assignment, increment target revision and append history/audit; seeded role default remains unchanged |
+| `v1_apply_user_permission_changes` | Active permission administrator within delegation ceiling | target/current revision and complete typed delta array | yes | validate all set/clear deltas, then atomically apply normalized assignments/scopes, increment target revision once and append one event per delta plus trusted transaction audit; any invalid delta leaves no effect |
+| `v1_list_user_permission_history` | Active permission administrator | target plus stable time/ID cursor | no | paged append-only access history without domain data |
 | `v1_create_project_material_return` / `v1_save_project_material_return` | Assigned Project/Site Engineer, organization-wide Engineering role or Admin | project/scope/draft version | yes | project-wide draft and replaceable delivered/custom lines; no stock effect |
 | `v1_submit_project_material_return` | Draft creator or authorized Engineering/Admin | return/version, project counter, source receipt lines | yes | controlled number, frozen snapshots, eligibility recheck, awaiting approval, audit/notification |
 | `v1_decide_project_material_return` | Assigned/global Project Engineer or Admin | return/version and decision | yes | approved, returned-for-changes or rejected state plus immutable reason/actor evidence |
@@ -173,6 +179,7 @@ membership.
 | Own profile | R/U non-authority fields | R/U non-authority fields | R/U non-authority fields | R/U non-authority fields |
 | Other profiles/team picker | R limited active directory | R limited active directory | R limited active directory | R; provision/disable via server |
 | Capabilities | R own effective | R own effective | R own effective | R/RPC manage |
+| Capability catalogue/templates/assignments/history | own effective snapshot only | own effective snapshot only | own effective snapshot only | protected workspace R/RPC only; no direct table mutation |
 | Assigned projects/scopes | R/C/U assigned | R/C/U assigned | R running, no C/U | R/RPC controlled manage |
 | Project memberships | R; RPC manage assigned project | R, no manage after create | R, no write | R/RPC |
 | Assigned BOQ groups/columns/rows | R/C/U | R/C/U | R only | R/C/U |
@@ -295,3 +302,15 @@ Every relevant migration/test must prove at least:
     never merge automatically, duplicate file/cutoff/idempotency identities do
     not duplicate stock, and any failed strict row leaves no partial supplier,
     receipt, movement, balance, document or audit result.
+17. a permission administrator cannot mutate their own effective access, grant
+    outside their delegation ceiling, remove/expire the last active permission
+    administrator, submit an unsupported scope or create conflicting active
+    assignments;
+18. an expired/revoked/inactive-user assignment is ineffective, stale target
+    revisions fail without partial change, and repeated idempotency keys do not
+    duplicate assignment/history/audit rows;
+19. ordinary authenticated clients cannot insert/update/delete capability,
+    template, assignment, project-scope, revision, history or parity data;
+20. the seeded shadow resolver reproduces the current role/membership and
+    commercial-override decisions with zero unexplained allow/deny differences
+    before any protected consumer is cut over.

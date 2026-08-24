@@ -10,13 +10,18 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/permissions_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_arrangement_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_arrangement_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 late SharedPreferences _preferences;
 
@@ -405,6 +410,9 @@ Future<void> _pumpArrangement(
       overrides: [
         canManageCommercialsProvider.overrideWithValue(true),
         canViewCommercialsProvider.overrideWithValue(true),
+        yorksV1MaterialRequestDetailProvider(
+          'request-1',
+        ).overrideWith((ref) async => _arrangementRequest),
         yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
       ],
       child: const YorksV1ArrangementScreen(requestId: 'request-1'),
@@ -481,6 +489,11 @@ Widget _app({required List<Override> overrides, required Widget child}) =>
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
+        yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+          (ref) => YorksV1TestPermissionController(
+            yorksV1TrustedFeaturePermissionState(),
+          ),
+        ),
         ...overrides,
       ],
       child: MaterialApp(
@@ -527,6 +540,34 @@ final _workingArrangementWorkspace = YorksV1ArrangementWorkspace(
   canSave: true,
   canDecide: false,
   arrangements: [_workingArrangement],
+);
+
+final _arrangementRequest = YorksV1MaterialRequest(
+  id: 'request-1',
+  projectId: 'project-1',
+  projectReference: 'YRA-322',
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeId: 'common',
+  scopeName: 'Common / All Buildings',
+  state: YorksV1MaterialRequestState.arranging,
+  recordVersion: 4,
+  createdAt: DateTime.utc(2026, 8, 8),
+  updatedAt: DateTime.utc(2026, 8, 9),
+  timing: YorksV1MaterialRequestTiming.normal,
+  requestNumber: 'YRA-322-MR101',
+  title: 'Arrangement test request',
+  requesterDisplayName: 'Project Engineer',
+  requesterProjectRole: 'Project Engineer',
+  lines: const [
+    YorksV1MaterialRequestLine(
+      id: 'request-line-1',
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: 'Motorized smoke damper',
+      quantity: '11',
+      unit: 'Nos',
+    ),
+  ],
 );
 
 final _approvalArrangementWorkspace = YorksV1ArrangementWorkspace(

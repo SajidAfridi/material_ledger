@@ -51,6 +51,74 @@ void main() {
   }
 
   group('Yorks V1 user provisioning adapter', () {
+    test(
+      'confirmed enforced users viewer refreshes without a legacy config role',
+      () async {
+        final commands = <Map<String, dynamic>>[];
+        final container = await connectedContainer(
+          yorksV1Foundation: true,
+          commands: commands,
+        );
+
+        await container
+            .read(usersProvider.notifier)
+            .refreshFromServer(permissionConfirmed: true);
+
+        expect(commands.single, containsPair('action', 'list'));
+      },
+    );
+
+    test(
+      'unconfirmed non-configuration viewer cannot request the directory',
+      () async {
+        final commands = <Map<String, dynamic>>[];
+        final container = await connectedContainer(
+          yorksV1Foundation: true,
+          commands: commands,
+        );
+
+        await expectLater(
+          container.read(usersProvider.notifier).refreshFromServer(),
+          throwsStateError,
+        );
+        expect(commands, isEmpty);
+      },
+    );
+
+    test('directory trusts only the exact primary role projection', () async {
+      final commands = <Map<String, dynamic>>[];
+      final container = await connectedContainer(
+        yorksV1Foundation: true,
+        commands: commands,
+        invocation: (body) async {
+          commands.add(Map<String, dynamic>.from(body));
+          return {
+            'ok': true,
+            'users': [
+              {
+                'appUserId': 'usr-exact-role',
+                'email': 'manager@yorks.test',
+                'fullName': 'Project Manager',
+                'role': 'project_manager',
+                // Historical/invalid secondary claims must never become a
+                // connected identity projection.
+                'roles': ['project_manager', 'admin'],
+                'active': true,
+              },
+            ],
+          };
+        },
+      );
+
+      await container
+          .read(usersProvider.notifier)
+          .refreshFromServer(permissionConfirmed: true);
+
+      final user = container.read(usersProvider).single;
+      expect(user.yorksV1RoleCache, YorksV1Role.projectManager);
+      expect(user.yorksV1Roles, [YorksV1Role.projectManager]);
+    });
+
     test('creates an exact V1 role without client capability claims', () async {
       final commands = <Map<String, dynamic>>[];
       final container = await connectedContainer(
@@ -72,6 +140,7 @@ void main() {
       expect(commands.single['role'], 'project_engineer');
       expect(commands.single.containsKey('caps'), false);
       expect(commands.single.containsKey('legacyShell'), false);
+      expect(commands.single.containsKey('roles'), false);
       expect(
         Uuid.isValidUUID(fromString: commands.single['idempotencyKey']),
         isTrue,
@@ -125,6 +194,10 @@ void main() {
         ]);
         expect(
           commands.every((command) => !command.containsKey('caps')),
+          isTrue,
+        );
+        expect(
+          commands.every((command) => !command.containsKey('roles')),
           isTrue,
         );
         expect(senior.role, UserRole.engineer);
@@ -191,10 +264,6 @@ void main() {
       final changed = await notifier.setYorksV1Role(
         user.id,
         YorksV1Role.seniorMechanicalEngineer,
-        roles: const [
-          YorksV1Role.seniorMechanicalEngineer,
-          YorksV1Role.projectEngineer,
-        ],
       );
 
       expect(changed, true);
@@ -204,10 +273,11 @@ void main() {
         commands.single,
         containsPair('role', 'senior_mechanical_engineer'),
       );
-      expect(commands.single['roles'], [
-        'senior_mechanical_engineer',
-        'project_engineer',
-      ]);
+      expect(commands.single.containsKey('roles'), false);
+      final updated = container
+          .read(usersProvider)
+          .singleWhere((candidate) => candidate.id == user.id);
+      expect(updated.yorksV1Roles, [YorksV1Role.seniorMechanicalEngineer]);
       expect(
         Uuid.isValidUUID(fromString: commands.single['idempotencyKey']),
         isTrue,
@@ -394,11 +464,16 @@ void main() {
         await tester.tap(find.byType(FloatingActionButton));
         await tester.pumpAndSettle();
 
+        expect(find.text('Additional roles (optional)'), findsNothing);
+        expect(find.byType(FilterChip), findsNothing);
+        await tester.tap(find.byType(DropdownButtonFormField<YorksV1Role>));
+        await tester.pumpAndSettle();
         expect(find.text('Project Engineer'), findsOneWidget);
-        expect(find.text('Site Engineer'), findsOneWidget);
+        expect(find.text('Site Engineer'), findsWidgets);
         expect(find.text('Procurement'), findsOneWidget);
         expect(find.text('Admin'), findsOneWidget);
         expect(find.text('Engineer'), findsNothing);
+        expect(find.byType(FilterChip), findsNothing);
       },
     );
 

@@ -24,9 +24,12 @@ import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_boq_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 const _draftId = 'mobile-mr-draft';
 const _projectId = 'mobile-mr-project';
@@ -1283,6 +1286,11 @@ Widget _scope({
 }) => ProviderScope(
   overrides: [
     sharedPreferencesProvider.overrideWithValue(_preferences),
+    yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+      (ref) => YorksV1TestPermissionController(
+        yorksV1TrustedFeaturePermissionState(),
+      ),
+    ),
     ...overrides,
   ],
   child: materialApp

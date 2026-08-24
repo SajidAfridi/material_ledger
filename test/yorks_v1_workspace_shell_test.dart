@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,11 +7,15 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/features/login/presentation/screens/login_screen.dart';
 import 'package:material_ledger/shared/models/app_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_permission_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -90,6 +96,68 @@ void main() {
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
+
+  testWidgets(
+    'connected shell verifies first snapshot without painting child or nav',
+    (tester) async {
+      _setViewport(tester, const Size(360, 800));
+      addTearDown(() => _resetViewport(tester));
+      final preferences = await SharedPreferences.getInstance();
+      final client = SupabaseClient(
+        'https://example.supabase.co',
+        'test-publishable-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      );
+      final controller = YorksV1CurrentPermissionSnapshotController(
+        enabled: true,
+        authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        client: null,
+        repository: _PendingPermissionRepository(),
+        revisionSignalSubscription:
+            ({required onSignal, required onUnavailable}) async => false,
+      );
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => const YorksV1WorkspaceShell(
+              child: SizedBox(key: ValueKey('protected-workspace-child')),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            supabaseClientProvider.overrideWithValue(client),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => controller,
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('yorks-permission-verification-shell')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('protected-workspace-child')),
+        findsNothing,
+      );
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'Senior Mechanical Engineer sees approved user configuration and read-only inventory destinations',
@@ -328,4 +396,40 @@ class _ShellTestApp extends StatelessWidget {
       child: MaterialApp.router(routerConfig: router),
     );
   }
+}
+
+class _PendingPermissionRepository implements YorksV1PermissionRepository {
+  @override
+  Future<YorksV1CurrentPermissionSnapshot> getCurrentSnapshot() =>
+      Completer<YorksV1CurrentPermissionSnapshot>().future;
+
+  @override
+  Future<YorksV1UserAdminOptions> getUserAdminOptions({
+    String? targetAppUserId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> getUserWorkspace({
+    required String targetAppUserId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> setAssignment(
+    YorksV1SetPermissionAssignmentInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> clearAssignment(
+    YorksV1ClearPermissionAssignmentInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> applyChanges(
+    YorksV1ApplyPermissionChangesInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1PermissionHistoryPage> listHistory(
+    YorksV1PermissionHistoryQuery query,
+  ) => throw UnimplementedError();
 }

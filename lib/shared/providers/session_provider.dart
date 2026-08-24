@@ -257,12 +257,6 @@ class AuthController {
     final yorksV1Role = YorksV1Role.fromServerClaim(
       authUser.appMetadata['role'],
     );
-    final rawYorksV1Roles = authUser.appMetadata['roles'];
-    final yorksV1Roles =
-        (rawYorksV1Roles is List ? rawYorksV1Roles : const <Object>[])
-            .map(YorksV1Role.fromServerClaim)
-            .whereType<YorksV1Role>()
-            .toList(growable: false);
     if (resolvedRole == null || yorksV1Role == null) {
       return SignInResult.accountSetupRequired;
     }
@@ -302,7 +296,6 @@ class AuthController {
               : '',
           role: resolvedRole,
           yorksV1Role: yorksV1Role,
-          yorksV1Roles: yorksV1Roles.isEmpty ? [yorksV1Role] : yorksV1Roles,
           mustChangePassword: mustChange,
         );
 

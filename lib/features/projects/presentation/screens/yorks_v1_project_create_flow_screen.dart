@@ -20,6 +20,7 @@ import '../../../../shared/models/yorks_v1_project_portfolio.dart';
 import '../../../../shared/models/yorks_v1_project_creation_draft.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/models/yorks_v1_project_team_directory_member.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
@@ -29,7 +30,9 @@ import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_document_file_service.dart';
+import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
 
 /// The normalized Yorks V1 R35 project creation experience.
 ///
@@ -215,6 +218,15 @@ class _YorksV1ProjectCreateFlowScreenState
     final language = ref.watch(languageProvider);
     final authUserId = ref.watch(yorksV1AuthUserIdProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final permission = yorksV1FeatureActionAccess(
+      permissionState,
+      _isEditing
+          ? YorksV1CapabilityKeys.projectsEdit
+          : YorksV1CapabilityKeys.projectsCreate,
+      legacyAllowed: role?.canCreateProject == true,
+      projectId: widget.editItem?.project.id,
+    );
 
     if (authUserId == null || authUserId.trim().isEmpty) {
       return _AccessState(
@@ -223,14 +235,13 @@ class _YorksV1ProjectCreateFlowScreenState
         language: language,
       );
     }
-    if (role == null || !role.canCreateProject) {
+    if (role == null || !permission.isVisible) {
       return _AccessState(
         title: YorksV1ProjectStrings.noPermission,
         description: YorksV1ProjectStrings.noPermissionDescription,
         language: language,
       );
     }
-
     if (_activeAuthUserId != authUserId) {
       _draftSaveTimer?.cancel();
       _pendingDraft = null;
@@ -259,6 +270,7 @@ class _YorksV1ProjectCreateFlowScreenState
 
     final saving =
         _isCreating ||
+        !permission.canWrite ||
         ((commandState.operation ==
                     YorksV1ProjectCommandOperation.createProject ||
                 commandState.operation ==
@@ -1183,6 +1195,16 @@ class _YorksV1ProjectCreateFlowScreenState
 
   Future<void> _createProject() async {
     if (_isCreating) return;
+    final role = ref.read(yorksV1CurrentRoleProvider);
+    final access = yorksV1FeatureActionAccess(
+      ref.read(yorksV1CurrentPermissionSnapshotProvider),
+      _isEditing
+          ? YorksV1CapabilityKeys.projectsEdit
+          : YorksV1CapabilityKeys.projectsCreate,
+      legacyAllowed: role?.canCreateProject == true,
+      projectId: widget.editItem?.project.id,
+    );
+    if (!access.canWrite) return;
     await _flushPendingDraft();
     final draft = _currentDraft();
     if (!_isEditing && _hasAttachmentsNeedingReselect(draft)) {

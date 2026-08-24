@@ -14,6 +14,7 @@ import '../../../../shared/models/yorks_v1_inventory_workbook.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -24,6 +25,8 @@ import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
+import '../yorks_v1_feature_action_access.dart';
 
 /// One responsive view for Procurement arrangement and immutable history.
 /// Server-derived action flags decide whether the current viewer can edit;
@@ -57,6 +60,8 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
         .watch(yorksV1FeatureFlagsProvider)
         .legacyArrangementReview;
     final workspace = ref.watch(yorksV1ArrangementWorkspaceProvider(requestId));
+    final request = ref.watch(yorksV1MaterialRequestDetailProvider(requestId));
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final mobile = YorksMobileUi.isActive(context) && !embedded;
     final compactRoute =
         !embedded &&
@@ -69,22 +74,58 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
         onRetry: () =>
             ref.invalidate(yorksV1ArrangementWorkspaceProvider(requestId)),
       ),
-      data: (value) => mobile
-          ? _MobileArrangementWorkspaceBody(
-              workspace: value,
-              language: language,
-              legacyArrangementReview: legacyArrangementReview,
-              onCompleted: onCompleted,
-            )
-          : _ArrangementWorkspaceBody(
-              workspace: value,
-              language: language,
-              legacyArrangementReview: legacyArrangementReview,
-              showPageHeader: !compactRoute && !embedded,
-              directEditor: embedded || compactRoute,
-              onCompleted: onCompleted,
-              onClose: onClose,
-            ),
+      data: (value) {
+        if ((permissionState.snapshot == null &&
+                permissionState.isInitialLoading) ||
+            (request.valueOrNull == null && request.isLoading)) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final requestValue = request.valueOrNull;
+        if (requestValue == null) {
+          return YorksV1ProjectReadBoundary(
+            allowed: false,
+            language: language,
+            child: const SizedBox.shrink(),
+          );
+        }
+        final canReadRequest = yorksV1CanReadProjectRecord(
+          permissionState,
+          YorksV1CapabilityKeys.materialRequestsView,
+          legacyAllowed: true,
+          projectId: requestValue.projectId,
+        );
+        final arrangeAccess = yorksV1FeatureActionAccess(
+          permissionState,
+          YorksV1CapabilityKeys.procurementArrange,
+          legacyAllowed: value.canBegin || value.canSave,
+          projectId: requestValue.projectId,
+        );
+        final content = mobile
+            ? _MobileArrangementWorkspaceBody(
+                workspace: value,
+                language: language,
+                legacyArrangementReview: legacyArrangementReview,
+                showArrange: arrangeAccess.isVisible,
+                canArrange: arrangeAccess.canWrite,
+                onCompleted: onCompleted,
+              )
+            : _ArrangementWorkspaceBody(
+                workspace: value,
+                language: language,
+                legacyArrangementReview: legacyArrangementReview,
+                showArrange: arrangeAccess.isVisible,
+                canArrange: arrangeAccess.canWrite,
+                showPageHeader: !compactRoute && !embedded,
+                directEditor: embedded || compactRoute,
+                onCompleted: onCompleted,
+                onClose: onClose,
+              );
+        return YorksV1ProjectReadBoundary(
+          allowed: canReadRequest,
+          language: language,
+          child: content,
+        );
+      },
     );
     if (mobile) {
       return Scaffold(
@@ -263,18 +304,22 @@ class _MobileArrangementWorkspaceBody extends ConsumerWidget {
     required this.workspace,
     required this.language,
     required this.legacyArrangementReview,
+    required this.showArrange,
+    required this.canArrange,
     this.onCompleted,
   });
 
   final YorksV1ArrangementWorkspace workspace;
   final AppLanguage language;
   final bool legacyArrangementReview;
+  final bool showArrange;
+  final bool canArrange;
   final VoidCallback? onCompleted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final working = workspace.workingArrangement;
-    if (working != null && workspace.canSave) {
+    if (working != null && workspace.canSave && showArrange) {
       final inventory = ref.watch(yorksV1ArrangementInventoryProvider);
       return inventory.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -288,6 +333,7 @@ class _MobileArrangementWorkspaceBody extends ConsumerWidget {
           inventoryItems: items,
           language: language,
           mobileFlow: true,
+          enabled: canArrange,
           onCompleted: onCompleted,
         ),
       );
@@ -306,8 +352,12 @@ class _MobileArrangementWorkspaceBody extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (workspace.canBegin && working == null)
-            _BeginArrangementAction(workspace: workspace, language: language),
+          if (workspace.canBegin && showArrange && working == null)
+            _BeginArrangementAction(
+              workspace: workspace,
+              language: language,
+              enabled: canArrange,
+            ),
           if (current != null) ...[
             YorksMobilePageTitle(
               eyebrow: YorksV1ArrangementStrings.arrangementReview.active(
@@ -340,6 +390,8 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
     required this.workspace,
     required this.language,
     required this.legacyArrangementReview,
+    required this.showArrange,
+    required this.canArrange,
     required this.showPageHeader,
     required this.directEditor,
     this.onCompleted,
@@ -349,6 +401,8 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
   final YorksV1ArrangementWorkspace workspace;
   final AppLanguage language;
   final bool legacyArrangementReview;
+  final bool showArrange;
+  final bool canArrange;
   final bool showPageHeader;
   final bool directEditor;
   final VoidCallback? onCompleted;
@@ -357,7 +411,7 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final working = workspace.workingArrangement;
-    final inventory = workspace.canSave
+    final inventory = workspace.canSave && showArrange
         ? ref.watch(yorksV1ArrangementInventoryProvider)
         : const AsyncData<List<YorksV1InventoryItem>>([]);
     return SafeArea(
@@ -401,12 +455,13 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                   _WorkspaceHeader(workspace: workspace),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-                if (workspace.canBegin && working == null)
+                if (workspace.canBegin && showArrange && working == null)
                   _BeginArrangementAction(
                     workspace: workspace,
                     language: language,
+                    enabled: canArrange,
                   ),
-                if (working != null) ...[
+                if (working != null && workspace.canSave && showArrange) ...[
                   _ArrangementEditorSurface(
                     directEditor: directEditor,
                     child: inventory.when(
@@ -424,6 +479,7 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                         arrangement: working,
                         inventoryItems: items,
                         language: language,
+                        enabled: canArrange,
                         onCompleted: onCompleted,
                         onClose: onClose,
                       ),
@@ -562,10 +618,12 @@ class _BeginArrangementAction extends ConsumerStatefulWidget {
   const _BeginArrangementAction({
     required this.workspace,
     required this.language,
+    required this.enabled,
   });
 
   final YorksV1ArrangementWorkspace workspace;
   final AppLanguage language;
+  final bool enabled;
 
   @override
   ConsumerState<_BeginArrangementAction> createState() =>
@@ -589,11 +647,12 @@ class _BeginArrangementActionState
       label: YorksV1ArrangementStrings.startArrangement.primary,
       icon: Icons.playlist_add_check_rounded,
       isLoading: _busy,
-      onPressed: _busy ? null : _begin,
+      onPressed: _busy || !widget.enabled ? null : _begin,
     ),
   );
 
   Future<void> _begin() async {
+    if (!widget.enabled) return;
     setState(() => _busy = true);
     try {
       await ref
@@ -630,6 +689,7 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
     required this.arrangement,
     required this.inventoryItems,
     required this.language,
+    required this.enabled,
     this.mobileFlow = false,
     this.onCompleted,
     this.onClose,
@@ -639,6 +699,7 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
   final YorksV1ProcurementArrangement arrangement;
   final List<YorksV1InventoryItem> inventoryItems;
   final AppLanguage language;
+  final bool enabled;
   final bool mobileFlow;
   final VoidCallback? onCompleted;
   final VoidCallback? onClose;
@@ -723,6 +784,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           validationIssues: _validationIssues,
           procurementNote: _procurementNote,
           busy: _busy,
+          enabled: widget.enabled,
           onChanged: _replace,
           onCreateInventoryItem: _createInventoryItem,
           onSave: _save,
@@ -758,7 +820,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                     suppliers: _suppliers,
                     reasons: _reasons,
                     inventoryItems: _inventoryItems,
-                    enabled: !_busy,
+                    enabled: widget.enabled && !_busy,
                     onChanged: _replace,
                     onCreateInventoryItem: _createInventoryItem,
                     validationIssues: _validationIssues,
@@ -779,7 +841,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                           supplier: _suppliers[line.id]!,
                           reason: _reasons[line.id]!,
                           inventoryItems: _inventoryItems,
-                          enabled: !_busy,
+                          enabled: widget.enabled && !_busy,
                           onChanged: _replace,
                           onCreateInventoryItem: _createInventoryItem,
                           validationMessages:
@@ -804,7 +866,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           const SizedBox(height: AppSpacing.xs),
           TextFormField(
             controller: _procurementNote,
-            enabled: !_busy,
+            enabled: widget.enabled && !_busy,
             minLines: 2,
             maxLines: 4,
             decoration: InputDecoration(
@@ -830,7 +892,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                   icon: Icons.send_rounded,
                   isExpanded: false,
                   isLoading: _busy,
-                  onPressed: _busy ? null : _save,
+                  onPressed: _busy || !widget.enabled ? null : _save,
                 ),
               ],
             ),
@@ -841,6 +903,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   }
 
   void _replace(_EditableArrangementLine value) {
+    if (!widget.enabled) return;
     final previous = _lines[value.arrangementLineId];
     if (value.decision == YorksV1ArrangementDecision.unavailable &&
         previous?.decision != YorksV1ArrangementDecision.unavailable) {
@@ -857,7 +920,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     YorksV1ArrangementLine line,
     _EditableArrangementLine draft,
   ) async {
-    if (_busy) return;
+    if (_busy || !widget.enabled) return;
     YorksV1InventoryWorkspace inventory;
     try {
       inventory = await ref
@@ -926,6 +989,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   }
 
   Future<void> _save() async {
+    if (!widget.enabled) return;
     final canManageCommercials = ref.read(canManageCommercialsProvider);
     final inputs = [
       for (final line in _lines.values)
@@ -1305,6 +1369,7 @@ class _MobileArrangementFlow extends StatefulWidget {
     required this.validationIssues,
     required this.procurementNote,
     required this.busy,
+    required this.enabled,
     required this.onChanged,
     required this.onCreateInventoryItem,
     required this.onSave,
@@ -1323,6 +1388,7 @@ class _MobileArrangementFlow extends StatefulWidget {
   final Map<String, List<String>> validationIssues;
   final TextEditingController procurementNote;
   final bool busy;
+  final bool enabled;
   final ValueChanged<_EditableArrangementLine> onChanged;
   final Future<void> Function(
     YorksV1ArrangementLine line,
@@ -1409,7 +1475,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
               label: YorksV1ArrangementStrings.saveForApproval.active(
                 widget.language,
               ),
-              onPressed: widget.busy
+              onPressed: widget.busy || !widget.enabled
                   ? null
                   : () =>
                         setState(() => _stage = _MobileArrangementStage.review),
@@ -1472,7 +1538,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                       ),
                   ],
                   selected: draft.decision,
-                  enabled: !widget.busy,
+                  enabled: widget.enabled && !widget.busy,
                   onSelected: (decision) {
                     widget.onChanged(
                       draft.copyWith(
@@ -1509,7 +1575,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                 const SizedBox(height: 14),
                 _SourcePicker(
                   value: draft,
-                  enabled: !widget.busy,
+                  enabled: widget.enabled && !widget.busy,
                   onChanged: (value) {
                     widget.onChanged(value);
                     setState(() {});
@@ -1523,7 +1589,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                     value: draft,
                     supplier: widget.suppliers[line.id]!,
                     inventoryItems: widget.inventoryItems,
-                    enabled: !widget.busy,
+                    enabled: widget.enabled && !widget.busy,
                     onChanged: (value) {
                       widget.onChanged(value);
                       setState(() {});
@@ -1538,7 +1604,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                     const SizedBox(height: 14),
                     _ExternalSourceReadinessFields(
                       value: draft,
-                      enabled: !widget.busy,
+                      enabled: widget.enabled && !widget.busy,
                       language: widget.language,
                       requiredByPolicy:
                           widget.workspace.externalSourceReadinessRequired,
@@ -1556,7 +1622,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                         child: _QuantityField(
                           value: draft,
                           controller: widget.arrangedQuantities[line.id]!,
-                          enabled: !widget.busy,
+                          enabled: widget.enabled && !widget.busy,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1577,7 +1643,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                     _UnitCostField(
                       value: draft,
                       controller: widget.unitCosts[line.id]!,
-                      enabled: !widget.busy,
+                      enabled: widget.enabled && !widget.busy,
                     ),
                   ],
                 ],
@@ -1588,7 +1654,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                   _ReasonField(
                     value: draft,
                     controller: widget.reasons[line.id]!,
-                    enabled: !widget.busy,
+                    enabled: widget.enabled && !widget.busy,
                   ),
                   Padding(
                     padding: const EdgeInsets.only(top: 5),
@@ -1619,13 +1685,13 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
           children: [
             SecondaryButton(
               label: YorksV1ArrangementStrings.previous.active(widget.language),
-              onPressed: widget.busy ? null : _previous,
+              onPressed: widget.busy || !widget.enabled ? null : _previous,
             ),
             PrimaryButton(
               label: YorksV1ArrangementStrings.saveAndNext.active(
                 widget.language,
               ),
-              onPressed: widget.busy ? null : _next,
+              onPressed: widget.busy || !widget.enabled ? null : _next,
             ),
           ],
         ),
@@ -1718,7 +1784,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                 ),
                 TextField(
                   controller: widget.procurementNote,
-                  enabled: !widget.busy,
+                  enabled: widget.enabled && !widget.busy,
                   minLines: 3,
                   maxLines: 5,
                   decoration: InputDecoration(
@@ -1734,7 +1800,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
           children: [
             SecondaryButton(
               label: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: widget.busy
+              onPressed: widget.busy || !widget.enabled
                   ? null
                   : () =>
                         setState(() => _stage = _MobileArrangementStage.lines),
@@ -1744,7 +1810,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                 widget.language,
               ),
               isLoading: widget.busy,
-              onPressed: widget.busy ? null : widget.onSave,
+              onPressed: widget.busy || !widget.enabled ? null : widget.onSave,
             ),
           ],
         ),

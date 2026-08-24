@@ -2,6 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 
 import {
   defaultCapsForRoles,
+  hasForbiddenV1ClaimInput,
   provisionableRole,
   provisionableRoles,
 } from "./role_claims.ts";
@@ -24,14 +25,17 @@ Deno.test("all eight exact V1 roles are accepted as primary claims", () => {
   assertEquals(provisionableRole("engineer"), null);
 });
 
-Deno.test("global engineer primary claims keep valid additional roles", () => {
+Deno.test("V1 accepts only one exact server-owned role", () => {
   assertEquals(
     provisionableRoles(
-      ["admin", "senior_mechanical_engineer", "project_engineer"],
+      ["senior_mechanical_engineer"],
       "senior_mechanical_engineer",
     ),
-    ["senior_mechanical_engineer", "admin", "project_engineer"],
+    ["senior_mechanical_engineer"],
   );
+  assertEquals(provisionableRoles(undefined, "project_manager"), [
+    "project_manager",
+  ]);
   assertEquals(
     provisionableRoles(["project_manager", "invalid"], "project_manager"),
     null,
@@ -41,14 +45,20 @@ Deno.test("global engineer primary claims keep valid additional roles", () => {
       ["workshop_in_charge", "document_controller"],
       "workshop_in_charge",
     ),
-    ["workshop_in_charge", "document_controller"],
+    null,
   );
+});
+
+Deno.test("V1 exact-role commands reject legacy and capability input", () => {
+  assertEquals(hasForbiddenV1ClaimInput({ role: "admin" }), false);
+  assertEquals(hasForbiddenV1ClaimInput({ caps: [] }), true);
+  assertEquals(hasForbiddenV1ClaimInput({ legacyShell: false }), true);
 });
 
 Deno.test("role capability defaults are server-derived", () => {
   assertEquals(defaultCapsForRoles(["senior_mechanical_engineer"]), []);
   assertEquals(
-    defaultCapsForRoles(["project_manager", "procurement"]),
+    defaultCapsForRoles(["procurement"]),
     [
       "viewCommercials",
       "rentals",

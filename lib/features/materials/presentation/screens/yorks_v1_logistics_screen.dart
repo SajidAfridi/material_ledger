@@ -14,6 +14,7 @@ import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -22,8 +23,10 @@ import '../../../../shared/providers/yorks_v1_documents_repository_provider.dart
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
+import '../yorks_v1_feature_action_access.dart';
 
 /// Role-aware request logistics. Server-derived action flags distinguish the
 /// Procurement dispatch form from Project/Site Engineer receipt review.
@@ -52,6 +55,7 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final workspace = ref.watch(yorksV1LogisticsWorkspaceProvider(requestId));
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final mobile = YorksMobileUi.isActive(context);
     final compactRoute =
         !mobile &&
@@ -59,15 +63,45 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
     final content = workspace.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => _LogisticsError(onRetry: () => _refresh(ref)),
-      data: (value) => _FocusedLogisticsBody(
-        workspace: value,
-        language: language,
-        onChanged: () => _refresh(ref),
-        showPageHeader: !compactRoute && !mobile,
-        focusReceiptReview: focusReceiptReview,
-        focusedDispatchId: focusedDispatchId,
-        initialDispatchDate: initialDispatchDate,
-      ),
+      data: (value) {
+        final canReadRequest = yorksV1CanReadProjectRecord(
+          permissionState,
+          YorksV1CapabilityKeys.materialRequestsView,
+          legacyAllowed: true,
+          projectId: value.projectId,
+        );
+        final dispatchAccess = yorksV1FeatureActionAccess(
+          permissionState,
+          YorksV1CapabilityKeys.dispatchCreate,
+          legacyAllowed: value.canDispatch,
+          projectId: value.projectId,
+        );
+        final receiptAccess = yorksV1FeatureActionAccess(
+          permissionState,
+          YorksV1CapabilityKeys.receiptsConfirm,
+          legacyAllowed: value.dispatches.any(
+            (dispatch) => dispatch.canConfirmReceipt,
+          ),
+          projectId: value.projectId,
+        );
+        return YorksV1ProjectReadBoundary(
+          allowed: canReadRequest,
+          language: language,
+          child: _FocusedLogisticsBody(
+            workspace: value,
+            language: language,
+            onChanged: () => _refresh(ref),
+            showPageHeader: !compactRoute && !mobile,
+            showDispatch: dispatchAccess.isVisible,
+            canDispatch: dispatchAccess.canWrite,
+            showReceiptReview: receiptAccess.isVisible,
+            canConfirmReceipt: receiptAccess.canWrite,
+            focusReceiptReview: focusReceiptReview,
+            focusedDispatchId: focusedDispatchId,
+            initialDispatchDate: initialDispatchDate,
+          ),
+        );
+      },
     );
     if (mobile) {
       return Scaffold(
@@ -138,6 +172,10 @@ class _FocusedLogisticsBody extends StatefulWidget {
     required this.language,
     required this.onChanged,
     required this.showPageHeader,
+    required this.showDispatch,
+    required this.canDispatch,
+    required this.showReceiptReview,
+    required this.canConfirmReceipt,
     required this.focusReceiptReview,
     required this.focusedDispatchId,
     required this.initialDispatchDate,
@@ -147,6 +185,10 @@ class _FocusedLogisticsBody extends StatefulWidget {
   final AppLanguage language;
   final VoidCallback onChanged;
   final bool showPageHeader;
+  final bool showDispatch;
+  final bool canDispatch;
+  final bool showReceiptReview;
+  final bool canConfirmReceipt;
   final bool focusReceiptReview;
   final String? focusedDispatchId;
   final DateTime? initialDispatchDate;
@@ -186,7 +228,9 @@ class _FocusedLogisticsBodyState extends State<_FocusedLogisticsBody> {
           break;
         }
       }
-      if (target == null || !target.canConfirmReceipt) {
+      if (target == null ||
+          !target.canConfirmReceipt ||
+          !widget.canConfirmReceipt) {
         YorksAppToast.show(
           context,
           title: YorksV1MaterialRequestStrings.recordChanged.primary,
@@ -212,6 +256,10 @@ class _FocusedLogisticsBodyState extends State<_FocusedLogisticsBody> {
     language: widget.language,
     onChanged: widget.onChanged,
     showPageHeader: widget.showPageHeader,
+    showDispatch: widget.showDispatch,
+    canDispatch: widget.canDispatch,
+    showReceiptReview: widget.showReceiptReview,
+    canConfirmReceipt: widget.canConfirmReceipt,
     initialDispatchDate: widget.initialDispatchDate,
   );
 }
@@ -222,6 +270,10 @@ class _LogisticsBody extends StatelessWidget {
     required this.language,
     required this.onChanged,
     required this.showPageHeader,
+    required this.showDispatch,
+    required this.canDispatch,
+    required this.showReceiptReview,
+    required this.canConfirmReceipt,
     required this.initialDispatchDate,
   });
 
@@ -229,20 +281,30 @@ class _LogisticsBody extends StatelessWidget {
   final AppLanguage language;
   final VoidCallback onChanged;
   final bool showPageHeader;
+  final bool showDispatch;
+  final bool canDispatch;
+  final bool showReceiptReview;
+  final bool canConfirmReceipt;
   final DateTime? initialDispatchDate;
 
   @override
   Widget build(BuildContext context) {
     if (YorksMobileUi.isActive(context)) {
-      if (workspace.canDispatch) {
+      if (showDispatch) {
         return _DispatchEditor(
           workspace: workspace,
           onChanged: onChanged,
+          enabled: canDispatch,
           mobileFlow: true,
           initialDispatchDate: initialDispatchDate,
         );
       }
-      return _MobileDispatchHistory(workspace: workspace, onChanged: onChanged);
+      return _MobileDispatchHistory(
+        workspace: workspace,
+        onChanged: onChanged,
+        showReceiptReview: showReceiptReview,
+        canConfirmReceipt: canConfirmReceipt,
+      );
     }
     return SafeArea(
       top: false,
@@ -277,12 +339,13 @@ class _LogisticsBody extends StatelessWidget {
                 ],
                 _WorkspaceHeader(workspace: workspace),
                 const SizedBox(height: AppSpacing.lg),
-                if (workspace.canDispatch) ...[
+                if (showDispatch) ...[
                   NexusSectionCard(
                     title: YorksV1LogisticsStrings.dispatchNow.primary,
                     child: _DispatchEditor(
                       workspace: workspace,
                       onChanged: onChanged,
+                      enabled: canDispatch,
                       initialDispatchDate: initialDispatchDate,
                     ),
                   ),
@@ -310,6 +373,8 @@ class _LogisticsBody extends StatelessWidget {
                                   dispatch: dispatch,
                                   workspace: workspace,
                                   onChanged: onChanged,
+                                  showReceiptReview: showReceiptReview,
+                                  canConfirmReceipt: canConfirmReceipt,
                                 ),
                               ),
                           ],
@@ -328,10 +393,14 @@ class _MobileDispatchHistory extends ConsumerWidget {
   const _MobileDispatchHistory({
     required this.workspace,
     required this.onChanged,
+    required this.showReceiptReview,
+    required this.canConfirmReceipt,
   });
 
   final YorksV1LogisticsWorkspace workspace;
   final VoidCallback onChanged;
+  final bool showReceiptReview;
+  final bool canConfirmReceipt;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -376,6 +445,8 @@ class _MobileDispatchHistory extends ConsumerWidget {
               dispatch: dispatch,
               workspace: workspace,
               onChanged: onChanged,
+              showReceiptReview: showReceiptReview,
+              canConfirmReceipt: canConfirmReceipt,
             ),
             const SizedBox(height: 12),
           ],
@@ -495,12 +566,14 @@ class _DispatchEditor extends ConsumerStatefulWidget {
   const _DispatchEditor({
     required this.workspace,
     required this.onChanged,
+    required this.enabled,
     this.mobileFlow = false,
     this.initialDispatchDate,
   });
 
   final YorksV1LogisticsWorkspace workspace;
   final VoidCallback onChanged;
+  final bool enabled;
   final bool mobileFlow;
   final DateTime? initialDispatchDate;
 
@@ -605,6 +678,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
           quantities: _quantities,
           dispatchDate: _dispatchDate,
           saving: _saving,
+          enabled: widget.enabled,
           onDate: _pickDate,
           onChanged: () => setState(() {}),
           onDispatch: _dispatch,
@@ -625,6 +699,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
                 child: _TextInput(
                   controller: _deliveryReference,
                   label: YorksV1LogisticsStrings.deliveryReference.primary,
+                  enabled: widget.enabled && !_saving,
                 ),
               ),
               SizedBox(
@@ -633,7 +708,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
                   label: _dateLabel(_dispatchDate),
                   isExpanded: false,
                   icon: Icons.calendar_today_outlined,
-                  onPressed: _saving ? null : _pickDate,
+                  onPressed: !widget.enabled || _saving ? null : _pickDate,
                 ),
               ),
               SizedBox(
@@ -641,6 +716,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
                 child: _TextInput(
                   controller: _driver,
                   label: YorksV1LogisticsStrings.driver.primary,
+                  enabled: widget.enabled && !_saving,
                 ),
               ),
               SizedBox(
@@ -648,6 +724,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
                 child: _TextInput(
                   controller: _vehicle,
                   label: YorksV1LogisticsStrings.vehicle.primary,
+                  enabled: widget.enabled && !_saving,
                 ),
               ),
             ],
@@ -662,6 +739,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
             _DispatchCandidateList(
               candidates: candidates,
               controllers: _quantities,
+              enabled: widget.enabled && !_saving,
             ),
           const SizedBox(height: AppSpacing.lg),
           Align(
@@ -671,7 +749,9 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
               icon: Icons.local_shipping_outlined,
               isExpanded: false,
               isLoading: _saving,
-              onPressed: candidates.isEmpty || _saving ? null : _dispatch,
+              onPressed: candidates.isEmpty || _saving || !widget.enabled
+                  ? null
+                  : _dispatch,
             ),
           ),
         ],
@@ -690,6 +770,7 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
   }
 
   Future<void> _dispatch() async {
+    if (!widget.enabled) return;
     if (_deliveryReference.text.trim().isEmpty) {
       _showError(YorksV1LogisticsStrings.deliveryReferenceRequired.primary);
       return;
@@ -784,6 +865,7 @@ class _MobileDispatchEditor extends StatelessWidget {
     required this.quantities,
     required this.dispatchDate,
     required this.saving,
+    required this.enabled,
     required this.onDate,
     required this.onChanged,
     required this.onDispatch,
@@ -796,6 +878,7 @@ class _MobileDispatchEditor extends StatelessWidget {
   final Map<String, TextEditingController> quantities;
   final DateTime dispatchDate;
   final bool saving;
+  final bool enabled;
   final VoidCallback onDate;
   final VoidCallback onChanged;
   final VoidCallback onDispatch;
@@ -830,11 +913,12 @@ class _MobileDispatchEditor extends StatelessWidget {
                     _TextInput(
                       controller: deliveryReference,
                       label: YorksV1LogisticsStrings.deliveryReference.primary,
+                      enabled: enabled && !saving,
                       onChanged: (_) => onChanged(),
                     ),
                     const SizedBox(height: 10),
                     InkWell(
-                      onTap: saving ? null : onDate,
+                      onTap: !enabled || saving ? null : onDate,
                       borderRadius: BorderRadius.circular(12),
                       child: InputDecorator(
                         decoration: InputDecoration(
@@ -855,6 +939,7 @@ class _MobileDispatchEditor extends StatelessWidget {
                           child: _TextInput(
                             controller: driver,
                             label: YorksV1LogisticsStrings.driver.primary,
+                            enabled: enabled && !saving,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -862,6 +947,7 @@ class _MobileDispatchEditor extends StatelessWidget {
                           child: _TextInput(
                             controller: vehicle,
                             label: YorksV1LogisticsStrings.vehicle.primary,
+                            enabled: enabled && !saving,
                           ),
                         ),
                       ],
@@ -885,7 +971,7 @@ class _MobileDispatchEditor extends StatelessWidget {
                     index: index + 1,
                     candidate: candidates[index],
                     controller: quantities[candidates[index].requestLineId]!,
-                    enabled: !saving,
+                    enabled: enabled && !saving,
                     onChanged: onChanged,
                   ),
                   const SizedBox(height: 10),
@@ -905,7 +991,9 @@ class _MobileDispatchEditor extends StatelessWidget {
           ).primary,
           children: [
             FilledButton.icon(
-              onPressed: candidates.isEmpty || saving ? null : onDispatch,
+              onPressed: candidates.isEmpty || saving || !enabled
+                  ? null
+                  : onDispatch,
               icon: saving
                   ? const SizedBox.square(
                       dimension: 17,
@@ -1025,10 +1113,12 @@ class _DispatchCandidateList extends StatelessWidget {
   const _DispatchCandidateList({
     required this.candidates,
     required this.controllers,
+    required this.enabled,
   });
 
   final List<YorksV1DispatchCandidate> candidates;
   final Map<String, TextEditingController> controllers;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -1042,6 +1132,7 @@ class _DispatchCandidateList extends StatelessWidget {
               _DispatchCandidateDesktopRow(
                 candidate: candidate,
                 controller: controllers[candidate.requestLineId]!,
+                enabled: enabled,
               ),
           ],
         );
@@ -1054,6 +1145,7 @@ class _DispatchCandidateList extends StatelessWidget {
               child: _DispatchCandidateMobileCard(
                 candidate: candidate,
                 controller: controllers[candidate.requestLineId]!,
+                enabled: enabled,
               ),
             ),
         ],
@@ -1091,10 +1183,12 @@ class _DispatchCandidateDesktopRow extends StatelessWidget {
   const _DispatchCandidateDesktopRow({
     required this.candidate,
     required this.controller,
+    required this.enabled,
   });
 
   final YorksV1DispatchCandidate candidate;
   final TextEditingController controller;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1131,6 +1225,7 @@ class _DispatchCandidateDesktopRow extends StatelessWidget {
           child: _QuantityInput(
             controller: controller,
             label: YorksV1LogisticsStrings.dispatchQuantity.primary,
+            enabled: enabled,
           ),
         ),
       ],
@@ -1142,10 +1237,12 @@ class _DispatchCandidateMobileCard extends StatelessWidget {
   const _DispatchCandidateMobileCard({
     required this.candidate,
     required this.controller,
+    required this.enabled,
   });
 
   final YorksV1DispatchCandidate candidate;
   final TextEditingController controller;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1185,6 +1282,7 @@ class _DispatchCandidateMobileCard extends StatelessWidget {
         _QuantityInput(
           controller: controller,
           label: YorksV1LogisticsStrings.dispatchQuantity.primary,
+          enabled: enabled,
         ),
       ],
     ),
@@ -1196,11 +1294,15 @@ class _DispatchCard extends ConsumerStatefulWidget {
     required this.dispatch,
     required this.workspace,
     required this.onChanged,
+    required this.showReceiptReview,
+    required this.canConfirmReceipt,
   });
 
   final YorksV1MaterialDispatch dispatch;
   final YorksV1LogisticsWorkspace workspace;
   final VoidCallback onChanged;
+  final bool showReceiptReview;
+  final bool canConfirmReceipt;
 
   @override
   ConsumerState<_DispatchCard> createState() => _DispatchCardState();
@@ -1221,6 +1323,12 @@ class _DispatchCardState extends ConsumerState<_DispatchCard> {
         .valueOrNull;
     final documentDispatch = _documentDispatch(documentsWorkspace);
     final revision = documentDispatch?.deliveryOrder?.currentRevision;
+    final deliveryOrderAccess = yorksV1FeatureActionAccess(
+      ref.watch(yorksV1CurrentPermissionSnapshotProvider),
+      YorksV1CapabilityKeys.deliveryOrdersGenerate,
+      legacyAllowed: documentDispatch?.canGenerate == true,
+      projectId: widget.workspace.projectId,
+    );
     final mobile = YorksMobileUi.isActive(context);
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -1309,23 +1417,28 @@ class _DispatchCardState extends ConsumerState<_DispatchCard> {
                       revision,
                     ),
                   )
-                else if (documentDispatch?.canGenerate == true)
+                else if (deliveryOrderAccess.isVisible)
                   SecondaryButton(
                     label: YorksV1LogisticsStrings.generateDeliveryOrder.active(
                       language,
                     ),
                     isExpanded: false,
                     icon: Icons.receipt_long_outlined,
-                    onPressed: _openDeliveryOrder,
+                    onPressed: deliveryOrderAccess.canWrite
+                        ? _openDeliveryOrder
+                        : null,
                   ),
-                if (widget.dispatch.canConfirmReceipt)
+                if (widget.dispatch.canConfirmReceipt &&
+                    widget.showReceiptReview)
                   SecondaryButton(
                     label: YorksV1LogisticsStrings.receiptReview.active(
                       language,
                     ),
                     isExpanded: false,
                     icon: Icons.fact_check_outlined,
-                    onPressed: () => _openReceiptReview(context),
+                    onPressed: widget.canConfirmReceipt
+                        ? () => _openReceiptReview(context)
+                        : null,
                   ),
               ],
             ),
@@ -1375,6 +1488,7 @@ class _DispatchCardState extends ConsumerState<_DispatchCard> {
   );
 
   Future<void> _openReceiptReview(BuildContext context) async {
+    if (!widget.canConfirmReceipt) return;
     await showYorksV1ReceiptReviewDialog(
       context,
       workspace: widget.workspace,

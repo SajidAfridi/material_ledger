@@ -11,6 +11,7 @@ import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/feedback/feedback_service.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/app_user.dart';
 import '../../../../shared/models/audit_log.dart';
@@ -18,13 +19,18 @@ import '../../../../shared/models/effective_permissions.dart';
 import '../../../../shared/models/user_role.dart';
 import '../../../../shared/models/yorks_v1_commercial_capability.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_strings.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/audit_log_provider.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/providers/users_provider.dart';
 import '../../../../shared/providers/yorks_v1_commercial_capability_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 
 /// Strips the `Exception: ` prefix so remote-provisioning errors read cleanly in
 /// a snackbar.
@@ -34,44 +40,56 @@ String _friendlyErr(Object e) {
   return s.startsWith(p) ? s.substring(p.length) : s;
 }
 
+String _permissionCopy(AppLanguage language, String key, {String? name}) =>
+    YorksV1PermissionStrings.text(
+      language,
+      key,
+    ).replaceAll('{name}', name ?? '');
+
+List<YorksV1Role> _displayYorksV1Roles(AppUser user) =>
+    user.yorksV1RoleCache == null
+    ? const <YorksV1Role>[]
+    : <YorksV1Role>[user.yorksV1RoleCache!];
+
 /// Display-only role text for the retained roster. V1 authorization never uses
 /// this cache; server commands and route guards read the current exact claim.
 String _roleLabel(AppUser user, {required bool yorksV1Provisioning}) {
   if (!yorksV1Provisioning) return user.role.label;
-  final roles = user.effectiveYorksV1Roles;
+  final roles = _displayYorksV1Roles(user);
   return roles.isEmpty
       ? AppStrings.yorksV1RoleMappingRequired.primary
       : roles.map((role) => _yorksV1RoleText(role).primary).join(' · ');
 }
 
-String _roleFamilyLabel(AppUser user, {required bool yorksV1Provisioning}) {
+String _roleFamilyLabel(
+  AppUser user, {
+  required bool yorksV1Provisioning,
+  required AppLanguage language,
+}) {
   if (!yorksV1Provisioning) return user.role.label;
-  final roles = user.effectiveYorksV1Roles;
+  final roles = _displayYorksV1Roles(user);
   if (roles.any((role) => role.isEngineering)) {
-    return 'Engineer';
+    return _permissionCopy(language, 'role_family.engineering');
   }
-  if (roles.contains(YorksV1Role.procurement)) return 'Procurement';
-  if (roles.contains(YorksV1Role.admin)) return 'Admin';
-  return 'Unassigned';
+  if (roles.contains(YorksV1Role.procurement)) {
+    return _permissionCopy(language, 'role_family.procurement');
+  }
+  if (roles.contains(YorksV1Role.admin)) {
+    return _permissionCopy(language, 'role_family.admin');
+  }
+  return _permissionCopy(language, 'unassigned');
 }
 
-String _roleTitleLabel(AppUser user, {required bool yorksV1Provisioning}) {
+String _roleTitleLabel(
+  AppUser user, {
+  required bool yorksV1Provisioning,
+  required AppLanguage language,
+}) {
   if (!yorksV1Provisioning) return user.role.label;
-  final roles = user.effectiveYorksV1Roles;
-  if (roles.isEmpty) return 'Unassigned';
+  final roles = _displayYorksV1Roles(user);
+  if (roles.isEmpty) return _permissionCopy(language, 'unassigned');
   return roles
-      .map((role) {
-        return switch (role) {
-          YorksV1Role.projectEngineer => 'Project Engineer',
-          YorksV1Role.siteEngineer => 'Site Engineer',
-          YorksV1Role.seniorMechanicalEngineer => 'Senior Mechanical Engineer',
-          YorksV1Role.projectManager => 'Project Manager',
-          YorksV1Role.workshopInCharge => 'Workshop In-Charge',
-          YorksV1Role.documentController => 'Document Controller',
-          YorksV1Role.procurement => 'Procurement Engineer',
-          YorksV1Role.admin => 'Operations Admin',
-        };
-      })
+      .map((role) => _yorksV1RoleText(role).active(language))
       .join(' · ');
 }
 
@@ -100,6 +118,108 @@ const _managedPermissions = <(PermissionKey, String)>[
 typedef _UserManagementBusyCommand =
     Future<void> Function(Future<void> Function() command);
 
+@visibleForTesting
+bool yorksV1IsProtectedSelfTarget({
+  required bool connectedV1,
+  required String? currentAppUserId,
+  required String targetAppUserId,
+}) =>
+    connectedV1 &&
+    currentAppUserId != null &&
+    currentAppUserId.trim().isNotEmpty &&
+    currentAppUserId == targetAppUserId;
+
+@visibleForTesting
+class YorksV1UserManagementAccess {
+  const YorksV1UserManagementAccess({
+    required this.canView,
+    required this.canCreate,
+    required this.canEditProfile,
+    required this.canAssignRoles,
+    required this.canResetPassword,
+    required this.canManageActivation,
+    required this.canViewPermissions,
+    required this.canManagePermissions,
+    required this.canViewAudit,
+    required this.isConfigurationActor,
+    required this.connectedV1,
+  });
+
+  factory YorksV1UserManagementAccess.resolve({
+    required bool connectedV1,
+    required YorksV1Role? role,
+    required YorksV1CurrentPermissionSnapshotState permissionState,
+  }) {
+    if (!connectedV1) {
+      return const YorksV1UserManagementAccess(
+        canView: true,
+        canCreate: true,
+        canEditProfile: true,
+        canAssignRoles: true,
+        canResetPassword: true,
+        canManageActivation: true,
+        canViewPermissions: false,
+        canManagePermissions: false,
+        canViewAudit: true,
+        isConfigurationActor: false,
+        connectedV1: false,
+      );
+    }
+    final legacy = role?.canConfigureUsers ?? false;
+    bool read(String key) => permissionState.hybridAllows(
+      key,
+      legacyAllowed: legacy,
+      organizationSummary: true,
+    );
+    bool write(String key) => permissionState.hybridAllows(
+      key,
+      legacyAllowed: legacy,
+      requireWrite: true,
+      organizationSummary: true,
+    );
+    return YorksV1UserManagementAccess(
+      canView: read(YorksV1CapabilityKeys.usersView),
+      canCreate: write(YorksV1CapabilityKeys.usersCreate),
+      canEditProfile: write(YorksV1CapabilityKeys.usersProfileEdit),
+      canAssignRoles: write(YorksV1CapabilityKeys.usersRolesAssign),
+      canResetPassword: write(YorksV1CapabilityKeys.usersPasswordReset),
+      canManageActivation: write(YorksV1CapabilityKeys.usersActivationManage),
+      canViewPermissions: read(YorksV1CapabilityKeys.permissionsView),
+      canManagePermissions: write(YorksV1CapabilityKeys.permissionsManage),
+      canViewAudit: read(YorksV1CapabilityKeys.auditView),
+      // The retained commercial-capability RPC has not been delegated yet.
+      // It still requires the established Admin/SME configuration actor in
+      // addition to the scoped permission decision.
+      isConfigurationActor: role?.canConfigureUsers ?? false,
+      connectedV1: true,
+    );
+  }
+
+  final bool canView;
+  final bool canCreate;
+  final bool canEditProfile;
+  final bool canAssignRoles;
+  final bool canResetPassword;
+  final bool canManageActivation;
+  final bool canViewPermissions;
+  final bool canManagePermissions;
+  final bool canViewAudit;
+  final bool isConfigurationActor;
+  final bool connectedV1;
+
+  bool get canManageUser =>
+      canEditProfile ||
+      canAssignRoles ||
+      canResetPassword ||
+      canManageActivation;
+
+  bool get canViewCommercialAccess =>
+      isConfigurationActor && canViewPermissions;
+
+  bool get canManageCommercialAccess =>
+      isConfigurationActor && canManagePermissions;
+}
+
 /// Admin user management & access control (SRS §4.7). Create / edit /
 /// deactivate accounts, assign roles, reset passwords, grant or revoke
 /// per-engineer inventory access. No self-signup — Admin creates every account.
@@ -115,6 +235,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   _AdminManagementTab _tab = _AdminManagementTab.users;
+  int? _lastDirectoryRefreshRevision;
 
   @override
   void dispose() {
@@ -133,13 +254,74 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         ).toLowerCase().contains(q);
   }
 
-  Future<void> _deleteUser(AppUser user) async {
+  Future<void> _removeUserAccess(AppUser user) async {
+    final connectedV1 =
+        ref.read(yorksV1UserProvisioningEnabledProvider) &&
+        ref.read(supabaseClientProvider) != null;
+    final language = ref.read(languageProvider);
+    if (yorksV1IsProtectedSelfTarget(
+      connectedV1: connectedV1,
+      currentAppUserId:
+          ref
+              .read(yorksV1CurrentPermissionSnapshotProvider)
+              .snapshot
+              ?.user
+              .appUserId ??
+          ref.read(currentUserProvider)?.id,
+      targetAppUserId: user.id,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _permissionCopy(language, 'self_account_protected_body'),
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    if (connectedV1) {
+      try {
+        final options = await ref.read(
+          yorksV1UserAdminOptionsProvider(user.id).future,
+        );
+        if (!options.canManageActivation) {
+          throw StateError(
+            _permissionCopy(language, 'admin_options_unavailable'),
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_friendlyErr(error)),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surfaceContainerLowest,
-        title: const Text('Delete user?'),
-        content: Text('Permanently remove ${user.fullName}?'),
+        title: Text(
+          _permissionCopy(
+            language,
+            connectedV1
+                ? 'deactivate_account_title'
+                : 'delete_local_user_title',
+          ),
+        ),
+        content: Text(
+          _permissionCopy(
+            language,
+            connectedV1 ? 'deactivate_account_body' : 'delete_local_user_body',
+            name: user.fullName,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -148,7 +330,10 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(
-              AppStrings.delete.primary,
+              _permissionCopy(
+                language,
+                connectedV1 ? 'deactivate_account' : 'delete_local_user',
+              ),
               style: const TextStyle(color: AppColors.error),
             ),
           ),
@@ -157,24 +342,40 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     );
     if (confirmed != true || !mounted) return;
     try {
-      final deleted = await ref
-          .read(usersProvider.notifier)
-          .deleteUser(user.id, idempotencyKey: const Uuid().v4());
-      if (!deleted) {
+      final changed = connectedV1
+          ? await ref
+                .read(usersProvider.notifier)
+                .setActive(user.id, false, idempotencyKey: const Uuid().v4())
+          : await ref
+                .read(usersProvider.notifier)
+                .deleteUser(user.id, idempotencyKey: const Uuid().v4());
+      if (!changed) {
         throw StateError(
-          "Can't delete the only active admin — assign another admin first.",
+          _permissionCopy(language, 'last_admin_deactivation_error'),
         );
       }
       await ref.logAudit(
-        action: 'User deleted',
+        action: connectedV1 ? 'User deactivated' : 'Local user deleted',
         module: AuditModule.platform,
         refId: user.id,
-        detail: user.fullName,
+        detail: connectedV1
+            ? '${user.fullName} · account access removed; history retained'
+            : '${user.fullName} · local development roster only',
       );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${user.fullName} deleted')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _permissionCopy(
+                language,
+                connectedV1
+                    ? 'deactivate_account_success'
+                    : 'delete_local_user_success',
+                name: user.fullName,
+              ),
+            ),
+          ),
+        );
       }
     } catch (error) {
       if (mounted) {
@@ -191,10 +392,44 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final phone = YorksMobileUi.isActive(context);
-    final all = ref.watch(usersProvider);
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
     );
+    final connectedV1 =
+        yorksV1Provisioning && ref.watch(supabaseClientProvider) != null;
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final access = YorksV1UserManagementAccess.resolve(
+      connectedV1: connectedV1,
+      role: ref.watch(yorksV1CurrentRoleProvider),
+      permissionState: permissionState,
+    );
+    if (!access.canView) {
+      return _UserDirectoryAccessGate(
+        loading: permissionState.isInitialLoading,
+        onRetry: () => ref
+            .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+            .refresh(),
+      );
+    }
+
+    final revision = permissionState.snapshot?.revision;
+    if (connectedV1 &&
+        revision != null &&
+        _lastDirectoryRefreshRevision != revision) {
+      _lastDirectoryRefreshRevision = revision;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        try {
+          await ref
+              .read(usersProvider.notifier)
+              .refreshFromServer(permissionConfirmed: access.canView);
+        } catch (_) {
+          // Keep the last confirmed directory. The explicit Refresh action
+          // remains available for a transient protected-directory failure.
+        }
+      });
+    }
+    final all = ref.watch(usersProvider);
     final users = all
         .where(
           (user) => _matches(user, yorksV1Provisioning: yorksV1Provisioning),
@@ -205,7 +440,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final engineers = all
         .where(
           (user) =>
-              user.effectiveYorksV1Roles.any((role) => role.isEngineering),
+              _displayYorksV1Roles(user).any((role) => role.isEngineering),
         )
         .length;
     final deactivated = all.length - activeUsers;
@@ -215,7 +450,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       // A nested FAB sits over the workspace navigation on phones. The phone
       // header owns the same create action so it remains visible without
       // obscuring a directory row.
-      floatingActionButton: !phone && MediaQuery.sizeOf(context).width < 820
+      floatingActionButton:
+          !phone && MediaQuery.sizeOf(context).width < 820 && access.canCreate
           ? FloatingActionButton.extended(
               onPressed: () => _AddUserSheet.show(context),
               icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -241,12 +477,16 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     _AdminPageHeader(
                       compact: compact,
                       phone: phone,
-                      onCreate: () => _AddUserSheet.show(context),
+                      onCreate: access.canCreate
+                          ? () => _AddUserSheet.show(context)
+                          : null,
                       onRefresh: () async {
                         try {
                           await ref
                               .read(usersProvider.notifier)
-                              .refreshFromServer();
+                              .refreshFromServer(
+                                permissionConfirmed: access.canView,
+                              );
                         } catch (error) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -258,11 +498,19 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     ),
                     const Gap(AppSpacing.xl),
                     _AdminTabBar(
-                      selected: _tab,
+                      selected:
+                          _tab == _AdminManagementTab.accessHistory &&
+                              !access.canViewAudit
+                          ? _AdminManagementTab.users
+                          : _tab,
+                      showAccessHistory: access.canViewAudit,
                       onChanged: (tab) => setState(() => _tab = tab),
                     ),
                     const Gap(AppSpacing.lg),
-                    switch (_tab) {
+                    switch (_tab == _AdminManagementTab.accessHistory &&
+                            !access.canViewAudit
+                        ? _AdminManagementTab.users
+                        : _tab) {
                       _AdminManagementTab.users => _UsersTab(
                         allUsers: all,
                         users: users,
@@ -272,10 +520,13 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                         queryController: _searchController,
                         query: _query,
                         yorksV1Provisioning: yorksV1Provisioning,
+                        access: access,
                         onQueryChanged: (query) =>
                             setState(() => _query = query),
-                        onCreate: () => _AddUserSheet.show(context),
-                        onDelete: _deleteUser,
+                        onCreate: access.canCreate
+                            ? () => _AddUserSheet.show(context)
+                            : null,
+                        onDelete: _removeUserAccess,
                       ),
                       _AdminManagementTab.projectAccess =>
                         const _ProjectAccessTab(),
@@ -296,6 +547,80 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
 enum _AdminManagementTab { users, projectAccess, accessHistory }
 
+class _UserDirectoryAccessGate extends ConsumerWidget {
+  const _UserDirectoryAccessGate({
+    required this.loading,
+    required this.onRetry,
+  });
+
+  final bool loading;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (loading)
+                    const CircularProgressIndicator()
+                  else
+                    const Icon(
+                      Icons.admin_panel_settings_outlined,
+                      size: 48,
+                      color: AppColors.muted,
+                    ),
+                  const Gap(AppSpacing.lg),
+                  Text(
+                    YorksV1PermissionStrings.text(
+                      language,
+                      loading
+                          ? 'directory_loading_title'
+                          : 'directory_unavailable_title',
+                    ),
+                    key: const ValueKey('user-directory-access-state'),
+                    textAlign: TextAlign.center,
+                    style: AppTypography.titleMedium,
+                  ),
+                  if (!loading) ...[
+                    const Gap(AppSpacing.sm),
+                    Text(
+                      YorksV1PermissionStrings.text(
+                        language,
+                        'directory_unavailable_body',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const Gap(AppSpacing.lg),
+                    OutlinedButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: Text(
+                        YorksV1PermissionStrings.text(language, 'retry'),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AdminPageHeader extends StatelessWidget {
   const _AdminPageHeader({
     required this.compact,
@@ -306,7 +631,7 @@ class _AdminPageHeader extends StatelessWidget {
 
   final bool compact;
   final bool phone;
-  final VoidCallback onCreate;
+  final VoidCallback? onCreate;
   final VoidCallback onRefresh;
 
   @override
@@ -353,14 +678,15 @@ class _AdminPageHeader extends StatelessWidget {
             ],
           ),
           const Gap(AppSpacing.md),
-          SizedBox(
-            height: AppSpacing.minTapTarget,
-            child: FilledButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: const Text('Add user'),
+          if (onCreate != null)
+            SizedBox(
+              height: AppSpacing.minTapTarget,
+              child: FilledButton.icon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Add user'),
+              ),
             ),
-          ),
         ],
       );
     }
@@ -377,11 +703,11 @@ class _AdminPageHeader extends StatelessWidget {
           ),
         Expanded(child: heading),
         const Gap(AppSpacing.lg),
-        if (!compact)
+        if (!compact && onCreate != null)
           _AdminPrimaryButton(
             label: 'Create User',
             icon: Icons.add_rounded,
-            onPressed: onCreate,
+            onPressed: onCreate!,
           )
         else
           IconButton(
@@ -395,9 +721,14 @@ class _AdminPageHeader extends StatelessWidget {
 }
 
 class _AdminTabBar extends StatelessWidget {
-  const _AdminTabBar({required this.selected, required this.onChanged});
+  const _AdminTabBar({
+    required this.selected,
+    required this.showAccessHistory,
+    required this.onChanged,
+  });
 
   final _AdminManagementTab selected;
+  final bool showAccessHistory;
   final ValueChanged<_AdminManagementTab> onChanged;
 
   @override
@@ -405,7 +736,8 @@ class _AdminTabBar extends StatelessWidget {
     final tabs = [
       _tab('Users', _AdminManagementTab.users),
       _tab('Project Access', _AdminManagementTab.projectAccess),
-      _tab('Access History', _AdminManagementTab.accessHistory),
+      if (showAccessHistory)
+        _tab('Access History', _AdminManagementTab.accessHistory),
     ];
     final control = DecoratedBox(
       decoration: BoxDecoration(
@@ -457,6 +789,7 @@ class _UsersTab extends StatelessWidget {
     required this.queryController,
     required this.query,
     required this.yorksV1Provisioning,
+    required this.access,
     required this.onQueryChanged,
     required this.onCreate,
     required this.onDelete,
@@ -470,8 +803,9 @@ class _UsersTab extends StatelessWidget {
   final TextEditingController queryController;
   final String query;
   final bool yorksV1Provisioning;
+  final YorksV1UserManagementAccess access;
   final ValueChanged<String> onQueryChanged;
-  final VoidCallback onCreate;
+  final VoidCallback? onCreate;
   final ValueChanged<AppUser> onDelete;
 
   @override
@@ -520,7 +854,7 @@ class _UsersTab extends StatelessWidget {
                         ),
                         const Gap(AppSpacing.xs),
                         Text(
-                          'Create, edit, safely delete and restore company accounts.',
+                          'Create, manage, deactivate and restore company accounts without losing history.',
                           style: AppTypography.bodyMedium.copyWith(
                             color: AppColors.muted,
                           ),
@@ -528,11 +862,11 @@ class _UsersTab extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (!compact)
+                  if (!compact && onCreate != null)
                     _AdminPrimaryButton(
                       label: 'Create User',
                       icon: Icons.add_rounded,
-                      onPressed: onCreate,
+                      onPressed: onCreate!,
                     ),
                 ],
               ),
@@ -560,6 +894,7 @@ class _UsersTab extends StatelessWidget {
                 _CompactUserList(
                   users: users,
                   yorksV1Provisioning: yorksV1Provisioning,
+                  access: access,
                   allUsersEmpty: allUsers.isEmpty,
                   onDelete: onDelete,
                 )
@@ -567,6 +902,7 @@ class _UsersTab extends StatelessWidget {
                 _DesktopUserTable(
                   users: users,
                   yorksV1Provisioning: yorksV1Provisioning,
+                  access: access,
                   allUsersEmpty: allUsers.isEmpty,
                   onDelete: onDelete,
                 ),
@@ -635,12 +971,14 @@ class _DesktopUserTable extends StatelessWidget {
   const _DesktopUserTable({
     required this.users,
     required this.yorksV1Provisioning,
+    required this.access,
     required this.allUsersEmpty,
     required this.onDelete,
   });
 
   final List<AppUser> users;
   final bool yorksV1Provisioning;
+  final YorksV1UserManagementAccess access;
   final bool allUsersEmpty;
   final ValueChanged<AppUser> onDelete;
 
@@ -664,7 +1002,7 @@ class _DesktopUserTable extends StatelessWidget {
                 Expanded(flex: 2, child: Text('COMMERCIAL')),
                 Expanded(flex: 2, child: Text('LAST ACTIVE')),
                 Expanded(flex: 2, child: Text('STATUS')),
-                SizedBox(width: 260, child: Text('')),
+                SizedBox(width: 370, child: Text('')),
               ],
             ),
           ),
@@ -672,6 +1010,7 @@ class _DesktopUserTable extends StatelessWidget {
             _UserTableRow(
               user: user,
               yorksV1Provisioning: yorksV1Provisioning,
+              access: access,
               onDelete: onDelete,
             ),
         ],
@@ -680,19 +1019,33 @@ class _DesktopUserTable extends StatelessWidget {
   }
 }
 
-class _UserTableRow extends StatelessWidget {
+class _UserTableRow extends ConsumerWidget {
   const _UserTableRow({
     required this.user,
     required this.yorksV1Provisioning,
+    required this.access,
     required this.onDelete,
   });
 
   final AppUser user;
   final bool yorksV1Provisioning;
+  final YorksV1UserManagementAccess access;
   final ValueChanged<AppUser> onDelete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final isCurrentUser = yorksV1IsProtectedSelfTarget(
+      connectedV1: access.connectedV1,
+      currentAppUserId:
+          ref
+              .watch(yorksV1CurrentPermissionSnapshotProvider)
+              .snapshot
+              ?.user
+              .appUserId ??
+          ref.watch(currentUserProvider)?.id,
+      targetAppUserId: user.id,
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: const BoxDecoration(
@@ -710,6 +1063,7 @@ class _UserTableRow extends StatelessWidget {
                   _roleFamilyLabel(
                     user,
                     yorksV1Provisioning: yorksV1Provisioning,
+                    language: language,
                   ),
                   style: AppTypography.labelLarge.copyWith(
                     fontWeight: FontWeight.w700,
@@ -719,6 +1073,7 @@ class _UserTableRow extends StatelessWidget {
                   _roleTitleLabel(
                     user,
                     yorksV1Provisioning: yorksV1Provisioning,
+                    language: language,
                   ),
                   style: AppTypography.labelSmall.copyWith(
                     color: AppColors.muted,
@@ -740,23 +1095,54 @@ class _UserTableRow extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 260,
+            width: 370,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () => _ManageUserSheet.show(context, user),
-                  icon: const Icon(Icons.edit_outlined, size: 17),
-                  label: const Text('Edit'),
-                ),
-                const SizedBox(width: 6),
-                TextButton(
-                  onPressed: () => onDelete(user),
-                  child: Text(
-                    'Delete',
-                    style: TextStyle(color: AppColors.error),
+                if (yorksV1Provisioning && access.canViewPermissions) ...[
+                  OutlinedButton.icon(
+                    key: Key('manage-access-${user.id}'),
+                    onPressed: () =>
+                        context.go(RoutePaths.yorksV1UserAccessPath(user.id)),
+                    icon: const Icon(
+                      Icons.admin_panel_settings_outlined,
+                      size: 17,
+                    ),
+                    label: Text(
+                      YorksV1PermissionStrings.text(language, 'manage_access'),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 6),
+                ],
+                if (access.canManageUser) ...[
+                  OutlinedButton.icon(
+                    key: Key('manage-user-${user.id}'),
+                    onPressed: () =>
+                        _ManageUserSheet.show(context, user, access),
+                    icon: const Icon(Icons.edit_outlined, size: 17),
+                    label: Text(
+                      YorksV1PermissionStrings.text(language, 'manage_user'),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                if (!access.connectedV1 &&
+                    user.active &&
+                    access.canManageActivation &&
+                    !isCurrentUser)
+                  TextButton(
+                    key: Key('deactivate-user-${user.id}'),
+                    onPressed: () => onDelete(user),
+                    child: Text(
+                      YorksV1PermissionStrings.text(
+                        language,
+                        access.connectedV1
+                            ? 'deactivate_account_short'
+                            : 'delete_local_user',
+                      ),
+                      style: const TextStyle(color: AppColors.error),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -770,11 +1156,13 @@ class _CompactUserList extends StatelessWidget {
   const _CompactUserList({
     required this.users,
     required this.yorksV1Provisioning,
+    required this.access,
     required this.allUsersEmpty,
     required this.onDelete,
   });
   final List<AppUser> users;
   final bool yorksV1Provisioning;
+  final YorksV1UserManagementAccess access;
   final bool allUsersEmpty;
   final ValueChanged<AppUser> onDelete;
 
@@ -787,6 +1175,7 @@ class _CompactUserList extends StatelessWidget {
           _MobileUserCard(
             user: user,
             yorksV1Provisioning: yorksV1Provisioning,
+            access: access,
             onDelete: onDelete,
           ),
           const Gap(AppSpacing.sm),
@@ -796,24 +1185,40 @@ class _CompactUserList extends StatelessWidget {
   }
 }
 
-class _MobileUserCard extends StatelessWidget {
+class _MobileUserCard extends ConsumerWidget {
   const _MobileUserCard({
     required this.user,
     required this.yorksV1Provisioning,
+    required this.access,
     required this.onDelete,
   });
   final AppUser user;
   final bool yorksV1Provisioning;
+  final YorksV1UserManagementAccess access;
   final ValueChanged<AppUser> onDelete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final isCurrentUser = yorksV1IsProtectedSelfTarget(
+      connectedV1: access.connectedV1,
+      currentAppUserId:
+          ref
+              .watch(yorksV1CurrentPermissionSnapshotProvider)
+              .snapshot
+              ?.user
+              .appUserId ??
+          ref.watch(currentUserProvider)?.id,
+      targetAppUserId: user.id,
+    );
     final role = _roleLabel(user, yorksV1Provisioning: yorksV1Provisioning);
     return Semantics(
       button: true,
       label: '${user.fullName}, $role',
       child: YorksMobileCard(
-        onTap: () => _ManageUserSheet.show(context, user),
+        onTap: access.canManageUser
+            ? () => _ManageUserSheet.show(context, user, access)
+            : null,
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -865,6 +1270,46 @@ class _MobileUserCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (yorksV1Provisioning && access.canViewPermissions) ...[
+              const Gap(AppSpacing.md),
+              const Divider(height: 1),
+              const Gap(AppSpacing.sm),
+              OutlinedButton.icon(
+                key: Key('manage-access-${user.id}'),
+                onPressed: () =>
+                    context.go(RoutePaths.yorksV1UserAccessPath(user.id)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(AppSpacing.minTapTarget),
+                ),
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                label: Text(
+                  YorksV1PermissionStrings.text(language, 'manage_access'),
+                ),
+              ),
+            ],
+            if (!access.connectedV1 &&
+                user.active &&
+                access.canManageActivation &&
+                !isCurrentUser) ...[
+              const Gap(AppSpacing.sm),
+              TextButton.icon(
+                key: Key('deactivate-user-${user.id}'),
+                onPressed: () => onDelete(user),
+                icon: const Icon(
+                  Icons.person_off_outlined,
+                  color: AppColors.error,
+                ),
+                label: Text(
+                  YorksV1PermissionStrings.text(
+                    language,
+                    access.connectedV1
+                        ? 'deactivate_account'
+                        : 'delete_local_user',
+                  ),
+                  style: const TextStyle(color: AppColors.error),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1161,60 +1606,56 @@ class _AdminPrimaryButton extends StatelessWidget {
   );
 }
 
-class _YorksRoleAssignmentEditor extends StatelessWidget {
-  const _YorksRoleAssignmentEditor({
+@visibleForTesting
+class YorksV1RoleAssignmentEditor extends StatelessWidget {
+  const YorksV1RoleAssignmentEditor({
+    required this.language,
     required this.primary,
-    required this.additional,
+    required this.availableRoles,
     required this.onPrimaryChanged,
-    required this.onAdditionalChanged,
+    this.statusText,
   });
 
-  final YorksV1Role primary;
-  final Set<YorksV1Role> additional;
-  final ValueChanged<YorksV1Role> onPrimaryChanged;
-  final void Function(YorksV1Role role, bool selected) onAdditionalChanged;
+  final AppLanguage language;
+  final YorksV1Role? primary;
+  final List<YorksV1Role> availableRoles;
+  final ValueChanged<YorksV1Role>? onPrimaryChanged;
+  final String? statusText;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Role', style: AppTypography.titleSmall),
-      const Gap(AppSpacing.sm),
-      DropdownButtonFormField<YorksV1Role>(
-        initialValue: primary,
-        decoration: const InputDecoration(),
-        items: [
-          for (final role in YorksV1Role.values)
-            DropdownMenuItem(
-              value: role,
-              child: Text(_yorksV1RoleText(role).primary),
-            ),
-        ],
-        onChanged: (role) {
-          if (role != null) onPrimaryChanged(role);
-        },
-      ),
-      const Gap(AppSpacing.sm),
-      Text(
-        'Additional roles (optional)',
-        style: AppTypography.labelMedium.copyWith(color: AppColors.muted),
-      ),
-      const Gap(AppSpacing.xs),
-      Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.xs,
-        children: [
-          for (final role in YorksV1Role.values)
-            if (role != primary)
-              FilterChip(
-                label: Text(_yorksV1RoleText(role).primary),
-                selected: additional.contains(role),
-                onSelected: (selected) => onAdditionalChanged(role, selected),
+  Widget build(BuildContext context) {
+    final selected = availableRoles.contains(primary) ? primary : null;
+    final onChanged = availableRoles.isEmpty || onPrimaryChanged == null
+        ? null
+        : (YorksV1Role? role) {
+            if (role != null) onPrimaryChanged!(role);
+          };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          YorksV1PermissionStrings.text(language, 'role'),
+          style: AppTypography.titleSmall,
+        ),
+        const Gap(AppSpacing.sm),
+        DropdownButtonFormField<YorksV1Role>(
+          key: const ValueKey('server-assignable-role-field'),
+          initialValue: selected,
+          isExpanded: true,
+          decoration: InputDecoration(helperText: statusText),
+          hint: Text(AppStrings.yorksV1RoleMappingRequired.active(language)),
+          items: [
+            for (final role in availableRoles)
+              DropdownMenuItem(
+                value: role,
+                child: Text(_yorksV1RoleText(role).active(language)),
               ),
-        ],
-      ),
-    ],
-  );
+          ],
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
 }
 
 // ─── Add user ────────────────────────────────────────────────────
@@ -1265,7 +1706,6 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
   final _passwordController = TextEditingController();
   UserRole _legacyRole = UserRole.engineer;
   YorksV1Role _yorksV1Role = YorksV1Role.siteEngineer;
-  final _additionalYorksRoles = <YorksV1Role>{};
   bool _busy = false;
   String? _createCommandFingerprint;
   String? _createIdempotencyKey;
@@ -1295,11 +1735,32 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final yorksV1Provisioning = ref.read(
+      yorksV1UserProvisioningEnabledProvider,
+    );
+    final connectedV1 =
+        yorksV1Provisioning && ref.read(supabaseClientProvider) != null;
+    if (connectedV1) {
+      final options = ref
+          .read(yorksV1UserAdminOptionsProvider(null))
+          .asData
+          ?.value;
+      if (options == null || !options.allowsRole(_yorksV1Role)) {
+        final language = ref.read(languageProvider);
+        AppFeedback.warning();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _permissionCopy(language, 'admin_options_unavailable'),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
     setState(() => _busy = true);
     try {
-      final yorksV1Provisioning = ref.read(
-        yorksV1UserProvisioningEnabledProvider,
-      );
       final fullName = _nameController.text.trim();
       final email = _emailController.text.trim();
       final password = _passwordController.text;
@@ -1310,8 +1771,6 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
           email,
           password,
           yorksV1Provisioning ? _yorksV1Role.name : _legacyRole.name,
-          if (yorksV1Provisioning)
-            _additionalYorksRoles.map((role) => role.name).join(','),
         ].join('\u0000'),
       );
       // When Supabase is configured this provisions the account in the identity
@@ -1323,7 +1782,6 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
               fullName: fullName,
               email: email,
               role: _yorksV1Role,
-              roles: [_yorksV1Role, ..._additionalYorksRoles],
               password: password,
               idempotencyKey: command.idempotencyKey,
               appUserId: command.appUserId,
@@ -1366,8 +1824,36 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final language = ref.watch(languageProvider);
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
+    );
+    final connectedV1 =
+        yorksV1Provisioning && ref.watch(supabaseClientProvider) != null;
+    final adminOptionsState = connectedV1
+        ? ref.watch(yorksV1UserAdminOptionsProvider(null))
+        : null;
+    final adminOptions = adminOptionsState?.asData?.value;
+    final assignableRoles = connectedV1
+        ? adminOptions?.assignableExactRoles ?? const <YorksV1Role>[]
+        : YorksV1Role.values;
+    final roleOptionsStatus = !connectedV1
+        ? null
+        : adminOptionsState!.isLoading
+        ? _permissionCopy(language, 'admin_options_loading')
+        : adminOptions == null
+        ? _permissionCopy(language, 'admin_options_unavailable')
+        : assignableRoles.isEmpty
+        ? _permissionCopy(language, 'no_assignable_roles')
+        : _permissionCopy(language, 'role_options_help');
+    final canCreateWithRole =
+        !yorksV1Provisioning ||
+        !connectedV1 ||
+        (adminOptions?.allowsRole(_yorksV1Role) ?? false);
+    final access = YorksV1UserManagementAccess.resolve(
+      connectedV1: connectedV1,
+      role: ref.watch(yorksV1CurrentRoleProvider),
+      permissionState: ref.watch(yorksV1CurrentPermissionSnapshotProvider),
     );
     return Material(
       color: AppColors.surface,
@@ -1469,20 +1955,17 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
                   ),
                   const Gap(AppSpacing.lg),
                   if (yorksV1Provisioning)
-                    _YorksRoleAssignmentEditor(
+                    YorksV1RoleAssignmentEditor(
+                      language: language,
                       primary: _yorksV1Role,
-                      additional: _additionalYorksRoles,
-                      onPrimaryChanged: (role) => setState(() {
-                        _additionalYorksRoles.remove(role);
-                        _yorksV1Role = role;
-                      }),
-                      onAdditionalChanged: (role, selected) => setState(() {
-                        if (selected) {
-                          _additionalYorksRoles.add(role);
-                        } else {
-                          _additionalYorksRoles.remove(role);
-                        }
-                      }),
+                      availableRoles: assignableRoles,
+                      statusText: roleOptionsStatus,
+                      onPrimaryChanged:
+                          connectedV1 && adminOptions?.canAssignRole != true
+                          ? null
+                          : (role) => setState(() {
+                              _yorksV1Role = role;
+                            }),
                     )
                   else ...[
                     Text('Role', style: AppTypography.titleSmall),
@@ -1514,7 +1997,9 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
                     icon: Icons.check_rounded,
                     isLoading: _busy,
                     isExpanded: true,
-                    onPressed: _busy ? null : _save,
+                    onPressed: _busy || !access.canCreate || !canCreateWithRole
+                        ? null
+                        : _save,
                   ),
                   const Gap(AppSpacing.md),
                 ],
@@ -1529,10 +2014,15 @@ class _AddUserSheetState extends ConsumerState<_AddUserSheet> {
 
 // ─── Manage user ─────────────────────────────────────────────────
 class _ManageUserSheet extends ConsumerStatefulWidget {
-  const _ManageUserSheet({required this.userId});
+  const _ManageUserSheet({required this.userId, required this.access});
   final String userId;
+  final YorksV1UserManagementAccess access;
 
-  static Future<void> show(BuildContext context, AppUser user) {
+  static Future<void> show(
+    BuildContext context,
+    AppUser user,
+    YorksV1UserManagementAccess access,
+  ) {
     return showDialog<void>(
       context: context,
       barrierColor: AppColors.scrim.withValues(alpha: .38),
@@ -1558,7 +2048,7 @@ class _ManageUserSheet extends ConsumerStatefulWidget {
               maxWidth: 520,
               maxHeight: viewport.height * .92,
             ),
-            child: _ManageUserSheet(userId: user.id),
+            child: _ManageUserSheet(userId: user.id, access: access),
           ),
         );
       },
@@ -1576,8 +2066,6 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
   bool _busy = false;
   final Map<String, String> _idempotencyKeys = {};
   String? _pendingResetPassword;
-  String? _rolesUserId;
-  Set<YorksV1Role> _selectedYorksRoles = {};
 
   String _idempotencyKeyFor(String command) =>
       _idempotencyKeys.putIfAbsent(command, () => const Uuid().v4());
@@ -1593,17 +2081,56 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
         .where((u) => u.id == widget.userId)
         .firstOrNull;
     if (user == null) return const SizedBox.shrink();
+    final language = ref.watch(languageProvider);
     final yorksV1Provisioning = ref.watch(
       yorksV1UserProvisioningEnabledProvider,
     );
-    if (_rolesUserId != user.id) {
-      _rolesUserId = user.id;
-      _selectedYorksRoles = user.effectiveYorksV1Roles.toSet();
-      if (_selectedYorksRoles.isEmpty && user.yorksV1RoleCache != null) {
-        _selectedYorksRoles.add(user.yorksV1RoleCache!);
-      }
-    }
-
+    final connectedV1 =
+        yorksV1Provisioning && ref.watch(supabaseClientProvider) != null;
+    final isCurrentUser = yorksV1IsProtectedSelfTarget(
+      connectedV1: connectedV1,
+      currentAppUserId:
+          ref
+              .watch(yorksV1CurrentPermissionSnapshotProvider)
+              .snapshot
+              ?.user
+              .appUserId ??
+          ref.watch(currentUserProvider)?.id,
+      targetAppUserId: user.id,
+    );
+    final access = YorksV1UserManagementAccess.resolve(
+      connectedV1: connectedV1,
+      role: ref.watch(yorksV1CurrentRoleProvider),
+      permissionState: ref.watch(yorksV1CurrentPermissionSnapshotProvider),
+    );
+    final adminOptionsState = connectedV1
+        ? ref.watch(yorksV1UserAdminOptionsProvider(user.id))
+        : null;
+    final adminOptions = adminOptionsState?.asData?.value;
+    final assignableRoles = connectedV1
+        ? adminOptions?.assignableExactRoles ?? const <YorksV1Role>[]
+        : YorksV1Role.values;
+    final roleOptionsStatus = !connectedV1
+        ? null
+        : adminOptionsState!.isLoading
+        ? _permissionCopy(language, 'admin_options_loading')
+        : adminOptions == null
+        ? _permissionCopy(language, 'admin_options_unavailable')
+        : assignableRoles.isEmpty
+        ? _permissionCopy(language, 'no_assignable_roles')
+        : _permissionCopy(language, 'role_options_help');
+    final canManageActivationForTarget =
+        access.canManageActivation &&
+        !isCurrentUser &&
+        (!connectedV1 || adminOptions?.canManageActivation == true);
+    final canAssignRolesForTarget =
+        access.canAssignRoles &&
+        !isCurrentUser &&
+        (!connectedV1 || adminOptions?.canAssignRole == true);
+    final canResetPasswordForTarget =
+        access.canResetPassword &&
+        !isCurrentUser &&
+        (!connectedV1 || adminOptions?.canResetPassword == true);
     // The app-level messenger outlives this sheet, so success toasts shown after
     // Navigator.pop still appear.
     final messenger = ScaffoldMessenger.of(context);
@@ -1633,6 +2160,16 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
     }
 
     Future<void> toggleActive() => run(() async {
+      if (!canManageActivationForTarget) {
+        return warn(
+          _permissionCopy(
+            language,
+            isCurrentUser
+                ? 'self_account_protected_body'
+                : 'admin_options_unavailable',
+          ),
+        );
+      }
       final willActivate = !user.active;
       final command = 'set-active:${user.id}:$willActivate';
       try {
@@ -1643,15 +2180,27 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               willActivate,
               idempotencyKey: _idempotencyKeyFor(command),
             );
-        if (!allowed) return warn("Can't deactivate the only active admin.");
+        if (!allowed) {
+          return warn(
+            _permissionCopy(language, 'last_admin_deactivation_error'),
+          );
+        }
         _completeCommand(command);
+        if (connectedV1) {
+          ref.invalidate(yorksV1UserAdminOptionsProvider(user.id));
+        }
         await ref.logAudit(
           action: willActivate ? 'User reactivated' : 'User deactivated',
           module: AuditModule.platform,
           refId: user.id,
           detail: user.fullName,
         );
-        success(willActivate ? 'Account reactivated' : 'Account deactivated');
+        success(
+          _permissionCopy(
+            language,
+            willActivate ? 'account_reactivated' : 'account_deactivated',
+          ),
+        );
       } catch (e) {
         warn(_friendlyErr(e));
       }
@@ -1680,6 +2229,16 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
     });
 
     Future<void> resetPassword() => run(() async {
+      if (!canResetPasswordForTarget) {
+        return warn(
+          _permissionCopy(
+            language,
+            isCurrentUser
+                ? 'self_account_protected_body'
+                : 'admin_options_unavailable',
+          ),
+        );
+      }
       // Capture the navigator up-front (before any await) — the sheet's own
       // context is about to be popped, so we drive the result dialog off the
       // (stable) navigator's context instead.
@@ -1802,36 +2361,27 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       }
     });
 
-    Future<void> setYorksV1Roles(
-      YorksV1Role primary,
-      Iterable<YorksV1Role> selected,
-    ) => run(() async {
-      final roles = <YorksV1Role>[];
-      for (final role in [primary, ...selected]) {
-        if (!roles.contains(role)) roles.add(role);
+    Future<void> setYorksV1Role(YorksV1Role role) => run(() async {
+      if (role == user.yorksV1RoleCache) return;
+      if (!canAssignRolesForTarget ||
+          (connectedV1 && adminOptions?.allowsRole(role) != true)) {
+        return warn(_permissionCopy(language, 'admin_options_unavailable'));
       }
-      final previous = user.effectiveYorksV1Roles;
-      if (primary == user.yorksV1RoleCache &&
-          roles.length == previous.length &&
-          roles.every(previous.contains)) {
-        return;
-      }
-      final command =
-          'set-v1-roles:${user.id}:${roles.map((r) => r.claimValue).join(',')}';
+      final command = 'set-v1-role:${user.id}:${role.claimValue}';
       try {
         final allowed = await ref
             .read(usersProvider.notifier)
             .setYorksV1Role(
               user.id,
-              primary,
-              roles: roles,
+              role,
               idempotencyKey: _idempotencyKeyFor(command),
             );
         if (!allowed) return warn("Can't change the only active admin's role.");
         _completeCommand(command);
-        final label = roles
-            .map((role) => _yorksV1RoleText(role).primary)
-            .join(' · ');
+        if (connectedV1) {
+          ref.invalidate(yorksV1UserAdminOptionsProvider(user.id));
+        }
+        final label = _yorksV1RoleText(role).primary;
         await ref.logAudit(
           action: 'User role changed',
           module: AuditModule.platform,
@@ -1839,7 +2389,6 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
           detail: '${user.fullName} → $label',
         );
         success('Role changed to $label');
-        _selectedYorksRoles = roles.toSet();
       } catch (e) {
         warn(_friendlyErr(e));
       }
@@ -1948,8 +2497,20 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       );
     }
 
-    Future<void> deleteUser() async {
+    Future<void> removeUserAccess() async {
       if (_busy) return;
+      if (!canManageActivationForTarget) {
+        warn(
+          _permissionCopy(
+            language,
+            isCurrentUser
+                ? 'self_account_protected_body'
+                : 'admin_options_unavailable',
+          ),
+        );
+        return;
+      }
+      final connectedV1 = access.connectedV1;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -1957,9 +2518,22 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
           ),
-          title: const Text('Delete user?'),
+          title: Text(
+            _permissionCopy(
+              language,
+              connectedV1
+                  ? 'deactivate_account_title'
+                  : 'delete_local_user_title',
+            ),
+          ),
           content: Text(
-            'Permanently remove ${user.fullName}. This cannot be undone.',
+            _permissionCopy(
+              language,
+              connectedV1
+                  ? 'deactivate_account_body'
+                  : 'delete_local_user_body',
+              name: user.fullName,
+            ),
             style: AppTypography.bodyMedium,
           ),
           actions: [
@@ -1970,7 +2544,10 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               child: Text(
-                AppStrings.delete.primary,
+                _permissionCopy(
+                  language,
+                  connectedV1 ? 'deactivate_account' : 'delete_local_user',
+                ),
                 style: const TextStyle(color: AppColors.error),
               ),
             ),
@@ -1980,31 +2557,52 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
       if (confirmed != true) return;
       await run(() async {
         final navigator = Navigator.of(context); // capture before await
-        final bool deleted;
+        final bool changed;
         const active = false;
         final command = 'set-active:${user.id}:$active';
         try {
-          deleted = await ref
-              .read(usersProvider.notifier)
-              .deleteUser(user.id, idempotencyKey: _idempotencyKeyFor(command));
+          changed = connectedV1
+              ? await ref
+                    .read(usersProvider.notifier)
+                    .setActive(
+                      user.id,
+                      false,
+                      idempotencyKey: _idempotencyKeyFor(command),
+                    )
+              : await ref
+                    .read(usersProvider.notifier)
+                    .deleteUser(
+                      user.id,
+                      idempotencyKey: _idempotencyKeyFor(command),
+                    );
         } catch (e) {
           return warn(_friendlyErr(e));
         }
-        if (!deleted) {
+        if (!changed) {
           return warn(
-            "Can't delete the only active admin — assign another admin first.",
+            _permissionCopy(language, 'last_admin_deactivation_error'),
           );
         }
         _completeCommand(command);
         await ref.logAudit(
-          action: 'User deleted',
+          action: connectedV1 ? 'User deactivated' : 'Local user deleted',
           module: AuditModule.platform,
           refId: user.id,
-          detail: user.fullName,
+          detail: connectedV1
+              ? '${user.fullName} · account access removed; history retained'
+              : '${user.fullName} · local development roster only',
         );
         if (!mounted) return;
         navigator.pop();
-        success('${user.fullName} deleted');
+        success(
+          _permissionCopy(
+            language,
+            connectedV1
+                ? 'deactivate_account_success'
+                : 'delete_local_user_success',
+            name: user.fullName,
+          ),
+        );
       });
     }
 
@@ -2080,13 +2678,17 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: user.active,
-                onChanged: _busy ? null : (_) => toggleActive(),
+                onChanged: _busy || !canManageActivationForTarget
+                    ? null
+                    : (_) => toggleActive(),
                 title: Text(
                   AppStrings.accountActive.primary,
                   style: AppTypography.bodyLarge,
                 ),
                 subtitle: Text(
-                  AppStrings.accountActiveHint.primary,
+                  isCurrentUser
+                      ? _permissionCopy(language, 'self_account_protected_body')
+                      : AppStrings.accountActiveHint.active(language),
                   style: AppTypography.bodySmall,
                 ),
                 activeThumbColor: AppColors.primary,
@@ -2108,44 +2710,16 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                 ),
 
               // ─── Role ────────────────────────────────────────
-              const Gap(AppSpacing.lg),
-              if (yorksV1Provisioning && _selectedYorksRoles.isNotEmpty)
-                _YorksRoleAssignmentEditor(
-                  primary: user.yorksV1RoleCache ?? _selectedYorksRoles.first,
-                  additional: _selectedYorksRoles
-                      .where(
-                        (role) =>
-                            role !=
-                            (user.yorksV1RoleCache ??
-                                _selectedYorksRoles.first),
-                      )
-                      .toSet(),
-                  onPrimaryChanged: _busy
-                      ? (_) {}
-                      : (role) {
-                          final previousPrimary =
-                              user.yorksV1RoleCache ??
-                              _selectedYorksRoles.first;
-                          final next = {..._selectedYorksRoles}
-                            ..remove(previousPrimary)
-                            ..add(role);
-                          setYorksV1Roles(role, next);
-                        },
-                  onAdditionalChanged: _busy
-                      ? (_, _) {}
-                      : (role, selected) {
-                          final next = {..._selectedYorksRoles};
-                          if (selected) {
-                            next.add(role);
-                          } else {
-                            next.remove(role);
-                          }
-                          final primary = user.yorksV1RoleCache ?? next.first;
-                          if (next.isEmpty) next.add(primary);
-                          setYorksV1Roles(primary, next);
-                        },
+              if (canAssignRolesForTarget) const Gap(AppSpacing.lg),
+              if (canAssignRolesForTarget && yorksV1Provisioning)
+                YorksV1RoleAssignmentEditor(
+                  language: language,
+                  primary: user.yorksV1RoleCache,
+                  availableRoles: assignableRoles,
+                  statusText: roleOptionsStatus,
+                  onPrimaryChanged: _busy ? (_) {} : setYorksV1Role,
                 )
-              else
+              else if (canAssignRolesForTarget)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2170,11 +2744,14 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               // retained local permission overrides below. The child fetches a
               // live, Admin-only server projection and the Edge/DB command
               // remains authoritative even if this display cache is stale.
-              if (yorksV1Provisioning && user.yorksV1RoleCache != null) ...[
+              if (access.canViewCommercialAccess &&
+                  yorksV1Provisioning &&
+                  user.yorksV1RoleCache != null) ...[
                 const Gap(AppSpacing.lg),
                 _YorksV1CommercialAccessSection(
                   appUserId: user.id,
                   targetRole: user.yorksV1RoleCache!,
+                  canManage: access.canManageCommercialAccess,
                   busy: _busy,
                   runBusyCommand: run,
                   onFailure: warn,
@@ -2183,43 +2760,45 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
               ],
 
               // ─── HR employee link (drives leave + balance) ───
-              const Gap(AppSpacing.lg),
-              Text('HR employee', style: AppTypography.titleSmall),
-              Builder(
-                builder: (_) {
-                  final linked = ref
-                      .watch(employeesProvider)
-                      .where((e) => e.id == user.employeeId)
-                      .firstOrNull;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    enabled: !_busy,
-                    leading: Icon(
-                      linked == null
-                          ? Icons.link_off_rounded
-                          : Icons.badge_outlined,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    title: Text(
-                      linked?.fullName ?? 'Not linked',
-                      style: AppTypography.bodyLarge,
-                    ),
-                    subtitle: Text(
-                      linked == null
-                          ? 'Link so this person can request leave (HR + balance)'
-                          : '${linked.jobRole} · ${linked.id}',
-                      style: AppTypography.bodySmall.copyWith(
+              if (access.canEditProfile) const Gap(AppSpacing.lg),
+              if (access.canEditProfile)
+                Text('HR employee', style: AppTypography.titleSmall),
+              if (access.canEditProfile)
+                Builder(
+                  builder: (_) {
+                    final linked = ref
+                        .watch(employeesProvider)
+                        .where((e) => e.id == user.employeeId)
+                        .firstOrNull;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      enabled: !_busy,
+                      leading: Icon(
+                        linked == null
+                            ? Icons.link_off_rounded
+                            : Icons.badge_outlined,
                         color: AppColors.onSurfaceVariant,
                       ),
-                    ),
-                    trailing: TextButton(
-                      onPressed: _busy ? null : pickEmployee,
-                      child: Text(linked == null ? 'Link' : 'Change'),
-                    ),
-                    onTap: _busy ? null : pickEmployee,
-                  );
-                },
-              ),
+                      title: Text(
+                        linked?.fullName ?? 'Not linked',
+                        style: AppTypography.bodyLarge,
+                      ),
+                      subtitle: Text(
+                        linked == null
+                            ? 'Link so this person can request leave (HR + balance)'
+                            : '${linked.jobRole} · ${linked.id}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: TextButton(
+                        onPressed: _busy ? null : pickEmployee,
+                        child: Text(linked == null ? 'Link' : 'Change'),
+                      ),
+                      onTap: _busy ? null : pickEmployee,
+                    );
+                  },
+                ),
 
               // ─── Permissions (per-user overrides) ────────────
               if (!yorksV1Provisioning && user.role != UserRole.admin) ...[
@@ -2252,26 +2831,36 @@ class _ManageUserSheetState extends ConsumerState<_ManageUserSheet> {
                   ),
               ],
 
-              const Gap(AppSpacing.lg),
-              SecondaryButton(
-                label: AppStrings.resetPassword.primary,
-                icon: Icons.lock_reset_rounded,
-                onPressed: _busy ? null : resetPassword,
-              ),
-              const Gap(AppSpacing.sm),
-              TextButton.icon(
-                onPressed: _busy ? null : deleteUser,
-                icon: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: AppColors.error,
+              if (canResetPasswordForTarget) ...[
+                const Gap(AppSpacing.lg),
+                SecondaryButton(
+                  label: AppStrings.resetPassword.primary,
+                  icon: Icons.lock_reset_rounded,
+                  onPressed: _busy ? null : resetPassword,
                 ),
-                label: Text(
-                  'Delete user',
-                  style: AppTypography.labelLarge.copyWith(
+              ],
+              if (canManageActivationForTarget && user.active) ...[
+                const Gap(AppSpacing.sm),
+                TextButton.icon(
+                  key: const ValueKey('manage-sheet-deactivate-account'),
+                  onPressed: _busy ? null : removeUserAccess,
+                  icon: const Icon(
+                    Icons.person_off_outlined,
                     color: AppColors.error,
                   ),
+                  label: Text(
+                    _permissionCopy(
+                      language,
+                      access.connectedV1
+                          ? 'deactivate_account'
+                          : 'delete_local_user',
+                    ),
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.error,
+                    ),
+                  ),
                 ),
-              ),
+              ],
               const Gap(AppSpacing.md),
             ],
           ),
@@ -2289,6 +2878,7 @@ class _YorksV1CommercialAccessSection extends ConsumerWidget {
   const _YorksV1CommercialAccessSection({
     required this.appUserId,
     required this.targetRole,
+    required this.canManage,
     required this.busy,
     required this.runBusyCommand,
     required this.onFailure,
@@ -2297,6 +2887,7 @@ class _YorksV1CommercialAccessSection extends ConsumerWidget {
 
   final String appUserId;
   final YorksV1Role targetRole;
+  final bool canManage;
   final bool busy;
   final _UserManagementBusyCommand runBusyCommand;
   final ValueChanged<String> onFailure;
@@ -2378,7 +2969,7 @@ class _YorksV1CommercialAccessSection extends ConsumerWidget {
             _CommercialCapabilitySwitch(
               capability: capability,
               access: capabilities[capability],
-              enabled: !busy && _mayChange(capability),
+              enabled: !busy && canManage && _mayChange(capability),
               onChanged: (granted) => _changeCapability(
                 context,
                 ref,
@@ -2397,6 +2988,7 @@ class _YorksV1CommercialAccessSection extends ConsumerWidget {
     required YorksV1CommercialCapability capability,
     required bool granted,
   }) async {
+    if (!canManage) return;
     final reason = await _askCommercialCapabilityReason(context);
     if (reason == null) return;
 
