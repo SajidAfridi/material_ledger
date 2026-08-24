@@ -153,6 +153,38 @@ Legacy role handling:
 - Server audit begins at V1 command activation. Client activity remains clearly
   labeled historical collaboration, not reclassified as trusted audit.
 
+### M6 — scoped capability management
+
+- Add the protected capability catalogue, immutable role defaults, current
+  organization/project assignments, normalized project scopes, target revision
+  and append-only change history without modifying roles or memberships.
+- Seed defaults to reproduce the effective role access in force before the
+  migration. Keep existing `v1_user_capabilities` commercial overrides and
+  their protected consumers unchanged; the new projection reports them without
+  deleting, copying or changing their meaning.
+- Keep all workflow RPC/RLS consumers on their prior checks while the new
+  resolver runs in shadow mode. Record a role/user/capability parity report and
+  block consumer cutover on every unexplained difference.
+- Accept stable application user IDs at the administration boundary. Resolve
+  the private Auth UUID through protected server data only; never expose it as
+  a client-selectable target or infer it locally.
+- Rollback disables each new consumer and management route but retains the
+  catalogue, assignments, revisions and history. Never drop an assignment that
+  was created after management activation or rewrite it into a role.
+- The additive implementation is split into three ordered migrations:
+  `20260824075503_scoped_capability_management.sql` creates the shadow resolver,
+  assignments, revision signal and administration contract;
+  `20260824084245_scoped_capability_core_workflow_cutover.sql` enables only the
+  tested project/material workflow consumers; and
+  `20260824091000_scoped_capability_user_administration_cutover.sql` enables the
+  action-specific User Management and permission-administration consumers only
+  after installing a versioned capability-aware Auth audit trigger. That same
+  transaction adds resumable HMAC-bound V1 provisioning, server-owned singular
+  role/compatibility claims, target hierarchy and action-specific durable
+  audit checks.
+  A rollback is a corrective forward migration that returns only affected
+  catalogue rows to `shadow`; it does not drop the new data or audit evidence.
+
 ## 5. Quarantine contract
 
 Use a protected migration issue/reconciliation relation or immutable report

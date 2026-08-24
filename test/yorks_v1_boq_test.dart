@@ -1452,6 +1452,7 @@ Widget _spreadsheetHarness({
         child: YorksV1BoqSpreadsheet(
           worksheet: effective,
           editable: true,
+          showEditActions: true,
           onSearchMaterials: onSearchMaterials,
           onApplyMaterialSuggestion: onApplyMaterialSuggestion,
           onUpdateCell:

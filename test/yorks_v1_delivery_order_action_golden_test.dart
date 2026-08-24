@@ -14,7 +14,10 @@ import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   setUpAll(() async {
@@ -58,6 +61,13 @@ void main() {
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.seniorMechanicalEngineer,
+            ),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(
+                  role: YorksV1Role.seniorMechanicalEngineer,
+                ),
+              ),
             ),
             yorksV1MaterialRequestDetailProvider(
               _request.id,
@@ -175,6 +185,13 @@ Future<void> _pumpReceivedRequest(WidgetTester tester) async {
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1CurrentRoleProvider.overrideWithValue(
           YorksV1Role.seniorMechanicalEngineer,
+        ),
+        yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+          (ref) => YorksV1TestPermissionController(
+            yorksV1TrustedFeaturePermissionState(
+              role: YorksV1Role.seniorMechanicalEngineer,
+            ),
+          ),
         ),
         yorksV1MaterialRequestDetailProvider(
           _receivedRequest.id,

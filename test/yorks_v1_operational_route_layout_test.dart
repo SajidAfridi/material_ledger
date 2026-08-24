@@ -23,8 +23,11 @@ import 'package:material_ledger/shared/providers/yorks_v1_material_request_provi
 import 'package:material_ledger/shared/providers/yorks_v1_boq_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_documents_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -70,6 +73,11 @@ void main() {
             ProviderScope(
               overrides: [
                 sharedPreferencesProvider.overrideWithValue(preferences),
+                yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                  (ref) => YorksV1TestPermissionController(
+                    yorksV1TrustedFeaturePermissionState(),
+                  ),
+                ),
                 yorksV1CurrentRoleProvider.overrideWithValue(
                   YorksV1Role.projectEngineer,
                 ),
@@ -116,6 +124,11 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
             ),
@@ -145,6 +158,11 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
             yorksV1MaterialRequestListProvider(null).overrideWith(
               (ref) async => [_receivedQueueRequest, _closedQueueRequest],
             ),
@@ -188,6 +206,11 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(),
+            ),
+          ),
           yorksV1MaterialRequestListProvider(null).overrideWith(
             (ref) async => [_receivedQueueRequest, _closedQueueRequest],
           ),
@@ -240,6 +263,11 @@ void main() {
           ProviderScope(
             overrides: [
               sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                (ref) => YorksV1TestPermissionController(
+                  yorksV1TrustedFeaturePermissionState(),
+                ),
+              ),
               yorksV1AuthUserIdProvider.overrideWithValue('layout-test-user'),
               yorksV1CurrentRoleProvider.overrideWithValue(
                 YorksV1Role.projectEngineer,
@@ -325,6 +353,11 @@ void main() {
           ProviderScope(
             overrides: [
               sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                (ref) => YorksV1TestPermissionController(
+                  yorksV1TrustedFeaturePermissionState(),
+                ),
+              ),
               yorksV1CurrentRoleProvider.overrideWithValue(
                 YorksV1Role.projectEngineer,
               ),
@@ -476,6 +509,11 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
             ),
@@ -565,6 +603,11 @@ void main() {
           ProviderScope(
             overrides: [
               sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                (ref) => YorksV1TestPermissionController(
+                  yorksV1TrustedFeaturePermissionState(),
+                ),
+              ),
               yorksV1CurrentRoleProvider.overrideWithValue(
                 YorksV1Role.projectEngineer,
               ),
@@ -622,6 +665,11 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
             ),

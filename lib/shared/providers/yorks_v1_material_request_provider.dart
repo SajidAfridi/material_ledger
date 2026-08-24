@@ -13,6 +13,7 @@ import '../models/yorks_v1_role.dart';
 import '../repositories/storage.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
+import 'yorks_v1_permission_provider.dart';
 import 'language_provider.dart';
 
 const _yorksV1MaterialRequestDraftKeyPrefix =
@@ -85,6 +86,7 @@ final yorksV1MaterialRequestSummaryPageProvider = FutureProvider.autoDispose
       YorksV1MaterialRequestSummaryPage,
       YorksV1MaterialRequestSummaryQuery
     >((ref, query) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
         previous,
         next,
@@ -106,6 +108,7 @@ final yorksV1MaterialRequestCommentPageProvider = FutureProvider.autoDispose
       YorksV1MaterialRequestCommentPage,
       ({String requestId, DateTime? beforeCreatedAt, String? beforeId})
     >((ref, query) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase2Repository) {
         throw const YorksV1DomainException(
@@ -122,6 +125,7 @@ final yorksV1MaterialRequestCommentPageProvider = FutureProvider.autoDispose
 
 final yorksV1MaterialRequestWorkAssignmentProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestWorkAssignment, String>((ref, requestId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase2Repository) {
@@ -135,6 +139,7 @@ final yorksV1MaterialRequestWorkAssignmentProvider = FutureProvider.autoDispose
 
 final yorksV1MaterialRequestChangeSummaryProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestChangeSummary?, String>((ref, requestId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.watch(yorksV1MaterialRequestRealtimeRevisionProvider);
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase2Repository) {
@@ -154,6 +159,7 @@ final yorksV1MaterialRequestLocalDraftsProvider =
       ref,
       ownerAuthUserId,
     ) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.watch(
         yorksV1MaterialRequestLocalDraftRevisionProvider(ownerAuthUserId),
       );
@@ -201,6 +207,7 @@ final yorksV1MaterialRequestPrivateDraftsProvider = FutureProvider.autoDispose
 
 final yorksV1MaterialRequestListProvider = FutureProvider.autoDispose
     .family<List<YorksV1MaterialRequest>, String?>((ref, projectId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       // Realtime never provides a request projection. Keep the current
       // authorized result on screen while a signal asks this provider to
       // refresh in place. Watching the revision as a normal dependency makes
@@ -537,6 +544,7 @@ final yorksV1MaterialRequestDraftProjectsProvider =
     FutureProvider.autoDispose<List<YorksV1MaterialRequestProjectOption>>((
       ref,
     ) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .listDraftProjects();
@@ -544,6 +552,7 @@ final yorksV1MaterialRequestDraftProjectsProvider =
 
 final yorksV1MaterialRequestScopesProvider = FutureProvider.autoDispose
     .family<List<YorksV1MaterialRequestScopeOption>, String>((ref, projectId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .listScopes(projectId);
@@ -552,6 +561,7 @@ final yorksV1MaterialRequestScopesProvider = FutureProvider.autoDispose
 final yorksV1MaterialRequestMentionCandidatesProvider = FutureProvider
     .autoDispose
     .family<List<YorksV1MaterialRequestMention>, String>((ref, requestId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .listMentionCandidates(requestId);
@@ -584,6 +594,7 @@ final yorksV1MaterialRequestInventorySearchProvider = FutureProvider.autoDispose
       List<YorksV1MaterialRequestInventorySuggestion>,
       YorksV1MaterialRequestInventorySearchKey
     >((ref, key) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       return ref
           .watch(yorksV1MaterialRequestRepositoryProvider)
           .searchInventory(
@@ -595,6 +606,7 @@ final yorksV1MaterialRequestInventorySearchProvider = FutureProvider.autoDispose
 
 final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequest, String>((ref, requestId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
         previous,
         next,
@@ -608,6 +620,7 @@ final yorksV1MaterialRequestDetailProvider = FutureProvider.autoDispose
 
 final yorksV1MaterialRequestPhase3PolicyProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestPhase3Policy, String>((ref, requestId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
         previous,
         next,
@@ -626,6 +639,7 @@ final yorksV1MaterialRequestPhase3PolicyProvider = FutureProvider.autoDispose
 
 final yorksV1MaterialRequestDocumentProvider = FutureProvider.autoDispose
     .family<YorksV1MaterialRequestDocumentModel, String>((ref, requestId) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
         previous,
         next,

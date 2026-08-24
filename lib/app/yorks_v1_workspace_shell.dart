@@ -9,6 +9,8 @@ import '../core/widgets/brand_logo.dart';
 import '../core/widgets/yorks_mobile_ui.dart';
 import '../shared/models/app_language.dart';
 import '../shared/models/app_strings.dart';
+import '../shared/models/yorks_v1_permission_management.dart';
+import '../shared/models/yorks_v1_permission_strings.dart';
 import '../shared/models/yorks_v1_project_strings.dart';
 import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
@@ -18,6 +20,7 @@ import '../shared/providers/notification_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/employee_provider.dart';
 import '../shared/providers/yorks_v1_material_request_provider.dart';
+import '../shared/providers/yorks_v1_permission_provider.dart';
 import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/providers/yorks_v1_feature_flags_provider.dart';
@@ -49,6 +52,21 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final location = GoRouterState.of(context).uri.path;
     final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
+    final connectedV1Permissions = ref.watch(supabaseClientProvider) != null;
+    final permissionState = connectedV1Permissions
+        ? ref.watch(yorksV1CurrentPermissionSnapshotProvider)
+        : null;
+    if (connectedV1Permissions && permissionState?.snapshot == null) {
+      return _YorksPermissionVerificationShell(
+        language: language,
+        loading: permissionState?.isInitialLoading ?? true,
+        onRetry: permissionState?.isInitialLoading ?? true
+            ? null
+            : () => ref
+                  .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+                  .refresh(),
+      );
+    }
     final chatUnread = teamChatEnabled
         ? ref.watch(yorksV1TeamChatUnreadProvider)
         : 0;
@@ -56,6 +74,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       role,
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
+      permissionState: permissionState,
     );
     final current = _currentDestination(destinations, location);
     final desktop =
@@ -154,6 +173,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                           nativeMobile: YorksMobileUi.isActive(context),
                           teamChatEnabled: teamChatEnabled,
                           chatUnread: chatUnread,
+                          permissionState: permissionState,
                         ),
                         activePath: location,
                         language: language,
@@ -172,6 +192,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                         breadcrumbs: breadcrumbs,
                         language: language,
                         role: role,
+                        destinations: destinations,
                       ),
                       Expanded(
                         child: YorksWorkspaceZoomViewport(
@@ -220,14 +241,22 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     required bool nativeMobile,
     bool teamChatEnabled = true,
     int chatUnread = 0,
+    YorksV1CurrentPermissionSnapshotState? permissionState,
   }) {
     final all = _destinationsFor(
       role,
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
+      permissionState: permissionState,
     );
-    _YorksDestination path(String route) =>
-        all.firstWhere((destination) => destination.path == route);
+    _YorksDestination? path(String route) {
+      for (final destination in all) {
+        if (destination.path == route) return destination;
+      }
+      return null;
+    }
+
+    final home = path(RoutePaths.engineerHome)!;
     if (!nativeMobile) {
       final more = _YorksDestination(
         label: AppStrings.more,
@@ -235,32 +264,29 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         selectedIcon: Icons.grid_view_rounded,
         path: RoutePaths.yorksV1MobileMore,
       );
-      if (role == YorksV1Role.procurement) {
-        return [
-          path(RoutePaths.engineerHome),
-          path(RoutePaths.yorksV1MaterialRequests),
-          path(RoutePaths.yorksV1Inventory),
-          teamChatEnabled
-              ? path(RoutePaths.yorksV1TeamChat)
-              : path(RoutePaths.yorksV1Dispatches),
-          more,
-        ];
-      }
-      return [
-        path(RoutePaths.engineerHome),
-        path(RoutePaths.yorksV1Projects),
-        if (teamChatEnabled) path(RoutePaths.yorksV1TeamChat),
-        path(RoutePaths.yorksV1MaterialRequests),
-        more,
-      ];
+      final preferred = role == YorksV1Role.procurement
+          ? <_YorksDestination?>[
+              home,
+              path(RoutePaths.yorksV1MaterialRequests),
+              path(RoutePaths.yorksV1Inventory),
+              teamChatEnabled
+                  ? path(RoutePaths.yorksV1TeamChat)
+                  : path(RoutePaths.yorksV1Dispatches),
+            ]
+          : <_YorksDestination?>[
+              home,
+              path(RoutePaths.yorksV1Projects),
+              if (teamChatEnabled) path(RoutePaths.yorksV1TeamChat),
+              path(RoutePaths.yorksV1MaterialRequests),
+            ];
+      return [...preferred.whereType<_YorksDestination>(), more];
     }
     _YorksDestination mobilePath(
-      String route,
+      _YorksDestination source,
       IconData icon,
       IconData selectedIcon, {
       TranslatableString? mobileLabel,
     }) {
-      final source = path(route);
       return _YorksDestination(
         label: mobileLabel ?? source.label,
         compactLabel: mobileLabel ?? source.compactLabel,
@@ -270,25 +296,32 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       );
     }
 
-    final home = mobilePath(
-      RoutePaths.engineerHome,
+    final mobileHome = mobilePath(
+      home,
       Icons.home_outlined,
       Icons.home_rounded,
       mobileLabel: AppStrings.home,
     );
-    final projects = mobilePath(
-      RoutePaths.yorksV1Projects,
-      Icons.folder_outlined,
-      Icons.folder_rounded,
-    );
-    final requests = mobilePath(
-      RoutePaths.yorksV1MaterialRequests,
-      Icons.receipt_long_outlined,
-      Icons.receipt_long_rounded,
-    );
-    final chat = teamChatEnabled
+    final projectSource = path(RoutePaths.yorksV1Projects);
+    final projects = projectSource == null
+        ? null
+        : mobilePath(
+            projectSource,
+            Icons.folder_outlined,
+            Icons.folder_rounded,
+          );
+    final requestSource = path(RoutePaths.yorksV1MaterialRequests);
+    final requests = requestSource == null
+        ? null
+        : mobilePath(
+            requestSource,
+            Icons.receipt_long_outlined,
+            Icons.receipt_long_rounded,
+          );
+    final chatSource = path(RoutePaths.yorksV1TeamChat);
+    final chat = teamChatEnabled && chatSource != null
         ? mobilePath(
-            RoutePaths.yorksV1TeamChat,
+            chatSource,
             Icons.chat_bubble_outline_rounded,
             Icons.chat_bubble_rounded,
           )
@@ -301,17 +334,124 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     );
     if (role == YorksV1Role.procurement) {
       return [
-        home,
-        requests,
-        path(RoutePaths.yorksV1Inventory),
-        if (chat != null) chat else path(RoutePaths.yorksV1Dispatches),
+        mobileHome,
+        ?requests,
+        ?path(RoutePaths.yorksV1Inventory),
+        ?(chat ?? path(RoutePaths.yorksV1Dispatches)),
         more,
       ];
     }
-    return [home, projects, ?chat, requests, more];
+    return [mobileHome, ?projects, ?chat, ?requests, more];
   }
 
   List<_YorksDestination> _destinationsFor(
+    YorksV1Role? role, {
+    bool teamChatEnabled = true,
+    int chatUnread = 0,
+    YorksV1CurrentPermissionSnapshotState? permissionState,
+  }) {
+    final candidates = <_YorksDestination>[
+      ..._legacyDestinationsFor(
+        role,
+        teamChatEnabled: teamChatEnabled,
+        chatUnread: chatUnread,
+      ),
+      ..._legacyDestinationsFor(
+        YorksV1Role.admin,
+        teamChatEnabled: teamChatEnabled,
+        chatUnread: chatUnread,
+      ),
+      ..._legacyDestinationsFor(
+        YorksV1Role.procurement,
+        teamChatEnabled: teamChatEnabled,
+        chatUnread: chatUnread,
+      ),
+      ..._legacyDestinationsFor(
+        YorksV1Role.seniorMechanicalEngineer,
+        teamChatEnabled: teamChatEnabled,
+        chatUnread: chatUnread,
+      ),
+    ];
+    final unique = <String, _YorksDestination>{};
+    for (final destination in candidates) {
+      final path = destination.path;
+      if (path != null) unique.putIfAbsent(path, () => destination);
+    }
+
+    bool allows(String capabilityKey, bool legacyAllowed) {
+      return permissionState?.hybridAllows(
+            capabilityKey,
+            legacyAllowed: legacyAllowed,
+            organizationSummary: true,
+          ) ??
+          legacyAllowed;
+    }
+
+    bool destinationAllowed(_YorksDestination destination) {
+      final path = destination.path;
+      if (path == RoutePaths.engineerHome) return true;
+      if (path == RoutePaths.yorksV1Projects) {
+        return allows(YorksV1CapabilityKeys.projectsView, role != null);
+      }
+      if (path == RoutePaths.yorksV1MaterialRequests) {
+        return allows(YorksV1CapabilityKeys.materialRequestsView, role != null);
+      }
+      if (path == RoutePaths.yorksV1TeamChat) {
+        return allows(YorksV1CapabilityKeys.chatView, role != null);
+      }
+      if (path == RoutePaths.yorksV1Inventory) {
+        return allows(
+          YorksV1CapabilityKeys.inventoryView,
+          role?.canBrowseInventory ?? false,
+        );
+      }
+      if (path == RoutePaths.yorksV1Returns) {
+        return allows(YorksV1CapabilityKeys.returnsView, role != null);
+      }
+      if (path == RoutePaths.yorksV1Dispatches) {
+        return allows(
+          YorksV1CapabilityKeys.dispatchView,
+          role == YorksV1Role.procurement || role == YorksV1Role.admin,
+        );
+      }
+      if (path == RoutePaths.yorksV1Configuration) {
+        return allows(
+          YorksV1CapabilityKeys.configurationView,
+          role == YorksV1Role.admin,
+        );
+      }
+      if (path == RoutePaths.rentals) {
+        return allows(
+          YorksV1CapabilityKeys.rentalsView,
+          role == YorksV1Role.admin,
+        );
+      }
+      if (path == RoutePaths.users) {
+        return allows(
+          YorksV1CapabilityKeys.usersView,
+          role?.canConfigureUsers ?? false,
+        );
+      }
+      if (path == RoutePaths.activityLog) {
+        return allows(
+          YorksV1CapabilityKeys.auditView,
+          role == YorksV1Role.admin,
+        );
+      }
+      if (path == RoutePaths.yorksV1DuctSizer ||
+          path == RoutePaths.yorksV1EspCalculator) {
+        return role?.isEngineering ?? false;
+      }
+      return false;
+    }
+
+    return [
+      for (final destination in unique.values)
+        if (destinationAllowed(destination)) destination,
+    ];
+  }
+
+  List<_YorksDestination> _legacyDestinationsFor(
     YorksV1Role? role, {
     bool teamChatEnabled = true,
     int chatUnread = 0,
@@ -524,6 +664,97 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
   }
 }
 
+/// Prevents protected feature widgets, navigation and actions from building
+/// before the first server-confirmed permission projection is available. The
+/// browser URL remains unchanged so a valid deep link resumes after the
+/// router's permission refresh signal, without a deny/redirect flash.
+class _YorksPermissionVerificationShell extends StatelessWidget {
+  const _YorksPermissionVerificationShell({
+    required this.language,
+    required this.loading,
+    required this.onRetry,
+  });
+
+  final AppLanguage language;
+  final bool loading;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    key: const ValueKey('yorks-permission-verification-shell'),
+    backgroundColor: AppColors.surface,
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (loading)
+                  const SizedBox.square(
+                    dimension: AppSpacing.minTapTarget,
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.security_update_warning_outlined,
+                    size: 48,
+                    color: AppColors.muted,
+                  ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  YorksV1PermissionStrings.text(
+                    language,
+                    loading ? 'loading_title' : 'load_failed_title',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.titleMedium.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  YorksV1PermissionStrings.text(
+                    language,
+                    loading ? 'loading_body' : 'load_failed_body',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+                if (onRetry != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  OutlinedButton.icon(
+                    key: const ValueKey('retry-permission-verification'),
+                    onPressed: onRetry,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(
+                        AppSpacing.minTapTarget,
+                        AppSpacing.minTapTarget,
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: Text(
+                      YorksV1PermissionStrings.text(language, 'retry'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// Full mobile destination used by the fixed bottom navigation. It exposes
 /// only routes already available to the authenticated role.
 class YorksV1MobileMoreScreen extends ConsumerWidget {
@@ -535,6 +766,10 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
     final teamChatEnabled = ref.watch(yorksV1FeatureFlagsProvider).teamChat;
+    final connectedV1Permissions = ref.watch(supabaseClientProvider) != null;
+    final permissionState = connectedV1Permissions
+        ? ref.watch(yorksV1CurrentPermissionSnapshotProvider)
+        : null;
     final chatUnread = teamChatEnabled
         ? ref.watch(yorksV1TeamChatUnreadProvider)
         : 0;
@@ -543,6 +778,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
       role,
       teamChatEnabled: teamChatEnabled,
       chatUnread: chatUnread,
+      permissionState: permissionState,
     );
     final primaryRoutes = shell
         ._mobileDestinationsFor(
@@ -550,6 +786,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
           nativeMobile: YorksMobileUi.isActive(context),
           teamChatEnabled: teamChatEnabled,
           chatUnread: chatUnread,
+          permissionState: permissionState,
         )
         .map((destination) => destination.path)
         .whereType<String>()
@@ -779,11 +1016,13 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
     required this.breadcrumbs,
     required this.language,
     required this.role,
+    required this.destinations,
   });
 
   final List<TranslatableString> breadcrumbs;
   final AppLanguage language;
   final YorksV1Role? role;
+  final List<_YorksDestination> destinations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -841,11 +1080,9 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
             SizedBox(
               width: 220,
               child: _YorksQuickNavigationButton(
-                destinations: _topLevelDestinationsFor(
-                  role,
-                  teamChatEnabled: teamChatEnabled,
-                  chatUnread: unreadChat,
-                ),
+                destinations: destinations
+                    .where((destination) => destination.path != null)
+                    .toList(growable: false),
                 language: language,
                 role: role,
               ),
@@ -1236,8 +1473,21 @@ class _YorksProfileDialog extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final profile = ref.watch(employeeProvider);
-    final projects = ref.watch(yorksV1ProjectPortfolioProvider);
-    final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final projects = ref.watch(yorksV1AuthorizedProjectPortfolioProvider);
+    final requests = ref
+        .watch(yorksV1MaterialRequestListProvider(null))
+        .whenData(
+          (items) => items
+              .where(
+                (item) => permissionState.hybridAllows(
+                  YorksV1CapabilityKeys.materialRequestsView,
+                  legacyAllowed: true,
+                  projectId: item.projectId,
+                ),
+              )
+              .toList(growable: false),
+        );
     final name = profile.name == '—'
         ? (user?.fullName ?? 'Yorks user')
         : profile.name;
@@ -1972,19 +2222,3 @@ TranslatableString _workspaceCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.admin => YorksV1ShellStrings.managementWorkspace,
   null => YorksV1ShellStrings.operationalWorkspace,
 };
-
-List<_YorksDestination> _topLevelDestinationsFor(
-  YorksV1Role? role, {
-  required bool teamChatEnabled,
-  required int chatUnread,
-}) {
-  final shell = YorksV1WorkspaceShell(child: const SizedBox.shrink());
-  return shell
-      ._destinationsFor(
-        role,
-        teamChatEnabled: teamChatEnabled,
-        chatUnread: chatUnread,
-      )
-      .where((item) => item.path != null)
-      .toList();
-}

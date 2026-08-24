@@ -265,11 +265,51 @@ Never waive a failed security/quantity test to meet the rapid-demo timebox.
   360px replacement card render without overflow, preserve at least 44px
   actions and expose no client-only authority.
 
+## 9B. Scoped capability management acceptance
+
+- AP-11: seeded role defaults reproduce the current effective decisions for all
+  eight exact roles, project memberships and existing commercial overrides;
+  parity has zero unexplained differences before consumer cutover.
+- AP-12: organization and one/many-project grants and denies resolve
+  deterministically; a project deny overrides an organization grant for that
+  project, expiry/revocation/inactive target fail closed, and unknown
+  capability/scope/effect inputs are rejected.
+- AP-13: a permission administrator cannot target themselves, grant above the
+  delegation ceiling, remove/expire the final active permission administrator,
+  or bypass the version/reason/idempotency requirements. Future denies and
+  expiring grants on `users.view`, `permissions.view`, `permissions.manage` or
+  `permissions.delegate` are rejected, including cross-scheduled changes that
+  would otherwise leave no manager at a later clock boundary.
+- AP-14: stale competing changes have no partial effects; an exact retry returns
+  the committed workspace without duplicating assignment, revision, history or
+  audit evidence.
+- AP-15: direct table APIs cannot read another user's assignments/history or
+  mutate catalogue/template/assignment/scope/revision/history/parity data.
+- AP-16: the current-user provider initiates its revision subscription before
+  the first protected fetch. A confirmed initial snapshot may render read-only
+  while the channel joins, but every mutation stays disabled until both the
+  snapshot and invalidation channel are healthy. The provider retains the last
+  confirmed snapshot during routine refresh, purges on
+  logout/inactive/authorization failure, polls safely if Realtime is
+  unavailable, and atomically updates navigation, search targets and actions
+  after a server-confirmed revision.
+- AP-17: User Management presents inherited/granted/denied/protected/shadow
+  states, reasoned review, conflict recovery and append-only history at 1366,
+  1024, 390 and 360px with keyboard/focus, 200% text, secondary language,
+  screen-reader labels and at least 44x44 controls.
+- AP-18: Admin, Senior Mechanical Engineer and a bounded delegated actor pass
+  real Edge -> GoTrue -> trigger tests for their allowed actions; inactive,
+  revoked, stale, self-target and above-hierarchy actions fail. V1 Auth bodies
+  with secondary roles, caller caps or a legacy-shell switch are rejected. A
+  failure between identity creation and role stamping resumes under the same
+  HMAC-bound idempotency key, while a lost-response retry returns the same
+  stable app user ID with exactly one `admin_user_created` audit.
+
 ## 10. Release evidence package
 
 Batch 10 produces:
 
-- scenario result matrix for AT-01–AT-40 and AP-01–AP-10;
+- scenario result matrix for AT-01–AT-40 and AP-01–AP-18;
 - Flutter/database/concurrency/integration command logs;
 - desktop/mobile screenshots and controlled-document renders;
 - workbook round-trip fixtures/results;

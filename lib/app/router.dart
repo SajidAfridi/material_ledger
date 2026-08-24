@@ -13,6 +13,7 @@ import '../features/admin/presentation/screens/data_sync_screen.dart';
 import '../features/admin/presentation/screens/more_hub_screen.dart';
 import '../features/admin/presentation/screens/material_masters_screen.dart';
 import '../features/admin/presentation/screens/user_management_screen.dart';
+import '../features/admin/presentation/screens/yorks_v1_user_access_screen.dart';
 import '../features/admin/presentation/screens/yorks_v1_configuration_screen.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
@@ -68,7 +69,9 @@ import '../shared/models/app_config.dart';
 import '../shared/models/app_user.dart';
 import '../shared/models/role_permissions.dart';
 import '../shared/models/user_role.dart';
+import '../shared/models/yorks_v1_permission_management.dart';
 import '../shared/models/yorks_v1_role.dart';
+import '../shared/providers/yorks_v1_permission_provider.dart';
 import '../shared/screens/about_screen.dart';
 import '../shared/screens/activity_log_screen.dart';
 import '../shared/screens/notifications_screen.dart';
@@ -298,6 +301,7 @@ abstract final class RoutePaths {
   static const String adminProjects = '/admin/projects';
   static const String adminRequests = '/admin/requests';
   static const String users = '/admin/users';
+  static const String yorksV1UserAccess = '/admin/users/:appUserId/access';
   static const String accessRoles = '/access-roles';
   static const String dataSync = '/data-sync';
   static const String procurement = '/admin/procurement';
@@ -307,6 +311,9 @@ abstract final class RoutePaths {
   static String planReviewProcurementPath(String projectId) =>
       '/admin/plan-review/$projectId';
   static String dispatchPath(String requestId) => '/admin/dispatch/$requestId';
+
+  static String yorksV1UserAccessPath(String appUserId) =>
+      '/admin/users/${appUserId.trim()}/access';
 
   // ─── Rentals / People details ───────────────────────────────
   static const String rentalUnit = '/rentals/:id';
@@ -360,12 +367,13 @@ Page<void> _framed(LocalKey key, Widget child) => _slide(
 
 /// Routes open to a [UserRole]. The in-app half of role-based access control
 /// (the Firestore Security Rules enforce the same server-side).
-bool _isAllowedForRole(
+bool? _isAllowedForRole(
   String path,
   UserRole role,
   AppUser? user,
   RolePermissions perms,
   YorksV1Role? yorksV1Role,
+  YorksV1HybridPermissionResolver? permissionResolver,
 ) {
   // Grantable boundaries resolve through: per-user override → editable role
   // default (Access & Roles matrix) → built-in baseline.
@@ -421,11 +429,20 @@ bool _isAllowedForRole(
       path == RoutePaths.adminRequests) {
     return role.isAdmin;
   }
-  if (path == RoutePaths.users) {
-    return yorksV1Role?.canConfigureUsers ?? role.isAdmin;
+  if (path == RoutePaths.users || path.startsWith('${RoutePaths.users}/')) {
+    final legacy = yorksV1Role?.canConfigureUsers ?? role.isAdmin;
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.usersView,
+      legacyAllowed: legacy,
+    );
   }
   if (path == RoutePaths.activityLog) {
-    return yorksV1Role == YorksV1Role.admin;
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.auditView,
+      legacyAllowed: yorksV1Role == YorksV1Role.admin,
+    );
   }
   if (path == RoutePaths.goodsReceipt) return canReceiveGoods;
   if (path == RoutePaths.finance) {
@@ -444,7 +461,11 @@ bool _isAllowedForRole(
   // Yorks role claim as the rental RPCs; legacy capability overrides cannot
   // expose commercial tenant, rent, receipt or cheque data.
   if (path.startsWith('/rentals')) {
-    return yorksV1Role == YorksV1Role.admin;
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.rentalsView,
+      legacyAllowed: yorksV1Role == YorksV1Role.admin,
+    );
   }
   if (path.startsWith('/people')) return canAccessPeople;
 
@@ -470,7 +491,12 @@ bool _isAllowedForRole(
 /// than the shared project/request read surface. Trusted RPCs and RLS remain
 /// authoritative; this prevents a stale link from building an inappropriate
 /// editor or organization-wide queue before the server rejects it.
-bool _isYorksV1RouteAllowedForRole(String path, YorksV1Role? role) {
+bool? _isYorksV1RouteAllowedForRole(
+  Uri uri,
+  YorksV1Role? role,
+  YorksV1HybridPermissionResolver? permissionResolver,
+) {
+  final path = uri.path;
   // Engineering calculators deliberately live outside the `/yorks/` prefix,
   // so evaluate their exact role boundary before the generic V1-path fast
   // path below. Otherwise a Procurement deep link reaches an Engineer-only
@@ -483,27 +509,150 @@ bool _isYorksV1RouteAllowedForRole(String path, YorksV1Role? role) {
   if (!path.startsWith('/yorks/')) return true;
   if (role == null) return false;
 
+  if (path == RoutePaths.yorksV1Projects ||
+      path.startsWith('${RoutePaths.yorksV1Projects}/')) {
+    final projectId = _yorksV1ProjectIdFromPath(path);
+    final decision = _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.projectsView,
+      legacyAllowed: true,
+      projectId: projectId,
+      organizationSummary: projectId == null,
+    );
+    if (decision != true) return decision;
+
+    // BOQ is a separate protected read surface. A person may retain access to
+    // the project workspace while an explicit BOQ deny removes workbook data.
+    // Check both the folder route and individual worksheet deep links here;
+    // RPC/RLS repeats the same project-scoped decision.
+    final projectSegments = uri.pathSegments;
+    final isBoqRoute =
+        projectSegments.length >= 4 &&
+        projectSegments[0] == 'yorks' &&
+        projectSegments[1] == 'projects' &&
+        projectSegments[3] == 'boq';
+    if (isBoqRoute) {
+      final boqDecision = _hybridRouteAllows(
+        permissionResolver,
+        YorksV1CapabilityKeys.boqView,
+        legacyAllowed: true,
+        projectId: projectId,
+        organizationSummary: false,
+      );
+      if (boqDecision != true) return boqDecision;
+    }
+  }
+
+  if (path == RoutePaths.yorksV1MaterialRequests ||
+      path.startsWith('${RoutePaths.yorksV1MaterialRequests}/')) {
+    final projectId = uri.queryParameters['project_id']?.trim();
+    final decision = _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.materialRequestsView,
+      legacyAllowed: true,
+      projectId: projectId == null || projectId.isEmpty ? null : projectId,
+      organizationSummary: projectId == null || projectId.isEmpty,
+    );
+    if (decision != true) return decision;
+  }
+
+  if (path == RoutePaths.yorksV1TeamChat ||
+      path.startsWith('${RoutePaths.yorksV1TeamChat}/')) {
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.chatView,
+      legacyAllowed: true,
+    );
+  }
+
   if (path == RoutePaths.yorksV1Inventory ||
       path == RoutePaths.yorksV1Dispatches) {
-    if (path == RoutePaths.yorksV1Inventory) return role.canBrowseInventory;
-    return role == YorksV1Role.procurement || role == YorksV1Role.admin;
+    if (path == RoutePaths.yorksV1Inventory) {
+      return _hybridRouteAllows(
+        permissionResolver,
+        YorksV1CapabilityKeys.inventoryView,
+        legacyAllowed: role.canBrowseInventory,
+      );
+    }
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.dispatchView,
+      legacyAllowed:
+          role == YorksV1Role.procurement || role == YorksV1Role.admin,
+    );
   }
 
   if (path == RoutePaths.yorksV1InventorySuppliers ||
       path == RoutePaths.yorksV1InventoryImport ||
       path.startsWith('${RoutePaths.yorksV1InventorySuppliers}/')) {
-    return role == YorksV1Role.procurement || role == YorksV1Role.admin;
+    final structurallyEligible =
+        role == YorksV1Role.procurement || role == YorksV1Role.admin;
+    if (!structurallyEligible) return false;
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.inventoryView,
+      legacyAllowed: role.canBrowseInventory,
+    );
   }
 
   if (path == RoutePaths.yorksV1Configuration) {
-    return role == YorksV1Role.admin;
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.configurationView,
+      legacyAllowed: role == YorksV1Role.admin,
+    );
+  }
+
+  if (path == RoutePaths.yorksV1Returns ||
+      path.startsWith('${RoutePaths.yorksV1Returns}/')) {
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.returnsView,
+      legacyAllowed: true,
+    );
   }
 
   if (path.startsWith('/yorks/projects/') && path.endsWith('/edit')) {
-    return role.isEngineering || role == YorksV1Role.admin;
+    final structurallyEligible =
+        role.isEngineering || role == YorksV1Role.admin;
+    if (!structurallyEligible) return false;
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.projectsEdit,
+      legacyAllowed: structurallyEligible,
+      projectId: _yorksV1ProjectIdFromPath(path),
+      organizationSummary: false,
+    );
   }
 
   return true;
+}
+
+bool? _hybridRouteAllows(
+  YorksV1HybridPermissionResolver? resolver,
+  String capabilityKey, {
+  required bool legacyAllowed,
+  String? projectId,
+  bool organizationSummary = true,
+}) {
+  if (resolver == null) return legacyAllowed;
+  return resolver(
+    capabilityKey,
+    legacyAllowed: legacyAllowed,
+    organizationSummary: organizationSummary,
+    projectId: projectId,
+  );
+}
+
+String? _yorksV1ProjectIdFromPath(String path) {
+  final segments = Uri(path: path).pathSegments;
+  if (segments.length < 3 ||
+      segments[0] != 'yorks' ||
+      segments[1] != 'projects') {
+    return null;
+  }
+  final projectId = segments[2].trim();
+  return projectId.isEmpty ? null : projectId;
 }
 
 /// Creates the app [GoRouter].
@@ -528,6 +677,7 @@ GoRouter createAppRouter({
   bool yorksV1TeamChatEnabled = false,
   bool yorksV1InventorySuppliersEnabled = false,
   YorksV1Role? yorksV1Role,
+  YorksV1HybridPermissionResolver? yorksV1PermissionResolver,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
   // [refreshListenable] let route guards re-evaluate the moment an Admin edits
   // the matrix, WITHOUT rebuilding the router (no nav reset).
@@ -595,10 +745,18 @@ GoRouter createAppRouter({
       // This is an experience-level guard only; the normalized V1 RPC/RLS
       // remains authoritative. It ensures a Procurement deep-link never
       // builds the project-creation form once the Rev 2.0/R35 route is on.
-      if (yorksV1ProjectsEnabled &&
-          path == RoutePaths.engineerCreateProject &&
-          (yorksV1Role == null || !yorksV1Role.canCreateProject)) {
-        return _yorksV1ProjectFallbackPath();
+      if (yorksV1ProjectsEnabled && path == RoutePaths.engineerCreateProject) {
+        final structurallyEligible = yorksV1Role?.canCreateProject ?? false;
+        if (!structurallyEligible) return _yorksV1ProjectFallbackPath();
+        final capabilityAllowed = _hybridRouteAllows(
+          yorksV1PermissionResolver,
+          YorksV1CapabilityKeys.projectsCreate,
+          legacyAllowed: structurallyEligible,
+        );
+        if (capabilityAllowed == false) {
+          return _yorksV1ProjectFallbackPath();
+        }
+        if (capabilityAllowed == null) return null;
       }
 
       if (path.startsWith('/yorks/projects/') && !yorksV1BoqEnabled) {
@@ -636,13 +794,51 @@ GoRouter createAppRouter({
           !yorksV1ReturnsDocumentsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
-      if (path.startsWith('/yorks/material-requests/draft/') &&
-          (yorksV1Role == null || !yorksV1Role.canCreateMaterialRequest)) {
+      if (path.startsWith('/yorks/material-requests/draft/')) {
+        final structurallyEligible =
+            yorksV1Role?.canCreateMaterialRequest ?? false;
+        if (!structurallyEligible) return _yorksV1ProjectFallbackPath();
+        final capabilityAllowed = _hybridRouteAllows(
+          yorksV1PermissionResolver,
+          YorksV1CapabilityKeys.materialRequestsCreate,
+          legacyAllowed: structurallyEligible,
+          projectId: state.uri.queryParameters['project_id'],
+          organizationSummary: (state.uri.queryParameters['project_id'] ?? '')
+              .trim()
+              .isEmpty,
+        );
+        if (capabilityAllowed == false) {
+          return _yorksV1ProjectFallbackPath();
+        }
+        if (capabilityAllowed == null) return null;
+      }
+      // The retained local Access & Roles matrix is not a V1 authority. Keep
+      // its route available only to the explicit legacy rollout lane.
+      if (yorksV1ProjectsEnabled && path == RoutePaths.accessRoles) {
+        return RoutePaths.users;
+      }
+      // Scoped-access deep links fail closed until a current protected
+      // snapshot authoritatively grants permission inspection. The target
+      // workspace RPC/RLS repeats this check; this guard prevents the page
+      // from painting while that confirmation is absent or stale.
+      if (path.startsWith('${RoutePaths.users}/')) {
+        final capabilityAllowed = _hybridRouteAllows(
+          yorksV1PermissionResolver,
+          YorksV1CapabilityKeys.permissionsView,
+          legacyAllowed: yorksV1Role?.canConfigureUsers ?? role.isAdmin,
+        );
+        if (capabilityAllowed == false) return RoutePaths.users;
+        if (capabilityAllowed == null) return null;
+      }
+      final yorksV1RouteAllowed = _isYorksV1RouteAllowedForRole(
+        state.uri,
+        yorksV1Role,
+        yorksV1PermissionResolver,
+      );
+      if (yorksV1RouteAllowed == false) {
         return _yorksV1ProjectFallbackPath();
       }
-      if (!_isYorksV1RouteAllowedForRole(path, yorksV1Role)) {
-        return _yorksV1ProjectFallbackPath();
-      }
+      if (yorksV1RouteAllowed == null) return null;
 
       // Batch 2 has the normalized creation flow but not the V1 portfolio,
       // workspace, BOQ/plan or request projection. Once V1 Projects is
@@ -662,9 +858,18 @@ GoRouter createAppRouter({
       // Role-based access guard for module routes → Home if not allowed.
       final perms =
           rolePermissions?.call() ?? RolePermissions.fromRoleDefaults();
-      if (!_isAllowedForRole(path, role, user, perms, yorksV1Role)) {
+      final roleAllowed = _isAllowedForRole(
+        path,
+        role,
+        user,
+        perms,
+        yorksV1Role,
+        yorksV1PermissionResolver,
+      );
+      if (roleAllowed == false) {
         return RoutePaths.engineerHome;
       }
+      if (roleAllowed == null) return null;
 
       return null;
     },
@@ -1197,6 +1402,15 @@ GoRouter createAppRouter({
         path: RoutePaths.users,
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const UserManagementScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1UserAccess,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1UserAccessScreen(
+            targetAppUserId: state.pathParameters['appUserId'] ?? '',
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.accessRoles,

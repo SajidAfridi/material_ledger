@@ -1235,6 +1235,16 @@ begin
         when p_role is null then '{}'::jsonb
         else jsonb_build_object('role', p_role)
       end
+      || case
+        when coalesce(public.v1_is_valid_role(p_role), false)
+          and p_audit_context -> '_v1_admin_audit_context' ->> 'action'
+            = 'created'
+        then jsonb_build_object(
+          'roles', jsonb_build_array(p_role),
+          'caps', public.v1_auth_expected_server_caps(p_role)
+        )
+        else '{}'::jsonb
+      end
       || coalesce(p_audit_context, '{}'::jsonb),
     jsonb_build_object('full_name', 'Batch 2 fixture'),
     clock_timestamp(),
@@ -2148,7 +2158,7 @@ select throws_ok(
            )
      where id = '10000000-0000-4000-8000-000000000091'::uuid$$,
   '42501',
-  'V1_ADMIN_AUDIT_CONTEXT_ACTOR_NOT_ACTIVE_ADMIN',
+  'V1_ADMIN_AUDIT_CONTEXT_ACTOR_CAPABILITY_REQUIRED',
   'A forged non-Admin audit context cannot mutate Auth state'
 );
 

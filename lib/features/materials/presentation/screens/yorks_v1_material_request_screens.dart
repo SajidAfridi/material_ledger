@@ -28,6 +28,7 @@ import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_quantity.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
@@ -43,6 +44,7 @@ import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_repository_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
@@ -57,6 +59,7 @@ import 'yorks_v1_controlled_unit_field.dart';
 import 'yorks_v1_logistics_screen.dart';
 import 'yorks_v1_material_request_centre.dart';
 import 'yorks_v1_returns_documents_screen.dart';
+import '../yorks_v1_feature_action_access.dart';
 
 /// V1 material request overview. It reads only the server projection; drafts
 /// are returned only to their creator by the database contract.
@@ -74,15 +77,27 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
     }
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final createAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      projectId: projectId,
+      anyProject: projectId == null,
+    );
     final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
     final phase2Repository =
         repository is YorksV1MaterialRequestPhase2Repository
         ? repository as YorksV1MaterialRequestPhase2Repository
         : null;
-    final refreshRevision = ref.watch(
+    final requestRefreshRevision = ref.watch(
       yorksV1MaterialRequestRealtimeRevisionProvider,
     );
-    final canCreate = role?.canCreateMaterialRequest ?? false;
+    final refreshRevision = Object.hash(
+      requestRefreshRevision,
+      permissionState.snapshot?.revision,
+    );
+    final canCreate = createAccess.isVisible;
     final ownerAuthUserId = ref.watch(yorksV1AuthUserIdProvider);
     final deviceDrafts = ownerAuthUserId == null || ownerAuthUserId.isEmpty
         ? const <YorksV1MaterialRequestDraft>[]
@@ -135,18 +150,21 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
         body: SafeArea(
           top: false,
           child: YorksV1MaterialRequestCentre(
+            key: ValueKey<int?>(permissionState.snapshot?.revision),
             requests: const [],
             language: language,
             canCreate: canCreate,
             fixedProjectId: projectId,
             summaryPageLoader: phase2Repository.listRequestSummaries,
             refreshRevision: refreshRevision,
-            onCreate: () => context.push(
-              RoutePaths.yorksV1MaterialRequestDraftPath(
-                const Uuid().v4(),
-                projectId: projectId,
-              ),
-            ),
+            onCreate: createAccess.canWrite
+                ? () => context.push(
+                    RoutePaths.yorksV1MaterialRequestDraftPath(
+                      const Uuid().v4(),
+                      projectId: projectId,
+                    ),
+                  )
+                : null,
             onOpen: (request) =>
                 context.push(_materialRequestOpenPath(request)),
             onRefresh: () {},
@@ -167,16 +185,27 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
             onRetry: () => ref.invalidate(yorksV1MaterialRequestListProvider),
           ),
           data: (items) => YorksV1MaterialRequestCentre(
-            requests: items,
+            requests: items
+                .where(
+                  (item) => yorksV1CanReadProjectRecord(
+                    permissionState,
+                    YorksV1CapabilityKeys.materialRequestsView,
+                    legacyAllowed: true,
+                    projectId: item.projectId,
+                  ),
+                )
+                .toList(growable: false),
             language: language,
             canCreate: canCreate,
             fixedProjectId: projectId,
-            onCreate: () => context.push(
-              RoutePaths.yorksV1MaterialRequestDraftPath(
-                const Uuid().v4(),
-                projectId: projectId,
-              ),
-            ),
+            onCreate: createAccess.canWrite
+                ? () => context.push(
+                    RoutePaths.yorksV1MaterialRequestDraftPath(
+                      const Uuid().v4(),
+                      projectId: projectId,
+                    ),
+                  )
+                : null,
             onOpen: (request) =>
                 context.push(_materialRequestOpenPath(request)),
             onRefresh: () => ref.invalidate(yorksV1MaterialRequestListProvider),
@@ -268,7 +297,15 @@ class _YorksMobileMaterialRequestsPageState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
-    final canCreate = role?.canCreateMaterialRequest ?? false;
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final createAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      projectId: widget.projectId,
+      anyProject: widget.projectId == null,
+    );
+    final canCreate = createAccess.isVisible;
     final ownerAuthUserId = ref.watch(yorksV1AuthUserIdProvider);
     final deviceDrafts = ownerAuthUserId == null || ownerAuthUserId.isEmpty
         ? const <YorksV1MaterialRequestDraft>[]
@@ -301,13 +338,28 @@ class _YorksMobileMaterialRequestsPageState
     final summary = phase2
         ? ref.watch(yorksV1MaterialRequestSummaryPageProvider(_summaryQuery))
         : null;
-    final requests = summary == null || summary.hasError
-        ? ref.watch(yorksV1MaterialRequestListProvider(widget.projectId))
-        : summary.whenData(
-            (page) => page.items
-                .map((request) => request.toRegisterProjection())
-                .toList(growable: false),
-          );
+    final requests =
+        (summary == null || summary.hasError
+                ? ref.watch(
+                    yorksV1MaterialRequestListProvider(widget.projectId),
+                  )
+                : summary.whenData(
+                    (page) => page.items
+                        .map((request) => request.toRegisterProjection())
+                        .toList(growable: false),
+                  ))
+            .whenData(
+              (items) => items
+                  .where(
+                    (item) => yorksV1CanReadProjectRecord(
+                      permissionState,
+                      YorksV1CapabilityKeys.materialRequestsView,
+                      legacyAllowed: true,
+                      projectId: item.projectId,
+                    ),
+                  )
+                  .toList(growable: false),
+            );
     return Scaffold(
       backgroundColor: AppColors.mobileSurface,
       body: ColoredBox(
@@ -358,7 +410,7 @@ class _YorksMobileMaterialRequestsPageState
                   onPageChanged: phase2 && summary?.hasError != true
                       ? (value) => setState(() => _page = value)
                       : null,
-                  onCreate: canCreate
+                  onCreate: createAccess.canWrite
                       ? () => context.push(
                           RoutePaths.yorksV1MaterialRequestDraftPath(
                             const Uuid().v4(),
@@ -1797,6 +1849,7 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final request = ref.watch(yorksV1MaterialRequestDetailProvider(requestId));
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
     return Scaffold(
@@ -1830,12 +1883,21 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
           onRetry: () =>
               ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId)),
         ),
-        data: (value) => _RequestDetailBody(
-          request: value,
+        data: (value) => YorksV1ProjectReadBoundary(
+          allowed: yorksV1CanReadProjectRecord(
+            permissionState,
+            YorksV1CapabilityKeys.materialRequestsView,
+            legacyAllowed: true,
+            projectId: value.projectId,
+          ),
           language: language,
-          showPageHeader: !compactRoute,
-          onRefresh: () =>
-              ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId)),
+          child: _RequestDetailBody(
+            request: value,
+            language: language,
+            showPageHeader: !compactRoute,
+            onRefresh: () =>
+                ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId)),
+          ),
         ),
       ),
     );
@@ -1875,6 +1937,24 @@ class _DraftForm extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final draft = state.draft;
+    final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final editAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      draft.serverRecordVersion > 0
+          ? YorksV1CapabilityKeys.materialRequestsEdit
+          : YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      projectId: draft.projectId,
+      anyProject: draft.projectId == null,
+    );
+    final submitAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsSubmit,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      projectId: draft.projectId,
+      anyProject: draft.projectId == null,
+    );
     final runtimeConfiguration = ref.watch(yorksV1RuntimeConfigurationProvider);
     final controlledUnitsAsync = ref.watch(
       yorksV1ConfigurationUnitCodesProvider,
@@ -1913,10 +1993,12 @@ class _DraftForm extends ConsumerWidget {
         selectedProject?.state == YorksV1ProjectLifecycle.active.wireValue;
     final canSubmit =
         draft.canSubmitLocally &&
+        submitAccess.canWrite &&
         controlledUnitsReady &&
         projectIsActive &&
         state.status != YorksV1MaterialRequestDraftSyncStatus.submitting;
     final isBusy =
+        !editAccess.canWrite ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
     final excelEnabled = ref.watch(yorksV1FeatureFlagsProvider).excel;
@@ -1935,12 +2017,15 @@ class _DraftForm extends ConsumerWidget {
         state: state,
         controller: controller,
         language: language,
+        canSave: editAccess.canWrite,
         child: _YorksMobileMaterialRequestDraftFlow(
           state: state,
           controller: controller,
           projects: projects,
           scopes: scopes,
           allowedTimings: allowedTimings,
+          canEdit: editAccess.canWrite,
+          canSubmit: submitAccess.canWrite,
           onSave: () => _save(context, ref, controller, draft),
           onSubmit: () => _submitForMobile(context, ref, controller),
         ),
@@ -1951,6 +2036,7 @@ class _DraftForm extends ConsumerWidget {
       state: state,
       controller: controller,
       language: language,
+      canSave: editAccess.canWrite,
       child: Scaffold(
         backgroundColor: AppColors.surface,
         appBar: compactRoute
@@ -2291,12 +2377,14 @@ class _MaterialRequestDraftExitGuard extends ConsumerStatefulWidget {
     required this.state,
     required this.controller,
     required this.language,
+    required this.canSave,
     required this.child,
   });
 
   final YorksV1MaterialRequestDraftState state;
   final YorksV1MaterialRequestDraftController controller;
   final AppLanguage language;
+  final bool canSave;
   final Widget child;
 
   @override
@@ -2381,6 +2469,7 @@ class _MaterialRequestDraftExitGuardState
   }
 
   Future<bool> _saveBeforeLeaving() async {
+    if (!widget.canSave) return false;
     final canSaveOnServer = widget.controller.currentDraft.canSubmitLocally;
     try {
       final saved = await widget.controller.saveDraft();
@@ -2683,6 +2772,8 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
     required this.projects,
     required this.scopes,
     required this.allowedTimings,
+    required this.canEdit,
+    required this.canSubmit,
     required this.onSave,
     required this.onSubmit,
   });
@@ -2692,6 +2783,8 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
   final AsyncValue<List<YorksV1MaterialRequestProjectOption>> projects;
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
   final List<YorksV1MaterialRequestTiming> allowedTimings;
+  final bool canEdit;
+  final bool canSubmit;
   final Future<void> Function() onSave;
   final Future<YorksV1MaterialRequest?> Function() onSubmit;
 
@@ -2744,6 +2837,7 @@ class _YorksMobileMaterialRequestDraftFlowState
   YorksV1MaterialRequestDraft get _draft => widget.state.draft;
 
   bool get _busy =>
+      !widget.canEdit ||
       widget.state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
       widget.state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
 
@@ -3115,6 +3209,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     final active = project?.state == YorksV1ProjectLifecycle.active.wireValue;
     final canSubmit =
         _draft.canSubmitLocally &&
+        widget.canSubmit &&
         controlledUnitsReady &&
         active &&
         _reviewConfirmed &&
@@ -6708,7 +6803,7 @@ class _MrDeleteButton extends StatelessWidget {
 
   final Key? buttonKey;
   final bool enabled;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => IconButton(
@@ -7131,6 +7226,7 @@ class _RequestDetailBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
     final arrangementEnabled = featureFlags.arrangement;
     final logisticsEnabled = featureFlags.logistics;
@@ -7172,16 +7268,22 @@ class _RequestDetailBody extends ConsumerWidget {
         MediaQuery.sizeOf(context).width >= AppSpacing.yorksV1DesktopBreakpoint;
     final isProcurement =
         role == YorksV1Role.procurement || role == YorksV1Role.admin;
-    final canArrange =
+    final legacyCanArrange =
         arrangementEnabled &&
         isProcurement &&
         (request.state == YorksV1MaterialRequestState.approvedForArrangement ||
             request.state == YorksV1MaterialRequestState.arranging);
+    final arrangeAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.procurementArrange,
+      legacyAllowed: legacyCanArrange,
+      projectId: request.projectId,
+    );
     // Cancellation is a Project Engineer/Admin command. A Site Engineer who
     // also holds a Project Engineer membership is authorized by the server,
     // but the role-safe request projection does not expose that composite
     // capability yet, so do not surface an action that can be rejected.
-    final canCancel =
+    final legacyCanCancel =
         ((role?.isGlobalProjectEngineer ?? false) ||
             role == YorksV1Role.projectEngineer ||
             role == YorksV1Role.admin) &&
@@ -7194,6 +7296,30 @@ class _RequestDetailBody extends ConsumerWidget {
             request.state == YorksV1MaterialRequestState.arranging ||
             request.state == YorksV1MaterialRequestState.awaitingApproval ||
             request.state == YorksV1MaterialRequestState.approved);
+    final cancelAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsCancel,
+      legacyAllowed: legacyCanCancel,
+      projectId: request.projectId,
+    );
+    final editAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsEdit,
+      legacyAllowed: request.canEditBeforeApproval,
+      projectId: request.projectId,
+    );
+    final approveAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsApprove,
+      legacyAllowed: request.canDecideRequest,
+      projectId: request.projectId,
+    );
+    final returnForChangesAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsReturnForChanges,
+      legacyAllowed: request.canDecideRequest,
+      projectId: request.projectId,
+    );
     final canOpenLogistics =
         logisticsEnabled &&
         request.state != YorksV1MaterialRequestState.draft &&
@@ -7214,13 +7340,40 @@ class _RequestDetailBody extends ConsumerWidget {
     final deliveryOrderDispatch = _firstDeliveryOrderDispatch(
       returnsDocumentsWorkspace,
     );
-    final canGenerateDeliveryOrder = deliveryOrderDispatch != null;
-    final canClose = yorksV1CanOfferMaterialRequestClose(
-      state: request.state,
-      role: role,
+    final deliveryOrderAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.deliveryOrdersGenerate,
+      legacyAllowed: deliveryOrderDispatch != null,
+      projectId: request.projectId,
     );
+    final receiptAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.receiptsConfirm,
+      legacyAllowed: receiptDispatch != null,
+      projectId: request.projectId,
+    );
+    final dispatchAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.dispatchCreate,
+      legacyAllowed: logisticsWorkspace?.canDispatch == true,
+      projectId: request.projectId,
+    );
+    final closeAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsClose,
+      legacyAllowed: yorksV1CanOfferMaterialRequestClose(
+        state: request.state,
+        role: role,
+      ),
+      projectId: request.projectId,
+    );
+    final canGenerateDeliveryOrder =
+        deliveryOrderDispatch != null && deliveryOrderAccess.isVisible;
+    final canClose = closeAccess.isVisible;
     final onGenerateDeliveryOrder =
-        returnsDocumentsWorkspace != null && deliveryOrderDispatch != null
+        returnsDocumentsWorkspace != null &&
+            deliveryOrderDispatch != null &&
+            deliveryOrderAccess.canWrite
         ? () => _generateDeliveryOrder(
             context,
             ref,
@@ -7230,7 +7383,9 @@ class _RequestDetailBody extends ConsumerWidget {
           )
         : null;
     final onReviewReceipt =
-        logisticsWorkspace == null || receiptDispatch == null
+        logisticsWorkspace == null ||
+            receiptDispatch == null ||
+            !receiptAccess.canWrite
         ? null
         : () => _reviewReceipt(
             context,
@@ -7243,34 +7398,49 @@ class _RequestDetailBody extends ConsumerWidget {
       state: request.state,
       role: role,
       canArrange:
-          canArrange &&
+          arrangeAccess.isVisible &&
           arrangementWorkspace != null &&
           (arrangementWorkspace.canBegin || arrangementWorkspace.canSave),
-      canDispatch: logisticsWorkspace?.canDispatch == true,
-      canConfirmReceipt: receiptDispatch != null,
+      canDispatch:
+          logisticsWorkspace?.canDispatch == true && dispatchAccess.isVisible,
+      canConfirmReceipt: receiptDispatch != null && receiptAccess.isVisible,
       canGenerateDeliveryOrder: canGenerateDeliveryOrder,
       canClose: canClose,
     );
     final onPrimaryAction = switch (primaryAction) {
-      YorksV1MaterialRequestDetailPrimaryAction.arrange =>
+      YorksV1MaterialRequestDetailPrimaryAction.arrange
+          when arrangeAccess.canWrite =>
         () => _openArrangement(context, ref, request.id, arrangementWorkspace),
-      YorksV1MaterialRequestDetailPrimaryAction.dispatch => () => context.push(
-        RoutePaths.yorksV1MaterialRequestLogisticsPath(request.id),
-      ),
-      YorksV1MaterialRequestDetailPrimaryAction.receiptReview =>
+      YorksV1MaterialRequestDetailPrimaryAction.dispatch
+          when dispatchAccess.canWrite =>
+        () => context.push(
+          RoutePaths.yorksV1MaterialRequestLogisticsPath(request.id),
+        ),
+      YorksV1MaterialRequestDetailPrimaryAction.receiptReview
+          when receiptAccess.canWrite =>
         onReviewReceipt,
-      YorksV1MaterialRequestDetailPrimaryAction.close => () => _close(
-        context,
-        ref,
-        request,
-      ),
-      YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder =>
+      YorksV1MaterialRequestDetailPrimaryAction.close
+          when closeAccess.canWrite =>
+        () => _close(context, ref, request),
+      YorksV1MaterialRequestDetailPrimaryAction.generateDeliveryOrder
+          when deliveryOrderAccess.canWrite =>
         onGenerateDeliveryOrder,
-      null => null,
+      _ => null,
     };
     final Widget? approvalActions =
-        request.canDecideRequest || request.canEditBeforeApproval
-        ? _RequestApprovalActions(request: request)
+        (request.canDecideRequest || request.canEditBeforeApproval) &&
+            (editAccess.isVisible ||
+                approveAccess.isVisible ||
+                returnForChangesAccess.isVisible)
+        ? _RequestApprovalActions(
+            request: request,
+            showEdit: editAccess.isVisible,
+            showApprove: approveAccess.isVisible,
+            showReturnForChanges: returnForChangesAccess.isVisible,
+            canEdit: editAccess.canWrite,
+            canApprove: approveAccess.canWrite,
+            canReturnForChanges: returnForChangesAccess.canWrite,
+          )
         : featureFlags.legacyArrangementReview &&
               arrangementWorkspace?.canDecide == true &&
               arrangementForApproval != null
@@ -7280,9 +7450,16 @@ class _RequestDetailBody extends ConsumerWidget {
           )
         : null;
     if (YorksMobileUi.isActive(context)) {
-      final mobileInlineApprovalActions = request.canEditBeforeApproval
+      final mobileInlineApprovalActions =
+          request.canEditBeforeApproval && editAccess.isVisible
           ? _RequestApprovalActions(
               request: request,
+              showEdit: editAccess.isVisible,
+              showApprove: false,
+              showReturnForChanges: false,
+              canEdit: editAccess.canWrite,
+              canApprove: false,
+              canReturnForChanges: false,
               showDecisionActions: false,
             )
           : featureFlags.legacyArrangementReview &&
@@ -7300,14 +7477,25 @@ class _RequestDetailBody extends ConsumerWidget {
         onPrimaryAction: onPrimaryAction,
         onRefresh: onRefresh,
         approvalActions: mobileInlineApprovalActions,
-        stickyApprovalActions: request.canDecideRequest
+        stickyApprovalActions:
+            request.canDecideRequest &&
+                (approveAccess.isVisible || returnForChangesAccess.isVisible)
             ? _RequestApprovalActions(
                 request: request,
+                showEdit: false,
+                showApprove: approveAccess.isVisible,
+                showReturnForChanges: returnForChangesAccess.isVisible,
+                canEdit: false,
+                canApprove: approveAccess.canWrite,
+                canReturnForChanges: returnForChangesAccess.canWrite,
                 showEditAction: false,
                 mobileSticky: true,
               )
             : null,
-        onCancel: canCancel ? () => _cancel(context, ref, request) : null,
+        showCancel: cancelAccess.isVisible,
+        onCancel: cancelAccess.canWrite
+            ? () => _cancel(context, ref, request)
+            : null,
         onOpenLogistics: canOpenLogistics
             ? () => context.push(
                 RoutePaths.yorksV1MaterialRequestLogisticsPath(request.id),
@@ -7320,6 +7508,7 @@ class _RequestDetailBody extends ConsumerWidget {
                 ),
               )
             : null,
+        showGenerateDeliveryOrder: canGenerateDeliveryOrder,
         onGenerateDeliveryOrder: onGenerateDeliveryOrder,
         documentModel: documentModel,
         onPdf: documentModel.valueOrNull == null
@@ -7380,7 +7569,8 @@ class _RequestDetailBody extends ConsumerWidget {
                           documentModel.valueOrNull!,
                         ),
                   approvalActions: approvalActions,
-                  onCancel: canCancel
+                  showCancel: cancelAccess.isVisible,
+                  onCancel: cancelAccess.canWrite
                       ? () => _cancel(context, ref, request)
                       : null,
                 ),
@@ -7419,7 +7609,10 @@ class _RequestDetailBody extends ConsumerWidget {
                               logisticsWorkspace: logisticsWorkspace,
                               returnsDocumentsWorkspace:
                                   returnsDocumentsWorkspace,
-                              onReviewReceipt: logisticsWorkspace == null
+                              showReceiptReview: receiptAccess.isVisible,
+                              onReviewReceipt:
+                                  logisticsWorkspace == null ||
+                                      !receiptAccess.canWrite
                                   ? null
                                   : (dispatch) => _reviewReceipt(
                                       context,
@@ -7428,8 +7621,11 @@ class _RequestDetailBody extends ConsumerWidget {
                                       logisticsWorkspace,
                                       dispatch,
                                     ),
+                              showGenerateDeliveryOrder:
+                                  deliveryOrderAccess.isVisible,
                               onGenerateDeliveryOrder:
-                                  returnsDocumentsWorkspace == null
+                                  returnsDocumentsWorkspace == null ||
+                                      !deliveryOrderAccess.canWrite
                                   ? null
                                   : (dispatch) => _generateDeliveryOrder(
                                       context,
@@ -7507,7 +7703,10 @@ class _RequestDetailBody extends ConsumerWidget {
                             logisticsWorkspace: logisticsWorkspace,
                             returnsDocumentsWorkspace:
                                 returnsDocumentsWorkspace,
-                            onReviewReceipt: logisticsWorkspace == null
+                            showReceiptReview: receiptAccess.isVisible,
+                            onReviewReceipt:
+                                logisticsWorkspace == null ||
+                                    !receiptAccess.canWrite
                                 ? null
                                 : (dispatch) => _reviewReceipt(
                                     context,
@@ -7516,8 +7715,11 @@ class _RequestDetailBody extends ConsumerWidget {
                                     logisticsWorkspace,
                                     dispatch,
                                   ),
+                            showGenerateDeliveryOrder:
+                                deliveryOrderAccess.isVisible,
                             onGenerateDeliveryOrder:
-                                returnsDocumentsWorkspace == null
+                                returnsDocumentsWorkspace == null ||
+                                    !deliveryOrderAccess.canWrite
                                 ? null
                                 : (dispatch) => _generateDeliveryOrder(
                                     context,
@@ -7684,6 +7886,7 @@ class _RequestDetailBody extends ConsumerWidget {
       workspace: workspace,
       dispatch: dispatch,
       documents: const YorksV1LogisticsDocumentService(),
+      canGenerate: true,
     );
     if (changed == true) _refreshWorkflow(ref, request);
   }
@@ -7976,9 +8179,11 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
     required this.onRefresh,
     required this.approvalActions,
     required this.stickyApprovalActions,
+    required this.showCancel,
     required this.onCancel,
     required this.onOpenLogistics,
     required this.onOpenDocuments,
+    required this.showGenerateDeliveryOrder,
     required this.onGenerateDeliveryOrder,
     required this.documentModel,
     required this.onPdf,
@@ -7993,9 +8198,11 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
   final VoidCallback onRefresh;
   final Widget? approvalActions;
   final Widget? stickyApprovalActions;
+  final bool showCancel;
   final VoidCallback? onCancel;
   final VoidCallback? onOpenLogistics;
   final VoidCallback? onOpenDocuments;
+  final bool showGenerateDeliveryOrder;
   final VoidCallback? onGenerateDeliveryOrder;
   final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
   final VoidCallback? onPdf;
@@ -8125,7 +8332,7 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
                     const SizedBox(height: 10),
                     replacementCard!,
                   ],
-                  if (onGenerateDeliveryOrder != null &&
+                  if (showGenerateDeliveryOrder &&
                       primaryAction !=
                           YorksV1MaterialRequestDetailPrimaryAction
                               .generateDeliveryOrder) ...[
@@ -8220,7 +8427,7 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
                   ],
                   if (onOpenLogistics != null ||
                       onOpenDocuments != null ||
-                      onCancel != null) ...[
+                      showCancel) ...[
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 8,
@@ -8271,7 +8478,7 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
                               YorksV1LogisticsStrings.printDocument.primary,
                             ),
                           ),
-                        if (onCancel != null)
+                        if (showCancel)
                           OutlinedButton.icon(
                             onPressed: onCancel,
                             icon: const Icon(Icons.close_rounded, size: 18),
@@ -8292,7 +8499,7 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
             ),
             if (stickyApprovalActions != null)
               stickyApprovalActions!
-            else if (actionLabel != null && onPrimaryAction != null)
+            else if (actionLabel != null)
               _MobileMrStickyActions(
                 primaryLabel: actionLabel,
                 primaryIcon: actionIcon!,
@@ -8609,12 +8816,24 @@ class _MobileMrLifecycleTimeline extends StatelessWidget {
 class _RequestApprovalActions extends ConsumerStatefulWidget {
   const _RequestApprovalActions({
     required this.request,
+    required this.showEdit,
+    required this.showApprove,
+    required this.showReturnForChanges,
+    required this.canEdit,
+    required this.canApprove,
+    required this.canReturnForChanges,
     this.showEditAction = true,
     this.showDecisionActions = true,
     this.mobileSticky = false,
   });
 
   final YorksV1MaterialRequest request;
+  final bool showEdit;
+  final bool showApprove;
+  final bool showReturnForChanges;
+  final bool canEdit;
+  final bool canApprove;
+  final bool canReturnForChanges;
   final bool showEditAction;
   final bool showDecisionActions;
   final bool mobileSticky;
@@ -8631,12 +8850,14 @@ class _RequestApprovalActionsState
   @override
   Widget build(BuildContext context) {
     final actions = <Widget>[
-      if (widget.showEditAction && widget.request.canEditBeforeApproval)
+      if (widget.showEditAction &&
+          widget.showEdit &&
+          widget.request.canEditBeforeApproval)
         _RecordActionButton(
           label: YorksV1MaterialRequestStrings.editRequest.primary,
           icon: Icons.edit_outlined,
-          onPressed: _busy
-              ? () {}
+          onPressed: _busy || !widget.canEdit
+              ? null
               : () => context.push(
                   RoutePaths.yorksV1MaterialRequestDraftPath(
                     widget.request.id,
@@ -8644,21 +8865,25 @@ class _RequestApprovalActionsState
                   ),
                 ),
         ),
-      if (widget.showDecisionActions && widget.request.canDecideRequest)
+      if (widget.showDecisionActions &&
+          widget.showApprove &&
+          widget.request.canDecideRequest)
         _RecordActionButton(
           label: YorksV1MaterialRequestStrings.approveForProcurement.primary,
           icon: Icons.verified_rounded,
           primary: true,
-          onPressed: _busy
-              ? () {}
+          onPressed: _busy || !widget.canApprove
+              ? null
               : () => _decide(YorksV1MaterialRequestReviewDecision.approved),
         ),
-      if (widget.showDecisionActions && widget.request.canDecideRequest)
+      if (widget.showDecisionActions &&
+          widget.showReturnForChanges &&
+          widget.request.canDecideRequest)
         _RecordActionButton(
           label: YorksV1MaterialRequestStrings.returnForChanges.primary,
           icon: Icons.reply_rounded,
-          onPressed: _busy
-              ? () {}
+          onPressed: _busy || !widget.canReturnForChanges
+              ? null
               : () => _decide(YorksV1MaterialRequestReviewDecision.returned),
         ),
     ];
@@ -9854,6 +10079,7 @@ class _RequestRecordHeader extends StatelessWidget {
     required this.onPdf,
     required this.onPrint,
     required this.approvalActions,
+    required this.showCancel,
     required this.onCancel,
   });
 
@@ -9865,6 +10091,7 @@ class _RequestRecordHeader extends StatelessWidget {
   final VoidCallback? onPdf;
   final VoidCallback? onPrint;
   final Widget? approvalActions;
+  final bool showCancel;
   final VoidCallback? onCancel;
 
   @override
@@ -9926,10 +10153,10 @@ class _RequestRecordHeader extends StatelessWidget {
         runSpacing: AppSpacing.sm,
         alignment: compact ? WrapAlignment.start : WrapAlignment.end,
         children: [
-          if (primaryAction != null && onPrimaryAction != null)
+          if (primaryAction != null)
             _RequestPrimaryActionButton(
               action: primaryAction!,
-              onPressed: onPrimaryAction!,
+              onPressed: onPrimaryAction,
             ),
           ?approvalActions,
           _RecordActionButton(
@@ -9949,12 +10176,12 @@ class _RequestRecordHeader extends StatelessWidget {
               icon: Icons.print_outlined,
               onPressed: onPrint!,
             ),
-          if (onCancel != null)
+          if (showCancel)
             _RecordActionButton(
               label: YorksV1MaterialRequestStrings.cancelRequest.primary,
               icon: Icons.close_rounded,
               destructive: true,
-              onPressed: onCancel!,
+              onPressed: onCancel,
             ),
           IconButton(
             tooltip: YorksV1MaterialRequestStrings.refresh.primary,
@@ -9995,7 +10222,7 @@ class _RecordActionButton extends StatelessWidget {
 
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool primary;
   final bool destructive;
 
@@ -10033,7 +10260,7 @@ class _RequestPrimaryActionButton extends StatelessWidget {
   });
 
   final YorksV1MaterialRequestDetailPrimaryAction action;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -10656,7 +10883,9 @@ class _RequestRecordContent extends StatelessWidget {
     required this.canOpenReturnsDocuments,
     required this.logisticsWorkspace,
     required this.returnsDocumentsWorkspace,
+    required this.showReceiptReview,
     required this.onReviewReceipt,
+    required this.showGenerateDeliveryOrder,
     required this.onGenerateDeliveryOrder,
     required this.onOpenLogistics,
     required this.onOpenReturns,
@@ -10670,7 +10899,9 @@ class _RequestRecordContent extends StatelessWidget {
   final bool canOpenReturnsDocuments;
   final YorksV1LogisticsWorkspace? logisticsWorkspace;
   final YorksV1ReturnsDocumentsWorkspace? returnsDocumentsWorkspace;
+  final bool showReceiptReview;
   final ValueChanged<YorksV1MaterialDispatch>? onReviewReceipt;
+  final bool showGenerateDeliveryOrder;
   final ValueChanged<YorksV1DeliveryOrderDispatch>? onGenerateDeliveryOrder;
   final VoidCallback onOpenLogistics;
   final VoidCallback onOpenReturns;
@@ -10764,6 +10995,7 @@ class _RequestRecordContent extends StatelessWidget {
         workspace: logisticsWorkspace,
         canOpenLogistics: canOpenLogistics,
         onOpenLogistics: onOpenLogistics,
+        showReceiptReview: showReceiptReview,
         onReviewReceipt: onReviewReceipt,
       ),
       const SizedBox(height: AppSpacing.xxl),
@@ -10776,6 +11008,7 @@ class _RequestRecordContent extends StatelessWidget {
         request: request,
         workspace: returnsDocumentsWorkspace,
         canOpenReturnsDocuments: canOpenReturnsDocuments,
+        showGenerateDeliveryOrder: showGenerateDeliveryOrder,
         onGenerateDeliveryOrder: onGenerateDeliveryOrder,
         onOpenReturns: onOpenReturns,
       ),
@@ -10789,6 +11022,7 @@ class _DispatchReceiptSummarySurface extends StatelessWidget {
     required this.workspace,
     required this.canOpenLogistics,
     required this.onOpenLogistics,
+    required this.showReceiptReview,
     required this.onReviewReceipt,
   });
 
@@ -10796,6 +11030,7 @@ class _DispatchReceiptSummarySurface extends StatelessWidget {
   final YorksV1LogisticsWorkspace? workspace;
   final bool canOpenLogistics;
   final VoidCallback onOpenLogistics;
+  final bool showReceiptReview;
   final ValueChanged<YorksV1MaterialDispatch>? onReviewReceipt;
 
   @override
@@ -10830,9 +11065,13 @@ class _DispatchReceiptSummarySurface extends StatelessWidget {
             _DispatchReceiptRow(
               dispatch: dispatches[index],
               onReviewReceipt:
-                  dispatches[index].canConfirmReceipt && onReviewReceipt != null
-                  ? () => onReviewReceipt!(dispatches[index])
+                  dispatches[index].canConfirmReceipt && showReceiptReview
+                  ? onReviewReceipt == null
+                        ? null
+                        : () => onReviewReceipt!(dispatches[index])
                   : null,
+              showReceiptReview:
+                  dispatches[index].canConfirmReceipt && showReceiptReview,
             ),
             if (index != dispatches.length - 1)
               const Divider(height: AppSpacing.xxl),
@@ -10844,9 +11083,14 @@ class _DispatchReceiptSummarySurface extends StatelessWidget {
 }
 
 class _DispatchReceiptRow extends StatelessWidget {
-  const _DispatchReceiptRow({required this.dispatch, this.onReviewReceipt});
+  const _DispatchReceiptRow({
+    required this.dispatch,
+    required this.showReceiptReview,
+    this.onReviewReceipt,
+  });
 
   final YorksV1MaterialDispatch dispatch;
+  final bool showReceiptReview;
   final VoidCallback? onReviewReceipt;
 
   @override
@@ -10880,11 +11124,11 @@ class _DispatchReceiptRow extends StatelessWidget {
             ],
           ),
         ),
-        if (onReviewReceipt != null)
+        if (showReceiptReview)
           _RecordActionButton(
             label: YorksV1LogisticsStrings.reviewAndMarkReceived.primary,
             icon: Icons.fact_check_outlined,
-            onPressed: onReviewReceipt!,
+            onPressed: onReviewReceipt,
             primary: true,
           ),
       ],
@@ -10897,6 +11141,7 @@ class _DeliveryOrderSummarySurface extends StatelessWidget {
     required this.request,
     required this.workspace,
     required this.canOpenReturnsDocuments,
+    required this.showGenerateDeliveryOrder,
     required this.onGenerateDeliveryOrder,
     required this.onOpenReturns,
   });
@@ -10904,6 +11149,7 @@ class _DeliveryOrderSummarySurface extends StatelessWidget {
   final YorksV1MaterialRequest request;
   final YorksV1ReturnsDocumentsWorkspace? workspace;
   final bool canOpenReturnsDocuments;
+  final bool showGenerateDeliveryOrder;
   final ValueChanged<YorksV1DeliveryOrderDispatch>? onGenerateDeliveryOrder;
   final VoidCallback onOpenReturns;
 
@@ -10938,14 +11184,15 @@ class _DeliveryOrderSummarySurface extends StatelessWidget {
             LayoutBuilder(
               builder: (context, constraints) {
                 final dispatch = dispatches[index];
-                final action =
-                    dispatch.canGenerate && onGenerateDeliveryOrder != null
+                final action = dispatch.canGenerate && showGenerateDeliveryOrder
                     ? _RecordActionButton(
                         label: YorksV1LogisticsStrings
                             .generateDeliveryOrder
                             .primary,
                         icon: Icons.receipt_long_outlined,
-                        onPressed: () => onGenerateDeliveryOrder!(dispatch),
+                        onPressed: onGenerateDeliveryOrder == null
+                            ? null
+                            : () => onGenerateDeliveryOrder!(dispatch),
                         primary: true,
                       )
                     : null;

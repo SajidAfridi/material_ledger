@@ -46,9 +46,10 @@ class AppUser {
   /// that explicit server-side change.
   final YorksV1Role? yorksV1RoleCache;
 
-  /// Server-owned role assignments returned by the connected Admin directory.
-  /// The legacy [role] and [yorksV1RoleCache] fields remain the compatibility
-  /// primary role while the multi-role authorization rollout is completed.
+  /// Backward-compatible serialized role list. Connected Yorks V1 identity
+  /// paths normalize this to the one exact server-controlled role in
+  /// [yorksV1RoleCache]; historical local records may still decode older lists
+  /// without gaining authorization from them.
   final List<YorksV1Role> yorksV1Roles;
 
   List<YorksV1Role> get effectiveYorksV1Roles => yorksV1Roles.isNotEmpty

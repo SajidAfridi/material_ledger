@@ -149,8 +149,22 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   /// Refresh the Admin roster from the authoritative Supabase Auth directory.
   /// The local collection remains a cache only; a failed refresh never erases
   /// the last known roster or invents users.
-  Future<void> refreshFromServer() async {
+  /// [permissionConfirmed] is the presentation layer's retained, protected
+  /// `users.view` decision. It lets an enforced viewer refresh without
+  /// inheriting the old configuration roles. The Edge Function repeats the
+  /// capability check and remains the authority even if a caller is tampered.
+  Future<void> refreshFromServer({bool permissionConfirmed = false}) async {
     if (_client == null) return;
+    if (_usesYorksV1IdentityProvisioning) {
+      final exactRole = YorksV1Role.fromServerClaim(
+        _client?.auth.currentUser?.appMetadata['role'],
+      );
+      if (!permissionConfirmed && !(exactRole?.canConfigureUsers ?? false)) {
+        throw StateError(
+          'A confirmed users.view permission is required to refresh the user directory.',
+        );
+      }
+    }
     final response = await _adminFn({'action': 'list'});
     final rows = response?['users'];
     if (rows is! List) return;
@@ -162,15 +176,9 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       final id = _string(row['appUserId']) ?? _string(row['authUserId']);
       if (id == null) continue;
       final primary = YorksV1Role.fromServerClaim(row['role']);
-      final roles = ((row['roles'] as List?) ?? const [])
-          .map(YorksV1Role.fromServerClaim)
-          .whereType<YorksV1Role>()
-          .toList(growable: false);
-      final effectiveRoles = roles.isNotEmpty
-          ? roles
-          : primary == null
+      final effectiveRoles = primary == null
           ? const <YorksV1Role>[]
-          : [primary];
+          : <YorksV1Role>[primary];
       final existing = previous[id];
       final compatibilityRole = primary == null
           ? existing?.role ?? UserRole.engineer
@@ -372,22 +380,20 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     return user;
   }
 
-  /// Provisions a connected Yorks V1 identity with one of the only four
-  /// accepted server role claims. The retained [AppUser.role] is written only
+  /// Provisions a connected Yorks V1 identity with one exact accepted server
+  /// role claim. The retained [AppUser.role] is written only
   /// as a downward compatibility-shell projection; it is never used to infer a
   /// V1 role and legacy `engineer` records are never promoted by this method.
   Future<AppUser> createYorksV1User({
     required String fullName,
     required String email,
     required YorksV1Role role,
-    List<YorksV1Role> roles = const [],
     required String password,
     String? idempotencyKey,
     String? appUserId,
   }) async {
     _requireYorksV1IdentityProvisioning();
 
-    final assignedRoles = _normaliseYorksRoles(role, roles);
     final id = appUserId ?? 'usr-${_uuid.v4().substring(0, 8)}';
     final draft = AppUser(
       id: id,
@@ -395,7 +401,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       email: email,
       role: _compatibilityShellRoleForYorksV1(role),
       yorksV1RoleCache: role,
-      yorksV1Roles: assignedRoles,
+      yorksV1Roles: <YorksV1Role>[role],
       createdAt: DateTime.now(),
     );
     // The Edge Function owns the exact role allow-list and all default claim
@@ -406,9 +412,6 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       'password': password,
       'fullName': fullName,
       'role': role.claimValue,
-      'roles': [
-        for (final assignedRole in assignedRoles) assignedRole.claimValue,
-      ],
       'appUserId': id,
       'idempotencyKey': ?idempotencyKey,
     });
@@ -432,10 +435,12 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     required String email,
     required UserRole role,
     required YorksV1Role? yorksV1Role,
-    List<YorksV1Role> yorksV1Roles = const [],
     required String fullName,
     bool mustChangePassword = false,
   }) async {
+    final exactRoles = yorksV1Role == null
+        ? const <YorksV1Role>[]
+        : <YorksV1Role>[yorksV1Role];
     final existing = _byId(id);
     if (existing != null) {
       // A legacy engineer still receives `null` for [yorksV1Role], so it cannot
@@ -443,14 +448,14 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       if (existing.mustChangePassword != mustChangePassword ||
           existing.role != role ||
           existing.yorksV1RoleCache != yorksV1Role ||
-          !_sameRoles(existing.yorksV1Roles, yorksV1Roles)) {
+          !_sameRoles(existing.yorksV1Roles, exactRoles)) {
         state = [
           for (final u in state)
             if (u.id == id)
               u.copyWith(
                 role: role,
                 yorksV1RoleCache: yorksV1Role,
-                yorksV1Roles: yorksV1Roles,
+                yorksV1Roles: exactRoles,
                 mustChangePassword: mustChangePassword,
               )
             else
@@ -466,7 +471,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
       email: email,
       role: role,
       yorksV1RoleCache: yorksV1Role,
-      yorksV1Roles: yorksV1Roles,
+      yorksV1Roles: exactRoles,
       mustChangePassword: mustChangePassword,
       createdAt: DateTime.now(),
     );
@@ -686,26 +691,21 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   Future<bool> setYorksV1Role(
     String id,
     YorksV1Role role, {
-    List<YorksV1Role> roles = const [],
     String? idempotencyKey,
   }) async {
     _requireYorksV1IdentityProvisioning();
     if (role != YorksV1Role.admin && _isLastActiveAdmin(id)) return false;
     final current = _byId(id);
     if (current == null) return false;
-    final assignedRoles = _normaliseYorksRoles(role, roles);
     final updated = current.copyWith(
       role: _compatibilityShellRoleForYorksV1(role),
       yorksV1RoleCache: role,
-      yorksV1Roles: assignedRoles,
+      yorksV1Roles: <YorksV1Role>[role],
     );
     await _adminFn({
       'action': 'updateClaims',
       'appUserId': id,
       'role': role.claimValue,
-      'roles': [
-        for (final assignedRole in assignedRoles) assignedRole.claimValue,
-      ],
       'idempotencyKey': ?idempotencyKey,
     });
     state = [
@@ -714,17 +714,6 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     ];
     await _store.writeAll(state);
     return true;
-  }
-
-  List<YorksV1Role> _normaliseYorksRoles(
-    YorksV1Role primary,
-    Iterable<YorksV1Role> additional,
-  ) {
-    final roles = <YorksV1Role>[primary];
-    for (final role in additional) {
-      if (!roles.contains(role)) roles.add(role);
-    }
-    return List<YorksV1Role>.unmodifiable(roles);
   }
 
   void _requireYorksV1IdentityProvisioning() {

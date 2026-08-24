@@ -4,14 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/permissions_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_arrangement_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_arrangement_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_arrangement_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -33,6 +38,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             canManageCommercialsProvider.overrideWithValue(true),
             canViewCommercialsProvider.overrideWithValue(true),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
@@ -106,6 +119,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             canManageCommercialsProvider.overrideWithValue(false),
             canViewCommercialsProvider.overrideWithValue(false),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
@@ -153,6 +174,14 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(),
+            ),
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _request),
           canManageCommercialsProvider.overrideWithValue(false),
           canViewCommercialsProvider.overrideWithValue(false),
           yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
@@ -213,6 +242,14 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(),
+            ),
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _request),
           canManageCommercialsProvider.overrideWithValue(false),
           canViewCommercialsProvider.overrideWithValue(false),
           yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
@@ -287,6 +324,14 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(),
+            ),
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _request),
           canManageCommercialsProvider.overrideWithValue(true),
           canViewCommercialsProvider.overrideWithValue(true),
           yorksV1ArrangementRepositoryProvider.overrideWithValue(
@@ -341,6 +386,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             canManageCommercialsProvider.overrideWithValue(true),
             canViewCommercialsProvider.overrideWithValue(true),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
@@ -400,6 +453,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             canManageCommercialsProvider.overrideWithValue(true),
             canViewCommercialsProvider.overrideWithValue(true),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
@@ -471,6 +532,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
             yorksV1ArrangementWorkspaceProvider(
               'request-1',
@@ -522,6 +591,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             canManageCommercialsProvider.overrideWithValue(true),
             canViewCommercialsProvider.overrideWithValue(true),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(
@@ -602,6 +679,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(
               _ArrangementRepository(),
             ),
@@ -659,6 +744,14 @@ void main() {
         ProviderScope(
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
             canManageCommercialsProvider.overrideWithValue(true),
             canViewCommercialsProvider.overrideWithValue(true),
             yorksV1ArrangementRepositoryProvider.overrideWithValue(
@@ -718,6 +811,34 @@ const _inventoryItems = [
     recordVersion: 1,
   ),
 ];
+
+final _request = YorksV1MaterialRequest(
+  id: 'request-1',
+  projectId: 'project-1',
+  projectReference: 'YRA-313',
+  projectName: 'Riyadh Substation',
+  scopeId: 'scope-1',
+  scopeName: 'Building A',
+  state: YorksV1MaterialRequestState.arranging,
+  recordVersion: 2,
+  createdAt: DateTime.utc(2026, 8, 8),
+  updatedAt: DateTime.utc(2026, 8, 8),
+  timing: YorksV1MaterialRequestTiming.normal,
+  requestNumber: 'YRAASDF12-MR101',
+  title: 'Arrangement test request',
+  requesterDisplayName: 'Project Engineer',
+  requesterProjectRole: 'Project Engineer',
+  lines: const [
+    YorksV1MaterialRequestLine(
+      id: 'request-line-1',
+      displayOrder: 1,
+      source: YorksV1MaterialRequestLineSource.custom,
+      description: 'Motorized smoke damper',
+      quantity: '11',
+      unit: 'Nos',
+    ),
+  ],
+);
 
 final _workingWorkspace = YorksV1ArrangementWorkspace(
   requestId: 'request-1',

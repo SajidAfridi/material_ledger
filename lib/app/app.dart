@@ -11,9 +11,16 @@ import '../shared/providers/language_provider.dart';
 import '../shared/providers/material_request_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
+import '../shared/providers/yorks_v1_arrangement_provider.dart';
+import '../shared/providers/yorks_v1_boq_provider.dart';
+import '../shared/providers/yorks_v1_documents_provider.dart';
 import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
+import '../shared/providers/yorks_v1_logistics_provider.dart';
+import '../shared/providers/yorks_v1_material_request_provider.dart';
 import '../shared/providers/yorks_v1_notification_provider.dart';
+import '../shared/providers/yorks_v1_permission_provider.dart';
+import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/services/app_config_service.dart';
 import '../shared/sync/realtime_sync.dart';
 import '../shared/sync/sync_engine.dart';
@@ -27,6 +34,38 @@ import 'router.dart';
 /// Bridges [rolePermissionsProvider] changes to the router's refreshListenable.
 class _RouterRefresh extends ChangeNotifier {
   void ping() => notifyListeners();
+}
+
+void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
+  // A permission revision is a refresh signal, never a row-level transaction.
+  // Destroy each protected cache so a revoked project/request cannot remain in
+  // memory while the same actor retains access to other projects.
+  ref.invalidate(yorksV1ProjectPortfolioProvider);
+  ref.invalidate(yorksV1BoqGroupsProvider);
+  ref.invalidate(yorksV1ScopedBoqGroupsProvider);
+  ref.invalidate(yorksV1BoqWorksheetControllerProvider);
+  ref.invalidate(yorksV1DocumentWorkspaceProvider);
+  ref.invalidate(yorksV1MaterialRequestSummaryPageProvider);
+  ref.invalidate(yorksV1MaterialRequestCommentPageProvider);
+  ref.invalidate(yorksV1MaterialRequestWorkAssignmentProvider);
+  ref.invalidate(yorksV1MaterialRequestChangeSummaryProvider);
+  ref.invalidate(yorksV1MaterialRequestListProvider);
+  ref.invalidate(yorksV1MaterialRequestDraftProjectsProvider);
+  ref.invalidate(yorksV1MaterialRequestScopesProvider);
+  ref.invalidate(yorksV1MaterialRequestMentionCandidatesProvider);
+  ref.invalidate(yorksV1MaterialRequestInventorySearchProvider);
+  ref.invalidate(yorksV1MaterialRequestDetailProvider);
+  ref.invalidate(yorksV1MaterialRequestPhase3PolicyProvider);
+  ref.invalidate(yorksV1MaterialRequestDocumentProvider);
+  ref.invalidate(yorksV1ArrangementWorkspaceProvider);
+  ref.invalidate(yorksV1ArrangementInventoryProvider);
+  ref.invalidate(yorksV1LogisticsWorkspaceProvider);
+  ref.invalidate(yorksV1ProjectMaterialMovementsProvider);
+  ref.invalidate(yorksV1ReturnsDocumentsWorkspaceProvider);
+  ref.invalidate(yorksV1MaterialReturnRegisterProvider);
+  ref.invalidate(yorksV1MaterialReturnProjectsProvider);
+  ref.invalidate(yorksV1ProjectMaterialReturnProvider);
+  ref.invalidate(yorksV1MaterialReturnCreationWorkspaceProvider);
 }
 
 /// Provider for the app router — lives here so the incremental
@@ -63,12 +102,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       .watch(yorksV1FeatureFlagsProvider)
       .inventorySuppliers;
   final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
+  final connectedV1Permissions =
+      yorksV1ProjectsEnabled && ref.watch(supabaseClientProvider) != null;
 
   // Re-run route guards when an Admin edits role permissions — WITHOUT
   // rebuilding the router (which would reset navigation). We bridge the provider
   // to a Listenable and read it live in the redirect.
   final refresh = _RouterRefresh();
   ref.listen(rolePermissionsProvider, (_, _) => refresh.ping());
+  ref.listen(yorksV1CurrentPermissionSnapshotProvider, (previous, next) {
+    refresh.ping();
+    final previousSnapshot = previous?.snapshot;
+    if (previousSnapshot == null) return;
+    final nextSnapshot = next.snapshot;
+    if (nextSnapshot == null ||
+        nextSnapshot.revision != previousSnapshot.revision) {
+      _invalidateYorksV1ProtectedProjectionCaches(ref);
+    }
+  });
   ref.onDispose(refresh.dispose);
 
   return createAppRouter(
@@ -87,6 +138,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     yorksV1TeamChatEnabled: yorksV1TeamChatEnabled,
     yorksV1InventorySuppliersEnabled: yorksV1InventorySuppliersEnabled,
     yorksV1Role: yorksV1Role,
+    yorksV1PermissionResolver: connectedV1Permissions
+        ? (
+            capabilityKey, {
+            required legacyAllowed,
+            requireWrite = false,
+            organizationSummary = false,
+            projectId,
+          }) => ref
+              .read(yorksV1CurrentPermissionSnapshotProvider)
+              .hybridRouteAllows(
+                capabilityKey,
+                legacyAllowed: legacyAllowed,
+                requireWrite: requireWrite,
+                organizationSummary: organizationSummary,
+                projectId: projectId,
+              )
+        : null,
     rolePermissions: () => ref.read(rolePermissionsProvider),
     refreshListenable: refresh,
   );

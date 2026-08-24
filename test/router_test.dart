@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/shared/models/app_user.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 
@@ -21,6 +22,13 @@ void main() {
     expect(
       RoutePaths.projectWorkspacePath('project-41'),
       '/projects/project-41',
+    );
+  });
+
+  test('scoped access path uses the stable AppUser identifier', () {
+    expect(
+      RoutePaths.yorksV1UserAccessPath('app-user-41'),
+      '/admin/users/app-user-41/access',
     );
   });
 
@@ -359,6 +367,287 @@ void main() {
           v1Role == YorksV1Role.seniorMechanicalEngineer
               ? RoutePaths.users
               : RoutePaths.engineerHome,
+        );
+
+        final targetPath = RoutePaths.yorksV1UserAccessPath('target-app-user');
+        router.go(targetPath);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          v1Role == YorksV1Role.seniorMechanicalEngineer
+              ? targetPath
+              : RoutePaths.engineerHome,
+          reason:
+              '${v1Role.name} must follow the same protected boundary for a user access deep link',
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        router.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'eligible V1 actors need independent create and edit capabilities',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final changed = ValueNotifier<int>(0);
+      final allowed = <String, bool>{
+        YorksV1CapabilityKeys.projectsView: true,
+        YorksV1CapabilityKeys.boqView: false,
+        YorksV1CapabilityKeys.materialRequestsView: true,
+        YorksV1CapabilityKeys.projectsCreate: false,
+        YorksV1CapabilityKeys.projectsEdit: false,
+        YorksV1CapabilityKeys.materialRequestsCreate: false,
+      };
+      final router = createAppRouter(
+        isOnboarded: true,
+        isLoggedIn: true,
+        role: UserRole.engineer,
+        user: AppUser(
+          id: 'project-engineer-capability-test',
+          fullName: 'Project Engineer',
+          email: 'project.engineer@yorks.test',
+          role: UserRole.engineer,
+          createdAt: DateTime.utc(2026, 8, 24),
+        ),
+        yorksV1ProjectsEnabled: true,
+        yorksV1BoqEnabled: true,
+        yorksV1RequestsEnabled: true,
+        yorksV1Role: YorksV1Role.projectEngineer,
+        refreshListenable: changed,
+        yorksV1PermissionResolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) => allowed[capabilityKey] ?? legacyAllowed,
+      );
+      addTearDown(() {
+        router.dispose();
+        changed.dispose();
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+
+      Future<void> expectGate(String path, String capabilityKey) async {
+        router.go(path);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          RoutePaths.engineerHome,
+          reason: '$capabilityKey deny must fail closed',
+        );
+        allowed[capabilityKey] = true;
+        changed.value++;
+        router.go(path);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          path,
+          reason: '$capabilityKey grant should re-enable an eligible actor',
+        );
+      }
+
+      await expectGate(
+        RoutePaths.engineerCreateProject,
+        YorksV1CapabilityKeys.projectsCreate,
+      );
+      await expectGate(
+        RoutePaths.yorksV1ProjectEditPath('project-1'),
+        YorksV1CapabilityKeys.projectsEdit,
+      );
+      await expectGate(
+        RoutePaths.yorksV1BoqGroupsPath('project-1'),
+        YorksV1CapabilityKeys.boqView,
+      );
+      await expectGate(
+        RoutePaths.yorksV1MaterialRequestDraftPath('draft-1'),
+        YorksV1CapabilityKeys.materialRequestsCreate,
+      );
+    },
+  );
+
+  testWidgets(
+    'personal grants do not bypass non-delegable structural role boundaries',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final router = createAppRouter(
+        isOnboarded: true,
+        isLoggedIn: true,
+        role: UserRole.procurement,
+        user: AppUser(
+          id: 'procurement-structural-test',
+          fullName: 'Procurement',
+          email: 'procurement.structural@yorks.test',
+          role: UserRole.procurement,
+          createdAt: DateTime.utc(2026, 8, 24),
+        ),
+        yorksV1ProjectsEnabled: true,
+        yorksV1BoqEnabled: true,
+        yorksV1RequestsEnabled: true,
+        yorksV1Role: YorksV1Role.procurement,
+        yorksV1PermissionResolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) => true,
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+
+      for (final path in [
+        RoutePaths.engineerCreateProject,
+        RoutePaths.yorksV1ProjectEditPath('project-1'),
+        RoutePaths.yorksV1MaterialRequestDraftPath('draft-1'),
+      ]) {
+        router.go(path);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          RoutePaths.engineerHome,
+          reason: 'a capability grant must not widen structural role access',
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'pending protected route decision preserves a deep link until refresh',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final changed = ValueNotifier<int>(0);
+      bool? permissionsView;
+      final targetPath = RoutePaths.yorksV1UserAccessPath('target-app-user');
+      final router = createAppRouter(
+        isOnboarded: true,
+        isLoggedIn: true,
+        role: UserRole.admin,
+        user: AppUser(
+          id: 'cold-start-admin',
+          fullName: 'Cold Start Admin',
+          email: 'cold.start@yorks.test',
+          role: UserRole.admin,
+          createdAt: DateTime.utc(2026, 8, 24),
+        ),
+        yorksV1ProjectsEnabled: true,
+        yorksV1Role: YorksV1Role.admin,
+        refreshListenable: changed,
+        yorksV1PermissionResolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) {
+              if (capabilityKey == YorksV1CapabilityKeys.permissionsView) {
+                return permissionsView;
+              }
+              return true;
+            },
+      );
+      addTearDown(() {
+        router.dispose();
+        changed.dispose();
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+
+      router.go(targetPath);
+      await tester.pump();
+      expect(router.routeInformationProvider.value.uri.path, targetPath);
+
+      permissionsView = false;
+      changed.value++;
+      await tester.pumpAndSettle();
+      expect(router.routeInformationProvider.value.uri.path, RoutePaths.users);
+    },
+  );
+
+  testWidgets(
+    'V1 scoped access deep links require a current permissions.view snapshot',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final targetPath = RoutePaths.yorksV1UserAccessPath('target-app-user');
+
+      for (final scenario in [
+        (current: false, canView: true),
+        (current: true, canView: false),
+        (current: true, canView: true),
+      ]) {
+        final router = createAppRouter(
+          isOnboarded: true,
+          isLoggedIn: true,
+          role: UserRole.admin,
+          user: AppUser(
+            id: 'permission-route-admin',
+            fullName: 'Permission Route Admin',
+            email: 'permission-route-admin@yorks.test',
+            role: UserRole.admin,
+            createdAt: DateTime.utc(2026, 8, 24),
+          ),
+          yorksV1ProjectsEnabled: true,
+          yorksV1Role: YorksV1Role.admin,
+          yorksV1PermissionResolver:
+              (
+                capabilityKey, {
+                required legacyAllowed,
+                requireWrite = false,
+                organizationSummary = false,
+                projectId,
+              }) {
+                if (capabilityKey == YorksV1CapabilityKeys.usersView) {
+                  return true;
+                }
+                return scenario.current &&
+                    scenario.canView &&
+                    capabilityKey == YorksV1CapabilityKeys.permissionsView;
+              },
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+        router.go(targetPath);
+        await tester.pumpAndSettle();
+
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          scenario.current && scenario.canView ? targetPath : RoutePaths.users,
         );
         await tester.pumpWidget(const SizedBox.shrink());
         router.dispose();

@@ -16,7 +16,10 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_arrangement_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 late SharedPreferences _preferences;
 
@@ -120,6 +123,11 @@ Future<void> _pump(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
         yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
+        yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+          (ref) => YorksV1TestPermissionController(
+            yorksV1TrustedFeaturePermissionState(role: YorksV1Role.procurement),
+          ),
+        ),
         yorksV1MaterialRequestDetailProvider(
           request.id,
         ).overrideWith((ref) async => request),

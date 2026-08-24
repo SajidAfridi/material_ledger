@@ -8,8 +8,13 @@ import {
 import {
   isV1AdminAuditIdempotencyKey,
   V1_ADMIN_AUDIT_CONTEXT_KEY,
+  V1_ADMIN_PROVISIONING_PENDING_KEY,
   v1AdminAuditRequestHash,
+  v1AdminProvisioningIntentHash,
+  v1AdminProvisioningPendingMatches,
+  v1AdminProvisioningRecoveryMatches,
   withV1AdminAuditContext,
+  withV1AdminProvisioningPending,
 } from "./auth_audit_context.ts";
 
 Deno.test("builds a finite server-owned auth audit context and replaces stale context", () => {
@@ -39,6 +44,105 @@ Deno.test("builds a finite server-owned auth audit context and replaces stale co
     idempotency_key: idempotencyKey,
     request_hash: requestHash,
   });
+});
+
+Deno.test("pending provisioning marker is strict, HMAC-bound and preserved only until completion", async () => {
+  const serviceKey = "server-only-service-role-key";
+  const actor = "10000000-0000-4000-8000-000000000004";
+  const intentHash = await v1AdminProvisioningIntentHash(
+    serviceKey,
+    actor,
+    "usr-test",
+    "Pending@Yorks.Test",
+    "site_engineer",
+  );
+  const marker = withV1AdminProvisioningPending(
+    { app_user_id: "usr-test" },
+    actor,
+    "usr-test",
+    "Pending@Yorks.Test",
+    "site_engineer",
+    "50000000-0000-4000-8000-000000000001",
+    "a".repeat(64),
+    intentHash,
+  );
+  assertEquals(
+    v1AdminProvisioningPendingMatches(
+      marker,
+      actor,
+      "usr-test",
+      "pending@yorks.test",
+      "site_engineer",
+      "50000000-0000-4000-8000-000000000001",
+      "a".repeat(64),
+      intentHash,
+    ),
+    true,
+  );
+  assertEquals(
+    v1AdminProvisioningPendingMatches(
+      marker,
+      actor,
+      "usr-test",
+      "pending@yorks.test",
+      "site_engineer",
+      "50000000-0000-4000-8000-000000000001",
+      "b".repeat(64),
+      intentHash,
+    ),
+    false,
+  );
+  assertEquals(
+    (marker[V1_ADMIN_PROVISIONING_PENDING_KEY] as Record<string, unknown>)
+      .version,
+    2,
+  );
+
+  const final = withV1AdminAuditContext(
+    marker,
+    "10000000-0000-4000-8000-000000000004",
+    "provisioned",
+    "50000000-0000-4000-8000-000000000001",
+    "a".repeat(64),
+  );
+  assertEquals(
+    final[V1_ADMIN_PROVISIONING_PENDING_KEY],
+    marker[V1_ADMIN_PROVISIONING_PENDING_KEY],
+  );
+
+  assertEquals(
+    await v1AdminProvisioningRecoveryMatches(
+      marker,
+      serviceKey,
+      "10000000-0000-4000-8000-000000000099",
+      "usr-test",
+      "pending@yorks.test",
+      "site_engineer",
+    ),
+    true,
+  );
+  assertEquals(
+    await v1AdminProvisioningRecoveryMatches(
+      marker,
+      serviceKey,
+      actor,
+      "usr-test",
+      "pending@yorks.test",
+      "site_engineer",
+    ),
+    false,
+  );
+  assertEquals(
+    await v1AdminProvisioningRecoveryMatches(
+      marker,
+      serviceKey,
+      "10000000-0000-4000-8000-000000000099",
+      "usr-other",
+      "pending@yorks.test",
+      "site_engineer",
+    ),
+    false,
+  );
 });
 
 Deno.test("accepts only a client UUID idempotency key", () => {

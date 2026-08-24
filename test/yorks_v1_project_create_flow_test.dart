@@ -16,6 +16,7 @@ import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_document_file_service_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_creation_draft_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_team_directory_provider.dart';
@@ -23,6 +24,8 @@ import 'package:material_ledger/shared/repositories/yorks_v1_project_repository.
 import 'package:material_ledger/shared/repositories/yorks_v1_project_team_directory_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_document_file_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 const _authUserId = 'test-auth-user-001';
 
@@ -40,6 +43,13 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1AuthUserIdProvider.overrideWithValue(_authUserId),
         yorksV1CurrentRoleProvider.overrideWithValue(role),
+        yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+          (ref) => YorksV1TestPermissionController(
+            yorksV1TrustedFeaturePermissionState(
+              role: role ?? YorksV1Role.admin,
+            ),
+          ),
+        ),
         yorksV1ProjectRepositoryProvider.overrideWithValue(repository),
         yorksV1ProjectTeamDirectoryRepositoryProvider.overrideWithValue(
           teamDirectoryRepository ?? _FakeTeamDirectoryRepository(),

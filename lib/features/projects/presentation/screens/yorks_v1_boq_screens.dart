@@ -17,6 +17,7 @@ import '../../../../shared/models/yorks_v1_document_strings.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
@@ -27,8 +28,10 @@ import '../../../../shared/providers/yorks_v1_boq_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_boq_workbook_service.dart';
 import '../../../../shared/services/yorks_v1_boq_document_service.dart';
+import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
 
 /// Ordered BOQ folder view for the normalized R35 project workspace.
 ///
@@ -50,6 +53,25 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final canRead = yorksV1CanReadProjectRecord(
+      permissionState,
+      YorksV1CapabilityKeys.boqView,
+      legacyAllowed: role != null,
+      projectId: projectId,
+    );
+    if (!canRead) {
+      final denied = YorksV1ProjectReadBoundary(
+        allowed: false,
+        language: language,
+        child: const SizedBox.shrink(),
+      );
+      if (embedded) return denied;
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(top: false, child: denied),
+      );
+    }
     final scopeOptions = ref.watch(
       yorksV1MaterialRequestScopesProvider(projectId),
     );
@@ -61,9 +83,24 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
       scopeId: selectedScopeId,
     );
     final groups = ref.watch(yorksV1ScopedBoqGroupsProvider(groupQuery));
-    final editable = role != null && role != YorksV1Role.procurement;
+    final legacyEditable = role != null && role != YorksV1Role.procurement;
+    final editAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.boqEdit,
+      legacyAllowed: legacyEditable,
+      projectId: projectId,
+    );
+    final requestCreateAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      projectId: projectId,
+    );
+    final editable = editAccess.canWrite;
+    final showEditActions = editAccess.isVisible;
     final isAllAggregate = selectedScopeId == null;
     final canMutateSelectedScope = editable && !isAllAggregate;
+    final showMutateSelectedScope = showEditActions && !isAllAggregate;
     final selectedRealScopeId = selectedScopeId;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
@@ -97,6 +134,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
         scopeSelector: scopeSelector,
         isAllAggregate: isAllAggregate,
         editable: canMutateSelectedScope,
+        showEditActions: showMutateSelectedScope,
         excelEnabled: excelEnabled,
         onSelectScope: selectScope,
         onAssignLegacyScope: onAssignLegacyScope,
@@ -169,23 +207,27 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                     ),
                     icon: const Icon(Icons.assignment_outlined),
                   ),
-                if (requestsEnabled && role?.canCreateMaterialRequest == true)
+                if (requestsEnabled && requestCreateAccess.isVisible)
                   IconButton(
                     tooltip: YorksV1MaterialRequestStrings.newRequest.primary,
-                    onPressed: () => context.push(
-                      RoutePaths.yorksV1MaterialRequestDraftPath(
-                        const Uuid().v4(),
-                        projectId: projectId,
-                      ),
-                    ),
+                    onPressed: requestCreateAccess.canWrite
+                        ? () => context.push(
+                            RoutePaths.yorksV1MaterialRequestDraftPath(
+                              const Uuid().v4(),
+                              projectId: projectId,
+                            ),
+                          )
+                        : null,
                     icon: const Icon(Icons.add_task_outlined),
                   ),
               ],
             )
           : null,
-      floatingActionButton: compactRoute && canMutateSelectedScope
+      floatingActionButton: compactRoute && showMutateSelectedScope
           ? FloatingActionButton.extended(
-              onPressed: () => _createGroup(context, ref, selectedRealScopeId),
+              onPressed: canMutateSelectedScope
+                  ? () => _createGroup(context, ref, selectedRealScopeId)
+                  : null,
               icon: const Icon(Icons.create_new_folder_outlined),
               label: Text(YorksV1BoqStrings.newGroup.primary),
             )
@@ -258,12 +300,17 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    if (canMutateSelectedScope)
+                    if (showMutateSelectedScope)
                       SizedBox(
                         height: AppSpacing.minTapTarget,
                         child: FilledButton.icon(
-                          onPressed: () =>
-                              _createGroup(context, ref, selectedRealScopeId),
+                          onPressed: canMutateSelectedScope
+                              ? () => _createGroup(
+                                  context,
+                                  ref,
+                                  selectedRealScopeId,
+                                )
+                              : null,
                           icon: const Icon(Icons.create_new_folder_outlined),
                           label: Text(YorksV1BoqStrings.newGroup.primary),
                         ),
@@ -293,6 +340,7 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                     language: language,
                     projectId: projectId,
                     editable: canMutateSelectedScope,
+                    showEditActions: showMutateSelectedScope,
                     aggregateReadOnly: isAllAggregate,
                     onSelectScope: selectScope,
                     onAssignLegacyScope: onAssignLegacyScope,
@@ -664,6 +712,7 @@ class _GroupsBody extends StatelessWidget {
     required this.language,
     required this.projectId,
     required this.editable,
+    required this.showEditActions,
     required this.onAddGroup,
     this.aggregateReadOnly = false,
     this.embedded = false,
@@ -675,7 +724,8 @@ class _GroupsBody extends StatelessWidget {
   final AppLanguage language;
   final String projectId;
   final bool editable;
-  final VoidCallback onAddGroup;
+  final bool showEditActions;
+  final VoidCallback? onAddGroup;
   final bool aggregateReadOnly;
   final bool embedded;
   final ValueChanged<String>? onSelectScope;
@@ -711,7 +761,7 @@ class _GroupsBody extends StatelessWidget {
                   language: language,
                   center: true,
                 ),
-                if (editable) ...[
+                if (showEditActions) ...[
                   const SizedBox(height: AppSpacing.lg),
                   PrimaryButton(
                     label: YorksV1BoqStrings.addGroup.primary,
@@ -1506,6 +1556,7 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
     required this.scopeSelector,
     required this.isAllAggregate,
     required this.editable,
+    required this.showEditActions,
     required this.excelEnabled,
     required this.onSelectScope,
     this.onAssignLegacyScope,
@@ -1521,6 +1572,7 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
   final Widget scopeSelector;
   final bool isAllAggregate;
   final bool editable;
+  final bool showEditActions;
   final bool excelEnabled;
   final ValueChanged<String> onSelectScope;
   final ValueChanged<YorksV1BoqGroup>? onAssignLegacyScope;
@@ -1565,9 +1617,9 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
                     icon: const Icon(Icons.print_outlined, size: 18),
                     label: Text(YorksV1BoqStrings.printBoq.primary),
                   ),
-                  if (editable)
+                  if (showEditActions)
                     FilledButton.icon(
-                      onPressed: onCreateGroup,
+                      onPressed: editable ? onCreateGroup : null,
                       icon: const Icon(
                         Icons.create_new_folder_outlined,
                         size: 18,
@@ -1606,6 +1658,7 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
               language: language,
               projectId: projectId,
               editable: editable,
+              showEditActions: showEditActions,
               aggregateReadOnly: isAllAggregate,
               onSelectScope: onSelectScope,
               onAssignLegacyScope: onAssignLegacyScope,
@@ -1662,9 +1715,9 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
                     icon: const Icon(Icons.print_outlined, size: 18),
                     label: Text(YorksV1BoqStrings.printBoq.primary),
                   ),
-                if (editable)
+                if (showEditActions)
                   FilledButton.icon(
-                    onPressed: onCreateGroup,
+                    onPressed: editable ? onCreateGroup : null,
                     icon: const Icon(
                       Icons.create_new_folder_outlined,
                       size: 18,
@@ -1693,6 +1746,7 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
             language: language,
             projectId: projectId,
             editable: editable,
+            showEditActions: showEditActions,
             aggregateReadOnly: isAllAggregate,
             onSelectScope: onSelectScope,
             onAssignLegacyScope: onAssignLegacyScope,
@@ -1845,6 +1899,26 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final canRead = yorksV1CanReadProjectRecord(
+      permissionState,
+      YorksV1CapabilityKeys.boqView,
+      legacyAllowed: role != null,
+      projectId: projectId,
+    );
+    if (!canRead) {
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          top: false,
+          child: YorksV1ProjectReadBoundary(
+            allowed: false,
+            language: language,
+            child: const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
     final state = ref.watch(yorksV1BoqWorksheetControllerProvider(groupId));
     final controller = ref.read(
       yorksV1BoqWorksheetControllerProvider(groupId).notifier,
@@ -1854,11 +1928,25 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
     final canViewCommercials = ref.watch(canViewCommercialsProvider);
     final canManageCommercials = ref.watch(canManageCommercialsProvider);
-    final editable =
+    final legacyEditable =
         role != null &&
         role != YorksV1Role.procurement &&
         !state.isReadOnly &&
         !(state.worksheet?.group.isLegacyUnassigned ?? false);
+    final editAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.boqEdit,
+      legacyAllowed: legacyEditable,
+      projectId: projectId,
+    );
+    final requestCreateAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      projectId: projectId,
+    );
+    final editable = editAccess.canWrite;
+    final showEditActions = editAccess.isVisible;
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
 
@@ -1903,12 +1991,13 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
                     ),
                     icon: const Icon(Icons.folder_open_outlined),
                   ),
-                if (editable && state.worksheet?.group.isCustom == true)
+                if (showEditActions && state.worksheet?.group.isCustom == true)
                   IconButton(
                     tooltip: YorksV1BoqStrings.archiveGroup.primary,
                     icon: const Icon(Icons.archive_outlined),
-                    onPressed: () =>
-                        _archive(context, ref, state.worksheet!.group),
+                    onPressed: editable
+                        ? () => _archive(context, ref, state.worksheet!.group)
+                        : null,
                   ),
                 IconButton(
                   tooltip: YorksV1BoqStrings.refresh.primary,
@@ -1916,15 +2005,17 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
                       _refreshWorksheet(context, ref, controller, state),
                   icon: const Icon(Icons.refresh_rounded),
                 ),
-                if (requestsEnabled && role?.canCreateMaterialRequest == true)
+                if (requestsEnabled && requestCreateAccess.isVisible)
                   IconButton(
                     tooltip: YorksV1MaterialRequestStrings.newRequest.primary,
-                    onPressed: () => context.push(
-                      RoutePaths.yorksV1MaterialRequestDraftPath(
-                        const Uuid().v4(),
-                        projectId: projectId,
-                      ),
-                    ),
+                    onPressed: requestCreateAccess.canWrite
+                        ? () => context.push(
+                            RoutePaths.yorksV1MaterialRequestDraftPath(
+                              const Uuid().v4(),
+                              projectId: projectId,
+                            ),
+                          )
+                        : null,
                     icon: const Icon(Icons.add_task_outlined),
                   ),
               ],
@@ -1943,6 +2034,7 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             controller: controller,
             language: language,
             editable: editable,
+            showEditActions: showEditActions,
             excelEnabled: excelEnabled,
             canViewCommercials: canViewCommercials,
             canManageCommercials: canManageCommercials,
@@ -1954,10 +2046,14 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
             showPageHeader: !compactRoute,
             onCreateRequestFromFolder:
                 requestsEnabled &&
-                    role?.canCreateMaterialRequest == true &&
+                    requestCreateAccess.canWrite &&
                     state.worksheet?.group.isScopeAssigned == true
                 ? () => _createRequestDraft(context, ref, controller, state)
                 : null,
+            showCreateRequestFromFolder:
+                requestsEnabled &&
+                requestCreateAccess.isVisible &&
+                state.worksheet?.group.isScopeAssigned == true,
             onImport: editable && excelEnabled && state.worksheet != null
                 ? () => _importWorkbook(
                     context,
@@ -2493,11 +2589,13 @@ class _WorksheetBody extends ConsumerWidget {
     required this.controller,
     required this.language,
     required this.editable,
+    required this.showEditActions,
     required this.excelEnabled,
     required this.canViewCommercials,
     required this.canManageCommercials,
     required this.onSaved,
     required this.showPageHeader,
+    required this.showCreateRequestFromFolder,
     this.onCreateRequestFromFolder,
     this.onImport,
     this.onExport,
@@ -2510,11 +2608,13 @@ class _WorksheetBody extends ConsumerWidget {
   final YorksV1BoqWorksheetController controller;
   final AppLanguage language;
   final bool editable;
+  final bool showEditActions;
   final bool excelEnabled;
   final bool canViewCommercials;
   final bool canManageCommercials;
   final VoidCallback onSaved;
   final bool showPageHeader;
+  final bool showCreateRequestFromFolder;
   final VoidCallback? onCreateRequestFromFolder;
   final Future<void> Function()? onImport;
   final Future<void> Function()? onExport;
@@ -2550,6 +2650,7 @@ class _WorksheetBody extends ConsumerWidget {
             worksheet: worksheet,
             language: language,
             editable: editable,
+            showEditActions: showEditActions,
             excelEnabled: excelEnabled,
             state: state,
             onTitleChanged: controller.updateTitle,
@@ -2578,6 +2679,7 @@ class _WorksheetBody extends ConsumerWidget {
             },
             onRefresh: controller.load,
             onCreateRequestFromFolder: onCreateRequestFromFolder,
+            showCreateRequestFromFolder: showCreateRequestFromFolder,
           ),
           const SizedBox(height: AppSpacing.sm),
           _LinkedWorkStrip(
@@ -2587,8 +2689,10 @@ class _WorksheetBody extends ConsumerWidget {
             onOpenRequests: onOpenRequests,
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (!editable) _ReadOnlyBanner(language: language),
-          if (!editable) const SizedBox(height: AppSpacing.md),
+          if (!editable && !showEditActions)
+            _ReadOnlyBanner(language: language),
+          if (!editable && !showEditActions)
+            const SizedBox(height: AppSpacing.md),
           if (state.status == YorksV1BoqSyncStatus.conflict)
             _ConflictBanner(language: language, onRefresh: controller.load),
           if (state.status == YorksV1BoqSyncStatus.conflict)
@@ -2597,6 +2701,7 @@ class _WorksheetBody extends ConsumerWidget {
             child: YorksV1BoqSpreadsheet(
               worksheet: worksheet,
               editable: editable,
+              showEditActions: showEditActions,
               canViewCommercials: canViewCommercials,
               canManageCommercials: canManageCommercials,
               canUndo: controller.canUndo,
@@ -2811,6 +2916,7 @@ class _WorksheetHeader extends StatelessWidget {
     required this.worksheet,
     required this.language,
     required this.editable,
+    required this.showEditActions,
     required this.excelEnabled,
     required this.state,
     required this.onTitleChanged,
@@ -2822,11 +2928,13 @@ class _WorksheetHeader extends StatelessWidget {
     this.onAddMaterial,
     required this.onRefresh,
     this.onCreateRequestFromFolder,
+    required this.showCreateRequestFromFolder,
   });
 
   final YorksV1BoqWorksheet worksheet;
   final AppLanguage language;
   final bool editable;
+  final bool showEditActions;
   final bool excelEnabled;
   final YorksV1BoqWorksheetState state;
   final ValueChanged<String> onTitleChanged;
@@ -2838,6 +2946,7 @@ class _WorksheetHeader extends StatelessWidget {
   final VoidCallback? onAddMaterial;
   final Future<void> Function() onRefresh;
   final VoidCallback? onCreateRequestFromFolder;
+  final bool showCreateRequestFromFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -2859,6 +2968,7 @@ class _WorksheetHeader extends StatelessWidget {
         status: status,
         statusColor: statusColor,
         editable: editable,
+        showEditActions: showEditActions,
         saving: state.status == YorksV1BoqSyncStatus.saving,
         onTitleChanged: onTitleChanged,
         onAddMaterial: onAddMaterial,
@@ -2868,6 +2978,7 @@ class _WorksheetHeader extends StatelessWidget {
         onOpenDocuments: onOpenDocuments,
         onSave: onSave,
         onCreateRequestFromFolder: onCreateRequestFromFolder,
+        showCreateRequestFromFolder: showCreateRequestFromFolder,
       );
     }
     return Material(
@@ -2919,15 +3030,16 @@ class _WorksheetHeader extends StatelessWidget {
                     icon: const Icon(Icons.print_outlined),
                     label: Text(YorksV1BoqStrings.printBoq.primary),
                   ),
-                if (editable)
+                if (showEditActions)
                   FilledButton.icon(
-                    onPressed: state.status == YorksV1BoqSyncStatus.saving
+                    onPressed:
+                        state.status == YorksV1BoqSyncStatus.saving || !editable
                         ? null
                         : onSave,
                     icon: const Icon(Icons.save_outlined),
                     label: Text(YorksV1BoqStrings.save.primary),
                   ),
-                if (onCreateRequestFromFolder != null)
+                if (showCreateRequestFromFolder)
                   OutlinedButton.icon(
                     key: const ValueKey('boq-create-request-from-folder'),
                     onPressed: onCreateRequestFromFolder,
@@ -2966,6 +3078,7 @@ class _MobileWorksheetHeader extends StatelessWidget {
     required this.status,
     required this.statusColor,
     required this.editable,
+    required this.showEditActions,
     required this.saving,
     required this.onTitleChanged,
     required this.onSave,
@@ -2975,12 +3088,14 @@ class _MobileWorksheetHeader extends StatelessWidget {
     this.onPrint,
     this.onOpenDocuments,
     this.onCreateRequestFromFolder,
+    required this.showCreateRequestFromFolder,
   });
 
   final YorksV1BoqWorksheet worksheet;
   final TranslatableString status;
   final Color statusColor;
   final bool editable;
+  final bool showEditActions;
   final bool saving;
   final ValueChanged<String> onTitleChanged;
   final Future<void> Function() onSave;
@@ -2990,6 +3105,7 @@ class _MobileWorksheetHeader extends StatelessWidget {
   final Future<void> Function()? onPrint;
   final VoidCallback? onOpenDocuments;
   final VoidCallback? onCreateRequestFromFolder;
+  final bool showCreateRequestFromFolder;
 
   @override
   Widget build(BuildContext context) => YorksMobileCard(
@@ -3016,18 +3132,20 @@ class _MobileWorksheetHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (editable)
+                      if (showEditActions)
                         IconButton(
                           tooltip: YorksV1BoqStrings.worksheetTitle.primary,
                           constraints: const BoxConstraints(
                             minWidth: AppSpacing.minTapTarget,
                             minHeight: AppSpacing.minTapTarget,
                           ),
-                          onPressed: () => _editMobileWorksheetTitle(
-                            context,
-                            worksheet.group.worksheetTitle,
-                            onTitleChanged,
-                          ),
+                          onPressed: editable
+                              ? () => _editMobileWorksheetTitle(
+                                  context,
+                                  worksheet.group.worksheetTitle,
+                                  onTitleChanged,
+                                )
+                              : null,
                           icon: const Icon(Icons.edit_outlined, size: 18),
                         ),
                     ],
@@ -3138,23 +3256,23 @@ class _MobileWorksheetHeader extends StatelessWidget {
             ),
           ],
         ),
-        if (editable || onCreateRequestFromFolder != null) ...[
+        if (showEditActions || showCreateRequestFromFolder) ...[
           const SizedBox(height: AppSpacing.sm),
           SizedBox(
             height: AppSpacing.massive,
             child: Row(
               children: [
-                if (editable)
+                if (showEditActions)
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: saving ? null : onSave,
+                      onPressed: saving || !editable ? null : onSave,
                       icon: const Icon(Icons.save_outlined, size: 18),
                       label: Text(YorksV1BoqStrings.saveWorksheet.primary),
                     ),
                   ),
-                if (editable && onCreateRequestFromFolder != null)
+                if (showEditActions && showCreateRequestFromFolder)
                   const SizedBox(width: AppSpacing.sm),
-                if (onCreateRequestFromFolder != null)
+                if (showCreateRequestFromFolder)
                   Expanded(
                     child: OutlinedButton.icon(
                       key: const ValueKey('boq-create-request-from-folder'),
@@ -4626,6 +4744,7 @@ class YorksV1BoqSpreadsheet extends StatefulWidget {
     super.key,
     required this.worksheet,
     required this.editable,
+    required this.showEditActions,
     this.canViewCommercials = false,
     this.canManageCommercials = false,
     this.canUndo = false,
@@ -4650,6 +4769,7 @@ class YorksV1BoqSpreadsheet extends StatefulWidget {
 
   final YorksV1BoqWorksheet worksheet;
   final bool editable;
+  final bool showEditActions;
   final bool canViewCommercials;
   final bool canManageCommercials;
   final bool canUndo;
@@ -4829,27 +4949,31 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
         children: [
-          if (widget.editable) ...[
+          if (widget.showEditActions) ...[
             IconButton(
               tooltip: YorksV1BoqStrings.undo.primary,
-              onPressed: widget.canUndo ? widget.onUndo : null,
+              onPressed: widget.editable && widget.canUndo
+                  ? widget.onUndo
+                  : null,
               icon: const Icon(Icons.undo_rounded),
             ),
             IconButton(
               tooltip: YorksV1BoqStrings.redo.primary,
-              onPressed: widget.canRedo ? widget.onRedo : null,
+              onPressed: widget.editable && widget.canRedo
+                  ? widget.onRedo
+                  : null,
               icon: const Icon(Icons.redo_rounded),
             ),
             OutlinedButton.icon(
               key: const ValueKey('boq-add-column'),
-              onPressed: _addColumn,
+              onPressed: widget.editable ? _addColumn : null,
               icon: const Icon(Icons.view_column_outlined, size: 18),
               label: Text(YorksV1BoqStrings.addColumn.primary),
             ),
             if (addFirstRow)
               FilledButton.icon(
                 key: const ValueKey('boq-add-blank-row'),
-                onPressed: widget.worksheet.columns.isEmpty
+                onPressed: !widget.editable || widget.worksheet.columns.isEmpty
                     ? null
                     : () {
                         final row = widget.onAddBlankRow(
@@ -4863,7 +4987,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
             else
               OutlinedButton.icon(
                 key: const ValueKey('boq-add-blank-row'),
-                onPressed: widget.worksheet.columns.isEmpty
+                onPressed: !widget.editable || widget.worksheet.columns.isEmpty
                     ? null
                     : () {
                         final row = widget.onAddBlankRow(
@@ -4876,7 +5000,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
               ),
             OutlinedButton.icon(
               key: const ValueKey('boq-add-similar-row'),
-              onPressed: !hasSelection
+              onPressed: !widget.editable || !hasSelection
                   ? null
                   : () {
                       final row = widget.onAddSimilarRow(
@@ -4983,7 +5107,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                 0,
                                 (total, column) => total + _widthFor(column),
                               ) +
-                              (widget.editable ? _actionWidth : 0),
+                              (widget.showEditActions ? _actionWidth : 0),
                           child: Column(
                             children: [
                               SizedBox(
@@ -5001,6 +5125,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                             widget.editable &&
                                             (!column.isCommercial ||
                                                 widget.canManageCommercials),
+                                        showEditAction: widget.showEditActions,
                                         onRename: widget.onRenameColumn,
                                         onDelete: () => _deleteColumn(column),
                                         onWidthChanged: (width) {
@@ -5015,7 +5140,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                           );
                                         },
                                       ),
-                                    if (widget.editable)
+                                    if (widget.showEditActions)
                                       const _GridActionHeader(),
                                   ],
                                 ),
@@ -5102,10 +5227,11 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                                                         value: value,
                                                       ),
                                                 ),
-                                              if (widget.editable)
+                                              if (widget.showEditActions)
                                                 _GridRowDeleteAction(
-                                                  onPressed: () =>
-                                                      _deleteRow(row),
+                                                  onPressed: widget.editable
+                                                      ? () => _deleteRow(row)
+                                                      : null,
                                                 ),
                                             ],
                                           );
@@ -5134,21 +5260,21 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
     ),
     child: Row(
       children: [
-        if (widget.editable) ...[
+        if (widget.showEditActions) ...[
           IconButton(
             tooltip: YorksV1BoqStrings.undo.primary,
-            onPressed: widget.canUndo ? widget.onUndo : null,
+            onPressed: widget.editable && widget.canUndo ? widget.onUndo : null,
             icon: const Icon(Icons.undo_rounded),
           ),
           IconButton(
             tooltip: YorksV1BoqStrings.redo.primary,
-            onPressed: widget.canRedo ? widget.onRedo : null,
+            onPressed: widget.editable && widget.canRedo ? widget.onRedo : null,
             icon: const Icon(Icons.redo_rounded),
           ),
           IconButton(
             key: const ValueKey('boq-add-column'),
             tooltip: YorksV1BoqStrings.addColumn.primary,
-            onPressed: _addColumn,
+            onPressed: widget.editable ? _addColumn : null,
             icon: const Icon(Icons.view_column_outlined),
           ),
           const SizedBox(width: AppSpacing.xs),
@@ -5219,7 +5345,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
                       row: rows[index],
                       number: index + 1,
                       columns: columns,
-                      editable: widget.editable,
+                      editable: widget.showEditActions,
                       highlighted: _rowMatches(rows[index], columns),
                       possibleDuplicate: duplicateRowIds.contains(
                         rows[index].id,
@@ -5333,6 +5459,7 @@ class _YorksV1BoqSpreadsheetState extends State<YorksV1BoqSpreadsheet> {
           rows: widget.worksheet.rows,
           columns: columns,
           editable: widget.editable && !widget.mobileConflict,
+          showEditActions: widget.showEditActions,
           canManageCommercials: widget.canManageCommercials,
           conflict: widget.mobileConflict,
           language: widget.mobileLanguage,
@@ -5355,6 +5482,7 @@ class _ColumnHeader extends StatefulWidget {
     required this.column,
     required this.width,
     required this.editable,
+    required this.showEditAction,
     required this.onRename,
     required this.onDelete,
     required this.onWidthChanged,
@@ -5363,6 +5491,7 @@ class _ColumnHeader extends StatefulWidget {
   final YorksV1BoqColumn column;
   final double width;
   final bool editable;
+  final bool showEditAction;
   final void Function(String, String) onRename;
   final VoidCallback onDelete;
   final ValueChanged<double> onWidthChanged;
@@ -5456,7 +5585,7 @@ class _ColumnHeaderState extends State<_ColumnHeader> {
                       ),
                     ),
                   ),
-                  if (widget.editable)
+                  if (widget.showEditAction)
                     IconButton(
                       tooltip: YorksV1BoqStrings.deleteColumn.primary,
                       constraints: const BoxConstraints(
@@ -5464,7 +5593,7 @@ class _ColumnHeaderState extends State<_ColumnHeader> {
                         minWidth: AppSpacing.minTapTarget,
                       ),
                       padding: EdgeInsets.zero,
-                      onPressed: widget.onDelete,
+                      onPressed: widget.editable ? widget.onDelete : null,
                       icon: const Icon(Icons.close_rounded, size: 17),
                     ),
                 ],
@@ -5531,7 +5660,7 @@ class _GridActionHeader extends StatelessWidget {
 class _GridRowDeleteAction extends StatelessWidget {
   const _GridRowDeleteAction({required this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -6109,6 +6238,7 @@ class _MobileBoqRowEditor extends StatefulWidget {
     required this.rows,
     required this.columns,
     required this.editable,
+    required this.showEditActions,
     required this.canManageCommercials,
     required this.conflict,
     this.language,
@@ -6123,6 +6253,7 @@ class _MobileBoqRowEditor extends StatefulWidget {
   final List<YorksV1BoqRow> rows;
   final List<YorksV1BoqColumn> columns;
   final bool editable;
+  final bool showEditActions;
   final bool canManageCommercials;
   final bool conflict;
   final AppLanguage? language;
@@ -6315,7 +6446,9 @@ class _MobileBoqRowEditorState extends State<_MobileBoqRowEditor> {
                 language: widget.language!,
                 onRefresh: widget.onRefresh ?? () async {},
               ),
-            ] else if (!widget.editable && widget.language != null) ...[
+            ] else if (!widget.editable &&
+                !widget.showEditActions &&
+                widget.language != null) ...[
               const SizedBox(height: AppSpacing.md),
               _ReadOnlyBanner(language: widget.language!),
             ],
@@ -6363,17 +6496,19 @@ class _MobileBoqRowEditorState extends State<_MobileBoqRowEditor> {
                 ),
               const SizedBox(height: AppSpacing.md),
             ],
-            if (widget.editable)
+            if (widget.showEditActions)
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       key: const ValueKey('boq-mobile-similar-row'),
-                      onPressed: () {
-                        _saveCurrent();
-                        widget.onAddSimilarRow(sourceRowId: _row.id);
-                        _finishAndPop();
-                      },
+                      onPressed: widget.editable
+                          ? () {
+                              _saveCurrent();
+                              widget.onAddSimilarRow(sourceRowId: _row.id);
+                              _finishAndPop();
+                            }
+                          : null,
                       icon: const Icon(Icons.copy_outlined),
                       label: Text(YorksV1BoqStrings.similarRow.primary),
                     ),
@@ -6381,16 +6516,18 @@ class _MobileBoqRowEditorState extends State<_MobileBoqRowEditor> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final confirmed = await _confirm(
-                          context: context,
-                          title: YorksV1BoqStrings.deleteRow,
-                          body: YorksV1BoqStrings.deleteRowConfirmation,
-                        );
-                        if (confirmed != true || !context.mounted) return;
-                        widget.onRemoveRow(_row.id);
-                        _finishAndPop();
-                      },
+                      onPressed: widget.editable
+                          ? () async {
+                              final confirmed = await _confirm(
+                                context: context,
+                                title: YorksV1BoqStrings.deleteRow,
+                                body: YorksV1BoqStrings.deleteRowConfirmation,
+                              );
+                              if (confirmed != true || !context.mounted) return;
+                              widget.onRemoveRow(_row.id);
+                              _finishAndPop();
+                            }
+                          : null,
                       icon: const Icon(Icons.delete_outline),
                       label: Text(YorksV1BoqStrings.deleteRow.primary),
                     ),

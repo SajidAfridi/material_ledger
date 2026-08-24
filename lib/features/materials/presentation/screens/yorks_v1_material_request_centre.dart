@@ -34,7 +34,7 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
   final List<YorksV1MaterialRequest> requests;
   final AppLanguage language;
   final bool canCreate;
-  final VoidCallback onCreate;
+  final VoidCallback? onCreate;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
   final VoidCallback onRefresh;
   final Widget? localDraftNotice;
@@ -701,7 +701,7 @@ class _CentreHeader extends StatelessWidget {
 
   final AppLanguage language;
   final bool canCreate;
-  final VoidCallback onCreate;
+  final VoidCallback? onCreate;
   final VoidCallback onRefresh;
 
   @override

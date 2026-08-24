@@ -8,7 +8,10 @@ import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +49,13 @@ void main() {
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
+            ),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(
+                  role: YorksV1Role.projectEngineer,
+                ),
+              ),
             ),
             yorksV1MaterialReturnRegisterProvider(
               query,

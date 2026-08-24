@@ -40,17 +40,21 @@ export function provisionableRoles(
   value: unknown,
   primary: string,
 ): string[] | null {
-  const requested = Array.isArray(value) ? value : [primary];
-  const roles = requested
-    .filter((role): role is string => typeof role === "string")
-    .filter((role, index, all) => all.indexOf(role) === index);
-  if (
-    roles.length === 0 ||
-    roles.some((role) => !PROVISIONABLE_ROLES.has(role))
-  ) {
+  if (value == null) return [primary];
+  if (!Array.isArray(value) || value.length !== 1 || value[0] !== primary) {
     return null;
   }
-  return [primary, ...roles.filter((role) => role !== primary)];
+  return [primary];
+}
+
+/// V1 roles and compatibility claims are server-owned. Exact-role commands
+/// reject every caller-supplied capability or legacy-shell switch instead of
+/// silently filtering it into a different request.
+export function hasForbiddenV1ClaimInput(
+  body: Readonly<Record<string, unknown>>,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(body, "caps") ||
+    Object.prototype.hasOwnProperty.call(body, "legacyShell");
 }
 
 export function defaultCapsForRoles(roles: readonly string[]): string[] {

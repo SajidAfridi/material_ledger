@@ -22,6 +22,7 @@ import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_configuration.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_overview_strings.dart';
+import '../../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../../shared/models/yorks_v1_rental.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/models/yorks_v1_team_chat.dart';
@@ -41,10 +42,12 @@ import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_controller_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../../../../shared/providers/yorks_v1_project_team_directory_provider.dart';
+import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/providers/yorks_v1_rental_provider.dart';
 import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import 'yorks_v1_boq_screens.dart';
 import 'yorks_v1_executive_overview.dart';
+import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
 
 /// The normalized, R35-aligned project portfolio.
 ///
@@ -73,13 +76,42 @@ class YorksV1OverviewScreen extends ConsumerWidget {
     ref.watch(yorksV1MaterialRequestLiveRefreshProvider);
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final permissions = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final user = ref.watch(currentUserProvider);
-    final projects = ref.watch(yorksV1ProjectPortfolioProvider);
-    final requests = ref.watch(yorksV1MaterialRequestListProvider(null));
-    final canCreateProject = role?.canCreateProject == true;
-    final canCreateRequest = role?.canCreateMaterialRequest == true;
+    final projects = ref.watch(yorksV1AuthorizedProjectPortfolioProvider);
+    final requests = ref
+        .watch(yorksV1MaterialRequestListProvider(null))
+        .whenData(
+          (items) => items
+              .where(
+                (item) => yorksV1CanReadProjectRecord(
+                  permissions,
+                  YorksV1CapabilityKeys.materialRequestsView,
+                  legacyAllowed: true,
+                  projectId: item.projectId,
+                ),
+              )
+              .toList(growable: false),
+        );
+    final createProjectAccess = yorksV1FeatureActionAccess(
+      permissions,
+      YorksV1CapabilityKeys.projectsCreate,
+      legacyAllowed: role?.canCreateProject == true,
+    );
+    final createRequestAccess = yorksV1FeatureActionAccess(
+      permissions,
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: role?.canCreateMaterialRequest == true,
+      anyProject: true,
+    );
+    final canCreateProject = createProjectAccess.isVisible;
+    final canCreateRequest = createRequestAccess.isVisible;
     final procurement = role == YorksV1Role.procurement;
-    final canBrowseInventory = role?.canBrowseInventory == true;
+    final canBrowseInventory = permissions.hybridAllows(
+      YorksV1CapabilityKeys.inventoryView,
+      legacyAllowed: role?.canBrowseInventory == true,
+      organizationSummary: true,
+    );
     final executive =
         role == YorksV1Role.admin || (role?.isGlobalProjectEngineer ?? false);
     final admin = role == YorksV1Role.admin;
@@ -175,10 +207,14 @@ class YorksV1OverviewScreen extends ConsumerWidget {
       procurement: procurement,
       canBrowseInventory: canBrowseInventory,
       inventory: inventory,
-      onCreateProject: () => context.push(RoutePaths.engineerCreateProject),
-      onCreateRequest: () => context.push(
-        RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
-      ),
+      onCreateProject: createProjectAccess.canWrite
+          ? () => context.push(RoutePaths.engineerCreateProject)
+          : null,
+      onCreateRequest: createRequestAccess.canWrite
+          ? () => context.push(
+              RoutePaths.yorksV1MaterialRequestDraftPath(const Uuid().v4()),
+            )
+          : null,
       onOpenProjects: () => context.go(RoutePaths.yorksV1Projects),
       onOpenRequests: () => context.go(RoutePaths.yorksV1MaterialRequests),
       onRetryProjects: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
@@ -225,8 +261,8 @@ class _R35OverviewPage extends StatelessWidget {
   final bool procurement;
   final bool canBrowseInventory;
   final AsyncValue<YorksV1InventoryWorkspace?> inventory;
-  final VoidCallback onCreateProject;
-  final VoidCallback onCreateRequest;
+  final VoidCallback? onCreateProject;
+  final VoidCallback? onCreateRequest;
   final VoidCallback onOpenProjects;
   final VoidCallback onOpenRequests;
   final VoidCallback onRetryProjects;
@@ -325,8 +361,8 @@ class _YorksMobileOverview extends StatelessWidget {
   final bool canCreateRequest;
   final bool canBrowseInventory;
   final AsyncValue<YorksV1InventoryWorkspace?> inventory;
-  final VoidCallback onCreateProject;
-  final VoidCallback onCreateRequest;
+  final VoidCallback? onCreateProject;
+  final VoidCallback? onCreateRequest;
   final VoidCallback onOpenProjects;
   final VoidCallback onOpenRequests;
   final VoidCallback onRetryProjects;
@@ -698,8 +734,8 @@ class _R35RoleAwareOverview extends StatelessWidget {
   final bool canCreateProject;
   final bool canCreateRequest;
   final bool canBrowseInventory;
-  final VoidCallback onCreateProject;
-  final VoidCallback onCreateRequest;
+  final VoidCallback? onCreateProject;
+  final VoidCallback? onCreateRequest;
   final VoidCallback onOpenProjects;
   final VoidCallback onOpenRequests;
   final VoidCallback onRetryProjects;
@@ -831,8 +867,8 @@ class _RoleOverviewHeader extends StatelessWidget {
   final bool compact;
   final bool canCreateProject;
   final bool canCreateRequest;
-  final VoidCallback onCreateProject;
-  final VoidCallback onCreateRequest;
+  final VoidCallback? onCreateProject;
+  final VoidCallback? onCreateRequest;
   final VoidCallback onOpenRequests;
 
   @override
@@ -2864,7 +2900,7 @@ class _R35PrimaryAction extends StatelessWidget {
 
   final String label;
   final IconData? icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -2903,7 +2939,7 @@ class _R35SecondaryAction extends StatelessWidget {
 
   final String label;
   final IconData? icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -3238,8 +3274,16 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
-    final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
-    final canCreate = role?.canCreateProject == true;
+    final portfolio = ref.watch(yorksV1AuthorizedProjectPortfolioProvider);
+    final createAccess = yorksV1FeatureActionAccess(
+      ref.watch(yorksV1CurrentPermissionSnapshotProvider),
+      YorksV1CapabilityKeys.projectsCreate,
+      legacyAllowed: role?.canCreateProject == true,
+    );
+    final canCreate = createAccess.isVisible;
+    final onCreate = createAccess.canWrite
+        ? () => context.push(RoutePaths.engineerCreateProject)
+        : null;
 
     if (YorksMobileUi.isActive(context)) {
       return Scaffold(
@@ -3259,9 +3303,7 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
             canCreate: canCreate,
             onSearchChanged: (value) => setState(() => _search = value),
             onStateChanged: (value) => setState(() => _stateFilter = value),
-            onCreate: canCreate
-                ? () => context.push(RoutePaths.engineerCreateProject)
-                : null,
+            onCreate: onCreate,
           ),
         ),
       );
@@ -3282,8 +3324,7 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
               SizedBox(
                 height: AppSpacing.minTapTarget,
                 child: FilledButton.icon(
-                  onPressed: () =>
-                      context.push(RoutePaths.engineerCreateProject),
+                  onPressed: onCreate,
                   icon: const Icon(Icons.add_rounded),
                   label: Text(YorksV1ProjectStrings.createProject.primary),
                 ),
@@ -3311,9 +3352,7 @@ class _YorksV1ProjectsScreenState extends ConsumerState<YorksV1ProjectsScreen> {
                 canCreate: canCreate,
                 onSearchChanged: (value) => setState(() => _search = value),
                 onStateChanged: (value) => setState(() => _stateFilter = value),
-                onCreate: canCreate
-                    ? () => context.push(RoutePaths.engineerCreateProject)
-                    : null,
+                onCreate: onCreate,
               );
             },
           ),
@@ -3395,14 +3434,29 @@ class _YorksV1ProjectWorkspaceScreenState
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final authUserId = ref.watch(yorksV1AuthUserIdProvider);
-    final portfolio = ref.watch(yorksV1ProjectPortfolioProvider);
-    final requests = ref.watch(
-      yorksV1MaterialRequestListProvider(widget.projectId),
+    final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
+    final portfolio = ref.watch(yorksV1AuthorizedProjectPortfolioProvider);
+    final canReadRequests = yorksV1CanReadProjectRecord(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsView,
+      legacyAllowed: true,
+      projectId: widget.projectId,
     );
+    final canReadBoq = yorksV1CanReadProjectRecord(
+      permissionState,
+      YorksV1CapabilityKeys.boqView,
+      legacyAllowed: true,
+      projectId: widget.projectId,
+    );
+    final AsyncValue<List<YorksV1MaterialRequest>> requests = canReadRequests
+        ? ref.watch(yorksV1MaterialRequestListProvider(widget.projectId))
+        : const AsyncData<List<YorksV1MaterialRequest>>([]);
     final scopes = ref.watch(
       yorksV1MaterialRequestScopesProvider(widget.projectId),
     );
-    final groups = ref.watch(yorksV1BoqGroupsProvider(widget.projectId));
+    final AsyncValue<List<YorksV1BoqGroup>> groups = canReadBoq
+        ? ref.watch(yorksV1BoqGroupsProvider(widget.projectId))
+        : const AsyncData<List<YorksV1BoqGroup>>([]);
     final documents = ref.watch(
       yorksV1DocumentWorkspaceProvider(widget.projectId),
     );
@@ -3542,24 +3596,48 @@ class _YorksV1ProjectWorkspaceScreenState
                       member.projectRole ==
                           YorksV1ProjectMembershipRole.projectEngineer,
                 );
-            final canManageProject =
+            final legacyCanManageProject =
                 role == YorksV1Role.admin ||
                 (role?.isGlobalProjectEngineer ?? false) ||
                 hasProjectEngineerMembership;
-            final canEdit =
+            final legacyCanEdit =
                 projectStateIsEditable &&
                 (role == YorksV1Role.admin ||
                     (role?.isGlobalProjectEngineer ?? false) ||
                     activeMember ||
                     isCreator);
+            final editAccess = yorksV1FeatureActionAccess(
+              permissionState,
+              YorksV1CapabilityKeys.projectsEdit,
+              legacyAllowed: legacyCanEdit,
+              projectId: selectedProject.project.id,
+            );
+            final archiveAccess = yorksV1FeatureActionAccess(
+              permissionState,
+              YorksV1CapabilityKeys.projectsArchive,
+              legacyAllowed: role == YorksV1Role.admin,
+              projectId: selectedProject.project.id,
+            );
+            final requestCreateAccess = yorksV1FeatureActionAccess(
+              permissionState,
+              YorksV1CapabilityKeys.materialRequestsCreate,
+              legacyAllowed: role?.canCreateMaterialRequest == true,
+              projectId: selectedProject.project.id,
+            );
+            final requestApproveAccess = yorksV1FeatureActionAccess(
+              permissionState,
+              YorksV1CapabilityKeys.materialRequestsApprove,
+              legacyAllowed: legacyCanManageProject,
+              projectId: selectedProject.project.id,
+            );
             final VoidCallback? activateAction =
                 selectedProject.project.state ==
                         YorksV1ProjectLifecycle.draft &&
-                    canManageProject
+                    legacyCanManageProject
                 ? () => _activateProject(selectedProject.project)
                 : null;
             final VoidCallback? newRequestAction =
-                projectStateIsEditable && role?.canCreateMaterialRequest == true
+                projectStateIsEditable && requestCreateAccess.canWrite
                 ? () => context.push(
                     RoutePaths.yorksV1MaterialRequestDraftPath(
                       const Uuid().v4(),
@@ -3567,7 +3645,7 @@ class _YorksV1ProjectWorkspaceScreenState
                     ),
                   )
                 : null;
-            final VoidCallback? editAction = canEdit
+            final VoidCallback? editAction = editAccess.canWrite
                 ? () => context.push(
                     RoutePaths.yorksV1ProjectEditPath(
                       selectedProject.project.id,
@@ -3575,7 +3653,7 @@ class _YorksV1ProjectWorkspaceScreenState
                   )
                 : null;
             final VoidCallback? archiveAction =
-                role == YorksV1Role.admin &&
+                archiveAccess.canWrite &&
                     selectedProject.project.state !=
                         YorksV1ProjectLifecycle.archived
                 ? () => _confirmSafeArchive(selectedProject.project)
@@ -3591,8 +3669,15 @@ class _YorksV1ProjectWorkspaceScreenState
                     onSelected: (value) =>
                         setState(() => _mobileDetailTab = value),
                     onActivate: activateAction,
+                    showNewRequest:
+                        projectStateIsEditable && requestCreateAccess.isVisible,
                     onNewRequest: newRequestAction,
+                    showEdit: editAccess.isVisible,
                     onEdit: editAction,
+                    showArchive:
+                        archiveAccess.isVisible &&
+                        selectedProject.project.state !=
+                            YorksV1ProjectLifecycle.archived,
                     onArchive: archiveAction,
                   )
                 : _ProjectWorkspaceBody(
@@ -3605,10 +3690,17 @@ class _YorksV1ProjectWorkspaceScreenState
                     documents: documents,
                     actorRole: role,
                     activeMember: activeMember,
-                    canActAsProjectEngineer: canManageProject,
+                    canActAsProjectEngineer: requestApproveAccess.isVisible,
                     onActivate: activateAction,
+                    showNewRequest:
+                        projectStateIsEditable && requestCreateAccess.isVisible,
                     onNewRequest: newRequestAction,
+                    showEdit: editAccess.isVisible,
                     onEdit: editAction,
+                    showArchive:
+                        archiveAccess.isVisible &&
+                        selectedProject.project.state !=
+                            YorksV1ProjectLifecycle.archived,
                     onArchive: archiveAction,
                     onOpenChat: openChatAction,
                     onRetryRequests: () => ref.invalidate(
@@ -4533,8 +4625,11 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     required this.activeMember,
     required this.canActAsProjectEngineer,
     required this.onActivate,
+    required this.showNewRequest,
     required this.onNewRequest,
+    required this.showEdit,
     required this.onEdit,
+    required this.showArchive,
     required this.onArchive,
     required this.onOpenChat,
     required this.onRetryRequests,
@@ -4552,8 +4647,11 @@ class _ProjectWorkspaceBody extends StatelessWidget {
   final bool activeMember;
   final bool canActAsProjectEngineer;
   final VoidCallback? onActivate;
+  final bool showNewRequest;
   final VoidCallback? onNewRequest;
+  final bool showEdit;
   final VoidCallback? onEdit;
+  final bool showArchive;
   final VoidCallback? onArchive;
   final VoidCallback? onOpenChat;
   final VoidCallback onRetryRequests;
@@ -4604,8 +4702,11 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                   selected: tab,
                   onSelected: onTabChanged,
                   onActivate: onActivate,
+                  showNewRequest: showNewRequest,
                   onNewRequest: onNewRequest,
+                  showEdit: showEdit,
                   onEdit: onEdit,
+                  showArchive: showArchive,
                   onArchive: onArchive,
                   onOpenChat: onOpenChat,
                 ),
@@ -4685,8 +4786,11 @@ class _MobileProjectDetails extends ConsumerWidget {
     required this.selected,
     required this.onSelected,
     required this.onActivate,
+    required this.showNewRequest,
     required this.onNewRequest,
+    required this.showEdit,
     required this.onEdit,
+    required this.showArchive,
     required this.onArchive,
   });
 
@@ -4695,8 +4799,11 @@ class _MobileProjectDetails extends ConsumerWidget {
   final _MobileProjectDetailTab selected;
   final ValueChanged<_MobileProjectDetailTab> onSelected;
   final VoidCallback? onActivate;
+  final bool showNewRequest;
   final VoidCallback? onNewRequest;
+  final bool showEdit;
   final VoidCallback? onEdit;
+  final bool showArchive;
   final VoidCallback? onArchive;
 
   @override
@@ -4732,8 +4839,11 @@ class _MobileProjectDetails extends ConsumerWidget {
                   _MobileProjectInformation(
                     item: item,
                     onActivate: onActivate,
+                    showNewRequest: showNewRequest,
                     onNewRequest: onNewRequest,
+                    showEdit: showEdit,
                     onEdit: onEdit,
+                    showArchive: showArchive,
                     onArchive: onArchive,
                   ),
                 _MobileProjectDetailTab.team => _MobileProjectTeam(
@@ -4828,15 +4938,21 @@ class _MobileProjectInformation extends StatelessWidget {
   const _MobileProjectInformation({
     required this.item,
     required this.onActivate,
+    required this.showNewRequest,
     required this.onNewRequest,
+    required this.showEdit,
     required this.onEdit,
+    required this.showArchive,
     required this.onArchive,
   });
 
   final YorksV1ProjectPortfolioItem item;
   final VoidCallback? onActivate;
+  final bool showNewRequest;
   final VoidCallback? onNewRequest;
+  final bool showEdit;
   final VoidCallback? onEdit;
+  final bool showArchive;
   final VoidCallback? onArchive;
 
   @override
@@ -4880,19 +4996,19 @@ class _MobileProjectInformation extends StatelessWidget {
           icon: const Icon(Icons.play_circle_outline_rounded),
           label: Text(YorksV1ProjectStrings.activateProject.primary),
         ),
-      if (onNewRequest != null)
+      if (showNewRequest)
         FilledButton.icon(
           onPressed: onNewRequest,
           icon: const Icon(Icons.add_rounded),
           label: Text(YorksV1MaterialRequestStrings.newRequest.primary),
         ),
-      if (onEdit != null)
+      if (showEdit)
         OutlinedButton.icon(
           onPressed: onEdit,
           icon: const Icon(Icons.edit_outlined),
           label: Text(YorksV1ProjectStrings.editProject.primary),
         ),
-      if (onArchive != null)
+      if (showArchive)
         TextButton.icon(
           onPressed: onArchive,
           style: TextButton.styleFrom(foregroundColor: AppColors.error),
@@ -6259,8 +6375,11 @@ class _ProjectR35Hero extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     required this.onActivate,
+    required this.showNewRequest,
     required this.onNewRequest,
+    required this.showEdit,
     required this.onEdit,
+    required this.showArchive,
     required this.onArchive,
     required this.onOpenChat,
   });
@@ -6269,8 +6388,11 @@ class _ProjectR35Hero extends StatelessWidget {
   final YorksV1ProjectWorkspaceTab selected;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
   final VoidCallback? onActivate;
+  final bool showNewRequest;
   final VoidCallback? onNewRequest;
+  final bool showEdit;
   final VoidCallback? onEdit;
+  final bool showArchive;
   final VoidCallback? onArchive;
   final VoidCallback? onOpenChat;
 
@@ -6351,7 +6473,7 @@ class _ProjectR35Hero extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (onNewRequest != null)
+                if (showNewRequest)
                   SizedBox(
                     height: AppSpacing.minTapTarget,
                     child: FilledButton.icon(
@@ -6366,7 +6488,7 @@ class _ProjectR35Hero extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (onEdit != null)
+                if (showEdit)
                   SizedBox(
                     height: AppSpacing.minTapTarget,
                     child: OutlinedButton.icon(
@@ -6379,7 +6501,7 @@ class _ProjectR35Hero extends StatelessWidget {
                       label: Text(YorksV1ProjectStrings.editProject.primary),
                     ),
                   ),
-                if (onArchive != null)
+                if (showArchive)
                   SizedBox(
                     height: AppSpacing.minTapTarget,
                     child: TextButton.icon(
