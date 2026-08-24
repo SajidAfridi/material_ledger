@@ -125,24 +125,12 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
     }
     if (!_store.isSeeded) _store.writeAll(state);
     if (_client != null || seedPassword.isNotEmpty) _store.writeAll(state);
-    final connectedRole = YorksV1Role.fromServerClaim(
-      _client?.auth.currentUser?.appMetadata['role'],
-    );
-    if (connectedRole?.canConfigureUsers ?? false) {
-      Future<void>.microtask(() async {
-        try {
-          await refreshFromServer();
-        } catch (_) {
-          // Sign-in and the cached roster remain usable; the Admin screen has
-          // an explicit refresh action for a transient directory failure.
-        }
-      });
-    }
   }
 
   final Ref _ref;
   final CollectionStore<AppUser> _store;
   final Map<String, String> _pendingRestampIdempotencyKeys = {};
+  Future<void>? _directoryRefreshInFlight;
 
   SupabaseClient? get _client => _ref.read(supabaseClientProvider);
 
@@ -153,7 +141,23 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
   /// `users.view` decision. It lets an enforced viewer refresh without
   /// inheriting the old configuration roles. The Edge Function repeats the
   /// capability check and remains the authority even if a caller is tampered.
-  Future<void> refreshFromServer({bool permissionConfirmed = false}) async {
+  Future<void> refreshFromServer({bool permissionConfirmed = false}) {
+    final active = _directoryRefreshInFlight;
+    if (active != null) return active;
+    final operation = _refreshFromServerOnce(
+      permissionConfirmed: permissionConfirmed,
+    );
+    _directoryRefreshInFlight = operation;
+    return operation.whenComplete(() {
+      if (identical(_directoryRefreshInFlight, operation)) {
+        _directoryRefreshInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _refreshFromServerOnce({
+    required bool permissionConfirmed,
+  }) async {
     if (_client == null) return;
     if (_usesYorksV1IdentityProvisioning) {
       final exactRole = YorksV1Role.fromServerClaim(
@@ -187,30 +191,67 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
           DateTime.tryParse(_string(row['createdAt']) ?? '') ??
           existing?.createdAt ??
           DateTime.now();
+      final candidate = AppUser(
+        id: id,
+        fullName: _string(row['fullName']) ?? existing?.fullName ?? id,
+        email: _string(row['email']) ?? existing?.email ?? '',
+        role: compatibilityRole,
+        active: row['active'] as bool? ?? true,
+        inventoryAccess: existing?.inventoryAccess ?? true,
+        createdAt: createdAt,
+        mustChangePassword: existing?.mustChangePassword ?? false,
+        employeeId: existing?.employeeId,
+        canSeeCostOverride: existing?.canSeeCostOverride,
+        canViewFinanceOverride: existing?.canViewFinanceOverride,
+        canSeeSalaryOverride: existing?.canSeeSalaryOverride,
+        canAccessRentalsOverride: existing?.canAccessRentalsOverride,
+        canAccessPeopleOverride: existing?.canAccessPeopleOverride,
+        canReceiveGoodsOverride: existing?.canReceiveGoodsOverride,
+        yorksV1RoleCache: primary,
+        yorksV1Roles: effectiveRoles,
+      );
       refreshed.add(
-        AppUser(
-          id: id,
-          fullName: _string(row['fullName']) ?? existing?.fullName ?? id,
-          email: _string(row['email']) ?? existing?.email ?? '',
-          role: compatibilityRole,
-          active: row['active'] as bool? ?? true,
-          inventoryAccess: existing?.inventoryAccess ?? true,
-          createdAt: createdAt,
-          mustChangePassword: existing?.mustChangePassword ?? false,
-          employeeId: existing?.employeeId,
-          canSeeCostOverride: existing?.canSeeCostOverride,
-          canViewFinanceOverride: existing?.canViewFinanceOverride,
-          canSeeSalaryOverride: existing?.canSeeSalaryOverride,
-          canAccessRentalsOverride: existing?.canAccessRentalsOverride,
-          canAccessPeopleOverride: existing?.canAccessPeopleOverride,
-          canReceiveGoodsOverride: existing?.canReceiveGoodsOverride,
-          yorksV1RoleCache: primary,
-          yorksV1Roles: effectiveRoles,
-        ),
+        existing != null && _sameUser(existing, candidate)
+            ? existing
+            : candidate,
       );
     }
+    if (_sameUserLists(state, refreshed)) return;
     state = refreshed;
     await _store.writeAll(state);
+  }
+
+  bool _sameUserLists(List<AppUser> left, List<AppUser> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (!identical(left[index], right[index]) &&
+          !_sameUser(left[index], right[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _sameUser(AppUser left, AppUser right) {
+    return left.id == right.id &&
+        left.fullName == right.fullName &&
+        left.email == right.email &&
+        left.role == right.role &&
+        left.active == right.active &&
+        left.inventoryAccess == right.inventoryAccess &&
+        left.createdAt == right.createdAt &&
+        left.passwordHash == right.passwordHash &&
+        left.passwordSalt == right.passwordSalt &&
+        left.mustChangePassword == right.mustChangePassword &&
+        left.employeeId == right.employeeId &&
+        left.canSeeCostOverride == right.canSeeCostOverride &&
+        left.canViewFinanceOverride == right.canViewFinanceOverride &&
+        left.canSeeSalaryOverride == right.canSeeSalaryOverride &&
+        left.canAccessRentalsOverride == right.canAccessRentalsOverride &&
+        left.canAccessPeopleOverride == right.canAccessPeopleOverride &&
+        left.canReceiveGoodsOverride == right.canReceiveGoodsOverride &&
+        left.yorksV1RoleCache == right.yorksV1RoleCache &&
+        _sameRoles(left.yorksV1Roles, right.yorksV1Roles);
   }
 
   String? _string(Object? value) {

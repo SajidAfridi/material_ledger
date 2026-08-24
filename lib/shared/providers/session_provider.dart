@@ -142,6 +142,15 @@ final authSessionLifecycleProvider = Provider<void>((ref) {
 class AuthController {
   AuthController(this._ref);
   final Ref _ref;
+  Future<void>? _restoreInFlight;
+  Future<SignInResult>? _materializationInFlight;
+  String? _materializationInFlightKey;
+  String? _lastMaterializationKey;
+  SignInResult? _lastMaterializationResult;
+  DateTime? _lastMaterializationAt;
+  String? _lastRevisionIdentityKey;
+
+  static const _materializationBurstWindow = Duration(seconds: 2);
 
   Future<SignInResult> signIn({
     required String email,
@@ -193,7 +202,17 @@ class AuthController {
   /// Revalidates an existing browser/mobile session against both GoTrue and the
   /// current user-owned V1 profile. Reading [auth.currentUser] alone is not a
   /// live session check, and a cached AppUser record is never authorization.
-  Future<void> restoreSupabaseSession() async {
+  Future<void> restoreSupabaseSession() {
+    final active = _restoreInFlight;
+    if (active != null) return active;
+    final operation = _restoreSupabaseSessionOnce();
+    _restoreInFlight = operation;
+    return operation.whenComplete(() {
+      if (identical(_restoreInFlight, operation)) _restoreInFlight = null;
+    });
+  }
+
+  Future<void> _restoreSupabaseSessionOnce() async {
     final client = _ref.read(supabaseClientProvider);
     if (client == null) return;
     if (client.auth.currentSession == null) {
@@ -231,6 +250,46 @@ class AuthController {
   }
 
   Future<SignInResult> _materializeSupabaseUser(
+    SupabaseClient client,
+    User authUser,
+  ) {
+    final materializationKey = _materializationKey(client, authUser);
+    final active = _materializationInFlight;
+    if (active != null && _materializationInFlightKey == materializationKey) {
+      return active;
+    }
+    final completedAt = _lastMaterializationAt;
+    if (_lastMaterializationKey == materializationKey &&
+        _lastMaterializationResult != null &&
+        completedAt != null &&
+        DateTime.now().difference(completedAt) < _materializationBurstWindow) {
+      return Future.value(_lastMaterializationResult!);
+    }
+
+    final operation = _materializeSupabaseUserOnce(client, authUser);
+    _materializationInFlight = operation;
+    _materializationInFlightKey = materializationKey;
+    return operation
+        .then((result) {
+          _lastMaterializationKey = materializationKey;
+          _lastMaterializationResult = result;
+          _lastMaterializationAt = DateTime.now();
+          return result;
+        })
+        .whenComplete(() {
+          if (identical(_materializationInFlight, operation)) {
+            _materializationInFlight = null;
+            _materializationInFlightKey = null;
+          }
+        });
+  }
+
+  String _materializationKey(SupabaseClient client, User authUser) {
+    final session = client.auth.currentSession;
+    return '${authUser.id}\u0000${session?.accessToken ?? ''}';
+  }
+
+  Future<SignInResult> _materializeSupabaseUserOnce(
     SupabaseClient client,
     User authUser,
   ) async {
@@ -299,20 +358,18 @@ class AuthController {
           mustChangePassword: mustChange,
         );
 
-    if (resolvedRole == UserRole.admin) {
-      // User Management must show the live Auth directory, including accounts
-      // provisioned from another device. A failed directory refresh never
-      // blocks sign-in because the signed-in account is already materialised.
-      try {
-        await _ref.read(usersProvider.notifier).refreshFromServer();
-      } catch (_) {
-        // Keep the cached roster and let the screen surface its last-known
-        // state; retrying is available from the Admin screen.
-      }
-    }
-
     await _ref.read(authSessionProvider.notifier).setUser(appUserId);
-    _ref.read(authSessionRevisionProvider.notifier).bump();
+    final revisionIdentityKey = [
+      authUser.id,
+      appUserId,
+      yorksV1Role.claimValue,
+      mustChange.toString(),
+      client.auth.currentSession?.accessToken ?? '',
+    ].join('\u0000');
+    if (_lastRevisionIdentityKey != revisionIdentityKey) {
+      _lastRevisionIdentityKey = revisionIdentityKey;
+      _ref.read(authSessionRevisionProvider.notifier).bump();
+    }
 
     return mustChange ? SignInResult.mustChangePassword : SignInResult.ok;
   }
@@ -400,8 +457,15 @@ class AuthController {
   /// reports a remote logout or a restored session cannot be verified; it never
   /// tries to make a second network sign-out call from inside an Auth callback.
   Future<void> clearLocalSession() async {
+    final hadIdentity =
+        _ref.read(authSessionProvider) != null ||
+        _lastRevisionIdentityKey != null;
     await _ref.read(authSessionProvider.notifier).logout();
-    _ref.read(authSessionRevisionProvider.notifier).bump();
+    _lastRevisionIdentityKey = null;
+    _lastMaterializationKey = null;
+    _lastMaterializationResult = null;
+    _lastMaterializationAt = null;
+    if (hadIdentity) _ref.read(authSessionRevisionProvider.notifier).bump();
   }
 
   Future<void> _signOutSupabaseAndClear(SupabaseClient client) async {

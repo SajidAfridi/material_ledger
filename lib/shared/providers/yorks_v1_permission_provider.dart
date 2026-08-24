@@ -233,9 +233,10 @@ extension YorksV1HybridPermissionStateAccess
   }
 
   /// Tri-state route decision used while the first protected projection is
-  /// loading. `null` means "not decided yet": the router keeps the browser
-  /// URL stable and the workspace shell paints only its neutral verification
-  /// state. A failed initial load is a confirmed denial, never a legacy grant.
+  /// loading or temporarily unavailable. `null` means "not decided yet": the
+  /// router keeps the browser URL stable and the workspace shell paints only
+  /// its neutral verification/retry state. Authentication or authorization
+  /// failures remain confirmed denials and never fall back to a role grant.
   bool? hybridRouteAllows(
     String capabilityKey, {
     required bool legacyAllowed,
@@ -243,7 +244,12 @@ extension YorksV1HybridPermissionStateAccess
     bool organizationSummary = false,
     String? projectId,
   }) {
-    if (snapshot == null && isInitialLoading) return null;
+    if (snapshot == null &&
+        (isInitialLoading ||
+            domainErrorCode == YorksV1DomainErrorCode.offline ||
+            domainErrorCode == YorksV1DomainErrorCode.backendUnavailable)) {
+      return null;
+    }
     return hybridAllows(
       capabilityKey,
       legacyAllowed: legacyAllowed,

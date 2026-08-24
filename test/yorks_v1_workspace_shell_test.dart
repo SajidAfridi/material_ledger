@@ -160,6 +160,101 @@ void main() {
   );
 
   testWidgets(
+    'confirmed enforced access hides a denied administration module responsively',
+    (tester) async {
+      addTearDown(() => _resetViewport(tester));
+      final preferences = await SharedPreferences.getInstance();
+      final client = SupabaseClient(
+        'https://example.supabase.co',
+        'test-publishable-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      );
+
+      Future<void> pumpPermission(bool usersView) async {
+        final controller = YorksV1CurrentPermissionSnapshotController(
+          enabled: true,
+          authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          client: null,
+          repository: _ResolvedPermissionRepository(
+            _permissionSnapshot(usersView: usersView),
+          ),
+          revisionSignalSubscription:
+              ({required onSignal, required onUnavailable}) async => true,
+        );
+        await controller.start();
+        final router = GoRouter(
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (_, _) => const YorksV1WorkspaceShell(
+                child: Scaffold(body: SizedBox.expand()),
+              ),
+            ),
+            GoRoute(
+              path: '/yorks/more',
+              builder: (_, _) =>
+                  const YorksV1WorkspaceShell(child: YorksV1MobileMoreScreen()),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            key: ValueKey(usersView),
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+              supabaseClientProvider.overrideWithValue(client),
+              yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.admin),
+              yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                (ref) => controller,
+              ),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      for (final size in [const Size(1366, 768), const Size(360, 800)]) {
+        _setViewport(tester, size);
+
+        await pumpPermission(true);
+        if (size.width <= 1000) {
+          await tester.tap(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is Semantics &&
+                  widget.properties.label == AppStrings.more.primary,
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(
+          find.text(YorksV1ShellStrings.userManagement.primary),
+          findsOneWidget,
+        );
+
+        await pumpPermission(false);
+        if (size.width <= 1000) {
+          await tester.tap(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is Semantics &&
+                  widget.properties.label == AppStrings.more.primary,
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(
+          find.text(YorksV1ShellStrings.userManagement.primary),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
     'Senior Mechanical Engineer sees approved user configuration and read-only inventory destinations',
     (tester) async {
       final preferences = await SharedPreferences.getInstance();
@@ -433,3 +528,87 @@ class _PendingPermissionRepository implements YorksV1PermissionRepository {
     YorksV1PermissionHistoryQuery query,
   ) => throw UnimplementedError();
 }
+
+class _ResolvedPermissionRepository implements YorksV1PermissionRepository {
+  const _ResolvedPermissionRepository(this.snapshot);
+
+  final YorksV1CurrentPermissionSnapshot snapshot;
+
+  @override
+  Future<YorksV1CurrentPermissionSnapshot> getCurrentSnapshot() async =>
+      snapshot;
+
+  @override
+  Future<YorksV1UserAdminOptions> getUserAdminOptions({
+    String? targetAppUserId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> getUserWorkspace({
+    required String targetAppUserId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> setAssignment(
+    YorksV1SetPermissionAssignmentInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> clearAssignment(
+    YorksV1ClearPermissionAssignmentInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> applyChanges(
+    YorksV1ApplyPermissionChangesInput input,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<YorksV1PermissionHistoryPage> listHistory(
+    YorksV1PermissionHistoryQuery query,
+  ) => throw UnimplementedError();
+}
+
+YorksV1CurrentPermissionSnapshot _permissionSnapshot({
+  required bool usersView,
+}) => YorksV1CurrentPermissionSnapshot.fromRpcJson({
+  'schema_version': YorksV1PermissionSchema.current,
+  'authorization_mode': 'mixed',
+  'generated_at': '2026-08-24T13:00:00Z',
+  'next_transition_at': null,
+  'user': {
+    'app_user_id': 'usr-admin',
+    'display_name': 'Admin',
+    'exact_role': 'admin',
+    'is_active': true,
+  },
+  'revision': 1,
+  'capabilities': [
+    {
+      'capability_key': YorksV1CapabilityKeys.usersView,
+      'module_key': 'users',
+      'action_key': 'view',
+      'label': 'View user directory',
+      'description': 'View the protected user directory.',
+      'risk_level': 'high',
+      'allowed_scope_kinds': ['organization'],
+      'requires_project_access': false,
+      'dependencies': <String>[],
+      'runtime_status': 'operational',
+      'is_assignable': true,
+      'actor_can_delegate': usersView,
+      'actor_delegable_scope_kinds': usersView ? ['organization'] : <String>[],
+      'display_order': 1,
+      'authorization_mode': 'enforced',
+      'role_default': true,
+      'organization_summary_visible': true,
+      'authoritative_effective': usersView,
+      'authoritative_source': usersView ? 'role_default' : 'explicit_deny',
+      'candidate_effective': usersView,
+      'candidate_source': usersView ? 'role_default' : 'explicit_deny',
+      'parity': true,
+      'project_overrides': <Object?>[],
+    },
+  ],
+  'project_access': <Object?>[],
+});

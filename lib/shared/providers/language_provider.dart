@@ -120,11 +120,13 @@ class AuthSessionNotifier extends StateNotifier<String?> {
   final SharedPreferences _prefs;
 
   Future<void> setUser(String userId) async {
+    if (state == userId) return;
     await _prefs.setString(kAuthUserIdPrefKey, userId);
     state = userId;
   }
 
   Future<void> logout() async {
+    if (state == null) return;
     await _prefs.remove(kAuthUserIdPrefKey);
     state = null;
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -117,6 +119,75 @@ void main() {
       final user = container.read(usersProvider).single;
       expect(user.yorksV1RoleCache, YorksV1Role.projectManager);
       expect(user.yorksV1Roles, [YorksV1Role.projectManager]);
+    });
+
+    test(
+      'concurrent directory refreshes share one protected request',
+      () async {
+        final commands = <Map<String, dynamic>>[];
+        final response = Completer<Map<String, dynamic>?>();
+        final container = await connectedContainer(
+          yorksV1Foundation: true,
+          commands: commands,
+          invocation: (body) {
+            commands.add(Map<String, dynamic>.from(body));
+            return response.future;
+          },
+        );
+
+        final first = container
+            .read(usersProvider.notifier)
+            .refreshFromServer(permissionConfirmed: true);
+        final second = container
+            .read(usersProvider.notifier)
+            .refreshFromServer(permissionConfirmed: true);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(commands, hasLength(1));
+        response.complete(const {'ok': true, 'users': <Object>[]});
+        await Future.wait([first, second]);
+      },
+    );
+
+    test('identical directory responses do not churn roster state', () async {
+      final commands = <Map<String, dynamic>>[];
+      final container = await connectedContainer(
+        yorksV1Foundation: true,
+        commands: commands,
+        invocation: (body) async {
+          commands.add(Map<String, dynamic>.from(body));
+          return const {
+            'ok': true,
+            'users': [
+              {
+                'appUserId': 'usr-stable-admin',
+                'email': 'admin@yorks.test',
+                'fullName': 'Stable Admin',
+                'role': 'admin',
+                'active': true,
+                'createdAt': '2026-08-24T00:00:00.000Z',
+              },
+            ],
+          };
+        },
+      );
+
+      await container
+          .read(usersProvider.notifier)
+          .refreshFromServer(permissionConfirmed: true);
+      var notifications = 0;
+      final subscription = container.listen<List<dynamic>>(
+        usersProvider,
+        (_, _) => notifications++,
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(usersProvider.notifier)
+          .refreshFromServer(permissionConfirmed: true);
+
+      expect(commands, hasLength(2));
+      expect(notifications, 0);
     });
 
     test('creates an exact V1 role without client capability claims', () async {

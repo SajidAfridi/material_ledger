@@ -411,7 +411,15 @@ class YorksV1SupabasePermissionRepository
       '23514' => YorksV1DomainErrorCode.invalidInput,
       'PGRST002' ||
       'PGRST003' ||
-      'PGRST202' => YorksV1DomainErrorCode.backendUnavailable,
+      'PGRST202' ||
+      // PostgreSQL cancels a projection with 57014 when PostgREST's
+      // statement timeout is reached. This is an availability failure, not
+      // an authoritative permission denial. The route layer keeps the URL
+      // stable and the shell paints its protected retry state.
+      '57014' ||
+      '57P01' ||
+      '57P02' ||
+      '57P03' => YorksV1DomainErrorCode.backendUnavailable,
       _ => YorksV1DomainErrorCode.serverRejected,
     };
     return YorksV1DomainException(

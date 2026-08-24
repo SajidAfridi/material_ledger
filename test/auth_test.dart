@@ -172,6 +172,28 @@ void main() {
       expect(container.read(currentUserProvider), isNull);
     });
 
+    test('reapplying the same session id is notification-free', () async {
+      await container
+          .read(authSessionProvider.notifier)
+          .setUser('stable-session-user');
+      final changes = <String?>[];
+      final subscription = container.listen<String?>(
+        authSessionProvider,
+        (_, next) => changes.add(next),
+      );
+      addTearDown(subscription.close);
+
+      await container
+          .read(authSessionProvider.notifier)
+          .setUser('stable-session-user');
+      expect(changes, isEmpty);
+
+      await container
+          .read(authSessionProvider.notifier)
+          .setUser('different-session-user');
+      expect(changes, ['different-session-user']);
+    });
+
     test(
       'session lifecycle increments the exact-role invalidation revision',
       () async {

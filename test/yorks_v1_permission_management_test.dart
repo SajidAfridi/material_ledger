@@ -11,6 +11,7 @@ import 'package:material_ledger/shared/repositories/yorks_v1_permission_reposito
 import 'package:material_ledger/shared/services/yorks_v1_critical_command_key_store.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -612,6 +613,22 @@ void main() {
       );
     });
 
+    test('database statement cancellation is a recoverable outage', () async {
+      final repository = _repository(
+        rpc: _ThrowingPermissionRpc(
+          const PostgrestException(
+            message: 'canceling statement due to statement timeout',
+            code: '57014',
+          ),
+        ),
+      );
+
+      await expectLater(
+        repository.getCurrentSnapshot(),
+        throwsA(_domainError(YorksV1DomainErrorCode.backendUnavailable)),
+      );
+    });
+
     test('older or malformed response fails closed', () async {
       final response = _snapshotJson();
       ((response['capabilities'] as List).single as Map).remove(
@@ -759,14 +776,20 @@ void main() {
       );
     });
 
-    test('route decisions distinguish initial verification from denial', () {
+    test('route decisions keep transient verification stable', () {
       const pending = YorksV1CurrentPermissionSnapshotState(
         isInitialLoading: true,
       );
-      const failed = YorksV1CurrentPermissionSnapshotState(
+      const unavailable = YorksV1CurrentPermissionSnapshotState(
         error: YorksV1DomainException(
           YorksV1DomainErrorCode.backendUnavailable,
         ),
+      );
+      const offline = YorksV1CurrentPermissionSnapshotState(
+        error: YorksV1DomainException(YorksV1DomainErrorCode.offline),
+      );
+      const unauthorized = YorksV1CurrentPermissionSnapshotState(
+        error: YorksV1DomainException(YorksV1DomainErrorCode.unauthorized),
       );
 
       expect(
@@ -777,7 +800,21 @@ void main() {
         isNull,
       );
       expect(
-        failed.hybridRouteAllows(
+        unavailable.hybridRouteAllows(
+          YorksV1CapabilityKeys.projectsView,
+          legacyAllowed: true,
+        ),
+        isNull,
+      );
+      expect(
+        offline.hybridRouteAllows(
+          YorksV1CapabilityKeys.projectsView,
+          legacyAllowed: true,
+        ),
+        isNull,
+      );
+      expect(
+        unauthorized.hybridRouteAllows(
           YorksV1CapabilityKeys.projectsView,
           legacyAllowed: true,
         ),
@@ -1306,6 +1343,18 @@ class _RecordingPermissionRpc implements YorksV1PermissionRpcClient {
     this.parameters = parameters;
     return response;
   }
+}
+
+class _ThrowingPermissionRpc implements YorksV1PermissionRpcClient {
+  const _ThrowingPermissionRpc(this.error);
+
+  final Object error;
+
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) => Future<Object?>.error(error);
 }
 
 class _FakePermissionRepository implements YorksV1PermissionRepository {

@@ -290,6 +290,51 @@ select set_config(
   true
 );
 
+with snapshot as materialized (
+  select public.v1_get_current_permission_snapshot() as value
+)
+select ok(
+  jsonb_array_length(snapshot.value -> 'capabilities') > 80
+  and not exists (
+    select 1
+    from jsonb_array_elements(snapshot.value -> 'capabilities') capability
+    where capability ->> 'capability_key' = any(array[
+      'users.view', 'permissions.view',
+      'permissions.manage', 'permissions.delegate'
+    ]::text[])
+      and (
+        coalesce((capability ->> 'role_default')::boolean, false) is not true
+        or coalesce((
+          capability ->> 'authoritative_effective'
+        )::boolean, false) is not true
+        or capability ->> 'authoritative_source' <> 'role_default'
+      )
+  )
+  and (
+    select count(*)
+    from jsonb_array_elements(snapshot.value -> 'capabilities') capability
+    where capability ->> 'capability_key' = any(array[
+      'users.view', 'permissions.view',
+      'permissions.manage', 'permissions.delegate'
+    ]::text[])
+  ) = 4,
+  'Admin keeps the complete inherited User Management permission chain'
+)
+from snapshot;
+
+with started as materialized (
+  select clock_timestamp() as started_at
+), snapshot as materialized (
+  select started.started_at,
+    public.v1_get_current_permission_snapshot() as value
+  from started
+)
+select ok(
+  extract(epoch from (clock_timestamp() - snapshot.started_at)) < 3,
+  'The current permission snapshot stays below the protected projection budget'
+)
+from snapshot;
+
 reset role;
 select is(
   (public.v1_get_user_permission_workspace('usr-local-site-engineer')

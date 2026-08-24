@@ -74,7 +74,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final isOnboarded = ref.watch(onboardingCompleteProvider);
   final isLoggedIn = ref.watch(isLoggedInProvider);
   final role = ref.watch(currentRoleProvider);
-  final user = ref.watch(currentUserProvider);
+  // The Admin directory is presentation data. A roster refresh may replace
+  // names, emails or other users, but must not reconstruct GoRouter and throw
+  // away the current location. Observe only fields that route guards actually
+  // consume, then read the matching user snapshot when one of those fields
+  // changes.
+  ref.watch(
+    currentUserProvider.select(
+      (user) => user == null
+          ? null
+          : (
+              id: user.id,
+              role: user.role,
+              active: user.active,
+              mustChangePassword: user.mustChangePassword,
+              canSeeCost: user.canSeeCostOverride,
+              canViewFinance: user.canViewFinanceOverride,
+              canSeeSalary: user.canSeeSalaryOverride,
+              canAccessRentals: user.canAccessRentalsOverride,
+              canAccessPeople: user.canAccessPeopleOverride,
+              canReceiveGoods: user.canReceiveGoodsOverride,
+            ),
+    ),
+  );
+  final user = ref.read(currentUserProvider);
   final gate = ref.watch(appGateProvider);
   final yorksV1ProjectsEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
@@ -122,7 +145,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
   ref.onDispose(refresh.dispose);
 
-  return createAppRouter(
+  final router = createAppRouter(
     isOnboarded: isOnboarded,
     isLoggedIn: isLoggedIn,
     role: role,
@@ -158,6 +181,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     rolePermissions: () => ref.read(rolePermissionsProvider),
     refreshListenable: refresh,
   );
+  ref.onDispose(router.dispose);
+  return router;
 });
 
 /// Maps a rugged device's physical action button (and the F5 demo key) to the
