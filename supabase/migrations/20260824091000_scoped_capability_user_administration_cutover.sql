@@ -101,7 +101,12 @@ as $$
                 then identity.raw_caps else '[]'::jsonb end
             ) value
           ) = (
-            select count(distinct value)
+            -- `cost` was the retained-shell spelling for the same
+            -- view-commercials boundary. Preserve that active-user behavior
+            -- during cutover while still rejecting a payload containing both
+            -- spellings as a semantic duplicate.
+            select count(distinct case value
+              when 'cost' then 'viewCommercials' else value end)
             from jsonb_array_elements_text(
               case when jsonb_typeof(identity.raw_caps) = 'array'
                 then identity.raw_caps else '[]'::jsonb end
@@ -117,7 +122,8 @@ as $$
           from jsonb_array_elements_text(
             public.v1_auth_expected_server_caps(identity.exact_role)
           ) expected(value)
-          where expected.value = actual.value
+          where expected.value = case actual.value
+            when 'cost' then 'viewCommercials' else actual.value end
         )
       ) else 0 end as extra_count,
       (
@@ -131,7 +137,9 @@ as $$
             case when jsonb_typeof(identity.raw_caps) = 'array'
               then identity.raw_caps else '[]'::jsonb end
           ) actual(value)
-          where actual.value = expected.value
+          where case actual.value
+            when 'cost' then 'viewCommercials' else actual.value end
+            = expected.value
         )
       ) as missing_count
     from active_identity identity

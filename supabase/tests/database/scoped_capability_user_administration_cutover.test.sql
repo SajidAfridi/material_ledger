@@ -147,6 +147,42 @@ select throws_ok(
 );
 
 reset role;
+update auth.users auth_user
+set raw_app_meta_data = jsonb_set(
+  auth_user.raw_app_meta_data,
+  '{caps}',
+  (
+    select jsonb_agg(
+      case value when 'viewCommercials' then 'cost' else value end
+      order by ordinal
+    )
+    from jsonb_array_elements_text(
+      public.v1_auth_expected_server_caps(
+        auth_user.raw_app_meta_data ->> 'role'
+      )
+    ) with ordinality as capability(value, ordinal)
+  ),
+  true
+)
+where id = '10000000-0000-4000-8000-000000000004'::uuid;
+
+select ok(
+  (public.v1_auth_claim_compatibility_report() -> 'mismatches')::text
+    not like '%usr-local-admin%',
+  'Historical cost claim remains semantically equivalent to viewCommercials during zero-surprise cutover'
+);
+
+update auth.users auth_user
+set raw_app_meta_data = jsonb_set(
+  auth_user.raw_app_meta_data,
+  '{caps}',
+  public.v1_auth_expected_server_caps(
+    auth_user.raw_app_meta_data ->> 'role'
+  ),
+  true
+)
+where id = '10000000-0000-4000-8000-000000000004'::uuid;
+
 update auth.users
 set raw_app_meta_data = jsonb_set(
   jsonb_set(
