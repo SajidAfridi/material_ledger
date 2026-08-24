@@ -12,6 +12,7 @@ import 'package:material_ledger/shared/models/yorks_v1_inventory_workbook.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_inventory_workbook_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
@@ -22,6 +23,28 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(_loadGoldenFonts);
+
+  testWidgets('import fails closed when controlled units cannot load', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(820, 900));
+    final controller = _controller();
+    await _pump(tester, controller: controller, failControlledUnits: true);
+
+    expect(
+      find.textContaining('Controlled units are unavailable.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('inventory-import-controlled-units-retry')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('inventory-import-choose-file')),
+      findsNothing,
+    );
+    expect(controller.state.stage, YorksV1InventoryImportStage.uploadFile);
+  });
 
   for (final width in [360.0, 390.0, 820.0, 1440.0]) {
     testWidgets('upload stage is overflow-free at ${width.toInt()}px', (
@@ -529,6 +552,7 @@ Future<void> _pump(
   required YorksV1InventoryImportController controller,
   YorksV1InventoryWorkbookFileService fileService = const _ImportFileService(),
   YorksV1Role role = YorksV1Role.admin,
+  bool failControlledUnits = false,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
@@ -537,6 +561,12 @@ Future<void> _pump(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1CurrentRoleProvider.overrideWithValue(role),
+        yorksV1ConfigurationUnitCodesProvider.overrideWith((ref) async {
+          if (failControlledUnits) {
+            throw StateError('Controlled unit register unavailable');
+          }
+          return yorksV1InventoryControlledUnits;
+        }),
         yorksV1InventoryImportControllerProvider.overrideWith(
           (ref) => controller,
         ),

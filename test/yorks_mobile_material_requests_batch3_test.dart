@@ -16,8 +16,11 @@ import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq_workbook.dart';
+import 'package:material_ledger/shared/models/yorks_v1_configuration.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_boq_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_repository_provider.dart';
@@ -70,6 +73,85 @@ void main() {
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_draft_boq_actions_desktop.png'),
     );
+  });
+
+  testWidgets(
+    'published timing policy defaults a pristine desktop draft and hides disabled urgent',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      await _pumpDraft(
+        tester,
+        runtimeConfiguration: _runtimeConfiguration(
+          defaultTiming: 'scheduled',
+          urgentEnabled: false,
+        ),
+      );
+
+      final timingPicker = tester
+          .widget<DropdownButton<YorksV1MaterialRequestTiming>>(
+            find.descendant(
+              of: find.byKey(const ValueKey('mr-timing-picker')),
+              matching: find.byType(
+                DropdownButton<YorksV1MaterialRequestTiming>,
+              ),
+            ),
+          );
+      expect(
+        timingPicker.items?.map((item) => item.value),
+        orderedEquals(const [
+          YorksV1MaterialRequestTiming.normal,
+          YorksV1MaterialRequestTiming.scheduled,
+        ]),
+      );
+      expect(find.text('Scheduled date'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('mobile timing policy fails closed when urgent is disabled', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    await _pumpDraft(
+      tester,
+      runtimeConfiguration: _runtimeConfiguration(urgentEnabled: false),
+    );
+
+    expect(find.byKey(const ValueKey('mobile-mr-timing-urgent')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('mobile-mr-timing-normal')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-mr-timing-scheduled')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an existing urgent draft remains visible when urgent is off', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(
+      tester,
+      runtimeConfiguration: _runtimeConfiguration(urgentEnabled: false),
+      serverRequest: _urgentDraftRequest,
+    );
+
+    final timingPicker = tester
+        .widget<DropdownButton<YorksV1MaterialRequestTiming>>(
+          find.descendant(
+            of: find.byKey(const ValueKey('mr-timing-picker')),
+            matching: find.byType(DropdownButton<YorksV1MaterialRequestTiming>),
+          ),
+        );
+    expect(
+      timingPicker.items?.map((item) => item.value),
+      contains(YorksV1MaterialRequestTiming.urgent),
+    );
+    expect(find.text('Urgent'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('desktop MR row exposes Similar beside delete', (tester) async {
@@ -1216,8 +1298,12 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   WidgetTester tester, {
   YorksV1BoqRepository? boqRepository,
   String? boqGroupId,
+  YorksV1RuntimeConfiguration? runtimeConfiguration,
+  YorksV1MaterialRequest? serverRequest,
 }) async {
-  final repository = _MaterialRequestRepositoryFixture();
+  final repository = _MaterialRequestRepositoryFixture(
+    serverRequest: serverRequest,
+  );
   await tester.pumpWidget(
     _scope(
       overrides: [
@@ -1226,6 +1312,12 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
           YorksV1Role.projectEngineer,
         ),
         yorksV1MaterialRequestRepositoryProvider.overrideWithValue(repository),
+        yorksV1RuntimeConfigurationProvider.overrideWith(
+          (ref) async => runtimeConfiguration ?? _runtimeConfiguration(),
+        ),
+        yorksV1ConfigurationUnitCodesProvider.overrideWith(
+          (ref) async => const ['Nos', 'Meter', 'Set'],
+        ),
         if (boqRepository != null)
           yorksV1BoqRepositoryProvider.overrideWithValue(boqRepository),
         yorksV1MaterialRequestDraftProjectsProvider.overrideWith(
@@ -1279,6 +1371,17 @@ Future<void> _addCustomMaterial(WidgetTester tester) async {
 
   await tester.enterText(find.byType(TextFormField).at(0), 'Flexible duct');
   await tester.enterText(find.byType(TextFormField).at(4), '2');
+  await tester.tap(
+    find
+        .descendant(
+          of: find.byKey(const ValueKey('mobile-custom-material-unit')),
+          matching: find.byType(DropdownButton<String>),
+        )
+        .first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Nos').last);
+  await tester.pumpAndSettle();
   await tester.tap(find.text('Add Custom Item'));
   await tester.pumpAndSettle();
   // The honest success toast is intentionally visible before returning to the
@@ -1451,8 +1554,42 @@ final _draftRequest = YorksV1MaterialRequest(
   lines: const [],
 );
 
+final _urgentDraftRequest = YorksV1MaterialRequest(
+  id: _draftId,
+  projectId: _projectId,
+  projectReference: 'YRA-322',
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeId: 'scope-common',
+  scopeName: 'Common / All Buildings',
+  state: YorksV1MaterialRequestState.draft,
+  recordVersion: 3,
+  createdAt: DateTime.utc(2026, 8, 9),
+  updatedAt: DateTime.utc(2026, 8, 24),
+  timing: YorksV1MaterialRequestTiming.urgent,
+  title: 'Urgent existing draft',
+  lines: const [],
+);
+
+YorksV1RuntimeConfiguration _runtimeConfiguration({
+  String defaultTiming = 'normal',
+  bool urgentEnabled = true,
+}) => YorksV1RuntimeConfiguration(
+  schemaVersion: 'yorks_v1_runtime_configuration_v1',
+  publishedVersion: 8,
+  publishedLabel: 'v1.8',
+  publishedAt: DateTime.utc(2026, 8, 24),
+  defaultTiming: defaultTiming,
+  urgentEnabled: urgentEnabled,
+  allowAuthorizedCreatorSelfApproval: true,
+  requireExternalSourceReadiness: false,
+  pushEnabled: true,
+);
+
 class _MaterialRequestRepositoryFixture
     implements YorksV1MaterialRequestRepository {
+  _MaterialRequestRepositoryFixture({this.serverRequest});
+
+  final YorksV1MaterialRequest? serverRequest;
   int saveAndSubmitCount = 0;
   final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
   List<YorksV1MaterialRequestMention> mentionCandidates = const [];
@@ -1513,8 +1650,13 @@ class _MaterialRequestRepositoryFixture
   Future<void> deleteDraft(String requestId) async {}
 
   @override
-  Future<YorksV1MaterialRequest> getRequest(String requestId) async =>
-      throw StateError('draft has not been saved to the server');
+  Future<YorksV1MaterialRequest> getRequest(String requestId) async {
+    if (serverRequest != null) return serverRequest!;
+    throw const YorksV1DomainException(
+      YorksV1DomainErrorCode.unauthorized,
+      serverCode: '42501',
+    );
+  }
 
   @override
   Future<YorksV1MaterialRequestDocumentModel> getDocumentModel(

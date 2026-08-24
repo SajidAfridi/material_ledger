@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_logistics.dart';
+import '../models/yorks_v1_material_return_workflow.dart';
+import '../models/yorks_v1_material_request.dart';
 import '../sync/connectivity_service.dart';
 import 'yorks_v1_material_request_repository.dart';
 
@@ -68,6 +70,54 @@ abstract interface class YorksV1LogisticsRepository {
   );
 }
 
+/// Optional project-wide return boundary. Keeping the new controlled workflow
+/// separate lets deterministic inventory/dispatch test repositories remain
+/// deliberately small while production exposes the complete return lifecycle.
+abstract interface class YorksV1ProjectMaterialReturnRepository {
+  Future<List<YorksV1MaterialRequestProjectOption>>
+  listMaterialReturnProjects();
+
+  Future<List<YorksV1MaterialReturnRegisterItem>> listProjectMaterialReturns({
+    String? projectId,
+    String? state,
+    String? search,
+  });
+
+  Future<YorksV1ProjectMaterialReturn> getProjectMaterialReturn(
+    String returnId,
+  );
+
+  Future<YorksV1MaterialReturnCreationWorkspace>
+  getMaterialReturnCreationWorkspace({
+    required String projectId,
+    String? returnId,
+  });
+
+  Future<YorksV1ProjectMaterialReturn> saveProjectMaterialReturnDraft(
+    YorksV1SaveMaterialReturnDraftInput input,
+  );
+
+  Future<YorksV1ProjectMaterialReturn> submitProjectMaterialReturn(
+    YorksV1MaterialReturnCommandInput input,
+  );
+
+  Future<YorksV1ProjectMaterialReturn> decideProjectMaterialReturn(
+    YorksV1MaterialReturnDecisionInput input,
+  );
+
+  Future<YorksV1ProjectMaterialReturn> dispatchProjectMaterialReturn(
+    YorksV1MaterialReturnDispatchInput input,
+  );
+
+  Future<YorksV1ProjectMaterialReturn> confirmProjectMaterialReturn(
+    YorksV1MaterialReturnReceiptInput input,
+  );
+
+  Future<YorksV1ProjectMaterialReturn> cancelProjectMaterialReturn(
+    YorksV1MaterialReturnCancellationInput input,
+  );
+}
+
 /// Optional read-only smart-category boundary. Keeping this separate preserves
 /// compatibility with deterministic test repositories while production uses
 /// the server-ranked, role-checked projection.
@@ -90,6 +140,7 @@ abstract interface class YorksV1InventoryItemMetadataRepository {
 class YorksV1SupabaseLogisticsRepository
     implements
         YorksV1LogisticsRepository,
+        YorksV1ProjectMaterialReturnRepository,
         YorksV1InventoryCategorySuggestionRepository,
         YorksV1InventoryItemMetadataRepository {
   const YorksV1SupabaseLogisticsRepository({
@@ -373,6 +424,183 @@ class YorksV1SupabaseLogisticsRepository
     return _returnsDocumentsWorkspace(response);
   }
 
+  @override
+  Future<List<YorksV1MaterialRequestProjectOption>>
+  listMaterialReturnProjects() async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_return_projects',
+      parameters: const {},
+      requiresReturnsDocuments: true,
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final row in response)
+        if (row is Map)
+          YorksV1MaterialRequestProjectOption.fromRpcJson(
+            Map<String, dynamic>.from(row),
+          ),
+    ];
+  }
+
+  @override
+  Future<List<YorksV1MaterialReturnRegisterItem>> listProjectMaterialReturns({
+    String? projectId,
+    String? state,
+    String? search,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_list_material_returns',
+      parameters: {
+        'p_project_id': _trimToNull(projectId),
+        'p_state': _trimToNull(state),
+        'p_search': _trimToNull(search),
+      },
+      requiresReturnsDocuments: true,
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final row in response)
+        if (row is Map)
+          YorksV1MaterialReturnRegisterItem.fromRpcJson(
+            Map<String, dynamic>.from(row),
+          ),
+    ];
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> getProjectMaterialReturn(
+    String returnId,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_material_return_detail_projection',
+      parameters: {'p_return_id': returnId},
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
+  @override
+  Future<YorksV1MaterialReturnCreationWorkspace>
+  getMaterialReturnCreationWorkspace({
+    required String projectId,
+    String? returnId,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_material_return_creation_workspace',
+      parameters: {
+        'p_project_id': projectId,
+        'p_return_id': _trimToNull(returnId),
+      },
+      requiresReturnsDocuments: true,
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialReturnCreationWorkspace.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> saveProjectMaterialReturnDraft(
+    YorksV1SaveMaterialReturnDraftInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_save_project_material_return_draft',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> submitProjectMaterialReturn(
+    YorksV1MaterialReturnCommandInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_submit_project_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> decideProjectMaterialReturn(
+    YorksV1MaterialReturnDecisionInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_decide_project_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> dispatchProjectMaterialReturn(
+    YorksV1MaterialReturnDispatchInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_dispatch_project_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> confirmProjectMaterialReturn(
+    YorksV1MaterialReturnReceiptInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_confirm_project_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
+  @override
+  Future<YorksV1ProjectMaterialReturn> cancelProjectMaterialReturn(
+    YorksV1MaterialReturnCancellationInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_cancel_project_material_return',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+      requiresReturnsDocuments: true,
+    );
+    return _projectMaterialReturn(response);
+  }
+
   Future<Object?> _invoke({
     required String functionName,
     required Map<String, Object?> parameters,
@@ -421,6 +649,17 @@ class YorksV1SupabaseLogisticsRepository
       );
     }
     return YorksV1InventoryWorkspace.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  static YorksV1ProjectMaterialReturn _projectMaterialReturn(Object? response) {
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1ProjectMaterialReturn.fromRpcJson(
       Map<String, dynamic>.from(response),
     );
   }
@@ -528,4 +767,9 @@ class YorksV1SupabaseLogisticsRepository
     };
     return YorksV1DomainException(code, serverCode: error.code, cause: error);
   }
+}
+
+String? _trimToNull(String? value) {
+  final normalized = value?.trim() ?? '';
+  return normalized.isEmpty ? null : normalized;
 }

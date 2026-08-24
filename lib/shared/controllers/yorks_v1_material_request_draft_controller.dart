@@ -302,9 +302,10 @@ class YorksV1MaterialRequestDraftController
             source: YorksV1MaterialRequestLineSource.custom,
             description: '',
             quantity: '',
-            // Keep the editor immediately usable.  Engineers can still pick
-            // another controlled unit from the row dropdown.
-            unit: 'Nos',
+            // Unit choices are server-controlled. Leaving a new row blank
+            // keeps the local draft recoverable without inventing a value
+            // when the Configuration control plane is unavailable.
+            unit: '',
           ),
         ],
       ),

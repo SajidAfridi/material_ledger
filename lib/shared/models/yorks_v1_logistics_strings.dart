@@ -906,6 +906,30 @@ TranslatableString yorksV1MaterialReturnStateCopy(
     ur: 'جمع شدہ',
     hi: 'जमा किया गया',
   ),
+  YorksV1MaterialReturnState.awaitingApproval => const TranslatableString(
+    en: 'Awaiting approval',
+    ar: 'بانتظار الاعتماد',
+    ur: 'منظوری کا منتظر',
+    hi: 'स्वीकृति की प्रतीक्षा',
+  ),
+  YorksV1MaterialReturnState.returnedForChanges => const TranslatableString(
+    en: 'Returned for changes',
+    ar: 'معاد للتعديل',
+    ur: 'تبدیلیوں کے لیے واپس',
+    hi: 'बदलाव के लिए वापस',
+  ),
+  YorksV1MaterialReturnState.approved => const TranslatableString(
+    en: 'Approved',
+    ar: 'معتمد',
+    ur: 'منظور شدہ',
+    hi: 'स्वीकृत',
+  ),
+  YorksV1MaterialReturnState.dispatched => const TranslatableString(
+    en: 'Dispatched to warehouse',
+    ar: 'مرسل إلى المستودع',
+    ur: 'گودام بھیج دیا گیا',
+    hi: 'गोदाम भेजा गया',
+  ),
   YorksV1MaterialReturnState.confirmed => const TranslatableString(
     en: 'Confirmed',
     ar: 'مؤكد',
@@ -917,5 +941,11 @@ TranslatableString yorksV1MaterialReturnStateCopy(
     ar: 'مرفوض',
     ur: 'مسترد',
     hi: 'अस्वीकृत',
+  ),
+  YorksV1MaterialReturnState.cancelled => const TranslatableString(
+    en: 'Cancelled',
+    ar: 'ملغى',
+    ur: 'منسوخ',
+    hi: 'रद्द',
   ),
 };

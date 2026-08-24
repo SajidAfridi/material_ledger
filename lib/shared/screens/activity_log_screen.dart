@@ -914,11 +914,15 @@ class _DesktopAuditEvent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canOpen = event.entityType == 'material_request';
+    final canOpen =
+        event.entityType == 'material_request' ||
+        event.entityType == 'material_return';
     return InkWell(
       onTap: canOpen
           ? () => context.go(
-              RoutePaths.yorksV1MaterialRequestPath(event.entityId),
+              event.entityType == 'material_return'
+                  ? RoutePaths.yorksV1MaterialReturnPath(event.entityId)
+                  : RoutePaths.yorksV1MaterialRequestPath(event.entityId),
             )
           : null,
       child: Container(
@@ -1013,11 +1017,15 @@ class _MobileAuditEvent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canOpen = event.entityType == 'material_request';
+    final canOpen =
+        event.entityType == 'material_request' ||
+        event.entityType == 'material_return';
     return InkWell(
       onTap: canOpen
           ? () => context.go(
-              RoutePaths.yorksV1MaterialRequestPath(event.entityId),
+              event.entityType == 'material_return'
+                  ? RoutePaths.yorksV1MaterialReturnPath(event.entityId)
+                  : RoutePaths.yorksV1MaterialRequestPath(event.entityId),
             )
           : null,
       child: Container(

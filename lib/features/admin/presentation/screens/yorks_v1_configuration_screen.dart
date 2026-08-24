@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart' show DateFormat;
-import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/yorks_app_toast.dart';
@@ -284,6 +283,15 @@ class _YorksV1ConfigurationScreenState
     bool compact,
   ) {
     final validation = configuration.validation;
+    final activeTemplateCount = configuration.boqTemplates
+        .where((template) => template.isActive)
+        .length;
+    final activeCategoryCount = configuration.categories
+        .where((category) => category.isActive)
+        .length;
+    final activeUnitCount = configuration.units
+        .where((unit) => unit.isActive)
+        .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -310,13 +318,11 @@ class _YorksV1ConfigurationScreenState
               label: _t('controlled_master_data'),
               status: _t('current'),
               value:
-                  '${29 + configuration.categories.length + configuration.units.length}',
+                  '${activeTemplateCount + activeCategoryCount + activeUnitCount}',
               detail: _t('controlled_master_summary')
-                  .replaceAll(
-                    '{categories}',
-                    '${configuration.categories.length}',
-                  )
-                  .replaceAll('{units}', '${configuration.units.length}'),
+                  .replaceAll('{templates}', '$activeTemplateCount')
+                  .replaceAll('{categories}', '$activeCategoryCount')
+                  .replaceAll('{units}', '$activeUnitCount'),
               tone: _MetricTone.blue,
             ),
             _MetricCard(
@@ -328,6 +334,18 @@ class _YorksV1ConfigurationScreenState
               tone: _MetricTone.purple,
             ),
           ],
+        ),
+        const Gap(14),
+        _ConfigCard(
+          icon: Icons.hub_outlined,
+          title: _t('control_coverage'),
+          subtitle: _t('control_coverage_help'),
+          child: _ControlCoverageSummary(
+            settings: configuration.settings,
+            language: _language,
+            draftUpdatedBy: configuration.draftUpdatedBy,
+            draftUpdatedAt: configuration.draftUpdatedAt,
+          ),
         ),
         const Gap(14),
         _ValidationCard(
@@ -717,6 +735,7 @@ class _YorksV1ConfigurationScreenState
                       ),
                   canArchive:
                       category.isActive &&
+                      !category.isSystem &&
                       !pendingCategoryArchiveIds.contains(category.id) &&
                       !pendingCategories.any(
                         (pending) => pending.id == category.id,
@@ -756,6 +775,7 @@ class _YorksV1ConfigurationScreenState
                       pendingUnits.any((pending) => pending.id == unit.id),
                   canArchive:
                       unit.isActive &&
+                      !unit.isSystem &&
                       !pendingUnitArchiveIds.contains(unit.id) &&
                       !pendingUnits.any((pending) => pending.id == unit.id),
                   onArchive: () => _showArchiveMaster(
@@ -850,19 +870,12 @@ class _YorksV1ConfigurationScreenState
                 body: _t('site_photo_receipt_body'),
                 value: true,
               ),
-              _SwitchSetting(
-                title: _t('authorized_creator_self_approval'),
-                body: _t('authorized_creator_self_approval_body'),
-                value: configuration.boolValue(
-                  'requests.allow_authorized_creator_self_approval',
-                  true,
-                ),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'requests.allow_authorized_creator_self_approval',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'requests.allow_authorized_creator_self_approval',
+                _t('authorized_creator_self_approval'),
+                _t('authorized_creator_self_approval_body'),
+                fallback: true,
               ),
             ],
           ),
@@ -875,31 +888,19 @@ class _YorksV1ConfigurationScreenState
           child: _FieldGrid(
             compact: compact,
             children: [
-              _SelectSetting(
-                label: _t('default_timing'),
-                value: configuration.stringValue(
-                  'requests.default_timing',
-                  'normal',
-                ),
+              _selectSetting(
+                configuration,
+                'requests.default_timing',
+                _t('default_timing'),
                 values: const ['normal', 'urgent', 'scheduled'],
-                displayLabel: (value) => _t(value),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'requests.default_timing',
-                  value,
-                ),
+                fallback: 'normal',
               ),
-              _SwitchSetting(
-                title: _t('urgent'),
-                body: _t('urgent_request_body'),
-                value: configuration.boolValue('requests.urgent_enabled', true),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'requests.urgent_enabled',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'requests.urgent_enabled',
+                _t('urgent'),
+                _t('urgent_request_body'),
+                fallback: true,
               ),
               _LockedValue(
                 label: _t('scheduled'),
@@ -962,9 +963,11 @@ class _YorksV1ConfigurationScreenState
           subtitle: _t('arrangement_policy_help'),
           child: Column(
             children: [
-              _LockedValue(
-                label: _t('default_source'),
-                value: _t(
+              _readOnlySetting(
+                configuration,
+                'procurement.default_source',
+                _t('default_source'),
+                _t(
                   configuration.stringValue(
                     'procurement.default_source',
                     'warehouse',
@@ -972,18 +975,11 @@ class _YorksV1ConfigurationScreenState
                 ),
               ),
               const Gap(10),
-              _SwitchSetting(
-                title: _t('external_source_readiness_required'),
-                body: _t('external_source_readiness_required_body'),
-                value: configuration.boolValue(
-                  'procurement.require_external_source_readiness',
-                ),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'procurement.require_external_source_readiness',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'procurement.require_external_source_readiness',
+                _t('external_source_readiness_required'),
+                _t('external_source_readiness_required_body'),
               ),
               const Gap(10),
               _ProtectedToggle(
@@ -1095,26 +1091,45 @@ class _YorksV1ConfigurationScreenState
           icon: Icons.account_balance_wallet_outlined,
           title: _t('billing_baseline'),
           subtitle: _t('billing_baseline_help'),
-          child: _BillingWeightsEditor(
-            key: ValueKey(configuration.draftRevision),
-            values: configuration.numberMapValue(
-              'accounts.billing_stage_weights',
-            ),
-            labels: {
-              'design': _t('billing_design'),
-              'material_supply': _t('billing_material_supply'),
-              'installation': _t('billing_installation'),
-              'commissioning_handover': _t('billing_commissioning_handover'),
-              'energizing': _t('billing_energizing'),
-            },
-            busy: _isBusy,
-            saveLabel: _t('save_draft'),
-            totalLabel: _t('total'),
-            onSave: (value) => _stageSetting(
+          child: _controlledSetting(
+            setting: _settingFor(
               configuration,
               'accounts.billing_stage_weights',
-              value,
             ),
+            child:
+                _settingFor(
+                  configuration,
+                  'accounts.billing_stage_weights',
+                ).isOperational
+                ? _BillingWeightsEditor(
+                    key: ValueKey(configuration.draftRevision),
+                    values: configuration.numberMapValue(
+                      'accounts.billing_stage_weights',
+                    ),
+                    labels: {
+                      'design': _t('billing_design'),
+                      'material_supply': _t('billing_material_supply'),
+                      'installation': _t('billing_installation'),
+                      'commissioning_handover': _t(
+                        'billing_commissioning_handover',
+                      ),
+                      'energizing': _t('billing_energizing'),
+                    },
+                    busy: _isBusy,
+                    saveLabel: _t('save_draft'),
+                    totalLabel: _t('total'),
+                    onSave: (value) => _stageSetting(
+                      configuration,
+                      'accounts.billing_stage_weights',
+                      value,
+                    ),
+                  )
+                : _LockedValue(
+                    label: _t('billing_baseline'),
+                    value: _configurationValueLabel(
+                      configuration.value('accounts.billing_stage_weights'),
+                    ),
+                  ),
           ),
         ),
         const Gap(14),
@@ -1188,19 +1203,12 @@ class _YorksV1ConfigurationScreenState
                 body: _t('a4_pdf_consistency_body'),
                 value: true,
               ),
-              _SwitchSetting(
-                title: _t('bilingual_header'),
-                body: _t('bilingual_header_body'),
-                value: configuration.boolValue(
-                  'documents.bilingual_header',
-                  true,
-                ),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'documents.bilingual_header',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'documents.bilingual_header',
+                _t('bilingual_header'),
+                _t('bilingual_header_body'),
+                fallback: true,
               ),
             ],
           ),
@@ -1213,9 +1221,11 @@ class _YorksV1ConfigurationScreenState
           child: _FieldGrid(
             compact: compact,
             children: [
-              _LockedValue(
-                label: _t('maximum_file_size'),
-                value: configuration
+              _readOnlySetting(
+                configuration,
+                'documents.maximum_file_size_mb',
+                _t('maximum_file_size'),
+                configuration
                     .intValue('documents.maximum_file_size_mb', 20)
                     .toString(),
               ),
@@ -1224,9 +1234,11 @@ class _YorksV1ConfigurationScreenState
                 'documents.retention_years',
                 _t('retention_years'),
               ),
-              _LockedValue(
-                label: _t('allowed_formats'),
-                value: configuration
+              _readOnlySetting(
+                configuration,
+                'documents.allowed_formats',
+                _t('allowed_formats'),
+                configuration
                     .stringListValue('documents.allowed_formats', const [
                       'PDF',
                       'DOCX',
@@ -1251,6 +1263,16 @@ class _YorksV1ConfigurationScreenState
     return Column(
       children: [
         _ConfigCard(
+          icon: Icons.monitor_heart_outlined,
+          title: _t('notification_delivery_health'),
+          subtitle: _t('notification_delivery_health_help'),
+          child: _NotificationDeliveryHealth(
+            health: configuration.operationalHealth,
+            language: _language,
+          ),
+        ),
+        const Gap(14),
+        _ConfigCard(
           icon: Icons.notifications_active_outlined,
           title: _t('notification_channels'),
           subtitle: _t('notification_channels_help'),
@@ -1261,30 +1283,18 @@ class _YorksV1ConfigurationScreenState
                 body: _t('in_app_body'),
                 value: true,
               ),
-              _SwitchSetting(
-                title: _t('push'),
-                body: _t('push_body'),
-                value: configuration.boolValue(
-                  'notifications.push_enabled',
-                  true,
-                ),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'notifications.push_enabled',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'notifications.push_enabled',
+                _t('push'),
+                _t('push_body'),
+                fallback: true,
               ),
-              _SwitchSetting(
-                title: _t('email'),
-                body: _t('email_body'),
-                value: configuration.boolValue('notifications.email_enabled'),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'notifications.email_enabled',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'notifications.email_enabled',
+                _t('email'),
+                _t('email_body'),
                 last: true,
               ),
             ],
@@ -1384,16 +1394,11 @@ class _YorksV1ConfigurationScreenState
                 'security.minimum_password_length',
                 _t('minimum_password'),
               ),
-              _SwitchSetting(
-                title: _t('admin_mfa'),
-                body: _t('admin_mfa_body'),
-                value: configuration.boolValue('security.admin_mfa_required'),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'security.admin_mfa_required',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'security.admin_mfa_required',
+                _t('admin_mfa'),
+                _t('admin_mfa_body'),
               ),
             ],
           ),
@@ -1420,27 +1425,19 @@ class _YorksV1ConfigurationScreenState
                 body: _t('commercial_enforcement_body'),
                 value: true,
               ),
-              _SwitchSetting(
-                title: _t('log_exports'),
-                body: _t('log_exports_body'),
-                value: configuration.boolValue('security.log_exports', true),
-                busy: _isBusy,
-                onChanged: (value) =>
-                    _stageSetting(configuration, 'security.log_exports', value),
+              _switchSetting(
+                configuration,
+                'security.log_exports',
+                _t('log_exports'),
+                _t('log_exports_body'),
+                fallback: true,
               ),
-              _SwitchSetting(
-                title: _t('log_access_changes'),
-                body: _t('log_access_changes_body'),
-                value: configuration.boolValue(
-                  'security.log_access_changes',
-                  true,
-                ),
-                busy: _isBusy,
-                onChanged: (value) => _stageSetting(
-                  configuration,
-                  'security.log_access_changes',
-                  value,
-                ),
+              _switchSetting(
+                configuration,
+                'security.log_access_changes',
+                _t('log_access_changes'),
+                _t('log_access_changes_body'),
+                fallback: true,
                 last: true,
               ),
             ],
@@ -1474,23 +1471,29 @@ class _YorksV1ConfigurationScreenState
           child: _FieldGrid(
             compact: compact,
             children: [
-              _LockedValue(
-                label: _t('project_pattern'),
-                value: configuration.stringValue(
+              _readOnlySetting(
+                configuration,
+                'numbering.project_pattern',
+                _t('project_pattern'),
+                configuration.stringValue(
                   'numbering.project_pattern',
                   'Admin-controlled unique reference',
                 ),
               ),
-              _LockedValue(
-                label: _t('mr_pattern'),
-                value: configuration.stringValue(
+              _readOnlySetting(
+                configuration,
+                'numbering.material_request_pattern',
+                _t('mr_pattern'),
+                configuration.stringValue(
                   'numbering.material_request_pattern',
                   '{PROJECT_REF}-MR{NNN}',
                 ),
               ),
-              _LockedValue(
-                label: _t('dispatch_pattern'),
-                value: configuration.stringValue(
+              _readOnlySetting(
+                configuration,
+                'numbering.dispatch_pattern',
+                _t('dispatch_pattern'),
+                configuration.stringValue(
                   'numbering.dispatch_pattern',
                   '{PROJECT_REF}-DSP{NNN}',
                 ),
@@ -1499,9 +1502,11 @@ class _YorksV1ConfigurationScreenState
                 label: _t('delivery_order'),
                 value: _t('delivery_order_reference'),
               ),
-              _LockedValue(
-                label: _t('return_pattern'),
-                value: configuration.stringValue(
+              _readOnlySetting(
+                configuration,
+                'numbering.return_pattern',
+                _t('return_pattern'),
+                configuration.stringValue(
                   'numbering.return_pattern',
                   '{PROJECT_REF}-RTN{NNN}',
                 ),
@@ -1586,36 +1591,111 @@ class _YorksV1ConfigurationScreenState
                   _HistoryMobileCard(
                     publication: publication,
                     language: _language,
+                    onTap: () => _showPublicationDetail(publication.id),
                   ),
               ],
             )
-          : _DataMatrix(
-              headers: [
-                _t('version'),
-                _t('published_at'),
-                _t('published_by'),
-                _t('reason'),
-                _t('affected_areas'),
-                _t('changes'),
-              ],
-              rows: [
-                for (final publication in configuration.history)
-                  [
-                    publication.versionLabel,
-                    _formatDate(publication.publishedAt),
-                    publication.publishedBy,
-                    publication.reason,
-                    publication.affectedAreas
-                        .map(
-                          (area) =>
-                              YorksV1ConfigurationStrings.area(_language, area),
-                        )
-                        .join(', '),
-                    '${publication.changeCount}',
-                  ],
-              ],
-              minimumWidth: 920,
+          : _ConfigurationHistoryTable(
+              publications: configuration.history,
+              language: _language,
+              onOpen: (publication) => _showPublicationDetail(publication.id),
             ),
+    );
+  }
+
+  YorksV1ConfigurationSetting _settingFor(
+    YorksV1ConfigurationCentre configuration,
+    String key,
+  ) {
+    for (final setting in configuration.settings) {
+      if (setting.key == key) return setting;
+    }
+    final value = configuration.value(key);
+    return YorksV1ConfigurationSetting(
+      key: key,
+      area: YorksV1ConfigurationArea.overview,
+      type: 'unknown',
+      publishedValue: value,
+      draftValue: null,
+      effectiveValue: value,
+      changed: false,
+    );
+  }
+
+  Widget _controlledSetting({
+    required YorksV1ConfigurationSetting setting,
+    required Widget child,
+  }) {
+    return _ConfigurationSettingControl(
+      setting: setting,
+      language: _language,
+      child: child,
+    );
+  }
+
+  Widget _switchSetting(
+    YorksV1ConfigurationCentre configuration,
+    String key,
+    String title,
+    String body, {
+    bool fallback = false,
+    bool last = false,
+  }) {
+    final setting = _settingFor(configuration, key);
+    final value = configuration.boolValue(key, fallback);
+    return _controlledSetting(
+      setting: setting,
+      child: setting.isOperational
+          ? _SwitchSetting(
+              title: title,
+              body: body,
+              value: value,
+              busy: _isBusy,
+              onChanged: (next) => _stageSetting(configuration, key, next),
+              last: last,
+            )
+          : _ReadOnlySettingValue(
+              title: title,
+              body: body,
+              value: _t(value ? 'enabled' : 'disabled'),
+              mode: setting.controlMode,
+            ),
+    );
+  }
+
+  Widget _selectSetting(
+    YorksV1ConfigurationCentre configuration,
+    String key,
+    String label, {
+    required List<String> values,
+    required String fallback,
+  }) {
+    final setting = _settingFor(configuration, key);
+    final value = configuration.stringValue(key, fallback);
+    return _controlledSetting(
+      setting: setting,
+      child: setting.isOperational
+          ? _SelectSetting(
+              label: label,
+              value: value,
+              values: values,
+              displayLabel: (option) => _t(option),
+              busy: _isBusy,
+              onChanged: (next) => _stageSetting(configuration, key, next),
+            )
+          : _LockedValue(label: label, value: _t(value)),
+    );
+  }
+
+  Widget _readOnlySetting(
+    YorksV1ConfigurationCentre configuration,
+    String key,
+    String label,
+    String value,
+  ) {
+    return _controlledSetting(
+      setting: _settingFor(configuration, key),
+      child: _LockedValue(label: label, value: value),
     );
   }
 
@@ -1630,24 +1710,30 @@ class _YorksV1ConfigurationScreenState
     final value = listValue && rawValue is List
         ? rawValue.join(', ')
         : rawValue?.toString() ?? '';
-    return _EditableSetting(
-      key: ValueKey('configuration-setting-$key-$value'),
-      label: label,
-      value: value,
-      textDirection: textDirection,
-      busy: _isBusy,
-      saveLabel: _t('save_draft'),
-      onSave: (next) => _stageSetting(
-        configuration,
-        key,
-        listValue
-            ? next
-                  .split(',')
-                  .map((part) => part.trim().toUpperCase())
-                  .where((part) => part.isNotEmpty)
-                  .toList()
-            : next,
-      ),
+    final setting = _settingFor(configuration, key);
+    return _controlledSetting(
+      setting: setting,
+      child: setting.isOperational
+          ? _EditableSetting(
+              key: ValueKey('configuration-setting-$key-$value'),
+              label: label,
+              value: value,
+              textDirection: textDirection,
+              busy: _isBusy,
+              saveLabel: _t('save_draft'),
+              onSave: (next) => _stageSetting(
+                configuration,
+                key,
+                listValue
+                    ? next
+                          .split(',')
+                          .map((part) => part.trim().toUpperCase())
+                          .where((part) => part.isNotEmpty)
+                          .toList()
+                    : next,
+              ),
+            )
+          : _LockedValue(label: label, value: value),
     );
   }
 
@@ -1656,30 +1742,35 @@ class _YorksV1ConfigurationScreenState
     String key,
     String label,
   ) {
-    return _EditableSetting(
-      key: ValueKey(
-        'configuration-setting-$key-${configuration.intValue(key)}',
-      ),
-      label: label,
-      value: '${configuration.intValue(key)}',
-      keyboardType: TextInputType.number,
-      busy: _isBusy,
-      saveLabel: _t('save_draft'),
-      onSave: (next) async {
-        final number = int.tryParse(next.trim());
-        if (number == null) {
-          if (mounted) {
-            YorksAppToast.show(
-              context,
-              title: _t('invalid_value'),
-              tone: YorksAppToastTone.error,
-              dismissible: true,
-            );
-          }
-          return false;
-        }
-        return _stageSetting(configuration, key, number);
-      },
+    final value = configuration.intValue(key);
+    final setting = _settingFor(configuration, key);
+    return _controlledSetting(
+      setting: setting,
+      child: setting.isOperational
+          ? _EditableSetting(
+              key: ValueKey('configuration-setting-$key-$value'),
+              label: label,
+              value: '$value',
+              keyboardType: TextInputType.number,
+              busy: _isBusy,
+              saveLabel: _t('save_draft'),
+              onSave: (next) async {
+                final number = int.tryParse(next.trim());
+                if (number == null) {
+                  if (mounted) {
+                    YorksAppToast.show(
+                      context,
+                      title: _t('invalid_value'),
+                      tone: YorksAppToastTone.error,
+                      dismissible: true,
+                    );
+                  }
+                  return false;
+                }
+                return _stageSetting(configuration, key, number);
+              },
+            )
+          : _LockedValue(label: label, value: '$value'),
     );
   }
 
@@ -1690,6 +1781,18 @@ class _YorksV1ConfigurationScreenState
     String key,
     Object value,
   ) async {
+    if (!_settingFor(configuration, key).isOperational) {
+      if (mounted) {
+        YorksAppToast.show(
+          context,
+          title: _t('control_read_only_error'),
+          tone: YorksAppToastTone.information,
+          dismissible: true,
+          duration: const Duration(seconds: 4),
+        );
+      }
+      return false;
+    }
     final saved = await ref
         .read(yorksV1ConfigurationCommandProvider.notifier)
         .stageSetting(
@@ -1725,7 +1828,6 @@ class _YorksV1ConfigurationScreenState
       configuration,
       entityKind: 'material_category',
       actionKind: 'create',
-      targetId: const Uuid().v4(),
       payload: {'name': result.name, 'parent_category_id': result.parentId},
     );
   }
@@ -1740,7 +1842,6 @@ class _YorksV1ConfigurationScreenState
       configuration,
       entityKind: 'material_unit',
       actionKind: 'create',
-      targetId: const Uuid().v4(),
       payload: {
         'name': result.name,
         'short_code': result.shortCode,
@@ -1784,7 +1885,7 @@ class _YorksV1ConfigurationScreenState
     YorksV1ConfigurationCentre configuration, {
     required String entityKind,
     required String actionKind,
-    required String targetId,
+    String? targetId,
     required Map<String, Object?> payload,
     String? reason,
   }) async {
@@ -1807,6 +1908,16 @@ class _YorksV1ConfigurationScreenState
       duration: const Duration(seconds: 4),
     );
     return saved;
+  }
+
+  Future<void> _showPublicationDetail(String publicationId) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => _PublicationDetailDialog(
+        publicationId: publicationId,
+        language: _language,
+      ),
+    );
   }
 
   Future<void> _showValidation() async {
@@ -2416,6 +2527,21 @@ class _DraftToolbar extends StatelessWidget {
             : _t('published_configuration'),
         color: configuration.hasDraft ? AppColors.warning : AppColors.success,
       ),
+      if (configuration.hasDraft &&
+          configuration.draftUpdatedBy?.trim().isNotEmpty == true)
+        _StatusPill(
+          label: compact
+              ? '${_t('draft')} · ${configuration.draftUpdatedBy!.trim()}'
+              : _t('draft_last_updated')
+                    .replaceAll('{actor}', configuration.draftUpdatedBy!.trim())
+                    .replaceAll(
+                      '{time}',
+                      _configurationDateLabel(configuration.draftUpdatedAt),
+                    ),
+          color: AppColors.purple,
+          icon: Icons.group_outlined,
+          subtle: true,
+        ),
       for (final area in configuration.affectedAreas)
         _StatusPill(
           label: YorksV1ConfigurationStrings.area(language, area),
@@ -2520,6 +2646,619 @@ class _StatusPill extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ControlCoverageSummary extends StatelessWidget {
+  const _ControlCoverageSummary({
+    required this.settings,
+    required this.language,
+    required this.draftUpdatedBy,
+    required this.draftUpdatedAt,
+  });
+
+  final List<YorksV1ConfigurationSetting> settings;
+  final AppLanguage language;
+  final String? draftUpdatedBy;
+  final DateTime draftUpdatedAt;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = {
+      for (final mode in YorksV1ConfigurationControlMode.values)
+        mode: settings.where((setting) => setting.controlMode == mode).length,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < AppSpacing.compactBreakpoint;
+            final width = stacked
+                ? constraints.maxWidth
+                : (constraints.maxWidth - AppSpacing.md * 2) / 3;
+            return Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.md,
+              children: [
+                for (final mode in YorksV1ConfigurationControlMode.values)
+                  SizedBox(
+                    width: width,
+                    child: _ControlCoverageTile(
+                      mode: mode,
+                      count: counts[mode] ?? 0,
+                      language: language,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        if (draftUpdatedBy?.trim().isNotEmpty == true) ...[
+          const Gap(AppSpacing.md),
+          Text(
+            _t('draft_last_updated')
+                .replaceAll('{actor}', draftUpdatedBy!.trim())
+                .replaceAll('{time}', _configurationDateLabel(draftUpdatedAt)),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _NotificationDeliveryHealth extends StatelessWidget {
+  const _NotificationDeliveryHealth({
+    required this.health,
+    required this.language,
+  });
+
+  final YorksV1ConfigurationOperationalHealth health;
+  final AppLanguage language;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final (:title, :body, :tone) = _deliveryState();
+    final lastSuccessfulAt = health.lastSuccessfulDeliveryAt;
+    final metrics = [
+      _NotificationHealthMetricData(
+        label: _t('active_devices'),
+        value: '${health.activeDeviceCount}',
+        icon: Icons.devices_outlined,
+        color: health.activeDeviceCount > 0
+            ? AppColors.success
+            : AppColors.warning,
+      ),
+      _NotificationHealthMetricData(
+        label: _t('pending_delivery'),
+        value: '${health.pendingDeliveryCount}',
+        icon: Icons.schedule_send_outlined,
+        color: health.pendingDeliveryCount > 0
+            ? AppColors.warning
+            : AppColors.success,
+      ),
+      _NotificationHealthMetricData(
+        label: _t('recent_delivery_failures'),
+        value: '${health.recentFailureCount}',
+        icon: Icons.error_outline_rounded,
+        color: health.recentFailureCount > 0
+            ? AppColors.error
+            : AppColors.success,
+      ),
+      _NotificationHealthMetricData(
+        label: _t('last_successful_delivery'),
+        value: lastSuccessfulAt == null
+            ? _t('no_successful_delivery')
+            : _configurationDateLabel(lastSuccessfulAt),
+        icon: Icons.task_alt_outlined,
+        color: lastSuccessfulAt == null ? AppColors.muted : AppColors.blue,
+      ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Notice(
+          icon: switch (tone) {
+            _NoticeTone.success => Icons.cloud_done_outlined,
+            _NoticeTone.error => Icons.cloud_off_outlined,
+            _NoticeTone.warning => Icons.sync_problem_outlined,
+            _NoticeTone.blue => Icons.info_outline_rounded,
+          },
+          title: title,
+          body: body,
+          tone: tone,
+        ),
+        const Gap(AppSpacing.md),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 430
+                ? 1
+                : constraints.maxWidth < 760
+                ? 2
+                : 4;
+            final width =
+                (constraints.maxWidth - AppSpacing.sm * (columns - 1)) /
+                columns;
+            return Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final metric in metrics)
+                  SizedBox(
+                    width: width,
+                    child: _NotificationHealthMetric(data: metric),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  ({String title, String body, _NoticeTone tone}) _deliveryState() {
+    if (!health.pushEnabled) {
+      return (
+        title: _t('push_delivery_disabled'),
+        body: _t('push_delivery_disabled_help'),
+        tone: _NoticeTone.blue,
+      );
+    }
+    if (health.recentFailureCount > 0) {
+      return (
+        title: _t('push_delivery_failures'),
+        body: _t('push_delivery_failures_help'),
+        tone: _NoticeTone.error,
+      );
+    }
+    if (health.activeDeviceCount == 0) {
+      return (
+        title: _t('no_active_devices'),
+        body: _t('no_active_devices_help'),
+        tone: _NoticeTone.warning,
+      );
+    }
+    if (health.pendingDeliveryCount > 0) {
+      return (
+        title: _t('delivery_queue_pending'),
+        body: _t('delivery_queue_pending_help'),
+        tone: _NoticeTone.warning,
+      );
+    }
+    return (
+      title: _t('push_delivery_operational'),
+      body: _t('push_delivery_operational_help'),
+      tone: _NoticeTone.success,
+    );
+  }
+}
+
+class _NotificationHealthMetricData {
+  const _NotificationHealthMetricData({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+}
+
+class _NotificationHealthMetric extends StatelessWidget {
+  const _NotificationHealthMetric({required this.data});
+
+  final _NotificationHealthMetricData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: '${data.label}: ${data.value}',
+      child: ExcludeSemantics(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 96),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: data.color.withValues(alpha: .06),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            border: Border.all(color: data.color.withValues(alpha: .18)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(data.icon, size: 20, color: data.color),
+              const Gap(AppSpacing.sm),
+              Text(
+                data.value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.titleMedium.copyWith(color: AppColors.ink),
+              ),
+              const Gap(AppSpacing.xs),
+              Text(
+                data.label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ControlCoverageTile extends StatelessWidget {
+  const _ControlCoverageTile({
+    required this.mode,
+    required this.count,
+    required this.language,
+  });
+
+  final YorksV1ConfigurationControlMode mode;
+  final int count;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final presentation = _controlModePresentation(mode, language);
+    return Semantics(
+      container: true,
+      label: '${presentation.label}. $count. ${presentation.help}',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: presentation.color.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: presentation.color.withValues(alpha: .18)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: presentation.color.withValues(alpha: .11),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: Icon(
+                presentation.icon,
+                color: presentation.color,
+                size: 20,
+              ),
+            ),
+            const Gap(AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    presentation.label,
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  Text(
+                    presentation.help,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(AppSpacing.sm),
+            Text(
+              '$count',
+              style: AppTypography.headlineSmall.copyWith(
+                color: presentation.color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfigurationSettingControl extends StatelessWidget {
+  const _ConfigurationSettingControl({
+    required this.setting,
+    required this.language,
+    required this.child,
+  });
+
+  final YorksV1ConfigurationSetting setting;
+  final AppLanguage language;
+  final Widget child;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final presentation = _controlModePresentation(
+      setting.controlMode,
+      language,
+    );
+    final affectedAreas = setting.impactScope
+        .map((area) => YorksV1ConfigurationStrings.area(language, area))
+        .join(', ');
+    final details = <String>[
+      presentation.help,
+      if (affectedAreas.isNotEmpty)
+        _t('affects_areas').replaceAll('{areas}', affectedAreas),
+      if (setting.enforcementTarget.trim().isNotEmpty)
+        _t('enforced_by').replaceAll(
+          '{target}',
+          YorksV1ConfigurationStrings.enforcement(
+            language,
+            setting.enforcementTarget,
+          ),
+        ),
+    ];
+    final stagedActor = setting.stagedBy?.trim();
+    final stagedAt = setting.stagedAt;
+    return Semantics(
+      container: true,
+      readOnly: !setting.isOperational,
+      label: '${presentation.label}. ${details.join(' ')}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              _StatusPill(
+                label: presentation.label,
+                color: presentation.color,
+                icon: presentation.icon,
+                subtle: true,
+              ),
+              if (setting.changed)
+                _StatusPill(
+                  label: _t('draft'),
+                  color: AppColors.warning,
+                  icon: Icons.edit_outlined,
+                  subtle: true,
+                ),
+            ],
+          ),
+          const Gap(AppSpacing.sm),
+          child,
+          const Gap(AppSpacing.xs),
+          Text(
+            details.join(' · '),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+          if (setting.changed && stagedActor?.isNotEmpty == true) ...[
+            const Gap(AppSpacing.xs),
+            Text(
+              _t('staged_by')
+                  .replaceAll('{actor}', stagedActor!)
+                  .replaceAll(
+                    '{time}',
+                    stagedAt == null
+                        ? _t('draft')
+                        : _configurationDateLabel(stagedAt),
+                  ),
+              style: AppTypography.labelSmall.copyWith(color: AppColors.blue),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadOnlySettingValue extends StatelessWidget {
+  const _ReadOnlySettingValue({
+    required this.title,
+    required this.body,
+    required this.value,
+    required this.mode,
+  });
+
+  final String title;
+  final String body;
+  final String value;
+  final YorksV1ConfigurationControlMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      readOnly: true,
+      label: '$title. $body. $value.',
+      child: ExcludeSemantics(
+        child: Container(
+          constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.labelLarge.copyWith(
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const Gap(AppSpacing.xs),
+                    Text(
+                      body,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Gap(AppSpacing.md),
+              _StatusPill(
+                label: value,
+                color: mode == YorksV1ConfigurationControlMode.protected
+                    ? AppColors.blue
+                    : AppColors.warning,
+                icon: mode == YorksV1ConfigurationControlMode.protected
+                    ? Icons.lock_outline_rounded
+                    : Icons.schedule_outlined,
+                subtle: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+({String label, String help, Color color, IconData icon})
+_controlModePresentation(
+  YorksV1ConfigurationControlMode mode,
+  AppLanguage language,
+) {
+  final key = switch (mode) {
+    YorksV1ConfigurationControlMode.operational => 'operational',
+    YorksV1ConfigurationControlMode.protected => 'protected_control',
+    YorksV1ConfigurationControlMode.planned => 'planned',
+  };
+  final helpKey = switch (mode) {
+    YorksV1ConfigurationControlMode.operational => 'operational_help',
+    YorksV1ConfigurationControlMode.protected => 'protected_control_help',
+    YorksV1ConfigurationControlMode.planned => 'planned_help',
+  };
+  final color = switch (mode) {
+    YorksV1ConfigurationControlMode.operational => AppColors.success,
+    YorksV1ConfigurationControlMode.protected => AppColors.blue,
+    YorksV1ConfigurationControlMode.planned => AppColors.warning,
+  };
+  final icon = switch (mode) {
+    YorksV1ConfigurationControlMode.operational => Icons.bolt_rounded,
+    YorksV1ConfigurationControlMode.protected => Icons.lock_outline_rounded,
+    YorksV1ConfigurationControlMode.planned => Icons.schedule_outlined,
+  };
+  return (
+    label: YorksV1ConfigurationStrings.text(language, key),
+    help: YorksV1ConfigurationStrings.text(language, helpKey),
+    color: color,
+    icon: icon,
+  );
+}
+
+String _configurationDateLabel(DateTime value) =>
+    DateFormat('dd MMM yyyy, HH:mm').format(value);
+
+String _humanizeConfigurationToken(String value) => value
+    .trim()
+    .split(RegExp(r'[_\-.]+'))
+    .where((part) => part.isNotEmpty)
+    .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+    .join(' ');
+
+String _configurationValueLabel(Object? value) {
+  if (value == null) return '—';
+  if (value is List) {
+    return value.map(_configurationValueLabel).join(', ');
+  }
+  if (value is Map) {
+    final entries = value.entries.toList()
+      ..sort(
+        (left, right) => left.key.toString().compareTo(right.key.toString()),
+      );
+    return entries
+        .map(
+          (entry) =>
+              '${_humanizeConfigurationToken(entry.key.toString())}: ${_configurationValueLabel(entry.value)}',
+        )
+        .join(' · ');
+  }
+  return value.toString();
+}
+
+String _localizedConfigurationValue(Object? value, AppLanguage language) {
+  if (value is bool) {
+    return YorksV1ConfigurationStrings.text(
+      language,
+      value ? 'enabled' : 'disabled',
+    );
+  }
+  if (value is List) {
+    return value
+        .map((entry) => _localizedConfigurationValue(entry, language))
+        .join(', ');
+  }
+  if (value is Map) {
+    final entries = value.entries.toList()
+      ..sort(
+        (left, right) => left.key.toString().compareTo(right.key.toString()),
+      );
+    return entries
+        .map(
+          (entry) =>
+              '${_humanizeConfigurationToken(entry.key.toString())}: ${_localizedConfigurationValue(entry.value, language)}',
+        )
+        .join(' · ');
+  }
+  return _configurationValueLabel(value);
+}
+
+String _configurationSettingTitle(String settingKey, AppLanguage language) {
+  const stringKeys = <String, String>{
+    'company.legal_name': 'legal_company_name',
+    'company.short_name': 'short_application_name',
+    'company.arabic_name': 'arabic_company_name',
+    'company.workspace_name': 'workspace_name',
+    'regional.country': 'country',
+    'regional.timezone': 'timezone',
+    'regional.date_format': 'date_format',
+    'regional.currency': 'currency',
+    'regional.primary_language': 'primary_language',
+    'regional.secondary_language': 'secondary_language',
+    'regional.financial_year_start': 'financial_year_start',
+    'requests.default_timing': 'default_timing',
+    'requests.urgent_enabled': 'urgent',
+    'requests.allow_authorized_creator_self_approval':
+        'authorized_creator_self_approval',
+    'procurement.default_source': 'default_source',
+    'procurement.require_external_source_readiness':
+        'external_source_readiness_required',
+    'accounts.billing_stage_weights': 'billing_baseline',
+    'accounts.payment_terms_days': 'payment_terms',
+    'accounts.pdc_reminder_days': 'pdc_reminder',
+    'documents.maximum_file_size_mb': 'maximum_file_size',
+    'documents.retention_years': 'retention_years',
+    'documents.allowed_formats': 'allowed_formats',
+    'documents.bilingual_header': 'bilingual_header',
+    'notifications.push_enabled': 'push',
+    'notifications.email_enabled': 'email',
+    'security.session_timeout_hours': 'session_timeout',
+    'security.minimum_password_length': 'minimum_password',
+    'security.admin_mfa_required': 'admin_mfa',
+    'security.log_exports': 'log_exports',
+    'security.log_access_changes': 'log_access_changes',
+    'security.audit_retention_years': 'audit_retention',
+    'numbering.project_pattern': 'project_pattern',
+    'numbering.material_request_pattern': 'mr_pattern',
+    'numbering.dispatch_pattern': 'dispatch_pattern',
+    'numbering.return_pattern': 'return_pattern',
+  };
+  final key = stringKeys[settingKey];
+  if (key == null) return _humanizeConfigurationToken(settingKey);
+  return YorksV1ConfigurationStrings.text(language, key);
 }
 
 class _ConfigSurface extends StatelessWidget {
@@ -2899,7 +3638,7 @@ class _InfoRule extends ConsumerWidget {
   }
 }
 
-class _ProtectedToggle extends StatelessWidget {
+class _ProtectedToggle extends ConsumerWidget {
   const _ProtectedToggle({
     required this.title,
     required this.body,
@@ -2913,55 +3652,74 @@ class _ProtectedToggle extends StatelessWidget {
   final bool last;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      decoration: BoxDecoration(
-        border: last
-            ? null
-            : const Border(bottom: BorderSide(color: AppColors.line)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final status = YorksV1ConfigurationStrings.text(
+      language,
+      value ? 'enabled' : 'disabled',
+    );
+    final protectedLabel = YorksV1ConfigurationStrings.text(
+      language,
+      'protected_control',
+    );
+    return Semantics(
+      container: true,
+      readOnly: true,
+      label: '$title. $body. $protectedLabel. $status.',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            border: last
+                ? null
+                : const Border(bottom: BorderSide(color: AppColors.line)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        title,
-                        style: AppTypography.labelLarge.copyWith(
-                          color: AppColors.ink,
-                          fontWeight: FontWeight.w700,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: AppTypography.labelLarge.copyWith(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                      ),
+                        const Gap(7),
+                        const Icon(
+                          Icons.lock_outline_rounded,
+                          size: 14,
+                          color: AppColors.blue,
+                        ),
+                      ],
                     ),
-                    const Gap(7),
-                    const Icon(
-                      Icons.lock_outline_rounded,
-                      size: 14,
-                      color: AppColors.blue,
+                    const Gap(2),
+                    Text(
+                      body,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                        height: 1.35,
+                      ),
                     ),
                   ],
                 ),
-                const Gap(2),
-                Text(
-                  body,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.muted,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const Gap(12),
+              _StatusPill(
+                label: status,
+                color: value ? AppColors.blue : AppColors.muted,
+                icon: Icons.lock_outline_rounded,
+                subtle: true,
+              ),
+            ],
           ),
-          const Gap(12),
-          IgnorePointer(
-            child: Switch.adaptive(value: value, onChanged: (_) {}),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -3732,61 +4490,266 @@ class _HistoryPreview extends StatelessWidget {
   }
 }
 
-class _HistoryMobileCard extends StatelessWidget {
-  const _HistoryMobileCard({required this.publication, required this.language});
+class _ConfigurationHistoryTable extends StatelessWidget {
+  const _ConfigurationHistoryTable({
+    required this.publications,
+    required this.language,
+    required this.onOpen,
+  });
 
-  final YorksV1ConfigurationPublication publication;
+  final List<YorksV1ConfigurationPublication> publications;
   final AppLanguage language;
+  final ValueChanged<YorksV1ConfigurationPublication> onOpen;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _StatusPill(
-                label: publication.versionLabel,
-                color: AppColors.purple,
-              ),
-              const Spacer(),
-              Text(
-                '${publication.changeCount} ${YorksV1ConfigurationStrings.text(language, 'changes').toLowerCase()}',
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.muted,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: 920,
+            child: Column(
+              children: [
+                Container(
+                  color: AppColors.surfaceContainerLow,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      _HistoryCell(text: _t('version'), flex: 1, heading: true),
+                      _HistoryCell(
+                        text: _t('published_at'),
+                        flex: 2,
+                        heading: true,
+                      ),
+                      _HistoryCell(
+                        text: _t('published_by'),
+                        flex: 2,
+                        heading: true,
+                      ),
+                      _HistoryCell(text: _t('reason'), flex: 3, heading: true),
+                      _HistoryCell(
+                        text: _t('affected_areas'),
+                        flex: 3,
+                        heading: true,
+                      ),
+                      _HistoryCell(text: _t('changes'), flex: 1, heading: true),
+                      const SizedBox(width: 32),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const Gap(9),
-          Text(
-            publication.reason,
-            style: AppTypography.labelLarge.copyWith(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w700,
+                for (final (index, publication) in publications.indexed)
+                  Semantics(
+                    button: true,
+                    label:
+                        '${publication.versionLabel}. ${publication.reason}. ${_t('view_changes')}.',
+                    child: Material(
+                      color: AppColors.surfaceContainerLowest,
+                      child: InkWell(
+                        onTap: () => onOpen(publication),
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 56),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          decoration: index == publications.length - 1
+                              ? null
+                              : const BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(color: AppColors.line),
+                                  ),
+                                ),
+                          child: Row(
+                            children: [
+                              _HistoryCell(
+                                text: publication.versionLabel,
+                                flex: 1,
+                                strong: true,
+                              ),
+                              _HistoryCell(
+                                text: _configurationDateLabel(
+                                  publication.publishedAt,
+                                ),
+                                flex: 2,
+                              ),
+                              _HistoryCell(
+                                text: publication.publishedBy,
+                                flex: 2,
+                              ),
+                              _HistoryCell(
+                                text: publication.reason,
+                                flex: 3,
+                                strong: true,
+                              ),
+                              _HistoryCell(
+                                text: publication.affectedAreas
+                                    .map(
+                                      (area) =>
+                                          YorksV1ConfigurationStrings.area(
+                                            language,
+                                            area,
+                                          ),
+                                    )
+                                    .join(', '),
+                                flex: 3,
+                              ),
+                              _HistoryCell(
+                                text: '${publication.changeCount}',
+                                flex: 1,
+                              ),
+                              const SizedBox(
+                                width: 32,
+                                child: Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 18,
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          const Gap(5),
-          Text(
-            publication.affectedAreas
-                .map((area) => YorksV1ConfigurationStrings.area(language, area))
-                .join(' · '),
-            style: AppTypography.bodySmall.copyWith(color: AppColors.blue),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryCell extends StatelessWidget {
+  const _HistoryCell({
+    required this.text,
+    required this.flex,
+    this.heading = false,
+    this.strong = false,
+  });
+
+  final String text;
+  final int flex;
+  final bool heading;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.only(right: AppSpacing.sm),
+        child: Text(
+          text,
+          maxLines: heading ? 1 : 2,
+          overflow: TextOverflow.ellipsis,
+          style: heading
+              ? AppTypography.labelSmall.copyWith(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w800,
+                )
+              : AppTypography.bodySmall.copyWith(
+                  color: strong ? AppColors.ink : AppColors.inkSecondary,
+                  fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryMobileCard extends StatelessWidget {
+  const _HistoryMobileCard({
+    required this.publication,
+    required this.language,
+    required this.onTap,
+  });
+
+  final YorksV1ConfigurationPublication publication;
+  final AppLanguage language;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: AppColors.surfaceContainerLow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.line),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _StatusPill(
+                      label: publication.versionLabel,
+                      color: AppColors.purple,
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${publication.changeCount} ${YorksV1ConfigurationStrings.text(language, 'changes').toLowerCase()}',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const Gap(AppSpacing.xs),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                  ],
+                ),
+                const Gap(9),
+                Text(
+                  publication.reason,
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Gap(5),
+                Text(
+                  publication.affectedAreas
+                      .map(
+                        (area) =>
+                            YorksV1ConfigurationStrings.area(language, area),
+                      )
+                      .join(' · '),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.blue,
+                  ),
+                ),
+                const Gap(7),
+                Text(
+                  '${publication.publishedBy} · ${DateFormat('dd MMM yyyy, HH:mm').format(publication.publishedAt)}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Gap(7),
-          Text(
-            '${publication.publishedBy} · ${DateFormat('dd MMM yyyy, HH:mm').format(publication.publishedAt)}',
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -4058,6 +5021,461 @@ class _ValidationDialog extends StatelessWidget {
   }
 }
 
+class _PublicationDetailDialog extends ConsumerWidget {
+  const _PublicationDetailDialog({
+    required this.publicationId,
+    required this.language,
+  });
+
+  final String publicationId;
+  final AppLanguage language;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detail = ref.watch(
+      yorksV1ConfigurationPublicationDetailProvider(publicationId),
+    );
+    final height = (MediaQuery.sizeOf(context).height * .68)
+        .clamp(300.0, 620.0)
+        .toDouble();
+    return AlertDialog(
+      title: Text(_t('publication_details')),
+      content: SizedBox(
+        width: 680,
+        height: height,
+        child: detail.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => _EmptyMessage(
+            icon: Icons.cloud_off_outlined,
+            title: _t('service_unavailable'),
+            actionLabel: _t('retry'),
+            onAction: () => ref.invalidate(
+              yorksV1ConfigurationPublicationDetailProvider(publicationId),
+            ),
+          ),
+          data: (publicationDetail) {
+            final publication = publicationDetail.publication;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Notice(
+                  icon: Icons.verified_outlined,
+                  title:
+                      '${publication.versionLabel} · ${publication.publishedBy}',
+                  body:
+                      '${publication.reason}\n${_configurationDateLabel(publication.publishedAt)}',
+                  tone: _NoticeTone.success,
+                ),
+                const Gap(AppSpacing.md),
+                Expanded(
+                  child: publicationDetail.changes.isEmpty
+                      ? Center(
+                          child: Text(
+                            _t('no_history'),
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: publicationDetail.changes.length,
+                          separatorBuilder: (_, _) => const Gap(AppSpacing.sm),
+                          itemBuilder: (context, index) =>
+                              _PublishedConfigurationChangeCard(
+                                change: publicationDetail.changes[index],
+                                language: language,
+                              ),
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(_t('close')),
+        ),
+      ],
+    );
+  }
+}
+
+class _PublishedConfigurationChangeCard extends StatelessWidget {
+  const _PublishedConfigurationChangeCard({
+    required this.change,
+    required this.language,
+  });
+
+  final YorksV1ConfigurationPublicationChange change;
+  final AppLanguage language;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final settingKey = change.settingKey ?? change.changeKind;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _configurationSettingTitle(settingKey, language),
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              const Gap(AppSpacing.sm),
+              _StatusPill(
+                label: YorksV1ConfigurationStrings.area(language, change.area),
+                color: AppColors.blue,
+                subtle: true,
+              ),
+            ],
+          ),
+          const Gap(AppSpacing.sm),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final before = _ConfigurationDiffValue(
+                label: _t('before'),
+                value: _localizedConfigurationValue(
+                  change.beforeValue,
+                  language,
+                ),
+              );
+              final after = _ConfigurationDiffValue(
+                label: _t('after'),
+                value: _localizedConfigurationValue(
+                  change.afterValue,
+                  language,
+                ),
+                emphasized: true,
+              );
+              if (constraints.maxWidth < 430) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [before, const Gap(AppSpacing.sm), after],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: before),
+                  const Gap(AppSpacing.sm),
+                  Expanded(child: after),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConfigurationSettingDiffCard extends StatelessWidget {
+  const _ConfigurationSettingDiffCard({
+    required this.setting,
+    required this.language,
+  });
+
+  final YorksV1ConfigurationSetting setting;
+  final AppLanguage language;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final presentation = _controlModePresentation(
+      setting.controlMode,
+      language,
+    );
+    final title = _configurationSettingTitle(setting.key, language);
+    final stagedActor = setting.stagedBy?.trim();
+    return Semantics(
+      container: true,
+      label:
+          '$title. ${_t('published_value')}: ${_localizedConfigurationValue(setting.publishedValue, language)}. ${_t('draft_value')}: ${_localizedConfigurationValue(setting.draftValue, language)}.',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      Text(
+                        setting.key,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(AppSpacing.sm),
+                _StatusPill(
+                  label: presentation.label,
+                  color: presentation.color,
+                  icon: presentation.icon,
+                  subtle: true,
+                ),
+              ],
+            ),
+            const Gap(AppSpacing.sm),
+            _ConfigurationDiffValue(
+              label: _t('published_value'),
+              value: _localizedConfigurationValue(
+                setting.publishedValue,
+                language,
+              ),
+            ),
+            const Gap(AppSpacing.sm),
+            _ConfigurationDiffValue(
+              label: _t('draft_value'),
+              value: _localizedConfigurationValue(setting.draftValue, language),
+              emphasized: true,
+            ),
+            if (stagedActor?.isNotEmpty == true) ...[
+              const Gap(AppSpacing.sm),
+              Text(
+                _t('staged_by')
+                    .replaceAll('{actor}', stagedActor!)
+                    .replaceAll(
+                      '{time}',
+                      setting.stagedAt == null
+                          ? _t('draft')
+                          : _configurationDateLabel(setting.stagedAt!),
+                    ),
+                style: AppTypography.labelSmall.copyWith(color: AppColors.blue),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfigurationMasterActionDiffCard extends StatelessWidget {
+  const _ConfigurationMasterActionDiffCard({
+    required this.action,
+    required this.configuration,
+    required this.language,
+  });
+
+  final YorksV1ConfigurationMasterAction action;
+  final YorksV1ConfigurationCentre configuration;
+  final AppLanguage language;
+
+  String _t(String key) => YorksV1ConfigurationStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final entityLabel = switch (action.entityKind) {
+      'material_category' => _t('material_category'),
+      'material_unit' => _t('material_unit'),
+      _ => _humanizeConfigurationToken(action.entityKind),
+    };
+    final actionLabel = action.actionKind == 'archive'
+        ? _t('archive')
+        : _t('create');
+    final targetName = _targetName();
+    final details = <({String label, String value})>[
+      if (action.payload['short_code']?.toString().trim().isNotEmpty == true)
+        (
+          label: _t('short_code'),
+          value: action.payload['short_code']!.toString(),
+        ),
+      if (action.payload['unit_type']?.toString().trim().isNotEmpty == true)
+        (
+          label: _t('unit_type'),
+          value: _t('unit_${action.payload['unit_type']}'),
+        ),
+      if (action.payload['decimal_places'] != null)
+        (
+          label: _t('decimal_places'),
+          value: action.payload['decimal_places'].toString(),
+        ),
+      if (action.reason?.trim().isNotEmpty == true)
+        (label: _t('action_reason'), value: action.reason!.trim()),
+      if (targetName == action.targetId)
+        (label: _t('target_reference'), value: action.targetId),
+    ];
+    final actionColor = action.actionKind == 'archive'
+        ? AppColors.error
+        : AppColors.success;
+    return Semantics(
+      container: true,
+      label:
+          '${_t('master_data_action')}. $entityLabel. $actionLabel. $targetName.',
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: actionColor.withValues(alpha: .24)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: actionColor.withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  ),
+                  child: Icon(
+                    action.entityKind == 'material_unit'
+                        ? Icons.straighten_outlined
+                        : Icons.category_outlined,
+                    size: 19,
+                    color: actionColor,
+                  ),
+                ),
+                const Gap(AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        targetName,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.ink,
+                        ),
+                      ),
+                      Text(
+                        entityLabel,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(AppSpacing.sm),
+                _StatusPill(
+                  label: actionLabel,
+                  color: actionColor,
+                  icon: action.actionKind == 'archive'
+                      ? Icons.archive_outlined
+                      : Icons.add_rounded,
+                  subtle: true,
+                ),
+              ],
+            ),
+            if (details.isNotEmpty) ...[
+              const Gap(AppSpacing.sm),
+              for (var index = 0; index < details.length; index++) ...[
+                if (index > 0) const Gap(AppSpacing.sm),
+                _ConfigurationDiffValue(
+                  label: details[index].label,
+                  value: details[index].value,
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _targetName() {
+    final payloadName = action.payload['name']?.toString().trim();
+    if (payloadName?.isNotEmpty == true) return payloadName!;
+    if (action.entityKind == 'material_category') {
+      for (final category in configuration.categories) {
+        if (category.id == action.targetId) return category.name;
+      }
+    }
+    if (action.entityKind == 'material_unit') {
+      for (final unit in configuration.units) {
+        if (unit.id == action.targetId) {
+          return '${unit.name} (${unit.shortCode})';
+        }
+      }
+    }
+    return action.targetId;
+  }
+}
+
+class _ConfigurationDiffValue extends StatelessWidget {
+  const _ConfigurationDiffValue({
+    required this.label,
+    required this.value,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: emphasized
+            ? AppColors.blueContainer.withValues(alpha: .55)
+            : AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        border: Border.all(
+          color: emphasized ? AppColors.blueContainerStrong : AppColors.line,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+          ),
+          const Gap(AppSpacing.xs),
+          SelectableText(
+            value,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.ink,
+              fontWeight: emphasized ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PublishDialog extends StatefulWidget {
   const _PublishDialog({required this.configuration, required this.language});
 
@@ -4094,6 +5512,22 @@ class _PublishDialogState extends State<_PublishDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final changedSettings = widget.configuration.settings
+        .where((setting) => setting.changed)
+        .toList(growable: false);
+    final changeCards = <Widget>[
+      for (final setting in changedSettings)
+        _ConfigurationSettingDiffCard(
+          setting: setting,
+          language: widget.language,
+        ),
+      for (final action in widget.configuration.masterActions)
+        _ConfigurationMasterActionDiffCard(
+          action: action,
+          configuration: widget.configuration,
+          language: widget.language,
+        ),
+    ];
     return AlertDialog(
       key: const Key('configuration-publish-dialog'),
       title: Text(_t('review_publish')),
@@ -4127,6 +5561,41 @@ class _PublishDialogState extends State<_PublishDialog> {
                     ),
                 ],
               ),
+              if (widget.configuration.draftUpdatedBy?.trim().isNotEmpty ==
+                  true) ...[
+                const Gap(12),
+                _Notice(
+                  icon: Icons.groups_outlined,
+                  title: _t('shared_draft'),
+                  body: _t('draft_last_updated')
+                      .replaceAll(
+                        '{actor}',
+                        widget.configuration.draftUpdatedBy!.trim(),
+                      )
+                      .replaceAll(
+                        '{time}',
+                        _configurationDateLabel(
+                          widget.configuration.draftUpdatedAt,
+                        ),
+                      ),
+                  tone: _NoticeTone.blue,
+                ),
+              ],
+              if (changeCards.isNotEmpty) ...[
+                const Gap(16),
+                Text(
+                  _t('exact_changes'),
+                  style: AppTypography.titleSmall.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Gap(8),
+                for (final (index, card) in changeCards.indexed) ...[
+                  card,
+                  if (index != changeCards.length - 1) const Gap(AppSpacing.sm),
+                ],
+              ],
               const Gap(16),
               TextField(
                 controller: _controller,

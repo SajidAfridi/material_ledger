@@ -155,6 +155,22 @@ void main() {
   );
 
   group('Yorks V1 Material Request draft controller', () {
+    test('new custom rows do not fabricate a controlled unit', () async {
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: _FakeRequestRepository(),
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.addCustomLine();
+
+      expect(controller.state.draft.lines.single.unit, isEmpty);
+      expect(controller.state.draft.canSubmitLocally, isFalse);
+    });
+
     test('inserts a similar line directly below the selected row', () async {
       final controller = YorksV1MaterialRequestDraftController(
         ownerAuthUserId: _siteEngineer,

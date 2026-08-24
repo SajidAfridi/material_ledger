@@ -78,6 +78,7 @@ class YorksV1NotificationRecord {
     final resolvedRequestId = requestId?.trim() ?? '';
     final resolvedProjectId = projectId?.trim() ?? '';
     final resolvedChatConversationId = chatConversationId?.trim() ?? '';
+    final isMaterialReturn = entityType == 'material_return';
     return AppNotification(
       id: id,
       type: copy.type,
@@ -86,9 +87,15 @@ class YorksV1NotificationRecord {
       body: copy.body(language),
       timestamp: createdAt,
       isRead: seenAt != null,
-      refId: resolvedRequestId.isNotEmpty ? resolvedRequestId : entityId,
+      refId: isMaterialReturn
+          ? entityId
+          : resolvedRequestId.isNotEmpty
+          ? resolvedRequestId
+          : entityId,
       route: resolvedChatConversationId.isNotEmpty
           ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
+          : isMaterialReturn
+          ? RoutePaths.yorksV1MaterialReturnPath(entityId)
           : resolvedRequestId.isNotEmpty
           ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
           : resolvedProjectId.isNotEmpty &&
@@ -347,6 +354,52 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
     hindiTitle: 'सामग्री वापसी जमा हुई',
     hindiBody: 'परियोजना सामग्री वापसी खरीद पुष्टि की प्रतीक्षा में है।',
   ),
+  'material_return_approval_required': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material return approval required',
+    englishBody: 'A project material return is ready for Engineering review.',
+    arabicTitle: 'مطلوب اعتماد مرتجع المواد',
+    arabicBody: 'مرتجع مواد المشروع جاهز لمراجعة الهندسة.',
+    urduTitle: 'مٹیریل ریٹرن کی منظوری درکار ہے',
+    urduBody: 'پروجیکٹ مٹیریل ریٹرن انجینئرنگ جائزے کے لیے تیار ہے۔',
+    hindiTitle: 'सामग्री वापसी अनुमोदन आवश्यक',
+    hindiBody: 'परियोजना सामग्री वापसी इंजीनियरिंग समीक्षा के लिए तैयार है।',
+  ),
+  'material_return_approved': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material return approved',
+    englishBody: 'Engineering approved the material return for site dispatch.',
+    arabicTitle: 'تم اعتماد مرتجع المواد',
+    arabicBody: 'اعتمدت الهندسة مرتجع المواد للإرسال من الموقع.',
+    urduTitle: 'مٹیریل ریٹرن منظور ہو گیا',
+    urduBody:
+        'انجینئرنگ نے سائٹ سے بھیجنے کے لیے مٹیریل ریٹرن منظور کر لیا ہے۔',
+    hindiTitle: 'सामग्री वापसी स्वीकृत',
+    hindiBody: 'इंजीनियरिंग ने साइट से भेजने के लिए सामग्री वापसी स्वीकृत की।',
+  ),
+  'material_return_returned_for_changes': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material return changes required',
+    englishBody: 'Engineering returned the material return with a reason.',
+    arabicTitle: 'مطلوب تعديل مرتجع المواد',
+    arabicBody: 'أعادت الهندسة مرتجع المواد مع السبب.',
+    urduTitle: 'مٹیریل ریٹرن میں تبدیلی درکار ہے',
+    urduBody: 'انجینئرنگ نے مٹیریل ریٹرن وجہ کے ساتھ واپس کیا ہے۔',
+    hindiTitle: 'सामग्री वापसी में बदलाव आवश्यक',
+    hindiBody: 'इंजीनियरिंग ने कारण सहित सामग्री वापसी लौटा दी।',
+  ),
+  'material_return_receipt_required': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Returned materials awaiting receipt',
+    englishBody:
+        'Dispatched return materials are ready for Procurement receipt.',
+    arabicTitle: 'المواد المرتجعة بانتظار الاستلام',
+    arabicBody: 'المواد المرتجعة المرسلة جاهزة لاستلام المشتريات.',
+    urduTitle: 'واپس شدہ مواد وصولی کا منتظر ہے',
+    urduBody: 'بھیجا گیا واپس شدہ مواد پروکیورمنٹ وصولی کے لیے تیار ہے۔',
+    hindiTitle: 'लौटाई सामग्री प्राप्ति की प्रतीक्षा में',
+    hindiBody: 'भेजी गई वापसी सामग्री खरीद प्राप्ति के लिए तैयार है।',
+  ),
   'material_return_confirmed': YorksV1NotificationCopy(
     type: NotificationType.request,
     englishTitle: 'Material return confirmed',
@@ -369,6 +422,17 @@ const _eventCopy = <String, YorksV1NotificationCopy>{
     urduBody: 'پروکیورمنٹ نے مٹیریل ریٹرن وجہ کے ساتھ واپس کر دیا ہے۔',
     hindiTitle: 'सामग्री वापसी अस्वीकृत हुई',
     hindiBody: 'खरीद ने कारण सहित सामग्री वापसी लौटा दी।',
+  ),
+  'material_return_cancelled': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Material return cancelled',
+    englishBody: 'The material return was cancelled before warehouse receipt.',
+    arabicTitle: 'تم إلغاء مرتجع المواد',
+    arabicBody: 'تم إلغاء مرتجع المواد قبل استلام المستودع.',
+    urduTitle: 'مٹیریل ریٹرن منسوخ ہو گیا',
+    urduBody: 'مٹیریل ریٹرن گودام کی وصولی سے پہلے منسوخ کر دیا گیا۔',
+    hindiTitle: 'सामग्री वापसी रद्द हुई',
+    hindiBody: 'गोदाम प्राप्ति से पहले सामग्री वापसी रद्द कर दी गई।',
   ),
   'material_request_cancelled': YorksV1NotificationCopy(
     type: NotificationType.request,

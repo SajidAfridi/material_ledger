@@ -511,17 +511,38 @@ name>` when the project has a job/contract reference.
 
 Return lifecycle:
 
-`draft -> submitted -> confirmed | rejected`
+`draft -> awaiting_approval -> approved -> dispatched -> confirmed`
 
-- Eligible quantity is good received minus prior confirmed returns.
-- Submission freezes project, scope, source request/dispatch/receipt links and
-  line snapshots.
-- Only Procurement/Admin can confirm physical warehouse receipt.
-- Confirmation is idempotent and appends movements once.
-- A supplier-sourced line must be mapped to an existing inventory item or a new
-  Admin/Procurement-proposed item before warehouse confirmation. No stock is
-  posted to an unidentified item.
-- Rejection requires a reason and does not change stock.
+`awaiting_approval -> returned_for_changes -> awaiting_approval`
+
+`awaiting_approval -> rejected` and any pre-dispatch active state may become
+`cancelled` with a reason.
+
+- A return belongs to one project and one real scope, not to one Material
+  Request. It remains available during project close-out and may combine
+  traceable delivered lines from multiple requests with explicitly marked
+  historical/custom lines.
+- Eligible delivered quantity is good received minus prior approved,
+  dispatched or confirmed returns. Draft selection never reserves or changes
+  stock; the server rechecks eligibility under source-line locks on submit and
+  confirmation.
+- Submission assigns the controlled return number and freezes project, scope,
+  source request/dispatch/receipt links, custom provenance and line snapshots.
+- Assigned Project Engineers, organization-wide engineering approvers and
+  Admin approve, return for changes or reject. Procurement cannot approve the
+  return it will receive.
+- Dispatch records the physical handover date, driver, optional vehicle and
+  mandatory delivery-note reference before warehouse receipt can be confirmed.
+- Only Procurement/Admin can confirm physical warehouse receipt. Good,
+  damaged and not-received quantities must reconcile exactly to each returned
+  line; only good quantity increments warehouse stock.
+- A custom or otherwise unmapped line must be mapped to an existing inventory
+  item or a new Procurement/Admin-created item before good stock is posted. No
+  stock is posted to an unidentified item.
+- Confirmation is atomic and idempotent, appends one movement per good line,
+  retains exception quantities and emits audit/notification evidence once.
+- Rejection, return for changes and cancellation require reasons and never
+  change stock. Confirmed history is immutable.
 
 ## 14. Documents and links
 
@@ -592,8 +613,9 @@ Critical actions never show success before the server commits.
   R38.9 separately approves controlled supplier receipt provenance inside the
   Warehouse Inventory workspace; it does not authorize purchasing workflow,
   multi-warehouse behavior or accounting valuation.
-- Configuration, Rentals, User Management, Audit Trail, Duct Sizer and ESP
-  Calculator remain and receive smoke/regression fixes only.
+- Rentals, User Management, Audit Trail, Duct Sizer and ESP Calculator remain
+  and receive smoke/regression fixes only. Configuration follows the explicit
+  server-authoritative control-plane contract in section 21.
 - Multi-warehouse, portals, barcode/QR, AI and complex BI are deferred.
 
 ## 19. R38.9 supplier identity and receipt import
@@ -649,3 +671,44 @@ Critical actions never show success before the server commits.
   authorized non-Site-Engineer creator may self-approve; supplier readiness is
   non-blocking; and an all-unavailable request stays Procurement-editable until
   explicit authorized cancellation makes it terminal.
+
+## 21. Configuration control-plane truth
+
+Configuration is an exact-Admin, server-authoritative control plane. A value is
+shown in one of three explicit modes so the screen never promises behavior that
+the application does not enforce:
+
+- **Operational** values have a named runtime consumer, may be staged by an
+  exact Admin, remain inert as a draft, and affect only future commands after a
+  validated publication succeeds.
+- **Protected** values describe a Yorks V1 security, legal, document, audit or
+  numbering invariant. They are visible with their enforcement target but are
+  not editable through Configuration.
+- **Planned** values are retained for future modules or integrations. They are
+  visible for roadmap clarity but cannot be staged or published until an
+  authoritative runtime consumer and permission tests exist.
+
+The operational policy set is intentionally narrow and real:
+
+- `requests.default_timing` supplies the initial timing for a new pristine MR
+  draft; it never rewrites a recovered or server-backed draft.
+- `requests.urgent_enabled` controls whether future MRs may select or commit
+  Urgent timing. Existing urgent records remain readable and unchanged.
+- `requests.allow_authorized_creator_self_approval` controls the temporary
+  adoption policy defined in section 20 and is rechecked by the trusted
+  approval command.
+- `procurement.require_external_source_readiness` controls whether future
+  external-source arrangements require supplier readiness before save.
+- `notifications.push_enabled` controls future push-outbox enqueue only.
+  Durable in-app notifications and existing outbox evidence are retained.
+
+Categories and units remain audited master-data actions. Their changes stage in
+the same shared draft and become active only through publication. Publication
+uses an optimistic draft revision, a device-persistent idempotency key, a
+mandatory reason, server-side validation, immutable before/after history and
+exact actor/role attribution. Protected/planned legacy draft values must be
+explicitly cleared or discarded; they are never silently published.
+
+Non-Admin roles may read only the narrow published runtime projection required
+by their workflow. They cannot read the Admin draft, publication detail,
+protected settings or operational delivery-health diagnostics.

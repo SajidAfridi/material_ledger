@@ -106,6 +106,34 @@ Deno.test("approval-first and return events have specific safe copy", () => {
     safePushCopy("material_return_confirmed").title,
     "Material return confirmed",
   );
+  for (
+    const eventCode of [
+      "material_return_approval_required",
+      "material_return_approved",
+      "material_return_returned_for_changes",
+      "material_return_rejected",
+      "material_return_receipt_required",
+      "material_return_confirmed",
+      "material_return_cancelled",
+    ]
+  ) {
+    assertEquals(
+      safePushCopy(eventCode).title === "Yorks workflow update",
+      false,
+    );
+  }
+});
+
+Deno.test("material returns deep-link to their standalone record", () => {
+  const returnId = "17000000-0000-4000-8000-000000000001";
+  assertEquals(
+    routeFor({
+      ...claim("14000000-0000-4000-8000-000000000001"),
+      entityType: "material_return",
+      entityId: returnId,
+    }),
+    `/yorks/returns/${returnId}`,
+  );
 });
 
 Deno.test("coordination assignment has specific non-commercial copy", () => {

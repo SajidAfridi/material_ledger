@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
@@ -708,7 +710,7 @@ class _ReturnsDocumentsBodyState extends ConsumerState<_ReturnsDocumentsBody> {
           );
       if (!mounted) return;
       _submitDraftIdempotencyKey = const Uuid().v4();
-      widget.onChanged();
+      context.go(RoutePaths.yorksV1MaterialReturnPath(draft.id));
     } catch (_) {
       if (mounted) _showFailure(YorksV1LogisticsStrings.savingFailed.primary);
     } finally {

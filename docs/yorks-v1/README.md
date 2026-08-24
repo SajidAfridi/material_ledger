@@ -44,6 +44,7 @@ explicit V7-to-V1 conflict resolution.
 | [`R38_4_RENTAL_PROPERTIES.md`](R38_4_RENTAL_PROPERTIES.md) | Admin-only rental property, lease, rent, cheque, import/export and controlled-document implementation |
 | [`R38_5_TEAM_CHAT_IMPLEMENTATION.md`](R38_5_TEAM_CHAT_IMPLEMENTATION.md) | R38.5 contextual Team Chat architecture, permissions, Storage, notification, responsive UI and rollback contract |
 | [`R38_9_INVENTORY_SUPPLIER_FOLDERS.md`](R38_9_INVENTORY_SUPPLIER_FOLDERS.md) | R38.9 supplier folders, Unknown Supplier, five-stage import, receipt provenance and migration safety contract |
+| [`MATERIAL_RETURN_CONTROLLED_WORKFLOW.md`](MATERIAL_RETURN_CONTROLLED_WORKFLOW.md) | Project-wide Material Return lifecycle, provenance, approval, warehouse receipt, document and rollback contract |
 | [`V01_VISUAL_EVIDENCE.md`](V01_VISUAL_EVIDENCE.md) | Workspace shell, empty Overview and Project Creation convergence evidence |
 | [`MOBILE_UI_IMPLEMENTATION_GUIDE.md`](MOBILE_UI_IMPLEMENTATION_GUIDE.md) | Mobile-only authority split, guard, state/permission checklist and evidence workflow |
 | [`MOBILE_UI_SCREEN_LEDGER.md`](MOBILE_UI_SCREEN_LEDGER.md) | Delivery state for all 52 mobile design references |

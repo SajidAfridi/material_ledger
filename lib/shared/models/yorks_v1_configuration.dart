@@ -24,6 +24,23 @@ enum YorksV1ConfigurationArea {
   }
 }
 
+enum YorksV1ConfigurationControlMode {
+  operational('operational'),
+  protected('protected'),
+  planned('planned');
+
+  const YorksV1ConfigurationControlMode(this.wireName);
+
+  final String wireName;
+
+  static YorksV1ConfigurationControlMode fromWireName(String? value) {
+    return values.firstWhere(
+      (mode) => mode.wireName == value,
+      orElse: () => planned,
+    );
+  }
+}
+
 class YorksV1ConfigurationSetting {
   const YorksV1ConfigurationSetting({
     required this.key,
@@ -33,6 +50,11 @@ class YorksV1ConfigurationSetting {
     required this.draftValue,
     required this.effectiveValue,
     required this.changed,
+    this.controlMode = YorksV1ConfigurationControlMode.planned,
+    this.impactScope = const [],
+    this.enforcementTarget = '',
+    this.stagedBy,
+    this.stagedAt,
   });
 
   final String key;
@@ -42,16 +64,43 @@ class YorksV1ConfigurationSetting {
   final Object? draftValue;
   final Object? effectiveValue;
   final bool changed;
+  final YorksV1ConfigurationControlMode controlMode;
+  final List<YorksV1ConfigurationArea> impactScope;
+  final String enforcementTarget;
+  final String? stagedBy;
+  final DateTime? stagedAt;
+
+  bool get isOperational =>
+      controlMode == YorksV1ConfigurationControlMode.operational;
+
+  bool get isProtected =>
+      controlMode == YorksV1ConfigurationControlMode.protected;
+
+  bool get isPlanned => controlMode == YorksV1ConfigurationControlMode.planned;
 
   factory YorksV1ConfigurationSetting.fromJson(Map<String, dynamic> json) {
+    final area = YorksV1ConfigurationArea.fromWireName(
+      json['area']?.toString(),
+    );
+    final impactScope = (json['impact_scope'] as List? ?? const <Object>[])
+        .map((value) => YorksV1ConfigurationArea.fromWireName(value.toString()))
+        .toSet()
+        .toList(growable: false);
     return YorksV1ConfigurationSetting(
       key: json['key']?.toString() ?? '',
-      area: YorksV1ConfigurationArea.fromWireName(json['area']?.toString()),
+      area: area,
       type: json['type']?.toString() ?? 'string',
       publishedValue: json['published_value'],
       draftValue: json['draft_value'],
       effectiveValue: json['effective_value'],
       changed: json['changed'] == true,
+      controlMode: YorksV1ConfigurationControlMode.fromWireName(
+        json['control_mode']?.toString(),
+      ),
+      impactScope: impactScope.isEmpty ? [area] : impactScope,
+      enforcementTarget: json['enforcement_target']?.toString() ?? '',
+      stagedBy: _nullableString(json['staged_by']),
+      stagedAt: _nullableDateTime(json['staged_at']),
     );
   }
 }
@@ -267,6 +316,141 @@ class YorksV1ConfigurationPublication {
   }
 }
 
+class YorksV1ConfigurationPublicationChange {
+  const YorksV1ConfigurationPublicationChange({
+    required this.id,
+    required this.settingKey,
+    required this.area,
+    required this.beforeValue,
+    required this.afterValue,
+    required this.changeKind,
+  });
+
+  final String id;
+  final String? settingKey;
+  final YorksV1ConfigurationArea area;
+  final Object? beforeValue;
+  final Object? afterValue;
+  final String changeKind;
+
+  factory YorksV1ConfigurationPublicationChange.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return YorksV1ConfigurationPublicationChange(
+      id: json['id']?.toString() ?? '',
+      settingKey: _nullableString(json['setting_key']),
+      area: YorksV1ConfigurationArea.fromWireName(json['area']?.toString()),
+      beforeValue: json['before_value'],
+      afterValue: json['after_value'],
+      changeKind: json['change_kind']?.toString() ?? '',
+    );
+  }
+}
+
+class YorksV1ConfigurationPublicationDetail {
+  const YorksV1ConfigurationPublicationDetail({
+    required this.publication,
+    required this.changes,
+  });
+
+  final YorksV1ConfigurationPublication publication;
+  final List<YorksV1ConfigurationPublicationChange> changes;
+
+  factory YorksV1ConfigurationPublicationDetail.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return YorksV1ConfigurationPublicationDetail(
+      publication: YorksV1ConfigurationPublication.fromJson(
+        _object(json['publication']),
+      ),
+      changes: _objectList(json['changes'])
+          .map(YorksV1ConfigurationPublicationChange.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+class YorksV1RuntimeConfiguration {
+  const YorksV1RuntimeConfiguration({
+    required this.schemaVersion,
+    required this.publishedVersion,
+    required this.publishedLabel,
+    required this.publishedAt,
+    required this.defaultTiming,
+    required this.urgentEnabled,
+    required this.allowAuthorizedCreatorSelfApproval,
+    required this.requireExternalSourceReadiness,
+    required this.pushEnabled,
+  });
+
+  final String schemaVersion;
+  final int publishedVersion;
+  final String publishedLabel;
+  final DateTime publishedAt;
+  final String defaultTiming;
+  final bool urgentEnabled;
+  final bool allowAuthorizedCreatorSelfApproval;
+  final bool requireExternalSourceReadiness;
+  final bool pushEnabled;
+
+  factory YorksV1RuntimeConfiguration.fromJson(Map<String, dynamic> json) {
+    return YorksV1RuntimeConfiguration(
+      schemaVersion: json['schema_version']?.toString() ?? '',
+      publishedVersion: (json['published_version'] as num?)?.toInt() ?? 0,
+      publishedLabel: json['published_label']?.toString() ?? '',
+      publishedAt:
+          _nullableDateTime(json['published_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      defaultTiming: json['default_timing']?.toString() ?? 'normal',
+      urgentEnabled: json['urgent_enabled'] == true,
+      allowAuthorizedCreatorSelfApproval:
+          json['allow_authorized_creator_self_approval'] == true,
+      requireExternalSourceReadiness:
+          json['require_external_source_readiness'] == true,
+      pushEnabled: json['push_enabled'] == true,
+    );
+  }
+}
+
+class YorksV1ConfigurationOperationalHealth {
+  const YorksV1ConfigurationOperationalHealth({
+    required this.pushEnabled,
+    required this.activeDeviceCount,
+    required this.pendingDeliveryCount,
+    required this.recentFailureCount,
+    required this.lastSuccessfulDeliveryAt,
+  });
+
+  final bool pushEnabled;
+  final int activeDeviceCount;
+  final int pendingDeliveryCount;
+  final int recentFailureCount;
+  final DateTime? lastSuccessfulDeliveryAt;
+
+  factory YorksV1ConfigurationOperationalHealth.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return YorksV1ConfigurationOperationalHealth(
+      pushEnabled: json['push_enabled'] == true,
+      activeDeviceCount: (json['active_device_count'] as num?)?.toInt() ?? 0,
+      pendingDeliveryCount:
+          (json['pending_delivery_count'] as num?)?.toInt() ?? 0,
+      recentFailureCount: (json['recent_failure_count'] as num?)?.toInt() ?? 0,
+      lastSuccessfulDeliveryAt: _nullableDateTime(
+        json['last_successful_delivery_at'],
+      ),
+    );
+  }
+
+  static const empty = YorksV1ConfigurationOperationalHealth(
+    pushEnabled: false,
+    activeDeviceCount: 0,
+    pendingDeliveryCount: 0,
+    recentFailureCount: 0,
+    lastSuccessfulDeliveryAt: null,
+  );
+}
+
 class YorksV1ConfigurationCentre {
   const YorksV1ConfigurationCentre({
     required this.schemaVersion,
@@ -278,6 +462,8 @@ class YorksV1ConfigurationCentre {
     required this.draftRevision,
     required this.draftBaseVersion,
     required this.draftUpdatedAt,
+    this.draftUpdatedBy,
+    this.operationalHealth = YorksV1ConfigurationOperationalHealth.empty,
     required this.settings,
     required this.masterActions,
     required this.categories,
@@ -296,6 +482,8 @@ class YorksV1ConfigurationCentre {
   final int draftRevision;
   final int draftBaseVersion;
   final DateTime draftUpdatedAt;
+  final String? draftUpdatedBy;
+  final YorksV1ConfigurationOperationalHealth operationalHealth;
   final List<YorksV1ConfigurationSetting> settings;
   final List<YorksV1ConfigurationMasterAction> masterActions;
   final List<YorksV1ConfigurationCategory> categories;
@@ -369,6 +557,10 @@ class YorksV1ConfigurationCentre {
             json['draft_updated_at']?.toString() ?? '',
           )?.toLocal() ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      draftUpdatedBy: _nullableString(json['draft_updated_by']),
+      operationalHealth: YorksV1ConfigurationOperationalHealth.fromJson(
+        _object(json['operational_health']),
+      ),
       settings: _objectList(
         json['settings'],
       ).map(YorksV1ConfigurationSetting.fromJson).toList(growable: false),
@@ -400,3 +592,13 @@ Map<String, dynamic> _object(Object? value) =>
 List<Map<String, dynamic>> _objectList(Object? value) => value is List
     ? value.whereType<Map>().map(Map<String, dynamic>.from).toList()
     : const <Map<String, dynamic>>[];
+
+String? _nullableString(Object? value) {
+  final normalized = value?.toString().trim() ?? '';
+  return normalized.isEmpty ? null : normalized;
+}
+
+DateTime? _nullableDateTime(Object? value) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '');
+  return parsed?.toLocal();
+}

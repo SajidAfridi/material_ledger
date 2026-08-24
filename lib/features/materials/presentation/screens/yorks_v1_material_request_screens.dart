@@ -17,6 +17,7 @@ import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_boq.dart';
 import '../../../../shared/models/yorks_v1_boq_strings.dart';
 import '../../../../shared/models/yorks_v1_boq_workbook.dart';
+import '../../../../shared/models/yorks_v1_configuration.dart';
 import '../../../../shared/models/yorks_v1_arrangement_strings.dart';
 import '../../../../shared/models/yorks_v1_arrangement.dart';
 import '../../../../shared/models/yorks_v1_domain_error.dart';
@@ -51,27 +52,10 @@ import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/repositories/yorks_v1_material_request_repository.dart';
 
 import 'yorks_v1_arrangement_screen.dart';
+import 'yorks_v1_controlled_unit_field.dart';
 import 'yorks_v1_logistics_screen.dart';
 import 'yorks_v1_material_request_centre.dart';
 import 'yorks_v1_returns_documents_screen.dart';
-
-const _mrUnitOptions = <String>[
-  'Nos',
-  'Each',
-  'Meter',
-  'Cm',
-  'Length',
-  'Set',
-  'Pairs',
-  'Roll',
-  'Box',
-  'Ton',
-  'Boxes',
-  'Kg',
-  'Litre',
-  'Pack',
-  'Lot',
-];
 
 /// V1 material request overview. It reads only the server projection; drafts
 /// are returned only to their creator by the database contract.
@@ -1464,6 +1448,8 @@ class _YorksV1MaterialRequestDraftScreenState
   bool _seededFromBoq = false;
   bool _seededProjectFromRoute = false;
   bool _hydratedFromServer = false;
+  bool _runtimePolicyResolutionScheduled = false;
+  bool _runtimePolicyResolved = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1484,6 +1470,7 @@ class _YorksV1MaterialRequestDraftScreenState
     final controller = ref.read(
       yorksV1MaterialRequestDraftControllerProvider(key).notifier,
     );
+    final runtimeConfiguration = ref.watch(yorksV1RuntimeConfigurationProvider);
     final shouldHydrateFromServer =
         state.draft.serverRecordVersion == 0 &&
         state.draft.updatedAt.millisecondsSinceEpoch == 0;
@@ -1500,11 +1487,32 @@ class _YorksV1MaterialRequestDraftScreenState
         });
       }
     }
+    final runtimeDefaultCanBeApplied =
+        runtimeConfiguration is AsyncData<YorksV1RuntimeConfiguration> &&
+        _serverDraftIsAbsent(serverDraft) &&
+        _isPristineForRuntimeDefault(state.draft);
+    if (!_runtimePolicyResolved &&
+        !_runtimePolicyResolutionScheduled &&
+        runtimeDefaultCanBeApplied) {
+      _runtimePolicyResolutionScheduled = true;
+      final configuration = runtimeConfiguration.value;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _resolveRuntimePolicy(controller, configuration);
+      });
+    }
+    final runtimePolicyAllowsAutomaticSeeding =
+        _runtimePolicyResolved ||
+        !_isPristineForRuntimeDefault(state.draft) ||
+        runtimeConfiguration is AsyncError ||
+        (runtimeConfiguration is AsyncData<YorksV1RuntimeConfiguration> &&
+            serverDraft is AsyncError &&
+            !_serverDraftIsAbsent(serverDraft));
     final routeProjectId = widget.projectId?.trim();
     final canSeedProjectFromRoute =
         routeProjectId != null &&
         routeProjectId.isNotEmpty &&
         state.draft.projectId == null &&
+        runtimePolicyAllowsAutomaticSeeding &&
         (!_shouldHydrateFromServer(state) || serverDraft is AsyncError);
     if (!_seededProjectFromRoute && canSeedProjectFromRoute) {
       _seededProjectFromRoute = true;
@@ -1512,7 +1520,9 @@ class _YorksV1MaterialRequestDraftScreenState
         if (mounted) controller.setProject(routeProjectId);
       });
     }
-    if (!_seededFromBoq && widget.boqGroupId != null) {
+    if (!_seededFromBoq &&
+        widget.boqGroupId != null &&
+        runtimePolicyAllowsAutomaticSeeding) {
       _seededFromBoq = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _seedDraftFromBoq(controller, state.draft);
@@ -1529,6 +1539,57 @@ class _YorksV1MaterialRequestDraftScreenState
   bool _shouldHydrateFromServer(YorksV1MaterialRequestDraftState state) =>
       state.draft.serverRecordVersion == 0 &&
       state.draft.updatedAt.millisecondsSinceEpoch == 0;
+
+  bool _serverDraftIsAbsent(AsyncValue<YorksV1MaterialRequest>? serverDraft) {
+    if (serverDraft is! AsyncError<YorksV1MaterialRequest>) return false;
+    final error = serverDraft.error;
+    return error is YorksV1DomainException &&
+        error.code == YorksV1DomainErrorCode.unauthorized;
+  }
+
+  bool _isPristineForRuntimeDefault(YorksV1MaterialRequestDraft draft) =>
+      draft.serverRecordVersion == 0 &&
+      draft.updatedAt.millisecondsSinceEpoch == 0 &&
+      !draft.hasRecoverableContent &&
+      draft.timing == YorksV1MaterialRequestTiming.normal &&
+      draft.scheduledDate == null;
+
+  Future<void> _resolveRuntimePolicy(
+    YorksV1MaterialRequestDraftController controller,
+    YorksV1RuntimeConfiguration configuration,
+  ) async {
+    try {
+      // The owner-only recovery copy must win over a published default.
+      // Calling hydration here also closes the short race between the
+      // controller's startup reconciliation and the independent policy call.
+      await controller.hydratePrivateDraft();
+      if (!mounted) return;
+      final current = controller.currentDraft;
+      if (_isPristineForRuntimeDefault(current)) {
+        final configured = YorksV1MaterialRequestTiming.fromWireValue(
+          configuration.defaultTiming,
+        );
+        final defaultTiming =
+            configured == YorksV1MaterialRequestTiming.urgent &&
+                configuration.urgentEnabled != true
+            ? YorksV1MaterialRequestTiming.normal
+            : configured ?? YorksV1MaterialRequestTiming.normal;
+        if (defaultTiming != current.timing) {
+          await controller.setTiming(defaultTiming);
+        }
+      }
+    } catch (_) {
+      // A runtime default is a convenience, never an editing authority. Keep
+      // the model's safe Normal default if local recovery/storage is unable to
+      // accept the published preference during initialization.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _runtimePolicyResolved = true;
+        });
+      }
+    }
+  }
 
   Future<void> _seedDraftFromBoq(
     YorksV1MaterialRequestDraftController controller,
@@ -1756,6 +1817,23 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
   }
 }
 
+List<YorksV1MaterialRequestTiming> _allowedRequestTimings(
+  YorksV1MaterialRequestDraft draft,
+  AsyncValue<YorksV1RuntimeConfiguration> runtimeConfiguration,
+) {
+  // Runtime policy is fail-closed: a loading or unavailable policy never
+  // exposes Urgent as a new selection. An existing urgent draft remains
+  // representable so opening it cannot silently rewrite workflow data.
+  final urgentEnabled = runtimeConfiguration.valueOrNull?.urgentEnabled == true;
+  return [
+    for (final timing in YorksV1MaterialRequestTiming.values)
+      if (timing != YorksV1MaterialRequestTiming.urgent ||
+          urgentEnabled ||
+          draft.timing == YorksV1MaterialRequestTiming.urgent)
+        timing,
+  ];
+}
+
 class _DraftForm extends ConsumerWidget {
   const _DraftForm({
     required this.state,
@@ -1772,6 +1850,14 @@ class _DraftForm extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final draft = state.draft;
+    final runtimeConfiguration = ref.watch(yorksV1RuntimeConfigurationProvider);
+    final controlledUnitsAsync = ref.watch(
+      yorksV1ConfigurationUnitCodesProvider,
+    );
+    final controlledUnitsReady = yorksV1ControlledUnitsReady(
+      controlledUnitsAsync,
+    );
+    final allowedTimings = _allowedRequestTimings(draft, runtimeConfiguration);
     final projects = ref.watch(yorksV1MaterialRequestDraftProjectsProvider);
     final scopes = draft.projectId == null
         ? const AsyncData<List<YorksV1MaterialRequestScopeOption>>([])
@@ -1802,6 +1888,7 @@ class _DraftForm extends ConsumerWidget {
         selectedProject?.state == YorksV1ProjectLifecycle.active.wireValue;
     final canSubmit =
         draft.canSubmitLocally &&
+        controlledUnitsReady &&
         projectIsActive &&
         state.status != YorksV1MaterialRequestDraftSyncStatus.submitting;
     final isBusy =
@@ -1828,6 +1915,7 @@ class _DraftForm extends ConsumerWidget {
           controller: controller,
           projects: projects,
           scopes: scopes,
+          allowedTimings: allowedTimings,
           onSave: () => _save(context, ref, controller, draft),
           onSubmit: () => _submitForMobile(context, ref, controller),
         ),
@@ -1887,6 +1975,7 @@ class _DraftForm extends ConsumerWidget {
                   projects: projects,
                   scopes: scopes,
                   controller: controller,
+                  allowedTimings: allowedTimings,
                 ),
               );
               final items = _R35RequestCard(
@@ -1953,6 +2042,11 @@ class _DraftForm extends ConsumerWidget {
                 if (!draft.canSubmitLocally)
                   _InlineMessage(
                     copy: YorksV1MaterialRequestStrings.missingRequired,
+                    language: language,
+                  ),
+                if (!controlledUnitsReady)
+                  _InlineMessage(
+                    copy: YorksV1ControlledUnitStrings.unavailable,
                     language: language,
                   ),
                 if (draft.projectId != null &&
@@ -2563,6 +2657,7 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
     required this.controller,
     required this.projects,
     required this.scopes,
+    required this.allowedTimings,
     required this.onSave,
     required this.onSubmit,
   });
@@ -2571,6 +2666,7 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
   final YorksV1MaterialRequestDraftController controller;
   final AsyncValue<List<YorksV1MaterialRequestProjectOption>> projects;
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
+  final List<YorksV1MaterialRequestTiming> allowedTimings;
   final Future<void> Function() onSave;
   final Future<YorksV1MaterialRequest?> Function() onSubmit;
 
@@ -2598,7 +2694,7 @@ class _YorksMobileMaterialRequestDraftFlowState
   late final TextEditingController _customQuantity;
   String? _editingCustomLineId;
   YorksV1MaterialRequestInventorySuggestion? _customSuggestion;
-  String _customUnit = 'Nos';
+  String _customUnit = '';
 
   @override
   void initState() {
@@ -2774,8 +2870,9 @@ class _YorksMobileMaterialRequestDraftFlowState
                     spacing: 8,
                     runSpacing: 4,
                     children: [
-                      for (final timing in YorksV1MaterialRequestTiming.values)
+                      for (final timing in widget.allowedTimings)
                         YorksMobilePill(
+                          key: ValueKey('mobile-mr-timing-${timing.wireValue}'),
                           label: yorksV1MaterialRequestTimingCopy(
                             timing,
                           ).primary,
@@ -2981,6 +3078,9 @@ class _YorksMobileMaterialRequestDraftFlowState
   );
 
   Widget _reviewBody() {
+    final controlledUnitsReady = yorksV1ControlledUnitsReady(
+      ref.watch(yorksV1ConfigurationUnitCodesProvider),
+    );
     final project = widget.projects.valueOrNull
         ?.where((item) => item.id == _draft.projectId)
         .firstOrNull;
@@ -2989,7 +3089,11 @@ class _YorksMobileMaterialRequestDraftFlowState
         .firstOrNull;
     final active = project?.state == YorksV1ProjectLifecycle.active.wireValue;
     final canSubmit =
-        _draft.canSubmitLocally && active && _reviewConfirmed && !_busy;
+        _draft.canSubmitLocally &&
+        controlledUnitsReady &&
+        active &&
+        _reviewConfirmed &&
+        !_busy;
     return Column(
       children: [
         Expanded(
@@ -3060,6 +3164,15 @@ class _YorksMobileMaterialRequestDraftFlowState
                     text: YorksV1MaterialRequestStrings
                         .projectMustBeActive
                         .primary,
+                    error: true,
+                  ),
+                ),
+              if (!controlledUnitsReady)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _MobileMrNotice(
+                    icon: Icons.cloud_off_outlined,
+                    text: YorksV1ControlledUnitStrings.unavailable.primary,
                     error: true,
                   ),
                 ),
@@ -3314,12 +3427,9 @@ class _YorksMobileMaterialRequestDraftFlowState
   }
 
   Widget _customMaterialBody() {
-    final configuredUnits = ref
-        .watch(yorksV1ConfigurationUnitCodesProvider)
-        .valueOrNull;
-    final unitOptions = configuredUnits == null || configuredUnits.isEmpty
-        ? _mrUnitOptions
-        : configuredUnits;
+    final unitsAsync = ref.watch(yorksV1ConfigurationUnitCodesProvider);
+    final controlledUnits = yorksV1LoadedControlledUnits(unitsAsync);
+    final unitReady = controlledUnits.contains(_customUnit.trim());
     return Column(
       children: [
         Expanded(
@@ -3403,25 +3513,16 @@ class _YorksMobileMaterialRequestDraftFlowState
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _customUnit,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText:
-                                  YorksV1MaterialRequestStrings.unit.primary,
+                          child: YorksV1ControlledUnitDropdown(
+                            fieldKey: const ValueKey(
+                              'mobile-custom-material-unit',
                             ),
-                            items: [
-                              for (final unit in unitOptions)
-                                DropdownMenuItem(
-                                  value: unit,
-                                  child: Text(unit),
-                                ),
-                            ],
-                            onChanged: _busy
-                                ? null
-                                : (value) => setState(
-                                    () => _customUnit = value ?? _customUnit,
-                                  ),
+                            label: YorksV1MaterialRequestStrings.unit.primary,
+                            value: _customUnit,
+                            enabled: !_busy,
+                            showDependencyStatus: true,
+                            onChanged: (value) =>
+                                setState(() => _customUnit = value),
                           ),
                         ),
                       ],
@@ -3441,7 +3542,7 @@ class _YorksMobileMaterialRequestDraftFlowState
           primaryIcon: _editingCustomLineId == null
               ? Icons.add_rounded
               : Icons.check_rounded,
-          onPrimary: _busy ? null : _addCustomMaterial,
+          onPrimary: _busy || !unitReady ? null : _addCustomMaterial,
         ),
       ],
     );
@@ -3700,8 +3801,12 @@ class _YorksMobileMaterialRequestDraftFlowState
   }
 
   Future<void> _addCustomMaterial() async {
+    final controlledUnits = yorksV1LoadedControlledUnits(
+      ref.read(yorksV1ConfigurationUnitCodesProvider),
+    );
     if (_customDescription.text.trim().isEmpty ||
-        _customQuantity.text.trim().isEmpty) {
+        _customQuantity.text.trim().isEmpty ||
+        !controlledUnits.contains(_customUnit.trim())) {
       _snack(context, YorksV1MaterialRequestStrings.missingRequired.primary);
       return;
     }
@@ -3739,7 +3844,7 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customSize.clear();
       _customModel.clear();
       _customQuantity.text = '1';
-      _customUnit = 'Nos';
+      _customUnit = '';
     });
     _snack(context, YorksV1MaterialRequestStrings.itemAdded.primary);
   }
@@ -3778,7 +3883,7 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customSize.clear();
       _customModel.clear();
       _customQuantity.text = '1';
-      _customUnit = 'Nos';
+      _customUnit = '';
     });
   }
 
@@ -5321,12 +5426,14 @@ class _RequestFormFields extends StatelessWidget {
     required this.projects,
     required this.scopes,
     required this.controller,
+    required this.allowedTimings,
   });
 
   final YorksV1MaterialRequestDraft draft;
   final AsyncValue<List<YorksV1MaterialRequestProjectOption>> projects;
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
   final YorksV1MaterialRequestDraftController controller;
+  final List<YorksV1MaterialRequestTiming> allowedTimings;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -5435,7 +5542,11 @@ class _RequestFormFields extends StatelessWidget {
             );
           },
         ),
-        _TimingPicker(draft: draft, controller: controller),
+        _TimingPicker(
+          draft: draft,
+          controller: controller,
+          allowedTimings: allowedTimings,
+        ),
         if (draft.timing == YorksV1MaterialRequestTiming.scheduled)
           _ScheduledDateField(draft: draft, controller: controller),
         _OptionalDeliveryNote(draft: draft, controller: controller),
@@ -5600,21 +5711,28 @@ class _ScopeDropdown extends StatelessWidget {
 }
 
 class _TimingPicker extends StatelessWidget {
-  const _TimingPicker({required this.draft, required this.controller});
+  const _TimingPicker({
+    required this.draft,
+    required this.controller,
+    required this.allowedTimings,
+  });
 
   final YorksV1MaterialRequestDraft draft;
   final YorksV1MaterialRequestDraftController controller;
+  final List<YorksV1MaterialRequestTiming> allowedTimings;
 
   @override
   Widget build(BuildContext context) =>
       DropdownButtonFormField<YorksV1MaterialRequestTiming>(
+        key: const ValueKey('mr-timing-picker'),
         initialValue: draft.timing,
         decoration: InputDecoration(
           labelText: YorksV1MaterialRequestStrings.requestTiming.primary,
         ),
         items: [
-          for (final timing in YorksV1MaterialRequestTiming.values)
+          for (final timing in allowedTimings)
             DropdownMenuItem(
+              key: ValueKey('mr-timing-${timing.wireValue}'),
               value: timing,
               child: Text(yorksV1MaterialRequestTimingCopy(timing).primary),
             ),
@@ -6625,35 +6743,13 @@ class _LineUnitDropdown extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final value = initialValue.trim();
-    final configuredUnits = ref
-        .watch(yorksV1ConfigurationUnitCodesProvider)
-        .valueOrNull;
-    final unitOptions = configuredUnits == null || configuredUnits.isEmpty
-        ? _mrUnitOptions
-        : configuredUnits;
-    final options = <String>{
-      if (value.isNotEmpty && !unitOptions.contains(value)) value,
-      ...unitOptions,
-    }.toList(growable: false);
-    return DropdownButtonFormField<String>(
-      key: fieldKey,
-      initialValue: options.contains(value) && value.isNotEmpty ? value : 'Nos',
-      isExpanded: true,
-      style: AppTypography.bodySmall.copyWith(color: AppColors.ink),
-      decoration: const InputDecoration(
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      ),
-      items: [
-        for (final option in options)
-          DropdownMenuItem(value: option, child: Text(option)),
-      ],
-      onChanged: enabled
-          ? (next) {
-              if (next != null) onChanged(next);
-            }
-          : null,
+    return YorksV1ControlledUnitDropdown(
+      fieldKey: fieldKey,
+      label: YorksV1MaterialRequestStrings.unit.primary,
+      value: initialValue,
+      enabled: enabled,
+      isDense: true,
+      onChanged: onChanged,
     );
   }
 }
@@ -6905,31 +7001,12 @@ class _LineLabeledUnitDropdown extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final value = initialValue.trim();
-    final configuredUnits = ref
-        .watch(yorksV1ConfigurationUnitCodesProvider)
-        .valueOrNull;
-    final unitOptions = configuredUnits == null || configuredUnits.isEmpty
-        ? _mrUnitOptions
-        : configuredUnits;
-    final options = <String>{
-      if (value.isNotEmpty && !unitOptions.contains(value)) value,
-      ...unitOptions,
-    }.toList(growable: false);
-    return DropdownButtonFormField<String>(
-      key: fieldKey,
-      initialValue: options.contains(value) && value.isNotEmpty ? value : 'Nos',
-      isExpanded: true,
-      decoration: InputDecoration(labelText: label),
-      items: [
-        for (final option in options)
-          DropdownMenuItem(value: option, child: Text(option)),
-      ],
-      onChanged: enabled
-          ? (next) {
-              if (next != null) onChanged(next);
-            }
-          : null,
+    return YorksV1ControlledUnitDropdown(
+      fieldKey: fieldKey,
+      label: label,
+      value: initialValue,
+      enabled: enabled,
+      onChanged: onChanged,
     );
   }
 }

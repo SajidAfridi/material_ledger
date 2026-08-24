@@ -842,8 +842,13 @@ class YorksV1InventorySummary {
 enum YorksV1MaterialReturnState {
   draft('draft'),
   submitted('submitted'),
+  awaitingApproval('awaiting_approval'),
+  returnedForChanges('returned_for_changes'),
+  approved('approved'),
+  dispatched('dispatched'),
   confirmed('confirmed'),
-  rejected('rejected');
+  rejected('rejected'),
+  cancelled('cancelled');
 
   const YorksV1MaterialReturnState(this.wireValue);
   final String wireValue;

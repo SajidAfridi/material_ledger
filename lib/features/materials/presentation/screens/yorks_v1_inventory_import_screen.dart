@@ -19,11 +19,14 @@ import '../../../../shared/models/yorks_v1_inventory_workbook.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_configuration_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/providers/yorks_v1_inventory_supplier_provider.dart';
 import '../../../../shared/providers/yorks_v1_inventory_workbook_provider.dart';
 import '../../../../shared/providers/yorks_v1_logistics_provider.dart';
 import '../../../../shared/services/yorks_v1_inventory_workbook_service.dart';
+
+import 'yorks_v1_controlled_unit_field.dart';
 
 /// Import matching must see the complete protected supplier master. An exact
 /// supplier on page two must never be offered as a new supplier, so this
@@ -118,6 +121,20 @@ class _YorksV1InventoryImportScreenState
       return _RestrictedImportSurface(language: language);
     }
 
+    final unitsAsync = ref.watch(yorksV1ConfigurationUnitCodesProvider);
+    if (unitsAsync.isLoading && !unitsAsync.hasError) {
+      return const _ImportLoadingSurface();
+    }
+    final controlledUnits = yorksV1LoadedControlledUnits(unitsAsync);
+    if (controlledUnits.isEmpty) {
+      return _ImportDependencyError(
+        language: language,
+        message: YorksV1ControlledUnitStrings.unavailable.active(language),
+        retryKey: const ValueKey('inventory-import-controlled-units-retry'),
+        onRetry: () => ref.invalidate(yorksV1ConfigurationUnitCodesProvider),
+      );
+    }
+
     final workspaceAsync = widget.workspace == null
         ? ref.watch(yorksV1InventoryWorkspaceProvider(null))
         : AsyncValue.data(widget.workspace!);
@@ -127,7 +144,8 @@ class _YorksV1InventoryImportScreenState
         language: language,
         onRetry: () => ref.invalidate(yorksV1InventoryWorkspaceProvider(null)),
       ),
-      data: (workspace) => _buildWithWorkspace(context, language, workspace),
+      data: (workspace) =>
+          _buildWithWorkspace(context, language, workspace, controlledUnits),
     );
   }
 
@@ -135,9 +153,16 @@ class _YorksV1InventoryImportScreenState
     BuildContext context,
     AppLanguage language,
     YorksV1InventoryWorkspace workspace,
+    List<String> controlledUnits,
   ) {
     if (widget.suppliers != null) {
-      return _buildBody(context, language, workspace, widget.suppliers!);
+      return _buildBody(
+        context,
+        language,
+        workspace,
+        widget.suppliers!,
+        controlledUnits,
+      );
     }
     final suppliersAsync = ref.watch(_inventoryImportSupplierMastersProvider);
     return suppliersAsync.when(
@@ -146,7 +171,8 @@ class _YorksV1InventoryImportScreenState
         language: language,
         onRetry: () => ref.invalidate(_inventoryImportSupplierMastersProvider),
       ),
-      data: (suppliers) => _buildBody(context, language, workspace, suppliers),
+      data: (suppliers) =>
+          _buildBody(context, language, workspace, suppliers, controlledUnits),
     );
   }
 
@@ -155,6 +181,7 @@ class _YorksV1InventoryImportScreenState
     AppLanguage language,
     YorksV1InventoryWorkspace workspace,
     List<YorksV1InventorySupplierMaster> suppliers,
+    List<String> controlledUnits,
   ) {
     final state = ref.watch(yorksV1InventoryImportControllerProvider);
     final controller = ref.read(
@@ -204,6 +231,7 @@ class _YorksV1InventoryImportScreenState
                     controller: controller,
                     workspace: workspace,
                     suppliers: suppliers,
+                    controlledUnits: controlledUnits,
                   ),
                 ],
               ),
@@ -220,6 +248,7 @@ class _YorksV1InventoryImportScreenState
     required YorksV1InventoryImportController controller,
     required YorksV1InventoryWorkspace workspace,
     required List<YorksV1InventorySupplierMaster> suppliers,
+    required List<String> controlledUnits,
   }) => switch (state.stage) {
     YorksV1InventoryImportStage.uploadFile => _UploadStage(
       language: language,
@@ -256,6 +285,7 @@ class _YorksV1InventoryImportScreenState
       language: language,
       state: state,
       workspace: workspace,
+      controlledUnits: controlledUnits,
       searchController: _reviewSearchController,
       query: _reviewSearch,
       filter: _reviewFilter,
@@ -1962,6 +1992,7 @@ class _ReviewStage extends StatelessWidget {
     required this.language,
     required this.state,
     required this.workspace,
+    required this.controlledUnits,
     required this.searchController,
     required this.query,
     required this.filter,
@@ -1987,6 +2018,7 @@ class _ReviewStage extends StatelessWidget {
   final AppLanguage language;
   final YorksV1InventoryImportState state;
   final YorksV1InventoryWorkspace workspace;
+  final List<String> controlledUnits;
   final TextEditingController searchController;
   final String query;
   final _ReviewFilter filter;
@@ -2042,6 +2074,7 @@ class _ReviewStage extends StatelessWidget {
             language: language,
             groups: state.unresolvedUnitGroups,
             mapping: state.mapping,
+            controlledUnits: controlledUnits,
             onResolve: onResolveUnit,
             onClear: onClearUnit,
           ),
@@ -2362,6 +2395,7 @@ class _UnitResolutionPanel extends StatelessWidget {
     required this.language,
     required this.groups,
     required this.mapping,
+    required this.controlledUnits,
     required this.onResolve,
     required this.onClear,
   });
@@ -2369,6 +2403,7 @@ class _UnitResolutionPanel extends StatelessWidget {
   final AppLanguage language;
   final List<YorksV1InventoryUnitReviewGroup> groups;
   final YorksV1InventoryColumnMapping? mapping;
+  final List<String> controlledUnits;
   final _UnitResolved onResolve;
   final ValueChanged<String> onClear;
 
@@ -2436,7 +2471,7 @@ class _UnitResolutionPanel extends StatelessWidget {
                           ),
                         ),
                         items: [
-                          for (final unit in yorksV1InventoryControlledUnits)
+                          for (final unit in controlledUnits)
                             DropdownMenuItem(value: unit, child: Text(unit)),
                         ],
                         onChanged: (value) {
@@ -4772,10 +4807,17 @@ class _ImportFailureBanner extends StatelessWidget {
 }
 
 class _ImportDependencyError extends StatelessWidget {
-  const _ImportDependencyError({required this.language, required this.onRetry});
+  const _ImportDependencyError({
+    required this.language,
+    required this.onRetry,
+    this.message,
+    this.retryKey,
+  });
 
   final AppLanguage language;
   final VoidCallback onRetry;
+  final String? message;
+  final Key? retryKey;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -4793,12 +4835,14 @@ class _ImportDependencyError extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              YorksV1InventorySupplierStrings.loadFailed.active(language),
+              message ??
+                  YorksV1InventorySupplierStrings.loadFailed.active(language),
               textAlign: TextAlign.center,
               style: AppTypography.titleMedium,
             ),
             const SizedBox(height: AppSpacing.lg),
             FilledButton.icon(
+              key: retryKey,
               onPressed: onRetry,
               style: _primaryButtonStyle(),
               icon: const Icon(Icons.refresh_rounded, size: 18),

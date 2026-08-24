@@ -130,6 +130,30 @@ export function safePushCopy(eventCode: string): PushCopy {
         body: "A project material return is awaiting Procurement confirmation.",
         type: "request",
       };
+    case "material_return_approval_required":
+      return {
+        title: "Material return approval required",
+        body: "A project material return is ready for Engineering review.",
+        type: "request",
+      };
+    case "material_return_approved":
+      return {
+        title: "Material return approved",
+        body: "Engineering approved the material return for site dispatch.",
+        type: "request",
+      };
+    case "material_return_returned_for_changes":
+      return {
+        title: "Material return changes required",
+        body: "Engineering returned the material return with a reason.",
+        type: "request",
+      };
+    case "material_return_receipt_required":
+      return {
+        title: "Returned materials awaiting receipt",
+        body: "Dispatched return materials are ready for Procurement receipt.",
+        type: "request",
+      };
     case "material_return_confirmed":
       return {
         title: "Material return confirmed",
@@ -141,6 +165,12 @@ export function safePushCopy(eventCode: string): PushCopy {
       return {
         title: "Material return rejected",
         body: "Procurement returned the material return with a reason.",
+        type: "request",
+      };
+    case "material_return_cancelled":
+      return {
+        title: "Material return cancelled",
+        body: "The material return was cancelled before warehouse receipt.",
         type: "request",
       };
     case "material_request_cancelled":
@@ -180,6 +210,12 @@ export function routeFor(claim: PushClaim): string {
   const chatId = claim.chatConversationId;
   if (typeof chatId === "string" && /^[0-9a-f-]{36}$/i.test(chatId)) {
     return `/yorks/team-chat/${chatId}`;
+  }
+  if (
+    claim.entityType === "material_return" &&
+    /^[0-9a-f-]{36}$/i.test(claim.entityId)
+  ) {
+    return `/yorks/returns/${claim.entityId}`;
   }
   const id = claim.requestId;
   if (typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)) {

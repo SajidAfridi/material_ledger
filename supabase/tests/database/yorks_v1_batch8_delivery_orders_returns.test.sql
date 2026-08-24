@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(61);
+select plan(79);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -569,12 +569,12 @@ select lives_ok(
 
 set local role postgres;
 select ok(
-  (select state = 'submitted' and return_number = 'B8-RET-001-RTN001'
+  (select state = 'awaiting_approval' and return_number = 'B8-RET-001-RTN001'
     from public.v1_material_returns
     where id = (select return_id from v1_b8_warehouse_return))
   and (select eligible_quantity_at_submit = 3 from public.v1_material_return_lines
     where material_return_id = (select return_id from v1_b8_warehouse_return)),
-  'Return submission allocates a number and freezes eligibility from good receipt facts'
+  'Return submission allocates a number, freezes eligibility and requires Engineering approval'
 );
 
 set local role authenticated;
@@ -590,8 +590,28 @@ select throws_ok(
       'expected_version', 2, 'line_mappings', '[]'::jsonb
     ), '83000000-0000-4000-8000-000000000003'::uuid
   )$$,
-  '42501', 'V1_RETURN_CONFIRM_DENIED',
+  '42501', 'V1_MATERIAL_RETURN_RECEIPT_DENIED',
   'Site Engineer cannot confirm a physical warehouse return'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000005","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
+  true
+);
+select public.v1_decide_project_material_return(
+  jsonb_build_object(
+    'return_id', (select return_id from v1_b8_warehouse_return),
+    'expected_version', 2, 'decision', 'approved', 'reason', null
+  ), '83000000-0000-4000-8000-000000000020'::uuid
+);
+select public.v1_dispatch_project_material_return(
+  jsonb_build_object(
+    'return_id', (select return_id from v1_b8_warehouse_return),
+    'expected_version', 3, 'driver_name', 'Batch 8 Driver',
+    'vehicle_reference', 'B8-TRUCK-01',
+    'delivery_note_reference', 'B8-RETURN-DN-01'
+  ), '83000000-0000-4000-8000-000000000021'::uuid
 );
 
 set local role authenticated;
@@ -605,7 +625,7 @@ select lives_ok(
   $$select public.v1_confirm_material_return(
     jsonb_build_object(
       'return_id', (select return_id from v1_b8_warehouse_return),
-      'expected_version', 2, 'line_mappings', '[]'::jsonb
+      'expected_version', 4, 'line_mappings', '[]'::jsonb
     ), '83000000-0000-4000-8000-000000000004'::uuid
   )$$,
   'Procurement confirms the physical warehouse return'
@@ -615,7 +635,7 @@ select lives_ok(
   $$select public.v1_confirm_material_return(
     jsonb_build_object(
       'return_id', (select return_id from v1_b8_warehouse_return),
-      'expected_version', 2, 'line_mappings', '[]'::jsonb
+      'expected_version', 4, 'line_mappings', '[]'::jsonb
     ), '83000000-0000-4000-8000-000000000004'::uuid
   )$$,
   'A confirmation retry returns the original committed response'
@@ -667,7 +687,7 @@ select throws_ok(
       'expected_version', (select record_version from v1_b8_over_return)
     ), '83000000-0000-4000-8000-000000000006'::uuid
   )$$,
-  '22023', 'V1_RETURN_ELIGIBLE_QTY_EXCEEDED',
+  '22023', 'V1_MATERIAL_RETURN_ELIGIBLE_QTY_EXCEEDED',
   'Submission rejects returns above good received less prior confirmed returns'
 );
 
@@ -702,6 +722,26 @@ select lives_ok(
   'The supplier-source return is submitted for Procurement confirmation'
 );
 
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000005","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
+  true
+);
+select public.v1_decide_project_material_return(
+  jsonb_build_object(
+    'return_id', (select return_id from v1_b8_supplier_return),
+    'expected_version', 2, 'decision', 'approved', 'reason', null
+  ), '83000000-0000-4000-8000-000000000022'::uuid
+);
+select public.v1_dispatch_project_material_return(
+  jsonb_build_object(
+    'return_id', (select return_id from v1_b8_supplier_return),
+    'expected_version', 3, 'driver_name', 'Batch 8 Driver',
+    'vehicle_reference', 'B8-TRUCK-02',
+    'delivery_note_reference', 'B8-RETURN-DN-02'
+  ), '83000000-0000-4000-8000-000000000023'::uuid
+);
+
 set local role postgres;
 create temporary table v1_b8_supplier_return_line as
 select id as return_line_id from public.v1_material_return_lines
@@ -719,10 +759,10 @@ select throws_ok(
   $$select public.v1_confirm_material_return(
     jsonb_build_object(
       'return_id', (select return_id from v1_b8_supplier_return),
-      'expected_version', 2, 'line_mappings', '[]'::jsonb
+      'expected_version', 4, 'line_mappings', '[]'::jsonb
     ), '83000000-0000-4000-8000-000000000009'::uuid
   )$$,
-  '22023', 'V1_RETURN_CONFIRM_MAPPINGS_INVALID',
+  '22023', 'V1_MATERIAL_RETURN_TARGET_ITEM_INVALID',
   'Supplier-source stock cannot be confirmed without an identified inventory item'
 );
 
@@ -730,7 +770,7 @@ select lives_ok(
   $$select public.v1_confirm_material_return(
     jsonb_build_object(
       'return_id', (select return_id from v1_b8_supplier_return),
-      'expected_version', 2,
+      'expected_version', 4,
       'line_mappings', jsonb_build_array(jsonb_build_object(
         'return_line_id', (select return_line_id from v1_b8_supplier_return_line),
         'inventory_item_id', null,
@@ -792,7 +832,7 @@ select lives_ok(
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  '{"sub":"10000000-0000-4000-8000-000000000005","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-supporting-project-engineer"}}',
   true
 );
 select lives_ok(
@@ -802,7 +842,7 @@ select lives_ok(
       'expected_version', 2, 'reason', 'Warehouse count does not match'
     ), '83000000-0000-4000-8000-000000000013'::uuid
   )$$,
-  'Procurement rejects a submitted return with a required reason'
+  'Project Engineering rejects an awaiting-approval return with a required reason'
 );
 
 set local role postgres;
@@ -1240,6 +1280,371 @@ select is(
    where delivery_order.dispatch_id = '82500000-0000-4000-8000-000000000001'),
   2,
   'A receipt retry never duplicates the receipt-reviewed Delivery Report revision'
+);
+
+-- Project-wide Material Returns are a separate controlled document lifecycle.
+-- They may trace a confirmed delivery or carry an explicit unmatched custom
+-- row, but only Procurement confirmation creates a warehouse movement.
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000008","role":"authenticated","app_metadata":{"role":"project_manager","app_user_id":"usr-project-manager"}}',
+  true
+);
+select ok(
+  public.v1_can_create_project_material_return(
+    (select project_id from v1_b8_targets)
+  ) and public.v1_can_approve_project_material_return(
+    (select project_id from v1_b8_targets)
+  ),
+  'A global Project Manager can create and approve a return without project membership'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000007","role":"authenticated","app_metadata":{"role":"senior_mechanical_engineer","app_user_id":"usr-senior-mechanical-engineer"}}',
+  true
+);
+select ok(
+  public.v1_can_create_project_material_return(
+    (select project_id from v1_b8_targets)
+  ) and public.v1_can_approve_project_material_return(
+    (select project_id from v1_b8_targets)
+  ),
+  'A global Senior Mechanical Engineer has the same controlled return authority'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_save_project_material_return_draft(
+    jsonb_build_object(
+      'return_id', null,
+      'project_id', (select project_id from v1_b8_targets),
+      'scope_id', (select scope_id from v1_b8_targets),
+      'expected_version', 0,
+      'purpose', 'Return unmatched project ladder',
+      'note', 'Project close-out stock reconciliation',
+      'requested_return_date', current_date,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'origin_kind', 'custom',
+        'receipt_review_line_id', null,
+        'item_description', 'Project return custom ladder',
+        'brand_origin', 'Yorks test',
+        'unit', 'Nos',
+        'return_qty', '2',
+        'note', 'No historical MR reference available'
+      ))
+    ), '82800000-0000-4000-8000-000000000001'::uuid
+  )$$,
+  'An assigned Site Engineer saves a project-wide custom return draft'
+);
+
+set local role postgres;
+create temporary table v1_b8_project_returns as
+select material_return.id, material_return.record_version,
+  return_line.id as return_line_id
+from public.v1_material_returns material_return
+join public.v1_material_return_lines return_line
+  on return_line.material_return_id = material_return.id
+where material_return.purpose = 'Return unmatched project ladder';
+grant select on table v1_b8_project_returns to authenticated;
+select ok(
+  (select material_return.state = 'draft'
+      and material_return.request_id is null
+    from public.v1_material_returns material_return
+    where material_return.id = (select id from v1_b8_project_returns)),
+  'The project-wide draft remains independent from any guessed Material Request'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_submit_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_project_returns),
+      'expected_version', 1
+    ), '82800000-0000-4000-8000-000000000002'::uuid
+  )$$,
+  'The creator explicitly submits the return for Engineering approval'
+);
+
+set local role postgres;
+select ok(
+  (select material_return.state = 'awaiting_approval'
+      and material_return.return_number like 'B8-RET-001-RTN%'
+    from public.v1_material_returns material_return
+    where material_return.id = (select id from v1_b8_project_returns)),
+  'Submission assigns the project return reference and Engineering queue state'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select throws_ok(
+  $$select public.v1_decide_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_project_returns),
+      'expected_version', 2,
+      'decision', 'approved',
+      'reason', null
+    ), '82800000-0000-4000-8000-000000000003'::uuid
+  )$$,
+  '42501', 'V1_MATERIAL_RETURN_DECISION_DENIED',
+  'Procurement cannot approve the return that it will physically receive'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000008","role":"authenticated","app_metadata":{"role":"project_manager","app_user_id":"usr-project-manager"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_decide_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_project_returns),
+      'expected_version', 2,
+      'decision', 'approved',
+      'reason', 'Approved for warehouse return'
+    ), '82800000-0000-4000-8000-000000000004'::uuid
+  )$$,
+  'The global Project Manager approves the controlled return'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_dispatch_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_project_returns),
+      'expected_version', 3,
+      'driver_name', 'Taimoor Shah',
+      'vehicle_reference', 'AD-12345',
+      'delivery_note_reference', 'RTN-DN-001'
+    ), '82800000-0000-4000-8000-000000000005'::uuid
+  )$$,
+  'The project team records driver and delivery-note custody before transport'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_confirm_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_project_returns),
+      'expected_version', 4,
+      'receipt_note', 'Counted and accepted at warehouse',
+      'line_receipts', jsonb_build_array(jsonb_build_object(
+        'return_line_id', (select return_line_id from v1_b8_project_returns),
+        'received_good_qty', '2',
+        'damaged_qty', '0',
+        'not_received_qty', '0',
+        'inventory_item_id', null,
+        'new_inventory_item', jsonb_build_object(
+          'item_description', 'Project return custom ladder',
+          'brand_origin', 'Yorks test',
+          'unit', 'Nos'
+        ),
+        'note', 'Accepted in good condition'
+      ))
+    ), '82800000-0000-4000-8000-000000000006'::uuid
+  )$$,
+  'Procurement confirms the physical receipt and maps unmatched material'
+);
+
+set local role postgres;
+select ok(
+  (select material_return.state = 'confirmed'
+    from public.v1_material_returns material_return
+    where material_return.id = (select id from v1_b8_project_returns))
+  and (select balance.on_hand_qty = 2
+    from public.v1_inventory_items item
+    join public.v1_inventory_balances balance
+      on balance.inventory_item_id = item.id
+    where item.item_description = 'Project return custom ladder')
+  and (select count(*) = 1
+    from public.v1_inventory_movements movement
+    join public.v1_material_return_lines line
+      on line.id = movement.source_entity_id
+    where line.material_return_id = (select id from v1_b8_project_returns)
+      and movement.movement_type = 'return'),
+  'Only accepted-good quantity enters stock through one append-only movement'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_confirm_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_project_returns),
+      'expected_version', 4,
+      'receipt_note', 'Counted and accepted at warehouse',
+      'line_receipts', jsonb_build_array(jsonb_build_object(
+        'return_line_id', (select return_line_id from v1_b8_project_returns),
+        'received_good_qty', '2', 'damaged_qty', '0', 'not_received_qty', '0',
+        'inventory_item_id', null,
+        'new_inventory_item', jsonb_build_object(
+          'item_description', 'Project return custom ladder',
+          'brand_origin', 'Yorks test', 'unit', 'Nos'
+        ),
+        'note', 'Accepted in good condition'
+      ))
+    ), '82800000-0000-4000-8000-000000000006'::uuid
+  )$$,
+  'A confirmation retry returns the stored result'
+);
+
+set local role postgres;
+select is(
+  (select count(*)::integer
+    from public.v1_inventory_movements movement
+    join public.v1_material_return_lines line
+      on line.id = movement.source_entity_id
+    where line.material_return_id = (select id from v1_b8_project_returns)
+      and movement.movement_type = 'return'),
+  1,
+  'A confirmation retry never duplicates stock movement'
+);
+
+create temporary table v1_b8_delivered_return_source as
+select review_line.id as receipt_review_line_id
+from public.v1_receipt_review_lines review_line
+join public.v1_material_dispatch_lines dispatch_line
+  on dispatch_line.id = review_line.dispatch_line_id
+where dispatch_line.dispatch_id = '82500000-0000-4000-8000-000000000001'
+  and review_line.good_qty > 0
+limit 1;
+grant select on table v1_b8_delivered_return_source to authenticated;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select throws_ok(
+  $$select public.v1_save_project_material_return_draft(
+    jsonb_build_object(
+      'return_id', null,
+      'project_id', (select project_id from v1_b8_targets),
+      'scope_id', (select scope.id from public.v1_project_scopes scope
+        where scope.project_id = (select project_id from v1_b8_targets)
+          and scope.scope_kind = 'common'),
+      'expected_version', 0,
+      'purpose', 'Reject cross-scope source',
+      'note', null,
+      'requested_return_date', null,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'origin_kind', 'delivered',
+        'receipt_review_line_id', (select receipt_review_line_id
+          from v1_b8_delivered_return_source),
+        'item_description', null,
+        'brand_origin', null,
+        'unit', null,
+        'return_qty', '1',
+        'note', null
+      ))
+    ), '82800000-0000-4000-8000-000000000017'::uuid
+  )$$,
+  '22023', 'V1_MATERIAL_RETURN_SOURCE_INVALID',
+  'A delivered line cannot be attached to a different project scope'
+);
+
+select lives_ok(
+  $$select public.v1_save_project_material_return_draft(
+    jsonb_build_object(
+      'return_id', null,
+      'project_id', (select project_id from v1_b8_targets),
+      'scope_id', (select scope_id from v1_b8_targets),
+      'expected_version', 0,
+      'purpose', 'Trace delivered item then cancel',
+      'note', null,
+      'requested_return_date', null,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'origin_kind', 'delivered',
+        'receipt_review_line_id', (select receipt_review_line_id
+          from v1_b8_delivered_return_source),
+        'item_description', null,
+        'brand_origin', null,
+        'unit', null,
+        'return_qty', '1',
+        'note', 'Trace proof'
+      ))
+    ), '82800000-0000-4000-8000-000000000007'::uuid
+  )$$,
+  'A project return can be created directly from a confirmed delivered line'
+);
+
+set local role postgres;
+create temporary table v1_b8_cancel_return as
+select material_return.id
+from public.v1_material_returns material_return
+where material_return.purpose = 'Trace delivered item then cancel';
+grant select on table v1_b8_cancel_return to authenticated;
+select ok(
+  (select line.source_request_id is not null
+      and line.source_dispatch_id is not null
+      and line.receipt_review_line_id is not null
+    from public.v1_material_return_lines line
+    join public.v1_material_returns material_return
+      on material_return.id = line.material_return_id
+    where material_return.purpose = 'Trace delivered item then cancel'),
+  'Delivered-line returns retain MR, dispatch and receipt provenance'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_cancel_project_material_return(
+    jsonb_build_object(
+      'return_id', (select id from v1_b8_cancel_return),
+      'expected_version', 1,
+      'reason', 'Transport no longer required'
+    ), '82800000-0000-4000-8000-000000000008'::uuid
+  )$$,
+  'The creator may cancel a draft with an audited reason before dispatch'
+);
+
+set local role postgres;
+select ok(
+  (select material_return.state = 'cancelled'
+      and material_return.cancellation_reason = 'Transport no longer required'
+    from public.v1_material_returns material_return
+    where material_return.purpose = 'Trace delivered item then cancel')
+  and not exists (
+    select 1 from public.v1_inventory_movements movement
+    join public.v1_material_return_lines line
+      on line.id = movement.source_entity_id
+    join public.v1_material_returns material_return
+      on material_return.id = line.material_return_id
+    where material_return.purpose = 'Trace delivered item then cancel'
+  ),
+  'Cancellation records the reason and never changes warehouse stock'
 );
 
 select * from finish();

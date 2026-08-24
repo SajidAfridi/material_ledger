@@ -408,9 +408,25 @@ Procurement or Admin sees **Generate Delivery Order** without waiting for
 receipt confirmation. It contains only S.No, Description, dispatched Qty and
 Unit; later receipt results remain separate.
 
-Return creation uses project/scope first, then autocomplete restricted to
-eligible received material. Each row shows available-to-return quantity. Return
-detail exposes submit/confirm/reject ownership and immutable source links.
+Material Returns have a dedicated centre, creation workspace and detail route.
+The register supports search and state filtering, always exposes current owner
+and next action, and uses a desktop table or compact mobile cards rather than a
+request-detail subsection.
+
+Creation selects project and scope first, then lists eligible good-received
+material from every Material Request in that scope. Each delivered row shows
+MR and dispatch trace plus available-to-return quantity; explicitly marked
+custom rows remain possible when historical source attribution is unavailable.
+
+The editor is an Excel-like desktop grid with a persistent horizontal scrollbar
+and a focused card editor on mobile. Approval, return-for-changes, rejection,
+dispatch, Procurement receipt reconciliation, inventory mapping, cancellation,
+PDF/print and Excel actions appear only when the server projection grants them.
+
+Dispatch captures driver, vehicle and delivery-note evidence. The final return
+form uses the Yorks bilingual header, project/date fields, No./Description/Qty/
+Note table and a final-page signature matrix for sender, driver, engineer and
+warehouse receiver.
 
 ## 12. Formal documents
 

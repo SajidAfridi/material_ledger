@@ -7,6 +7,7 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
@@ -303,6 +304,9 @@ Widget _testApp({
   overrides: [
     yorksV1CurrentRoleProvider.overrideWithValue(exactRole),
     sharedPreferencesProvider.overrideWithValue(preferences),
+    yorksV1ConfigurationUnitCodesProvider.overrideWith(
+      (ref) async => const ['Nos', 'Meter', 'Set', 'Kg', 'Ton', 'Boxes'],
+    ),
     yorksV1LogisticsRepositoryProvider.overrideWithValue(
       repository ?? _FakeLogisticsRepository(),
     ),

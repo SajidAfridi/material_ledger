@@ -158,6 +158,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'notification delivery health shows authoritative backend facts',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpConfiguration(tester, preferences, repository);
+
+      await tester.enterText(
+        find.byKey(const Key('configuration-search')),
+        'notification',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Notifications').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Notification delivery health'), findsOneWidget);
+      expect(find.text('Push deliveries are pending'), findsOneWidget);
+      expect(find.text('Active devices'), findsOneWidget);
+      expect(find.text('Pending delivery'), findsOneWidget);
+      expect(find.text('Failures in the last 24 hours'), findsOneWidget);
+      expect(find.text('Last successful delivery'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('publish review includes exact staged master data actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final fixture = _configurationFixture();
+    fixture['master_actions'] = [
+      {
+        'id': 'ca820000-0000-4000-8000-000000000001',
+        'entity_kind': 'material_unit',
+        'action_kind': 'create',
+        'target_id': 'ca820000-0000-4000-8000-000000000002',
+        'payload': {
+          'name': 'Length metre',
+          'short_code': 'm',
+          'unit_type': 'length',
+          'decimal_places': 2,
+        },
+      },
+    ];
+
+    await _pumpConfiguration(
+      tester,
+      preferences,
+      _FakeConfigurationRepository(fixture),
+    );
+
+    await tester.tap(find.byKey(const Key('configuration-review-publish')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('configuration-publish-dialog')),
+      findsOneWidget,
+    );
+    expect(find.text('Length metre'), findsOneWidget);
+    expect(find.text('Material unit'), findsOneWidget);
+    expect(find.text('Create'), findsOneWidget);
+    expect(find.text('m'), findsOneWidget);
+    expect(find.text('Length'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('non-Admin receives a fail-closed Configuration surface', (
     tester,
   ) async {
@@ -237,6 +307,30 @@ class _FakeConfigurationRepository implements YorksV1ConfigurationRepository {
       YorksV1ConfigurationCentre.fromJson(fixture);
 
   @override
+  Future<YorksV1RuntimeConfiguration> getRuntimeConfiguration() async =>
+      YorksV1RuntimeConfiguration.fromJson({
+        'schema_version': 'R38.5 / 1.1',
+        'published_version': 4,
+        'published_label': 'v1.3.0',
+        'published_at': '2026-08-13T18:40:00Z',
+        'default_timing': 'normal',
+        'urgent_enabled': true,
+        'allow_authorized_creator_self_approval': true,
+        'require_external_source_readiness': false,
+        'push_enabled': true,
+      });
+
+  @override
+  Future<YorksV1ConfigurationPublicationDetail> getPublicationDetail({
+    required String publicationId,
+  }) async => YorksV1ConfigurationPublicationDetail.fromJson({
+    'publication': fixture['history'] is List
+        ? (fixture['history'] as List).first
+        : const <String, Object?>{},
+    'changes': const <Object?>[],
+  });
+
+  @override
   Future<List<String>> getActiveUnitCodes() async => const ['Nos', 'Meter'];
 
   @override
@@ -290,6 +384,14 @@ Map<String, dynamic> _configurationFixture() => {
   'draft_revision': 7,
   'draft_base_version': 4,
   'draft_updated_at': '2026-08-14T09:00:00Z',
+  'draft_updated_by': 'Owner · Admin',
+  'operational_health': {
+    'push_enabled': true,
+    'active_device_count': 3,
+    'pending_delivery_count': 1,
+    'recent_failure_count': 0,
+    'last_successful_delivery_at': '2026-08-14T08:55:00Z',
+  },
   'settings': [
     _setting(
       'company.legal_name',
@@ -473,4 +575,55 @@ Map<String, dynamic> _setting(
   'draft_value': draftValue,
   'effective_value': draftValue ?? value,
   'changed': changed,
+  'control_mode': _configurationControlMode(key),
+  'impact_scope': [area],
+  'enforcement_target': _configurationEnforcementTarget(key),
+  if (changed) 'staged_by': 'Owner · Admin',
+  if (changed) 'staged_at': '2026-08-14T09:00:00Z',
+};
+
+String _configurationControlMode(String key) {
+  const operational = {
+    'requests.default_timing',
+    'requests.urgent_enabled',
+    'requests.allow_authorized_creator_self_approval',
+    'procurement.require_external_source_readiness',
+    'notifications.push_enabled',
+  };
+  const protected = {
+    'regional.currency',
+    'procurement.default_source',
+    'documents.maximum_file_size_mb',
+    'documents.allowed_formats',
+    'documents.bilingual_header',
+    'security.log_exports',
+    'security.log_access_changes',
+  };
+  if (operational.contains(key)) return 'operational';
+  if (key.startsWith('company.') ||
+      key.startsWith('numbering.') ||
+      protected.contains(key)) {
+    return 'protected';
+  }
+  return 'planned';
+}
+
+String _configurationEnforcementTarget(String key) => switch (key) {
+  'requests.default_timing' => 'mr_draft_default_timing',
+  'requests.urgent_enabled' => 'mr_urgent_submission_guard',
+  'requests.allow_authorized_creator_self_approval' => 'mr_self_approval_guard',
+  'procurement.require_external_source_readiness' =>
+    'procurement_external_readiness_guard',
+  'notifications.push_enabled' => 'notification_push_outbox',
+  _ when key.startsWith('company.') => 'controlled_document_identity',
+  'regional.currency' => 'aed_commercial_boundary',
+  'procurement.default_source' => 'warehouse_first_arrangement',
+  'documents.maximum_file_size_mb' ||
+  'documents.allowed_formats' ||
+  'documents.bilingual_header' => 'storage_document_contract',
+  'security.log_exports' ||
+  'security.log_access_changes' => 'append_only_audit_contract',
+  _ when key.startsWith('numbering.') => 'trusted_server_numbering',
+  _ when _configurationControlMode(key) == 'protected' => 'product_invariant',
+  _ => 'retained_reference',
 };

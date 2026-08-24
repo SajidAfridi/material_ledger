@@ -114,6 +114,50 @@ void main() {
     );
   });
 
+  test('material return notifications open the standalone return record', () {
+    final returnNotification = YorksV1NotificationRecord.fromRpcJson({
+      'notification_id': '21000000-0000-4000-8000-000000000003',
+      'event_code': 'material_return_approval_required',
+      'entity_type': 'material_return',
+      'entity_id': '25000000-0000-4000-8000-000000000001',
+      // A legacy request association must not override the first-class return
+      // destination.
+      'request_id': requestId,
+      'project_id': '23000000-0000-4000-8000-000000000001',
+      'created_at': '2026-08-24T12:00:00Z',
+      'seen_at': null,
+    }).toAppNotification(AppLanguage.english);
+
+    expect(returnNotification.refId, '25000000-0000-4000-8000-000000000001');
+    expect(
+      returnNotification.route,
+      '/yorks/returns/25000000-0000-4000-8000-000000000001',
+    );
+    expect(returnNotification.title, 'Material return approval required');
+  });
+
+  test('every controlled material return transition has specific copy', () {
+    for (final eventCode in <String>[
+      'material_return_approval_required',
+      'material_return_approved',
+      'material_return_returned_for_changes',
+      'material_return_rejected',
+      'material_return_receipt_required',
+      'material_return_confirmed',
+      'material_return_cancelled',
+    ]) {
+      final notification = record(
+        eventCode: eventCode,
+      ).toAppNotification(AppLanguage.english);
+      expect(
+        notification.title,
+        isNot('Yorks workflow update'),
+        reason: eventCode,
+      );
+      expect(notification.body.trim(), isNotEmpty, reason: eventCode);
+    }
+  });
+
   test('work assignment uses specific localized request copy', () {
     for (final language in AppLanguage.values) {
       final notification = record(

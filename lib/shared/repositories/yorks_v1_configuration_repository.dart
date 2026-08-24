@@ -10,6 +10,12 @@ import 'yorks_v1_material_request_repository.dart';
 abstract interface class YorksV1ConfigurationRepository {
   Future<YorksV1ConfigurationCentre> getConfigurationCentre();
 
+  Future<YorksV1RuntimeConfiguration> getRuntimeConfiguration();
+
+  Future<YorksV1ConfigurationPublicationDetail> getPublicationDetail({
+    required String publicationId,
+  });
+
   Future<List<String>> getActiveUnitCodes();
 
   Future<void> stageSetting({
@@ -72,8 +78,57 @@ class YorksV1SupabaseConfigurationRepository
         parameters: const {},
       ),
     );
+    if (!_isValidConfigurationCentre(response)) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
     response['environment'] = _buildEnvironment;
     return YorksV1ConfigurationCentre.fromJson(response);
+  }
+
+  @override
+  Future<YorksV1RuntimeConfiguration> getRuntimeConfiguration() async {
+    final response = _object(
+      await _invoke(
+        functionName: 'v1_get_runtime_configuration',
+        parameters: const {},
+      ),
+    );
+    if (!_isValidRuntimeConfiguration(response)) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1RuntimeConfiguration.fromJson(response);
+  }
+
+  @override
+  Future<YorksV1ConfigurationPublicationDetail> getPublicationDetail({
+    required String publicationId,
+  }) async {
+    final normalizedPublicationId = publicationId.trim();
+    if (normalizedPublicationId.isEmpty) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    final response = _object(
+      await _invoke(
+        functionName: 'v1_get_configuration_publication_detail',
+        parameters: {'p_publication_id': normalizedPublicationId},
+      ),
+    );
+    if (!_isValidPublicationDetail(response, normalizedPublicationId)) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    final detail = YorksV1ConfigurationPublicationDetail.fromJson(response);
+    if (detail.publication.changeCount != detail.changes.length) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return detail;
   }
 
   @override
@@ -251,5 +306,125 @@ class YorksV1SupabaseConfigurationRepository
       );
     }
     return Map<String, dynamic>.from(response);
+  }
+
+  static bool _isValidRuntimeConfiguration(Map<String, dynamic> response) {
+    const booleanKeys = <String>[
+      'urgent_enabled',
+      'allow_authorized_creator_self_approval',
+      'require_external_source_readiness',
+      'push_enabled',
+    ];
+    final defaultTiming = response['default_timing'];
+    return response['schema_version'] is String &&
+        (response['schema_version'] as String).trim().isNotEmpty &&
+        response['published_version'] is num &&
+        response['published_label'] is String &&
+        (response['published_label'] as String).trim().isNotEmpty &&
+        DateTime.tryParse(response['published_at']?.toString() ?? '') != null &&
+        defaultTiming is String &&
+        const {'urgent', 'normal', 'scheduled'}.contains(defaultTiming) &&
+        booleanKeys.every((key) => response[key] is bool);
+  }
+
+  static bool _isValidConfigurationCentre(Map<String, dynamic> response) {
+    const listKeys = <String>[
+      'settings',
+      'master_actions',
+      'material_categories',
+      'material_units',
+      'boq_group_templates',
+      'history',
+    ];
+    final settings = response['settings'];
+    final health = response['operational_health'];
+    final validation = response['validation'];
+    if (response['schema_version'] is! String ||
+        (response['schema_version'] as String).trim().isEmpty ||
+        response['published_version'] is! num ||
+        response['published_label'] is! String ||
+        (response['published_label'] as String).trim().isEmpty ||
+        DateTime.tryParse(response['published_at']?.toString() ?? '') == null ||
+        response['draft_revision'] is! num ||
+        response['draft_base_version'] is! num ||
+        DateTime.tryParse(response['draft_updated_at']?.toString() ?? '') ==
+            null ||
+        listKeys.any((key) => response[key] is! List) ||
+        settings is! List ||
+        health is! Map ||
+        validation is! Map) {
+      return false;
+    }
+    final healthMap = Map<String, dynamic>.from(health);
+    if (healthMap['push_enabled'] is! bool ||
+        healthMap['active_device_count'] is! num ||
+        healthMap['pending_delivery_count'] is! num ||
+        healthMap['recent_failure_count'] is! num) {
+      return false;
+    }
+    final validationMap = Map<String, dynamic>.from(validation);
+    if (!const {
+          'ready',
+          'recommendations',
+          'blocked',
+        }.contains(validationMap['status']) ||
+        validationMap['blocking'] is! List ||
+        validationMap['recommendations'] is! List) {
+      return false;
+    }
+    return settings.every((setting) {
+      if (setting is! Map) return false;
+      final settingMap = Map<String, dynamic>.from(setting);
+      final key = settingMap['key']?.toString().trim() ?? '';
+      final area = settingMap['area'];
+      final mode = settingMap['control_mode'];
+      final impactScope = settingMap['impact_scope'];
+      final target = settingMap['enforcement_target'];
+      return key.isNotEmpty &&
+          YorksV1ConfigurationArea.values.any(
+            (candidate) => candidate.wireName == area,
+          ) &&
+          const {'operational', 'protected', 'planned'}.contains(mode) &&
+          impactScope is List &&
+          impactScope.isNotEmpty &&
+          impactScope.every(
+            (area) => YorksV1ConfigurationArea.values.any(
+              (candidate) => candidate.wireName == area,
+            ),
+          ) &&
+          target is String &&
+          target.trim().isNotEmpty;
+    });
+  }
+
+  static bool _isValidPublicationDetail(
+    Map<String, dynamic> response,
+    String expectedPublicationId,
+  ) {
+    final publication = response['publication'];
+    final changes = response['changes'];
+    if (publication is! Map || changes is! List) return false;
+    final publicationMap = Map<String, dynamic>.from(publication);
+    if (publicationMap['id']?.toString() != expectedPublicationId ||
+        publicationMap['version_number'] is! num ||
+        (publicationMap['version_label']?.toString().trim().isEmpty ?? true) ||
+        DateTime.tryParse(publicationMap['published_at']?.toString() ?? '') ==
+            null ||
+        publicationMap['change_count'] is! num ||
+        publicationMap['affected_areas'] is! List) {
+      return false;
+    }
+    return changes.every((change) {
+      if (change is! Map) return false;
+      final changeMap = Map<String, dynamic>.from(change);
+      final id = changeMap['id']?.toString().trim() ?? '';
+      final area = changeMap['area']?.toString();
+      final kind = changeMap['change_kind']?.toString().trim() ?? '';
+      return id.isNotEmpty &&
+          kind.isNotEmpty &&
+          YorksV1ConfigurationArea.values.any(
+            (configurationArea) => configurationArea.wireName == area,
+          );
+    });
   }
 }

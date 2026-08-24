@@ -12,6 +12,7 @@ import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_inventory_workbook_provider.dart';
@@ -57,6 +58,16 @@ void main() {
               YorksV1Role.procurement,
             ),
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1ConfigurationUnitCodesProvider.overrideWith(
+              (ref) async => const [
+                'Nos',
+                'Meter',
+                'Set',
+                'Kg',
+                'Ton',
+                'Boxes',
+              ],
+            ),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
             ),
@@ -117,6 +128,16 @@ void main() {
               ),
             ),
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1ConfigurationUnitCodesProvider.overrideWith(
+              (ref) async => const [
+                'Nos',
+                'Meter',
+                'Set',
+                'Kg',
+                'Ton',
+                'Boxes',
+              ],
+            ),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
             ),
@@ -293,6 +314,16 @@ void main() {
               YorksV1Role.procurement,
             ),
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1ConfigurationUnitCodesProvider.overrideWith(
+              (ref) async => const [
+                'Nos',
+                'Meter',
+                'Set',
+                'Kg',
+                'Ton',
+                'Boxes',
+              ],
+            ),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
             ),
@@ -362,6 +393,16 @@ void main() {
               YorksV1Role.procurement,
             ),
             sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1ConfigurationUnitCodesProvider.overrideWith(
+              (ref) async => const [
+                'Nos',
+                'Meter',
+                'Set',
+                'Kg',
+                'Ton',
+                'Boxes',
+              ],
+            ),
             yorksV1LogisticsRepositoryProvider.overrideWithValue(
               const _GoldenInventoryRepository(),
             ),

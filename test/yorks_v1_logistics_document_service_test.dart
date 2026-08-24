@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/yorks_v1_company_document_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_return_workflow.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
 import 'package:material_ledger/shared/services/yorks_v1_logistics_document_service.dart';
 import 'package:pdf/pdf.dart';
@@ -69,6 +70,61 @@ void main() {
     materialReturns: const [],
     returnInventoryItems: const [],
   );
+  final projectReturn = YorksV1ProjectMaterialReturn(
+    id: 'project-return-1',
+    number: 'Y-001-RTN001',
+    state: YorksV1ProjectMaterialReturnState.dispatched,
+    recordVersion: 4,
+    projectId: 'project-1',
+    projectReference: 'Y-001',
+    projectName: 'Yorks Project',
+    scopeId: 'scope-1',
+    scopeName: 'Building A',
+    purpose: 'Project close-out surplus',
+    draftedAt: DateTime.utc(2026, 8, 24),
+    draftedByAuthUserId: 'site-engineer-1',
+    draftedByDisplayName: 'Site Engineer',
+    draftedByRole: 'site_engineer',
+    driverName: 'Taimoor Shah',
+    vehicleReference: 'AD-12345',
+    deliveryNoteReference: 'RTN-DN-001',
+    canEdit: false,
+    canSubmit: false,
+    canApprove: false,
+    canReturnForChanges: false,
+    canDispatch: false,
+    canConfirm: true,
+    canCancel: false,
+    lines: const [
+      YorksV1MaterialReturnLineRecord(
+        id: 'return-line-1',
+        origin: YorksV1ReturnLineOrigin.delivered,
+        receiptReviewLineId: 'receipt-line-1',
+        sourceRequestId: 'request-1',
+        sourceRequestNumber: 'Y-MR-001',
+        sourceDispatchId: 'dispatch-1',
+        sourceDispatchNumber: 'Y-DSP-001',
+        displayOrder: 1,
+        description: 'Copper pipe',
+        brandOrigin: 'UAE',
+        unit: 'Mtr',
+        sourceKind: 'warehouse',
+        returnQuantity: '3',
+        lineNote: 'Unused length',
+      ),
+      YorksV1MaterialReturnLineRecord(
+        id: 'return-line-2',
+        origin: YorksV1ReturnLineOrigin.custom,
+        displayOrder: 2,
+        description: 'Site ladder',
+        unit: 'Nos',
+        sourceKind: 'custom',
+        returnQuantity: '1',
+        lineNote: 'Historical MR unavailable',
+      ),
+    ],
+    inventoryItems: const [],
+  );
 
   test(
     'Delivery Order export has only the frozen four operational columns',
@@ -97,6 +153,41 @@ void main() {
           'Mtr',
         ]),
       );
+    },
+  );
+
+  test('Project Material Return Excel preserves source trace and notes', () {
+    final workbook = const YorksV1BoqWorkbookCodec().decode(
+      bytes: service.buildProjectMaterialReturnExcel(projectReturn),
+      fileName: 'project-return.xlsx',
+    );
+
+    expect(
+      workbook.sheets.single.rows[1],
+      equals(const [
+        'No.',
+        'Item Description',
+        'Brand / Origin',
+        'Qty.',
+        'Unit',
+        'Source trace',
+        'Note',
+      ]),
+    );
+    expect(workbook.sheets.single.rows[2][5], 'Y-MR-001 · Y-DSP-001');
+    expect(workbook.sheets.single.rows[3][5], 'Custom / unmatched');
+  });
+
+  test(
+    'Project Material Return PDF is printable in Yorks form style',
+    () async {
+      final bytes = await service.buildProjectMaterialReturnPdf(
+        projectReturn,
+        format: PdfPageFormat.a4,
+      );
+      expect(bytes.length, greaterThan(500));
+      expect(utf8.decode(bytes.take(4).toList()), equals('%PDF'));
+      expect(_generatedPdfPageCount(bytes), 1);
     },
   );
 

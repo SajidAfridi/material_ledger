@@ -35,6 +35,11 @@ enum YorksV1Role {
   /// for every save and submit command.
   bool get canCreateMaterialRequest => isEngineering || this == admin;
 
+  /// Project material returns are raised by project stakeholders and remain
+  /// server-scoped to active membership. Completed projects intentionally stay
+  /// eligible so surplus can be reconciled during close-out.
+  bool get canCreateMaterialReturn => isEngineering || this == admin;
+
   /// A base Site Engineer can hold a dated, project-specific Project Engineer
   /// membership. The client has no authoritative membership projection at this
   /// command boundary, so it must not reject that person before the trusted

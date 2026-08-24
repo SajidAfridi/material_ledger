@@ -14,6 +14,11 @@ abstract final class YorksV1ConfigurationStrings {
     return _localized[language.code]?[key] ?? _english[key] ?? fallback;
   }
 
+  static String enforcement(AppLanguage language, String targetCode) {
+    final key = 'enforcement.$targetCode';
+    return _localized[language.code]?[key] ?? _english[key] ?? targetCode;
+  }
+
   static const Map<String, String> _english = {
     'title': 'Configuration Centre',
     'subtitle':
@@ -23,6 +28,87 @@ abstract final class YorksV1ConfigurationStrings {
     'discard_draft': 'Discard draft',
     'restore_defaults': 'Restore defaults',
     'save_draft': 'Save to draft',
+    'control_coverage': 'Control coverage',
+    'control_coverage_help':
+        'Only operational controls change live application behaviour. Protected rules remain enforced and planned controls are visible for future activation.',
+    'operational': 'Operational',
+    'operational_help': 'Published changes are enforced by the application.',
+    'protected_control': 'Protected',
+    'protected_control_help':
+        'This rule is enforced by the trusted workflow and cannot be weakened here.',
+    'planned': 'Planned',
+    'planned_help':
+        'This control is visible for planning but is not active in production.',
+    'enabled': 'Enabled',
+    'disabled': 'Disabled',
+    'read_only': 'Read only',
+    'control_read_only_error':
+        'This control is read-only here. Review its enforcement policy for the authoritative source.',
+    'enforced_by': 'Enforced by {target}',
+    'affects_areas': 'Affects {areas}',
+    'draft_last_updated': 'Shared draft updated by {actor} · {time}',
+    'staged_by': 'Staged by {actor} · {time}',
+    'exact_changes': 'Exact staged changes',
+    'master_data_action': 'Master data change',
+    'material_category': 'Material category',
+    'material_unit': 'Material unit',
+    'target_reference': 'Target reference',
+    'action_reason': 'Action reason',
+    'published_value': 'Published value',
+    'draft_value': 'Draft value',
+    'shared_draft': 'Shared Admin draft',
+    'view_changes': 'View changes',
+    'publication_details': 'Publication details',
+    'before': 'Before',
+    'after': 'After',
+    'notification_delivery_health': 'Notification delivery health',
+    'notification_delivery_health_help':
+        'Live backend delivery facts for the published push policy. Draft changes do not alter this status until publication.',
+    'active_devices': 'Active devices',
+    'pending_delivery': 'Pending delivery',
+    'recent_delivery_failures': 'Failures in the last 24 hours',
+    'last_successful_delivery': 'Last successful delivery',
+    'no_successful_delivery': 'No successful delivery recorded',
+    'push_delivery_disabled': 'Push delivery is disabled',
+    'push_delivery_disabled_help':
+        'The published push policy is off. In-app notifications remain authoritative.',
+    'push_delivery_operational': 'Push delivery is operational',
+    'push_delivery_operational_help':
+        'Active devices are enrolled and the backend reports no pending or failed deliveries.',
+    'push_delivery_failures': 'Delivery failures need attention',
+    'push_delivery_failures_help':
+        'The backend recorded one or more failed push deliveries in the last 24 hours.',
+    'delivery_queue_pending': 'Push deliveries are pending',
+    'delivery_queue_pending_help':
+        'The backend queue still has deliveries awaiting a confirmed outcome.',
+    'no_active_devices': 'No active notification devices',
+    'no_active_devices_help':
+        'Push is enabled, but no active device enrollment is available for delivery.',
+    'enforcement.mr_draft_default_timing':
+        'new Material Request draft defaults',
+    'enforcement.mr_urgent_submission_guard':
+        'the trusted urgent Material Request submission guard',
+    'enforcement.mr_self_approval_guard':
+        'the trusted Engineering self-approval command',
+    'enforcement.procurement_external_readiness_guard':
+        'the trusted Procurement arrangement command',
+    'enforcement.notification_push_outbox':
+        'the notification push outbox trigger',
+    'enforcement.controlled_document_identity':
+        'the Yorks legal and controlled-document identity contract',
+    'enforcement.aed_commercial_boundary':
+        'the protected AED commercial boundary',
+    'enforcement.warehouse_first_arrangement':
+        'the protected Warehouse-first arrangement contract',
+    'enforcement.storage_document_contract':
+        'the protected storage and controlled-document contract',
+    'enforcement.append_only_audit_contract':
+        'the mandatory append-only audit contract',
+    'enforcement.trusted_server_numbering':
+        'the trusted server numbering command',
+    'enforcement.product_invariant': 'a protected Yorks V1 product invariant',
+    'enforcement.retained_reference':
+        'a retained reference with no active runtime consumer',
     'cancel': 'Cancel',
     'close': 'Close',
     'publish': 'Publish configuration',
@@ -260,7 +346,7 @@ abstract final class YorksV1ConfigurationStrings {
     'no_search_results': 'No configuration settings match this search.',
     'open_configuration_area': 'Open this configuration area',
     'controlled_master_summary':
-        '1 BOQ folder + {categories} categories + {units} units',
+        '{templates} BOQ folders + {categories} categories + {units} units',
     'procurement_project_access': 'Procurement project access',
     'procurement_project_access_body':
         'Procurement may view active Projects and BOQs but cannot create or edit Engineering records.',
@@ -554,6 +640,84 @@ abstract final class YorksV1ConfigurationStrings {
       'discard_draft': 'تجاهل المسودة',
       'restore_defaults': 'استعادة الافتراضيات',
       'save_draft': 'حفظ في المسودة',
+      'control_coverage': 'نطاق التحكم',
+      'control_coverage_help':
+          'العناصر التشغيلية فقط تغير سلوك التطبيق. تبقى القواعد المحمية مفعلة وتظهر العناصر المخططة للتفعيل مستقبلاً.',
+      'operational': 'تشغيلي',
+      'operational_help': 'تطبق التغييرات المنشورة في التطبيق.',
+      'protected_control': 'محمي',
+      'protected_control_help':
+          'هذه القاعدة مفروضة من سير العمل الموثوق ولا يمكن إضعافها من هنا.',
+      'planned': 'مخطط',
+      'planned_help': 'هذا التحكم معروض للتخطيط وغير مفعل في الإنتاج.',
+      'enabled': 'مفعل',
+      'disabled': 'معطل',
+      'read_only': 'للقراءة فقط',
+      'control_read_only_error':
+          'عنصر التحكم هذا للقراءة فقط هنا. راجع سياسة التطبيق لمعرفة المصدر المعتمد.',
+      'enforced_by': 'يطبق بواسطة {target}',
+      'affects_areas': 'يؤثر في {areas}',
+      'draft_last_updated': 'حدث المسودة المشتركة {actor} · {time}',
+      'staged_by': 'أعدها {actor} · {time}',
+      'exact_changes': 'التغييرات المعدة بالضبط',
+      'master_data_action': 'تغيير في البيانات الرئيسية',
+      'material_category': 'فئة المواد',
+      'material_unit': 'وحدة المواد',
+      'target_reference': 'مرجع العنصر',
+      'action_reason': 'سبب الإجراء',
+      'published_value': 'القيمة المنشورة',
+      'draft_value': 'قيمة المسودة',
+      'shared_draft': 'مسودة المسؤولين المشتركة',
+      'view_changes': 'عرض التغييرات',
+      'publication_details': 'تفاصيل النشر',
+      'before': 'قبل',
+      'after': 'بعد',
+      'notification_delivery_health': 'حالة تسليم الإشعارات',
+      'notification_delivery_health_help':
+          'حقائق مباشرة من الخادم لسياسة الإشعارات المنشورة. لا تؤثر تغييرات المسودة قبل النشر.',
+      'active_devices': 'الأجهزة النشطة',
+      'pending_delivery': 'قيد التسليم',
+      'recent_delivery_failures': 'إخفاقات آخر 24 ساعة',
+      'last_successful_delivery': 'آخر تسليم ناجح',
+      'no_successful_delivery': 'لم يسجل أي تسليم ناجح',
+      'push_delivery_disabled': 'تسليم الإشعارات معطل',
+      'push_delivery_disabled_help':
+          'سياسة الإشعارات المنشورة معطلة. تبقى إشعارات داخل التطبيق هي المرجع.',
+      'push_delivery_operational': 'تسليم الإشعارات يعمل',
+      'push_delivery_operational_help':
+          'الأجهزة النشطة مسجلة ولا توجد عمليات تسليم معلقة أو فاشلة.',
+      'push_delivery_failures': 'إخفاقات التسليم تحتاج إلى مراجعة',
+      'push_delivery_failures_help':
+          'سجل الخادم عملية أو أكثر من عمليات تسليم الإشعارات الفاشلة خلال آخر 24 ساعة.',
+      'delivery_queue_pending': 'عمليات تسليم معلقة',
+      'delivery_queue_pending_help':
+          'ما زالت قائمة انتظار الخادم تحتوي على عمليات تسليم تنتظر نتيجة مؤكدة.',
+      'no_active_devices': 'لا توجد أجهزة إشعارات نشطة',
+      'no_active_devices_help':
+          'الإشعارات مفعلة ولكن لا يوجد تسجيل جهاز نشط متاح للتسليم.',
+      'enforcement.mr_draft_default_timing':
+          'الإعدادات الافتراضية لمسودة طلب المواد الجديدة',
+      'enforcement.mr_urgent_submission_guard':
+          'حاجز إرسال طلب المواد العاجل الموثوق',
+      'enforcement.mr_self_approval_guard':
+          'أمر الموافقة الهندسية الذاتية الموثوق',
+      'enforcement.procurement_external_readiness_guard':
+          'أمر ترتيب المشتريات الموثوق',
+      'enforcement.notification_push_outbox': 'مشغل قائمة إرسال الإشعارات',
+      'enforcement.controlled_document_identity':
+          'عقد الهوية القانونية والمستندات المعتمدة ليوركس',
+      'enforcement.aed_commercial_boundary':
+          'الحد التجاري المحمي للدرهم الإماراتي',
+      'enforcement.warehouse_first_arrangement':
+          'عقد الترتيب المحمي الذي يبدأ بالمستودع',
+      'enforcement.storage_document_contract':
+          'عقد التخزين والمستندات المعتمدة المحمي',
+      'enforcement.append_only_audit_contract':
+          'عقد التدقيق الإلزامي للإضافة فقط',
+      'enforcement.trusted_server_numbering': 'أمر الترقيم الموثوق في الخادم',
+      'enforcement.product_invariant': 'قاعدة منتج Yorks V1 محمية',
+      'enforcement.retained_reference':
+          'قيمة مرجعية محفوظة دون مستهلك تشغيلي نشط',
       'cancel': 'إلغاء',
       'close': 'إغلاق',
       'publish': 'نشر الإعدادات',

@@ -8,6 +8,7 @@ import '../models/yorks_v1_boq.dart';
 import '../models/yorks_v1_company_document_strings.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_logistics_strings.dart';
+import '../models/yorks_v1_material_return_workflow.dart';
 import '../models/yorks_v1_project_strings.dart';
 import '../models/yorks_v1_quantity.dart';
 import 'yorks_v1_boq_workbook_service.dart';
@@ -74,6 +75,40 @@ class YorksV1LogisticsDocumentService {
     ],
   );
 
+  Uint8List buildProjectMaterialReturnExcel(
+    YorksV1ProjectMaterialReturn materialReturn,
+  ) => _buildWorkbook(
+    projectId: materialReturn.projectId,
+    sourceId: materialReturn.id,
+    title: materialReturn.number ?? 'Material Return Draft',
+    headings: const [
+      'No.',
+      'Item Description',
+      'Brand / Origin',
+      'Qty.',
+      'Unit',
+      'Source trace',
+      'Note',
+    ],
+    rows: [
+      for (final line in materialReturn.lines)
+        [
+          line.displayOrder.toString(),
+          line.description,
+          line.brandOrigin ?? '',
+          yorksV1DisplayQuantity(line.returnQuantity),
+          line.unit,
+          line.origin == YorksV1ReturnLineOrigin.custom
+              ? 'Custom / unmatched'
+              : [
+                  line.sourceRequestNumber,
+                  line.sourceDispatchNumber,
+                ].whereType<String>().join(' · '),
+          line.lineNote ?? '',
+        ],
+    ],
+  );
+
   /// Printing receives the exact immutable A4 bytes used by the PDF download
   /// and stored controlled-document snapshot.  Never rebuild a second printer
   /// layout from mutable dispatch rows.
@@ -121,6 +156,148 @@ class YorksV1LogisticsDocumentService {
       format: format,
     ),
   );
+
+  Future<void> printProjectMaterialReturn(
+    YorksV1ProjectMaterialReturn materialReturn,
+  ) => Printing.layoutPdf(
+    onLayout: (format) =>
+        buildProjectMaterialReturnPdf(materialReturn, format: format),
+  );
+
+  Future<void> shareProjectMaterialReturnPdf(
+    YorksV1ProjectMaterialReturn materialReturn,
+  ) async {
+    final bytes = await buildProjectMaterialReturnPdf(
+      materialReturn,
+      format: PdfPageFormat.a4,
+    );
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: suggestedProjectMaterialReturnPdfName(materialReturn),
+    );
+  }
+
+  Future<Uint8List> buildProjectMaterialReturnPdf(
+    YorksV1ProjectMaterialReturn materialReturn, {
+    required PdfPageFormat format,
+  }) async {
+    final logo = await _loadLogo();
+    final theme = await _buildTheme();
+    final document = pw.Document(
+      theme: theme,
+      title: '${materialReturn.number ?? 'Draft'} - RETURN MATERIALS',
+      author: YorksV1CompanyDocumentStrings.legalName.primary,
+      creator: 'Yorks Project Management',
+    );
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        maxPages: 200,
+        margin: pw.EdgeInsets.fromLTRB(
+          12 * PdfPageFormat.mm,
+          9 * PdfPageFormat.mm,
+          12 * PdfPageFormat.mm,
+          7 * PdfPageFormat.mm,
+        ),
+        header: (context) => context.pageNumber == 1
+            ? pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  _companyHeader(logo),
+                  pw.SizedBox(height: 2.5 * PdfPageFormat.mm),
+                  pw.Center(
+                    child: pw.Text(
+                      'RETURN MATERIALS',
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.SizedBox(height: 3 * PdfPageFormat.mm),
+                  _deliveryLabelValue(
+                    'Reference',
+                    materialReturn.number ?? 'Draft',
+                    valueBold: true,
+                  ),
+                  pw.SizedBox(height: 1.8 * PdfPageFormat.mm),
+                  _deliveryLabelValue(
+                    'Project',
+                    '${materialReturn.projectReference} - ${materialReturn.projectName}',
+                    valueBold: true,
+                  ),
+                  pw.SizedBox(height: 1.8 * PdfPageFormat.mm),
+                  _deliveryLabelValue(
+                    'Building / Scope',
+                    materialReturn.scopeName,
+                  ),
+                  pw.SizedBox(height: 1.8 * PdfPageFormat.mm),
+                  _deliveryLabelValue(
+                    'Date',
+                    DateFormat('dd/MM/yyyy').format(
+                      (materialReturn.requestedReturnDate ??
+                              materialReturn.draftedAt)
+                          .toLocal(),
+                    ),
+                  ),
+                  pw.SizedBox(height: 1.8 * PdfPageFormat.mm),
+                  _deliveryLabelValue('Purpose', materialReturn.purpose ?? '—'),
+                  if (materialReturn.deliveryNoteReference != null) ...[
+                    pw.SizedBox(height: 1.8 * PdfPageFormat.mm),
+                    _deliveryLabelValue(
+                      'Delivery note',
+                      materialReturn.deliveryNoteReference!,
+                    ),
+                  ],
+                  if (materialReturn.driverName != null) ...[
+                    pw.SizedBox(height: 1.8 * PdfPageFormat.mm),
+                    _deliveryLabelValue(
+                      'Driver / Vehicle',
+                      [
+                        materialReturn.driverName,
+                        materialReturn.vehicleReference,
+                      ].whereType<String>().join(' · '),
+                    ),
+                  ],
+                  pw.SizedBox(height: 4 * PdfPageFormat.mm),
+                ],
+              )
+            : pw.SizedBox(),
+        footer: _materialReturnFooter,
+        build: (_) => [
+          _table(
+            headers: const ['No.', 'Item Description', 'Qty.', 'Unit', 'Note'],
+            rows: [
+              for (final line in materialReturn.lines)
+                [
+                  line.displayOrder.toString(),
+                  [
+                    line.description,
+                    if (line.brandOrigin != null) line.brandOrigin!,
+                    if (line.sourceRequestNumber != null)
+                      'Source: ${line.sourceRequestNumber}'
+                    else if (line.origin == YorksV1ReturnLineOrigin.custom)
+                      'Source: Custom / unmatched',
+                  ].join('\n'),
+                  yorksV1DisplayQuantity(line.returnQuantity),
+                  line.unit,
+                  line.lineNote ?? '',
+                ],
+            ],
+          ),
+        ],
+      ),
+    );
+    return document.save(enableEventLoopBalancing: true);
+  }
+
+  String suggestedProjectMaterialReturnExcelName(
+    YorksV1ProjectMaterialReturn materialReturn,
+  ) => '${_safeName(materialReturn.number ?? 'material_return_draft')}.xlsx';
+
+  String suggestedProjectMaterialReturnPdfName(
+    YorksV1ProjectMaterialReturn materialReturn,
+  ) => '${_safeName(materialReturn.number ?? 'material_return_draft')}.pdf';
 
   Future<Uint8List> buildDeliveryOrderPdf({
     required YorksV1ReturnsDocumentsWorkspace workspace,
@@ -756,6 +933,68 @@ class YorksV1LogisticsDocumentService {
             ? pw.Align(
                 alignment: pw.Alignment.bottomCenter,
                 child: _deliveryOrderSignatureBlock(),
+              )
+            : pw.SizedBox(),
+      ),
+      pw.SizedBox(height: 4 * PdfPageFormat.mm),
+      _companyContact(),
+      pw.SizedBox(height: 1.5 * PdfPageFormat.mm),
+      _pageNumber(context),
+    ],
+  );
+
+  static pw.Widget _materialReturnFooter(pw.Context context) => pw.Column(
+    mainAxisSize: pw.MainAxisSize.min,
+    children: [
+      pw.SizedBox(
+        height: 43 * PdfPageFormat.mm,
+        child: context.pageNumber == context.pagesCount
+            ? pw.Align(
+                alignment: pw.Alignment.bottomCenter,
+                child: pw.Table(
+                  border: pw.TableBorder.all(color: _documentGrid, width: .65),
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColor.fromInt(0xFFE7EEF9),
+                      ),
+                      children: [
+                        for (final heading in const [
+                          'Send by',
+                          'Driver',
+                          'Engineer',
+                          'Receive by',
+                        ])
+                          pw.Padding(
+                            padding: pw.EdgeInsets.all(1.8 * PdfPageFormat.mm),
+                            child: pw.Text(
+                              heading,
+                              style: pw.TextStyle(
+                                fontSize: 7.2,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    for (final label in const ['Name', 'Signature', 'Date'])
+                      pw.TableRow(
+                        children: [
+                          for (var index = 0; index < 4; index++)
+                            pw.Container(
+                              height: 8 * PdfPageFormat.mm,
+                              padding: pw.EdgeInsets.all(
+                                1.6 * PdfPageFormat.mm,
+                              ),
+                              child: pw.Text(
+                                '$label:',
+                                style: const pw.TextStyle(fontSize: 6.7),
+                              ),
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
               )
             : pw.SizedBox(),
       ),

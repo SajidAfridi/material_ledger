@@ -140,7 +140,7 @@ select throws_ok(
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000014'
   )$$,
-  '22023', 'V1_CONFIGURATION_SETTING_NOT_EDITABLE',
+  '22023', 'V1_CONFIGURATION_SETTING_NOT_OPERATIONAL',
   'Canonical server numbering cannot be weakened through Configuration'
 );
 select throws_ok(
@@ -149,7 +149,7 @@ select throws_ok(
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000015'
   )$$,
-  '22023', 'V1_CONFIGURATION_SETTING_NOT_EDITABLE',
+  '22023', 'V1_CONFIGURATION_SETTING_NOT_OPERATIONAL',
   'The canonical Warehouse-first arrangement source cannot be overridden'
 );
 select throws_ok(
@@ -158,7 +158,7 @@ select throws_ok(
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000016'
   )$$,
-  '22023', 'V1_CONFIGURATION_SETTING_NOT_EDITABLE',
+  '22023', 'V1_CONFIGURATION_SETTING_NOT_OPERATIONAL',
   'Configuration cannot promise a file size above the enforced 20 MiB limit'
 );
 select throws_ok(
@@ -167,23 +167,31 @@ select throws_ok(
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000017'
   )$$,
-  '22023', 'V1_CONFIGURATION_SETTING_NOT_EDITABLE',
+  '22023', 'V1_CONFIGURATION_SETTING_NOT_OPERATIONAL',
   'Configuration cannot advertise a format outside the enforced MIME allowlist'
 );
 
 reset role;
+insert into public.v1_configuration_units (
+  id, name, short_code, unit_type, decimal_places, is_system,
+  created_by_auth_user_id
+) values (
+  'c3820000-0000-4000-8000-000000000017',
+  'Archive conflict fixture', 'FixtureUnit', 'count', 0, false,
+  '10000000-0000-4000-8000-000000000004'
+);
 insert into public.v1_inventory_items (
   id, item_description, unit, is_active, created_by_auth_user_id
 ) values (
   'c3820000-0000-4000-8000-000000000018',
-  'R38 controlled-unit publication fixture', 'Nos', true,
+  'R38 controlled-unit publication fixture', 'FixtureUnit', true,
   '10000000-0000-4000-8000-000000000004'
 );
 set local role authenticated;
 select lives_ok(
   $$select public.v1_stage_configuration_master_action(
     'material_unit', 'archive',
-    'c3810000-0000-4000-8000-000000000001', '{}'::jsonb,
+    'c3820000-0000-4000-8000-000000000017', '{}'::jsonb,
     'Retire a unit after checking operational usage',
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000019'
@@ -215,67 +223,78 @@ select is(
 );
 select throws_ok(
   $$select public.v1_stage_configuration_setting(
-    'security.minimum_password_length', '8'::jsonb,
+    'security.admin_mfa_required', 'true'::jsonb,
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000002'
   )$$,
-  '22023', 'V1_CONFIGURATION_INTEGER_OUT_OF_RANGE',
-  'The draft command rejects a password baseline below the protected minimum'
+  '22023', 'V1_CONFIGURATION_SETTING_NOT_OPERATIONAL',
+  'A planned MFA value cannot be published before an authoritative Auth consumer exists'
 );
 
-select lives_ok(
-  $$select public.v1_stage_configuration_setting(
-    'accounts.billing_stage_weights',
-    '{"design":10,"material_supply":50,"installation":30,"commissioning_handover":5,"energizing":0}'::jsonb,
-    (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
-    'c3820000-0000-4000-8000-000000000003'
-  )$$,
-  'Admin can stage an internally typed but publish-invalid billing allocation'
-);
-select is(
-  (
-    select sum((entry.value #>> '{}')::numeric)
-    from jsonb_each(
-      (
-        select setting -> 'published_value'
-        from jsonb_array_elements(
-          public.v1_get_configuration_centre() -> 'settings'
-        ) setting
-        where setting ->> 'key' = 'accounts.billing_stage_weights'
-      )
-    ) entry
-  ),
-  100::numeric,
-  'Staging never mutates the published configuration'
-);
-select is(
-  public.v1_get_configuration_validation() ->> 'status',
-  'blocked',
-  'The authoritative validator blocks a billing total below 100 percent'
-);
 select throws_ok(
-  $$select public.v1_publish_configuration(
-    'Attempt invalid billing publication',
-    (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
-    'c3820000-0000-4000-8000-000000000004'
-  )$$,
-  '23514', 'V1_CONFIGURATION_VALIDATION_BLOCKED',
-  'Publication revalidates and rejects a blocking draft atomically'
-);
-
-select lives_ok(
   $$select public.v1_stage_configuration_setting(
     'accounts.billing_stage_weights',
     '{"design":10,"material_supply":50,"installation":30,"commissioning_handover":5,"energizing":5}'::jsonb,
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
+    'c3820000-0000-4000-8000-000000000003'
+  )$$,
+  '22023', 'V1_CONFIGURATION_SETTING_NOT_OPERATIONAL',
+  'Deferred Accounts allocation cannot enter the operational publication queue'
+);
+
+select ok(
+  (
+    select setting ->> 'control_mode' = 'operational'
+    from jsonb_array_elements(
+      public.v1_get_configuration_centre() -> 'settings'
+    ) setting
+    where setting ->> 'key' = 'requests.default_timing'
+  )
+  and (
+    select setting ->> 'control_mode' = 'protected'
+    from jsonb_array_elements(
+      public.v1_get_configuration_centre() -> 'settings'
+    ) setting
+    where setting ->> 'key' = 'numbering.material_request_pattern'
+  )
+  and (
+    select setting ->> 'control_mode' = 'planned'
+    from jsonb_array_elements(
+      public.v1_get_configuration_centre() -> 'settings'
+    ) setting
+    where setting ->> 'key' = 'accounts.billing_stage_weights'
+  ),
+  'The Admin projection identifies operational, protected and planned controls explicitly'
+);
+
+select lives_ok(
+  $$select public.v1_stage_configuration_setting(
+    'requests.default_timing', '"scheduled"'::jsonb,
+    (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
+    'c3820000-0000-4000-8000-000000000004'
+  )$$,
+  'Admin can stage a real operational default timing change'
+);
+
+select is(
+  public.v1_get_runtime_configuration() ->> 'default_timing',
+  'normal',
+  'Staged operational timing remains inert in the runtime projection'
+);
+
+select lives_ok(
+  $$select public.v1_stage_configuration_setting(
+    'requests.urgent_enabled', 'false'::jsonb,
+    (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000005'
   )$$,
-  'Admin can correct the draft allocation with an optimistic revision check'
+  'Admin can stage the enforced urgent-request policy independently'
 );
+
 select is(
   public.v1_get_configuration_validation() ->> 'status',
-  'recommendations',
-  'Non-blocking MFA guidance remains a recommendation'
+  'ready',
+  'Only enforced operational and master-data dependencies determine readiness'
 );
 select throws_ok(
   $$select public.v1_publish_configuration(
@@ -289,11 +308,11 @@ select throws_ok(
 
 select lives_ok(
   $$select public.v1_stage_configuration_setting(
-    'notifications.email_enabled', 'true'::jsonb,
+    'notifications.push_enabled', 'false'::jsonb,
     (public.v1_get_configuration_centre() ->> 'draft_revision')::integer,
     'c3820000-0000-4000-8000-000000000010'
   )$$,
-  'Admin can stage a valid production change after correcting validation'
+  'Admin can stage the operational push transport policy'
 );
 
 create temporary table configuration_publish_context as
@@ -311,21 +330,13 @@ select lives_ok(
   )$$,
   'Admin can publish a validated draft with a reason'
 );
-select is(
-  (
-    select sum((entry.value #>> '{}')::numeric)
-    from jsonb_each(
-      (
-        select setting -> 'published_value'
-        from jsonb_array_elements(
-          public.v1_get_configuration_centre() -> 'settings'
-        ) setting
-        where setting ->> 'key' = 'accounts.billing_stage_weights'
-      )
-    ) entry
-  ),
-  100::numeric,
-  'The publication commits the validated setting value'
+select ok(
+  public.v1_get_runtime_configuration() ->> 'default_timing' = 'scheduled'
+  and not (public.v1_get_runtime_configuration()
+    ->> 'urgent_enabled')::boolean
+  and not (public.v1_get_runtime_configuration()
+    ->> 'push_enabled')::boolean,
+  'Publication atomically exposes the reviewed operational values to runtime consumers'
 );
 select is(
   jsonb_array_length(public.v1_get_configuration_centre() -> 'history'),

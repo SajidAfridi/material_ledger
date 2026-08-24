@@ -46,6 +46,7 @@ import '../features/materials/presentation/screens/yorks_v1_inventory_screen.dar
 import '../features/materials/presentation/screens/yorks_v1_inventory_supplier_screens.dart';
 import '../features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
+import '../features/materials/presentation/screens/yorks_v1_material_returns_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
@@ -127,6 +128,8 @@ abstract final class RoutePaths {
   static const String yorksV1InventoryImport = '/yorks/inventory/import';
   static const String yorksV1Dispatches = '/yorks/dispatches';
   static const String yorksV1Returns = '/yorks/returns';
+  static const String yorksV1MaterialReturnNew = '/yorks/returns/new';
+  static const String yorksV1MaterialReturn = '/yorks/returns/:returnId';
   static const String yorksV1Configuration = '/yorks/configuration';
   static const String yorksV1TeamChat = '/yorks/team-chat';
   static const String yorksV1TeamChatConversation =
@@ -210,6 +213,17 @@ abstract final class RoutePaths {
 
   static String yorksV1InventorySupplierPath(String supplierId) =>
       '/yorks/inventory/suppliers/$supplierId';
+
+  static String yorksV1MaterialReturnPath(String returnId) =>
+      '/yorks/returns/$returnId';
+
+  static String yorksV1MaterialReturnEditPath(
+    String projectId,
+    String returnId,
+  ) => Uri(
+    path: yorksV1MaterialReturnNew,
+    queryParameters: {'project_id': projectId, 'return_id': returnId},
+  ).toString();
 
   static String yorksV1MaterialRequestsPath({String? projectId}) {
     final trimmed = projectId?.trim();
@@ -1026,10 +1040,25 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1Returns,
+        pageBuilder: (context, state) =>
+            _yorksV1Slide(state.pageKey, const YorksV1MaterialReturnsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialReturnNew,
         pageBuilder: (context, state) => _yorksV1Slide(
           state.pageKey,
-          const YorksV1WorkflowQueueScreen(
-            kind: YorksV1WorkflowQueueKind.returns,
+          YorksV1MaterialReturnEditorScreen(
+            initialProjectId: state.uri.queryParameters['project_id'],
+            returnId: state.uri.queryParameters['return_id'],
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1MaterialReturn,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksV1MaterialReturnDetailScreen(
+            returnId: state.pathParameters['returnId'] ?? '',
           ),
         ),
       ),

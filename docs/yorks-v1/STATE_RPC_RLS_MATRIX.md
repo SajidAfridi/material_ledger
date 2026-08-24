@@ -57,7 +57,11 @@ exception quantities reconcile to the dispatched quantity as defined in
 
 ### Return
 
-`draft -> submitted -> confirmed | rejected`
+`draft -> awaiting_approval -> approved -> dispatched -> confirmed`
+
+`awaiting_approval -> returned_for_changes -> awaiting_approval`
+
+`awaiting_approval -> rejected`; pre-dispatch active states may be `cancelled`.
 
 Only `confirmed` appends an inventory movement.
 
@@ -115,9 +119,13 @@ tables/functions.
 | `v1_generate_delivery_order` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, Procurement/Admin after committed dispatch | dispatch/current DO revision; optional later review link | yes | immutable dispatch-quantity revision before review, or immutable receipt-reviewed good-quantity Delivery Report revision after review; document link, audit |
 | `admin-users` Edge commands | Active exact Admin or Senior Mechanical Engineer | live Auth role, active actor, stable app-user target; action-specific input | yes for mutations | Auth mutation plus safe server audit; last-active-Admin invariant retained |
 | `v1_get/set_user_commercial_capability` | Active exact Admin or Senior Mechanical Engineer | live exact actor, target Auth user; reason and idempotency for writes | writes only | safe capability envelope/override plus audit; no commercial record data returned |
-| `v1_submit_material_return` | Assigned Project/Site Engineer/Admin | source receipt/return/version/counter | yes | frozen return lines, number, submitted state, audit/notification |
-| `v1_confirm_material_return` | Procurement/Admin | return, source lines, inventory | yes | confirmed state, stock movements once, audit/notification |
-| `v1_reject_material_return` | Procurement/Admin | return/version | yes | rejected state/reason, audit/notification |
+| `v1_create_project_material_return` / `v1_save_project_material_return` | Assigned Project/Site Engineer, organization-wide Engineering role or Admin | project/scope/draft version | yes | project-wide draft and replaceable delivered/custom lines; no stock effect |
+| `v1_submit_project_material_return` | Draft creator or authorized Engineering/Admin | return/version, project counter, source receipt lines | yes | controlled number, frozen snapshots, eligibility recheck, awaiting approval, audit/notification |
+| `v1_decide_project_material_return` | Assigned/global Project Engineer or Admin | return/version and decision | yes | approved, returned-for-changes or rejected state plus immutable reason/actor evidence |
+| `v1_dispatch_project_material_return` | Approved-return creator or authorized Engineering/Admin | return/version, driver and delivery-note evidence | yes | dispatched state and physical handover snapshot; no stock effect |
+| `v1_confirm_project_material_return` | Procurement/Admin | return/version, every return line, source lines and inventory | yes | reconciled good/damaged/not-received facts, confirmed state, one stock movement per good line, audit/notification |
+| `v1_cancel_project_material_return` | Draft creator, assigned/global Engineering or Admin before dispatch | return/version/reason | yes | terminal cancellation with retained lines and audit; no stock effect |
+| Legacy `v1_submit_material_return` / `v1_confirm_material_return` / `v1_reject_material_return` | Existing request-scoped clients only | historical request/source contracts | yes | compatibility path retained during rollout; new UI uses project-wide commands |
 | `v1_cancel_material_request` | Project Engineer/global Engineering/Admin per policy | MR/version/reservations/current arrangement | yes | terminal cancel, retain unavailable/history, release remainder, lock Procurement editing, audit/notification |
 | `v1_close_material_request` | Assigned Project/Site Engineer, global Senior Mechanical Engineer/Project Manager, or Admin | MR and all logistics rows | yes | validated closed state, audit |
 | `v1_adjust_inventory` | Procurement/Admin capability | inventory item/version | yes | append-only adjustment movement and derived balance, audit |
