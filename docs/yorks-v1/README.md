@@ -5,17 +5,18 @@ Approved: 1 August 2026
 Current delivery stage: **Batches 0–9 complete; Batch 10 local release
 evidence passed. Staging acceptance, protected Android signing and deployment
 remain release-owner activities. R39 Accounts was approved on 25 August 2026;
-its T01–T04 protected server/domain slices are additive and route-less, and
-`YORKS_V1_ACCOUNTS` remains off until the phased Accounts acceptance gate
-passes.**
+its T01–T07 protected server/domain/UI slices are complete. The release owner
+explicitly authorized production web enablement on 26 August 2026 while the
+tracked flag default remains off for unconfigured and CI builds.**
 
 > **HISTORICAL BATCH MATERIAL — NOT THE CURRENT BUILD CONFIGURATION.** The
 > batch-completion files record the original incremental rollout and therefore
 > may say that an individual R35 flag was default-off. The canonical R35 build
 > configuration below is current: the accepted, complete R35 chain is on by
 > default and legacy Nexus flags are disabled. The later
-> `YORKS_V1_ACCOUNTS` flag is an intentional exception and remains off until
-> its R39 rollout gate passes.
+> `YORKS_V1_ACCOUNTS` flag is an intentional exception and remains separately
+> operator-controlled. Production web enablement was explicitly authorized on
+> 26 August 2026; the tracked default remains off.
 
 This folder is the repository-local contract for the Yorks V1 Procurement
 Control and Inventory turnaround. Rev 2.0 supersedes the overlapping Nexus V7

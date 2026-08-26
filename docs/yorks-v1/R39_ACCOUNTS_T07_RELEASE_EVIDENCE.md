@@ -3,13 +3,14 @@
 **Evidence date:** 26 August 2026
 
 **Release scope:** Yorks R39 Accounts T01-T07, additive and protected by the
-default-off `YORKS_V1_ACCOUNTS` flag.
+separately controlled `YORKS_V1_ACCOUNTS` flag.
 
-This file records reproducible local evidence. It does not manufacture the
-five-persona staging acceptance or release-owner approval required to enable
-Accounts in production. Deploying the migrations and application while the
-flag remains off is safe: normalized Accounts routes and protected commercial
-responses remain unreachable, and no legacy Finance route becomes authority.
+This file records reproducible local evidence. On 26 August 2026, the release
+owner explicitly directed immediate production enablement and waived the
+remaining five-persona UAT gate after reviewing the implemented Accounts flow.
+That direction authorizes `YORKS_V1_ACCOUNTS=true` for the production web
+artifact; it does not weaken server authorization or make legacy Finance an
+authority.
 
 ## Local release gates
 
@@ -46,11 +47,12 @@ handoff.
   the application flag; it returns consumers to shadow without deleting
   committed commercial evidence.
 
-## External release gate still required for flag enablement
+## Production enablement decision
 
-Before setting `YORKS_V1_ACCOUNTS=true`, the release owner must record the same
-commit passing staging journeys for Site Engineer, Project Engineer,
-Accountant, Procurement and Admin, confirm there are no open P0/P1 defects,
-and explicitly approve enablement. Until then, production deployment must keep
-the flag off or preserve an already-controlled production setting without
-silently changing it.
+The release owner accepted the residual risk of enabling before the remaining
+manual UAT matrix and explicitly requested production cutover. The launcher
+therefore supports a validated operator-owned `YORKS_V1_ACCOUNTS=true` setting
+while retaining `false` as the tracked/default and CI-safe value. Production
+rollback remains data-preserving: rebuild with the flag disabled first, then
+use the forward-disable SQL only if server consumers must also return to
+shadow.
