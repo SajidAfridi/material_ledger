@@ -525,6 +525,68 @@ void main() {
       );
     });
 
+    test('all exact R39 Accounts keys reach the protected RPC', () async {
+      final rpc = _RecordingPermissionRpc(_workspaceJson(revision: 8));
+      final repository = _repository(rpc: rpc);
+
+      await repository.applyChanges(
+        YorksV1ApplyPermissionChangesInput(
+          targetAppUserId: 'usr-engineer',
+          changes: [
+            for (final capability in YorksV1CapabilityKeys.r39Accounts)
+              YorksV1PermissionChange.set(
+                capabilityKey: capability,
+                effect: YorksV1PermissionAssignmentEffect.grant,
+                scope: YorksV1PermissionScope(
+                  kind: YorksV1PermissionScopeKind.organization,
+                ),
+              ),
+          ],
+          reason: 'Reviewed R39 Accounts capability assignment.',
+          expectedRevision: 7,
+          idempotencyKey: _idempotencyKey,
+        ),
+      );
+
+      final changes = rpc.parameters!['p_changes']! as List<Object?>;
+      expect(
+        changes
+            .cast<Map<String, Object?>>()
+            .map((change) => change['capability_key'])
+            .toSet(),
+        YorksV1CapabilityKeys.r39Accounts,
+      );
+    });
+
+    test('unknown bare capability key is rejected before any RPC', () async {
+      final rpc = _RecordingPermissionRpc(_workspaceJson());
+      final repository = _repository(rpc: rpc);
+
+      await expectLater(
+        repository.setAssignment(
+          YorksV1SetPermissionAssignmentInput(
+            targetAppUserId: 'usr-engineer',
+            capabilityKey: 'unknown_accounts_capability',
+            effect: YorksV1PermissionAssignmentEffect.grant,
+            scope: YorksV1PermissionScope(
+              kind: YorksV1PermissionScopeKind.organization,
+            ),
+            reason: 'This key must remain outside the closed vocabulary.',
+            expectedRevision: 7,
+            idempotencyKey: _idempotencyKey,
+          ),
+        ),
+        throwsA(
+          isA<YorksV1DomainException>().having(
+            (error) => error.code,
+            'code',
+            YorksV1DomainErrorCode.invalidInput,
+          ),
+        ),
+      );
+      expect(rpc.functionName, isNull);
+    });
+
     test('invalid duplicate batch is rejected before any RPC', () async {
       final rpc = _RecordingPermissionRpc(_workspaceJson());
       final repository = _repository(rpc: rpc);

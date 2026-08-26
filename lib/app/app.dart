@@ -7,6 +7,10 @@ import '../core/security/session_lock.dart';
 import '../core/scroll/yorks_scroll_behavior.dart';
 import '../core/theme/app_theme.dart';
 import '../features/system/presentation/screens/lock_screen.dart';
+import '../features/accounts/application/accounts_portfolio_providers.dart';
+import '../features/accounts/application/accounts_providers.dart';
+import '../features/accounts/application/accounts_receivables_providers.dart';
+import '../features/accounts/application/accounts_supplier_providers.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/material_request_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
@@ -66,6 +70,11 @@ void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
   ref.invalidate(yorksV1MaterialReturnProjectsProvider);
   ref.invalidate(yorksV1ProjectMaterialReturnProvider);
   ref.invalidate(yorksV1MaterialReturnCreationWorkspaceProvider);
+  ref.invalidate(yorksAccountsPortfolioControllerProvider);
+  ref.invalidate(yorksAccountsProjectOverviewControllerProvider);
+  ref.invalidate(yorksAccountsProjectControllerProvider);
+  ref.invalidate(yorksAccountsReceivablesControllerProvider);
+  ref.invalidate(yorksAccountsSupplierControllerProvider);
 }
 
 /// Provider for the app router — lives here so the incremental
@@ -124,6 +133,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final yorksV1InventorySuppliersEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
       .inventorySuppliers;
+  final yorksV1AccountsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .accounts;
   final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
   final connectedV1Permissions =
       yorksV1ProjectsEnabled && ref.watch(supabaseClientProvider) != null;
@@ -160,6 +172,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     yorksV1DocumentsEnabled: yorksV1DocumentsEnabled,
     yorksV1TeamChatEnabled: yorksV1TeamChatEnabled,
     yorksV1InventorySuppliersEnabled: yorksV1InventorySuppliersEnabled,
+    yorksV1AccountsEnabled: yorksV1AccountsEnabled,
     yorksV1Role: yorksV1Role,
     yorksV1PermissionResolver: connectedV1Permissions
         ? (

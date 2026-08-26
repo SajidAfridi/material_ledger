@@ -59,6 +59,7 @@ final yorksV1CurrentRoleProvider = Provider<YorksV1Role?>((ref) {
       // A real connected account must receive project_engineer from the JWT.
       UserRole.engineer => YorksV1Role.projectEngineer,
       UserRole.procurement => YorksV1Role.procurement,
+      UserRole.accountant => YorksV1Role.accountant,
       UserRole.admin => YorksV1Role.admin,
     };
   }

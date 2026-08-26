@@ -10,6 +10,7 @@ enum YorksV1Role {
   projectManager('project_manager'),
   workshopInCharge('workshop_in_charge'),
   documentController('document_controller'),
+  accountant('accountant'),
   procurement('procurement'),
   admin('admin');
 

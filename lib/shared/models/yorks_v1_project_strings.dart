@@ -8,6 +8,12 @@ import 'yorks_v1_project.dart';
 /// resolve their visible copy through this catalogue so the effective R35 UI
 /// never turns repository errors or prototype text into user-facing strings.
 abstract final class YorksV1ProjectStrings {
+  static const accounts = TranslatableString(
+    en: 'Accounts',
+    ar: 'الحسابات',
+    ur: 'اکاؤنٹس',
+    hi: 'अकाउंट्स',
+  );
   static const projects = TranslatableString(
     en: 'Projects',
     ar: 'المشاريع',
@@ -1476,6 +1482,7 @@ abstract final class YorksV1ProjectStrings {
       'project_manager' => AppStrings.projectManagerRole,
       'workshop_in_charge' => AppStrings.workshopInChargeRole,
       'document_controller' => AppStrings.documentControllerRole,
+      'accountant' => AppStrings.accountantRole,
       'procurement' => procurementRole,
       'admin' => adminRole,
       _ => projectTeam,

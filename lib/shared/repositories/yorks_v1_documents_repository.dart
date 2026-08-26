@@ -120,11 +120,32 @@ abstract interface class YorksV1SupplierDocumentsRepository {
   });
 }
 
+/// Accounts documents reuse the same immutable object/version pipeline while
+/// receiving a strictly role-shaped commercial projection.
+abstract interface class YorksV1AccountsDocumentsRepository {
+  Future<YorksV1AccountsDocumentWorkspace> getAccountsWorkspace(
+    String projectId, {
+    String? search,
+    YorksV1AccountsDocumentType? documentType,
+    bool includeArchived = false,
+  });
+
+  Future<YorksV1AccountsDocumentWorkspace> uploadAccounts(
+    YorksV1DocumentUploadInput input,
+  );
+
+  Future<Uint8List> downloadDocument({
+    required String bucketId,
+    required String objectPath,
+  });
+}
+
 class YorksV1SupabaseDocumentsRepository
     implements
         YorksV1DocumentsRepository,
         YorksV1RentalDocumentsRepository,
-        YorksV1SupplierDocumentsRepository {
+        YorksV1SupplierDocumentsRepository,
+        YorksV1AccountsDocumentsRepository {
   const YorksV1SupabaseDocumentsRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -174,6 +195,33 @@ class YorksV1SupabaseDocumentsRepository
   }
 
   @override
+  Future<YorksV1AccountsDocumentWorkspace> getAccountsWorkspace(
+    String projectId, {
+    String? search,
+    YorksV1AccountsDocumentType? documentType,
+    bool includeArchived = false,
+  }) async {
+    final normalizedProjectId = projectId.trim();
+    if (normalizedProjectId.isEmpty) _unexpected();
+    _requireAccountsReady();
+    final response = await _invoke(
+      functionName: 'v1_get_accounts_documents',
+      parameters: {
+        'p_project_id': normalizedProjectId,
+        'p_search': _nullableTrimmed(search),
+        'p_document_type': documentType?.wireValue,
+        'p_include_archived': includeArchived,
+      },
+    );
+    if (response is! Map) _unexpected();
+    final workspace = YorksV1AccountsDocumentWorkspace.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+    if (workspace.projectId != normalizedProjectId) _unexpected();
+    return workspace;
+  }
+
+  @override
   Future<YorksV1DocumentWorkspace> upload(YorksV1DocumentUploadInput input) =>
       _upload(
         input,
@@ -204,11 +252,26 @@ class YorksV1SupabaseDocumentsRepository
     );
   }
 
-  Future<YorksV1DocumentWorkspace> _upload(
+  @override
+  Future<YorksV1AccountsDocumentWorkspace> uploadAccounts(
+    YorksV1DocumentUploadInput input,
+  ) {
+    _requireAccountsReady();
+    _validateAccountsUpload(input);
+    return _upload(
+      input,
+      prepareFunction: 'v1_prepare_accounts_document_upload',
+      reload: () => getAccountsWorkspace(input.projectId),
+      includeAccountsMetadata: true,
+    );
+  }
+
+  Future<T> _upload<T>(
     YorksV1DocumentUploadInput input, {
     required String prepareFunction,
-    required Future<YorksV1DocumentWorkspace> Function() reload,
+    required Future<T> Function() reload,
     bool includeSupplierMetadata = false,
+    bool includeAccountsMetadata = false,
   }) async {
     _requireReady();
     final rpc = _rpcClient!;
@@ -227,6 +290,8 @@ class YorksV1SupabaseDocumentsRepository
         parameters: {
           'p_payload': includeSupplierMetadata
               ? input.toSupplierRpcPayload(hash)
+              : includeAccountsMetadata
+              ? input.toAccountsRpcPayload(hash)
               : input.toRpcPayload(hash),
           'p_idempotency_key': input.idempotencyKey,
         },
@@ -383,6 +448,15 @@ class YorksV1SupabaseDocumentsRepository
     _requireReady();
   }
 
+  void _requireAccountsReady() {
+    if (!_featureFlags.accounts) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.featureDisabled,
+      );
+    }
+    _requireReady();
+  }
+
   static void _validateSupplierUpload(YorksV1DocumentUploadInput input) {
     final type = input.supplierDocumentType;
     final reference = input.businessReference?.trim();
@@ -399,6 +473,20 @@ class YorksV1SupabaseDocumentsRepository
         (type == YorksV1SupplierDocumentType.invoice &&
             input.classification != YorksV1DocumentClassification.commercial);
     if (invalid) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+  }
+
+  static void _validateAccountsUpload(YorksV1DocumentUploadInput input) {
+    final type = input.accountsDocumentType;
+    final accountsTarget = input.entityType.wireValue.startsWith('accounts_');
+    final operationalAllowed =
+        type == YorksV1AccountsDocumentType.progressEvidence;
+    final classificationValid = operationalAllowed
+        ? input.classification == YorksV1DocumentClassification.operational ||
+              input.classification == YorksV1DocumentClassification.commercial
+        : input.classification == YorksV1DocumentClassification.commercial;
+    if (type == null || !accountsTarget || !classificationValid) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
   }
@@ -420,4 +508,9 @@ class YorksV1SupabaseDocumentsRepository
   static Never _unexpected() => throw const YorksV1DomainException(
     YorksV1DomainErrorCode.unexpectedResponse,
   );
+}
+
+String? _nullableTrimmed(String? value) {
+  final normalized = value?.trim();
+  return normalized == null || normalized.isEmpty ? null : normalized;
 }

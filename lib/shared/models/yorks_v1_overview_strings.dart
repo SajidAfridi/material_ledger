@@ -5,6 +5,19 @@ import 'app_strings.dart';
 /// Overview content is intentionally decision-oriented: each exact Yorks role
 /// sees the same trusted records through a role-specific operational lens.
 abstract final class YorksV1OverviewStrings {
+  static const accountantRolloutTitle = TranslatableString(
+    en: 'Accounts workspace is not enabled',
+    ar: 'مساحة عمل الحسابات غير مفعلة',
+    ur: 'اکاؤنٹس ورک اسپیس فعال نہیں ہے',
+    hi: 'अकाउंट्स वर्कस्पेस सक्षम नहीं है',
+  );
+  static const accountantRolloutDescription = TranslatableString(
+    en: 'Your Accountant profile is ready. Accounts remains locked until the controlled rollout is enabled.',
+    ar: 'ملف المحاسب جاهز. ستبقى الحسابات مقفلة حتى يتم تفعيل الإطلاق المنضبط.',
+    ur: 'آپ کا اکاؤنٹنٹ پروفائل تیار ہے۔ کنٹرولڈ رول آؤٹ فعال ہونے تک اکاؤنٹس مقفل رہے گا۔',
+    hi: 'आपकी अकाउंटेंट प्रोफाइल तैयार है। नियंत्रित रोलआउट सक्षम होने तक अकाउंट्स लॉक रहेगा।',
+  );
+
   static const adminCommandCentre = TranslatableString(
     en: 'Yorks Command Centre',
     ar: 'مركز قيادة يوركس',

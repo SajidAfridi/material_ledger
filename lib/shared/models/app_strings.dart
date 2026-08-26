@@ -832,6 +832,12 @@ abstract final class AppStrings {
     ur: 'دستاویز کنٹرولر',
     hi: 'दस्तावेज़ नियंत्रक',
   );
+  static const accountantRole = TranslatableString(
+    en: 'Accountant',
+    ar: 'محاسب',
+    ur: 'اکاؤنٹنٹ',
+    hi: 'लेखाकार',
+  );
   static const procurementRole = TranslatableString(
     en: 'Procurement',
     ar: 'المشتريات',

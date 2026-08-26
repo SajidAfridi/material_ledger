@@ -65,6 +65,87 @@ exception quantities reconcile to the dispatched quantity as defined in
 
 Only `confirmed` appends an inventory movement.
 
+### R39 Accounts rollout boundary
+
+The 25 August 2026 Accounts approval does not grant T01 transaction authority.
+`YORKS_V1_ACCOUNTS` defaults off; the exact Accountant role and all 15 Accounts
+capabilities are added to protected constraints/catalogue in shadow while no
+Accounts route or mutation command is reachable. The exact catalogue is in
+[`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md).
+
+T01 protects only the default-stage template and its 100% invariant; it freezes
+but does not yet instantiate the physical-building allocation policy. T02 adds
+the commercial baseline, project physical-building allocation relations,
+100%/Common-exclusion constraints and Billing Progress states/commands. T03
+adds client claim, invoice, certification, PDC and payment states/commands, and
+T04 adds supplier bill/match/payment states/commands. T05–T07 add reachable UI
+and shared evidence/release cutover only after the corresponding server tests
+pass. Every
+later state transition must be added to this matrix with its caller, locks,
+expected version, idempotency, atomic effects and rollback before enforcement.
+The legacy `/admin/finance` route has no row here because it is not an Accounts
+authority (FR-002 and FR-014).
+
+T02 promotes only `view_project_accounts`,
+`view_project_commercial_values`, `suggest_billing_progress`,
+`confirm_billing_progress`, `configure_project_commercials` and
+`review_commercial_progress` for their protected server consumers. The app
+flag stays off. T03 claim/invoice capabilities, T06 export capability and all
+normalized T05 routes remain shadow/unreachable.
+
+### R39 T02 commercial baseline
+
+`not_initialized -> active revision 1 -> active revision N`
+
+Initialization creates revision 1 once. A later valid revision atomically
+becomes active and makes the prior revision historical; no current or
+historical baseline is updated in place. Invalid allocation, stage, terms, VAT
+or scope input leaves no revision or audit side effect. Revision requires the
+current baseline version, a reason, idempotency key and request hash.
+
+An active revision contains an explicit currency, positive fixed-numeric
+contract value, payment terms, reminder lead, explicit validated VAT snapshot,
+effective date, physical-building allocations and stage allocations. Accounts
+has no approved VAT default and never borrows the Rentals 5% rate. Management
+review is disabled/null until an authorized baseline explicitly configures a
+rule; no implicit threshold, quorum or expiry is allowed.
+
+### R39 T02 Billing Progress
+
+For each active `(project, baseline_revision, physical_building, stage)` there
+is exactly one current row and any number of append-only revisions.
+
+| Fact/action | State rule | Authority |
+|---|---|---|
+| Suggest | 0–100; summary or authorized project evidence required; confirmed/eligible unchanged | Active scoped actor with `suggest_billing_progress` |
+| Confirm | 0–100; independent of suggestion; an increase needs an authorized evidence reference | Active scoped actor with `confirm_billing_progress` |
+| Review | `not_required`, `pending` or `satisfied` is derived from the explicit baseline policy and review records | Active scoped actor with `review_commercial_progress` |
+| Correct | New revision only; expected version, mandatory reason/evidence and applicable capability | Same command authority plus Admin-only exceptional policy; no exception route exists in T02 |
+
+Suggestion, confirmation and review lock the current row, validate the active
+baseline and expected version, append one revision/audit event, then update the
+current projection atomically. Monetary visibility remains a separate
+`view_project_commercial_values` decision; `confirm_billing_progress` does not
+implicitly grant it.
+
+### R39 T04 supplier-bill and payment states
+
+`draft -> approved`, with `cancelled` terminal. Payment is a derived state:
+`pending`, `approved`, `partially_paid`, `paid`, `blocked` or `cancelled`.
+
+| Fact/action | State rule | Authority |
+|---|---|---|
+| Maintain bill evidence | Draft only; expected version; no accepted quantity supplied by the caller | Active scoped Procurement/Admin with `manage_supplier_bills` |
+| Match | `matched` for PO/LPO + accepted receipt + supplier invoice; `review` for exactly two; `blocked` for fewer than two or explicit mismatch | Server-derived only |
+| Approve | Current supplier-invoice document required; normally `matched`; unmatched exception needs a fresh Admin reason | Accountant/Admin with `approve_supplier_bill_payment`; Admin-only exception |
+| Pay | Approved, current evidence, positive fixed-numeric amount and net paid not above total incl. VAT; unmatched payment needs a new Admin reason | Accountant/Admin with `approve_supplier_bill_payment`; Admin-only exception |
+| Reverse payment | One exact linked original, never a mutation or second reversal | Same payment authority with expected bill version |
+| Cancel | No nonzero net payment; approved cancellation requires payment authority and reason | Draft maintainer, or Accountant/Admin for approved bill |
+
+The operational Receipt Review remains authoritative and unchanged. T04 reads
+its confirmed good quantity and delivery reference through a narrow trusted
+helper; it does not modify MR, Dispatch, Receipt, Inventory or Return state.
+
 ## 2. Quantity invariants
 
 | Invariant | Enforcement point |
@@ -79,6 +160,13 @@ Only `confirmed` appends an inventory movement.
 | Missing/damaged does not increment good received | receipt RPC and movement trigger/constraint |
 | Confirmed returns do not exceed good received minus earlier confirmed returns | return submit/confirm RPC under source-line locks |
 | One committed effect per idempotency key/request hash | idempotency table unique constraint and RPC helper |
+| R39 active physical-building allocations total 100.0000 within 0.00005 and exclude Common | baseline initialize/revise RPC plus deferred constraint trigger |
+| R39 active stage allocations total 100.0000 within 0.00005 | baseline initialize/revise RPC plus deferred constraint trigger |
+| R39 contract value is finite fixed numeric and `> 0`; VAT is an explicit validated snapshot | baseline initialize/revise RPC and checks |
+| R39 `0 <= reminder_days <= payment_terms_days` | baseline initialize/revise RPC and checks |
+| One current R39 progress row per project/revision/physical building/stage | unique constraint plus progress RPCs |
+| R39 suggested/confirmed progress is between 0 and 100; suggestion never mutates confirmation | checks plus suggest/confirm RPC separation |
+| R39 Stage Value and Confirmed Eligible are server-derived decimal values | role-safe baseline/progress projections only |
 
 All authoritative quantities are Postgres `numeric`. Flutter may format decimal
 input but does not decide the final comparison result.
@@ -88,8 +176,27 @@ input but does not decide the final comparison result.
 Proposed stable function names use a `v1_` prefix during coexistence with legacy
 tables/functions.
 
+T01 introduces no normalized Accounts mutation RPC. Any additive T01
+projection is diagnostic/shadow-only, returns no Accounts record values and
+cannot be treated by Flutter as a command grant. T02–T07 must add their exact
+RPC/projection rows here before consumer cutover.
+
 | RPC | Caller | Locks/version | Idempotent | Atomic effects |
 |---|---|---|---|---|
+| `v1_initialize_project_commercial_baseline` | Active scoped `configure_project_commercials` actor | project/profile, physical scope set, protected default stage template; one baseline per project | yes | validate explicit VAT/terms/positive contract/100% sets/Common exclusion, create profile + immutable revision 1 + allocations + progress current rows, append audit |
+| `v1_revise_project_commercial_baseline` | Active scoped `configure_project_commercials` actor | project/profile/current baseline + allocation/progress rows in deterministic order; expected baseline version | yes | validate complete replacement snapshot and reason, create immutable numbered revision, atomically switch current baseline, preserve earlier facts/audit; T03 later marks open claim drafts stale |
+| `v1_suggest_billing_progress` | Active scoped `suggest_billing_progress` actor within authorized project/building | active baseline/current progress row; expected progress version | yes | validate 0–100 and evidence summary/reference, append suggestion revision/audit, update suggestion only |
+| `v1_confirm_billing_progress` | Active scoped `confirm_billing_progress` actor | active baseline/current progress row and authorized evidence references; expected progress version | yes | validate 0–100 and increase evidence, append confirmation revision/audit, update confirmed percent/review blocker and server eligible facts; no value visibility grant |
+| `v1_review_commercial_progress` | Active scoped `review_commercial_progress` actor when explicit policy requires review | active baseline/current progress/review fact; expected progress version | yes | append satisfied review/revision/audit and clear only the matching review blocker |
+| `v1_get_project_commercial_baseline` | Active scoped `view_project_accounts`; value fields require `view_project_commercial_values` | project/current baseline | no | role-safe active revision/status/allocations; protected monetary keys omitted rather than zeroed |
+| `v1_list_billing_progress` | Active scoped `view_project_accounts`; value fields require `view_project_commercial_values` | active baseline plus stable filter/cursor arguments | no | current Building × Stage rows, invariant totals, blockers and record command flags; filters never change aggregate calculations or hide blockers |
+| `v1_list_billing_progress_revisions` | Active scoped `view_project_accounts`; value fields require `view_project_commercial_values` | authorized project/progress row plus stable cursor | no | append-only suggestion/confirmation/review history with only authorized evidence metadata |
+| `v1_create_supplier_bill_draft`, `v1_update_supplier_bill_draft` | Active scoped Procurement/Admin with `manage_supplier_bills` | project/bill/version plus controlled-document and confirmed-receipt roots | yes | validate supplier/invoice/value/evidence identity, derive trusted delivery and match state, save draft and audit; no operational mutation |
+| `v1_approve_supplier_bill` | Active scoped Accountant/Admin with `approve_supplier_bill_payment` | project/bill/version and current evidence | yes | require supplier-invoice document, enforce matched or fresh Admin exception, snapshot approval/audit |
+| `v1_record_supplier_payment` | Active scoped Accountant/Admin with `approve_supplier_bill_payment` | project/bill/version and prior payment/reversal facts | yes | re-check evidence and approval, enforce positive amount/total cap/reference uniqueness, append payment/audit and derive state |
+| `v1_reverse_supplier_payment` | Active scoped Accountant/Admin with `approve_supplier_bill_payment` | project/bill/version, exact original payment and reversal uniqueness | yes | append one exact negative linked reversal/audit; never edit original payment |
+| `v1_cancel_supplier_bill` | Draft maintainer, or scoped payment approver for approved bill | project/bill/version and net payment total | yes | require reason, reject nonzero net payment, set terminal cancelled state and audit |
+| `v1_get_supplier_bill`, `v1_list_supplier_bills` | Active scoped `view_project_accounts`; costs require `view_supplier_costs` | authorized project/bill plus stable filters/cursor | no | protected supplier state, match/payment status and command flags; monetary keys omitted without cost authority; no client-receivable keys |
 | `v1_create_project` | Project Engineer, Site Engineer, Admin | reference/template rows | yes | project, Common/buildings, initial memberships, one Workshop Materials BOQ folder per real scope, audit |
 | `v1_update_project` | Active assigned Project/Site Engineer or Admin | project/version, retained building scopes | yes | project setup, parties, active/retired building scopes; each new real scope receives one Workshop Materials folder, audit |
 | `v1_archive_project` | Admin only | project/version, open MR check | yes | irreversible safe archive state, retained history, audit |
@@ -173,6 +280,33 @@ fail closed.
 Legend: `R` read, `C` create, `U` update, `RPC` mutation only through trusted
 command, `—` denied. “Assigned” always means an active relevant project
 membership.
+
+The exact ninth `accountant` role is not an “Assigned” technical member. During
+T01 it receives only its own protected identity/effective-capability snapshot;
+Accounts capabilities are shadow and the feature is unreachable. It is denied
+Project/BOQ/MR/Dispatch/Receipt/Inventory/Return/membership mutation through
+UI, direct tables and ordinary RPCs. Later Accounts reads/commands use explicit
+project/organization capability scope and record-specific command flags, never
+technical membership or role-name inference (FR-016–FR-025).
+
+### R39 T02 response and command boundary
+
+| T02 surface | Site Engineer | Project Engineer | Accountant | Procurement | Admin / management reviewer |
+|---|---|---|---|---|---|
+| Baseline/progress non-monetary projection | Authorized project scope with `view_project_accounts`; percentages/evidence/owner only | Authorized project scope with `view_project_accounts` | Capability-scoped project only | Denied by default | Capability-scoped project |
+| Contract/allocation/eligible monetary fields | Omitted unless separately granted `view_project_commercial_values` | Omitted unless separately granted `view_project_commercial_values` | Allowed only where both project scope and value capability are effective | Denied by default | Allowed only where both project scope and value capability are effective |
+| Suggest progress | RPC with `suggest_billing_progress` and active project/building scope | Only if explicitly granted same capability | Denied by default | Denied | Only if explicitly granted same capability |
+| Confirm progress | Denied | RPC with `confirm_billing_progress`; value capability is not required to confirm | Denied by default | Denied | Only if explicitly granted same capability |
+| Configure/revise baseline | Denied | Denied by default | Denied by default | Denied | RPC with `configure_project_commercials` |
+| Management review | Denied | Denied unless explicitly granted | Denied unless explicitly granted | Denied | RPC with `review_commercial_progress` and configured review requirement |
+| Direct relation insert/update/delete | Denied | Denied | Denied | Denied | Denied; trusted RPC only |
+
+An unassigned actor is denied even if a guessed project/building UUID is
+valid. Revocation/inactivation is re-checked against live protected identity on
+every read and command. The non-monetary JSON shape contains no contract,
+currency, VAT, allocation amount, Stage Value, eligible, cumulative or
+available-to-claim key; AT-SEC-001/004/005/008 assert both database response
+and captured network payload absence.
 
 | Domain | Project Engineer | Site Engineer | Procurement | Admin |
 |---|---|---|---|---|
@@ -267,6 +401,10 @@ At minimum, append events for:
 - document version/link change;
 - Admin user/capability change and override.
 - configuration publication with exact Admin, reason, affected areas and immutable version.
+- after the applicable R39 phase cuts over: commercial baseline revision,
+  progress suggestion/confirmation/review, claim/invoice/certification,
+  PDC/payment, supplier-bill match/approval/payment and Accounts document
+  changes with exact actor, role, capability, project, reason and server time.
 
 Audit tables deny client insert, update and delete. Corrections append a new
 event referencing the original.
@@ -314,3 +452,28 @@ Every relevant migration/test must prove at least:
 20. the seeded shadow resolver reproduces the current role/membership and
     commercial-override decisions with zero unexplained allow/deny differences
     before any protected consumer is cut over.
+21. an Accountant cannot mutate BOQ, Material Request or Dispatch by route,
+    direct table API or ordinary RPC, and denial creates no partial operational
+    or audit side effect (AT-SEC-003);
+22. an inactive Accountant presenting a stale token receives no Accounts read
+    or command result and any protected client projection is purged
+    (AT-SEC-006); and
+23. an unknown exact role receives no Accounts capability, route, projection
+    or command privilege (AT-SEC-007).
+24. a Site Engineer or any actor without
+    `view_project_commercial_values` receives percent/evidence/owner facts but
+    no monetary JSON field keys, including through direct RPC calls, filters,
+    revision history or captured network response (AT-SEC-001/008);
+25. an unassigned Project Engineer guessing project/building identifiers is
+    denied every T02 projection/command with no existence oracle or partial
+    revision/audit side effect (AT-SEC-004);
+26. a revoked/inactive T02 actor is denied on the next refetch and command even
+    with a stale token; protected client state must be purged by the future T05
+    consumer (AT-SEC-005);
+27. ordinary authenticated users cannot insert, update or delete a baseline,
+    allocation, current progress, progress revision, review or T02 audit row;
+28. same idempotency key plus same request hash returns the prior T02 result,
+    while the same key plus a different hash conflicts without a second
+    revision/audit row (AT-CONC-002/003); and
+29. two T02 confirmations with the same expected version yield one success and
+    one stale conflict with no lost update or partial effect (AT-PROG-005).

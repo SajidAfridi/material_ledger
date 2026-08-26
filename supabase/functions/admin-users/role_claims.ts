@@ -19,6 +19,10 @@ export const DEFAULT_CAPS: Readonly<Record<string, readonly string[]>> = {
     "goods",
     "approveLeave",
   ],
+  // Accounts commands are resolved by protected Postgres capabilities. Keep
+  // legacy shell claims empty so provisioning cannot manufacture technical,
+  // inventory or general finance access for Accountant.
+  accountant: [],
   project_engineer: [],
   site_engineer: [],
   senior_mechanical_engineer: [],

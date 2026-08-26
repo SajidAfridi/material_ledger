@@ -25,12 +25,14 @@ class YorksV1DomainException implements Exception {
     this.code, {
     this.serverCode,
     this.serverMessage,
+    this.supportReference,
     this.cause,
   });
 
   final YorksV1DomainErrorCode code;
   final String? serverCode;
   final String? serverMessage;
+  final String? supportReference;
   final Object? cause;
 
   @override

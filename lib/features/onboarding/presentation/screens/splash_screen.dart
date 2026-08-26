@@ -45,16 +45,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         // starts at this route. Keep the branded hand-off long enough to read
         // without delaying the desktop workspace.
         mobile ? const Duration(milliseconds: 1600) : Duration.zero,
-        () async {
+        () {
           if (!mounted) return;
           // The approved R35 prototype goes directly from splash to sign-in. The
           // old first-run language gate could redirect that hand-off back to
           // splash forever on a fresh browser profile. English is the configured
           // default; users can change the display language later from Profile.
           if (!ref.read(onboardingCompleteProvider)) {
-            await ref.read(onboardingCompleteProvider.notifier).complete();
+            // Persist the one-way preference without leaving a navigation
+            // continuation alive after this route (or its test router) has
+            // been disposed. The router remains the authority for the handoff.
+            unawaited(ref.read(onboardingCompleteProvider.notifier).complete());
           }
-          if (mounted) context.go(RoutePaths.login);
+          context.go(RoutePaths.login);
         },
       );
     });

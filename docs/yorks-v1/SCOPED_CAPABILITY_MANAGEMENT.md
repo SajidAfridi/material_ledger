@@ -1,6 +1,7 @@
 # Yorks V1 — Scoped Capability Management
 
-Status: **approved for additive implementation on 24 August 2026**
+Status: **approved for additive implementation on 24 August 2026; Accounts
+shadow catalogue amendment approved 25 August 2026**
 
 This contract introduces person-specific permissions without replacing Yorks
 roles, weakening workflow invariants or changing any user's effective access at
@@ -27,8 +28,9 @@ runtime consumer exists, or permit audit history to be edited/deleted.
 
 The first production deployment is a zero-surprise migration:
 
-1. the exact eight server-controlled roles and active project memberships stay
-   unchanged;
+1. the exact nine server-controlled roles are recognized; the existing eight
+   operational role baselines and active technical project memberships stay
+   unchanged, while the new Accountant is never added to technical membership;
 2. a seeded role baseline reproduces the effective access that each role has
    immediately before this migration;
 3. existing commercial overrides remain effective and are surfaced through the
@@ -116,9 +118,32 @@ A capability is shown as assignable only when its server consumer, RLS/RPC
 tests and role-safe response shape are marked `enforced`. `shadow` capabilities
 may appear read-only for parity diagnostics, and their candidate assignments
 must not change the currently authoritative route, response or command
-decision. `planned` capabilities are not
-shown as usable controls. Accounts controls remain planned until an
-authoritative Accounts runtime exists.
+decision. `planned` capabilities are not shown as usable controls.
+
+The 25 August 2026 R39 T01 foundation adds these exact Accounts catalogue keys
+in `shadow`, not `planned` or `enforced`:
+
+- `view_project_accounts`
+- `view_project_commercial_values`
+- `suggest_billing_progress`
+- `confirm_billing_progress`
+- `prepare_client_claim`
+- `manage_client_invoices`
+- `record_client_certification`
+- `record_client_payment`
+- `manage_pdc`
+- `manage_supplier_bills`
+- `approve_supplier_bill_payment`
+- `configure_project_commercials`
+- `view_supplier_costs`
+- `export_accounts_registers`
+- `review_commercial_progress`
+
+They remain read-only parity facts and cannot change route, projection or
+command authority during T01. T02–T07 may mark one key/consumer `enforced` only
+when the same bounded phase ships its protected runtime and complete positive,
+negative, stale-claim, project-scope, response-shape and separation-of-duties
+tests. `YORKS_V1_ACCOUNTS` remains default-off until the R39 release gate.
 
 The following are never delegable capabilities: changing or deleting audit
 history; retrieving secrets/service credentials; bypassing RLS; editing
@@ -287,8 +312,8 @@ All other operational catalogue rows remain `shadow` until their complete
 read/command surface is separable and tested. In particular, project-team and
 project-state management, granular BOQ import/export/folder actions, printing,
 embedded logistics reads/evidence and warehouse return confirmation remain
-legacy-authoritative. Planned Accounts and audit-corrective-note controls stay
-disabled and nonassignable.
+legacy-authoritative. R39 Accounts keys remain shadow and nonassignable during
+T01; audit-corrective-note controls remain planned, disabled and nonassignable.
 
 Rollback disables the new consumer and returns to the prior server check. It
 does not drop capability data, remove audit history or rewrite roles. A
@@ -297,8 +322,9 @@ as retained configuration pending the next safe cutover.
 
 Acceptance requires:
 
-- an exact current-access preservation fixture for all eight roles and existing
-  commercial overrides;
+- an exact current-access preservation fixture for all nine roles and existing
+  commercial overrides, proving that Accountant has no technical membership or
+  non-Accounts authority;
 - positive and negative tests for every seeded capability;
 - self-escalation, delegation-ceiling, last-admin, expiry and conflicting-writer
   proofs;

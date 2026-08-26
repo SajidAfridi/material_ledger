@@ -11,6 +11,7 @@ Deno.test("only Admin and Senior Mechanical Engineer configure users", () => {
   assertEquals(canConfigureUsers("project_manager"), false);
   assertEquals(canConfigureUsers("project_engineer"), false);
   assertEquals(canConfigureUsers("procurement"), false);
+  assertEquals(canConfigureUsers("accountant"), false);
   assertEquals(canConfigureUsers(null), false);
 });
 

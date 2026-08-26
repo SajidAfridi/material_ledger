@@ -30,7 +30,16 @@ enum YorksV1DocumentEntityType {
   deliveryOrder('delivery_order'),
   rentalProperty('rental_property'),
   supplier('supplier'),
-  supplierReceiptBatch('supplier_receipt_batch');
+  supplierReceiptBatch('supplier_receipt_batch'),
+  accountsBaselineRevision('accounts_baseline_revision'),
+  accountsBillingProgressRevision('accounts_billing_progress_revision'),
+  accountsClientClaim('accounts_client_claim'),
+  accountsClientInvoice('accounts_client_invoice'),
+  accountsClientCertification('accounts_client_certification'),
+  accountsClientPayment('accounts_client_payment'),
+  accountsClientPdc('accounts_client_pdc'),
+  accountsSupplierBill('accounts_supplier_bill'),
+  accountsSupplierMatch('accounts_supplier_match');
 
   const YorksV1DocumentEntityType(this.wireValue);
 
@@ -40,6 +49,36 @@ enum YorksV1DocumentEntityType {
     if (value is! String) return null;
     for (final entityType in values) {
       if (entityType.wireValue == value) return entityType;
+    }
+    return null;
+  }
+}
+
+enum YorksV1AccountsDocumentType {
+  contract('contract'),
+  contractVariation('contract_variation'),
+  progressEvidence('progress_evidence'),
+  clientClaim('client_claim'),
+  clientInvoice('client_invoice'),
+  clientCertification('client_certification'),
+  paymentCertificate('payment_certificate'),
+  pdcCopy('pdc_copy'),
+  paymentReceipt('payment_receipt'),
+  supplierInvoice('supplier_invoice'),
+  poLpo('po_lpo'),
+  deliveryReceipt('delivery_receipt'),
+  paymentAdvice('payment_advice'),
+  commercialCorrespondence('commercial_correspondence'),
+  other('other');
+
+  const YorksV1AccountsDocumentType(this.wireValue);
+
+  final String wireValue;
+
+  static YorksV1AccountsDocumentType? fromWireValue(Object? value) {
+    if (value is! String) return null;
+    for (final type in values) {
+      if (type.wireValue == value) return type;
     }
     return null;
   }
@@ -216,6 +255,9 @@ class YorksV1Document {
     required this.createdAt,
     required this.currentVersion,
     required this.links,
+    this.versions = const [],
+    this.accountsDocumentType,
+    this.isArchived = false,
   });
 
   final String id;
@@ -223,6 +265,9 @@ class YorksV1Document {
   final DateTime createdAt;
   final YorksV1DocumentVersion currentVersion;
   final List<YorksV1DocumentLink> links;
+  final List<YorksV1DocumentVersion> versions;
+  final YorksV1AccountsDocumentType? accountsDocumentType;
+  final bool isArchived;
 
   factory YorksV1Document.fromRpcJson(Map<String, dynamic> json) {
     final classification = YorksV1DocumentClassification.fromWireValue(
@@ -236,6 +281,16 @@ class YorksV1Document {
         classification != YorksV1DocumentClassification.commercial) {
       _unexpected();
     }
+    final rawAccountsType = json['accounts_document_type'];
+    final accountsType = YorksV1AccountsDocumentType.fromWireValue(
+      rawAccountsType,
+    );
+    if (rawAccountsType != null && accountsType == null) _unexpected();
+    final versions = json.containsKey('versions')
+        ? _jsonList(
+            json['versions'],
+          ).map(YorksV1DocumentVersion.fromRpcJson).toList(growable: false)
+        : <YorksV1DocumentVersion>[currentVersion];
     return YorksV1Document(
       id: _requiredString(json, 'id'),
       classification: classification,
@@ -244,11 +299,67 @@ class YorksV1Document {
       links: _jsonList(
         json['links'],
       ).map(YorksV1DocumentLink.fromRpcJson).toList(growable: false),
+      versions: versions,
+      accountsDocumentType: accountsType,
+      isArchived: json['archived'] == true,
     );
   }
 
   bool isLinkedTo(YorksV1DocumentEntityType type, String entityId) =>
       links.any((link) => link.entityType == type && link.entityId == entityId);
+}
+
+class YorksV1AccountsDocumentTarget {
+  const YorksV1AccountsDocumentTarget({
+    required this.entityType,
+    required this.entityId,
+    required this.label,
+  });
+
+  final YorksV1DocumentEntityType entityType;
+  final String entityId;
+  final String label;
+
+  factory YorksV1AccountsDocumentTarget.fromRpcJson(Map<String, dynamic> json) {
+    final entityType = YorksV1DocumentEntityType.fromWireValue(
+      json['entity_type'],
+    );
+    if (entityType == null || !entityType.wireValue.startsWith('accounts_')) {
+      _unexpected();
+    }
+    return YorksV1AccountsDocumentTarget(
+      entityType: entityType,
+      entityId: _requiredString(json, 'entity_id'),
+      label: _requiredString(json, 'label'),
+    );
+  }
+}
+
+class YorksV1AccountsDocumentWorkspace {
+  const YorksV1AccountsDocumentWorkspace({
+    required this.projectId,
+    required this.documents,
+    required this.uploadTargets,
+    required this.canUpload,
+  });
+
+  final String projectId;
+  final List<YorksV1Document> documents;
+  final List<YorksV1AccountsDocumentTarget> uploadTargets;
+  final bool canUpload;
+
+  factory YorksV1AccountsDocumentWorkspace.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1AccountsDocumentWorkspace(
+    projectId: _requiredString(json, 'project_id'),
+    documents: _jsonList(
+      json['documents'],
+    ).map(YorksV1Document.fromRpcJson).toList(growable: false),
+    uploadTargets: _jsonList(
+      json['upload_targets'],
+    ).map(YorksV1AccountsDocumentTarget.fromRpcJson).toList(growable: false),
+    canUpload: json['can_upload'] == true,
+  );
 }
 
 class YorksV1AuditEvent {
@@ -366,6 +477,7 @@ class YorksV1DocumentUploadInput {
     this.supplierDocumentType,
     this.businessReference,
     this.supplierDocumentNotes,
+    this.accountsDocumentType,
   });
 
   final String projectId;
@@ -384,6 +496,7 @@ class YorksV1DocumentUploadInput {
   final YorksV1SupplierDocumentType? supplierDocumentType;
   final String? businessReference;
   final String? supplierDocumentNotes;
+  final YorksV1AccountsDocumentType? accountsDocumentType;
 
   Map<String, Object?> toRpcPayload(String sha256) => {
     'project_id': projectId,
@@ -409,6 +522,11 @@ class YorksV1DocumentUploadInput {
     'supplier_document_type': supplierDocumentType?.wireValue,
     'business_reference': _nullableString(businessReference),
     'supplier_document_notes': _nullableString(supplierDocumentNotes),
+  };
+
+  Map<String, Object?> toAccountsRpcPayload(String sha256) => {
+    ...toRpcPayload(sha256),
+    'accounts_document_type': accountsDocumentType?.wireValue,
   };
 }
 

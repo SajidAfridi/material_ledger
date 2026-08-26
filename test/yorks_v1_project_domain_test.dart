@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Yorks V1 role claims', () {
-    test('accepts only the eight exact server-controlled role claims', () {
+    test('accepts only the nine exact server-controlled role claims', () {
       expect(
         YorksV1Role.fromServerClaim('project_engineer'),
         YorksV1Role.projectEngineer,
@@ -39,6 +39,7 @@ void main() {
         YorksV1Role.fromServerClaim('document_controller'),
         YorksV1Role.documentController,
       );
+      expect(YorksV1Role.fromServerClaim('accountant'), YorksV1Role.accountant);
       expect(
         YorksV1Role.fromServerClaim('procurement'),
         YorksV1Role.procurement,
@@ -54,6 +55,16 @@ void main() {
       expect(YorksV1Role.seniorMechanicalEngineer.isEngineering, isTrue);
       expect(YorksV1Role.seniorMechanicalEngineer.canBrowseInventory, isTrue);
       expect(YorksV1Role.seniorMechanicalEngineer.canManageInventory, isFalse);
+      expect(YorksV1Role.accountant.isEngineering, isFalse);
+      expect(YorksV1Role.accountant.isGlobalProjectEngineer, isFalse);
+      expect(YorksV1Role.accountant.canCreateProject, isFalse);
+      expect(YorksV1Role.accountant.canCreateMaterialRequest, isFalse);
+      expect(YorksV1Role.accountant.canCreateMaterialReturn, isFalse);
+      expect(YorksV1Role.accountant.canManageProjectMembers, isFalse);
+      expect(YorksV1Role.accountant.canSetProjectState, isFalse);
+      expect(YorksV1Role.accountant.canConfigureUsers, isFalse);
+      expect(YorksV1Role.accountant.canBrowseInventory, isFalse);
+      expect(YorksV1Role.accountant.canManageInventory, isFalse);
     });
 
     test('never promotes a legacy Engineer claim automatically', () {

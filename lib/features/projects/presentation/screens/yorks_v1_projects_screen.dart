@@ -73,9 +73,17 @@ class YorksV1OverviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(yorksV1MaterialRequestLiveRefreshProvider);
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    // Accountant is a provisionable R39 identity before the Accounts module is
+    // enabled. Keep the retained technical overview fail-closed and, crucially,
+    // return before subscribing to any project, MR, inventory, realtime or
+    // administration provider.
+    if (role == YorksV1Role.accountant) {
+      return _AccountantRolloutLockedState(language: language);
+    }
+
+    ref.watch(yorksV1MaterialRequestLiveRefreshProvider);
     final permissions = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final user = ref.watch(currentUserProvider);
     final projects = ref.watch(yorksV1AuthorizedProjectPortfolioProvider);
@@ -567,6 +575,14 @@ class _OverviewRoleProfile {
         _OverviewActionKind.returns,
       ],
     ),
+    YorksV1Role.accountant => const _OverviewRoleProfile(
+      eyebrow: YorksV1OverviewStrings.accountantRolloutTitle,
+      title: YorksV1OverviewStrings.accountantRolloutTitle,
+      description: YorksV1OverviewStrings.accountantRolloutDescription,
+      priorityTitle: YorksV1OverviewStrings.accountantRolloutTitle,
+      metrics: [],
+      actions: [],
+    ),
     YorksV1Role.projectEngineer || null => const _OverviewRoleProfile(
       eyebrow: YorksV1OverviewStrings.engineeringWorkspace,
       title: YorksV1OverviewStrings.projectEngineerTitle,
@@ -586,6 +602,59 @@ class _OverviewRoleProfile {
       ],
     ),
   };
+}
+
+class _AccountantRolloutLockedState extends StatelessWidget {
+  const _AccountantRolloutLockedState({required this.language});
+
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppColors.surface,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: NexusSectionCard(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    key: ValueKey('accountant-rollout-locked-icon'),
+                    size: 44,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  BilingualText(
+                    english:
+                        YorksV1OverviewStrings.accountantRolloutTitle.primary,
+                    secondary: YorksV1OverviewStrings.accountantRolloutTitle
+                        .secondary(language),
+                    englishStyle: AppTypography.headlineSmall,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    YorksV1OverviewStrings.accountantRolloutDescription.active(
+                      language,
+                    ),
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _OverviewStats {
@@ -3384,6 +3453,7 @@ enum YorksV1ProjectWorkspaceTab {
   overview,
   boq,
   requests,
+  accounts,
   documents,
   materialMovement,
 }
@@ -3448,6 +3518,24 @@ class _YorksV1ProjectWorkspaceScreenState
       legacyAllowed: true,
       projectId: widget.projectId,
     );
+    final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
+    final canReadProjectAccounts =
+        featureFlags.accounts &&
+        yorksV1CanReadProjectRecord(
+          permissionState,
+          YorksV1CapabilityKeys.viewProjectAccounts,
+          legacyAllowed: false,
+          projectId: widget.projectId,
+        );
+    final canReadSupplierAccounts =
+        featureFlags.accounts &&
+        yorksV1CanReadProjectRecord(
+          permissionState,
+          YorksV1CapabilityKeys.viewSupplierCosts,
+          legacyAllowed: false,
+          projectId: widget.projectId,
+        );
+    final showAccounts = canReadProjectAccounts || canReadSupplierAccounts;
     final AsyncValue<List<YorksV1MaterialRequest>> requests = canReadRequests
         ? ref.watch(yorksV1MaterialRequestListProvider(widget.projectId))
         : const AsyncData<List<YorksV1MaterialRequest>>([]);
@@ -3573,9 +3661,7 @@ class _YorksV1ProjectWorkspaceScreenState
               );
             }
             final selectedProject = project;
-            final teamChatEnabled = ref
-                .watch(yorksV1FeatureFlagsProvider)
-                .teamChat;
+            final teamChatEnabled = featureFlags.teamChat;
             final projectStateIsEditable =
                 selectedProject.project.state ==
                     YorksV1ProjectLifecycle.draft ||
@@ -3691,6 +3777,7 @@ class _YorksV1ProjectWorkspaceScreenState
                     actorRole: role,
                     activeMember: activeMember,
                     canActAsProjectEngineer: requestApproveAccess.isVisible,
+                    showAccounts: showAccounts,
                     onActivate: activateAction,
                     showNewRequest:
                         projectStateIsEditable && requestCreateAccess.isVisible,
@@ -3707,6 +3794,18 @@ class _YorksV1ProjectWorkspaceScreenState
                       yorksV1MaterialRequestListProvider(widget.projectId),
                     ),
                     onTabChanged: (value) {
+                      if (value == YorksV1ProjectWorkspaceTab.accounts) {
+                        context.go(
+                          canReadProjectAccounts
+                              ? RoutePaths.yorksV1ProjectAccountsOverviewPath(
+                                  selectedProject.project.id,
+                                )
+                              : RoutePaths.yorksV1ProjectAccountsSupplierBillsPath(
+                                  selectedProject.project.id,
+                                ),
+                        );
+                        return;
+                      }
                       setState(() => _tab = value);
                     },
                   );
@@ -3720,6 +3819,8 @@ class _YorksV1ProjectWorkspaceScreenState
                         '${selectedProject.project.reference} · ${YorksV1ProjectStrings.boq.primary}',
                       YorksV1ProjectWorkspaceTab.requests =>
                         YorksV1ProjectStrings.materialRequests.primary,
+                      YorksV1ProjectWorkspaceTab.accounts =>
+                        YorksV1ProjectStrings.accounts.primary,
                       YorksV1ProjectWorkspaceTab.documents =>
                         YorksV1ProjectStrings.documents.primary,
                       YorksV1ProjectWorkspaceTab.materialMovement =>
@@ -4624,6 +4725,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
     required this.actorRole,
     required this.activeMember,
     required this.canActAsProjectEngineer,
+    required this.showAccounts,
     required this.onActivate,
     required this.showNewRequest,
     required this.onNewRequest,
@@ -4646,6 +4748,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
   final YorksV1Role? actorRole;
   final bool activeMember;
   final bool canActAsProjectEngineer;
+  final bool showAccounts;
   final VoidCallback? onActivate;
   final bool showNewRequest;
   final VoidCallback? onNewRequest;
@@ -4672,6 +4775,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
         actorRole: actorRole,
         activeMember: activeMember,
         canActAsProjectEngineer: canActAsProjectEngineer,
+        showAccounts: showAccounts,
         onTabChanged: onTabChanged,
         onOpenRequests: () => context.push(
           RoutePaths.yorksV1MaterialRequestsPath(projectId: project.id),
@@ -4701,6 +4805,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                   project: project,
                   selected: tab,
                   onSelected: onTabChanged,
+                  showAccounts: showAccounts,
                   onActivate: onActivate,
                   showNewRequest: showNewRequest,
                   onNewRequest: onNewRequest,
@@ -4751,6 +4856,16 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                         onOpen: () => context.push(
                           RoutePaths.yorksV1MaterialRequestsPath(
                             projectId: project.id,
+                          ),
+                        ),
+                      ),
+                      YorksV1ProjectWorkspaceTab.accounts => _LinkedRecordCard(
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: YorksV1ProjectStrings.accounts,
+                        action: YorksV1ProjectStrings.accounts,
+                        onOpen: () => context.go(
+                          RoutePaths.yorksV1ProjectAccountsOverviewPath(
+                            project.id,
                           ),
                         ),
                       ),
@@ -5518,6 +5633,7 @@ class _MobileProjectWorkspace extends StatelessWidget {
     required this.actorRole,
     required this.activeMember,
     required this.canActAsProjectEngineer,
+    required this.showAccounts,
     required this.onTabChanged,
     required this.onOpenRequests,
     required this.onOpenDocuments,
@@ -5535,6 +5651,7 @@ class _MobileProjectWorkspace extends StatelessWidget {
   final YorksV1Role? actorRole;
   final bool activeMember;
   final bool canActAsProjectEngineer;
+  final bool showAccounts;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
   final VoidCallback onOpenRequests;
   final VoidCallback onOpenDocuments;
@@ -5546,6 +5663,7 @@ class _MobileProjectWorkspace extends StatelessWidget {
     final tabs = _MobileProjectWorkspaceTabs(
       selected: tab,
       onSelected: onTabChanged,
+      showAccounts: showAccounts,
     );
     if (tab == YorksV1ProjectWorkspaceTab.boq) {
       return ColoredBox(
@@ -5600,6 +5718,16 @@ class _MobileProjectWorkspace extends StatelessWidget {
                 title: YorksV1ProjectStrings.materialRequests,
                 action: YorksV1ProjectStrings.openRequests,
                 onOpen: onOpenRequests,
+              ),
+              YorksV1ProjectWorkspaceTab.accounts => _LinkedRecordCard(
+                icon: Icons.account_balance_wallet_outlined,
+                title: YorksV1ProjectStrings.accounts,
+                action: YorksV1ProjectStrings.accounts,
+                onOpen: () => context.go(
+                  RoutePaths.yorksV1ProjectAccountsOverviewPath(
+                    item.project.id,
+                  ),
+                ),
               ),
               YorksV1ProjectWorkspaceTab.documents => _LinkedRecordCard(
                 icon: Icons.folder_open_outlined,
@@ -5747,10 +5875,12 @@ class _MobileProjectWorkspaceTabs extends StatelessWidget {
   const _MobileProjectWorkspaceTabs({
     required this.selected,
     required this.onSelected,
+    required this.showAccounts,
   });
 
   final YorksV1ProjectWorkspaceTab selected;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
+  final bool showAccounts;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -5762,48 +5892,49 @@ class _MobileProjectWorkspaceTabs extends StatelessWidget {
       child: Row(
         children: [
           for (final tab in YorksV1ProjectWorkspaceTab.values)
-            SizedBox(
-              width: tab == YorksV1ProjectWorkspaceTab.materialMovement
-                  ? 132
-                  : 92,
-              child: Semantics(
-                button: true,
-                selected: selected == tab,
-                child: InkWell(
-                  key: ValueKey('yorks-mobile-project-tab-${tab.name}'),
-                  onTap: () => onSelected(tab),
-                  child: Container(
-                    constraints: const BoxConstraints(
-                      minHeight: AppSpacing.minTapTarget,
-                    ),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          width: 2,
-                          color: selected == tab
-                              ? AppColors.blue
-                              : Colors.transparent,
+            if (tab != YorksV1ProjectWorkspaceTab.accounts || showAccounts)
+              SizedBox(
+                width: tab == YorksV1ProjectWorkspaceTab.materialMovement
+                    ? 132
+                    : 92,
+                child: Semantics(
+                  button: true,
+                  selected: selected == tab,
+                  child: InkWell(
+                    key: ValueKey('yorks-mobile-project-tab-${tab.name}'),
+                    onTap: () => onSelected(tab),
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minHeight: AppSpacing.minTapTarget,
+                      ),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            width: 2,
+                            color: selected == tab
+                                ? AppColors.blue
+                                : Colors.transparent,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Text(
-                      _mobileProjectTabLabel(tab),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.labelSmall.copyWith(
-                        color: selected == tab
-                            ? AppColors.navy
-                            : AppColors.muted,
-                        fontWeight: selected == tab
-                            ? FontWeight.w800
-                            : FontWeight.w700,
+                      child: Text(
+                        _mobileProjectTabLabel(tab),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: selected == tab
+                              ? AppColors.navy
+                              : AppColors.muted,
+                          fontWeight: selected == tab
+                              ? FontWeight.w800
+                              : FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
         ],
       ),
     ),
@@ -5814,6 +5945,7 @@ String _mobileProjectTabLabel(YorksV1ProjectWorkspaceTab tab) => switch (tab) {
   YorksV1ProjectWorkspaceTab.overview => YorksV1ProjectStrings.overview.primary,
   YorksV1ProjectWorkspaceTab.boq => YorksV1ProjectStrings.boq.primary,
   YorksV1ProjectWorkspaceTab.requests => YorksV1ProjectStrings.requests.primary,
+  YorksV1ProjectWorkspaceTab.accounts => YorksV1ProjectStrings.accounts.primary,
   YorksV1ProjectWorkspaceTab.documents => YorksV1ProjectStrings.docs.primary,
   YorksV1ProjectWorkspaceTab.materialMovement =>
     YorksV1ProjectStrings.materialMovement.primary,
@@ -6374,6 +6506,7 @@ class _ProjectR35Hero extends StatelessWidget {
     required this.project,
     required this.selected,
     required this.onSelected,
+    required this.showAccounts,
     required this.onActivate,
     required this.showNewRequest,
     required this.onNewRequest,
@@ -6387,6 +6520,7 @@ class _ProjectR35Hero extends StatelessWidget {
   final YorksV1Project project;
   final YorksV1ProjectWorkspaceTab selected;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
+  final bool showAccounts;
   final VoidCallback? onActivate;
   final bool showNewRequest;
   final VoidCallback? onNewRequest;
@@ -6536,7 +6670,11 @@ class _ProjectR35Hero extends StatelessWidget {
           },
         ),
         const SizedBox(height: AppSpacing.xxl),
-        _ProjectWorkspaceTabs(selected: selected, onSelected: onSelected),
+        _ProjectWorkspaceTabs(
+          selected: selected,
+          onSelected: onSelected,
+          showAccounts: showAccounts,
+        ),
       ],
     ),
   );
@@ -6546,10 +6684,12 @@ class _ProjectWorkspaceTabs extends StatelessWidget {
   const _ProjectWorkspaceTabs({
     required this.selected,
     required this.onSelected,
+    required this.showAccounts,
   });
 
   final YorksV1ProjectWorkspaceTab selected;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onSelected;
+  final bool showAccounts;
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -6557,11 +6697,12 @@ class _ProjectWorkspaceTabs extends StatelessWidget {
     child: Row(
       children: [
         for (final tab in YorksV1ProjectWorkspaceTab.values)
-          _ProjectWorkspaceTabButton(
-            label: _tabCopy(tab).primary,
-            selected: selected == tab,
-            onPressed: () => onSelected(tab),
-          ),
+          if (tab != YorksV1ProjectWorkspaceTab.accounts || showAccounts)
+            _ProjectWorkspaceTabButton(
+              label: _tabCopy(tab).primary,
+              selected: selected == tab,
+              onPressed: () => onSelected(tab),
+            ),
       ],
     ),
   );
@@ -6572,6 +6713,7 @@ class _ProjectWorkspaceTabs extends StatelessWidget {
       YorksV1ProjectWorkspaceTab.boq => YorksV1ProjectStrings.boq,
       YorksV1ProjectWorkspaceTab.requests =>
         YorksV1ProjectStrings.materialRequests,
+      YorksV1ProjectWorkspaceTab.accounts => YorksV1ProjectStrings.accounts,
       YorksV1ProjectWorkspaceTab.documents => YorksV1ProjectStrings.documents,
       YorksV1ProjectWorkspaceTab.materialMovement =>
         YorksV1ProjectStrings.materialMovement,

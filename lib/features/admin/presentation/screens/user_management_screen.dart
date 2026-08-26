@@ -101,6 +101,7 @@ TranslatableString _yorksV1RoleText(YorksV1Role role) => switch (role) {
   YorksV1Role.projectManager => AppStrings.projectManagerRole,
   YorksV1Role.workshopInCharge => AppStrings.workshopInChargeRole,
   YorksV1Role.documentController => AppStrings.documentControllerRole,
+  YorksV1Role.accountant => AppStrings.accountantRole,
   YorksV1Role.procurement => AppStrings.procurementRole,
   YorksV1Role.admin => AppStrings.adminRole,
 };
@@ -1002,7 +1003,7 @@ class _DesktopUserTable extends StatelessWidget {
                 Expanded(flex: 2, child: Text('COMMERCIAL')),
                 Expanded(flex: 2, child: Text('LAST ACTIVE')),
                 Expanded(flex: 2, child: Text('STATUS')),
-                SizedBox(width: 370, child: Text('')),
+                SizedBox(width: 430, child: Text('')),
               ],
             ),
           ),
@@ -1095,7 +1096,7 @@ class _UserTableRow extends ConsumerWidget {
             ),
           ),
           SizedBox(
-            width: 370,
+            width: 430,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

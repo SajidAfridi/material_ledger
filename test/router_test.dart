@@ -7,8 +7,11 @@ import 'package:material_ledger/app/router.dart';
 import 'package:material_ledger/shared/models/app_user.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
+import 'package:material_ledger/shared/models/yorks_v1_overview_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/services/app_config_service.dart';
 
 /// `GoRouter` validates its whole route tree at construction (duplicate paths,
 /// malformed nested sub-routes, etc. throw immediately). Building it for every
@@ -53,6 +56,102 @@ void main() {
       });
     }
   });
+
+  testWidgets(
+    'Accountant is contained to locked Home and shared profile routes',
+    (tester) async {
+      final router = createAppRouter(
+        isOnboarded: true,
+        isLoggedIn: true,
+        role: UserRole.accountant,
+        user: AppUser(
+          id: 'accountant-user',
+          fullName: 'Accounts User',
+          email: 'accounts@yorks.test',
+          role: UserRole.accountant,
+          yorksV1RoleCache: YorksV1Role.accountant,
+          yorksV1Roles: const [YorksV1Role.accountant],
+          createdAt: DateTime.utc(2026, 8, 25),
+        ),
+        yorksV1ProjectsEnabled: true,
+        yorksV1BoqEnabled: true,
+        yorksV1RequestsEnabled: true,
+        yorksV1ArrangementEnabled: true,
+        yorksV1LogisticsEnabled: true,
+        yorksV1ReturnsDocumentsEnabled: true,
+        yorksV1DocumentsEnabled: true,
+        yorksV1TeamChatEnabled: true,
+        yorksV1InventorySuppliersEnabled: true,
+        yorksV1Role: YorksV1Role.accountant,
+      );
+      addTearDown(router.dispose);
+
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            appVersionProvider.overrideWithValue(
+              const AppVersionInfo(version: '1.0.0', build: 1),
+            ),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.accountant,
+            ),
+          ],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+
+      expect(
+        find.text(YorksV1OverviewStrings.accountantRolloutTitle.primary),
+        findsOneWidget,
+      );
+      expect(router.routeInformationProvider.value.uri.path, '/');
+
+      for (final deniedPath in <String>[
+        RoutePaths.materials,
+        RoutePaths.rentals,
+        RoutePaths.people,
+        RoutePaths.more,
+        RoutePaths.engineerBrowse,
+        RoutePaths.engineerProjects,
+        RoutePaths.engineerCreateProject,
+        RoutePaths.engineerNewRequest,
+        RoutePaths.adminProjects,
+        RoutePaths.adminRequests,
+        RoutePaths.inventory,
+        RoutePaths.procurement,
+        RoutePaths.finance,
+        RoutePaths.users,
+        RoutePaths.activityLog,
+        RoutePaths.yorksV1Projects,
+        RoutePaths.yorksV1MaterialRequests,
+        RoutePaths.yorksV1Inventory,
+        RoutePaths.yorksV1Dispatches,
+        RoutePaths.yorksV1Returns,
+        RoutePaths.yorksV1Configuration,
+        RoutePaths.yorksV1TeamChat,
+      ]) {
+        router.go(deniedPath);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          RoutePaths.engineerHome,
+          reason: deniedPath,
+        );
+      }
+
+      router.go(RoutePaths.engineerProfile);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerProfile,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'V1 Procurement project deep links land on an office-shell safe route',

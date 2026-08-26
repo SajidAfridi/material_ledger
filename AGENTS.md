@@ -16,7 +16,8 @@ documentation for it already exists.
 When sources disagree, use this order:
 
 1. `Yorks_V1_SRS_and_Rapid_Development_Plan_Rev2_0.docx` — behavior, scope,
-   roles, invariants and acceptance.
+   roles, invariants and acceptance, except where the later approved Accounts
+   R39 package expressly supersedes an Accounts-only deferred statement.
 2. The effective final R35 behavior in
    `Yorks_AC_Ref_V1_Procurement_Control_R35_Final.html` — visual and interaction
    target only where it does not conflict with the SRS or security rules.
@@ -38,6 +39,11 @@ Before every Yorks V1 task, read:
 Then read the task-relevant architecture, UI, migration, test and implementation
 documents linked from that README.
 
+For Accounts work, also read
+`docs/yorks-v1/R39_ACCOUNTS_FOUNDATION.md`. The approved 25 August 2026 R39
+package governs Accounts-only behavior; it does not reopen any unrelated V1
+decision.
+
 ## Required architecture
 
 - Flutter and Dart
@@ -58,7 +64,7 @@ snapshot upserts are not permitted for critical V1 transitions.
 
 Implement:
 
-1. Authentication, profiles, eight exact roles and project membership guards
+1. Authentication, profiles, nine exact roles and project membership guards
 2. Projects, buildings/Common scope and historical team membership
 3. Twenty-nine default BOQ groups plus custom groups
 4. Dynamic BOQ columns/rows and real Excel import/export
@@ -72,10 +78,14 @@ Implement:
 12. Documents, links, versions, activity, notifications and audit
 13. Retained Configuration, Rentals, User Management, Audit Trail, Duct Sizer
     and ESP Calculator
+14. The phased R39 project commercial-control Accounts module: baselines,
+    billing progress, claims, certification, receipts/PDCs and matched supplier
+    bills, behind `YORKS_V1_ACCOUNTS` until its release gate passes
 
 Explicitly deferred:
 
-- Accounts, invoicing, payments and general ledger
+- general ledger, journal entry, payroll, tax, bank-reconciliation,
+  depreciation, inventory-valuation and company-wide P&L workflows
 - full RFQ, quotation comparison and Purchase Order supplier-management suite
 - multi-warehouse workflows
 - supplier/client portals
@@ -98,6 +108,10 @@ boundaries; do not destructively remove historical records.
   its own arrangement.
 - **Admin** — controlled administration and audited overrides. Admin is not a
   substitute for missing workflow history.
+- **Accountant** — exact platform role for authorized project Accounts,
+  certification, PDC/payment and supplier-bill payment controls. Accountant is
+  never a technical project member and inherits no Project, BOQ, MR, Dispatch,
+  Receipt, Inventory, Return or team-management mutation authority.
 - **Senior Mechanical Engineer**, **Project Manager**, **Workshop In-Charge**
   and **Document Controller** — organization-wide
   Project Engineer roles. They can access every project and perform Project
@@ -112,7 +126,17 @@ boundaries; do not destructively remove historical records.
 Authorization claims come only from exact, server-controlled
 `app_metadata.role` values. Never infer privilege from email, editable user
 metadata or an unprotected profile. Project access derives from dated
-`project_members` records.
+`project_members` records, except that Accountant Accounts scope derives from
+protected scoped-capability resolution and never from technical membership.
+
+The exact Accounts capability keys, 90/10 policy defaults, 10/50/30/5/5 stage
+defaults and Common-allocation exclusion are frozen in
+`docs/yorks-v1/R39_ACCOUNTS_FOUNDATION.md`. T01 is additive/shadow-only;
+it protects the default-stage template and its 100% total but does not create
+project physical-building allocation relations or constraints. Those ship in
+T02 with the commercial baseline. Normalized Accounts routes remain
+unreachable and the feature flag remains off until their later phased
+acceptance. Legacy `/admin/finance` is not authority.
 
 ## Canonical workflow
 

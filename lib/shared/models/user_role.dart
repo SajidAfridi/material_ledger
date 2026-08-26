@@ -1,14 +1,15 @@
-/// The operational roles. Admin is the all-in-one office/owner role (it absorbs
-/// the former Accountant — finance/cost/salary/read-all — and signs in for the
-/// owner). Procurement runs materials, rentals and (now) the People/HR module.
-/// The company owner signs in via Admin (no separate owner role).
+/// Compatibility-shell roles retained while normalized Yorks modules are
+/// rolled out. Exact Yorks authorization always uses `YorksV1Role` and the
+/// protected server capability projection instead of these presentation
+/// buckets.
 ///
-/// History: `accountant` was merged into `admin` (may be split out later);
-/// People/HR was moved to `procurement` (kept on admin for now, later
-/// procurement-only). See SRS v1.3 §3 / FR-132/133.
+/// Accountant is deliberately explicit and least-privilege. It is not folded
+/// into Admin, Procurement or Engineer because doing so would grant unrelated
+/// legacy module authority before the normalized Accounts feature is enabled.
 enum UserRole {
   engineer('Engineer', 'انجینئر', 'इंजीनियर'),
   procurement('Procurement', 'پروکیورمنٹ', 'खरीद'),
+  accountant('Accountant', 'اکاؤنٹنٹ', 'लेखाकार'),
   admin('Admin', 'ایڈمن', 'एडमिन');
 
   const UserRole(this.label, this.labelUr, this.labelHi);
@@ -37,7 +38,7 @@ enum UserRole {
   bool get isAdmin => this == admin;
 
   // Module access -------------------------------------------------------
-  bool get canAccessMaterials => true; // all roles touch Materials
+  bool get canAccessMaterials => this != accountant;
   bool get canAccessRentals => this == procurement || this == admin;
   bool get canAccessPeople => this == procurement || this == admin;
 
@@ -52,7 +53,8 @@ enum UserRole {
   /// request their own leave; they never approve.
   bool get canApproveLeave => this == procurement || this == admin;
 
-  /// View the finance / cost roll-up screens (Admin only — absorbed Accountant).
+  /// View the retired legacy finance/cost roll-up screen. Normalized Accounts
+  /// uses exact server capabilities and never derives access from this getter.
   bool get canViewFinance => this == admin;
 
   /// True for the office/web roles that use the multi-module admin panel.

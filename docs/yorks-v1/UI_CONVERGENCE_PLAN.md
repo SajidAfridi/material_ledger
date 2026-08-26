@@ -35,7 +35,10 @@ the release-readiness work in Batch 10.
 The original prototype contains overlapping or deferred routes that must not be
 silently recreated beside V1 authority:
 
-- Accounts, RFQ, quotations and PO remain unavailable in V1.
+- RFQ, quotations and PO remain unavailable in V1. The later approved R39
+  Accounts module is a separate normalized T01–T07 rollout; it stays
+  unreachable behind default-off `YORKS_V1_ACCOUNTS` during T01 and never
+  revives legacy `/admin/finance`.
 - Dispatch and return navigation starts from an authorised Material Request;
   global list surfaces are introduced only with a safe server projection.
 - The normalized project portfolio now uses an explicitly non-commercial read
@@ -47,7 +50,9 @@ silently recreated beside V1 authority:
 - The project workspace currently provides Overview, BOQ, Material Requests
   and Documents. BOQ and Documents open the selected project's connected
   record; Material Requests opens the role-authorized request workspace while
-  its project-scoped list filter is completed in Slice 11C.
+  its project-scoped list filter is completed in Slice 11C. R39 T05 may add a
+  normalized, capability-guarded Accounts entry after its server phases pass;
+  that later work does not change this historical Slice 11 baseline.
 
 Every convergence slice preserves the existing positive/negative RLS tests;
 UI visibility is never treated as authorization.

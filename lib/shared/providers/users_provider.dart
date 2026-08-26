@@ -774,6 +774,7 @@ class UsersNotifier extends StateNotifier<List<AppUser>> {
         YorksV1Role.projectManager ||
         YorksV1Role.workshopInCharge ||
         YorksV1Role.documentController => UserRole.engineer,
+        YorksV1Role.accountant => UserRole.accountant,
         YorksV1Role.procurement => UserRole.procurement,
         YorksV1Role.admin => UserRole.admin,
       };

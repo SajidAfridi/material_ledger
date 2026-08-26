@@ -40,3 +40,12 @@ final yorksV1SupplierDocumentsRepositoryProvider =
       }
       return repository as YorksV1SupplierDocumentsRepository;
     });
+
+final yorksV1AccountsDocumentsRepositoryProvider =
+    Provider<YorksV1AccountsDocumentsRepository>((ref) {
+      final repository = ref.watch(yorksV1DocumentsRepositoryProvider);
+      if (repository is! YorksV1AccountsDocumentsRepository) {
+        throw StateError('Accounts document repository is unavailable.');
+      }
+      return repository as YorksV1AccountsDocumentsRepository;
+    });

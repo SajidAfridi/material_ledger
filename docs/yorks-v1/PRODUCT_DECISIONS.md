@@ -46,6 +46,7 @@ Canonical Auth role claims are:
 - `workshop_in_charge`
 - `document_controller`
 - `procurement`
+- `accountant`
 - `admin`
 
 Claims come from server-controlled `app_metadata.role`. A protected profile may
@@ -102,9 +103,23 @@ Admin creates/disables users through a protected server/Edge Function using a
 service-role secret that never ships to Flutter. Referenced users are
 deactivated rather than deleted.
 
+By product-owner approval on 25 August 2026, `accountant` is the ninth exact
+platform role. It is not a Project Engineer, Site Engineer or other technical
+project-membership role and cannot be inserted into `project_members` to gain
+technical authority. Accountant project Accounts scope comes from the
+protected capability resolver. Accountant can act only through normalized
+Accounts projections/commands that return an explicit command flag; it gains
+no Project, BOQ, MR, Dispatch, Receipt, Inventory, Return or team-management
+mutation authority. Historical actor attribution retains the exact role.
+
 ## 3. Default commercial access
 
 Capabilities are `view_commercials` and `manage_commercials`.
+
+These retained generic capabilities continue to protect existing operational
+commercial projections. They do not authorize R39 Accounts. Accounts uses the
+15 exact capability keys frozen in section 23 and never infers an Accounts
+command from either generic capability alone.
 
 - Project Engineer and Site Engineer have no commercial access by default.
 - Procurement and Admin have both capabilities by default; Admin can revoke
@@ -607,8 +622,10 @@ Critical actions never show success before the server commits.
 
 ## 18. Deferred and retained behavior
 
-- Accounts and Finance navigation is unavailable in the Yorks V1 experience.
-  Existing records/code remain preserved behind a disabled legacy boundary.
+- The legacy Finance navigation/model remains preserved behind a disabled
+  non-authoritative boundary. It cannot create or mutate normalized Accounts
+  records. R39 Accounts is a separate phased, default-off normalized feature
+  governed by section 23.
 - Full RFQ, quotation comparison, PO and supplier portal remain deferred.
   R38.9 separately approves controlled supplier receipt provenance inside the
   Warehouse Inventory workspace; it does not authorize purchasing workflow,
@@ -755,3 +772,129 @@ legacy JWT capability arrays. The four capabilities required to retain a
 permission administrator (`users.view`, `permissions.view`,
 `permissions.manage`, `permissions.delegate`) are immediate and open-ended;
 ordinary capabilities may still use reviewed validity windows.
+
+## 23. R39 Accounts project commercial control
+
+Product-owner approval on 25 August 2026 supersedes only the earlier decision
+to keep Accounts unavailable. Accounts is project commercial control, not a
+general accounting ERP. It may read trusted operational facts through narrow
+authorized projections but cannot rewrite Projects, BOQ, Material Requests,
+Procurement, Inventory, Dispatch, Receipt, Delivery Orders, Returns or
+technical membership (FR-002 and FR-003).
+
+The feature flag is exactly `YORKS_V1_ACCOUNTS`, defaults off and fails closed.
+T01 adds only the exact Accountant role, protected capability/default rows,
+additive/shadow schema/RLS and negative tests. T02–T07 cut over baseline,
+progress, receivables, supplier bills, routes/UI and shared evidence surfaces
+one tested consumer at a time. No normalized Accounts deep link or action is
+reachable during T01. Legacy `/admin/finance` is not an authority or fallback
+(FR-014).
+
+The exact Accounts capability keys are:
+
+- `view_project_accounts`
+- `view_project_commercial_values`
+- `suggest_billing_progress`
+- `confirm_billing_progress`
+- `prepare_client_claim`
+- `manage_client_invoices`
+- `record_client_certification`
+- `record_client_payment`
+- `manage_pdc`
+- `manage_supplier_bills`
+- `approve_supplier_bill_payment`
+- `configure_project_commercials`
+- `view_supplier_costs`
+- `export_accounts_registers`
+- `review_commercial_progress`
+
+The server returns these capabilities and record-specific command flags.
+Flutter, profile titles and visible routes are never authorization. Project
+Engineer may confirm defensible progress and prepare a claim only when
+explicitly authorized; Site Engineer may suggest progress without protected
+commercial values; Procurement may manage supplier-bill evidence without
+client receivables; Accountant manages authorized receivable/payment controls
+without technical mutation; Admin exceptions require a reason and audit; and
+Senior Mechanical Engineer/Project Manager review requires
+`review_commercial_progress` rather than a title match (FR-018–FR-025).
+
+New project commercial baselines default to 90 payment-term days and a 10-day
+reminder lead. Both remain configurable and are snapshotted when an invoice is
+submitted. Default stages are Design 10%, Material Supply 50%, Installation
+30%, Commissioning & Handover 5% and Energizing 5%. Physical building
+allocations total exactly 100% within explicit numeric tolerance;
+`Common / All Buildings` is excluded from physical commercial allocation
+(FR-029–FR-031). T01 protects the default-stage rows and their 100% total and
+freezes the physical-allocation/Common policy. T02 creates the project
+physical-building allocation relations and enforces that policy at row and
+command boundaries. The complete phased and security contract is
+[`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md).
+
+### R39 T03 receivables policy defaults
+
+The following fail-closed rules bind the T03 claim and receivables slice. They
+remove policy ambiguity before any normalized Accounts consumer is enabled:
+
+- a client claim is a protected root separate from the invoice it may create;
+  its exact lifecycle is `draft -> ready_for_accounts -> invoiced`, with
+  `cancelled` as the only releasing terminal state;
+- every non-cancelled claim reserves its snapshotted eligible value exactly
+  once. A returned claim retains that reservation for correction and
+  resubmission. Only pre-submission draft deletion or explicit cancellation
+  releases it, without rewriting history;
+- preparing a monetary claim requires both `prepare_client_claim` and
+  `view_project_commercial_values`. Every claimed line must carry at least one
+  nonblank evidence reference before Accounts submission;
+- certification is append-only and cumulative. The latest accepted cumulative
+  certification snapshot is authoritative, cannot exceed the invoice claim,
+  and cannot decrease in T03. A later correction workflow must be separately
+  approved rather than silently rewriting a certification fact;
+- a submitted invoice cannot be cancelled after certification, payment or PDC
+  evidence exists. Returned invoices may be corrected and resubmitted without
+  acquiring claim capacity a second time;
+- payment references are case-insensitively unique within a project. A payment
+  correction is an exact linked reversal of one original fact, never an edit;
+- PDC exposure includes only `expected`, `received` and `deposited` instruments.
+  `cleared`, `replaced`, `returned`, `bounced` and `cancelled` instruments do
+  not contribute. Clearing a PDC requires an explicit bank/payment reference
+  and clearance date and atomically records exactly one linked client-payment
+  fact; merely receiving or depositing a PDC never records payment.
+
+These rules remain additive and inactive while `YORKS_V1_ACCOUNTS` is off.
+Changing them later requires an explicit versioned configuration decision and
+a forward migration that preserves all earlier snapshots and audit facts.
+
+### R39 T04 supplier-bill policy defaults
+
+The following fail-closed rules bind the T04 supplier-bill slice:
+
+- the bill lifecycle is `draft -> approved`, with `cancelled` as a terminal
+  state; Procurement maintains draft evidence while Accountant/Admin controls
+  approval and payment;
+- a PO/LPO evidence group requires both its external reference and a current,
+  commercial, project-linked controlled document. A reference alone does not
+  make the group present;
+- accepted delivery is derived only from a confirmed Receipt Review with
+  positive good quantity. Client-supplied delivery quantities or references
+  are never authoritative;
+- a current commercial supplier-invoice document is required before approval
+  and has no exception path;
+- server match state is `matched` for three evidence groups, `review` for two,
+  and `blocked` for fewer than two or any explicit mismatch;
+- only exact Admin may approve or pay an unmatched bill, and each exceptional
+  command requires its own nonblank audited reason;
+- supplier invoice identity is case-insensitively unique by project, supplier
+  name and invoice reference. Payment references are independently
+  case-insensitively unique by project;
+- supplier payments are append-only, may be partial, cannot exceed total
+  including VAT and are corrected only through one exact linked reversal;
+- cancellation is forbidden while net payment is nonzero. Cancelling an
+  approved bill requires payment-approval authority and a reason; and
+- supplier projections never expose client claims, certifications, receipts
+  or other receivable-side protected values to Procurement.
+- operational Accounts defaults do not alter the established action-only User
+  Management password-reset/activation hierarchy. Exact-role creation and
+  change remain Accounts-aware and fail closed at the Auth trigger boundary.
+
+These rules do not create an RFQ, quotation comparison or full Purchase Order
+workflow. T04 is route-less and inactive while `YORKS_V1_ACCOUNTS` is off.

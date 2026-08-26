@@ -38,7 +38,10 @@ Replace or isolate:
 - three-role route assumptions and unassigned-project visibility;
 - client-supplied critical actors/timestamps;
 - metadata-only document placeholders;
-- old Phase 1/RFQ/PO/Accounts navigation in the V1 experience.
+- old Phase 1/RFQ/PO and legacy Finance/Accounts prototype navigation in the V1
+  experience. The later normalized R39 Accounts feature is a separate,
+  default-off authority and never reuses `/admin/finance` as its repository or
+  command path.
 
 ## 3. Normalized domain boundary
 
@@ -60,6 +63,43 @@ The V1 domain is additive and normalized:
 - documents: `documents`, `document_links`
 - operations: `notifications`, `audit_events`, `idempotency_keys`,
   `reference_counters`, `app_settings`
+- R39 Accounts (phased/default-off): protected commercial baselines and
+  revisions, building/stage allocations, progress evidence/confirmations,
+  claims/invoices/certification, append-only payments/PDCs, matched supplier
+  bills and linked documents/audit. T01 installs only an additive/shadow
+  foundation; T02–T07 add and cut over bounded consumers.
+
+### R39 T02 bounded server authority
+
+T02 adds only the protected profile/baseline/building-allocation/stage-
+allocation/current-progress/progress-revision relations and their trusted
+RPCs. `YORKS_V1_ACCOUNTS` remains off and Flutter has no normalized Accounts
+route until T05. Direct authenticated relation writes are revoked; exposed
+relations have RLS, and SECURITY DEFINER functions use an empty fixed
+`search_path`, derive `auth.uid()`, re-check the live exact role/profile,
+enforce project/building scope and receive only narrow execute grants.
+
+All T02 money/percentage values are PostgreSQL fixed numeric and serialized as
+decimal strings. The server calculates Stage Value, Confirmed Eligible,
+cumulative eligible and commercial progress. Role-safe projections have two
+deliberate schemas: a non-monetary shape with percentages/evidence/owner and no
+monetary field keys, and a value shape available only with
+`view_project_commercial_values`. Confirmation capability is independent from
+value visibility.
+
+Baseline/profile, allocation and current progress rows are locked in stable
+project -> baseline -> building -> stage order. Critical commands require
+expected version and canonical payload hash. Same idempotency key/hash returns
+the first result; a different hash conflicts. Every accepted command appends
+revision and trusted audit in the same transaction. Realtime remains only a
+refetch signal.
+
+T02 can validate already-authorized project document references as progress
+evidence, but does not create an Accounts upload/export subsystem. T03 owns
+claim/invoice consumption and stale-claim behavior, T05 owns routes/UI, and T06
+owns Accounts document upload/link, print/export and report consumers. A
+protected T02 claim-consumption seam is non-actionable while T03 is absent; no
+Prepare Claim command or fake claim row is introduced.
 
 Commercial columns use protected relations or protected views. Operational
 tables do not embed commercial values into a JSON payload available to all

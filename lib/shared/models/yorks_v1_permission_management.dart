@@ -163,6 +163,47 @@ abstract final class YorksV1CapabilityKeys {
   static const accountsEdit = 'accounts.edit';
   static const accountsApprove = 'accounts.approve';
   static const accountsExport = 'accounts.export';
+  static const viewProjectAccounts = 'view_project_accounts';
+  static const viewProjectCommercialValues = 'view_project_commercial_values';
+  static const suggestBillingProgress = 'suggest_billing_progress';
+  static const confirmBillingProgress = 'confirm_billing_progress';
+  static const prepareClientClaim = 'prepare_client_claim';
+  static const manageClientInvoices = 'manage_client_invoices';
+  static const recordClientCertification = 'record_client_certification';
+  static const recordClientPayment = 'record_client_payment';
+  static const managePdc = 'manage_pdc';
+  static const manageSupplierBills = 'manage_supplier_bills';
+  static const approveSupplierBillPayment = 'approve_supplier_bill_payment';
+  static const configureProjectCommercials = 'configure_project_commercials';
+  static const viewSupplierCosts = 'view_supplier_costs';
+  static const exportAccountsRegisters = 'export_accounts_registers';
+  static const reviewCommercialProgress = 'review_commercial_progress';
+
+  /// The R39 Accounts contract is the only authority allowed to use bare
+  /// snake_case capability keys. Retained operational capabilities remain
+  /// dotted. Keeping this set closed prevents a malformed or future bare key
+  /// from silently becoming client-recognized authority.
+  static const r39Accounts = <String>{
+    viewProjectAccounts,
+    viewProjectCommercialValues,
+    suggestBillingProgress,
+    confirmBillingProgress,
+    prepareClientClaim,
+    manageClientInvoices,
+    recordClientCertification,
+    recordClientPayment,
+    managePdc,
+    manageSupplierBills,
+    approveSupplierBillPayment,
+    configureProjectCommercials,
+    viewSupplierCosts,
+    exportAccountsRegisters,
+    reviewCommercialProgress,
+  };
+
+  static bool isValidWireKey(String value) =>
+      RegExp(r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$').hasMatch(value) ||
+      r39Accounts.contains(value);
 
   static const all = <String>{
     projectsView,
@@ -253,6 +294,7 @@ abstract final class YorksV1CapabilityKeys {
     accountsEdit,
     accountsApprove,
     accountsExport,
+    ...r39Accounts,
   };
 }
 
@@ -647,7 +689,7 @@ class YorksV1PermissionCatalogEntry {
     required this.displayOrder,
   }) : allowedScopes = Set.unmodifiable(allowedScopes),
        dependencies = List.unmodifiable(dependencies) {
-    if (!RegExp(r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$').hasMatch(key) ||
+    if (!YorksV1CapabilityKeys.isValidWireKey(key) ||
         !RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(module) ||
         !RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(action)) {
       throw const FormatException('Incomplete permission catalog entry');
@@ -657,9 +699,7 @@ class YorksV1PermissionCatalogEntry {
     }
     if (this.dependencies.toSet().length != this.dependencies.length ||
         this.dependencies.any(
-          (dependency) => !RegExp(
-            r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$',
-          ).hasMatch(dependency),
+          (dependency) => !YorksV1CapabilityKeys.isValidWireKey(dependency),
         )) {
       throw const FormatException('Invalid permission dependencies');
     }

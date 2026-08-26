@@ -2077,6 +2077,7 @@ String _ownerName(
   return switch (snapshot.currentOwnerRole) {
     UserRole.procurement => ProjectWorkspaceStrings.procurementTeam.primary,
     UserRole.engineer => ProjectWorkspaceStrings.engineeringTeam.primary,
+    UserRole.accountant => AppStrings.accountantRole.primary,
     UserRole.admin => ProjectWorkspaceStrings.adminTeam.primary,
     null => ProjectWorkspaceStrings.noCurrentOwner.primary,
   };

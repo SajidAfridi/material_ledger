@@ -43,41 +43,45 @@ class AppShell extends ConsumerWidget {
     UserRole role, {
     required bool canRentals,
     required bool canPeople,
-  }) => [
-    const _Destination(
+  }) {
+    const home = _Destination(
       branch: _home,
       icon: Icons.home_outlined,
       activeIcon: Icons.home_rounded,
       label: AppStrings.home,
-    ),
-    const _Destination(
-      branch: _materials,
-      icon: Icons.inventory_2_outlined,
-      activeIcon: Icons.inventory_2_rounded,
-      label: AppStrings.materials,
-    ),
-    if (canRentals)
+    );
+    if (role == UserRole.accountant) return const [home];
+    return [
+      home,
       const _Destination(
-        branch: _rentals,
-        icon: Icons.storefront_outlined,
-        activeIcon: Icons.storefront_rounded,
-        label: AppStrings.rentalShops,
+        branch: _materials,
+        icon: Icons.inventory_2_outlined,
+        activeIcon: Icons.inventory_2_rounded,
+        label: AppStrings.materials,
       ),
-    if (canPeople)
-      const _Destination(
-        branch: _people,
-        icon: Icons.groups_outlined,
-        activeIcon: Icons.groups_rounded,
-        label: AppStrings.people,
-      ),
-    if (role.isAdmin)
-      const _Destination(
-        branch: _more,
-        icon: Icons.more_horiz_outlined,
-        activeIcon: Icons.more_horiz_rounded,
-        label: AppStrings.more,
-      ),
-  ];
+      if (canRentals)
+        const _Destination(
+          branch: _rentals,
+          icon: Icons.storefront_outlined,
+          activeIcon: Icons.storefront_rounded,
+          label: AppStrings.rentalShops,
+        ),
+      if (canPeople)
+        const _Destination(
+          branch: _people,
+          icon: Icons.groups_outlined,
+          activeIcon: Icons.groups_rounded,
+          label: AppStrings.people,
+        ),
+      if (role.isAdmin)
+        const _Destination(
+          branch: _more,
+          icon: Icons.more_horiz_outlined,
+          activeIcon: Icons.more_horiz_rounded,
+          label: AppStrings.more,
+        ),
+    ];
+  }
 
   void _goBranch(int branch) {
     AppFeedback.tabSwitch(); // light haptic tick, eyes-free confirmation

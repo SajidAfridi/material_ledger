@@ -185,6 +185,206 @@ Legacy role handling:
   A rollback is a corrective forward migration that returns only affected
   catalogue rows to `shadow`; it does not drop the new data or audit evidence.
 
+### M7 — R39 Accounts phased foundation
+
+The approved 25 August 2026 Accounts rollout is separate from the completed R35
+chain and begins default-off.
+
+- T01 additively extends every centralized exact-role constraint, Auth/audit
+  validation, seed persona and test fixture with `accountant`. Accountant is a
+  platform role only; no technical `project_members` row is created or
+  backfilled (FR-016 and FR-017).
+- Add the 15 exact Accounts catalogue keys defined in
+  [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md) as `shadow` and
+  nonassignable. Seeded templates must preserve all eight existing operational
+  role decisions and grant no technical authority to Accountant
+  (NFR-MAINT-004).
+- Add only normalized, protected, empty Accounts foundation relations/types,
+  explicit foreign keys, RLS deny-by-default policies and server-owned default
+  stage policy required by T01. Do not copy, reinterpret or dual-write legacy
+  Finance records (FR-002 and FR-003).
+- Seed the protected forward defaults: 90 payment-term days, 10 reminder-lead
+  days and stage-template rows Design 10%, Material Supply 50%, Installation
+  30%, Commissioning & Handover 5%, Energizing 5%. T01 enforces that the
+  protected stage template totals 100% within explicit numeric tolerance
+  (FR-029).
+- Record the binding FR-030/FR-031 policy in T01: future physical building
+  allocations must total 100% within explicit numeric tolerance and
+  Common / All Buildings is non-physical. T01 creates no project
+  physical-building allocation relation or row-level allocation constraint.
+- Add `YORKS_V1_ACCOUNTS` default-off wiring. During T01 there is no normalized
+  route, action, command cutover or Accounts value projection. Legacy
+  `/admin/finance` remains non-authoritative and is never a fallback (FR-014).
+
+T02 adds the commercial baseline, project physical-building allocation
+relations, 100% row-level/server command enforcement, Common exclusion and
+Billing Progress. T03–T04 add the receivable and supplier-bill consumers in
+bounded additive migrations. T05 enables normalized routes/UI only behind the
+flag and server projection. T06 adds shared Documents/Audit/Notifications and
+exports without parallel subsystems. T07 supplies the complete security,
+performance, responsive, staging and release evidence before production
+enablement.
+
+### M7.1 — T02 baseline and Billing Progress migration order
+
+T02 is an additive server slice and follows this order in one versioned
+migration plus pgTAP gate:
+
+1. Verify the T01 exact nine-role/15-capability catalogue, protected 90/10
+   settings and 10/50/30/5/5 stage template. Abort on drift; do not repair it
+   from application hydration.
+2. Create protected normalized
+   `v1_accounts_project_commercial_profiles`,
+   `v1_accounts_baseline_revisions`,
+   `v1_accounts_baseline_building_allocations`,
+   `v1_accounts_baseline_stage_allocations`,
+   `v1_accounts_billing_progress` and
+   `v1_accounts_billing_progress_revisions` with explicit foreign keys,
+   checks, current-row uniqueness and append-only history guards.
+3. Enable RLS before any grant. Revoke direct authenticated write access;
+   service/definer functions receive only the required relation privileges.
+   Protected views/functions use an empty fixed `search_path`, derive
+   `auth.uid()`, re-check live exact role and active profile, and are explicitly
+   revoked from `public`/`anon` before narrow authenticated execute grants.
+4. Install deferred constraints/command validation for positive fixed-numeric
+   contract value, explicit validated VAT snapshot, terms/reminder bounds,
+   physical-building and stage totals of 100.0000 within 0.00005, Common
+   exclusion, 0–100 progress and one current Building × Stage row. No default
+   VAT is seeded; Rentals' 5% is unrelated.
+5. Install the T02 commands and role-safe projections listed in
+   [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md), including deterministic
+   row-lock order, expected versions, payload-hash idempotency and same-
+   transaction audit.
+6. Promote only `view_project_accounts`,
+   `view_project_commercial_values`, `suggest_billing_progress`,
+   `confirm_billing_progress`, `configure_project_commercials` and
+   `review_commercial_progress` to their tested T02 runtime consumers. Remove
+   the T01 catalogue dependency that made value visibility a prerequisite for
+   `confirm_billing_progress`; FR-059 requires confirmation authority and
+   monetary response shape to remain separate.
+7. Leave every T03/T04/T06 capability and consumer shadow. Keep
+   `YORKS_V1_ACCOUNTS` off, add no route, and run clean-reset, positive,
+   negative, concurrency and response-shape tests before accepting the server
+   slice.
+
+The migration creates no demo money, baseline or progress record and does not
+backfill legacy Finance. An authorized initialize command creates baseline
+revision 1 only when a real project is explicitly configured. Management
+review is stored disabled/null until configured; no implicit amount threshold,
+quorum or expiry is migrated. Existing protected project document references
+may be validated as T02 evidence, but Accounts document upload/link UI and
+exports are not introduced.
+
+T02 prepares forward-compatible claim-consumption and claim-draft-staleness
+seams without a claim relation or command. They return no consumed amount while
+T03 is absent, and no Prepare Claim action is reachable. T03 must replace those
+seams atomically and complete FR-035/037/051/052,
+AT-BL-006/007, AT-PROG-006/007 and AT-CONC-005 against real immutable claim
+rows. T05 later installs routes/UI; T06 later installs Accounts upload,
+print/export/report consumers.
+
+T02 rollback is forward-only:
+
+- disable `YORKS_V1_ACCOUNTS` (it should already be off) and revoke/return the
+  six T02 catalogue consumers to `shadow`;
+- redeploy the prior accepted server consumer while retaining every baseline,
+  allocation, progress revision and audit row;
+- never drop or rewrite a historical revision, collapse it into legacy
+  Finance, or delete an idempotency result; and
+- if a defect affects calculations, block new T02 commands, retain reads only
+  where the response shape is proven safe, and ship a corrective migration
+  that appends/recomputes a new revision rather than mutating evidence.
+
+### M7.2 — T03 claims and receivables migration order
+
+T03 is one additive migration after T01/T02 and follows this order:
+
+1. Verify the five T03 capability catalogue rows are still shadow and that the
+   T02 baseline/progress relations and protected seams have their accepted
+   shape. Abort on drift.
+2. Create empty protected claim/line, invoice, certification, payment, PDC and
+   PDC-event relations with exact state checks, project/root correlations,
+   uniqueness/indexes and append-only guards. Do not import or dual-write
+   legacy Finance.
+3. Enable RLS before grants, revoke direct public/anon/authenticated writes and
+   install fixed-search-path trusted helpers/commands. All mutations derive
+   live actor/role/scope, lock deterministic roots, validate expected versions,
+   use request-hash idempotency and append audit atomically.
+4. Replace the T02 claim-consumption and stale-draft functions. Existing T02
+   rows remain unchanged; future claims retain immutable references to their
+   original baseline and progress revisions.
+5. Install role-safe claims/receivables projections and promote only
+   `prepare_client_claim`, `manage_client_invoices`,
+   `record_client_certification`, `record_client_payment` and `manage_pdc`
+   after clean reset, pgTAP and concurrency proof.
+6. Keep `YORKS_V1_ACCOUNTS` off and add no production route. T05/T06 remain
+   responsible for UI, documents, notifications, exports and reports.
+
+T03 rollback is forward-only: return the five T03 consumers to `shadow`, keep
+the feature flag off and deploy a corrective migration. Never delete a claim,
+invoice, certification, payment, PDC, event, snapshot, audit or idempotency
+fact, and never reinterpret it as a legacy Finance row.
+
+### M7.3 — T04 supplier-bill migration order
+
+T04 is one additive migration after T01–T03 and follows this order:
+
+1. Verify the three T04 capability rows are still shadow and that trusted
+   documents, dispatches and confirmed receipt reviews have their accepted
+   shape. Abort on drift.
+2. Create empty protected supplier-bill and supplier-payment relations with
+   exact states, fixed-precision values, project/root correlations,
+   case-insensitive reference uniqueness and append-only payment guards. Do
+   not backfill or dual-write legacy Finance.
+3. Enable RLS before grants, revoke direct public/anon/authenticated writes and
+   install fixed-search-path trusted helpers/commands. Match state derives
+   from controlled documents and confirmed operational receipt facts; no
+   caller-provided accepted quantity is trusted.
+4. Install versioned, request-hash idempotent create/update/approve/pay/reverse/
+   cancel commands and role-safe get/list projections. Every command checks
+   live exact role, capability and scope, locks deterministic roots and appends
+   audit in the same transaction.
+5. Promote only `manage_supplier_bills`,
+   `approve_supplier_bill_payment` and `view_supplier_costs` after clean reset,
+   pgTAP and Flutter boundary proof. Keep all T05/T06 consumers absent.
+6. Preserve action-only User Management target administration by excluding
+   inherent Accounts defaults from reset/activation hierarchy checks, and add
+   an earlier strict Auth guard that still enforces the full Accounts-aware
+   template for role-bearing creation/change commands.
+7. Keep `YORKS_V1_ACCOUNTS` off and preserve the operational chain unchanged.
+
+T04 rollback is forward-only: return those three consumers to `shadow`, revoke
+authenticated execution of the exact T04 commands/projections and deploy a
+corrective migration. Never delete a supplier bill, payment, reversal,
+document link, operational receipt, audit event or idempotency result, and
+never reinterpret one as a legacy Finance row.
+
+Rollback is a forward corrective migration that disables
+`YORKS_V1_ACCOUNTS`, returns affected Accounts catalogue rows to `shadow` and
+redeploys the prior accepted consumer. It never deletes Accounts rows,
+snapshots, documents, revisions, payments or audit evidence. This satisfies
+NFR-MAINT-003.
+
+### M7.4 — T05-T07 application, evidence and release controls
+
+- T05 adds only flag/capability-guarded normalized routes and Flutter
+  projections; it does not migrate or backfill legacy Finance.
+- T06 reuses the protected document/audit/notification relations, adds
+  Accounts classification metadata/links and structured report projections,
+  then promotes only `export_accounts_registers` after its access tests pass.
+- T07 adds private operational metric/job-run relations, supporting indexes,
+  a service-only idempotent reminder runner and admin-only readiness/health
+  projections. It does not enable `YORKS_V1_ACCOUNTS`.
+- First response to a release defect is an application deployment with the
+  flag off. A reviewed corrective forward migration may then apply
+  `supabase/snippets/r39_accounts_t05_t07_forward_disable.sql`; T02-T04 command
+  defects additionally use the existing T01-T04 artifact.
+- Rollback never drops Accounts relations or objects and never edits an
+  applied migration. Compare protected business/document/audit/metric/job row
+  counts before and after; any discrepancy stops the rollout.
+- Re-enable only through another tested forward migration and a separate
+  flag-on application release after five-persona same-commit staging UAT.
+
 ## 5. Quarantine contract
 
 Use a protected migration issue/reconciliation relation or immutable report
@@ -227,7 +427,11 @@ Each migration records before/after counts by entity and status, plus:
 - quarantine count and categorized reasons.
 
 Positive and negative RLS tests run against representative Project Engineer,
-Site Engineer, Procurement and Admin identities after every relevant phase.
+Site Engineer, Procurement, Accountant and Admin identities after every
+relevant Accounts phase. T01 additionally proves that existing eight-role
+operational decisions remain unchanged, Accountant cannot mutate
+BOQ/MR/Dispatch, inactive Accountant stale tokens fail closed and unknown roles
+gain nothing (AT-SEC-003, AT-SEC-006 and AT-SEC-007).
 
 ## 7. Application rollout
 
@@ -247,6 +451,13 @@ chain, and the previous approved complete build is the rollback artifact.
 The individual flags remain test/development controls only. They are not a
 production partial-rollout or rollback mechanism.
 
+R39 Accounts is the documented exception to that completed-R35 statement while
+its new phases are in progress. `YORKS_V1_ACCOUNTS` remains independently off
+through T01–T04, may be enabled only in controlled staging for T05–T07 evidence,
+and reaches production only after the complete R39 acceptance gate. Disabling
+it removes normalized Accounts navigation/routes/actions but does not make
+legacy `/admin/finance` authoritative.
+
 ## 8. Rollback strategy
 
 Schema migrations are additive; the complete-R35 rollback normally means:
@@ -265,6 +476,11 @@ copying stale legacy snapshots over normalized state.
 If logistics has accepted a V1 command, legacy stock write paths remain
 disabled after a build rollback. Operators use an audited correction or a
 controlled server runbook.
+
+If Accounts has accepted a later-phase command, rollback disables new Accounts
+traffic and restores the prior accepted Accounts consumer/flag state while
+retaining every committed commercial fact. It never converts normalized
+Accounts data into legacy Finance rows or resumes an obsolete mutation path.
 
 R38.3 smart-warehouse rollout is additive. Existing items stay uncategorized
 until Procurement/Admin confirms a mapping; no historical balance, reservation
@@ -429,6 +645,16 @@ Stop before production mutation when:
 - an existing status cannot map without changing its business meaning;
 - rollback would require overwriting committed newer data;
 - backup/restore, required credentials or an operations owner is unavailable.
+- adding Accountant would leave an Auth, audit, RLS, route, seed or test
+  allowlist inconsistent;
+- an Accounts migration would reinterpret legacy Finance data, create
+  technical Accountant membership or expose a normalized route while the flag
+  is off; or
+- the T01 protected default-stage template cannot enforce its 100% invariant;
+  or
+- the T02 project physical-building allocation relation cannot enforce its
+  100% total and Common / All Buildings exclusion without treating Common as a
+  physical commercial scope.
 
 ## 10. Required notes per migration PR
 

@@ -11,8 +11,11 @@ import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_project_portfolio_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   test('project references use natural YRA ordering', () {
@@ -80,6 +83,13 @@ void main() {
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.procurement,
+            ),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(
+                  role: YorksV1Role.procurement,
+                ),
+              ),
             ),
             yorksV1ProjectPortfolioProvider.overrideWith((ref) async => [item]),
           ],

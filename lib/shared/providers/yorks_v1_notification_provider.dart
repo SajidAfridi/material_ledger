@@ -213,7 +213,7 @@ class YorksV1NotificationsNotifier
               if (!joined.isCompleted) joined.complete(false);
             }
           });
-      return joined.future.timeout(
+      return await joined.future.timeout(
         const Duration(seconds: 15),
         onTimeout: () => false,
       );

@@ -20,6 +20,7 @@ void main() {
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
+      expect(flags.accounts, false);
       expect(flags.inventorySuppliers, false);
     });
 
@@ -45,6 +46,7 @@ void main() {
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
+      expect(flags.accounts, false);
       expect(flags.inventorySuppliers, false);
     });
 
@@ -70,6 +72,7 @@ void main() {
       expect(flags.logistics, false);
       expect(flags.returnsDocuments, false);
       expect(flags.documents, false);
+      expect(flags.accounts, false);
       expect(flags.inventorySuppliers, false);
     });
 
@@ -96,8 +99,44 @@ void main() {
       expect(flags.logistics, true);
       expect(flags.returnsDocuments, true);
       expect(flags.documents, true);
+      expect(flags.accounts, false);
       expect(flags.isCompleteR35, true);
     });
+
+    test(
+      'Accounts stays off by default and fails closed without documents',
+      () {
+        const defaultEnvironment = YorksV1FeatureFlags.fromEnvironment();
+        const missingDocuments = YorksV1FeatureFlags(
+          foundation: true,
+          projects: true,
+          boq: true,
+          excel: true,
+          requests: true,
+          arrangement: true,
+          logistics: true,
+          returnsDocuments: true,
+          accounts: true,
+        );
+        const complete = YorksV1FeatureFlags(
+          foundation: true,
+          projects: true,
+          boq: true,
+          excel: true,
+          requests: true,
+          arrangement: true,
+          logistics: true,
+          returnsDocuments: true,
+          documents: true,
+          accounts: true,
+        );
+
+        expect(defaultEnvironment.accounts, false);
+        expect(missingDocuments.accounts, false);
+        expect(complete.accounts, true);
+        expect(complete.isCompleteR35, true);
+      },
+    );
 
     test('supplier folders require the secure document chain', () {
       const withoutDocuments = YorksV1FeatureFlags(
@@ -155,6 +194,7 @@ void main() {
       expect(flags.logistics, true);
       expect(flags.returnsDocuments, true);
       expect(flags.documents, true);
+      expect(flags.accounts, false);
       expect(flags.isCompleteR35, true);
     });
 

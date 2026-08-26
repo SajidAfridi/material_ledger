@@ -105,8 +105,8 @@ select is(
     from auth.users
     where email like '%@yorks.local.test'
   ),
-  6::bigint,
-  'Exactly six deterministic local Auth personas are seeded'
+  7::bigint,
+  'Exactly seven deterministic local Auth personas are seeded'
 );
 
 select is(
@@ -119,6 +119,7 @@ select is(
     where email like '%@yorks.local.test'
   ),
   array[
+    'accountant',
     'admin',
     'procurement',
     'project_engineer',
@@ -126,7 +127,7 @@ select is(
     'senior_mechanical_engineer',
     'site_engineer'
   ]::text[],
-  'The local personas use the exact six Yorks V1 role claims'
+  'The local personas use the exact seven testable Yorks V1 role claims'
 );
 
 select is(
@@ -135,7 +136,7 @@ select is(
     from auth.users
     where email like '%@yorks.local.test'
   ),
-  6::bigint,
+  7::bigint,
   'Every local persona has a stable distinct application user id'
 );
 
@@ -147,7 +148,7 @@ select is(
     where auth_user.email like '%@yorks.local.test'
       and identity_record.provider = 'email'
   ),
-  6::bigint,
+  7::bigint,
   'Every local persona has a deterministic email identity'
 );
 

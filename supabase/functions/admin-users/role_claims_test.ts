@@ -7,11 +7,12 @@ import {
   provisionableRoles,
 } from "./role_claims.ts";
 
-Deno.test("all eight exact V1 roles are accepted as primary claims", () => {
+Deno.test("all nine exact V1 roles are accepted as primary claims", () => {
   for (
     const role of [
       "admin",
       "procurement",
+      "accountant",
       "project_engineer",
       "site_engineer",
       "senior_mechanical_engineer",
@@ -56,6 +57,7 @@ Deno.test("V1 exact-role commands reject legacy and capability input", () => {
 });
 
 Deno.test("role capability defaults are server-derived", () => {
+  assertEquals(defaultCapsForRoles(["accountant"]), []);
   assertEquals(defaultCapsForRoles(["senior_mechanical_engineer"]), []);
   assertEquals(
     defaultCapsForRoles(["procurement"]),

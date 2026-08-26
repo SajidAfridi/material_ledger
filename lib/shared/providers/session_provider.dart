@@ -88,9 +88,9 @@ class AuthSessionRevisionNotifier extends StateNotifier<int> {
 /// Resolves the compatibility-shell role from the only trusted source: an
 /// exact server-controlled `app_metadata.role` claim.
 ///
-/// Yorks V1 claims deliberately map *down* to the existing shell's three
-/// legacy buckets so a connected V1 identity can still sign in while retained
-/// modules are being migrated. This function is never V1 authorization:
+/// Yorks V1 claims deliberately map *down* to explicit compatibility shell
+/// roles so a connected V1 identity can still sign in while retained modules
+/// are being migrated. This function is never V1 authorization:
 /// Yorks V1 commands and routes use [YorksV1Role.fromServerClaim] directly.
 /// In particular, a legacy `engineer` value does not become a Project Engineer
 /// or Site Engineer through this compatibility mapping.
@@ -107,6 +107,7 @@ UserRole? userRoleFromAppMetadata(Map<String, dynamic> appMetadata) {
     YorksV1Role.projectManager ||
     YorksV1Role.workshopInCharge ||
     YorksV1Role.documentController => UserRole.engineer,
+    YorksV1Role.accountant => UserRole.accountant,
     YorksV1Role.procurement => UserRole.procurement,
     YorksV1Role.admin => UserRole.admin,
     null => null,
@@ -327,6 +328,7 @@ class AuthController {
       YorksV1Role.projectManager ||
       YorksV1Role.workshopInCharge ||
       YorksV1Role.documentController => 'project_engineer',
+      YorksV1Role.accountant => 'accountant',
       YorksV1Role.procurement => 'procurement',
       YorksV1Role.admin => 'admin',
     };

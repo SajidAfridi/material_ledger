@@ -15,6 +15,7 @@ import '../features/admin/presentation/screens/material_masters_screen.dart';
 import '../features/admin/presentation/screens/user_management_screen.dart';
 import '../features/admin/presentation/screens/yorks_v1_user_access_screen.dart';
 import '../features/admin/presentation/screens/yorks_v1_configuration_screen.dart';
+import '../features/accounts/presentation/screens/yorks_accounts_screens.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
 import '../features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
@@ -113,6 +114,23 @@ abstract final class RoutePaths {
       '/yorks/projects/:projectId/boq/:groupId';
   static const String yorksV1ProjectDocuments =
       '/yorks/projects/:projectId/documents';
+  static const String yorksV1Accounts = '/yorks/accounts';
+  static const String yorksV1ProjectAccounts =
+      '/yorks/projects/:projectId/accounts';
+  static const String yorksV1ProjectAccountsOverview =
+      '/yorks/projects/:projectId/accounts/overview';
+  static const String yorksV1ProjectAccountsBilling =
+      '/yorks/projects/:projectId/accounts/billing';
+  static const String yorksV1ProjectAccountsInvoices =
+      '/yorks/projects/:projectId/accounts/client-invoices';
+  static const String yorksV1ProjectAccountsReceiptsPdc =
+      '/yorks/projects/:projectId/accounts/receipts-pdc';
+  static const String yorksV1ProjectAccountsSupplierBills =
+      '/yorks/projects/:projectId/accounts/supplier-bills';
+  static const String yorksV1ProjectAccountsDocuments =
+      '/yorks/projects/:projectId/accounts/documents';
+  static const String yorksV1ProjectAccountsActivity =
+      '/yorks/projects/:projectId/accounts/activity';
   static const String yorksV1MaterialRequests = '/yorks/material-requests';
   static const String yorksV1MaterialRequestDraft =
       '/yorks/material-requests/draft/:draftId';
@@ -182,6 +200,23 @@ abstract final class RoutePaths {
       queryParameters: queryParameters,
     ).toString();
   }
+
+  static String yorksV1ProjectAccountsPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts';
+  static String yorksV1ProjectAccountsOverviewPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/overview';
+  static String yorksV1ProjectAccountsBillingPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/billing';
+  static String yorksV1ProjectAccountsInvoicesPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/client-invoices';
+  static String yorksV1ProjectAccountsReceiptsPdcPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/receipts-pdc';
+  static String yorksV1ProjectAccountsSupplierBillsPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/supplier-bills';
+  static String yorksV1ProjectAccountsDocumentsPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/documents';
+  static String yorksV1ProjectAccountsActivityPath(String projectId) =>
+      '/yorks/projects/$projectId/accounts/activity';
 
   static String yorksV1MaterialRequestDraftPath(
     String draftId, {
@@ -415,6 +450,12 @@ bool? _isAllowedForRole(
   };
   if (sharedAll.contains(path)) return true;
 
+  if (_isYorksV1AccountsPath(path)) return true;
+
+  // Accountant is an Accounts-only identity. Normalized Accounts paths are
+  // accepted above and then resolved through the protected capability guard.
+  if (role == UserRole.accountant) return false;
+
   // Materials hub is an office tab; engineers use their own Browse instead.
   if (path == RoutePaths.materials) return role.usesAdminPanel;
 
@@ -508,6 +549,34 @@ bool? _isYorksV1RouteAllowedForRole(
 
   if (!path.startsWith('/yorks/')) return true;
   if (role == null) return false;
+
+  if (_isYorksV1AccountsPath(path)) {
+    final projectId = _yorksV1ProjectIdFromPath(path);
+    if (projectId == null) {
+      if (!_canOpenAccountsPortfolio(role)) return false;
+      return _hybridRouteAllows(
+        permissionResolver,
+        YorksV1CapabilityKeys.viewProjectAccounts,
+        legacyAllowed: false,
+        organizationSummary: true,
+      );
+    }
+    final supplierOnly = path.endsWith('/supplier-bills');
+    final capability = supplierOnly
+        ? YorksV1CapabilityKeys.viewSupplierCosts
+        : YorksV1CapabilityKeys.viewProjectAccounts;
+    return _hybridRouteAllows(
+      permissionResolver,
+      capability,
+      legacyAllowed: false,
+      projectId: projectId,
+      organizationSummary: false,
+    );
+  }
+
+  // Accountant inherits no non-Accounts project, BOQ, MR, Inventory or
+  // administration route merely because it is a recognized platform role.
+  if (role == YorksV1Role.accountant) return false;
 
   if (path == RoutePaths.yorksV1Projects ||
       path.startsWith('${RoutePaths.yorksV1Projects}/')) {
@@ -655,6 +724,16 @@ String? _yorksV1ProjectIdFromPath(String path) {
   return projectId.isEmpty ? null : projectId;
 }
 
+bool _isYorksV1AccountsPath(String path) =>
+    path == RoutePaths.yorksV1Accounts ||
+    (path.startsWith('/yorks/projects/') && path.contains('/accounts'));
+
+bool _canOpenAccountsPortfolio(YorksV1Role role) =>
+    role == YorksV1Role.admin ||
+    role == YorksV1Role.accountant ||
+    role == YorksV1Role.projectManager ||
+    role == YorksV1Role.seniorMechanicalEngineer;
+
 /// Creates the app [GoRouter].
 /// [isOnboarded], [isLoggedIn], [role] and [user] drive redirect / access logic.
 GoRouter createAppRouter({
@@ -676,6 +755,7 @@ GoRouter createAppRouter({
   bool yorksV1DocumentsEnabled = false,
   bool yorksV1TeamChatEnabled = false,
   bool yorksV1InventorySuppliersEnabled = false,
+  bool yorksV1AccountsEnabled = false,
   YorksV1Role? yorksV1Role,
   YorksV1HybridPermissionResolver? yorksV1PermissionResolver,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
@@ -726,8 +806,12 @@ GoRouter createAppRouter({
         return path == RoutePaths.login ? null : RoutePaths.login;
       }
 
-      // Logged-in users shouldn't sit on onboarding/login — land at Home.
+      // Logged-in users shouldn't sit on onboarding/login. Accountant lands
+      // directly in the normalized, capability-guarded Accounts workspace.
       if (path == RoutePaths.languageSelection || path == RoutePaths.login) {
+        if (yorksV1AccountsEnabled && yorksV1Role == YorksV1Role.accountant) {
+          return RoutePaths.yorksV1Accounts;
+        }
         return RoutePaths.engineerHome;
       }
 
@@ -759,7 +843,25 @@ GoRouter createAppRouter({
         if (capabilityAllowed == null) return null;
       }
 
-      if (path.startsWith('/yorks/projects/') && !yorksV1BoqEnabled) {
+      if (_isYorksV1AccountsPath(path) && !yorksV1AccountsEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (path == RoutePaths.finance && yorksV1AccountsEnabled) {
+        return yorksV1Role != null && _canOpenAccountsPortfolio(yorksV1Role)
+            ? RoutePaths.yorksV1Accounts
+            : _yorksV1ProjectFallbackPath();
+      }
+      if (yorksV1AccountsEnabled &&
+          yorksV1Role == YorksV1Role.procurement &&
+          path.endsWith('/accounts')) {
+        final projectId = _yorksV1ProjectIdFromPath(path);
+        if (projectId != null) {
+          return RoutePaths.yorksV1ProjectAccountsSupplierBillsPath(projectId);
+        }
+      }
+      if (path.startsWith('/yorks/projects/') &&
+          !_isYorksV1AccountsPath(path) &&
+          !yorksV1BoqEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
       if (path.startsWith('/yorks/projects/') &&
@@ -1061,6 +1163,89 @@ GoRouter createAppRouter({
         path: RoutePaths.yorksV1Projects,
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const YorksV1ProjectsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1Accounts,
+        pageBuilder: (context, state) =>
+            _yorksV1Slide(state.pageKey, const YorksAccountsPortfolioScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccounts,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsOverview,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsBilling,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksProjectAccountsTab.billing,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsInvoices,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksProjectAccountsTab.invoices,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsReceiptsPdc,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksProjectAccountsTab.receiptsPdc,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsSupplierBills,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksProjectAccountsTab.supplierBills,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsDocuments,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksProjectAccountsTab.documents,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1ProjectAccountsActivity,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          YorksProjectAccountsScreen(
+            projectId: state.pathParameters['projectId'] ?? '',
+            initialTab: YorksProjectAccountsTab.activity,
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1BoqGroups,

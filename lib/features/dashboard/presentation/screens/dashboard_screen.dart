@@ -10,6 +10,7 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/inventory_transaction.dart';
+import '../../../../shared/models/user_role.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
 import '../../../../shared/providers/hr_provider.dart';
 import '../../../../shared/providers/inventory_provider.dart';
@@ -36,8 +37,14 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
-    final currency = ref.watch(currencyProvider);
     final role = ref.watch(currentRoleProvider);
+    // Accountant is provisionable before R39 Accounts is routed. Always land
+    // on the V1 fail-closed state rather than starting retained inventory,
+    // project, request, rental or people dashboard providers.
+    if (role == UserRole.accountant) {
+      return const YorksV1OverviewScreen();
+    }
+    final currency = ref.watch(currencyProvider);
     final yorksV1ProjectsEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
         .projects;

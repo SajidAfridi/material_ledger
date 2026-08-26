@@ -440,9 +440,7 @@ class YorksV1SupabasePermissionRepository
 
   static String _capabilityKey(String value) {
     final normalized = _requiredText(value);
-    if (!RegExp(
-      r'^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$',
-    ).hasMatch(normalized)) {
+    if (!YorksV1CapabilityKeys.isValidWireKey(normalized)) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
     return normalized;

@@ -542,6 +542,7 @@ void main() {
         expect(find.text('Project Engineer'), findsOneWidget);
         expect(find.text('Site Engineer'), findsWidgets);
         expect(find.text('Procurement'), findsOneWidget);
+        expect(find.text('Accountant'), findsOneWidget);
         expect(find.text('Admin'), findsOneWidget);
         expect(find.text('Engineer'), findsNothing);
         expect(find.byType(FilterChip), findsNothing);

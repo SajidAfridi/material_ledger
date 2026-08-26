@@ -11,6 +11,7 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/security/session_lock.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/user_role.dart';
 import '../../../../shared/models/yorks_v1_engineering_tools_strings.dart';
 import '../../../../shared/models/yorks_v1_workspace_status.dart';
 import '../../../../shared/providers/employee_provider.dart';
@@ -31,6 +32,7 @@ class EngineerProfileScreen extends ConsumerWidget {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
     final role = ref.watch(currentRoleProvider);
+    final isAccountant = role == UserRole.accountant;
     final online = ref.watch(isOnlineProvider);
     final engineeringToolsEnabled = ref
         .watch(yorksV1FeatureFlagsProvider)
@@ -137,7 +139,7 @@ class EngineerProfileScreen extends ConsumerWidget {
                   children: [
                     // Owner/admin approves leave in the office panel — they don't
                     // request it. Engineers and procurement (linked employees) do.
-                    if (!role.isAdmin)
+                    if (!role.isAdmin && !isAccountant)
                       _ProfileTile(
                         icon: Icons.event_available_outlined,
                         title: AppStrings.myLeave.primary,
@@ -150,13 +152,13 @@ class EngineerProfileScreen extends ConsumerWidget {
                         title: AppStrings.auditTrail.primary,
                         onTap: () => context.push(RoutePaths.activityLog),
                       ),
-                    if (engineeringToolsEnabled)
+                    if (engineeringToolsEnabled && !isAccountant)
                       _ProfileTile(
                         icon: Icons.straighten_outlined,
                         title: YorksV1EngineeringToolsStrings.ductSizer.primary,
                         onTap: () => context.push(RoutePaths.yorksV1DuctSizer),
                       ),
-                    if (engineeringToolsEnabled)
+                    if (engineeringToolsEnabled && !isAccountant)
                       _ProfileTile(
                         icon: Icons.calculate_outlined,
                         title: YorksV1EngineeringToolsStrings
@@ -345,6 +347,7 @@ class _MobileEngineerProfile extends ConsumerWidget {
     final lang = ref.watch(languageProvider);
     final currency = ref.watch(currencyProvider);
     final role = ref.watch(currentRoleProvider);
+    final isAccountant = role == UserRole.accountant;
     final emp = ref.watch(employeeProvider);
     final status = ref.watch(yorksV1WorkspaceStatusProvider);
     final toolsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
@@ -428,19 +431,19 @@ class _MobileEngineerProfile extends ConsumerWidget {
                       title: AppStrings.auditTrail.primary,
                       onTap: () => context.push(RoutePaths.activityLog),
                     ),
-                  if (!role.isAdmin)
+                  if (!role.isAdmin && !isAccountant)
                     _MobileProfileTile(
                       icon: Icons.event_available_outlined,
                       title: AppStrings.myLeave.primary,
                       onTap: () => context.push(RoutePaths.myLeave),
                     ),
-                  if (toolsEnabled)
+                  if (toolsEnabled && !isAccountant)
                     _MobileProfileTile(
                       icon: Icons.straighten_outlined,
                       title: YorksV1EngineeringToolsStrings.ductSizer.primary,
                       onTap: () => context.push(RoutePaths.yorksV1DuctSizer),
                     ),
-                  if (toolsEnabled)
+                  if (toolsEnabled && !isAccountant)
                     _MobileProfileTile(
                       icon: Icons.calculate_outlined,
                       title:

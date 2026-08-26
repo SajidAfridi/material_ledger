@@ -15,6 +15,9 @@ import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 void main() {
   testWidgets(
@@ -32,6 +35,13 @@ void main() {
             ),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
+            ),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(
+                  role: YorksV1Role.projectEngineer,
+                ),
+              ),
             ),
           ],
           child: const MaterialApp(home: Scaffold(body: EngineerHomeScreen())),

@@ -161,21 +161,89 @@ void main() {
           findsOneWidget,
           reason: role.claimValue,
         );
-        expect(
-          find.byKey(
-            ValueKey(
-              role == YorksV1Role.admin || role.isGlobalProjectEngineer
-                  ? 'executive-overview-metrics'
-                  : 'role-overview-metrics',
+        if (role == YorksV1Role.accountant) {
+          expect(
+            find.byKey(const ValueKey('accountant-rollout-locked-icon')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('role-overview-metrics')),
+            findsNothing,
+          );
+          expect(
+            find.byKey(const ValueKey('executive-overview-metrics')),
+            findsNothing,
+          );
+        } else {
+          expect(
+            find.byKey(
+              ValueKey(
+                role == YorksV1Role.admin || role.isGlobalProjectEngineer
+                    ? 'executive-overview-metrics'
+                    : 'role-overview-metrics',
+              ),
             ),
-          ),
-          findsOneWidget,
-        );
+            findsOneWidget,
+          );
+        }
         expect(tester.takeException(), isNull, reason: role.claimValue);
       }
 
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
+    },
+  );
+
+  testWidgets(
+    'Accountant overview stays locked without starting technical providers',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      var liveRefreshStarted = false;
+      var projectPortfolioStarted = false;
+      var requestListStarted = false;
+      var inventoryStarted = false;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.accountant,
+            ),
+            yorksV1MaterialRequestLiveRefreshProvider.overrideWith((ref) {
+              liveRefreshStarted = true;
+            }),
+            yorksV1AuthorizedProjectPortfolioProvider.overrideWith((ref) {
+              projectPortfolioStarted = true;
+              return const AsyncData(<YorksV1ProjectPortfolioItem>[]);
+            }),
+            yorksV1MaterialRequestListProvider(null).overrideWith((ref) async {
+              requestListStarted = true;
+              return <YorksV1MaterialRequest>[];
+            }),
+            yorksV1InventoryWorkspaceProvider(null).overrideWith((ref) async {
+              inventoryStarted = true;
+              return YorksV1InventoryWorkspace(items: const []);
+            }),
+          ],
+          child: const MaterialApp(home: YorksV1OverviewScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(YorksV1OverviewStrings.accountantRolloutTitle.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1OverviewStrings.accountantRolloutDescription.primary),
+        findsOneWidget,
+      );
+      expect(liveRefreshStarted, isFalse);
+      expect(projectPortfolioStarted, isFalse);
+      expect(requestListStarted, isFalse);
+      expect(inventoryStarted, isFalse);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -398,6 +466,8 @@ String _roleTitle(YorksV1Role role) => switch (role) {
     YorksV1OverviewStrings.projectEngineerTitle.primary,
   YorksV1Role.procurement =>
     'Arrange, approve and dispatch without over-supplying.',
+  YorksV1Role.accountant =>
+    YorksV1OverviewStrings.accountantRolloutTitle.primary,
 };
 
 final _projects = <YorksV1ProjectPortfolioItem>[

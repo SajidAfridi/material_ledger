@@ -14,9 +14,12 @@ import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/project_cost_provider.dart';
 import '../../../../shared/services/commercial_csv_export.dart';
 
-/// Admin read-only cost roll-up: per-project dispatched value, returned value
-/// and net consumed cost, with a CSV export (FR-091). (Finance was the former
-/// Accountant role, now merged into Admin.)
+/// Retired Admin-only compatibility cost roll-up.
+///
+/// This screen is not the normalized R39 Accounts authority and its legacy
+/// Finance permission must never authorize an Accountant or an Accounts
+/// command. It remains temporarily available to Admin during the guarded
+/// rollout and is replaced with the normalized route set in R39 T05.
 class FinanceScreen extends ConsumerWidget {
   const FinanceScreen({super.key});
 

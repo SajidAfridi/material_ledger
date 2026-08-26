@@ -19,7 +19,7 @@ select ok(
 select is(
   (select count(*)
    from public.v1_permission_role_defaults),
-  (select count(*) * 8 from public.v1_capability_catalog),
+  (select count(*) * 9 from public.v1_capability_catalog),
   'Every exact Yorks role has an explicit default for every catalog capability'
 );
 
@@ -108,9 +108,11 @@ select ok(
   and not exists (
     select 1 from public.v1_permission_role_defaults role_default
     join public.v1_capability_catalog catalog using (capability_key)
-    where catalog.status = 'planned' and role_default.is_granted
+    where catalog.status = 'planned'
+      and role_default.is_granted
+      and not public.v1_accounts_is_capability_key(catalog.capability_key)
   ),
-  'All-project visibility is protected and planned capabilities are ineffective'
+  'All-project visibility is protected and only R39 future templates may be pre-seeded while planned'
 );
 
 select ok(
@@ -978,12 +980,12 @@ select ok(
   not public.v1_current_user_can_assign_exact_role(
     'usr-local-procurement', 'site_engineer'
   )
-  and public.v1_current_user_can_assign_new_exact_role('site_engineer')
+  and not public.v1_current_user_can_assign_new_exact_role('site_engineer')
   and not public.v1_current_user_can_assign_exact_role(
     'usr-local-procurement', 'admin'
   )
   and not public.v1_current_user_can_assign_new_exact_role('admin'),
-  'A delegated ordinary manager cannot demote a target above its server role-template ceiling'
+  'A delegated ordinary manager cannot assign a role carrying nondelegable Accounts authority'
 );
 
 select ok(

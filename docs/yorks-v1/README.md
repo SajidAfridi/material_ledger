@@ -4,13 +4,18 @@ Status: **approved re-baseline**
 Approved: 1 August 2026
 Current delivery stage: **Batches 0–9 complete; Batch 10 local release
 evidence passed. Staging acceptance, protected Android signing and deployment
-remain release-owner activities.**
+remain release-owner activities. R39 Accounts was approved on 25 August 2026;
+its T01–T04 protected server/domain slices are additive and route-less, and
+`YORKS_V1_ACCOUNTS` remains off until the phased Accounts acceptance gate
+passes.**
 
 > **HISTORICAL BATCH MATERIAL — NOT THE CURRENT BUILD CONFIGURATION.** The
 > batch-completion files record the original incremental rollout and therefore
-> may say that an individual flag was default-off. The canonical R35 build
-> configuration below is current: the accepted, complete Yorks chain is on by
-> default and legacy Nexus flags are disabled.
+> may say that an individual R35 flag was default-off. The canonical R35 build
+> configuration below is current: the accepted, complete R35 chain is on by
+> default and legacy Nexus flags are disabled. The later
+> `YORKS_V1_ACCOUNTS` flag is an intentional exception and remains off until
+> its R39 rollout gate passes.
 
 This folder is the repository-local contract for the Yorks V1 Procurement
 Control and Inventory turnaround. Rev 2.0 supersedes the overlapping Nexus V7
@@ -39,6 +44,7 @@ explicit V7-to-V1 conflict resolution.
 | [`CURRENT_TO_TARGET_GAP_ANALYSIS.md`](CURRENT_TO_TARGET_GAP_ANALYSIS.md) | Exact current code reuse, gaps and risks |
 | [`ARCHITECTURE_AND_SECURITY_CONTRACT.md`](ARCHITECTURE_AND_SECURITY_CONTRACT.md) | Flutter/Supabase boundary and trusted data flow |
 | [`SCOPED_CAPABILITY_MANAGEMENT.md`](SCOPED_CAPABILITY_MANAGEMENT.md) | Hybrid role-template and person-specific scoped permissions, compatibility, delegation, parity and rollout contract |
+| [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md) | Approved Accounts-only authority, ninth exact role, exact capabilities, defaults, phased rollout and T01 security gate |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
@@ -54,7 +60,7 @@ explicit V7-to-V1 conflict resolution.
 | [`evidence/r38-configuration-20260814/README.md`](evidence/r38-configuration-20260814/README.md) | R38 Configuration Centre security, behavior and responsive visual evidence |
 | [`evidence/r38-5-team-chat-20260814/README.md`](evidence/r38-5-team-chat-20260814/README.md) | R38.5 Team Chat desktop, tablet and mobile visual/security evidence |
 | [`MIGRATION_AND_ROLLBACK_PLAN.md`](MIGRATION_AND_ROLLBACK_PLAN.md) | Additive migration, reconciliation, quarantine and rollback |
-| [`TEST_AND_ACCEPTANCE_PLAN.md`](TEST_AND_ACCEPTANCE_PLAN.md) | Test layers, 31 scenarios and web/Android evidence |
+| [`TEST_AND_ACCEPTANCE_PLAN.md`](TEST_AND_ACCEPTANCE_PLAN.md) | Canonical scenarios, R39 phase gates and platform/security evidence |
 | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Dependency-ordered Batches 0–10 |
 | [`BATCH_00_COMPLETION.md`](BATCH_00_COMPLETION.md) | Re-baseline changes, verification and known blockers |
 | [`BATCH_02_COMPLETION.md`](BATCH_02_COMPLETION.md) | Identity, projects, audit/RLS hardening and verification |
@@ -100,10 +106,14 @@ legacy `NEXUS_V7_*` flags to an R35 command.
 
 `Project -> BOQ -> MR Draft -> Submit -> Arrange/Reserve -> Project Engineer Approval -> Dispatch -> Receipt Review -> Delivery Order -> Return`
 
-Accounts is part of the current Yorks target subject to role permissions. The
-full RFQ/quotation/PO suite is not part of V1. Configuration, Rentals, User
-Management, Audit Trail, Duct Sizer and ESP Calculator remain in place and
-receive regression coverage rather than redesign.
+R39 adds normalized project commercial-control Accounts through phases T01–T07
+without changing this operational chain. T01 is additive/shadow-only; later
+phases cut over tested Accounts surfaces behind `YORKS_V1_ACCOUNTS`. The
+legacy `/admin/finance` route is not Accounts authority. The full
+RFQ/quotation/PO and general-accounting suites are not part of V1.
+Configuration, Rentals, User Management, Audit Trail, Duct Sizer and ESP
+Calculator remain in place and receive regression coverage rather than
+Accounts-driven redesign.
 
 ## How to execute a batch
 

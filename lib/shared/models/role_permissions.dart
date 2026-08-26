@@ -130,6 +130,11 @@ bool resolveCapability(
   RolePermissions perms,
   RoleCapability cap,
 ) {
+  // R39 Accounts authority is intentionally separate from the retained dotted
+  // compatibility capability matrix. Even a stale local per-user override
+  // must not turn Accountant into a technical, HR, rental or legacy Finance
+  // role before the protected Accounts capability consumer exists.
+  if (role == UserRole.accountant) return false;
   final key = cap.overrideKey;
   if (user != null && key != null) {
     final override = user.overrideFor(key);

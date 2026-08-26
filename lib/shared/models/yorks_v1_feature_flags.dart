@@ -19,6 +19,7 @@ class YorksV1FeatureFlags {
     bool logistics = false,
     bool returnsDocuments = false,
     bool documents = false,
+    bool accounts = false,
     bool teamChat = false,
     bool inventorySuppliers = false,
   }) : _foundation = foundation,
@@ -31,6 +32,7 @@ class YorksV1FeatureFlags {
        _logistics = logistics,
        _returnsDocuments = returnsDocuments,
        _documents = documents,
+       _accounts = accounts,
        _teamChat = teamChat,
        _inventorySuppliers = inventorySuppliers;
 
@@ -69,6 +71,10 @@ class YorksV1FeatureFlags {
         'YORKS_V1_DOCUMENTS',
         defaultValue: true,
       ),
+      _accounts = const bool.fromEnvironment(
+        'YORKS_V1_ACCOUNTS',
+        defaultValue: false,
+      ),
       _teamChat = const bool.fromEnvironment(
         'YORKS_R38_TEAM_CHAT',
         defaultValue: false,
@@ -88,6 +94,7 @@ class YorksV1FeatureFlags {
   final bool _logistics;
   final bool _returnsDocuments;
   final bool _documents;
+  final bool _accounts;
   final bool _teamChat;
   final bool _inventorySuppliers;
 
@@ -106,6 +113,12 @@ class YorksV1FeatureFlags {
   bool get logistics => arrangement && _logistics;
   bool get returnsDocuments => logistics && _returnsDocuments;
   bool get documents => returnsDocuments && _documents;
+
+  /// Accounts remains a separately controlled R39 rollout. It depends on the
+  /// protected document chain and defaults off until its database, permission
+  /// and UI acceptance gates have all passed.
+  bool get accounts => documents && _accounts;
+
   bool get teamChat => documents && _teamChat;
 
   /// Supplier folders include controlled receipt evidence, so the feature

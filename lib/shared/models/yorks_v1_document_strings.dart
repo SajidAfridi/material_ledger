@@ -310,6 +310,63 @@ String yorksV1DocumentEntityLabel(YorksV1DocumentEntityType entityType) {
       ur: 'سپلائر وصولی بیچ',
       hi: 'आपूर्तिकर्ता रसीद बैच',
     ),
+    YorksV1DocumentEntityType.accountsBaselineRevision =>
+      const TranslatableString(
+        en: 'Contract baseline',
+        ar: 'خط أساس العقد',
+        ur: 'معاہدے کی بنیادی قدر',
+        hi: 'अनुबंध आधाररेखा',
+      ),
+    YorksV1DocumentEntityType.accountsBillingProgressRevision =>
+      const TranslatableString(
+        en: 'Billing progress',
+        ar: 'تقدم الفوترة',
+        ur: 'بلنگ پیش رفت',
+        hi: 'बिलिंग प्रगति',
+      ),
+    YorksV1DocumentEntityType.accountsClientClaim => const TranslatableString(
+      en: 'Client claim',
+      ar: 'مطالبة العميل',
+      ur: 'کلائنٹ کلیم',
+      hi: 'ग्राहक दावा',
+    ),
+    YorksV1DocumentEntityType.accountsClientInvoice => const TranslatableString(
+      en: 'Client invoice',
+      ar: 'فاتورة العميل',
+      ur: 'کلائنٹ انوائس',
+      hi: 'ग्राहक चालान',
+    ),
+    YorksV1DocumentEntityType.accountsClientCertification =>
+      const TranslatableString(
+        en: 'Client certification',
+        ar: 'اعتماد العميل',
+        ur: 'کلائنٹ سرٹیفکیشن',
+        hi: 'ग्राहक प्रमाणन',
+      ),
+    YorksV1DocumentEntityType.accountsClientPayment => const TranslatableString(
+      en: 'Client payment',
+      ar: 'دفعة العميل',
+      ur: 'کلائنٹ ادائیگی',
+      hi: 'ग्राहक भुगतान',
+    ),
+    YorksV1DocumentEntityType.accountsClientPdc => const TranslatableString(
+      en: 'Client PDC',
+      ar: 'شيك العميل الآجل',
+      ur: 'کلائنٹ پی ڈی سی',
+      hi: 'ग्राहक पीडीसी',
+    ),
+    YorksV1DocumentEntityType.accountsSupplierBill => const TranslatableString(
+      en: 'Supplier bill',
+      ar: 'فاتورة المورد',
+      ur: 'سپلائر بل',
+      hi: 'आपूर्तिकर्ता बिल',
+    ),
+    YorksV1DocumentEntityType.accountsSupplierMatch => const TranslatableString(
+      en: 'Supplier match',
+      ar: 'مطابقة المورد',
+      ur: 'سپلائر میچ',
+      hi: 'आपूर्तिकर्ता मिलान',
+    ),
   };
   return copy.primary;
 }

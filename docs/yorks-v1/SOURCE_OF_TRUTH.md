@@ -43,7 +43,7 @@ atomic full-snapshot replacement and must allow a revised column/row structure
 after prior rows or columns were removed without reusing archived coordinates.
 
 Product-owner change approval on 24 August 2026 adds person-specific scoped
-capability administration inside User Management. The exact eight roles remain
+capability administration inside User Management. The then-current eight roles remain
 server-controlled job identities and baseline templates. The first deployment
 must reproduce every user's current effective access, keep existing protected
 workflow checks authoritative during shadow parity, and cut over one tested
@@ -51,6 +51,17 @@ server consumer at a time. Explicit grants and denies never bypass project
 scope, workflow state, quantity rules, separation of duties, commercial
 response shaping or immutable audit. The complete contract is
 [`SCOPED_CAPABILITY_MANAGEMENT.md`](SCOPED_CAPABILITY_MANAGEMENT.md).
+
+Product-owner approval on 25 August 2026 adds the phased R39 Accounts module
+and the ninth exact `accountant` platform role. This later Accounts-only source
+supersedes prior statements that Accounts is deferred, absent or permanently
+unreachable. It does not supersede any non-Accounts workflow or grant
+Accountant technical project membership. The T01 foundation is additive and
+shadow-only, `YORKS_V1_ACCOUNTS` defaults off, and later T02–T07 surfaces cut
+over only after their individual and complete acceptance gates. The normalized
+Accounts authority is defined by
+[`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md); legacy
+`/admin/finance` remains non-authoritative.
 
 ## Approved source artifacts
 
@@ -62,6 +73,9 @@ fingerprints establish exactly which versions were approved:
 | `Yorks_V1_SRS_and_Rapid_Development_Plan_Rev2_0.docx` | Authoritative product, workflow, data, security and acceptance baseline | `b9bd71e5474c5f09391764a294a094fc0565e1ca2d2a2d4a3ebd3fc0ffc0293d` |
 | `Yorks_AC_Ref_V1_Procurement_Control_R35_Final.html` | Effective final R35 visual and interaction reference | `420436288da54dce8e3e6dc35f4c43e9e7524738d3381050a641f2912818c75c` |
 | `Yorks_V1_SOL_AI_Execution_Pack.md` | Task prompts, sequencing and completion discipline | `02a25c24197ff5b0f9729aab96a0c16b1f469a1938e0f6aa966bce3f73737067` |
+| `01_Yorks_Accounts_Requirements_Specification_R39.md` | Approved Accounts-only functional, non-functional, UI and acceptance authority | `31ce5163afc1aae34086560012c25471080c6ea86b7af2f623a28c2c617c514d` |
+| `07_AI_Implementation_Prompt.md` (R39 package) | Accounts T00–T07 sequencing and implementation discipline | `efc142ddd5abe7eea6cb03a90e749c950b3ca2779057f7f1fc282b9294e31a3f` |
+| `08_Decisions_Assumptions_and_NonRegression.md` (R39 package) | Frozen Accounts defaults and non-regression boundary | `ea25b3dcfca7411682ceb524f395ac746f3b3530660a7a474148672f50970df9` |
 
 If a source artifact changes hash, stop and treat it as a new product input.
 Do not silently replace this baseline.
@@ -78,6 +92,9 @@ Do not silently replace this baseline.
    data-preserving resolutions where the approved artifacts are silent.
 5. Existing V7 behavior is not carried forward merely because it is already
    implemented.
+6. For Accounts-only conflicts, the approved 25 August 2026 R39 package and
+   [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md) supersede older
+   deferred/unreachable statements. They do not alter unrelated V1 authority.
 
 ## Confirmed implementation direction
 
@@ -93,7 +110,7 @@ backward visual or workflow compatibility.
 |---|---|---|
 | Core planning structure | Phase 1 Material Plan and Phase 2 request | Dynamic BOQ groups/rows followed by an explicit MR draft and Submit |
 | Reservation timing | Phase 1 advisory; separate Phase 2 allocation | Procurement arrangement creates/replaces warehouse reservations |
-| Project roles | Generic Engineer plus Procurement/Admin | Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager, Workshop In-Charge, Document Controller, Procurement and Admin |
+| Project/platform roles | Generic Engineer plus Procurement/Admin | Project Engineer, Site Engineer, Senior Mechanical Engineer, Project Manager, Workshop In-Charge, Document Controller, Procurement, Accountant and Admin; Accountant is not technical project membership |
 | Project wizard | Three stages | Effective R35 five stages |
 | Procurement scope | Package, RFQ, quotations and PO | Direct line arrangement, approval, dispatch and receipt; full RFQ/PO deferred |
 | Inventory | V7 multi-source/multi-warehouse direction | One warehouse in V1 |
@@ -104,7 +121,7 @@ backward visual or workflow compatibility.
 | Standard rows | One frozen ten-column material grid | Dynamic BOQ worksheet; seven-column controlled MR output |
 | BOQ ownership | One combined editable project plan | Independent Common/building BOQs; Overview is read-only summary only |
 | Material events | Supplier/warehouse/site directions modeled separately | Dispatch plus site receipt review in V1; supplier-receipt/PO suite deferred |
-| Accounts | Outside V7 transformation but existing routes could remain | Explicitly unavailable in the V1 experience |
+| Accounts | Outside V7 transformation but existing routes could remain | R39 normalized project commercial control rolls out through T01–T07 behind a default-off flag; legacy Finance is never authority |
 
 ### R38.3 smart warehouse client review pack
 
@@ -155,8 +172,10 @@ The complete frozen behavior is in
 
 The R35 HTML is an accretive localStorage proof-of-concept with older R24–R34
 implementations still present underneath final overrides. Only the effective
-final routes and presentation are an oracle. Hidden/dead RFQ, PO, Accounts,
-Material Plan and older status paths are not requirements.
+final routes and presentation are an oracle. Hidden/dead RFQ, PO, Material
+Plan, older status paths and the prototype's legacy Accounts implementation are
+not requirements. Accounts requirements come only from the approved R39
+package and the repository-local R39 foundation contract.
 
 Production Flutter must reproduce the approved intent while replacing:
 

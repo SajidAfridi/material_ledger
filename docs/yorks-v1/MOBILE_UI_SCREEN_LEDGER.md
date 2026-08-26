@@ -64,12 +64,12 @@ evidence is tracked under
 | 39 | Material Return Review | Returns | Batch 4 | Verified | [Evidence](evidence/mobile-batch-04/39_material_return_review/deltas.md); draft/submit remain explicit and stock waits for Procurement confirmation |
 | 40 | Documents | Documents | Batch 5 | Verified | [Evidence](evidence/mobile-batch-05/README.md); authorized classification, real link filters and immutable versions retained |
 | 41 | Document Viewer | Documents | Batch 5 | Verified | [Evidence](evidence/mobile-batch-05/README.md); PDF bytes use the existing authorized reader; non-PDF files remain download-only |
-| 42 | Accounts Overview | Accounts | Deferred | Deferred — no production surface | No Accounts navigation or sample commercial values until implemented |
-| 43 | Billing Progress | Accounts | Deferred | Deferred — no production surface | Reference retained for future authorized Accounts work |
-| 44 | Client Invoices | Accounts | Deferred | Deferred — no production surface | Reference retained; no disconnected invoice register |
-| 45 | Client Invoice Detail | Accounts | Deferred | Deferred — no production surface | Reference retained; no fake certification/payment facts |
-| 46 | Supplier Bills | Accounts | Deferred | Deferred — no production surface | Reference retained; no inferred Procurement finance authority |
-| 47 | Supplier Bill Detail | Accounts | Deferred | Deferred — no production surface | Reference retained; no disconnected approval command |
+| 42 | Accounts Overview | Accounts | R39 T05 planned | T01 unreachable — flag off | Normalized portfolio only after T02–T04 server authority and T05 route acceptance |
+| 43 | Billing Progress | Accounts | R39 T02/T05 planned | T01 unreachable — flag off | Server baseline/progress first; responsive ledger UI later |
+| 44 | Claims & Invoices | Accounts | R39 T03/T05 planned | T01 unreachable — flag off | No disconnected register or false financial facts |
+| 45 | Client Invoice Detail / Receipts & PDC | Accounts | R39 T03/T05 planned | T01 unreachable — flag off | Certification, payment and PDC remain separate server facts |
+| 46 | Supplier Bills | Accounts | R39 T04/T05 planned | T01 unreachable — flag off | Procurement evidence and Accounts payment authority remain separated |
+| 47 | Supplier Bill Detail | Accounts | R39 T04/T05 planned | T01 unreachable — flag off | No approval/payment command before match and protected command acceptance |
 | 48 | Duct Sizer | Tools | Batch 5 | Verified | [Evidence](evidence/mobile-batch-05/README.md); retained calculation and local persistence commands unchanged |
 | 49 | ESP Calculator | Tools | Batch 5 | Verified | [Evidence](evidence/mobile-batch-05/README.md); retained row calculation and local persistence commands unchanged |
 | 50 | Profile & Settings | System | Batch 5 | Verified | [Evidence](evidence/mobile-batch-05/README.md); only existing profile, preference, route and session controls are shown |
@@ -88,5 +88,7 @@ evidence is tracked under
   may be added for visual completeness.
 - Dynamic and commercial-capability-safe field shapes always override static
   reference columns.
-- Accounts references remain deferred until a separate product slice supplies
-  real routes, repositories, server rules and acceptance tests.
+- The approved 25 August 2026 R39 slice now supplies the phased Accounts
+  contract. T01 remains foundation-only and default-off; no ledger row becomes
+  Verified until its T02–T07 server, route, responsive and acceptance evidence
+  is complete. Legacy `/admin/finance` never satisfies an Accounts row.

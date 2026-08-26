@@ -35,6 +35,11 @@ membership, not a separate static navigation tree. Site Engineer never sees an
 enabled team-management or arrangement-approval action without active Project
 Engineer membership.
 
+After the accepted R39 T05 cutover only, authorized Engineering users receive a
+project-context Accounts entry. Site Engineers see only the permitted progress
+suggestion/evidence surface and never protected values by default. T01 exposes
+no Accounts route.
+
 ### Procurement
 
 - Overview
@@ -47,6 +52,19 @@ Engineer membership.
 Project and BOQ pages use explicit read-only presentation. Controls are not
 merely removed from the DOM/widget tree; routes and database writes are also
 denied.
+
+After the accepted R39 supplier-bill cutover, Procurement receives only its
+capability-authorized supplier-bill/evidence surface; client receivables remain
+absent and server-denied by default.
+
+### Accountant
+
+Accountant is the ninth exact platform role, not a technical project member.
+After R39 T05 and only when `YORKS_V1_ACCOUNTS` plus the server projection allow
+it, navigation contains Accounts Portfolio and authorized project Accounts.
+It does not expose Project/BOQ/MR/Dispatch/Receipt/Inventory/Return mutation
+destinations. During T01 the Accounts flag is off and no Accounts destination
+is reachable.
 
 ### Admin
 
@@ -70,8 +88,10 @@ Senior Mechanical Engineer navigation additionally includes User Management.
 It does not include Configuration, Access & Roles, Data Sync, Audit Trail or
 other Admin-only destinations. Project Manager navigation is unchanged.
 
-Accounts, RFQ, quotation, PO, legacy Material Plan and hidden prototype routes
-are absent from V1 navigation and command search.
+Legacy Finance, RFQ, quotation, PO, legacy Material Plan and hidden prototype
+routes are absent from V1 navigation and command search. Normalized Accounts is
+the sole exception after its later R39 flag/capability cutover; legacy
+`/admin/finance` is never used as authority or fallback.
 
 ## 3. Global shell
 
@@ -178,12 +198,18 @@ draft state.
 
 ### Project workspace
 
-Only these primary tabs:
+R35 baseline primary tabs:
 
 - Overview
 - BOQ
 - Material Requests
 - Documents
+
+After the accepted R39 T05 cutover, an Accounts tab/entry is added only for a
+server-authorized project scope. Its internal sections are Overview, Billing
+Progress, Claims & Invoices, Receipts & PDC, Supplier Bills, Documents and
+Activity, with unauthorized sections omitted rather than disabled. The existing
+project workspace and Documents surface are extended, not duplicated.
 
 Overview shows project facts, team, scopes, counts, recent MRs and current
 action. Team history/change controls appear only for Project Engineer/Admin.
@@ -489,3 +515,35 @@ The in-app browser blocked the local `file://` artifact, so runtime prototype
 screenshots/focus behavior were not independently verified. Each implementation
 batch must verify the resulting Flutter screen directly rather than claiming
 pixel parity from source inspection alone.
+
+## 16. R39 Accounts UI addendum
+
+The approved Accounts package supersedes only the earlier UI decision to keep
+Accounts absent. `YORKS_V1_ACCOUNTS` defaults off; T01 adds no route, navigation
+item, command-search target or deep-link destination. T05 may expose normalized
+Accounts only after its protected projections and route guards pass. A missing
+dependency fails closed. The current Yorks shell, tokens, responsive helpers,
+Documents, Notifications, Audit and file-saving systems remain mandatory; no
+parallel Accounts shell or theme is permitted (FR-002, FR-003 and FR-014).
+
+Portfolio figures appear in this order: Contract Baseline, Confirmed Eligible,
+Available to Claim, Claimed, Certified, **Amount Paid Till Date**, Still Due and
+PDC Exposure. “Paid to Yorks” and generic “Overall Progress” are not canonical;
+the weighted label is **Confirmed Commercial Progress**. Payment terms and
+reminder copy render the server snapshots/defaults (90 and 10), never a
+hardcoded prototype value. Default stage presentation is 10/50/30/5/5, and
+Common / All Buildings never appears as a physical commercial allocation.
+
+The Accounts UI consumes explicit server capabilities/command flags. It never
+infers authority from Accountant, Manager or Senior Engineer text. Protected
+values and unavailable tabs are absent from unauthorized response shapes,
+state, semantics, exports and widgets. Loading uses skeletons rather than false
+zeroes; committed feedback appears only after server confirmation.
+
+Acceptance viewports are 1440×900, 1366×768, 1024×768, 820×1180, 390×844 and
+360×800. Desktop uses dense pageable registers; tablet stacks filters/actions;
+mobile uses ledger cards and focused actions rather than squeezed desktop
+tables. Every state covers loading, empty, no results, forbidden, offline,
+recoverable error, stale conflict, uncertain commit and session expiry with
+44px targets, visible keyboard focus, status text plus icon, 200% text scaling
+and reduced motion.
