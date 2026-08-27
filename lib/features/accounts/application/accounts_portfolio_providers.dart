@@ -36,6 +36,10 @@ final yorksAccountsProjectOverviewControllerProvider = StateNotifierProvider
       YorksAccountsProjectOverviewState,
       String
     >((ref, projectId) {
+      // Keep the latest confirmed projection across Accounts tab routes and
+      // browser print round-trips. Any identity, role or permission-epoch
+      // change below still invalidates this provider and purges the cache.
+      ref.keepAlive();
       ref.watch(yorksV1CurrentRoleProvider);
       ref.watch(yorksV1AuthUserIdProvider);
       ref.watch(yorksAccountsPermissionEpochProvider);

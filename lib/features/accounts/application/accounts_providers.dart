@@ -54,6 +54,10 @@ final yorksAccountsProjectControllerProvider = StateNotifierProvider.autoDispose
       ref,
       projectId,
     ) {
+      // Route changes must not discard a confirmed project ledger. Watched
+      // authority inputs still recreate the provider immediately on access
+      // or identity changes, so protected data never survives revocation.
+      ref.keepAlive();
       // Recreate even when a token refresh keeps the same auth-user ID but
       // changes the exact server-controlled role claim.
       ref.watch(yorksV1CurrentRoleProvider);

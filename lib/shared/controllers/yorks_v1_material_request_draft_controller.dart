@@ -187,21 +187,40 @@ class YorksV1MaterialRequestDraftController
     transform,
   ) => _replace(transform(state.draft));
 
-  /// Changes the project only when the caller has explicitly confirmed that
-  /// existing BOQ, Excel and custom rows may be removed.  This makes the
-  /// destructive project/scope reset visible to the presentation layer.
+  /// Changes the project without allowing a row to retain BOQ provenance from
+  /// the old project. A caller may preserve the engineer's entered rows; BOQ
+  /// rows then become descriptive custom snapshots while Excel/custom rows
+  /// retain their source kind. The server still re-checks the new project and
+  /// scope before a connected save or submit.
   Future<bool> setProject(
     String? projectId, {
     bool discardExistingLines = false,
+    bool preserveExistingLines = false,
   }) async {
     final draft = state.draft;
     if (projectId == draft.projectId) return true;
-    if (draft.lines.isNotEmpty && !discardExistingLines) return false;
+    if (draft.lines.isNotEmpty &&
+        !discardExistingLines &&
+        !preserveExistingLines) {
+      return false;
+    }
+    final retainedLines = preserveExistingLines
+        ? [
+            for (final line in draft.lines)
+              line.source == YorksV1MaterialRequestLineSource.boq
+                  ? line.copyWith(
+                      source: YorksV1MaterialRequestLineSource.custom,
+                      sourceBoqGroupId: null,
+                      sourceBoqRowId: null,
+                    )
+                  : line,
+          ]
+        : const <YorksV1MaterialRequestLine>[];
     await update(
       (current) => current.copyWith(
         projectId: projectId,
         scopeId: null,
-        lines: const [],
+        lines: retainedLines,
       ),
     );
     return true;
@@ -290,26 +309,30 @@ class YorksV1MaterialRequestDraftController
     await _persist(hydrated);
   }
 
-  Future<void> addCustomLine() async {
+  Future<void> addCustomLine({String? afterLineId}) async {
     final draft = state.draft;
-    await _replace(
-      draft.copyWith(
-        lines: [
-          ...draft.lines,
-          YorksV1MaterialRequestLine(
-            id: _uuidFactory(),
-            displayOrder: draft.lines.length + 1,
-            source: YorksV1MaterialRequestLineSource.custom,
-            description: '',
-            quantity: '',
-            // Unit choices are server-controlled. Leaving a new row blank
-            // keeps the local draft recoverable without inventing a value
-            // when the Configuration control plane is unavailable.
-            unit: '',
-          ),
-        ],
-      ),
-    );
+    final insertIndex = afterLineId == null
+        ? draft.lines.length
+        : draft.lines.indexWhere((line) => line.id == afterLineId) + 1;
+    final safeInsertIndex = insertIndex <= 0 || insertIndex > draft.lines.length
+        ? draft.lines.length
+        : insertIndex;
+    final lines = [...draft.lines]
+      ..insert(
+        safeInsertIndex,
+        YorksV1MaterialRequestLine(
+          id: _uuidFactory(),
+          displayOrder: safeInsertIndex + 1,
+          source: YorksV1MaterialRequestLineSource.custom,
+          description: '',
+          quantity: '',
+          // Unit choices are server-controlled. Leaving a new row blank
+          // keeps the local draft recoverable without inventing a value
+          // when the Configuration control plane is unavailable.
+          unit: '',
+        ),
+      );
+    await _replace(draft.copyWith(lines: _reindexLines(lines)));
   }
 
   Future<void> addBlankLine() => addCustomLine();

@@ -32,11 +32,13 @@ class YorksV1DocumentsScreen extends ConsumerStatefulWidget {
     required this.projectId,
     this.focusEntityType,
     this.focusEntityId,
+    this.embedded = false,
   });
 
   final String projectId;
   final String? focusEntityType;
   final String? focusEntityId;
+  final bool embedded;
 
   @override
   ConsumerState<YorksV1DocumentsScreen> createState() =>
@@ -66,6 +68,50 @@ class _YorksV1DocumentsScreenState
     final mobile = YorksMobileUi.isActive(context);
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+    final body = workspace.when(
+      loading: () => mobile
+          ? const _MobileDocumentsLoading()
+          : const Center(child: CircularProgressIndicator()),
+      error: (_, _) => mobile
+          ? _MobileDocumentsError(onRetry: _refresh)
+          : _ErrorState(onRetry: _refresh),
+      data: (value) => mobile
+          ? _MobileDocumentsBody(
+              workspace: value,
+              targetEntityType: _targetEntityType,
+              targetEntityId: _targetEntityId,
+              focusedRecord: _hasFocusedRecord,
+              busy: _working,
+              onCreateDocument: () => _uploadNewVersion(),
+              onUploadVersion: (document) =>
+                  _uploadNewVersion(document: document),
+              onDownload: _download,
+              onShare: _share,
+              onReadBytes: _readBytes,
+              onLink: _link,
+              onRemove: _remove,
+            )
+          : _WorkspaceBody(
+              workspace: value,
+              language: language,
+              targetEntityType: _targetEntityType,
+              targetEntityId: _targetEntityId,
+              focusedRecord: _hasFocusedRecord,
+              busy: _working,
+              onUploadVersion: (document) =>
+                  _uploadNewVersion(document: document),
+              onDownload: _download,
+              onLink: _link,
+              onRemove: _remove,
+              showPageHeader: widget.embedded || !compactRoute,
+              onCreateDocument: () => _uploadNewVersion(),
+              onDropDocuments: _uploadDroppedDocuments,
+              onDropError: () =>
+                  _snack(context, YorksV1DocumentStrings.uploadFailed.primary),
+              onLinkExisting: () => _linkExistingDocument(value),
+            ),
+    );
+    if (widget.embedded) return body;
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: mobile
@@ -128,51 +174,7 @@ class _YorksV1DocumentsScreenState
               label: Text(YorksV1DocumentStrings.addDocument.primary),
             )
           : null,
-      body: workspace.when(
-        loading: () => mobile
-            ? const _MobileDocumentsLoading()
-            : const Center(child: CircularProgressIndicator()),
-        error: (_, _) => mobile
-            ? _MobileDocumentsError(onRetry: _refresh)
-            : _ErrorState(onRetry: _refresh),
-        data: (value) => mobile
-            ? _MobileDocumentsBody(
-                workspace: value,
-                targetEntityType: _targetEntityType,
-                targetEntityId: _targetEntityId,
-                focusedRecord: _hasFocusedRecord,
-                busy: _working,
-                onCreateDocument: () => _uploadNewVersion(),
-                onUploadVersion: (document) =>
-                    _uploadNewVersion(document: document),
-                onDownload: _download,
-                onShare: _share,
-                onReadBytes: _readBytes,
-                onLink: _link,
-                onRemove: _remove,
-              )
-            : _WorkspaceBody(
-                workspace: value,
-                language: language,
-                targetEntityType: _targetEntityType,
-                targetEntityId: _targetEntityId,
-                focusedRecord: _hasFocusedRecord,
-                busy: _working,
-                onUploadVersion: (document) =>
-                    _uploadNewVersion(document: document),
-                onDownload: _download,
-                onLink: _link,
-                onRemove: _remove,
-                showPageHeader: !compactRoute,
-                onCreateDocument: () => _uploadNewVersion(),
-                onDropDocuments: _uploadDroppedDocuments,
-                onDropError: () => _snack(
-                  context,
-                  YorksV1DocumentStrings.uploadFailed.primary,
-                ),
-                onLinkExisting: () => _linkExistingDocument(value),
-              ),
-      ),
+      body: body,
     );
   }
 

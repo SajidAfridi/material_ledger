@@ -33,6 +33,7 @@ class YorksV1TeamChatScreen extends ConsumerStatefulWidget {
 
 class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   YorksV1ChatFilter _filter = YorksV1ChatFilter.all;
   String? _openedInitialId;
   String? _focusMessageId;
@@ -79,6 +80,7 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
       ..removeListener(_onSearchChanged)
       ..dispose();
     _searchDebounce?.cancel();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -163,6 +165,7 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
                       state: state,
                       conversations: _visibleConversations(state),
                       searchController: _searchController,
+                      searchFocusNode: _searchFocusNode,
                       filter: _filter,
                       mobile: true,
                       onFilterChanged: (value) =>
@@ -179,6 +182,7 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
                       state: state,
                       conversations: _visibleConversations(state),
                       searchController: _searchController,
+                      searchFocusNode: _searchFocusNode,
                       filter: _filter,
                       mobile: false,
                       onFilterChanged: (value) =>
@@ -220,18 +224,39 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
       ),
     );
 
-    return ColoredBox(
-      color: AppColors.surface,
-      child: Padding(
-        padding: mobile
-            ? EdgeInsets.zero
-            : EdgeInsets.fromLTRB(
-                size.width <= 980 ? 12 : 20,
-                size.width <= 980 ? 12 : 16,
-                size.width <= 980 ? 12 : 20,
-                size.width <= 980 ? 16 : 20,
-              ),
-        child: content,
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.keyK, control: true):
+            _FocusChatSearchIntent(),
+        SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+            _FocusChatSearchIntent(),
+      },
+      child: Actions(
+        actions: {
+          _FocusChatSearchIntent: CallbackAction<_FocusChatSearchIntent>(
+            onInvoke: (_) {
+              if (!selected || !mobile) _searchFocusNode.requestFocus();
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: !mobile,
+          child: ColoredBox(
+            color: AppColors.surface,
+            child: Padding(
+              padding: mobile
+                  ? EdgeInsets.zero
+                  : EdgeInsets.fromLTRB(
+                      size.width <= 980 ? 12 : 20,
+                      size.width <= 980 ? 12 : 16,
+                      size.width <= 980 ? 12 : 20,
+                      size.width <= 980 ? 16 : 20,
+                    ),
+              child: content,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -311,6 +336,7 @@ class _ConversationListPane extends ConsumerWidget {
     required this.state,
     required this.conversations,
     required this.searchController,
+    required this.searchFocusNode,
     required this.filter,
     required this.mobile,
     required this.onFilterChanged,
@@ -322,6 +348,7 @@ class _ConversationListPane extends ConsumerWidget {
   final YorksV1TeamChatState state;
   final List<YorksV1ChatConversation> conversations;
   final TextEditingController searchController;
+  final FocusNode searchFocusNode;
   final YorksV1ChatFilter filter;
   final bool mobile;
   final ValueChanged<YorksV1ChatFilter> onFilterChanged;
@@ -340,6 +367,7 @@ class _ConversationListPane extends ConsumerWidget {
       PushAuthorizationState.provisional => !pushStatus.deviceRegistered,
       _ => true,
     };
+    final conversationEntries = _conversationListEntries(conversations);
     return Column(
       children: [
         SizedBox(
@@ -398,6 +426,7 @@ class _ConversationListPane extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: TextField(
             controller: searchController,
+            focusNode: searchFocusNode,
             decoration: InputDecoration(
               isDense: true,
               hintText: YorksV1TeamChatStrings.search.active(language),
@@ -466,12 +495,21 @@ class _ConversationListPane extends ConsumerWidget {
                   onRefresh: () => context
                       .readProvider(yorksV1TeamChatProvider.notifier)
                       .refresh(),
-                  child: ListView.separated(
+                  child: ListView.builder(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    itemCount: conversations.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 1),
+                    itemCount: conversationEntries.length,
                     itemBuilder: (context, index) {
-                      final conversation = conversations[index];
+                      final entry = conversationEntries[index];
+                      if (entry.conversation == null) {
+                        return _ConversationSectionHeading(
+                          label:
+                              (entry.pinned
+                                      ? YorksV1TeamChatStrings.pinned
+                                      : YorksV1TeamChatStrings.recent)
+                                  .active(language),
+                        );
+                      }
+                      final conversation = entry.conversation!;
                       return _ConversationListTile(
                         conversation: conversation,
                         selected:
@@ -486,6 +524,56 @@ class _ConversationListPane extends ConsumerWidget {
       ],
     );
   }
+}
+
+class _FocusChatSearchIntent extends Intent {
+  const _FocusChatSearchIntent();
+}
+
+class _ConversationListEntry {
+  const _ConversationListEntry.heading({required this.pinned})
+    : conversation = null;
+
+  const _ConversationListEntry.conversation(this.conversation) : pinned = false;
+
+  final bool pinned;
+  final YorksV1ChatConversation? conversation;
+}
+
+List<_ConversationListEntry> _conversationListEntries(
+  List<YorksV1ChatConversation> conversations,
+) {
+  final pinned = conversations.where((item) => item.isPinned).toList();
+  final recent = conversations.where((item) => !item.isPinned).toList();
+  return [
+    if (pinned.isNotEmpty) ...[
+      const _ConversationListEntry.heading(pinned: true),
+      ...pinned.map(_ConversationListEntry.conversation),
+    ],
+    if (recent.isNotEmpty) ...[
+      const _ConversationListEntry.heading(pinned: false),
+      ...recent.map(_ConversationListEntry.conversation),
+    ],
+  ];
+}
+
+class _ConversationSectionHeading extends StatelessWidget {
+  const _ConversationSectionHeading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(14, 10, 14, 5),
+    child: Text(
+      label.toUpperCase(),
+      style: AppTypography.labelSmall.copyWith(
+        color: AppColors.muted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: .75,
+      ),
+    ),
+  );
 }
 
 Future<void> _showChatAlertSetup(BuildContext context) {
@@ -656,10 +744,13 @@ class _ConversationPane extends ConsumerStatefulWidget {
 class _ConversationPaneState extends ConsumerState<_ConversationPane> {
   final _scrollController = ScrollController();
   final _messageKeys = <String, GlobalKey>{};
+  final _draftBodies = <String, String>{};
   YorksV1ChatMessage? _replyingTo;
   bool _nearBottom = true;
   bool _loadingOlder = false;
   int _newMessageCount = 0;
+  String? _highlightedMessageId;
+  Timer? _highlightTimer;
 
   @override
   void initState() {
@@ -676,7 +767,9 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
     if (newThread == null) return;
     if (widget.focusMessageId != null &&
         widget.focusMessageId != oldWidget.focusMessageId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _focusMessage());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _focusRequestedMessage(),
+      );
     }
     if (oldThread?.conversation.id != newThread.conversation.id) {
       _newMessageCount = 0;
@@ -699,19 +792,46 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
     }
   }
 
-  Future<void> _focusMessage() async {
+  Future<void> _focusRequestedMessage() async {
     final messageId = widget.focusMessageId;
     if (!mounted || messageId == null) return;
+    await _revealMessage(messageId);
+    widget.onFocusHandled();
+  }
+
+  Future<void> _revealMessage(String messageId) async {
+    if (!mounted) return;
     final messageContext = _messageKeys[messageId]?.currentContext;
-    if (messageContext != null) {
+    if (messageContext == null && _scrollController.hasClients) {
+      final messages = widget.state.thread?.messages ?? const [];
+      final index = messages.indexWhere((message) => message.id == messageId);
+      if (index >= 0 && messages.length > 1) {
+        await _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent *
+              (index / (messages.length - 1)),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+      }
+    }
+    if (!mounted) return;
+    final revealedContext = _messageKeys[messageId]?.currentContext;
+    if (revealedContext != null && revealedContext.mounted) {
       await Scrollable.ensureVisible(
-        messageContext,
+        revealedContext,
         alignment: .35,
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
       );
     }
-    widget.onFocusHandled();
+    if (!mounted) return;
+    _highlightTimer?.cancel();
+    setState(() => _highlightedMessageId = messageId);
+    _highlightTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && _highlightedMessageId == messageId) {
+        setState(() => _highlightedMessageId = null);
+      }
+    });
   }
 
   void _onScroll() {
@@ -773,6 +893,7 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -846,6 +967,13 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
                     onPressed: () =>
                         _openConversationRecord(context, conversation),
                   ),
+                _ChatIconButton(
+                  tooltip: YorksV1TeamChatStrings.searchConversation.active(
+                    widget.language,
+                  ),
+                  icon: Icons.search_rounded,
+                  onPressed: () => _showMessageSearch(thread),
+                ),
                 if (!widget.showInfoPanel)
                   _ChatIconButton(
                     tooltip: YorksV1TeamChatStrings.conversationInfo.active(
@@ -956,24 +1084,36 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
                             message.id,
                             GlobalKey.new,
                           ),
-                          child: Column(
-                            children: [
-                              if (showDate)
-                                _DateSeparator(date: message.createdAt),
-                              if (message.isSystem)
-                                _SystemMessage(
-                                  message: message,
-                                  language: widget.language,
-                                )
-                              else
-                                _MessageBubble(
-                                  message: message,
-                                  language: widget.language,
-                                  mobile: widget.mobile,
-                                  onReply: () =>
-                                      setState(() => _replyingTo = message),
-                                ),
-                            ],
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: _highlightedMessageId == message.id
+                                  ? AppColors.blueContainer.withValues(
+                                      alpha: .62,
+                                    )
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                if (showDate)
+                                  _DateSeparator(date: message.createdAt),
+                                if (message.isSystem)
+                                  _SystemMessage(
+                                    message: message,
+                                    language: widget.language,
+                                  )
+                                else
+                                  _MessageBubble(
+                                    message: message,
+                                    language: widget.language,
+                                    mobile: widget.mobile,
+                                    onReply: () =>
+                                        setState(() => _replyingTo = message),
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -994,13 +1134,214 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
                 ),
         ),
         _ChatComposer(
+          key: ValueKey('chat-composer-${conversation.id}'),
           language: widget.language,
           thread: thread,
           replyingTo: _replyingTo,
+          initialDraft: _draftBodies[conversation.id] ?? '',
+          onDraftChanged: (value) {
+            if (value.trim().isEmpty) {
+              _draftBodies.remove(conversation.id);
+            } else {
+              _draftBodies[conversation.id] = value;
+            }
+          },
           onCancelReply: () => setState(() => _replyingTo = null),
           onSent: () => setState(() => _replyingTo = null),
         ),
       ],
+    );
+  }
+
+  Future<void> _showMessageSearch(YorksV1ChatThread thread) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ConversationMessageSearchSheet(
+        language: widget.language,
+        messages: thread.messages,
+      ),
+    );
+    if (selected != null && mounted) await _revealMessage(selected);
+  }
+}
+
+class _ConversationMessageSearchSheet extends StatefulWidget {
+  const _ConversationMessageSearchSheet({
+    required this.language,
+    required this.messages,
+  });
+
+  final AppLanguage language;
+  final List<YorksV1ChatMessage> messages;
+
+  @override
+  State<_ConversationMessageSearchSheet> createState() =>
+      _ConversationMessageSearchSheetState();
+}
+
+class _ConversationMessageSearchSheetState
+    extends State<_ConversationMessageSearchSheet> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<YorksV1ChatMessage> get _results {
+    final query = _controller.text.trim().toLowerCase();
+    final searchable = widget.messages.where((message) => !message.isSystem);
+    final values = query.isEmpty
+        ? searchable.toList()
+        : searchable.where((message) {
+            final content = [
+              message.senderDisplayName,
+              message.body,
+              ...message.attachments.map((item) => item.fileName),
+            ].whereType<String>().join(' ').toLowerCase();
+            return content.contains(query);
+          }).toList();
+    return values.reversed.take(30).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = _results;
+    return SafeArea(
+      child: FractionallySizedBox(
+        heightFactor: .78,
+        child: Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+            boxShadow: const [
+              BoxShadow(
+                color: AppColors.shadow,
+                blurRadius: 24,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        YorksV1TeamChatStrings.searchConversation.active(
+                          widget.language,
+                        ),
+                        style: AppTypography.titleMedium,
+                      ),
+                    ),
+                    _ChatIconButton(
+                      tooltip: YorksV1TeamChatStrings.close.active(
+                        widget.language,
+                      ),
+                      icon: Icons.close_rounded,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                child: TextField(
+                  key: const ValueKey('chat-message-search-field'),
+                  controller: _controller,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: YorksV1TeamChatStrings.searchRecentMessages
+                        .active(widget.language),
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _controller.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: YorksV1TeamChatStrings.close.active(
+                              widget.language,
+                            ),
+                            onPressed: () {
+                              _controller.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    filled: true,
+                    fillColor: AppColors.surfaceContainerLow,
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: results.isEmpty
+                    ? _SmallEmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: YorksV1TeamChatStrings.noMatchingMessages.active(
+                          widget.language,
+                        ),
+                        body: YorksV1TeamChatStrings.searchRecentMessages
+                            .active(widget.language),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemCount: results.length,
+                        separatorBuilder: (_, _) =>
+                            const Divider(height: 1, indent: 62),
+                        itemBuilder: (context, index) {
+                          final message = results[index];
+                          final preview =
+                              message.body ??
+                              message.attachments.firstOrNull?.fileName ??
+                              '';
+                          return Material(
+                            key: ValueKey(
+                              'chat-message-search-result-${message.id}',
+                            ),
+                            color: Colors.transparent,
+                            child: ListTile(
+                              minTileHeight: 58,
+                              leading: _PersonAvatar(
+                                name: message.senderDisplayName ?? '',
+                                size: 36,
+                              ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      message.senderDisplayName ?? '',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.labelLarge,
+                                    ),
+                                  ),
+                                  Text(
+                                    _compactTime(message.createdAt),
+                                    style: AppTypography.labelSmall,
+                                  ),
+                                ],
+                              ),
+                              subtitle: Text(
+                                preview,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => Navigator.pop(context, message.id),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1302,9 +1643,12 @@ class _MessageBubble extends ConsumerWidget {
 
 class _ChatComposer extends ConsumerStatefulWidget {
   const _ChatComposer({
+    super.key,
     required this.language,
     required this.thread,
     required this.replyingTo,
+    required this.initialDraft,
+    required this.onDraftChanged,
     required this.onCancelReply,
     required this.onSent,
   });
@@ -1312,6 +1656,8 @@ class _ChatComposer extends ConsumerStatefulWidget {
   final AppLanguage language;
   final YorksV1ChatThread thread;
   final YorksV1ChatMessage? replyingTo;
+  final String initialDraft;
+  final ValueChanged<String> onDraftChanged;
   final VoidCallback onCancelReply;
   final VoidCallback onSent;
 
@@ -1330,6 +1676,12 @@ class _ChatComposerState extends ConsumerState<_ChatComposer> {
   String? _attemptFingerprint;
   String? _mentionQuery;
   int? _mentionStart;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController.text = widget.initialDraft;
+  }
 
   @override
   void dispose() {
@@ -1528,7 +1880,10 @@ class _ChatComposerState extends ConsumerState<_ChatComposer> {
                           enabled: !adminOnly && !state.sending,
                           minLines: 1,
                           maxLines: 5,
-                          onChanged: (_) => _updateMentionQuery(),
+                          onChanged: (value) {
+                            widget.onDraftChanged(value);
+                            _updateMentionQuery();
+                          },
                           textInputAction: TextInputAction.newline,
                           decoration: InputDecoration(
                             hintText: YorksV1TeamChatStrings.messageHint.active(
@@ -1758,6 +2113,7 @@ class _ChatComposerState extends ConsumerState<_ChatComposer> {
       return;
     }
     _textController.clear();
+    widget.onDraftChanged('');
     _messageIdempotencyKey = null;
     _attemptFingerprint = null;
     _mentions.clear();

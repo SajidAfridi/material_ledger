@@ -52,6 +52,67 @@ class YorksV1MaterialRequestDocumentService {
     includeCommercial: false,
   );
 
+  /// Produces an import-ready engineering workbook for reuse while composing
+  /// another request. Unlike the controlled submitted form, this private
+  /// draft workbook keeps Size and Model / Tag in explicit editable columns.
+  /// It contains no commercial or warehouse availability data.
+  Uint8List buildDraftImportExcel(YorksV1MaterialRequestDraft draft) {
+    final headings = <String>[
+      YorksV1MaterialRequestStrings.rowNumber.primary,
+      YorksV1MaterialRequestStrings.itemDescription.primary,
+      YorksV1MaterialRequestStrings.size.primary,
+      YorksV1MaterialRequestStrings.planningModelTag.primary,
+      YorksV1MaterialRequestStrings.brandOrigin.primary,
+      YorksV1MaterialRequestStrings.quantity.primary,
+      YorksV1MaterialRequestStrings.unit.primary,
+    ];
+    final columns = [
+      for (var index = 0; index < headings.length; index++)
+        YorksV1BoqColumn(
+          id: 'mr_import_column_$index',
+          heading: headings[index],
+          displayOrder: index + 1,
+        ),
+    ];
+    final worksheet = YorksV1BoqWorksheet(
+      group: YorksV1BoqGroup(
+        id: draft.id,
+        projectId: draft.projectId ?? 'draft',
+        name: 'Material Request Import',
+        worksheetTitle: 'MR Import',
+        displayOrder: 1,
+        isCustom: false,
+        isArchived: false,
+        version: draft.serverRecordVersion,
+        rowCount: draft.lines.length,
+        columnCount: columns.length,
+        updatedAt: draft.updatedAt,
+      ),
+      columns: columns,
+      rows: [
+        for (var index = 0; index < draft.lines.length; index++)
+          YorksV1BoqRow(
+            id: draft.lines[index].id,
+            displayOrder: index + 1,
+            values: {
+              'mr_import_column_0': (index + 1).toString(),
+              'mr_import_column_1': draft.lines[index].description,
+              'mr_import_column_2': draft.lines[index].size ?? '',
+              'mr_import_column_3':
+                  draft.lines[index].model ??
+                  draft.lines[index].planningModelTag ??
+                  '',
+              'mr_import_column_4': draft.lines[index].brandOrigin ?? '',
+              'mr_import_column_5': draft.lines[index].quantity,
+              'mr_import_column_6': draft.lines[index].unit,
+            },
+            canonicalValues: const {},
+          ),
+      ],
+    );
+    return workbookCodec.encodeWorksheet(worksheet);
+  }
+
   Uint8List _buildExcel({
     required String id,
     required String projectId,
@@ -128,6 +189,17 @@ class YorksV1MaterialRequestDocumentService {
 
   String suggestedDraftExcelName(YorksV1MaterialRequestDraft draft) =>
       'Material_Request_Draft_${_safeName(draft.id)}.xlsx';
+
+  String suggestedDraftImportExcelName(
+    YorksV1MaterialRequestDraft draft, {
+    String? projectReference,
+  }) {
+    final reference = projectReference?.trim();
+    final prefix = reference == null || reference.isEmpty
+        ? 'Material_Request'
+        : '${_safeName(reference)}_Material_Request';
+    return '${prefix}_Import_Ready.xlsx';
+  }
 
   static const double _mm = PdfPageFormat.mm;
   static final PdfColor _documentInk = PdfColor.fromHex('#111111');

@@ -11,6 +11,8 @@ import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_project_create_flow_screen.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_projects_screen.dart';
+import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_documents_screen.dart';
+import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
@@ -204,6 +206,35 @@ void main() {
     expect(find.text('0'), findsAtLeastNWidgets(4));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'project Requests and Documents tabs render their registers in place',
+    (tester) async {
+      await _setViewport(tester, const Size(390, 844));
+      await _pumpWorkspaceShell(tester, role: YorksV1Role.projectEngineer);
+
+      await tester.tap(
+        find.byKey(const ValueKey('yorks-mobile-project-tab-requests')),
+      );
+      await tester.pump();
+      expect(find.byType(YorksV1MaterialRequestsScreen), findsOneWidget);
+      expect(
+        find.text(YorksV1ProjectStrings.openRequests.primary),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('yorks-mobile-project-tab-documents')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(YorksV1DocumentsScreen), findsOneWidget);
+      expect(
+        find.text(YorksV1ProjectStrings.openDocuments.primary),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('team Manage follows actual project authority', (tester) async {
     await _setViewport(tester, const Size(390, 844));

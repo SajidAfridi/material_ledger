@@ -816,6 +816,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'انوینٹری کیٹلاگ',
     hi: 'इन्वेंटरी कैटलॉग',
   );
+  static const keepCustomItem = TranslatableString(
+    en: 'Keep as custom item',
+    ar: 'الاحتفاظ كعنصر مخصص',
+    ur: 'کسٹم آئٹم کے طور پر رکھیں',
+    hi: 'कस्टम आइटम के रूप में रखें',
+  );
+  static const catalogueMatch = TranslatableString(
+    en: 'Catalogue',
+    ar: 'الدليل',
+    ur: 'کیٹلاگ',
+    hi: 'कैटलॉग',
+  );
+  static const inBoq = TranslatableString(
+    en: 'In BOQ',
+    ar: 'في جدول الكميات',
+    ur: 'BOQ میں',
+    hi: 'BOQ में',
+  );
   static const approved = TranslatableString(
     en: 'Approved',
     ar: 'معتمد',
@@ -1070,6 +1088,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'پروجیکٹ تبدیل کرنے سے اس ڈرافٹ سے {count} میٹیریل آئٹمز ہٹ جائیں گی۔ جاری رکھیں؟',
     hi: 'प्रोजेक्ट बदलने से इस ड्राफ़्ट से {count} सामग्री आइटम हट जाएंगे। जारी रखें?',
   );
+  static const changeProjectPreservesLines = TranslatableString(
+    en: 'Project changed. Existing items were kept as editable custom rows; choose the new scope before submitting.',
+    ar: 'تم تغيير المشروع. تم الاحتفاظ بالعناصر الحالية كصفوف مخصصة قابلة للتعديل؛ اختر النطاق الجديد قبل الإرسال.',
+    ur: 'پروجیکٹ تبدیل ہو گیا۔ موجودہ آئٹمز قابل تدوین کسٹم قطاروں کے طور پر محفوظ ہیں؛ جمع کرانے سے پہلے نیا اسکوپ منتخب کریں۔',
+    hi: 'प्रोजेक्ट बदल गया। मौजूदा आइटम संपादन योग्य कस्टम पंक्तियों के रूप में रखे गए हैं; सबमिट करने से पहले नया स्कोप चुनें।',
+  );
   static const changeScope = TranslatableString(
     en: 'Change scope',
     ar: 'تغيير النطاق',
@@ -1189,6 +1213,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'إضافة عنصر مخصص',
     ur: 'کسٹم آئٹم شامل کریں',
     hi: 'कस्टम आइटम जोड़ें',
+  );
+  static const addCustomRow = TranslatableString(
+    en: 'Add custom row here',
+    ar: 'إضافة صف مخصص هنا',
+    ur: 'یہاں کسٹم قطار شامل کریں',
+    hi: 'यहाँ कस्टम पंक्ति जोड़ें',
+  );
+  static const chooseProjectBeforeAdding = TranslatableString(
+    en: 'Choose a project before adding material items.',
+    ar: 'اختر مشروعًا قبل إضافة بنود المواد.',
+    ur: 'میٹیریل آئٹمز شامل کرنے سے پہلے پروجیکٹ منتخب کریں۔',
+    hi: 'सामग्री आइटम जोड़ने से पहले एक परियोजना चुनें।',
   );
   static const addBlankRow = TranslatableString(
     en: 'Add Blank Row',
@@ -1441,6 +1477,72 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'اختر مشروعًا ونطاقًا، وأكمل البنود الصالحة، وأضف تاريخًا مجدولًا عند الحاجة.',
     ur: 'پروجیکٹ اور دائرہ منتخب کریں، درست سطور مکمل کریں، اور ضرورت ہو تو شیڈول کی تاریخ شامل کریں۔',
     hi: 'परियोजना और दायरा चुनें, मान्य पंक्तियाँ पूरी करें और जरूरत होने पर निर्धारित तिथि जोड़ें।',
+  );
+  static const chooseProjectRequired = TranslatableString(
+    en: 'Choose a project to continue.',
+    ar: 'اختر مشروعًا للمتابعة.',
+    ur: 'جاری رکھنے کے لیے پروجیکٹ منتخب کریں۔',
+    hi: 'जारी रखने के लिए कोई प्रोजेक्ट चुनें।',
+  );
+  static const chooseScopeRequired = TranslatableString(
+    en: 'Choose a building or Common scope to continue.',
+    ar: 'اختر مبنى أو نطاقًا مشتركًا للمتابعة.',
+    ur: 'جاری رکھنے کے لیے بلڈنگ یا کامن اسکوپ منتخب کریں۔',
+    hi: 'जारी रखने के लिए भवन या कॉमन स्कोप चुनें।',
+  );
+  static const addItemRequired = TranslatableString(
+    en: 'Add at least one material item before submitting.',
+    ar: 'أضف بند مواد واحدًا على الأقل قبل الإرسال.',
+    ur: 'جمع کرانے سے پہلے کم از کم ایک میٹیریل آئٹم شامل کریں۔',
+    hi: 'सबमिट करने से पहले कम से कम एक सामग्री आइटम जोड़ें।',
+  );
+  static const itemDescriptionRequired = TranslatableString(
+    en: 'Item description is required',
+    ar: 'وصف العنصر مطلوب',
+    ur: 'آئٹم کی تفصیل درکار ہے',
+    hi: 'आइटम का विवरण आवश्यक है',
+  );
+  static const quantityRequired = TranslatableString(
+    en: 'Enter a quantity greater than zero',
+    ar: 'أدخل كمية أكبر من الصفر',
+    ur: 'صفر سے زیادہ مقدار درج کریں',
+    hi: 'शून्य से अधिक मात्रा दर्ज करें',
+  );
+  static const unitRequired = TranslatableString(
+    en: 'Select a valid unit',
+    ar: 'اختر وحدة صالحة',
+    ur: 'درست یونٹ منتخب کریں',
+    hi: 'एक मान्य इकाई चुनें',
+  );
+  static TranslatableString rowsNeedAttention(int count) => TranslatableString(
+    en: '$count material row${count == 1 ? ' needs' : 's need'} attention. The first incomplete row is highlighted below.',
+    ar: '$count من صفوف المواد تحتاج إلى مراجعة. تم تمييز أول صف غير مكتمل أدناه.',
+    ur: '$count میٹیریل قطاروں کو توجہ درکار ہے۔ پہلی نامکمل قطار نیچے نمایاں ہے۔',
+    hi: '$count सामग्री पंक्तियों पर ध्यान देना आवश्यक है। पहली अधूरी पंक्ति नीचे हाइलाइट की गई है।',
+  );
+  static const scheduledDateRequired = TranslatableString(
+    en: 'Choose the scheduled delivery date for this request.',
+    ar: 'اختر تاريخ التسليم المجدول لهذا الطلب.',
+    ur: 'اس درخواست کے لیے طے شدہ ترسیل کی تاریخ منتخب کریں۔',
+    hi: 'इस अनुरोध के लिए निर्धारित डिलीवरी तिथि चुनें।',
+  );
+  static const saveShortcut = TranslatableString(
+    en: 'Save draft: Ctrl/Cmd + S',
+    ar: 'حفظ المسودة: Ctrl/Cmd + S',
+    ur: 'ڈرافٹ محفوظ کریں: Ctrl/Cmd + S',
+    hi: 'ड्राफ़्ट सहेजें: Ctrl/Cmd + S',
+  );
+  static const customItemShortcut = TranslatableString(
+    en: 'Add custom item: Ctrl/Cmd + Shift + C',
+    ar: 'إضافة عنصر مخصص: Ctrl/Cmd + Shift + C',
+    ur: 'کسٹم آئٹم شامل کریں: Ctrl/Cmd + Shift + C',
+    hi: 'कस्टम आइटम जोड़ें: Ctrl/Cmd + Shift + C',
+  );
+  static const submitShortcut = TranslatableString(
+    en: 'Submit request: Ctrl/Cmd + Enter',
+    ar: 'إرسال الطلب: Ctrl/Cmd + Enter',
+    ur: 'درخواست جمع کریں: Ctrl/Cmd + Enter',
+    hi: 'अनुरोध सबमिट करें: Ctrl/Cmd + Enter',
   );
   static const projectMustBeActive = TranslatableString(
     en: 'Activate the selected project before submitting this request.',

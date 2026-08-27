@@ -213,6 +213,90 @@ void main() {
       expect(lines[2].sourceBoqRowId, isNull);
     });
 
+    test('inserts a custom line directly below the selected row', () async {
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: _FakeRequestRepository(),
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.addCustomLine();
+      await controller.addCustomLine();
+      final selected = controller.state.draft.lines.first;
+
+      await controller.addCustomLine(afterLineId: selected.id);
+
+      final lines = controller.state.draft.lines;
+      expect(lines, hasLength(3));
+      expect(lines.map((line) => line.displayOrder), [1, 2, 3]);
+      expect(lines.first.id, selected.id);
+      expect(lines[1].description, isEmpty);
+      expect(lines[1].quantity, isEmpty);
+      expect(lines[1].unit, isEmpty);
+      expect(lines[1].source, YorksV1MaterialRequestLineSource.custom);
+    });
+
+    test(
+      'changing project preserves entered rows without old BOQ provenance',
+      () async {
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+          repository: _FakeRequestRepository(),
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
+        await controller.addCustomLine();
+        final boqLine = controller.state.draft.lines.single;
+        await controller.updateLine(
+          boqLine.id,
+          (line) => line.copyWith(
+            source: YorksV1MaterialRequestLineSource.boq,
+            sourceBoqGroupId: _boqGroupId,
+            sourceBoqRowId: _boqRowId,
+            description: 'Existing BOQ access door',
+            quantity: '2',
+            unit: 'Nos',
+          ),
+        );
+        await controller.addCustomLine();
+        final customLine = controller.state.draft.lines.last;
+        await controller.updateLine(
+          customLine.id,
+          (line) => line.copyWith(
+            description: 'Engineer custom item',
+            quantity: '1',
+            unit: 'Set',
+          ),
+        );
+
+        final changed = await controller.setProject(
+          '73000000-0000-4000-8000-000000000099',
+          preserveExistingLines: true,
+        );
+
+        final draft = controller.state.draft;
+        expect(changed, isTrue);
+        expect(draft.scopeId, isNull);
+        expect(draft.lines, hasLength(2));
+        expect(draft.lines.first.description, 'Existing BOQ access door');
+        expect(
+          draft.lines.first.source,
+          YorksV1MaterialRequestLineSource.custom,
+        );
+        expect(draft.lines.first.sourceBoqGroupId, isNull);
+        expect(draft.lines.first.sourceBoqRowId, isNull);
+        expect(draft.lines.last.description, 'Engineer custom item');
+      },
+    );
+
     test(
       'keeps draft recovery private and submits one versioned command',
       () async {
@@ -960,6 +1044,70 @@ void main() {
     );
   });
 
+  test('import-ready draft export keeps technical columns explicit', () {
+    final draft = YorksV1MaterialRequestDraft(
+      id: _draftId,
+      ownerAuthUserId: _siteEngineer,
+      submissionIdempotencyKey: 'submission-key',
+      projectId: _projectId,
+      scopeId: _scopeId,
+      updatedAt: DateTime.utc(2026, 8, 27),
+      lines: const [
+        YorksV1MaterialRequestLine(
+          id: '73000000-0000-4000-8000-000000000013',
+          displayOrder: 1,
+          source: YorksV1MaterialRequestLineSource.custom,
+          description: 'Access Door - Single Leaf',
+          size: '1000 x 2100 mm',
+          model: 'AD-SL-1000',
+          brandOrigin: 'Yorks / UAE',
+          quantity: '2',
+          unit: 'Each',
+        ),
+      ],
+    );
+    const codec = YorksV1BoqWorkbookCodec();
+    final service = YorksV1MaterialRequestDocumentService();
+    final workbook = codec.decode(
+      bytes: service.buildDraftImportExcel(draft),
+      fileName: service.suggestedDraftImportExcelName(
+        draft,
+        projectReference: 'YRA-322',
+      ),
+    );
+    final preview = codec.preview(
+      workbook: workbook,
+      sheet: workbook.sheets.single,
+      fallbackTitle: 'MR Import',
+    );
+    final fields = {
+      for (final column in preview.columns)
+        if (column.canonicalField != null)
+          column.canonicalField!: column.sourceIndex,
+    };
+
+    expect(fields.keys, contains(YorksV1BoqCanonicalField.description));
+    expect(fields.keys, contains(YorksV1BoqCanonicalField.size));
+    expect(fields.keys, contains(YorksV1BoqCanonicalField.planningModelTag));
+    expect(fields.keys, contains(YorksV1BoqCanonicalField.quantity));
+    expect(fields.keys, contains(YorksV1BoqCanonicalField.unit));
+    expect(fields.keys, isNot(contains(YorksV1BoqCanonicalField.unitCost)));
+    expect(
+      preview.rows.single.valueFor(fields[YorksV1BoqCanonicalField.size]!),
+      '1000 x 2100 mm',
+    );
+    expect(
+      preview.rows.single.valueFor(
+        fields[YorksV1BoqCanonicalField.planningModelTag]!,
+      ),
+      'AD-SL-1000',
+    );
+    expect(
+      service.suggestedDraftImportExcelName(draft, projectReference: 'YRA-322'),
+      'YRA-322_Material_Request_Import_Ready.xlsx',
+    );
+  });
+
   test('round-trip export preserves an incomplete editable line', () {
     final draft = YorksV1MaterialRequestDraft(
       id: _draftId,
@@ -1674,6 +1822,7 @@ const _projectId = '71000000-0000-4000-8000-000000000001';
 const _scopeId = '72000000-0000-4000-8000-000000000001';
 const _draftId = '73000000-0000-4000-8000-000000000001';
 const _boqGroupId = '75000000-0000-4000-8000-000000000001';
+const _boqRowId = '75000000-0000-4000-8000-000000000002';
 
 YorksV1BoqWorksheet _scopedWorksheet({required String scopeId}) =>
     YorksV1BoqWorksheet(

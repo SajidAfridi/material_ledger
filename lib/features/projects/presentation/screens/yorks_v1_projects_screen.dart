@@ -46,8 +46,10 @@ import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/providers/yorks_v1_rental_provider.dart';
 import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import 'yorks_v1_boq_screens.dart';
+import 'yorks_v1_documents_screen.dart';
 import 'yorks_v1_executive_overview.dart';
 import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
+import '../../../materials/presentation/screens/yorks_v1_material_request_screens.dart';
 
 /// The normalized, R35-aligned project portfolio.
 ///
@@ -4777,11 +4779,7 @@ class _ProjectWorkspaceBody extends StatelessWidget {
         canActAsProjectEngineer: canActAsProjectEngineer,
         showAccounts: showAccounts,
         onTabChanged: onTabChanged,
-        onOpenRequests: () => context.push(
-          RoutePaths.yorksV1MaterialRequestsPath(projectId: project.id),
-        ),
-        onOpenDocuments: () =>
-            context.push(RoutePaths.yorksV1ProjectDocumentsPath(project.id)),
+        onOpenRequests: () => onTabChanged(YorksV1ProjectWorkspaceTab.requests),
         onOpenRequest: (request) =>
             context.push(_materialRequestOpenPath(request)),
         onRetryRequests: onRetryRequests,
@@ -4794,6 +4792,55 @@ class _ProjectWorkspaceBody extends StatelessWidget {
         final horizontal = desktop
             ? AppSpacing.xxxl + AppSpacing.xs
             : AppSpacing.lg;
+        if (tab == YorksV1ProjectWorkspaceTab.requests ||
+            tab == YorksV1ProjectWorkspaceTab.documents) {
+          return ColoredBox(
+            color: AppColors.surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProjectR35Hero(
+                  project: project,
+                  selected: tab,
+                  onSelected: onTabChanged,
+                  showAccounts: showAccounts,
+                  onActivate: onActivate,
+                  showNewRequest: showNewRequest,
+                  onNewRequest: onNewRequest,
+                  showEdit: showEdit,
+                  onEdit: onEdit,
+                  showArchive: showArchive,
+                  onArchive: onArchive,
+                  onOpenChat: onOpenChat,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      AppSpacing.xl,
+                      horizontal,
+                      0,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: AppSpacing.pageMaxWidth,
+                      ),
+                      child: tab == YorksV1ProjectWorkspaceTab.requests
+                          ? YorksV1MaterialRequestsScreen(
+                              projectId: project.id,
+                              embedded: true,
+                            )
+                          : YorksV1DocumentsScreen(
+                              projectId: project.id,
+                              embedded: true,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
         return ColoredBox(
           color: AppColors.surface,
           child: SingleChildScrollView(
@@ -4836,29 +4883,18 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                           documents: documents,
                           onOpenBoq: () =>
                               onTabChanged(YorksV1ProjectWorkspaceTab.boq),
-                          onOpenRequests: () => context.push(
-                            RoutePaths.yorksV1MaterialRequestsPath(
-                              projectId: project.id,
-                            ),
-                          ),
-                          onOpenDocuments: () => context.push(
-                            RoutePaths.yorksV1ProjectDocumentsPath(project.id),
+                          onOpenRequests: () =>
+                              onTabChanged(YorksV1ProjectWorkspaceTab.requests),
+                          onOpenDocuments: () => onTabChanged(
+                            YorksV1ProjectWorkspaceTab.documents,
                           ),
                         ),
                       YorksV1ProjectWorkspaceTab.boq => YorksV1BoqGroupsScreen(
                         projectId: project.id,
                         embedded: true,
                       ),
-                      YorksV1ProjectWorkspaceTab.requests => _LinkedRecordCard(
-                        icon: Icons.assignment_outlined,
-                        title: YorksV1ProjectStrings.materialRequests,
-                        action: YorksV1ProjectStrings.openRequests,
-                        onOpen: () => context.push(
-                          RoutePaths.yorksV1MaterialRequestsPath(
-                            projectId: project.id,
-                          ),
-                        ),
-                      ),
+                      YorksV1ProjectWorkspaceTab.requests =>
+                        const SizedBox.shrink(),
                       YorksV1ProjectWorkspaceTab.accounts => _LinkedRecordCard(
                         icon: Icons.account_balance_wallet_outlined,
                         title: YorksV1ProjectStrings.accounts,
@@ -4869,14 +4905,8 @@ class _ProjectWorkspaceBody extends StatelessWidget {
                           ),
                         ),
                       ),
-                      YorksV1ProjectWorkspaceTab.documents => _LinkedRecordCard(
-                        icon: Icons.folder_open_outlined,
-                        title: YorksV1ProjectStrings.documents,
-                        action: YorksV1ProjectStrings.openDocuments,
-                        onOpen: () => context.push(
-                          RoutePaths.yorksV1ProjectDocumentsPath(project.id),
-                        ),
-                      ),
+                      YorksV1ProjectWorkspaceTab.documents =>
+                        const SizedBox.shrink(),
                       YorksV1ProjectWorkspaceTab.materialMovement =>
                         _ProjectMaterialMovementPanel(
                           projectId: project.id,
@@ -5636,7 +5666,6 @@ class _MobileProjectWorkspace extends StatelessWidget {
     required this.showAccounts,
     required this.onTabChanged,
     required this.onOpenRequests,
-    required this.onOpenDocuments,
     required this.onOpenRequest,
     required this.onRetryRequests,
   });
@@ -5654,7 +5683,6 @@ class _MobileProjectWorkspace extends StatelessWidget {
   final bool showAccounts;
   final ValueChanged<YorksV1ProjectWorkspaceTab> onTabChanged;
   final VoidCallback onOpenRequests;
-  final VoidCallback onOpenDocuments;
   final ValueChanged<YorksV1MaterialRequest> onOpenRequest;
   final VoidCallback onRetryRequests;
 
@@ -5677,6 +5705,29 @@ class _MobileProjectWorkspace extends StatelessWidget {
                 projectId: item.project.id,
                 embedded: true,
               ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (tab == YorksV1ProjectWorkspaceTab.requests ||
+        tab == YorksV1ProjectWorkspaceTab.documents) {
+      return ColoredBox(
+        color: AppColors.mobileSurface,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            tabs,
+            Expanded(
+              child: tab == YorksV1ProjectWorkspaceTab.requests
+                  ? YorksV1MaterialRequestsScreen(
+                      projectId: item.project.id,
+                      embedded: true,
+                    )
+                  : YorksV1DocumentsScreen(
+                      projectId: item.project.id,
+                      embedded: true,
+                    ),
             ),
           ],
         ),
@@ -5713,12 +5764,7 @@ class _MobileProjectWorkspace extends StatelessWidget {
                 onOpenRequest: onOpenRequest,
                 onRetryRequests: onRetryRequests,
               ),
-              YorksV1ProjectWorkspaceTab.requests => _LinkedRecordCard(
-                icon: Icons.assignment_outlined,
-                title: YorksV1ProjectStrings.materialRequests,
-                action: YorksV1ProjectStrings.openRequests,
-                onOpen: onOpenRequests,
-              ),
+              YorksV1ProjectWorkspaceTab.requests => const SizedBox.shrink(),
               YorksV1ProjectWorkspaceTab.accounts => _LinkedRecordCard(
                 icon: Icons.account_balance_wallet_outlined,
                 title: YorksV1ProjectStrings.accounts,
@@ -5729,12 +5775,7 @@ class _MobileProjectWorkspace extends StatelessWidget {
                   ),
                 ),
               ),
-              YorksV1ProjectWorkspaceTab.documents => _LinkedRecordCard(
-                icon: Icons.folder_open_outlined,
-                title: YorksV1ProjectStrings.documents,
-                action: YorksV1ProjectStrings.openDocuments,
-                onOpen: onOpenDocuments,
-              ),
+              YorksV1ProjectWorkspaceTab.documents => const SizedBox.shrink(),
               YorksV1ProjectWorkspaceTab.materialMovement =>
                 _ProjectMaterialMovementPanel(
                   projectId: item.project.id,

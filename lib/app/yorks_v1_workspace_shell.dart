@@ -495,10 +495,24 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       return false;
     }
 
-    return [
+    final visible = <_YorksDestination>[
       for (final destination in unique.values)
         if (destinationAllowed(destination)) destination,
     ];
+    final accountsIndex = visible.indexWhere(
+      (destination) => destination.path == RoutePaths.yorksV1Accounts,
+    );
+    final requestsIndex = visible.indexWhere(
+      (destination) => destination.path == RoutePaths.yorksV1MaterialRequests,
+    );
+    if (accountsIndex >= 0 && requestsIndex >= 0) {
+      final accounts = visible.removeAt(accountsIndex);
+      final updatedRequestsIndex = visible.indexWhere(
+        (destination) => destination.path == RoutePaths.yorksV1MaterialRequests,
+      );
+      visible.insert(updatedRequestsIndex + 1, accounts);
+    }
+    return visible;
   }
 
   List<_YorksDestination> _legacyDestinationsFor(

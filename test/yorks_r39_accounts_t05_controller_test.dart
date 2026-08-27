@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/features/accounts/application/accounts_portfolio_controller.dart';
@@ -45,6 +47,82 @@ void main() {
     expect(controller.state.status, YorksAccountsViewStatus.forbidden);
     expect(controller.state.projection, isNull);
   });
+
+  test(
+    'project overview keeps confirmed data visible during refresh and transient failure',
+    () async {
+      final repository = _Repository();
+      final controller = YorksAccountsProjectOverviewController(
+        projectId: 'project-1',
+        repository: repository,
+      );
+      expect(await controller.load(), isTrue);
+      final confirmed = controller.state.projection;
+
+      repository.pendingOverview = Completer();
+      final refresh = controller.load();
+      expect(controller.state.status, YorksAccountsViewStatus.loading);
+      expect(controller.state.projection, same(confirmed));
+      repository.pendingOverview!.complete(_overview('project-1'));
+      expect(await refresh, isTrue);
+
+      repository.error = const YorksV1DomainException(
+        YorksV1DomainErrorCode.offline,
+      );
+      expect(await controller.load(), isFalse);
+      expect(controller.state.status, YorksAccountsViewStatus.offline);
+      expect(controller.state.projection, isNotNull);
+    },
+  );
+
+  test(
+    'project Accounts cache survives route disposal but not permission changes',
+    () async {
+      final repository = _Repository();
+      final epoch = StateProvider<YorksAccountsPermissionEpoch>(
+        (ref) => (
+          revision: 1,
+          trusted: true,
+          stale: false,
+          revisionSignalHealthy: true,
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue('actor-1'),
+          yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.accountant),
+          yorksAccountsPortfolioRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksAccountsPermissionEpochProvider.overrideWith(
+            (ref) => ref.watch(epoch),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final provider = yorksAccountsProjectOverviewControllerProvider(
+        'project-1',
+      );
+      final subscription = container.listen(provider, (_, _) {});
+      final original = container.read(provider.notifier);
+      await original.load();
+      subscription.close();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(provider.notifier), same(original));
+      expect(container.read(provider).projection, isNotNull);
+
+      container.read(epoch.notifier).state = (
+        revision: 2,
+        trusted: false,
+        stale: true,
+        revisionSignalHealthy: true,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(provider.notifier), isNot(same(original)));
+      expect(container.read(provider).projection, isNull);
+    },
+  );
 
   test('permission epoch rebuild disposes cached Accounts state', () async {
     final repository = _Repository();
@@ -122,6 +200,7 @@ void main() {
 final class _Repository implements YorksAccountsPortfolioRepository {
   YorksV1DomainException? error;
   bool paged = false;
+  Completer<YorksAccountsProjectOverviewProjection>? pendingOverview;
 
   @override
   Future<YorksAccountsPortfolioProjection> getPortfolio(
@@ -147,7 +226,13 @@ final class _Repository implements YorksAccountsPortfolioRepository {
     String projectId,
   ) async {
     if (error case final failure?) throw failure;
-    return YorksAccountsProjectOverviewProjection(
+    if (pendingOverview case final pending?) return pending.future;
+    return _overview(projectId);
+  }
+}
+
+YorksAccountsProjectOverviewProjection _overview(String projectId) =>
+    YorksAccountsProjectOverviewProjection(
       projectId: projectId,
       projectReference: 'YRA-001',
       projectName: 'Project One',
@@ -160,8 +245,6 @@ final class _Repository implements YorksAccountsPortfolioRepository {
       receivables: const {'still_due': '10000.00'},
       supplier: const {'open_amount': '250.00'},
     );
-  }
-}
 
 final _zero = YorksAccountsDecimal.zero;
 final _totals = YorksAccountsPortfolioTotals(

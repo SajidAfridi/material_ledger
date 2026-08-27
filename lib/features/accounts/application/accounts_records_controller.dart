@@ -63,8 +63,10 @@ final class YorksAccountsDocumentsController
       );
       return true;
     } on YorksV1DomainException catch (error) {
+      final status = _statusFor(error.code);
       state = YorksAccountsDocumentsState(
-        status: _statusFor(error.code),
+        status: status,
+        workspace: _mustPurgeAccountsRecords(status) ? null : state.workspace,
         error: error,
         search: search,
         documentType: documentType,
@@ -150,8 +152,10 @@ final class YorksAccountsActivityController
       );
       return true;
     } on YorksV1DomainException catch (error) {
+      final status = _statusFor(error.code);
       state = YorksAccountsActivityState(
-        status: _statusFor(error.code),
+        status: status,
+        projection: _mustPurgeAccountsRecords(status) ? null : state.projection,
         filters: next,
         error: error,
       );
@@ -204,6 +208,11 @@ final class YorksAccountsActivityController
     }
   }
 }
+
+bool _mustPurgeAccountsRecords(YorksAccountsViewStatus status) =>
+    status == YorksAccountsViewStatus.forbidden ||
+    status == YorksAccountsViewStatus.sessionExpired ||
+    status == YorksAccountsViewStatus.unavailable;
 
 YorksAccountsViewStatus _statusFor(YorksV1DomainErrorCode code) =>
     switch (code) {

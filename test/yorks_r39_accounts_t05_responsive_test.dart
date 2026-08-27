@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,6 +78,74 @@ void main() {
     expect(find.text('AED 8,400,000.00'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Accounts refresh keeps confirmed page visible beneath its loading indicator',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final repository = _RefreshableOverviewRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1AuthUserIdProvider.overrideWithValue('accountant-1'),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.accountant,
+            ),
+            yorksAccountsPermissionEpochProvider.overrideWith(
+              (ref) => (
+                revision: 1,
+                trusted: true,
+                stale: false,
+                revisionSignalHealthy: true,
+              ),
+            ),
+            yorksAccountsPortfolioRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+          ],
+          child: const MaterialApp(
+            home: YorksProjectAccountsScreen(projectId: 'project-322'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(_projectOverview.projectName), findsWidgets);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(YorksProjectAccountsScreen)),
+      );
+      repository.pending = Completer();
+      unawaited(
+        container
+            .read(
+              yorksAccountsProjectOverviewControllerProvider(
+                'project-322',
+              ).notifier,
+            )
+            .load(),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('accounts-background-loading')),
+        findsOneWidget,
+      );
+      expect(find.text(_projectOverview.projectName), findsWidgets);
+      repository.pending!.complete(_projectOverview);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('accounts-background-loading')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Billing Progress uses cards and a filter sheet at 390px', (
     tester,
@@ -356,6 +426,21 @@ final class _Repository implements YorksAccountsPortfolioRepository {
   Future<YorksAccountsProjectOverviewProjection> getProjectOverview(
     String projectId,
   ) async => _projectOverview;
+}
+
+final class _RefreshableOverviewRepository
+    implements YorksAccountsPortfolioRepository {
+  Completer<YorksAccountsProjectOverviewProjection>? pending;
+
+  @override
+  Future<YorksAccountsPortfolioProjection> getPortfolio(
+    YorksAccountsPortfolioFilters filters,
+  ) async => _projection;
+
+  @override
+  Future<YorksAccountsProjectOverviewProjection> getProjectOverview(
+    String projectId,
+  ) => pending?.future ?? Future.value(_projectOverview);
 }
 
 final class _ProjectRepository implements YorksAccountsRepository {

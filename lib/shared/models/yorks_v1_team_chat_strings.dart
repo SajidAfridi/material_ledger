@@ -67,6 +67,36 @@ abstract final class YorksV1TeamChatStrings {
     ur: 'آرکائیو شدہ',
     hi: 'संग्रहीत',
   );
+  static const pinned = TranslatableString(
+    en: 'Pinned',
+    ar: 'المثبتة',
+    ur: 'پن شدہ',
+    hi: 'पिन किए गए',
+  );
+  static const recent = TranslatableString(
+    en: 'Recent',
+    ar: 'الأخيرة',
+    ur: 'حالیہ',
+    hi: 'हाल के',
+  );
+  static const searchConversation = TranslatableString(
+    en: 'Search this conversation',
+    ar: 'ابحث في هذه المحادثة',
+    ur: 'اس گفتگو میں تلاش کریں',
+    hi: 'इस बातचीत में खोजें',
+  );
+  static const searchRecentMessages = TranslatableString(
+    en: 'Search recent messages',
+    ar: 'ابحث في الرسائل الأخيرة',
+    ur: 'حالیہ پیغامات تلاش کریں',
+    hi: 'हाल के संदेश खोजें',
+  );
+  static const noMatchingMessages = TranslatableString(
+    en: 'No matching messages',
+    ar: 'لا توجد رسائل مطابقة',
+    ur: 'کوئی مماثل پیغام نہیں',
+    hi: 'कोई मिलता-जुलता संदेश नहीं',
+  );
   static const selectConversation = TranslatableString(
     en: 'Select a conversation',
     ar: 'اختر محادثة',

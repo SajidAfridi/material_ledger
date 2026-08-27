@@ -58,6 +58,7 @@ class YorksV1ControlledUnitDropdown extends ConsumerWidget {
     required this.onChanged,
     this.isDense = false,
     this.showDependencyStatus = false,
+    this.errorText,
   });
 
   final Key fieldKey;
@@ -67,6 +68,7 @@ class YorksV1ControlledUnitDropdown extends ConsumerWidget {
   final ValueChanged<String> onChanged;
   final bool isDense;
   final bool showDependencyStatus;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,6 +90,7 @@ class YorksV1ControlledUnitDropdown extends ConsumerWidget {
           : null,
       decoration: InputDecoration(
         labelText: label,
+        errorText: errorText,
         isDense: isDense,
         contentPadding: isDense
             ? const EdgeInsets.symmetric(horizontal: 8, vertical: 10)

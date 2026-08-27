@@ -29,6 +29,7 @@ final yorksAccountsDocumentsControllerProvider = StateNotifierProvider
       YorksAccountsDocumentsState,
       String
     >((ref, projectId) {
+      ref.keepAlive();
       ref.watch(yorksV1CurrentRoleProvider);
       ref.watch(yorksV1AuthUserIdProvider);
       ref.watch(yorksAccountsPermissionEpochProvider);
@@ -45,6 +46,7 @@ final yorksAccountsActivityControllerProvider = StateNotifierProvider
       YorksAccountsActivityState,
       String
     >((ref, projectId) {
+      ref.keepAlive();
       ref.watch(yorksV1CurrentRoleProvider);
       ref.watch(yorksV1AuthUserIdProvider);
       ref.watch(yorksAccountsPermissionEpochProvider);

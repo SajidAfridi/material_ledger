@@ -122,15 +122,76 @@ void main() {
     expect(find.text('Procurement Coordination'), findsWidgets);
     expect(find.text('Conversation info'), findsOneWidget);
     expect(find.text('Participants'), findsOneWidget);
+    expect(find.text('PINNED'), findsOneWidget);
+    expect(find.text('RECENT'), findsOneWidget);
     expect(
       find.textContaining('Chat supports coordination only'),
       findsWidgets,
     );
     expect(find.byTooltip('Attach files'), findsOneWidget);
+    expect(find.byTooltip('Search this conversation'), findsOneWidget);
+    expect(find.byIcon(Icons.videocam_outlined), findsNothing);
+    expect(find.byIcon(Icons.phone_outlined), findsNothing);
     await tester.tap(
       find.byKey(const ValueKey('chat-pinned-message-message-3')),
     );
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('conversation search finds and reveals a recent message', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpChat(tester, preferences, selected: true);
+
+    await tester.tap(find.byTooltip('Search this conversation'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-message-search-field')),
+      'signed schedule',
+    );
+    await tester.pumpAndSettle();
+
+    final result = find.byKey(
+      const ValueKey('chat-message-search-result-message-3'),
+    );
+    expect(result, findsOneWidget);
+    await tester.tap(result);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('chat-message-search-field')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('composer drafts stay isolated per conversation', (tester) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpChat(tester, preferences, selected: true);
+
+    final composer = find.widgetWithText(TextField, 'Write a message…');
+    await tester.enterText(composer, 'Keep this with procurement');
+    await tester.tap(find.text('YRA-313 · Project Team'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Write a message…'))
+          .controller!
+          .text,
+      isEmpty,
+    );
+
+    await tester.tap(find.text('Procurement Coordination').first);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Write a message…'))
+          .controller!
+          .text,
+      'Keep this with procurement',
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -244,7 +305,23 @@ class _FixtureTeamChatController extends YorksV1TeamChatController {
 
   @override
   Future<void> openConversation(String conversationId) async {
-    state = _chatState(selected: true);
+    final conversation = _conversationFixtures().firstWhere(
+      (item) => item.id == conversationId,
+    );
+    state = YorksV1TeamChatState(
+      conversations: _conversationFixtures(),
+      selectedConversationId: conversation.id,
+      thread: YorksV1ChatThread(
+        conversation: conversation,
+        participants: _participants(),
+        messages: conversation.id == 'conversation-group'
+            ? _messages()
+            : const [],
+      ),
+      loadingList: false,
+      loadingThread: false,
+      hasOlderMessages: false,
+    );
   }
 }
 

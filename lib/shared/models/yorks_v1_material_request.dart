@@ -812,10 +812,14 @@ class YorksV1MaterialRequestLine {
     currencyCode: currencyCode,
   );
 
+  bool get hasDescription => description.trim().isNotEmpty;
+
+  bool get hasControlledUnit => unit.trim().isNotEmpty;
+
+  bool get hasValidQuantity => _isPositiveDecimal(quantity);
+
   bool get hasValidOperationalValues =>
-      description.trim().isNotEmpty &&
-      unit.trim().isNotEmpty &&
-      _isPositiveDecimal(quantity);
+      hasDescription && hasControlledUnit && hasValidQuantity;
 
   Map<String, dynamic> toDraftJson() => {
     'id': id,

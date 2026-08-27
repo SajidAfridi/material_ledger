@@ -69,13 +69,49 @@ void main() {
     expect(find.text('Add from BOQ'), findsOneWidget);
     expect(find.text('Import Excel'), findsOneWidget);
     expect(find.text('Row tools'), findsNothing);
-    expect(find.text('Add Blank Row'), findsOneWidget);
+    expect(find.text('Add Blank Row'), findsNothing);
     expect(find.text('Add Similar Row'), findsNothing);
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('goldens/r35/mr_draft_boq_actions_desktop.png'),
     );
+  });
+
+  testWidgets('desktop custom item action waits for project selection', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester, initialProjectId: null);
+
+    final addCustom = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Add Custom Item'),
+    );
+    expect(addCustom.onPressed, isNull);
+    expect(
+      find.text('Choose a project before adding material items.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop custom-row shortcut follows familiar Ctrl Shift C', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpDraft(tester);
+    await tester.tap(find.byKey(const ValueKey('mr-title')));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Add Similar Row'), findsOneWidget);
+    expect(find.byTooltip('Add custom row here'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -157,21 +193,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('desktop MR row exposes Similar beside delete', (tester) async {
+  testWidgets('desktop MR row exposes Similar, Custom and delete', (
+    tester,
+  ) async {
     await _setViewport(tester, const Size(1366, 768));
     await _pumpDraft(tester);
 
-    await tester.tap(find.text('Add Blank Row'));
+    await tester.tap(find.text('Add Custom Item'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Add Similar Row'), findsOneWidget);
+    expect(find.byTooltip('Add custom row here'), findsOneWidget);
     expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-    await tester.tap(find.byTooltip('Add Similar Row'));
+    await tester.tap(find.byTooltip('Add custom row here'));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Add Similar Row'), findsNWidgets(2));
+    expect(find.byTooltip('Add custom row here'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'desktop incomplete rows name each error and submit reveals the blocker',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      await _pumpDraft(tester);
+
+      await tester.tap(find.text('Add Custom Item'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Item description is required'), findsOneWidget);
+      expect(find.text('Enter a quantity greater than zero'), findsOneWidget);
+      expect(find.text('Select a valid unit'), findsOneWidget);
+      expect(
+        find.textContaining('1 material row needs attention'),
+        findsOneWidget,
+      );
+      final submit = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Submit for Engineering approval'),
+      );
+      expect(submit.onPressed, isNotNull);
+
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Submit for Engineering approval'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('1 material row needs attention'),
+        findsWidgets,
+      );
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'desktop description typing ranks BOQ before inventory and fills descriptive cells',
@@ -195,7 +271,7 @@ void main() {
         ),
       ];
 
-      await tester.tap(find.text('Add Blank Row'));
+      await tester.tap(find.text('Add Custom Item'));
       await tester.pumpAndSettle();
       final description = find.descendant(
         of: find.byType(
@@ -208,7 +284,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Flexible duct'), findsOneWidget);
-      expect(find.textContaining('Selected scope BOQ'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mr-suggestion-group-scope_boq')),
+        findsOneWidget,
+      );
+      expect(find.text('In BOQ'), findsOneWidget);
       expect(repository.lastSearchProjectId, _projectId);
       expect(repository.lastSearchScopeId, 'scope-common');
       await tester.tap(find.text('Flexible duct'));
@@ -986,6 +1066,25 @@ void main() {
     },
   );
 
+  testWidgets('mobile custom material explains missing fields on action', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    await _pumpDraft(tester);
+    await _continueToMaterials(tester);
+
+    await tester.tap(find.text('Add Custom Item'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add Custom Item').hitTestable());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Item description is required'), findsWidgets);
+    expect(find.text('Select a valid unit'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('small mobile duplicates a selected row and reviews its details', (
     tester,
   ) async {
@@ -1308,6 +1407,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   String? boqGroupId,
   YorksV1RuntimeConfiguration? runtimeConfiguration,
   YorksV1MaterialRequest? serverRequest,
+  String? initialProjectId = _projectId,
 }) async {
   final repository = _MaterialRequestRepositoryFixture(
     serverRequest: serverRequest,
@@ -1351,7 +1451,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
       ],
       child: YorksV1MaterialRequestDraftScreen(
         draftId: _draftId,
-        projectId: _projectId,
+        projectId: initialProjectId,
         boqGroupId: boqGroupId,
       ),
     ),

@@ -27,6 +27,7 @@ final yorksAccountsSupplierControllerProvider = StateNotifierProvider
       YorksAccountsSupplierState,
       String
     >((ref, projectId) {
+      ref.keepAlive();
       ref.watch(yorksV1CurrentRoleProvider);
       ref.watch(yorksAccountsPermissionEpochProvider);
       final actorAuthUserId = ref.watch(yorksV1AuthUserIdProvider) ?? '';

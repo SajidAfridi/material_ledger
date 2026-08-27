@@ -222,6 +222,8 @@ class YorksProjectAccountsScreen extends ConsumerStatefulWidget {
 
 class _YorksProjectAccountsScreenState
     extends ConsumerState<YorksProjectAccountsScreen> {
+  int _activeTabLoads = 0;
+
   @override
   void initState() {
     super.initState();
@@ -237,77 +239,95 @@ class _YorksProjectAccountsScreenState
     }
   }
 
-  Future<void> _load() async {
-    await ref
-        .read(
-          yorksAccountsProjectOverviewControllerProvider(
-            widget.projectId,
-          ).notifier,
-        )
-        .load();
+  Future<void> _load({bool force = false}) async {
+    final overviewProvider = yorksAccountsProjectOverviewControllerProvider(
+      widget.projectId,
+    );
+    if (force || ref.read(overviewProvider).projection == null) {
+      await ref.read(overviewProvider.notifier).load();
+    }
     if (!mounted) return;
-    _loadTab(widget.initialTab);
+    await _loadTab(widget.initialTab, force: force);
   }
 
-  void _loadTab(YorksProjectAccountsTab tab) {
+  Future<void> _loadTab(
+    YorksProjectAccountsTab tab, {
+    bool force = false,
+  }) async {
+    final pending = <Future<bool>>[];
     switch (tab) {
       case YorksProjectAccountsTab.overview:
         break;
       case YorksProjectAccountsTab.documents:
-        ref
-            .read(
-              yorksAccountsDocumentsControllerProvider(
-                widget.projectId,
-              ).notifier,
-            )
-            .load();
+        final provider = yorksAccountsDocumentsControllerProvider(
+          widget.projectId,
+        );
+        if (force || ref.read(provider).workspace == null) {
+          pending.add(ref.read(provider.notifier).load());
+        }
         break;
       case YorksProjectAccountsTab.activity:
-        ref
-            .read(
-              yorksAccountsActivityControllerProvider(
-                widget.projectId,
-              ).notifier,
-            )
-            .load();
+        final provider = yorksAccountsActivityControllerProvider(
+          widget.projectId,
+        );
+        if (force || ref.read(provider).projection == null) {
+          pending.add(ref.read(provider.notifier).load());
+        }
         break;
       case YorksProjectAccountsTab.billing:
-        ref
-            .read(
-              yorksAccountsProjectControllerProvider(widget.projectId).notifier,
-            )
-            .load();
+        final provider = yorksAccountsProjectControllerProvider(
+          widget.projectId,
+        );
+        final state = ref.read(provider);
+        if (force || state.baseline == null || state.progress == null) {
+          pending.add(ref.read(provider.notifier).load());
+        }
         break;
       case YorksProjectAccountsTab.invoices:
-        ref
-            .read(
-              yorksAccountsProjectControllerProvider(widget.projectId).notifier,
-            )
-            .load();
-        final controller = ref.read(
-          yorksAccountsReceivablesControllerProvider(widget.projectId).notifier,
+        final projectProvider = yorksAccountsProjectControllerProvider(
+          widget.projectId,
         );
-        controller.loadClaims();
-        controller.loadInvoices();
+        final projectState = ref.read(projectProvider);
+        if (force ||
+            projectState.baseline == null ||
+            projectState.progress == null) {
+          pending.add(ref.read(projectProvider.notifier).load());
+        }
+        final receivablesProvider = yorksAccountsReceivablesControllerProvider(
+          widget.projectId,
+        );
+        final receivablesState = ref.read(receivablesProvider);
+        final controller = ref.read(receivablesProvider.notifier);
+        if (force || receivablesState.claims == null) {
+          pending.add(controller.loadClaims());
+        }
+        if (force || receivablesState.invoices == null) {
+          pending.add(controller.loadInvoices());
+        }
         break;
       case YorksProjectAccountsTab.receiptsPdc:
-        ref
-            .read(
-              yorksAccountsReceivablesControllerProvider(
-                widget.projectId,
-              ).notifier,
-            )
-            .loadReceiptsAndPdc();
+        final provider = yorksAccountsReceivablesControllerProvider(
+          widget.projectId,
+        );
+        if (force || ref.read(provider).ledger == null) {
+          pending.add(ref.read(provider.notifier).loadReceiptsAndPdc());
+        }
         break;
       case YorksProjectAccountsTab.supplierBills:
-        ref
-            .read(
-              yorksAccountsSupplierControllerProvider(
-                widget.projectId,
-              ).notifier,
-            )
-            .loadBills();
+        final provider = yorksAccountsSupplierControllerProvider(
+          widget.projectId,
+        );
+        if (force || ref.read(provider).bills == null) {
+          pending.add(ref.read(provider.notifier).loadBills());
+        }
         break;
+    }
+    if (pending.isEmpty) return;
+    if (mounted) setState(() => _activeTabLoads++);
+    try {
+      await Future.wait(pending);
+    } finally {
+      if (mounted) setState(() => _activeTabLoads--);
     }
   }
 
@@ -368,64 +388,117 @@ class _YorksProjectAccountsScreenState
     final selected = tabs.contains(widget.initialTab)
         ? widget.initialTab
         : tabs.first;
+    final loading =
+        overviewState.status == YorksAccountsViewStatus.loading ||
+        _activeTabLoads > 0 ||
+        _tabIsLoading(ref, widget.projectId, selected);
     return Scaffold(
       backgroundColor: AppColors.surface,
-      body: CustomScrollView(
-        key: PageStorageKey('accounts-project-${widget.projectId}-$selected'),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xxl,
-              AppSpacing.xxl,
-              AppSpacing.xxl,
-              AppSpacing.colossal,
+      body: Stack(
+        children: [
+          CustomScrollView(
+            key: PageStorageKey(
+              'accounts-project-${widget.projectId}-$selected',
             ),
-            sliver: SliverList.list(
-              children: [
-                _AccountsHero(
-                  eyebrow: _t(language, 'commercial_control'),
-                  title: projection.projectName,
-                  body:
-                      '${projection.projectReference}'
-                      '${projection.clientName == null ? '' : ' · ${projection.clientName}'}',
-                  badge: projection.actorExactRole,
-                  metadata: _projectMetadata(projection),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xxl,
+                  AppSpacing.xxl,
+                  AppSpacing.xxl,
+                  AppSpacing.colossal,
                 ),
-                const SizedBox(height: AppSpacing.md),
-                _ProjectAccountsTabs(
-                  tabs: tabs,
-                  selected: selected,
-                  language: language,
-                  onSelected: _selectTab,
+                sliver: SliverList.list(
+                  children: [
+                    _AccountsHero(
+                      eyebrow: _t(language, 'commercial_control'),
+                      title: projection.projectName,
+                      body:
+                          '${projection.projectReference}'
+                          '${projection.clientName == null ? '' : ' · ${projection.clientName}'}',
+                      badge: projection.actorExactRole,
+                      metadata: _projectMetadata(projection),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _ProjectAccountsTabs(
+                      tabs: tabs,
+                      selected: selected,
+                      language: language,
+                      onSelected: _selectTab,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _RoleGuidance(language: language),
+                    const SizedBox(height: AppSpacing.lg),
+                    if (projection.capabilities.canExport &&
+                        _reportKindForTab(selected, projection.capabilities) !=
+                            null) ...[
+                      YorksAccountsReportActions(
+                        kind: _reportKindForTab(
+                          selected,
+                          projection.capabilities,
+                        )!,
+                        projectId: widget.projectId,
+                        language: language,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                    _ProjectTabBody(
+                      projectId: widget.projectId,
+                      tab: selected,
+                      overview: projection,
+                      language: language,
+                      onRetry: () => unawaited(_load(force: true)),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                _RoleGuidance(language: language),
-                const SizedBox(height: AppSpacing.lg),
-                if (projection.capabilities.canExport &&
-                    _reportKindForTab(selected, projection.capabilities) !=
-                        null) ...[
-                  YorksAccountsReportActions(
-                    kind: _reportKindForTab(selected, projection.capabilities)!,
-                    projectId: widget.projectId,
-                    language: language,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
-                _ProjectTabBody(
-                  projectId: widget.projectId,
-                  tab: selected,
-                  overview: projection,
-                  language: language,
-                  onRetry: _load,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (loading)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(
+                key: ValueKey('accounts-background-loading'),
+                minHeight: 3,
+              ),
+            ),
         ],
       ),
     );
   }
 }
+
+bool _tabIsLoading(
+  WidgetRef ref,
+  String projectId,
+  YorksProjectAccountsTab tab,
+) => switch (tab) {
+  YorksProjectAccountsTab.overview => false,
+  YorksProjectAccountsTab.billing =>
+    ref.watch(yorksAccountsProjectControllerProvider(projectId)).status ==
+        YorksAccountsViewStatus.loading,
+  YorksProjectAccountsTab.invoices =>
+    ref.watch(yorksAccountsProjectControllerProvider(projectId)).status ==
+            YorksAccountsViewStatus.loading ||
+        ref
+                .watch(yorksAccountsReceivablesControllerProvider(projectId))
+                .status ==
+            YorksAccountsViewStatus.loading,
+  YorksProjectAccountsTab.receiptsPdc =>
+    ref.watch(yorksAccountsReceivablesControllerProvider(projectId)).status ==
+        YorksAccountsViewStatus.loading,
+  YorksProjectAccountsTab.supplierBills =>
+    ref.watch(yorksAccountsSupplierControllerProvider(projectId)).status ==
+        YorksAccountsViewStatus.loading,
+  YorksProjectAccountsTab.documents =>
+    ref.watch(yorksAccountsDocumentsControllerProvider(projectId)).status ==
+        YorksAccountsViewStatus.loading,
+  YorksProjectAccountsTab.activity =>
+    ref.watch(yorksAccountsActivityControllerProvider(projectId)).status ==
+        YorksAccountsViewStatus.loading,
+};
 
 YorksAccountsReportKind? _reportKindForTab(
   YorksProjectAccountsTab tab,

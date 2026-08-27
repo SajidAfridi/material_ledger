@@ -44,9 +44,13 @@ final class YorksAccountsPortfolioController
       );
       return true;
     } on YorksV1DomainException catch (error) {
+      final status = _statusFor(error.code);
       state = YorksAccountsPortfolioState(
-        status: _statusFor(error.code),
+        status: status,
         filters: nextFilters,
+        projection: _mustPurgeProtectedProjection(status)
+            ? null
+            : state.projection,
         error: error,
       );
       return false;
@@ -142,8 +146,9 @@ final class YorksAccountsProjectOverviewController
   final YorksAccountsPortfolioRepository _repository;
 
   Future<bool> load() async {
-    state = const YorksAccountsProjectOverviewState(
+    state = YorksAccountsProjectOverviewState(
       status: YorksAccountsViewStatus.loading,
+      projection: state.projection,
     );
     try {
       final projection = await _repository.getProjectOverview(_projectId);
@@ -153,8 +158,12 @@ final class YorksAccountsProjectOverviewController
       );
       return true;
     } on YorksV1DomainException catch (error) {
+      final status = _statusFor(error.code);
       state = YorksAccountsProjectOverviewState(
-        status: _statusFor(error.code),
+        status: status,
+        projection: _mustPurgeProtectedProjection(status)
+            ? null
+            : state.projection,
         error: error,
       );
       return false;
@@ -163,6 +172,11 @@ final class YorksAccountsProjectOverviewController
 
   void purge() => state = const YorksAccountsProjectOverviewState();
 }
+
+bool _mustPurgeProtectedProjection(YorksAccountsViewStatus status) =>
+    status == YorksAccountsViewStatus.forbidden ||
+    status == YorksAccountsViewStatus.sessionExpired ||
+    status == YorksAccountsViewStatus.unavailable;
 
 YorksAccountsViewStatus _statusFor(YorksV1DomainErrorCode code) =>
     switch (code) {
