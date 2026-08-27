@@ -36,6 +36,8 @@ void main() {
     expect(thread.messages.first.isSystem, isTrue);
     expect(thread.messages.last.attachments.single.fileName, 'schedule.pdf');
     expect(thread.messages.last.replyPreview?.body, 'Site handover at 3 PM.');
+    expect(thread.messages[2].receiptStatus, YorksV1ChatReceiptStatus.read);
+    expect(thread.messages[2].canEdit, isTrue);
   });
 
   test('chat command payloads trim text and retain server identifiers', () {
@@ -60,6 +62,21 @@ void main() {
     expect(send.toRpcPayload()['body'], 'Please confirm receipt.');
     expect(send.toRpcPayload()['reply_to_message_id'], 'message-1');
     expect(send.toRpcPayload()['attachment_ids'], ['attachment-1']);
+
+    const edit = YorksV1ChatEditInput(
+      messageId: 'message-1',
+      body: '  Updated dispatch time.  ',
+      expectedVersion: 4,
+      idempotencyKey: 'edit-chat-1',
+    );
+    const delete = YorksV1ChatDeleteInput(
+      messageId: 'message-1',
+      expectedVersion: 5,
+      idempotencyKey: 'delete-chat-1',
+    );
+    expect(edit.toRpcPayload()['body'], 'Updated dispatch time.');
+    expect(edit.toRpcPayload()['expected_version'], 4);
+    expect(delete.toRpcPayload()['expected_version'], 5);
   });
 
   test(
@@ -125,8 +142,8 @@ void main() {
     expect(find.text('PINNED'), findsOneWidget);
     expect(find.text('RECENT'), findsOneWidget);
     expect(
-      find.textContaining('Chat supports coordination only'),
-      findsWidgets,
+      find.textContaining('visible to authorized members only'),
+      findsOneWidget,
     );
     expect(find.byTooltip('Attach files'), findsOneWidget);
     expect(find.byTooltip('Search this conversation'), findsOneWidget);
@@ -163,6 +180,56 @@ void main() {
       find.byKey(const ValueKey('chat-message-search-field')),
       findsNothing,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('own message edit and soft-delete actions update the thread', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpChat(tester, preferences, selected: true);
+
+    await tester.tap(find.byKey(const ValueKey('chat-message-menu-message-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit message'), findsOneWidget);
+    expect(find.text('Delete message'), findsOneWidget);
+
+    await tester.tap(find.text('Edit message'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AlertDialog, 'Edit message'), findsOneWidget);
+    expect(
+      find.widgetWithText(
+        TextField,
+        '@MasaudKhan please confirm the unloading team.',
+      ),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'Unloading team confirmed for 3 PM.',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save changes'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('Unloading team confirmed for 3 PM.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat-message-menu-message-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete message'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Delete this message for everyone? A secure audit record will be retained.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete message'));
+    await tester.pumpAndSettle();
+    expect(find.text('This message was deleted'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -209,7 +276,7 @@ void main() {
     await _pumpChat(tester, preferences, selected: true);
     expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     expect(
-      find.textContaining('Chat supports coordination only'),
+      find.textContaining('visible to authorized members only'),
       findsOneWidget,
     );
     expect(find.byTooltip('Attach files'), findsOneWidget);
@@ -321,6 +388,55 @@ class _FixtureTeamChatController extends YorksV1TeamChatController {
       loadingList: false,
       loadingThread: false,
       hasOlderMessages: false,
+    );
+  }
+
+  @override
+  Future<bool> editMessage(YorksV1ChatEditInput input) async {
+    final current = state.thread!.messages.firstWhere(
+      (message) => message.id == input.messageId,
+    );
+    _replaceFixtureMessage(
+      YorksV1ChatMessage.fromRpcJson({
+        ..._messageToRpc(current),
+        'body': input.body.trim(),
+        'version': current.version + 1,
+        'edited_at': '2026-08-28T12:00:00Z',
+      }),
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> deleteMessage(YorksV1ChatDeleteInput input) async {
+    final current = state.thread!.messages.firstWhere(
+      (message) => message.id == input.messageId,
+    );
+    _replaceFixtureMessage(
+      YorksV1ChatMessage.fromRpcJson({
+        ..._messageToRpc(current),
+        'body': null,
+        'version': current.version + 1,
+        'edited_at': null,
+        'deleted_at': '2026-08-28T12:01:00Z',
+        'can_edit': false,
+        'can_delete': false,
+      }),
+    );
+    return true;
+  }
+
+  void _replaceFixtureMessage(YorksV1ChatMessage replacement) {
+    final thread = state.thread!;
+    state = state.copyWith(
+      thread: YorksV1ChatThread(
+        conversation: thread.conversation,
+        participants: thread.participants,
+        messages: [
+          for (final message in thread.messages)
+            if (message.id == replacement.id) replacement else message,
+        ],
+      ),
     );
   }
 }
@@ -533,11 +649,16 @@ YorksV1ChatMessage _message({
   body: body,
   createdAt: DateTime(2026, 8, 14, 10, 30),
   isMine: isMine,
+  canEdit: isMine,
+  canDelete: isMine,
   isPinned: false,
   acknowledgementCount: 0,
   acknowledgedByMe: false,
   attachments: const [],
   mentionedAuthUserIds: const [],
+  recipientCount: isMine ? 2 : 0,
+  deliveredCount: isMine ? 2 : 0,
+  readCount: isMine ? 2 : 0,
 );
 
 Map<String, dynamic> _threadRpcFixture() => {
@@ -618,14 +739,23 @@ Map<String, dynamic> _messageToRpc(YorksV1ChatMessage message) => {
           'id': message.replyPreview!.id,
           'sender_display_name': message.replyPreview!.senderDisplayName,
           'body': message.replyPreview!.body,
+          'is_deleted': message.replyPreview!.isDeleted,
         },
   'linked_entity_type': message.linkedEntityType,
   'linked_entity_id': message.linkedEntityId,
   'created_at': message.createdAt.toUtc().toIso8601String(),
+  'version': message.version,
+  'edited_at': message.editedAt?.toUtc().toIso8601String(),
+  'deleted_at': message.deletedAt?.toUtc().toIso8601String(),
   'is_mine': message.isMine,
+  'can_edit': message.canEdit,
+  'can_delete': message.canDelete,
   'is_pinned': message.isPinned,
   'acknowledgement_count': message.acknowledgementCount,
   'acknowledged_by_me': message.acknowledgedByMe,
+  'recipient_count': message.recipientCount,
+  'delivered_count': message.deliveredCount,
+  'read_count': message.readCount,
   'attachments': message.attachments
       .map(
         (attachment) => {

@@ -214,6 +214,14 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
         loadingList: false,
         clearError: true,
       );
+      try {
+        await _repository.markDelivered(
+          conversations.map((conversation) => conversation.id),
+        );
+      } on YorksV1DomainException {
+        // Delivery acknowledgement must never clear a usable authorized list.
+        // The next foreground, Realtime or safety refresh retries it.
+      }
     } on YorksV1DomainException catch (error) {
       state = state.copyWith(loadingList: false, error: error.code);
     } finally {
@@ -474,6 +482,58 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
     await _repository?.toggleMessagePin(messageId);
     final selected = state.selectedConversationId;
     if (selected != null) await _refreshThread(selected, markRead: false);
+  }
+
+  Future<bool> editMessage(YorksV1ChatEditInput input) async {
+    final repository = _repository;
+    if (repository == null) return false;
+    try {
+      final message = await repository.editMessage(input);
+      _replaceMessage(message);
+      await refreshConversations();
+      if (state.selectedConversationId == message.conversationId) {
+        await _refreshThread(message.conversationId, markRead: false);
+      }
+      return true;
+    } on YorksV1DomainException catch (error) {
+      state = state.copyWith(error: error.code);
+      return false;
+    }
+  }
+
+  Future<bool> deleteMessage(YorksV1ChatDeleteInput input) async {
+    final repository = _repository;
+    if (repository == null) return false;
+    try {
+      final message = await repository.deleteMessage(input);
+      _replaceMessage(message);
+      await refreshConversations();
+      if (state.selectedConversationId == message.conversationId) {
+        await _refreshThread(message.conversationId, markRead: false);
+      }
+      return true;
+    } on YorksV1DomainException catch (error) {
+      state = state.copyWith(error: error.code);
+      return false;
+    }
+  }
+
+  void _replaceMessage(YorksV1ChatMessage replacement) {
+    final thread = state.thread;
+    if (thread == null ||
+        thread.conversation.id != replacement.conversationId) {
+      return;
+    }
+    state = state.copyWith(
+      thread: YorksV1ChatThread(
+        conversation: thread.conversation,
+        participants: thread.participants,
+        messages: [
+          for (final message in thread.messages)
+            if (message.id == replacement.id) replacement else message,
+        ],
+      ),
+    );
   }
 
   Future<({Uint8List bytes, String fileName, String mimeType})>

@@ -9,6 +9,280 @@ abstract final class YorksV1AccountsStrings {
       'ur': 'اکاؤنٹس',
       'hi': 'अकाउंट्स',
     },
+    'accountant_workspace': {
+      'en': 'Accountant workspace',
+      'ar': 'مساحة عمل المحاسب',
+      'ur': 'اکاؤنٹنٹ ورک اسپیس',
+      'hi': 'अकाउंटेंट कार्यस्थान',
+    },
+    'control_centre_title': {
+      'en': 'Accounts Control Centre',
+      'ar': 'مركز التحكم بالحسابات',
+      'ur': 'اکاؤنٹس کنٹرول سینٹر',
+      'hi': 'अकाउंट्स कंट्रोल सेंटर',
+    },
+    'control_centre_body': {
+      'en':
+          'Manage project accounts, claims, receipts, PDCs, supplier bills and commercial performance across the portfolio.',
+      'ar':
+          'إدارة حسابات المشاريع والمطالبات والمقبوضات والشيكات الآجلة وفواتير الموردين والأداء التجاري عبر المحفظة.',
+      'ur':
+          'پورٹ فولیو میں پراجیکٹ اکاؤنٹس، کلیمز، رسیدیں، PDCs، سپلائر بلز اور کمرشل کارکردگی منظم کریں۔',
+      'hi':
+          'पूरे पोर्टफोलियो में प्रोजेक्ट अकाउंट्स, क्लेम, रसीदें, PDC, सप्लायर बिल और कमर्शियल प्रदर्शन संभालें।',
+    },
+    'office_claims_title': {
+      'en': 'Claims & Client Invoices',
+      'ar': 'المطالبات والفواتير',
+      'ur': 'کلیمز اور انوائسز',
+      'hi': 'क्लेम और इनवॉइस',
+    },
+    'office_claims_body': {
+      'en':
+          'Review claim packages, invoice submission, client certification and outstanding variances across authorized projects.',
+      'ar':
+          'مراجعة حزم المطالبات وتقديم الفواتير واعتماد العميل والفروقات المستحقة عبر المشاريع المصرح بها.',
+      'ur':
+          'مجاز پراجیکٹس میں کلیم پیکجز، انوائس جمع کرانا، کلائنٹ سرٹیفیکیشن اور بقایا فرق دیکھیں۔',
+      'hi':
+          'अधिकृत प्रोजेक्टों में क्लेम पैकेज, इनवॉइस सबमिशन, क्लाइंट प्रमाणन और बाकी अंतर देखें।',
+    },
+    'office_payments_title': {
+      'en': 'Receipts & PDC',
+      'ar': 'المقبوضات والشيكات الآجلة',
+      'ur': 'رسیدیں اور PDC',
+      'hi': 'रसीदें और PDC',
+    },
+    'billing_progress_title': {
+      'en': 'Billing Progress',
+      'ar': 'تقدم الفوترة',
+      'ur': 'بلنگ پیشرفت',
+      'hi': 'बिलिंग प्रगति',
+    },
+    'billing_progress_body': {
+      'en':
+          'Select an authorized project to review its physical-building and billing-stage progress, evidence and available-to-claim position.',
+      'ar':
+          'اختر مشروعاً مصرحاً به لمراجعة تقدم المباني الفعلية ومراحل الفوترة والأدلة والقيمة المتاحة للمطالبة.',
+      'ur':
+          'فزیکل بلڈنگ، بلنگ اسٹیج پیشرفت، ثبوت اور دستیاب کلیم پوزیشن دیکھنے کے لیے مجاز پراجیکٹ منتخب کریں۔',
+      'hi':
+          'भौतिक बिल्डिंग, बिलिंग-स्टेज प्रगति, साक्ष्य और उपलब्ध-क्लेम स्थिति देखने के लिए अधिकृत प्रोजेक्ट चुनें।',
+    },
+    'office_payments_body': {
+      'en':
+          'Track append-only client receipts, reversals and post-dated cheque status without introducing a bank-reconciliation ledger.',
+      'ar':
+          'تتبع إيصالات العملاء والقيود العكسية وحالة الشيكات الآجلة دون إنشاء دفتر تسوية بنكية.',
+      'ur':
+          'بینک ریکنسیلی ایشن لیجر کے بغیر کلائنٹ رسیدیں، ریورسلز اور پوسٹ ڈیٹڈ چیکس کی حالت ٹریک کریں۔',
+      'hi':
+          'बैंक मिलान लेजर बनाए बिना क्लाइंट रसीदें, रिवर्सल और पोस्ट-डेटेड चेक की स्थिति ट्रैक करें।',
+    },
+    'office_supplier_body': {
+      'en':
+          'Verify supplier invoice evidence, due dates, approval state and append-only payment position.',
+      'ar':
+          'تحقق من أدلة فواتير الموردين وتواريخ الاستحقاق وحالة الاعتماد ووضع المدفوعات المتسلسل.',
+      'ur':
+          'سپلائر انوائس ثبوت، واجب الادا تاریخ، منظوری کی حالت اور مسلسل ادائیگی پوزیشن کی تصدیق کریں۔',
+      'hi':
+          'सप्लायर इनवॉइस साक्ष्य, देय तारीख, स्वीकृति स्थिति और अपरिवर्तनीय भुगतान स्थिति जांचें।',
+    },
+    'office_due_title': {
+      'en': 'Due Schedule',
+      'ar': 'جدول الاستحقاقات',
+      'ur': 'ڈیو شیڈول',
+      'hi': 'देय समय-सारणी',
+    },
+    'office_due_body': {
+      'en':
+          'Monitor certified receivables, PDC maturity and matched supplier obligations from one controlled schedule.',
+      'ar':
+          'راقب المستحقات المعتمدة وآجال الشيكات الآجلة والتزامات الموردين المطابقة من جدول موحد.',
+      'ur':
+          'تصدیق شدہ وصولیاں، PDC میچورٹی اور میچ شدہ سپلائر واجبات ایک کنٹرولڈ شیڈول میں دیکھیں۔',
+      'hi':
+          'प्रमाणित प्राप्तियां, PDC परिपक्वता और मिलान किए सप्लायर दायित्व एक नियंत्रित समय-सारणी में देखें।',
+    },
+    'office_documents_body': {
+      'en':
+          'Find current controlled commercial evidence across projects, with classification and revision context preserved.',
+      'ar':
+          'ابحث عن الأدلة التجارية المضبوطة الحالية عبر المشاريع مع حفظ التصنيف وسياق المراجعات.',
+      'ur':
+          'درجہ بندی اور ریویژن سیاق کے ساتھ پراجیکٹس میں موجودہ کنٹرولڈ کمرشل ثبوت تلاش کریں۔',
+      'hi':
+          'वर्गीकरण और संशोधन संदर्भ सहित प्रोजेक्टों में मौजूदा नियंत्रित कमर्शियल साक्ष्य खोजें।',
+    },
+    'office_activity_title': {
+      'en': 'Accounts Audit Trail',
+      'ar': 'سجل تدقيق الحسابات',
+      'ur': 'اکاؤنٹس آڈٹ ٹریل',
+      'hi': 'अकाउंट्स ऑडिट ट्रेल',
+    },
+    'office_activity_body': {
+      'en':
+          'Inspect the append-only history of Accounts actions, responsible users and linked project records.',
+      'ar':
+          'افحص السجل المتسلسل لإجراءات الحسابات والمستخدمين المسؤولين وسجلات المشاريع المرتبطة.',
+      'ur':
+          'اکاؤنٹس کارروائیوں، ذمہ دار صارفین اور منسلک پراجیکٹ ریکارڈز کی مسلسل تاریخ دیکھیں۔',
+      'hi':
+          'अकाउंट्स कार्रवाइयों, जिम्मेदार उपयोगकर्ताओं और जुड़े प्रोजेक्ट रिकॉर्ड का अपरिवर्तनीय इतिहास देखें।',
+    },
+    'office_reports_title': {
+      'en': 'Accounts Reports',
+      'ar': 'تقارير الحسابات',
+      'ur': 'اکاؤنٹس رپورٹس',
+      'hi': 'अकाउंट्स रिपोर्ट',
+    },
+    'office_reports_body': {
+      'en':
+          'Generate protected portfolio and project registers using the same server-authorized commercial projections.',
+      'ar':
+          'أنشئ سجلات محمية للمحفظة والمشاريع باستخدام نفس العروض التجارية المصرح بها من الخادم.',
+      'ur':
+          'اسی سرور سے مجاز کمرشل پروجیکشن کے ساتھ محفوظ پورٹ فولیو اور پراجیکٹ رجسٹر بنائیں۔',
+      'hi':
+          'उसी सर्वर-अधिकृत कमर्शियल प्रोजेक्शन से सुरक्षित पोर्टफोलियो और प्रोजेक्ट रजिस्टर बनाएं।',
+    },
+    'office_records': {
+      'en': 'Records',
+      'ar': 'السجلات',
+      'ur': 'ریکارڈز',
+      'hi': 'रिकॉर्ड',
+    },
+    'office_total_value': {
+      'en': 'Total value',
+      'ar': 'القيمة الإجمالية',
+      'ur': 'کل قدر',
+      'hi': 'कुल मूल्य',
+    },
+    'office_secondary_value': {
+      'en': 'Processed value',
+      'ar': 'القيمة المعالجة',
+      'ur': 'پراسیس شدہ قدر',
+      'hi': 'प्रसंस्कृत मूल्य',
+    },
+    'office_outstanding': {
+      'en': 'Outstanding',
+      'ar': 'المستحق',
+      'ur': 'بقایا',
+      'hi': 'बकाया',
+    },
+    'office_needs_action': {
+      'en': 'Needs action',
+      'ar': 'يتطلب إجراء',
+      'ur': 'کارروائی درکار',
+      'hi': 'कार्रवाई आवश्यक',
+    },
+    'office_search': {
+      'en': 'Search project, party or reference…',
+      'ar': 'ابحث عن مشروع أو جهة أو مرجع…',
+      'ur': 'پراجیکٹ، فریق یا حوالہ تلاش کریں…',
+      'hi': 'प्रोजेक्ट, पक्ष या संदर्भ खोजें…',
+    },
+    'office_all_statuses': {
+      'en': 'All statuses',
+      'ar': 'كل الحالات',
+      'ur': 'تمام اسٹیٹس',
+      'hi': 'सभी स्थितियां',
+    },
+    'office_no_records': {
+      'en': 'No authorized records match this view',
+      'ar': 'لا توجد سجلات مصرح بها تطابق هذا العرض',
+      'ur': 'کوئی مجاز ریکارڈ اس منظر سے میل نہیں کھاتا',
+      'hi': 'कोई अधिकृत रिकॉर्ड इस दृश्य से मेल नहीं खाता',
+    },
+    'office_load_more': {
+      'en': 'Load more records',
+      'ar': 'تحميل المزيد من السجلات',
+      'ur': 'مزید ریکارڈز لوڈ کریں',
+      'hi': 'और रिकॉर्ड लोड करें',
+    },
+    'office_open_project': {
+      'en': 'Open project account',
+      'ar': 'فتح حساب المشروع',
+      'ur': 'پراجیکٹ اکاؤنٹ کھولیں',
+      'hi': 'प्रोजेक्ट अकाउंट खोलें',
+    },
+    'office_data_current': {
+      'en': 'Server-confirmed data',
+      'ar': 'بيانات مؤكدة من الخادم',
+      'ur': 'سرور سے تصدیق شدہ ڈیٹا',
+      'hi': 'सर्वर-पुष्ट डेटा',
+    },
+    'office_party': {
+      'en': 'Client / Supplier / User',
+      'ar': 'العميل / المورد / المستخدم',
+      'ur': 'کلائنٹ / سپلائر / صارف',
+      'hi': 'क्लाइंट / सप्लायर / उपयोगकर्ता',
+    },
+    'office_reference': {
+      'en': 'Reference',
+      'ar': 'المرجع',
+      'ur': 'حوالہ',
+      'hi': 'संदर्भ',
+    },
+    'office_amount': {
+      'en': 'Amount',
+      'ar': 'المبلغ',
+      'ur': 'رقم',
+      'hi': 'राशि',
+    },
+    'office_date': {
+      'en': 'Date',
+      'ar': 'التاريخ',
+      'ur': 'تاریخ',
+      'hi': 'तारीख',
+    },
+    'office_due_date': {
+      'en': 'Due date',
+      'ar': 'تاريخ الاستحقاق',
+      'ur': 'واجب الادا تاریخ',
+      'hi': 'देय तारीख',
+    },
+    'office_status': {
+      'en': 'Status',
+      'ar': 'الحالة',
+      'ur': 'حالت',
+      'hi': 'स्थिति',
+    },
+    'office_recent': {
+      'en': 'Recent activity',
+      'ar': 'النشاط الأخير',
+      'ur': 'حالیہ سرگرمی',
+      'hi': 'हाल की गतिविधि',
+    },
+    'office_quick_actions': {
+      'en': 'Quick actions',
+      'ar': 'إجراءات سريعة',
+      'ur': 'فوری کارروائیاں',
+      'hi': 'त्वरित कार्रवाइयां',
+    },
+    'office_portfolio_report': {
+      'en': 'Project Accounts Portfolio',
+      'ar': 'محفظة حسابات المشاريع',
+      'ur': 'پراجیکٹ اکاؤنٹس پورٹ فولیو',
+      'hi': 'प्रोजेक्ट अकाउंट्स पोर्टफोलियो',
+    },
+    'office_project_reports': {
+      'en': 'Project-level registers',
+      'ar': 'سجلات على مستوى المشروع',
+      'ur': 'پراجیکٹ سطح کے رجسٹرز',
+      'hi': 'प्रोजेक्ट-स्तरीय रजिस्टर',
+    },
+    'office_project_reports_body': {
+      'en':
+          'Open a project account to export its billing progress, claims, supplier bills or PDC register.',
+      'ar':
+          'افتح حساب مشروع لتصدير تقدم الفوترة أو المطالبات أو فواتير الموردين أو سجل الشيكات الآجلة.',
+      'ur':
+          'بلنگ پیشرفت، کلیمز، سپلائر بلز یا PDC رجسٹر ایکسپورٹ کرنے کے لیے پراجیکٹ اکاؤنٹ کھولیں۔',
+      'hi':
+          'बिलिंग प्रगति, क्लेम, सप्लायर बिल या PDC रजिस्टर निर्यात करने के लिए प्रोजेक्ट अकाउंट खोलें।',
+    },
     'commercial_control': {
       'en': 'Project commercial control',
       'ar': 'الرقابة التجارية للمشاريع',
@@ -1243,6 +1517,72 @@ abstract final class YorksV1AccountsStrings {
       'ar': 'معتمد',
       'ur': 'منظور',
       'hi': 'स्वीकृत',
+    },
+    'status_expected': {
+      'en': 'Expected',
+      'ar': 'متوقع',
+      'ur': 'متوقع',
+      'hi': 'अपेक्षित',
+    },
+    'status_received': {
+      'en': 'Received',
+      'ar': 'تم الاستلام',
+      'ur': 'وصول شدہ',
+      'hi': 'प्राप्त',
+    },
+    'status_reversed': {
+      'en': 'Reversed',
+      'ar': 'تم العكس',
+      'ur': 'ریورس شدہ',
+      'hi': 'वापस किया गया',
+    },
+    'status_deposited': {
+      'en': 'Deposited',
+      'ar': 'مودع',
+      'ur': 'جمع شدہ',
+      'hi': 'जमा',
+    },
+    'status_cleared': {
+      'en': 'Cleared',
+      'ar': 'تمت المقاصة',
+      'ur': 'کلیئر شدہ',
+      'hi': 'क्लियर',
+    },
+    'status_bounced': {
+      'en': 'Bounced',
+      'ar': 'مرتجع',
+      'ur': 'باؤنس شدہ',
+      'hi': 'बाउंस',
+    },
+    'status_replaced': {
+      'en': 'Replaced',
+      'ar': 'مستبدل',
+      'ur': 'تبدیل شدہ',
+      'hi': 'प्रतिस्थापित',
+    },
+    'status_current': {
+      'en': 'Current',
+      'ar': 'حالي',
+      'ur': 'موجودہ',
+      'hi': 'चालू',
+    },
+    'status_active': {
+      'en': 'Active',
+      'ar': 'نشط',
+      'ur': 'فعال',
+      'hi': 'सक्रिय',
+    },
+    'status_archived': {
+      'en': 'Archived',
+      'ar': 'مؤرشف',
+      'ur': 'آرکائیو شدہ',
+      'hi': 'संग्रहित',
+    },
+    'status_recorded': {
+      'en': 'Recorded',
+      'ar': 'مسجل',
+      'ur': 'ریکارڈ شدہ',
+      'hi': 'दर्ज',
     },
   };
 

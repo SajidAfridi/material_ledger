@@ -127,6 +127,12 @@ abstract final class YorksV1TeamChatStrings {
     ur: 'چیٹ صرف رابطہ کاری کے لیے ہے۔ منظوری، مقدار اور ورک فلو تبدیلیاں کنٹرولڈ ریکارڈ میں مکمل کریں۔',
     hi: 'चैट केवल समन्वय के लिए है। अनुमोदन, मात्रा और कार्यप्रवाह बदलाव नियंत्रित रिकॉर्ड में पूरे करें।',
   );
+  static const authorizedMembersOnly = TranslatableString(
+    en: 'This conversation is visible to authorized members only.',
+    ar: 'هذه المحادثة مرئية للأعضاء المصرح لهم فقط.',
+    ur: 'یہ گفتگو صرف مجاز اراکین کو نظر آتی ہے۔',
+    hi: 'यह बातचीत केवल अधिकृत सदस्यों को दिखाई देती है।',
+  );
   static const messageHint = TranslatableString(
     en: 'Write a message…',
     ar: 'اكتب رسالة…',
@@ -192,6 +198,84 @@ abstract final class YorksV1TeamChatStrings {
     ar: 'إلغاء تثبيت الرسالة',
     ur: 'پیغام اَن پن کریں',
     hi: 'संदेश अनपिन करें',
+  );
+  static const editMessage = TranslatableString(
+    en: 'Edit message',
+    ar: 'تعديل الرسالة',
+    ur: 'پیغام میں ترمیم کریں',
+    hi: 'संदेश संपादित करें',
+  );
+  static const deleteMessage = TranslatableString(
+    en: 'Delete message',
+    ar: 'حذف الرسالة',
+    ur: 'پیغام حذف کریں',
+    hi: 'संदेश हटाएँ',
+  );
+  static const deleteMessageBody = TranslatableString(
+    en: 'Delete this message for everyone? A secure audit record will be retained.',
+    ar: 'هل تريد حذف هذه الرسالة للجميع؟ سيتم الاحتفاظ بسجل تدقيق آمن.',
+    ur: 'کیا یہ پیغام سب کے لیے حذف کرنا ہے؟ ایک محفوظ آڈٹ ریکارڈ برقرار رہے گا۔',
+    hi: 'क्या यह संदेश सभी के लिए हटाना है? सुरक्षित ऑडिट रिकॉर्ड रखा जाएगा।',
+  );
+  static const messageDeleted = TranslatableString(
+    en: 'This message was deleted',
+    ar: 'تم حذف هذه الرسالة',
+    ur: 'یہ پیغام حذف کر دیا گیا ہے',
+    hi: 'यह संदेश हटा दिया गया',
+  );
+  static const edited = TranslatableString(
+    en: 'Edited',
+    ar: 'تم التعديل',
+    ur: 'ترمیم شدہ',
+    hi: 'संपादित',
+  );
+  static const couldNotEdit = TranslatableString(
+    en: 'The message could not be updated. Refresh and try again.',
+    ar: 'تعذر تحديث الرسالة. حدّث الصفحة وحاول مرة أخرى.',
+    ur: 'پیغام اپ ڈیٹ نہیں ہو سکا۔ ریفریش کر کے دوبارہ کوشش کریں۔',
+    hi: 'संदेश अपडेट नहीं हुआ। रीफ़्रेश करके फिर प्रयास करें।',
+  );
+  static const couldNotDelete = TranslatableString(
+    en: 'The message could not be deleted. Refresh and try again.',
+    ar: 'تعذر حذف الرسالة. حدّث الصفحة وحاول مرة أخرى.',
+    ur: 'پیغام حذف نہیں ہو سکا۔ ریفریش کر کے دوبارہ کوشش کریں۔',
+    hi: 'संदेश हटाया नहीं जा सका। रीफ़्रेश करके फिर प्रयास करें।',
+  );
+  static const sent = TranslatableString(
+    en: 'Sent',
+    ar: 'تم الإرسال',
+    ur: 'بھیجا گیا',
+    hi: 'भेजा गया',
+  );
+  static const delivered = TranslatableString(
+    en: 'Delivered',
+    ar: 'تم التسليم',
+    ur: 'پہنچ گیا',
+    hi: 'पहुंचा दिया गया',
+  );
+  static const read = TranslatableString(
+    en: 'Read',
+    ar: 'تمت القراءة',
+    ur: 'پڑھ لیا گیا',
+    hi: 'पढ़ा गया',
+  );
+  static const addEmoji = TranslatableString(
+    en: 'Add emoji',
+    ar: 'إضافة رمز تعبيري',
+    ur: 'ایموجی شامل کریں',
+    hi: 'इमोजी जोड़ें',
+  );
+  static const today = TranslatableString(
+    en: 'Today',
+    ar: 'اليوم',
+    ur: 'آج',
+    hi: 'आज',
+  );
+  static const yesterday = TranslatableString(
+    en: 'Yesterday',
+    ar: 'أمس',
+    ur: 'کل',
+    hi: 'कल',
   );
   static const conversationInfo = TranslatableString(
     en: 'Conversation info',

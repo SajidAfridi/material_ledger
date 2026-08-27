@@ -16,6 +16,8 @@ import '../features/admin/presentation/screens/user_management_screen.dart';
 import '../features/admin/presentation/screens/yorks_v1_user_access_screen.dart';
 import '../features/admin/presentation/screens/yorks_v1_configuration_screen.dart';
 import '../features/accounts/presentation/screens/yorks_accounts_screens.dart';
+import '../features/accounts/presentation/screens/yorks_accounts_office_screen.dart';
+import '../features/accounts/domain/accounts_office_models.dart';
 import '../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../features/engineer/presentation/screens/engineer_browse_screen.dart';
 import '../features/engineering_tools/presentation/screens/yorks_v1_engineering_calculator_screens.dart';
@@ -115,6 +117,19 @@ abstract final class RoutePaths {
   static const String yorksV1ProjectDocuments =
       '/yorks/projects/:projectId/documents';
   static const String yorksV1Accounts = '/yorks/accounts';
+  static const String yorksV1AccountsProjects = '/yorks/accounts/projects';
+  static const String yorksV1AccountsBillingProgress =
+      '/yorks/accounts/billing-progress';
+  static const String yorksV1AccountsClaims = '/yorks/accounts/claims';
+  static const String yorksV1AccountsClientPayments =
+      '/yorks/accounts/client-payments';
+  static const String yorksV1AccountsSupplierBills =
+      '/yorks/accounts/supplier-bills';
+  static const String yorksV1AccountsDueSchedule =
+      '/yorks/accounts/due-schedule';
+  static const String yorksV1AccountsDocuments = '/yorks/accounts/documents';
+  static const String yorksV1AccountsReports = '/yorks/accounts/reports';
+  static const String yorksV1AccountsActivity = '/yorks/accounts/activity';
   static const String yorksV1ProjectAccounts =
       '/yorks/projects/:projectId/accounts';
   static const String yorksV1ProjectAccountsOverview =
@@ -554,12 +569,26 @@ bool? _isYorksV1RouteAllowedForRole(
     final projectId = _yorksV1ProjectIdFromPath(path);
     if (projectId == null) {
       if (!_canOpenAccountsPortfolio(role)) return false;
-      return _hybridRouteAllows(
+      final canViewAccounts = _hybridRouteAllows(
         permissionResolver,
         YorksV1CapabilityKeys.viewProjectAccounts,
         legacyAllowed: false,
         organizationSummary: true,
       );
+      if (path != RoutePaths.yorksV1AccountsSupplierBills) {
+        return canViewAccounts;
+      }
+      final canViewSupplierCosts = _hybridRouteAllows(
+        permissionResolver,
+        YorksV1CapabilityKeys.viewSupplierCosts,
+        legacyAllowed: false,
+        organizationSummary: true,
+      );
+      if (canViewAccounts == false || canViewSupplierCosts == false) {
+        return false;
+      }
+      if (canViewAccounts == null || canViewSupplierCosts == null) return null;
+      return true;
     }
     final supplierOnly = path.endsWith('/supplier-bills');
     final capability = supplierOnly
@@ -726,6 +755,7 @@ String? _yorksV1ProjectIdFromPath(String path) {
 
 bool _isYorksV1AccountsPath(String path) =>
     path == RoutePaths.yorksV1Accounts ||
+    path.startsWith('${RoutePaths.yorksV1Accounts}/') ||
     (path.startsWith('/yorks/projects/') && path.contains('/accounts'));
 
 bool _canOpenAccountsPortfolio(YorksV1Role role) =>
@@ -824,6 +854,22 @@ GoRouter createAppRouter({
       }
       if (path == RoutePaths.changePassword) {
         return RoutePaths.engineerHome; // nothing to change → leave
+      }
+
+      // An already-authenticated Accountant may revisit the root route from a
+      // bookmark or a pre-rollout browser session. Once Accounts is enabled,
+      // send that stale landing route through the same protected portfolio
+      // guard instead of leaving it on the historical rollout-locked page.
+      if (path == RoutePaths.engineerHome &&
+          yorksV1AccountsEnabled &&
+          yorksV1Role == YorksV1Role.accountant) {
+        final allowed = _hybridRouteAllows(
+          yorksV1PermissionResolver,
+          YorksV1CapabilityKeys.viewProjectAccounts,
+          legacyAllowed: false,
+          organizationSummary: true,
+        );
+        if (allowed == true) return RoutePaths.yorksV1Accounts;
       }
 
       // This is an experience-level guard only; the normalized V1 RPC/RLS
@@ -1166,8 +1212,83 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: RoutePaths.yorksV1Accounts,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsPortfolioScreen(controlCentre: true),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsProjects,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsPortfolioScreen(controlCentre: false),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsBillingProgress,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsPortfolioScreen(billingProgress: true),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsClaims,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsOfficeScreen(
+            section: YorksAccountsOfficeSection.claims,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsClientPayments,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsOfficeScreen(
+            section: YorksAccountsOfficeSection.clientPayments,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsSupplierBills,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsOfficeScreen(
+            section: YorksAccountsOfficeSection.supplierBills,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsDueSchedule,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsOfficeScreen(
+            section: YorksAccountsOfficeSection.dueSchedule,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsDocuments,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsOfficeScreen(
+            section: YorksAccountsOfficeSection.documents,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsReports,
         pageBuilder: (context, state) =>
-            _yorksV1Slide(state.pageKey, const YorksAccountsPortfolioScreen()),
+            _yorksV1Slide(state.pageKey, const YorksAccountsReportsScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.yorksV1AccountsActivity,
+        pageBuilder: (context, state) => _yorksV1Slide(
+          state.pageKey,
+          const YorksAccountsOfficeScreen(
+            section: YorksAccountsOfficeSection.activity,
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.yorksV1ProjectAccounts,

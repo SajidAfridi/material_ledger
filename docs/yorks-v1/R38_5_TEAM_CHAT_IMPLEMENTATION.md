@@ -48,6 +48,9 @@ The Flutter UI provides:
 - pinned/muted/archived/unread conversation preferences;
 - Direct, Project, MR, Group and Announcement filters and server search;
 - reply, acknowledge, message pin and linked-record shortcuts;
+- version-checked sender edit and soft-delete actions for ordinary
+  conversations, with Material Request discussion remaining append-only;
+- server-derived sent, delivered and read marks without presence inference;
 - participant-only `@` suggestions and server-validated mention IDs;
 - owner/Admin group management;
 - verified PDF, Excel, Word, image and text attachments up to 20 MB;
@@ -55,10 +58,28 @@ The Flutter UI provides:
 - compact shell badges and exact thread deep links from notifications;
 - English, Arabic, Urdu and Hindi UX copy.
 
+## Message lifecycle and receipts
+
+The original sender may update only the body of their own non-system message
+in an ordinary Direct, Project, Group or Announcement conversation while they
+remain an active member. Delete is a soft-delete: the body, attachment and
+interaction projection are replaced by a localized tombstone, while the row,
+actor, timestamp and a private server-only prior-body revision remain intact.
+Material Request conversation messages are not editable or deletable because
+AT-26 keeps controlled MR discussion append-only.
+
+Edit and delete commands re-check sender, active membership, conversation kind
+and expected message version in one trusted transaction. They are idempotent,
+audited without copying the prior body into the general audit payload, and do
+not optimistically alter the client before server confirmation. A sender sees
+Sent, Delivered or Read from member delivery/read cursors. Delivery advances
+only for incoming messages, read also advances delivery, and neither cursor is
+used as an online-presence claim.
+
 ## Responsive contract
 
-- At 1250px and above, the workspace is a 310px conversation list, flexible
-  thread and 288px details panel.
+- At 1250px and above, the workspace is a 320px conversation list, flexible
+  thread and 316px details panel.
 - Below 1250px, the details pane becomes an explicit modal/sheet rather than
   compressing message content.
 - Around tablet width the conversation list is 285px and the thread remains a
@@ -98,10 +119,11 @@ canonical MR conversation; compatibility IDs/read APIs remain so older clients
 do not create a second visible history. Workflow audit-to-system-message
 projection is best-effort and cannot interrupt the source transaction.
 
-Rollback disables the flag and RPC grants and deploys the previous complete
-client/functions. It retains all messages, memberships, read cursors, verified
-attachments, notifications and audit attribution. No rollback deletes or
-rewrites committed collaboration history.
+Rollback disables the flag and lifecycle RPC grants and deploys the previous
+complete client/functions. It retains all messages, private revisions,
+memberships, delivery/read cursors, verified attachments, notifications and
+audit attribution. The additive columns and tombstone facts may remain dormant;
+no rollback deletes or rewrites committed collaboration history.
 
 ## Acceptance evidence
 
@@ -110,8 +132,12 @@ rewrites committed collaboration history.
   cross-device read state, mute/mentions, announcements, contextual revocation,
   private Storage, verification, authorized search, record-link authority,
   reply/reaction/pin facts, archive restore, bounded pagination and inactive-user denial.
+- `supabase/tests/database/yorks_r38_5_chat_message_lifecycle.test.sql`: sender
+  edit/delete authority, Material Request protection in the command contract,
+  stale-version conflict, idempotent revision capture, tombstone access,
+  delivery/read cursor projection and direct-write/RLS negatives.
 - `test/yorks_v1_team_chat_test.dart`: projection/payload/file/unread tests,
-  focused responsive interactions and four visual states.
+  focused edit/delete/receipt interactions and four responsive visual states.
 - `supabase/functions/send-push/notification_payload_test.ts`: trusted Team
   Chat copy, exact deep link and unsafe-route rejection.
 - [`evidence/r38-5-team-chat-20260814/README.md`](evidence/r38-5-team-chat-20260814/README.md): visual evidence index and gate record.

@@ -41,6 +41,8 @@ abstract interface class YorksV1TeamChatRepository {
 
   Future<YorksV1ChatMessage> sendMessage(YorksV1ChatSendInput input);
 
+  Future<void> markDelivered(Iterable<String> conversationIds);
+
   Future<void> markRead(String conversationId);
 
   Future<void> markUnread(String conversationId);
@@ -54,6 +56,10 @@ abstract interface class YorksV1TeamChatRepository {
   Future<void> toggleAcknowledgement(String messageId);
 
   Future<void> toggleMessagePin(String messageId);
+
+  Future<YorksV1ChatMessage> editMessage(YorksV1ChatEditInput input);
+
+  Future<YorksV1ChatMessage> deleteMessage(YorksV1ChatDeleteInput input);
 
   Future<({Uint8List bytes, String fileName, String mimeType})>
   downloadAttachment(String attachmentId);
@@ -300,6 +306,13 @@ class YorksV1SupabaseTeamChatRepository implements YorksV1TeamChatRepository {
   }
 
   @override
+  Future<void> markDelivered(Iterable<String> conversationIds) {
+    final ids = conversationIds.toSet().toList(growable: false);
+    if (ids.isEmpty) return Future.value();
+    return _voidRpc('v1_mark_chat_delivered', {'p_conversation_ids': ids});
+  }
+
+  @override
   Future<void> markRead(String conversationId) =>
       _voidRpc('v1_mark_chat_read', {'p_conversation_id': conversationId});
 
@@ -325,6 +338,34 @@ class YorksV1SupabaseTeamChatRepository implements YorksV1TeamChatRepository {
   @override
   Future<void> toggleMessagePin(String messageId) =>
       _voidRpc('v1_toggle_chat_message_pin', {'p_message_id': messageId});
+
+  @override
+  Future<YorksV1ChatMessage> editMessage(YorksV1ChatEditInput input) async {
+    final response = _map(
+      await _rpc(
+        'v1_edit_chat_message',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      ),
+    );
+    return YorksV1ChatMessage.fromRpcJson(response);
+  }
+
+  @override
+  Future<YorksV1ChatMessage> deleteMessage(YorksV1ChatDeleteInput input) async {
+    final response = _map(
+      await _rpc(
+        'v1_delete_chat_message',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      ),
+    );
+    return YorksV1ChatMessage.fromRpcJson(response);
+  }
 
   @override
   Future<({Uint8List bytes, String fileName, String mimeType})>

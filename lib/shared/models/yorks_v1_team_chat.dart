@@ -29,6 +29,8 @@ enum YorksV1ChatFilter {
   archived,
 }
 
+enum YorksV1ChatReceiptStatus { sent, delivered, read }
+
 class YorksV1ChatParticipant {
   const YorksV1ChatParticipant({
     required this.authUserId,
@@ -83,17 +85,20 @@ class YorksV1ChatReplyPreview {
     required this.id,
     required this.senderDisplayName,
     this.body,
+    this.isDeleted = false,
   });
 
   final String id;
   final String senderDisplayName;
   final String? body;
+  final bool isDeleted;
 
   factory YorksV1ChatReplyPreview.fromRpcJson(Map<String, dynamic> json) =>
       YorksV1ChatReplyPreview(
         id: _requiredString(json['id']),
         senderDisplayName: _requiredString(json['sender_display_name']),
         body: _nullableString(json['body']),
+        isDeleted: json['is_deleted'] == true,
       );
 }
 
@@ -109,6 +114,12 @@ class YorksV1ChatMessage {
     required this.acknowledgedByMe,
     required this.attachments,
     required this.mentionedAuthUserIds,
+    this.version = 1,
+    this.canEdit = false,
+    this.canDelete = false,
+    this.recipientCount = 0,
+    this.deliveredCount = 0,
+    this.readCount = 0,
     this.body,
     this.systemEventCode,
     this.senderAuthUserId,
@@ -118,6 +129,8 @@ class YorksV1ChatMessage {
     this.replyPreview,
     this.linkedEntityType,
     this.linkedEntityId,
+    this.editedAt,
+    this.deletedAt,
   });
 
   final String id;
@@ -133,14 +146,33 @@ class YorksV1ChatMessage {
   final String? linkedEntityType;
   final String? linkedEntityId;
   final DateTime createdAt;
+  final int version;
+  final DateTime? editedAt;
+  final DateTime? deletedAt;
   final bool isMine;
+  final bool canEdit;
+  final bool canDelete;
   final bool isPinned;
   final int acknowledgementCount;
   final bool acknowledgedByMe;
   final List<YorksV1ChatAttachment> attachments;
   final List<String> mentionedAuthUserIds;
+  final int recipientCount;
+  final int deliveredCount;
+  final int readCount;
 
   bool get isSystem => kind == 'system';
+  bool get isEdited => editedAt != null && deletedAt == null;
+  bool get isDeleted => deletedAt != null;
+
+  YorksV1ChatReceiptStatus? get receiptStatus {
+    if (!isMine || isSystem) return null;
+    if (recipientCount > 0 && readCount >= recipientCount) {
+      return YorksV1ChatReceiptStatus.read;
+    }
+    if (deliveredCount > 0) return YorksV1ChatReceiptStatus.delivered;
+    return YorksV1ChatReceiptStatus.sent;
+  }
 
   factory YorksV1ChatMessage.fromRpcJson(Map<String, dynamic> json) {
     final kind = _requiredString(json['kind']);
@@ -169,7 +201,12 @@ class YorksV1ChatMessage {
       linkedEntityType: _nullableString(json['linked_entity_type']),
       linkedEntityId: _nullableString(json['linked_entity_id']),
       createdAt: DateTime.parse(_requiredString(json['created_at'])).toLocal(),
+      version: _optionalInt(json['version'], fallback: 1),
+      editedAt: _nullableDate(json['edited_at']),
+      deletedAt: _nullableDate(json['deleted_at']),
       isMine: json['is_mine'] == true,
+      canEdit: json['can_edit'] == true,
+      canDelete: json['can_delete'] == true,
       isPinned: json['is_pinned'] == true,
       acknowledgementCount: _requiredInt(json['acknowledgement_count']),
       acknowledgedByMe: json['acknowledged_by_me'] == true,
@@ -178,6 +215,9 @@ class YorksV1ChatMessage {
         YorksV1ChatAttachment.fromRpcJson,
       ),
       mentionedAuthUserIds: _stringList(json['mentions']),
+      recipientCount: _optionalInt(json['recipient_count']),
+      deliveredCount: _optionalInt(json['delivered_count']),
+      readCount: _optionalInt(json['read_count']),
     );
   }
 }
@@ -414,6 +454,43 @@ class YorksV1ChatSendInput {
   };
 }
 
+class YorksV1ChatEditInput {
+  const YorksV1ChatEditInput({
+    required this.messageId,
+    required this.body,
+    required this.expectedVersion,
+    required this.idempotencyKey,
+  });
+
+  final String messageId;
+  final String body;
+  final int expectedVersion;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'message_id': messageId,
+    'body': body.trim(),
+    'expected_version': expectedVersion,
+  };
+}
+
+class YorksV1ChatDeleteInput {
+  const YorksV1ChatDeleteInput({
+    required this.messageId,
+    required this.expectedVersion,
+    required this.idempotencyKey,
+  });
+
+  final String messageId;
+  final int expectedVersion;
+  final String idempotencyKey;
+
+  Map<String, dynamic> toRpcPayload() => {
+    'message_id': messageId,
+    'expected_version': expectedVersion,
+  };
+}
+
 DateTime? _nullableDate(Object? value) => value is String && value.isNotEmpty
     ? DateTime.parse(value).toLocal()
     : null;
@@ -432,6 +509,9 @@ int _requiredInt(Object? value) => switch (value) {
   String count => int.parse(count),
   _ => throw const FormatException('Invalid chat number.'),
 };
+
+int _optionalInt(Object? value, {int fallback = 0}) =>
+    value == null ? fallback : _requiredInt(value);
 
 List<T> _mapList<T>(Object? value, T Function(Map<String, dynamic>) parser) {
   if (value == null) return const [];

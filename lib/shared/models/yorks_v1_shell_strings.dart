@@ -11,6 +11,66 @@ abstract final class YorksV1ShellStrings {
     ur: 'اکاؤنٹس',
     hi: 'अकाउंट्स',
   );
+  static const accountantWorkspace = TranslatableString(
+    en: 'Accountant workspace',
+    ar: 'مساحة عمل المحاسب',
+    ur: 'اکاؤنٹنٹ ورک اسپیس',
+    hi: 'अकाउंटेंट कार्यस्थान',
+  );
+  static const projectAccounts = TranslatableString(
+    en: 'Project Accounts',
+    ar: 'حسابات المشاريع',
+    ur: 'پراجیکٹ اکاؤنٹس',
+    hi: 'प्रोजेक्ट अकाउंट्स',
+  );
+  static const billingProgress = TranslatableString(
+    en: 'Billing Progress',
+    ar: 'تقدم الفوترة',
+    ur: 'بلنگ پیشرفت',
+    hi: 'बिलिंग प्रगति',
+  );
+  static const accountsClaims = TranslatableString(
+    en: 'Claims & Invoices',
+    ar: 'المطالبات والفواتير',
+    ur: 'کلیمز اور انوائسز',
+    hi: 'क्लेम और इनवॉइस',
+  );
+  static const receiptsPdc = TranslatableString(
+    en: 'Receipts & PDC',
+    ar: 'المقبوضات والشيكات الآجلة',
+    ur: 'رسیدیں اور PDC',
+    hi: 'रसीदें और PDC',
+  );
+  static const supplierBills = TranslatableString(
+    en: 'Supplier Bills',
+    ar: 'فواتير الموردين',
+    ur: 'سپلائر بلز',
+    hi: 'सप्लायर बिल',
+  );
+  static const dueSchedule = TranslatableString(
+    en: 'Due Schedule',
+    ar: 'جدول الاستحقاقات',
+    ur: 'ڈیو شیڈول',
+    hi: 'देय समय-सारणी',
+  );
+  static const accountsDocuments = TranslatableString(
+    en: 'Documents',
+    ar: 'المستندات',
+    ur: 'دستاویزات',
+    hi: 'दस्तावेज़',
+  );
+  static const accountsReports = TranslatableString(
+    en: 'Reports',
+    ar: 'التقارير',
+    ur: 'رپورٹس',
+    hi: 'रिपोर्ट',
+  );
+  static const accountsAuditTrail = TranslatableString(
+    en: 'Audit Trail',
+    ar: 'سجل التدقيق',
+    ur: 'آڈٹ ٹریل',
+    hi: 'ऑडिट ट्रेल',
+  );
   static const collaboration = TranslatableString(
     en: 'Collaboration',
     ar: 'التعاون',

@@ -34,6 +34,14 @@ updates to state, RLS, migration and acceptance documents.
   contextual Material Request discussion uses Team Chat and follows the same
   rule. Ordinary workflow notifications and preserved pre-Team-Chat history
   retain their existing workflow surface.
+- Product-owner clarification (28 August 2026): the original sender may edit
+  the text or soft-delete their own ordinary Direct, Project, Group and
+  Announcement messages while they remain an active conversation member.
+  Material Request conversation messages remain append-only under AT-26.
+  Every edit/delete is a version-checked trusted command, preserves the prior
+  body in a private server-only revision, and leaves an attributed tombstone
+  rather than removing history. Sent, delivered and read marks come only from
+  server-owned member cursors; the client never infers receipt or presence.
 
 ## 2. Roles and identity
 

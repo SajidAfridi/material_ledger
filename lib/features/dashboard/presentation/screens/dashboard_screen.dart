@@ -27,6 +27,7 @@ import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 import '../../../../shared/widgets/notification_bell.dart';
 import '../../../../shared/widgets/profile_menu_button.dart';
 import '../../../projects/presentation/screens/yorks_v1_projects_screen.dart';
+import '../../../accounts/presentation/screens/yorks_accounts_screens.dart';
 
 /// Home dashboard for office roles (procurement / admin). The single overview —
 /// it replaces the old Dashboard tab AND the Admin-Panel "Overview". KPI cards
@@ -38,11 +39,14 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = ref.watch(languageProvider);
     final role = ref.watch(currentRoleProvider);
-    // Accountant is provisionable before R39 Accounts is routed. Always land
-    // on the V1 fail-closed state rather than starting retained inventory,
-    // project, request, rental or people dashboard providers.
+    // Accountant is an Accounts-only identity. When the controlled feature is
+    // enabled, even a stale/root browser session builds the protected Accounts
+    // portfolio instead of the historical rollout-locked placeholder.
     if (role == UserRole.accountant) {
-      return const YorksV1OverviewScreen();
+      final accountsEnabled = ref.watch(yorksV1FeatureFlagsProvider).accounts;
+      return accountsEnabled
+          ? const YorksAccountsPortfolioScreen(controlCentre: true)
+          : const YorksV1OverviewScreen();
     }
     final currency = ref.watch(currencyProvider);
     final yorksV1ProjectsEnabled = ref

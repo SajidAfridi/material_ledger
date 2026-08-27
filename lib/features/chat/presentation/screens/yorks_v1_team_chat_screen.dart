@@ -135,19 +135,19 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         border: Border.all(color: AppColors.line),
-        borderRadius: BorderRadius.circular(mobile ? 0 : 15),
+        borderRadius: BorderRadius.circular(mobile ? 0 : 12),
         boxShadow: mobile
             ? null
             : const [
                 BoxShadow(
                   color: AppColors.shadow,
-                  blurRadius: 20,
-                  offset: Offset(0, 8),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
                 ),
               ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(mobile ? 0 : 15),
+        borderRadius: BorderRadius.circular(mobile ? 0 : 12),
         child: mobile
             ? (selected
                   ? _ConversationPane(
@@ -176,7 +176,7 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
             : Row(
                 children: [
                   SizedBox(
-                    width: size.width <= 980 ? 285 : 310,
+                    width: size.width <= 980 ? 285 : 320,
                     child: _ConversationListPane(
                       language: language,
                       state: state,
@@ -211,7 +211,7 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
                   if (showInfo && selected) ...[
                     const VerticalDivider(width: 1, thickness: 1),
                     SizedBox(
-                      width: 288,
+                      width: 316,
                       child: _ConversationInfoPanel(
                         language: language,
                         state: state,
@@ -623,92 +623,105 @@ class _ConversationListTile extends StatelessWidget {
             ? conversation.description ?? ''
             : _messagePreview(last, language));
     return Material(
-      color: selected ? AppColors.blueContainer.withValues(alpha: .72) : null,
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 68),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            child: Row(
-              children: [
-                _ConversationAvatar(conversation: conversation, size: 42),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        children: [
-                          if (conversation.isPinned) ...[
-                            const Icon(
-                              Icons.push_pin_rounded,
-                              size: 13,
-                              color: AppColors.blue,
-                            ),
-                            const SizedBox(width: 3),
-                          ],
-                          Expanded(
-                            child: Text(
-                              conversation.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.titleSmall.copyWith(
-                                fontWeight: conversation.hasUnread
-                                    ? FontWeight.w700
-                                    : FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (conversation.isMuted)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 4),
-                              child: Icon(
-                                Icons.notifications_off_outlined,
-                                size: 14,
-                                color: AppColors.muted,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              preview,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: conversation.hasUnread
-                                    ? AppColors.inkSecondary
-                                    : AppColors.muted,
-                                fontWeight: conversation.hasUnread
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            _compactTime(
-                              conversation.lastMessageAt ??
-                                  conversation.createdAt,
-                            ),
-                            style: AppTypography.labelSmall,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (conversation.hasUnread) ...[
-                  const SizedBox(width: 7),
-                  _CountBadge(count: conversation.unreadCount),
-                ],
-              ],
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          constraints: const BoxConstraints(minHeight: 76),
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 10, 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.blueContainer.withValues(alpha: .78)
+                : AppColors.surfaceContainerLowest,
+            border: BorderDirectional(
+              start: BorderSide(
+                color: selected ? AppColors.blue : Colors.transparent,
+                width: 3,
+              ),
             ),
+          ),
+          child: Row(
+            children: [
+              _ConversationAvatar(conversation: conversation, size: 42),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        if (conversation.isPinned) ...[
+                          const Icon(
+                            Icons.push_pin_rounded,
+                            size: 13,
+                            color: AppColors.blue,
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        Expanded(
+                          child: Text(
+                            conversation.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.titleSmall.copyWith(
+                              fontWeight: conversation.hasUnread
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _compactTime(
+                            conversation.lastMessageAt ??
+                                conversation.createdAt,
+                          ),
+                          style: AppTypography.labelSmall.copyWith(
+                            color: conversation.hasUnread
+                                ? AppColors.blue
+                                : AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: conversation.hasUnread
+                                  ? AppColors.inkSecondary
+                                  : AppColors.muted,
+                              fontWeight: conversation.hasUnread
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (conversation.isMuted)
+                          const Padding(
+                            padding: EdgeInsetsDirectional.only(start: 6),
+                            child: Icon(
+                              Icons.notifications_off_outlined,
+                              size: 14,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        if (conversation.hasUnread) ...[
+                          const SizedBox(width: 7),
+                          _CountBadge(count: conversation.unreadCount),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1012,7 +1025,7 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  YorksV1TeamChatStrings.coordinationOnly.active(
+                  YorksV1TeamChatStrings.authorizedMembersOnly.active(
                     widget.language,
                   ),
                   style: AppTypography.bodySmall.copyWith(
@@ -1098,7 +1111,10 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
                             child: Column(
                               children: [
                                 if (showDate)
-                                  _DateSeparator(date: message.createdAt),
+                                  _DateSeparator(
+                                    date: message.createdAt,
+                                    language: widget.language,
+                                  ),
                                 if (message.isSystem)
                                   _SystemMessage(
                                     message: message,
@@ -1479,37 +1495,66 @@ class _MessageBubble extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final own = message.isMine;
-    return Align(
-      alignment: own ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * (mobile ? .82 : .62),
+    final bubbleColor = message.isDeleted
+        ? AppColors.surfaceContainer
+        : own
+        ? AppColors.blueContainer
+        : AppColors.surfaceContainerLow;
+    final bubble = Container(
+      constraints: BoxConstraints(maxWidth: mobile ? 430 : 520),
+      padding: const EdgeInsets.fromLTRB(12, 9, 8, 6),
+      decoration: BoxDecoration(
+        color: bubbleColor,
+        border: Border.all(
+          color: own && !message.isDeleted
+              ? AppColors.blueContainerStrong
+              : AppColors.line,
         ),
-        margin: const EdgeInsets.only(bottom: 9),
-        padding: const EdgeInsets.fromLTRB(11, 9, 9, 7),
-        decoration: BoxDecoration(
-          color: own ? AppColors.navy : AppColors.surfaceContainerLow,
-          border: own ? null : Border.all(color: AppColors.line),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(own ? 12 : 3),
-            topRight: Radius.circular(own ? 3 : 12),
-            bottomLeft: const Radius.circular(12),
-            bottomRight: const Radius.circular(12),
-          ),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(own ? 12 : 4),
+          topRight: Radius.circular(own ? 4 : 12),
+          bottomLeft: const Radius.circular(12),
+          bottomRight: const Radius.circular(12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!own)
-              Text(
-                message.senderDisplayName!,
-                style: AppTypography.labelLarge.copyWith(color: AppColors.blue),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!own)
+            Text(
+              message.senderDisplayName!,
+              style: AppTypography.labelLarge.copyWith(color: AppColors.blue),
+            ),
+          if (message.isDeleted)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.block_rounded,
+                    size: 16,
+                    color: AppColors.muted,
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      YorksV1TeamChatStrings.messageDeleted.active(language),
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.muted,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            )
+          else ...[
             if (message.replyPreview != null) ...[
               const SizedBox(height: 5),
               _ReplyPreview(
                 preview: message.replyPreview!,
-                dark: own,
+                dark: false,
                 language: language,
               ),
             ],
@@ -1518,7 +1563,7 @@ class _MessageBubble extends ConsumerWidget {
               SelectableText(
                 message.body!,
                 style: AppTypography.bodyMedium.copyWith(
-                  color: own ? Colors.white : AppColors.inkSecondary,
+                  color: AppColors.inkSecondary,
                   height: 1.42,
                 ),
               ),
@@ -1528,7 +1573,7 @@ class _MessageBubble extends ConsumerWidget {
               for (final attachment in message.attachments)
                 _AttachmentTile(
                   attachment: attachment,
-                  dark: own,
+                  dark: false,
                   language: language,
                 ),
             ],
@@ -1536,45 +1581,61 @@ class _MessageBubble extends ConsumerWidget {
               const SizedBox(height: 7),
               _LinkedRecordChip(
                 message: message,
-                dark: own,
+                dark: false,
                 language: language,
               ),
             ],
-            const SizedBox(height: 5),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          ],
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                DateFormat.jm().format(message.createdAt),
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.muted,
+                ),
+              ),
+              if (message.isEdited) ...[
+                const SizedBox(width: 5),
                 Text(
-                  DateFormat.jm().format(message.createdAt),
+                  YorksV1TeamChatStrings.edited.active(language),
                   style: AppTypography.labelSmall.copyWith(
-                    color: own ? Colors.white70 : AppColors.muted,
+                    color: AppColors.muted,
                   ),
                 ),
-                if (message.isPinned) ...[
-                  const SizedBox(width: 5),
-                  Icon(
-                    Icons.push_pin_rounded,
-                    size: 12,
-                    color: own ? Colors.white70 : AppColors.blue,
-                  ),
-                ],
-                if (message.acknowledgementCount > 0) ...[
-                  const SizedBox(width: 5),
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 13,
-                    color: own ? Colors.white70 : AppColors.success,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    '${message.acknowledgementCount}',
-                    style: AppTypography.labelSmall.copyWith(
-                      color: own ? Colors.white70 : AppColors.success,
-                    ),
-                  ),
-                ],
+              ],
+              if (message.isPinned) ...[
                 const SizedBox(width: 5),
+                const Icon(
+                  Icons.push_pin_rounded,
+                  size: 12,
+                  color: AppColors.blue,
+                ),
+              ],
+              if (message.acknowledgementCount > 0) ...[
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 13,
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  '${message.acknowledgementCount}',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+              if (own) ...[
+                const SizedBox(width: 5),
+                _MessageReceipt(message: message, language: language),
+              ],
+              if (!message.isDeleted) ...[
+                const SizedBox(width: 2),
                 PopupMenuButton<String>(
+                  key: ValueKey('chat-message-menu-${message.id}'),
                   tooltip: YorksV1TeamChatStrings.conversationInfo.active(
                     language,
                   ),
@@ -1585,9 +1646,9 @@ class _MessageBubble extends ConsumerWidget {
                   ),
                   iconSize: 17,
                   color: AppColors.surfaceContainerLowest,
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.more_horiz_rounded,
-                    color: own ? Colors.white70 : AppColors.muted,
+                    color: AppColors.muted,
                   ),
                   onSelected: (value) {
                     if (value == 'reply') onReply();
@@ -1600,6 +1661,12 @@ class _MessageBubble extends ConsumerWidget {
                       ref
                           .read(yorksV1TeamChatProvider.notifier)
                           .toggleMessagePin(message.id);
+                    }
+                    if (value == 'edit') {
+                      _showEditMessage(context, ref, message, language);
+                    }
+                    if (value == 'delete') {
+                      _showDeleteMessage(context, ref, message, language);
                     }
                   },
                   itemBuilder: (_) => [
@@ -1630,15 +1697,247 @@ class _MessageBubble extends ConsumerWidget {
                                 .active(language),
                       ),
                     ),
+                    if (message.canEdit)
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: _MenuLabel(
+                          icon: Icons.edit_outlined,
+                          label: YorksV1TeamChatStrings.editMessage.active(
+                            language,
+                          ),
+                        ),
+                      ),
+                    if (message.canDelete)
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: _MenuLabel(
+                          icon: Icons.delete_outline_rounded,
+                          label: YorksV1TeamChatStrings.deleteMessage.active(
+                            language,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ],
+            ],
+          ),
+        ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        mainAxisAlignment: own
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!own) ...[
+            _PersonAvatar(
+              name: message.senderDisplayName ?? '',
+              size: mobile ? 26 : 30,
+            ),
+            const SizedBox(width: 7),
+          ],
+          Flexible(child: bubble),
+          if (own) ...[
+            const SizedBox(width: 7),
+            _PersonAvatar(
+              name: message.senderDisplayName ?? '',
+              size: mobile ? 26 : 30,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageReceipt extends StatelessWidget {
+  const _MessageReceipt({required this.message, required this.language});
+
+  final YorksV1ChatMessage message;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = message.receiptStatus ?? YorksV1ChatReceiptStatus.sent;
+    final label = switch (status) {
+      YorksV1ChatReceiptStatus.sent => YorksV1TeamChatStrings.sent,
+      YorksV1ChatReceiptStatus.delivered => YorksV1TeamChatStrings.delivered,
+      YorksV1ChatReceiptStatus.read => YorksV1TeamChatStrings.read,
+    }.active(language);
+    final count = status == YorksV1ChatReceiptStatus.read
+        ? message.readCount
+        : message.deliveredCount;
+    final semanticLabel = message.recipientCount > 1
+        ? '$label · $count/${message.recipientCount}'
+        : label;
+    return Tooltip(
+      message: semanticLabel,
+      child: Semantics(
+        label: semanticLabel,
+        child: Icon(
+          status == YorksV1ChatReceiptStatus.sent
+              ? Icons.done_rounded
+              : Icons.done_all_rounded,
+          size: 15,
+          color: status == YorksV1ChatReceiptStatus.read
+              ? AppColors.blue
+              : AppColors.muted,
         ),
       ),
     );
   }
+}
+
+Future<void> _showEditMessage(
+  BuildContext context,
+  WidgetRef ref,
+  YorksV1ChatMessage message,
+  AppLanguage language,
+) async {
+  final updatedBody = await showDialog<String>(
+    context: context,
+    builder: (_) =>
+        _EditMessageDialog(initialBody: message.body ?? '', language: language),
+  );
+  if (updatedBody == null || !context.mounted) return;
+  final saved = await ref
+      .read(yorksV1TeamChatProvider.notifier)
+      .editMessage(
+        YorksV1ChatEditInput(
+          messageId: message.id,
+          body: updatedBody,
+          expectedVersion: message.version,
+          idempotencyKey: const Uuid().v4(),
+        ),
+      );
+  if (!saved && context.mounted) {
+    _showChatSnackBar(
+      context,
+      YorksV1TeamChatStrings.couldNotEdit.active(language),
+    );
+  }
+}
+
+class _EditMessageDialog extends StatefulWidget {
+  const _EditMessageDialog({required this.initialBody, required this.language});
+
+  final String initialBody;
+  final AppLanguage language;
+
+  @override
+  State<_EditMessageDialog> createState() => _EditMessageDialogState();
+}
+
+class _EditMessageDialogState extends State<_EditMessageDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialBody);
+  }
+
+  bool get _canSave {
+    final value = _controller.text.trim();
+    return value.isNotEmpty && value != widget.initialBody;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(YorksV1TeamChatStrings.editMessage.active(widget.language)),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: TextField(
+        controller: _controller,
+        autofocus: true,
+        minLines: 2,
+        maxLines: 8,
+        maxLength: 4000,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          hintText: YorksV1TeamChatStrings.messageHint.active(widget.language),
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(YorksV1TeamChatStrings.cancel.active(widget.language)),
+      ),
+      FilledButton(
+        onPressed: _canSave
+            ? () => Navigator.pop(context, _controller.text.trim())
+            : null,
+        child: Text(YorksV1TeamChatStrings.saveChanges.active(widget.language)),
+      ),
+    ],
+  );
+}
+
+Future<void> _showDeleteMessage(
+  BuildContext context,
+  WidgetRef ref,
+  YorksV1ChatMessage message,
+  AppLanguage language,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(YorksV1TeamChatStrings.deleteMessage.active(language)),
+      content: Text(YorksV1TeamChatStrings.deleteMessageBody.active(language)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text(YorksV1TeamChatStrings.cancel.active(language)),
+        ),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+          onPressed: () => Navigator.pop(dialogContext, true),
+          icon: const Icon(Icons.delete_outline_rounded),
+          label: Text(YorksV1TeamChatStrings.deleteMessage.active(language)),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  final deleted = await ref
+      .read(yorksV1TeamChatProvider.notifier)
+      .deleteMessage(
+        YorksV1ChatDeleteInput(
+          messageId: message.id,
+          expectedVersion: message.version,
+          idempotencyKey: const Uuid().v4(),
+        ),
+      );
+  if (!deleted && context.mounted) {
+    _showChatSnackBar(
+      context,
+      YorksV1TeamChatStrings.couldNotDelete.active(language),
+    );
+  }
+}
+
+void _showChatSnackBar(BuildContext context, String message) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
 }
 
 class _ChatComposer extends ConsumerStatefulWidget {
@@ -1840,6 +2139,26 @@ class _ChatComposerState extends ConsumerState<_ChatComposer> {
                       ? null
                       : _attach,
                 ),
+                SizedBox(
+                  width: AppSpacing.minTapTarget,
+                  height: AppSpacing.minTapTarget,
+                  child: PopupMenuButton<String>(
+                    tooltip: YorksV1TeamChatStrings.addEmoji.active(
+                      widget.language,
+                    ),
+                    enabled: !adminOnly && !state.sending,
+                    icon: const Icon(Icons.sentiment_satisfied_alt_outlined),
+                    onSelected: _insertEmoji,
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: '👍', child: Text('👍')),
+                      PopupMenuItem(value: '✅', child: Text('✅')),
+                      PopupMenuItem(value: '🙏', child: Text('🙏')),
+                      PopupMenuItem(value: '🙂', child: Text('🙂')),
+                      PopupMenuItem(value: '📎', child: Text('📎')),
+                      PopupMenuItem(value: '🚚', child: Text('🚚')),
+                    ],
+                  ),
+                ),
                 _ChatIconButton(
                   tooltip: YorksV1TeamChatStrings.choosePerson.active(
                     widget.language,
@@ -1997,6 +2316,21 @@ class _ChatComposerState extends ConsumerState<_ChatComposer> {
       selection: TextSelection.collapsed(offset: cursor + prefix.length),
     );
     _updateMentionQuery();
+    _focusNode.requestFocus();
+  }
+
+  void _insertEmoji(String emoji) {
+    final text = _textController.text;
+    final selection = _textController.selection;
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final next = text.replaceRange(start, end, emoji);
+    _textController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + emoji.length),
+    );
+    widget.onDraftChanged(next);
+    setState(() {});
     _focusNode.requestFocus();
   }
 
@@ -2242,37 +2576,6 @@ class _ConversationInfoPanel extends ConsumerWidget {
           ],
           const SizedBox(height: 18),
           _InfoHeading(
-            icon: Icons.people_outline_rounded,
-            title: YorksV1TeamChatStrings.participants.active(language),
-            count: thread.participants.length,
-          ),
-          const SizedBox(height: 6),
-          for (final participant in thread.participants)
-            ListTile(
-              dense: true,
-              minTileHeight: AppSpacing.minTapTarget,
-              contentPadding: EdgeInsets.zero,
-              leading: _PersonAvatar(name: participant.displayName, size: 34),
-              title: Text(
-                participant.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              subtitle: Text(_roleLabel(participant.exactRole, language)),
-              trailing: participant.isOwner
-                  ? Text(
-                      YorksV1TeamChatStrings.owner.active(language),
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.blue,
-                      ),
-                    )
-                  : null,
-            ),
-          const Divider(height: 24),
-          _InfoHeading(
             icon: Icons.attach_file_rounded,
             title: YorksV1TeamChatStrings.sharedFiles.active(language),
             count: files.length,
@@ -2328,6 +2631,37 @@ class _ConversationInfoPanel extends ConsumerWidget {
                   ),
                 ),
               ),
+          const Divider(height: 24),
+          _InfoHeading(
+            icon: Icons.people_outline_rounded,
+            title: YorksV1TeamChatStrings.participants.active(language),
+            count: thread.participants.length,
+          ),
+          const SizedBox(height: 6),
+          for (final participant in thread.participants)
+            ListTile(
+              dense: true,
+              minTileHeight: AppSpacing.minTapTarget,
+              contentPadding: EdgeInsets.zero,
+              leading: _PersonAvatar(name: participant.displayName, size: 34),
+              title: Text(
+                participant.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(_roleLabel(participant.exactRole, language)),
+              trailing: participant.isOwner
+                  ? Text(
+                      YorksV1TeamChatStrings.owner.active(language),
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.blue,
+                      ),
+                    )
+                  : null,
+            ),
           const Divider(height: 24),
           _InfoAction(
             icon: Icons.mark_email_unread_outlined,
@@ -3387,7 +3721,17 @@ class _ReplyPreview extends StatelessWidget {
             color: dark ? Colors.white : AppColors.blue,
           ),
         ),
-        if (preview.body != null)
+        if (preview.isDeleted)
+          Text(
+            YorksV1TeamChatStrings.messageDeleted.active(language),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodySmall.copyWith(
+              color: dark ? Colors.white70 : AppColors.muted,
+              fontStyle: FontStyle.italic,
+            ),
+          )
+        else if (preview.body != null)
           Text(
             preview.body!,
             maxLines: 2,
@@ -3540,8 +3884,9 @@ class _CountBadge extends StatelessWidget {
 }
 
 class _DateSeparator extends StatelessWidget {
-  const _DateSeparator({required this.date});
+  const _DateSeparator({required this.date, required this.language});
   final DateTime date;
+  final AppLanguage language;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -3552,7 +3897,7 @@ class _DateSeparator extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Text(
-            DateFormat.yMMMd().format(date),
+            _chatDateLabel(date, language),
             style: AppTypography.labelSmall,
           ),
         ),
@@ -3728,6 +4073,22 @@ String _compactTime(DateTime date) {
       : DateFormat.MMMd().format(date);
 }
 
+String _chatDateLabel(DateTime date, AppLanguage language) {
+  final now = DateTime.now();
+  if (_sameDay(now, date)) {
+    return YorksV1TeamChatStrings.today.active(language);
+  }
+  final yesterday = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).subtract(const Duration(days: 1));
+  if (_sameDay(yesterday, date)) {
+    return YorksV1TeamChatStrings.yesterday.active(language);
+  }
+  return DateFormat.yMMMd().format(date);
+}
+
 bool _sameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -3751,6 +4112,9 @@ String _messagePreview(YorksV1ChatMessage message, AppLanguage language) {
     return YorksV1TeamChatStrings.systemEvent(
       message.systemEventCode,
     ).active(language);
+  }
+  if (message.isDeleted) {
+    return YorksV1TeamChatStrings.messageDeleted.active(language);
   }
   if (message.body != null) return message.body!;
   if (message.attachments.isNotEmpty) return message.attachments.first.fileName;

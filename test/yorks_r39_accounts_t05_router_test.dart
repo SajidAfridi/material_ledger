@@ -117,11 +117,87 @@ void main() {
         RoutePaths.yorksV1Accounts,
       );
 
+      await _go(tester, router, RoutePaths.engineerHome);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.yorksV1Accounts,
+      );
+
+      for (final officePath in const [
+        RoutePaths.yorksV1AccountsProjects,
+        RoutePaths.yorksV1AccountsBillingProgress,
+        RoutePaths.yorksV1AccountsClaims,
+        RoutePaths.yorksV1AccountsClientPayments,
+        RoutePaths.yorksV1AccountsSupplierBills,
+        RoutePaths.yorksV1AccountsDueSchedule,
+        RoutePaths.yorksV1AccountsDocuments,
+        RoutePaths.yorksV1AccountsReports,
+        RoutePaths.yorksV1AccountsActivity,
+      ]) {
+        await _go(tester, router, officePath);
+        expect(router.routeInformationProvider.value.uri.path, officePath);
+      }
+
       await _go(tester, router, RoutePaths.yorksV1MaterialRequests);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.yorksV1Accounts,
+      );
+    },
+  );
+
+  testWidgets(
+    'organization supplier register requires the supplier-cost capability',
+    (tester) async {
+      final router = _router(
+        userRole: UserRole.accountant,
+        exactRole: YorksV1Role.accountant,
+        accountsEnabled: true,
+        resolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) => capabilityKey == YorksV1CapabilityKeys.viewProjectAccounts,
+      );
+      addTearDown(router.dispose);
+      await _mount(tester, router, YorksV1Role.accountant);
+
+      await _go(tester, router, RoutePaths.yorksV1AccountsSupplierBills);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        RoutePaths.yorksV1Accounts,
+      );
+    },
+  );
+
+  testWidgets(
+    'organization supplier register rejects supplier-only authority',
+    (tester) async {
+      final router = _router(
+        userRole: UserRole.accountant,
+        exactRole: YorksV1Role.accountant,
+        accountsEnabled: true,
+        resolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) => capabilityKey == YorksV1CapabilityKeys.viewSupplierCosts,
+      );
+      addTearDown(router.dispose);
+      await _mount(tester, router, YorksV1Role.accountant);
+
+      await _go(tester, router, RoutePaths.yorksV1AccountsSupplierBills);
       expect(
         router.routeInformationProvider.value.uri.path,
         RoutePaths.engineerHome,
       );
+      expect(find.text('Supplier Bills'), findsNothing);
     },
   );
 }

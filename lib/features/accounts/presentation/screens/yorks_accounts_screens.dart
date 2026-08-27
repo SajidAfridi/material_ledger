@@ -32,7 +32,14 @@ import '../widgets/yorks_accounts_records_views.dart';
 import '../widgets/yorks_accounts_supplier_action_sheets.dart';
 
 class YorksAccountsPortfolioScreen extends ConsumerStatefulWidget {
-  const YorksAccountsPortfolioScreen({super.key});
+  const YorksAccountsPortfolioScreen({
+    super.key,
+    this.controlCentre = false,
+    this.billingProgress = false,
+  }) : assert(!(controlCentre && billingProgress));
+
+  final bool controlCentre;
+  final bool billingProgress;
 
   @override
   ConsumerState<YorksAccountsPortfolioScreen> createState() =>
@@ -119,7 +126,13 @@ class _YorksAccountsPortfolioScreenState
             .read(yorksAccountsPortfolioControllerProvider.notifier)
             .load(_filters),
         child: CustomScrollView(
-          key: const PageStorageKey('accounts-portfolio-scroll'),
+          key: PageStorageKey(
+            widget.controlCentre
+                ? 'accounts-control-centre-scroll'
+                : widget.billingProgress
+                ? 'accounts-billing-progress-scroll'
+                : 'accounts-portfolio-scroll',
+          ),
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
@@ -133,8 +146,22 @@ class _YorksAccountsPortfolioScreenState
                 children: [
                   _AccountsHero(
                     eyebrow: _t(language, 'commercial_control'),
-                    title: _t(language, 'portfolio_title'),
-                    body: _t(language, 'portfolio_body'),
+                    title: _t(
+                      language,
+                      widget.controlCentre
+                          ? 'control_centre_title'
+                          : widget.billingProgress
+                          ? 'billing_progress_title'
+                          : 'portfolio_title',
+                    ),
+                    body: _t(
+                      language,
+                      widget.controlCentre
+                          ? 'control_centre_body'
+                          : widget.billingProgress
+                          ? 'billing_progress_body'
+                          : 'portfolio_body',
+                    ),
                     badge: projection?.actorExactRole ?? '',
                   ),
                   if (projection?.canExport == true) ...[

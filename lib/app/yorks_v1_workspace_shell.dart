@@ -272,9 +272,12 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       return null;
     }
 
-    final home = path(RoutePaths.engineerHome)!;
+    final home = path(RoutePaths.engineerHome);
     if (role == YorksV1Role.accountant) {
       final accounts = path(RoutePaths.yorksV1Accounts);
+      final projects = path(RoutePaths.yorksV1AccountsProjects);
+      final claims = path(RoutePaths.yorksV1AccountsClaims);
+      final payments = path(RoutePaths.yorksV1AccountsClientPayments);
       final more = _YorksDestination(
         label: AppStrings.more,
         icon: nativeMobile ? Icons.menu_rounded : Icons.grid_view_outlined,
@@ -283,8 +286,9 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
             : Icons.grid_view_rounded,
         path: RoutePaths.yorksV1MobileMore,
       );
-      return [home, ?accounts, more];
+      return [?accounts, ?projects, ?claims, ?payments, more];
     }
+    final requiredHome = home!;
     if (!nativeMobile) {
       final more = _YorksDestination(
         label: AppStrings.more,
@@ -294,7 +298,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       );
       final preferred = role == YorksV1Role.procurement
           ? <_YorksDestination?>[
-              home,
+              requiredHome,
               path(RoutePaths.yorksV1MaterialRequests),
               path(RoutePaths.yorksV1Inventory),
               teamChatEnabled
@@ -302,7 +306,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                   : path(RoutePaths.yorksV1Dispatches),
             ]
           : <_YorksDestination?>[
-              home,
+              requiredHome,
               path(RoutePaths.yorksV1Projects),
               if (teamChatEnabled) path(RoutePaths.yorksV1TeamChat),
               path(RoutePaths.yorksV1MaterialRequests),
@@ -325,7 +329,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     }
 
     final mobileHome = mobilePath(
-      home,
+      requiredHome,
       Icons.home_outlined,
       Icons.home_rounded,
       mobileLabel: AppStrings.home,
@@ -379,13 +383,80 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     YorksV1CurrentPermissionSnapshotState? permissionState,
     bool accountsEnabled = false,
   }) {
+    final accountantOffice = accountsEnabled && role == YorksV1Role.accountant
+        ? <_YorksDestination>[
+            _YorksDestination(
+              label: YorksV1ShellStrings.accounts,
+              icon: Icons.dashboard_outlined,
+              selectedIcon: Icons.dashboard_rounded,
+              path: RoutePaths.yorksV1Accounts,
+              group: YorksV1ShellStrings.accountantWorkspace,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.projectAccounts,
+              icon: Icons.folder_outlined,
+              selectedIcon: Icons.folder_rounded,
+              path: RoutePaths.yorksV1AccountsProjects,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.billingProgress,
+              icon: Icons.stacked_bar_chart_outlined,
+              selectedIcon: Icons.stacked_bar_chart_rounded,
+              path: RoutePaths.yorksV1AccountsBillingProgress,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.accountsClaims,
+              icon: Icons.request_page_outlined,
+              selectedIcon: Icons.request_page_rounded,
+              path: RoutePaths.yorksV1AccountsClaims,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.receiptsPdc,
+              icon: Icons.account_balance_wallet_outlined,
+              selectedIcon: Icons.account_balance_wallet_rounded,
+              path: RoutePaths.yorksV1AccountsClientPayments,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.supplierBills,
+              icon: Icons.receipt_long_outlined,
+              selectedIcon: Icons.receipt_long_rounded,
+              path: RoutePaths.yorksV1AccountsSupplierBills,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.dueSchedule,
+              icon: Icons.calendar_month_outlined,
+              selectedIcon: Icons.calendar_month_rounded,
+              path: RoutePaths.yorksV1AccountsDueSchedule,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.accountsDocuments,
+              icon: Icons.folder_copy_outlined,
+              selectedIcon: Icons.folder_copy_rounded,
+              path: RoutePaths.yorksV1AccountsDocuments,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.accountsReports,
+              icon: Icons.analytics_outlined,
+              selectedIcon: Icons.analytics_rounded,
+              path: RoutePaths.yorksV1AccountsReports,
+            ),
+            _YorksDestination(
+              label: YorksV1ShellStrings.accountsAuditTrail,
+              icon: Icons.policy_outlined,
+              selectedIcon: Icons.policy_rounded,
+              path: RoutePaths.yorksV1AccountsActivity,
+            ),
+          ]
+        : const <_YorksDestination>[];
     final candidates = <_YorksDestination>[
-      ..._legacyDestinationsFor(
-        role,
-        teamChatEnabled: teamChatEnabled,
-        chatUnread: chatUnread,
-      ),
-      if (accountsEnabled)
+      if (!(accountsEnabled && role == YorksV1Role.accountant))
+        ..._legacyDestinationsFor(
+          role,
+          teamChatEnabled: teamChatEnabled,
+          chatUnread: chatUnread,
+        ),
+      ...accountantOffice,
+      if (accountsEnabled && role != YorksV1Role.accountant)
         _YorksDestination(
           label: YorksV1ShellStrings.accounts,
           icon: Icons.account_balance_wallet_outlined,
@@ -427,18 +498,29 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       final path = destination.path;
       if (path == RoutePaths.engineerHome) return true;
       if (role == YorksV1Role.accountant &&
-          path != RoutePaths.yorksV1Accounts) {
+          path != RoutePaths.yorksV1Accounts &&
+          (path == null ||
+              !path.startsWith('${RoutePaths.yorksV1Accounts}/'))) {
         return false;
       }
-      if (path == RoutePaths.yorksV1Accounts) {
+      if (path == RoutePaths.yorksV1Accounts ||
+          (path?.startsWith('${RoutePaths.yorksV1Accounts}/') ?? false)) {
         final structurallyEligible =
             role == YorksV1Role.admin ||
             role == YorksV1Role.accountant ||
             role == YorksV1Role.projectManager ||
             role == YorksV1Role.seniorMechanicalEngineer;
+        final canViewAccounts = allows(
+          YorksV1CapabilityKeys.viewProjectAccounts,
+          false,
+        );
+        final canViewDestination =
+            path != RoutePaths.yorksV1AccountsSupplierBills ||
+            allows(YorksV1CapabilityKeys.viewSupplierCosts, false);
         return accountsEnabled &&
             structurallyEligible &&
-            allows(YorksV1CapabilityKeys.viewProjectAccounts, false);
+            canViewAccounts &&
+            canViewDestination;
       }
       if (path == RoutePaths.yorksV1Projects) {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);
@@ -689,12 +771,16 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     List<_YorksDestination> destinations,
     String location,
   ) {
-    if (location == RoutePaths.yorksV1Accounts ||
-        location.contains('/accounts')) {
+    if (location.startsWith('${RoutePaths.yorksV1Accounts}/')) {
       for (final destination in destinations) {
-        if (destination.path == RoutePaths.yorksV1Accounts) {
-          return destination;
-        }
+        if (destination.path == location) return destination;
+      }
+    }
+    if (location == RoutePaths.yorksV1Accounts ||
+        (location.startsWith('/yorks/projects/') &&
+            location.contains('/accounts'))) {
+      for (final destination in destinations) {
+        if (destination.path == RoutePaths.yorksV1Accounts) return destination;
       }
     }
     for (final destination in destinations) {
@@ -1555,6 +1641,7 @@ class _YorksProfileDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
+    final language = ref.watch(languageProvider);
     final profile = ref.watch(employeeProvider);
     final isAccountant = role == YorksV1Role.accountant;
     var assignedProjectCount = 0;
@@ -1695,7 +1782,9 @@ class _YorksProfileDialog extends ConsumerWidget {
                     child: _ProfileStat(
                       label: 'Workspace',
                       value: isAccountant
-                          ? 'Accounts rollout locked'
+                          ? YorksV1ShellStrings.accountantWorkspace.active(
+                              language,
+                            )
                           : 'BOQ · MR · Docs',
                     ),
                   ),
@@ -2317,7 +2406,7 @@ TranslatableString _workspaceCopy(YorksV1Role? role) => switch (role) {
   YorksV1Role.projectManager ||
   YorksV1Role.workshopInCharge ||
   YorksV1Role.documentController => YorksV1ShellStrings.engineerWorkspace,
-  YorksV1Role.accountant => YorksV1ShellStrings.operationalWorkspace,
+  YorksV1Role.accountant => YorksV1ShellStrings.accountantWorkspace,
   YorksV1Role.procurement => YorksV1ShellStrings.procurementWorkspace,
   YorksV1Role.admin => YorksV1ShellStrings.managementWorkspace,
   null => YorksV1ShellStrings.operationalWorkspace,
