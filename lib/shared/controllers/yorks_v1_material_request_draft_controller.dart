@@ -688,31 +688,64 @@ class YorksV1MaterialRequestDraftController
     try {
       submitted = await _repository.saveAndSubmit(draft);
     } on YorksV1DomainException catch (error) {
-      var nextDraft = draft;
-      final shouldRefreshIdempotency =
-          error.code != YorksV1DomainErrorCode.conflict &&
-          error.serverCode != null &&
-          (error.serverCode == '22023' || error.serverCode == '55P03');
-      if (shouldRefreshIdempotency) {
-        nextDraft = draft.copyWith(
-          submissionIdempotencyKey: _uuidFactory(),
-          updatedAt: DateTime.now().toUtc(),
-        );
+      if (error.code == YorksV1DomainErrorCode.conflict) {
+        final rebased = await _rebaseAmbiguousInitialSave(draft);
+        if (rebased != null) {
+          try {
+            submitted = await _repository.saveAndSubmit(rebased);
+          } on YorksV1DomainException catch (retryError) {
+            state = YorksV1MaterialRequestDraftState(
+              draft: rebased,
+              status: retryError.code == YorksV1DomainErrorCode.conflict
+                  ? YorksV1MaterialRequestDraftSyncStatus.conflict
+                  : YorksV1MaterialRequestDraftSyncStatus.failed,
+              errorCode: retryError.code,
+            );
+            return null;
+          } catch (_) {
+            state = YorksV1MaterialRequestDraftState(
+              draft: rebased,
+              status: YorksV1MaterialRequestDraftSyncStatus.failed,
+              errorCode: YorksV1DomainErrorCode.backendUnavailable,
+            );
+            return null;
+          }
+        } else {
+          state = YorksV1MaterialRequestDraftState(
+            draft: draft,
+            status: YorksV1MaterialRequestDraftSyncStatus.conflict,
+            errorCode: error.code,
+          );
+          return null;
+        }
+      }
+      if (submitted == null) {
+        var nextDraft = draft;
+        final shouldRefreshIdempotency =
+            error.code != YorksV1DomainErrorCode.conflict &&
+            error.serverCode != null &&
+            (error.serverCode == '22023' || error.serverCode == '55P03');
+        if (shouldRefreshIdempotency) {
+          nextDraft = draft.copyWith(
+            submissionIdempotencyKey: _uuidFactory(),
+            updatedAt: DateTime.now().toUtc(),
+          );
+          state = YorksV1MaterialRequestDraftState(
+            draft: nextDraft,
+            status: YorksV1MaterialRequestDraftSyncStatus.failed,
+            errorCode: error.code,
+          );
+          await _persist(nextDraft);
+        }
         state = YorksV1MaterialRequestDraftState(
           draft: nextDraft,
-          status: YorksV1MaterialRequestDraftSyncStatus.failed,
+          status: error.code == YorksV1DomainErrorCode.conflict
+              ? YorksV1MaterialRequestDraftSyncStatus.conflict
+              : YorksV1MaterialRequestDraftSyncStatus.failed,
           errorCode: error.code,
         );
-        await _persist(nextDraft);
+        return null;
       }
-      state = YorksV1MaterialRequestDraftState(
-        draft: nextDraft,
-        status: error.code == YorksV1DomainErrorCode.conflict
-            ? YorksV1MaterialRequestDraftSyncStatus.conflict
-            : YorksV1MaterialRequestDraftSyncStatus.failed,
-        errorCode: error.code,
-      );
-      return null;
     } catch (error) {
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
@@ -737,6 +770,45 @@ class YorksV1MaterialRequestDraftController
       status: YorksV1MaterialRequestDraftSyncStatus.submitted,
     );
     return submitted;
+  }
+
+  /// Recovers the one safe stale-version case caused by an ambiguous first
+  /// save response: the server committed version 1, while the browser still
+  /// holds version 0. A later version remains a real competing-writer conflict
+  /// and is never rebased automatically.
+  ///
+  /// The remote rows must still be present in the local draft. This permits a
+  /// user to append more rows after the response was lost, while refusing to
+  /// overwrite a different first-save snapshot or a draft changed elsewhere.
+  Future<YorksV1MaterialRequestDraft?> _rebaseAmbiguousInitialSave(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    if (draft.serverRecordVersion != 0) return null;
+    try {
+      final remote = await _repository.getRequest(draft.id);
+      final localLineIds = draft.lines.map((line) => line.id).toSet();
+      final sameDraftBoundary =
+          remote.state.isDraft &&
+          remote.recordVersion == 1 &&
+          remote.projectId == draft.projectId &&
+          remote.scopeId == draft.scopeId &&
+          remote.lines.every((line) => localLineIds.contains(line.id));
+      if (!sameDraftBoundary) return null;
+
+      final rebased = draft.copyWith(
+        serverRecordVersion: remote.recordVersion,
+        submissionIdempotencyKey: _uuidFactory(),
+        updatedAt: DateTime.now().toUtc(),
+      );
+      await _persist(rebased);
+      state = YorksV1MaterialRequestDraftState(
+        draft: rebased,
+        status: YorksV1MaterialRequestDraftSyncStatus.submitting,
+      );
+      return rebased;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> discardLocal({bool requireServerConfirmation = false}) async {

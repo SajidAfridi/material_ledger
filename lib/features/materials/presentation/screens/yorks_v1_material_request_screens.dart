@@ -2501,9 +2501,10 @@ class _DraftForm extends ConsumerWidget {
     final submitted = await controller.submit();
     if (!context.mounted) return null;
     if (submitted == null) {
-      final message = controller.lastErrorCode == YorksV1DomainErrorCode.offline
-          ? YorksV1MaterialRequestStrings.offlineSubmit.primary
-          : YorksV1MaterialRequestStrings.submitFailed.primary;
+      final errorCode = controller.lastErrorCode;
+      final message = errorCode == null
+          ? YorksV1MaterialRequestStrings.submitFailed.primary
+          : YorksV1MaterialRequestStrings.commandFailure(errorCode).primary;
       _snack(context, message);
       return null;
     }

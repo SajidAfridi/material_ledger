@@ -343,6 +343,123 @@ void main() {
     );
 
     test(
+      'recovers an ambiguous first save before submitting newer local rows',
+      () async {
+        final repository = _FakeRequestRepository()
+          ..submitFailures.add(
+            const YorksV1DomainException(
+              YorksV1DomainErrorCode.conflict,
+              serverCode: '40001',
+            ),
+          );
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
+        await controller.addCustomLine();
+        final firstLine = controller.state.draft.lines.single;
+        await controller.updateLine(
+          firstLine.id,
+          (current) => current.copyWith(
+            description: 'Saved server line',
+            quantity: '1',
+            unit: 'Nos',
+          ),
+        );
+        repository.requestResult = _request(
+          requestId: _draftId,
+          version: 1,
+          lines: [
+            firstLine
+                .copyWith(
+                  description: 'Saved server line',
+                  quantity: '1',
+                  unit: 'Nos',
+                )
+                .toRpcJson(),
+          ],
+        );
+        await controller.addCustomLine(afterLineId: firstLine.id);
+        final secondLine = controller.state.draft.lines.last;
+        await controller.updateLine(
+          secondLine.id,
+          (current) => current.copyWith(
+            description: 'New local line',
+            quantity: '2',
+            unit: 'Nos',
+          ),
+        );
+
+        final submitted = await controller.submit();
+
+        expect(submitted?.requestNumber, 'B5TEST-MR001');
+        expect(repository.saveAndSubmitInputs, hasLength(2));
+        expect(repository.saveAndSubmitInputs.first.serverRecordVersion, 0);
+        expect(repository.saveAndSubmitInputs.last.serverRecordVersion, 1);
+        expect(
+          repository.saveAndSubmitInputs.last.submissionIdempotencyKey,
+          isNot(repository.saveAndSubmitInputs.first.submissionIdempotencyKey),
+        );
+        expect(repository.saveAndSubmitInputs.last.lines, hasLength(2));
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.submitted,
+        );
+      },
+    );
+
+    test('keeps later server-version conflicts fail-closed', () async {
+      final repository = _FakeRequestRepository()
+        ..submitFailure = const YorksV1DomainException(
+          YorksV1DomainErrorCode.conflict,
+          serverCode: '40001',
+        );
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: repository,
+        uuidFactory: _Ids().next,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.hydrateFromServer(
+        _request(
+          requestId: _draftId,
+          version: 2,
+          lines: const [
+            {
+              'id': '73000000-0000-4000-8000-000000000010',
+              'display_order': 1,
+              'source_kind': 'custom',
+              'item_description': 'Saved damper',
+              'requested_qty': '2',
+              'unit': 'Nos',
+            },
+          ],
+        ),
+      );
+
+      final submitted = await controller.submit();
+
+      expect(submitted, isNull);
+      expect(repository.saveAndSubmitInputs, hasLength(1));
+      expect(repository.saveAndSubmitInputs.single.serverRecordVersion, 2);
+      expect(
+        controller.state.status,
+        YorksV1MaterialRequestDraftSyncStatus.conflict,
+      );
+      expect(controller.lastErrorCode, YorksV1DomainErrorCode.conflict);
+    });
+
+    test(
       'does not leave the draft in submitting after an unexpected error',
       () async {
         final repository = _FakeRequestRepository()
@@ -1935,6 +2052,8 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   updateForApprovalInputs = [];
   Object? saveFailure;
   Object? submitFailure;
+  final List<Object> submitFailures = [];
+  YorksV1MaterialRequest? requestResult;
   Future<void>? saveDelay;
 
   @override
@@ -1998,6 +2117,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
 
   @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async =>
+      requestResult ??
       _request(requestId: requestId, version: 2, number: 'B5TEST-MR001');
 
   @override
@@ -2036,9 +2156,10 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> saveAndSubmit(
     YorksV1MaterialRequestDraft draft,
   ) async {
+    saveAndSubmitInputs.add(draft);
+    if (submitFailures.isNotEmpty) throw submitFailures.removeAt(0);
     final failure = submitFailure;
     if (failure != null) throw failure;
-    saveAndSubmitInputs.add(draft);
     return _request(requestId: draft.id, version: 2, number: 'B5TEST-MR001');
   }
 
