@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/features/materials/presentation/yorks_v1_feature_action_access.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 
@@ -56,6 +57,36 @@ void main() {
     expect(access.isWritePaused, isTrue);
   });
 
+  test('routine refresh keeps a trusted action available', () {
+    final access = yorksV1FeatureActionAccess(
+      _state(allowed: true, refreshing: true),
+      YorksV1CapabilityKeys.projectsEdit,
+      legacyAllowed: true,
+      projectId: projectId,
+    );
+
+    expect(access.isVisible, isTrue);
+    expect(access.canWrite, isTrue);
+    expect(access.isWritePaused, isFalse);
+  });
+
+  test('transient routine failure retains trusted action availability', () {
+    final access = yorksV1FeatureActionAccess(
+      _state(
+        allowed: true,
+        error: const YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
+        ),
+      ),
+      YorksV1CapabilityKeys.projectsEdit,
+      legacyAllowed: true,
+      projectId: projectId,
+    );
+
+    expect(access.isVisible, isTrue);
+    expect(access.canWrite, isTrue);
+  });
+
   test('shadow capability preserves the supplied legacy decision', () {
     final denied = yorksV1FeatureActionAccess(
       _state(allowed: true, mode: 'shadow'),
@@ -91,6 +122,8 @@ YorksV1CurrentPermissionSnapshotState _state({
   required bool allowed,
   String mode = 'enforced',
   bool stale = false,
+  bool refreshing = false,
+  Object? error,
 }) => YorksV1CurrentPermissionSnapshotState(
   snapshot: YorksV1CurrentPermissionSnapshot.fromRpcJson({
     'schema_version': 1,
@@ -158,6 +191,8 @@ YorksV1CurrentPermissionSnapshotState _state({
       },
     ],
   }),
+  isRefreshing: refreshing,
   isStale: stale,
   isRevisionSignalHealthy: true,
+  error: error,
 );

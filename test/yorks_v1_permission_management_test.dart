@@ -990,7 +990,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         expect(controller.state.snapshot?.revision, 7);
         expect(controller.state.isRefreshing, isTrue);
-        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
 
         deferred.complete(_snapshot(revision: 8));
         await refresh;
@@ -1002,7 +1002,7 @@ void main() {
     );
 
     test(
-      'transient refresh failure keeps painted reads but disables writes',
+      'transient routine failure retains the trusted snapshot and writes',
       () async {
         final repository = _FakePermissionRepository(
           currentSnapshot: _snapshot(),
@@ -1016,8 +1016,12 @@ void main() {
         await controller.refresh();
 
         expect(controller.state.snapshot?.revision, 7);
-        expect(controller.state.isStale, isTrue);
-        expect(controller.state.isTrustedForWrites, isFalse);
+        expect(controller.state.isStale, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
+        expect(
+          controller.state.domainErrorCode,
+          YorksV1DomainErrorCode.backendUnavailable,
+        );
         expect(
           controller.state.allows(
             YorksV1CapabilityKeys.projectsEdit,
@@ -1025,6 +1029,71 @@ void main() {
           ),
           isTrue,
         );
+        controller.dispose();
+      },
+    );
+
+    test('duplicate routine refreshes coalesce into one RPC', () async {
+      final deferred = Completer<YorksV1CurrentPermissionSnapshot>();
+      final repository = _FakePermissionRepository(
+        currentSnapshot: _snapshot(),
+      );
+      final controller = _currentController(repository);
+      await controller.start();
+      expect(repository.currentLoads, 1);
+
+      repository.nextSnapshot = () => deferred.future;
+      final first = controller.refresh();
+      await Future<void>.delayed(Duration.zero);
+      final second = controller.refresh();
+      await second;
+
+      expect(repository.currentLoads, 2);
+      expect(controller.state.isRefreshing, isTrue);
+      expect(controller.state.isTrustedForWrites, isTrue);
+
+      deferred.complete(_snapshot(revision: 8));
+      await first;
+      expect(repository.currentLoads, 2);
+      expect(controller.state.snapshot?.revision, 8);
+      controller.dispose();
+    });
+
+    test(
+      'revision signal pauses writes until fresh authority arrives',
+      () async {
+        final deferred = Completer<YorksV1CurrentPermissionSnapshot>();
+        late Future<void> Function() signal;
+        final repository = _FakePermissionRepository(
+          currentSnapshot: _snapshot(),
+        );
+        final controller = YorksV1CurrentPermissionSnapshotController(
+          enabled: true,
+          authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          client: null,
+          repository: repository,
+          revisionSignalSubscription:
+              ({required onSignal, required onUnavailable}) async {
+                signal = onSignal;
+                return true;
+              },
+          safetyRefreshInterval: const Duration(hours: 1),
+        );
+        await controller.start();
+        expect(controller.state.isTrustedForWrites, isTrue);
+
+        repository.nextSnapshot = () => deferred.future;
+        final refresh = signal();
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.state.snapshot?.revision, 7);
+        expect(controller.state.isStale, isTrue);
+        expect(controller.state.isTrustedForWrites, isFalse);
+
+        deferred.complete(_snapshot(revision: 8));
+        await refresh;
+        expect(controller.state.snapshot?.revision, 8);
+        expect(controller.state.isStale, isFalse);
+        expect(controller.state.isTrustedForWrites, isTrue);
         controller.dispose();
       },
     );
@@ -1079,21 +1148,44 @@ void main() {
       },
     );
 
+    test('short foreground gap does not repeat the permission RPC', () async {
+      var now = DateTime.utc(2026, 8, 24, 9);
+      final repository = _FakePermissionRepository(
+        currentSnapshot: _snapshot(),
+      );
+      final controller = _currentController(repository, now: () => now);
+      await controller.start();
+      expect(repository.currentLoads, 1);
+
+      controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+      now = now.add(const Duration(seconds: 20));
+      controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.currentLoads, 1);
+      expect(controller.state.isTrustedForWrites, isTrue);
+      controller.dispose();
+    });
+
     test(
-      'app resume performs a safety refresh after leaving foreground',
+      'long foreground gap performs one authoritative safety refresh',
       () async {
+        var now = DateTime.utc(2026, 8, 24, 9);
         final repository = _FakePermissionRepository(
           currentSnapshot: _snapshot(),
         );
-        final controller = _currentController(repository);
+        final controller = _currentController(repository, now: () => now);
         await controller.start();
+        expect(repository.currentLoads, 1);
 
         repository.nextSnapshot = () async => _snapshot(revision: 8);
         controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+        now = now.add(const Duration(minutes: 3));
         controller.didChangeAppLifecycleState(AppLifecycleState.resumed);
-        await _waitFor(() => repository.currentLoads >= 3);
+        await _waitFor(() => repository.currentLoads >= 2);
 
         expect(controller.state.snapshot?.revision, 8);
+        expect(repository.currentLoads, 2);
         controller.dispose();
       },
     );
@@ -1110,7 +1202,7 @@ void main() {
       repository.nextSnapshot = () async => _snapshot(revision: 8);
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
-      expect(repository.currentLoads, greaterThanOrEqualTo(3));
+      expect(repository.currentLoads, greaterThanOrEqualTo(2));
       expect(controller.state.snapshot?.revision, 8);
       controller.dispose();
     });
@@ -1476,8 +1568,9 @@ class _FakePermissionRepository implements YorksV1PermissionRepository {
 }
 
 YorksV1CurrentPermissionSnapshotController _currentController(
-  YorksV1PermissionRepository repository,
-) => YorksV1CurrentPermissionSnapshotController(
+  YorksV1PermissionRepository repository, {
+  DateTime Function()? now,
+}) => YorksV1CurrentPermissionSnapshotController(
   enabled: true,
   authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   client: null,
@@ -1485,4 +1578,5 @@ YorksV1CurrentPermissionSnapshotController _currentController(
   revisionSignalSubscription:
       ({required onSignal, required onUnavailable}) async => true,
   safetyRefreshInterval: const Duration(hours: 1),
+  now: now,
 );

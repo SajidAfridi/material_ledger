@@ -89,8 +89,9 @@ class YorksV1FeatureActionAccess {
   final bool canWrite;
   final YorksV1PermissionCapabilityAuthorizationMode? authorizationMode;
 
-  /// A confirmed allow remains visible during a routine refresh, but the
-  /// mutation pauses until the revision channel and snapshot are trustworthy.
+  /// A confirmed allow remains usable during a routine background refresh.
+  /// Writes pause only when the revision channel is unhealthy or an actual
+  /// authority change has made the retained snapshot stale.
   bool get isWritePaused => isVisible && !canWrite;
 }
 
@@ -128,9 +129,9 @@ YorksV1FeatureActionAccess yorksV1FeatureActionAccess(
   };
   return YorksV1FeatureActionAccess(
     isVisible: allowed,
-    // Shadow preserves the legacy structural decision, while AP-16 still
-    // pauses every mutation until the confirmed snapshot and its invalidation
-    // channel are healthy.
+    // Shadow preserves the legacy structural decision. AP-16 keeps a trusted
+    // decision usable during routine polling, but pauses every mutation when
+    // the invalidation channel is unhealthy or the snapshot is stale.
     canWrite: allowed && state.isTrustedForWrites,
     authorizationMode: access.authorizationMode,
   );

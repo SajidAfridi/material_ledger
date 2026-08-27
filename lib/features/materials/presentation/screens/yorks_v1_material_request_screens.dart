@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6202,6 +6203,8 @@ class _MaterialSuggestionPanel extends StatelessWidget {
     required this.maxHeight,
     this.customQuery,
     this.onKeepCustom,
+    this.highlightedId,
+    this.onHovered,
   });
 
   final List<YorksV1MaterialRequestInventorySuggestion> values;
@@ -6210,6 +6213,8 @@ class _MaterialSuggestionPanel extends StatelessWidget {
   final double maxHeight;
   final String? customQuery;
   final VoidCallback? onKeepCustom;
+  final String? highlightedId;
+  final ValueChanged<YorksV1MaterialRequestInventorySuggestion>? onHovered;
 
   @override
   Widget build(BuildContext context) {
@@ -6262,13 +6267,19 @@ class _MaterialSuggestionPanel extends StatelessWidget {
           InkWell(
             key: ValueKey('mr-suggestion-${item.id}'),
             onTap: () => onSelected(item),
+            onHover: (hovering) {
+              if (hovering) onHovered?.call(item);
+            },
             child: Container(
               constraints: const BoxConstraints(
                 minHeight: AppSpacing.minTapTarget,
               ),
               padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.line)),
+              decoration: BoxDecoration(
+                color: highlightedId == item.id
+                    ? AppColors.blue.withValues(alpha: 0.06)
+                    : null,
+                border: const Border(bottom: BorderSide(color: AppColors.line)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -6385,6 +6396,7 @@ class _MaterialSuggestionPanel extends StatelessWidget {
     return Align(
       alignment: AlignmentDirectional.topStart,
       child: Material(
+        key: const ValueKey('mr-suggestion-panel'),
         elevation: 8,
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -6397,6 +6409,55 @@ class _MaterialSuggestionPanel extends StatelessWidget {
             children: children,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MaterialSuggestionOverlayGeometry {
+  const _MaterialSuggestionOverlayGeometry({
+    required this.width,
+    required this.height,
+    required this.offset,
+  });
+
+  final double width;
+  final double height;
+  final Offset offset;
+
+  static _MaterialSuggestionOverlayGeometry resolve({
+    required BuildContext fieldContext,
+    required BuildContext overlayContext,
+    required double preferredWidth,
+    required double preferredHeight,
+  }) {
+    final fieldBox = fieldContext.findRenderObject()! as RenderBox;
+    final overlayBox = overlayContext.findRenderObject()! as RenderBox;
+    final viewport = overlayBox.size;
+    final origin = fieldBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+    const margin = 16.0;
+    const gap = 6.0;
+    final width = math
+        .min(preferredWidth, math.max(280, viewport.width - (margin * 2)))
+        .toDouble();
+    final below = viewport.height - origin.dy - fieldBox.size.height - margin;
+    final above = origin.dy - margin;
+    final opensBelow =
+        below >= math.min(220, preferredHeight) || below >= above;
+    final availableHeight = opensBelow ? below : above;
+    final height = math
+        .min(preferredHeight, math.max(140, availableHeight))
+        .toDouble();
+    final desiredX = origin.dx;
+    final clampedX = desiredX
+        .clamp(margin, viewport.width - margin - width)
+        .toDouble();
+    return _MaterialSuggestionOverlayGeometry(
+      width: width,
+      height: height,
+      offset: Offset(
+        clampedX - origin.dx,
+        opensBelow ? fieldBox.size.height + gap : -height - gap,
       ),
     );
   }
@@ -6424,7 +6485,282 @@ YorksV1MaterialRequestLine _applyMaterialSuggestion(
   quantityIsSuggested: false,
 );
 
-class _MobileInventoryDescriptionField extends ConsumerStatefulWidget {
+class _AnchoredMaterialDescriptionAutocomplete extends ConsumerStatefulWidget {
+  const _AnchoredMaterialDescriptionAutocomplete({
+    required this.textController,
+    required this.focusNode,
+    required this.enabled,
+    required this.projectId,
+    required this.scopeId,
+    required this.onSelected,
+    this.onChanged,
+    this.onCommitted,
+    this.errorText,
+    this.fieldKey,
+    this.labelText,
+    this.hintText,
+    this.isDense = false,
+    this.contentPadding,
+    this.suffixIconSize = 19,
+    this.preferredWidth = 560,
+    this.preferredHeight = 410,
+  });
+
+  final TextEditingController textController;
+  final FocusNode focusNode;
+  final bool enabled;
+  final String? projectId;
+  final String? scopeId;
+  final ValueChanged<YorksV1MaterialRequestInventorySuggestion> onSelected;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onCommitted;
+  final String? errorText;
+  final Key? fieldKey;
+  final String? labelText;
+  final String? hintText;
+  final bool isDense;
+  final EdgeInsetsGeometry? contentPadding;
+  final double suffixIconSize;
+  final double preferredWidth;
+  final double preferredHeight;
+
+  @override
+  ConsumerState<_AnchoredMaterialDescriptionAutocomplete> createState() =>
+      _AnchoredMaterialDescriptionAutocompleteState();
+}
+
+class _AnchoredMaterialDescriptionAutocompleteState
+    extends ConsumerState<_AnchoredMaterialDescriptionAutocomplete> {
+  final LayerLink _layerLink = LayerLink();
+  final GlobalKey _anchorKey = GlobalKey();
+  OverlayEntry? _overlayEntry;
+  List<YorksV1MaterialRequestInventorySuggestion> _values = const [];
+  int _highlightedIndex = 0;
+  int _searchEpoch = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_handleFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant _AnchoredMaterialDescriptionAutocomplete oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_handleFocusChanged);
+      widget.focusNode.addListener(_handleFocusChanged);
+    }
+    if (!widget.enabled && oldWidget.enabled) _hideOptions();
+  }
+
+  void _handleFocusChanged() {
+    if (!widget.focusNode.hasFocus) {
+      widget.onCommitted?.call();
+      _hideOptions();
+    }
+  }
+
+  Future<void> _search(String rawQuery) async {
+    final epoch = ++_searchEpoch;
+    final query = rawQuery.trim();
+    final projectId = widget.projectId?.trim();
+    final scopeId = widget.scopeId?.trim();
+    if (!widget.enabled ||
+        projectId == null ||
+        projectId.isEmpty ||
+        scopeId == null ||
+        scopeId.isEmpty ||
+        query.length < 2) {
+      _values = const [];
+      _hideOptions();
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 220));
+    if (!mounted || epoch != _searchEpoch) return;
+    try {
+      final results = await ref.read(
+        yorksV1MaterialRequestInventorySearchProvider(
+          YorksV1MaterialRequestInventorySearchKey(
+            projectId: projectId,
+            scopeId: scopeId,
+            query: query,
+          ),
+        ).future,
+      );
+      if (!mounted || epoch != _searchEpoch) return;
+      _values = results;
+      _highlightedIndex = 0;
+      if (_values.isEmpty || !widget.focusNode.hasFocus) {
+        _hideOptions();
+      } else {
+        _showOptions();
+      }
+    } catch (_) {
+      if (!mounted || epoch != _searchEpoch) return;
+      _values = const [];
+      _hideOptions();
+    }
+  }
+
+  void _showOptions() {
+    final anchorContext = _anchorKey.currentContext;
+    final overlayState = Overlay.maybeOf(context, rootOverlay: true);
+    if (anchorContext == null || overlayState == null) return;
+    final geometry = _MaterialSuggestionOverlayGeometry.resolve(
+      fieldContext: anchorContext,
+      overlayContext: overlayState.context,
+      preferredWidth: widget.preferredWidth,
+      preferredHeight: widget.preferredHeight,
+    );
+    _overlayEntry ??= OverlayEntry(
+      builder: (_) {
+        return Positioned.fill(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CompositedTransformFollower(
+                link: _layerLink,
+                showWhenUnlinked: false,
+                offset: geometry.offset,
+                child: SizedBox(
+                  width: geometry.width,
+                  child: _MaterialSuggestionPanel(
+                    values: _values,
+                    onSelected: _select,
+                    maxWidth: geometry.width,
+                    maxHeight: geometry.height,
+                    customQuery: widget.textController.text,
+                    onKeepCustom: _keepCustom,
+                    highlightedId: _values.isEmpty
+                        ? null
+                        : _values[_highlightedIndex].id,
+                    onHovered: (item) {
+                      final index = _values.indexOf(item);
+                      if (index < 0 || index == _highlightedIndex) return;
+                      _highlightedIndex = index;
+                      _overlayEntry?.markNeedsBuild();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (_overlayEntry!.mounted) {
+      _overlayEntry!.markNeedsBuild();
+    } else {
+      overlayState.insert(_overlayEntry!);
+    }
+  }
+
+  void _select(YorksV1MaterialRequestInventorySuggestion suggestion) {
+    widget.textController.value = TextEditingValue(
+      text: suggestion.description,
+      selection: TextSelection.collapsed(offset: suggestion.description.length),
+    );
+    widget.onSelected(suggestion);
+    _hideOptions();
+  }
+
+  void _keepCustom() {
+    widget.onChanged?.call(widget.textController.text);
+    widget.onCommitted?.call();
+    _hideOptions();
+    widget.focusNode.unfocus();
+  }
+
+  void _hideOptions() {
+    _overlayEntry?.remove();
+    _overlayEntry?.dispose();
+    _overlayEntry = null;
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || _overlayEntry == null) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      _hideOptions();
+      return KeyEventResult.handled;
+    }
+    if (_values.isEmpty) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _highlightedIndex = (_highlightedIndex + 1) % _values.length;
+      _overlayEntry?.markNeedsBuild();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _highlightedIndex =
+          (_highlightedIndex - 1 + _values.length) % _values.length;
+      _overlayEntry?.markNeedsBuild();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_handleFocusChanged);
+    _hideOptions();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: const ValueKey('mr-material-description-autocomplete'),
+    child: Focus(
+      canRequestFocus: false,
+      onKeyEvent: _handleKeyEvent,
+      child: CompositedTransformTarget(
+        key: _anchorKey,
+        link: _layerLink,
+        child: TextFormField(
+          key: widget.fieldKey,
+          controller: widget.textController,
+          focusNode: widget.focusNode,
+          enabled: widget.enabled,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (value) {
+            widget.onChanged?.call(value);
+            unawaited(_search(value));
+          },
+          onFieldSubmitted: (_) {
+            if (_values.isNotEmpty && _overlayEntry != null) {
+              _select(_values[_highlightedIndex]);
+            } else {
+              widget.onCommitted?.call();
+            }
+          },
+          onTapOutside: (_) => widget.focusNode.unfocus(),
+          decoration: InputDecoration(
+            isDense: widget.isDense,
+            labelText: widget.labelText,
+            hintText: widget.hintText,
+            suffixIcon:
+                widget.enabled &&
+                    widget.projectId != null &&
+                    widget.scopeId != null
+                ? Icon(
+                    Icons.search_rounded,
+                    size: widget.suffixIconSize,
+                    color: AppColors.muted,
+                  )
+                : null,
+            contentPadding: widget.contentPadding,
+            errorText: widget.errorText,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _MobileInventoryDescriptionField extends StatefulWidget {
   const _MobileInventoryDescriptionField({
     required this.controller,
     required this.projectId,
@@ -6444,52 +6780,13 @@ class _MobileInventoryDescriptionField extends ConsumerStatefulWidget {
   final String? errorText;
 
   @override
-  ConsumerState<_MobileInventoryDescriptionField> createState() =>
+  State<_MobileInventoryDescriptionField> createState() =>
       _MobileInventoryDescriptionFieldState();
 }
 
 class _MobileInventoryDescriptionFieldState
-    extends ConsumerState<_MobileInventoryDescriptionField> {
+    extends State<_MobileInventoryDescriptionField> {
   final FocusNode _focusNode = FocusNode();
-  int _searchEpoch = 0;
-
-  Future<Iterable<YorksV1MaterialRequestInventorySuggestion>> _options(
-    TextEditingValue value,
-  ) async {
-    final epoch = ++_searchEpoch;
-    final query = value.text.trim();
-    final projectId = widget.projectId?.trim();
-    final scopeId = widget.scopeId?.trim();
-    if (!widget.enabled ||
-        projectId == null ||
-        projectId.isEmpty ||
-        scopeId == null ||
-        scopeId.isEmpty ||
-        query.length < 2) {
-      return const <YorksV1MaterialRequestInventorySuggestion>[];
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 220));
-    if (!mounted || epoch != _searchEpoch) {
-      return const <YorksV1MaterialRequestInventorySuggestion>[];
-    }
-    try {
-      final results = await ref.read(
-        yorksV1MaterialRequestInventorySearchProvider(
-          YorksV1MaterialRequestInventorySearchKey(
-            projectId: projectId,
-            scopeId: scopeId,
-            query: query,
-          ),
-        ).future,
-      );
-      if (!mounted || epoch != _searchEpoch) {
-        return const <YorksV1MaterialRequestInventorySuggestion>[];
-      }
-      return results;
-    } catch (_) {
-      return const <YorksV1MaterialRequestInventorySuggestion>[];
-    }
-  }
 
   @override
   void dispose() {
@@ -6499,41 +6796,18 @@ class _MobileInventoryDescriptionFieldState
 
   @override
   Widget build(BuildContext context) =>
-      RawAutocomplete<YorksV1MaterialRequestInventorySuggestion>(
-        textEditingController: widget.controller,
+      _AnchoredMaterialDescriptionAutocomplete(
+        textController: widget.controller,
         focusNode: _focusNode,
-        displayStringForOption: (option) => option.description,
-        optionsBuilder: _options,
+        enabled: widget.enabled,
+        projectId: widget.projectId,
+        scopeId: widget.scopeId,
         onSelected: widget.onSelected,
-        fieldViewBuilder: (context, controller, focusNode, onSubmitted) =>
-            TextFormField(
-              controller: controller,
-              focusNode: focusNode,
-              enabled: widget.enabled,
-              textCapitalization: TextCapitalization.sentences,
-              onChanged: widget.onEdited,
-              onFieldSubmitted: (_) => onSubmitted(),
-              decoration: InputDecoration(
-                labelText:
-                    YorksV1MaterialRequestStrings.itemDescription.primary,
-                suffixIcon: const Icon(Icons.search_rounded, size: 19),
-                errorText: widget.errorText,
-              ),
-            ),
-        optionsViewBuilder: (context, select, options) {
-          final values = options.toList(growable: false);
-          return _MaterialSuggestionPanel(
-            values: values,
-            onSelected: select,
-            maxWidth: 360,
-            maxHeight: 390,
-            customQuery: widget.controller.text,
-            onKeepCustom: () {
-              widget.onEdited?.call(widget.controller.text);
-              _focusNode.unfocus();
-            },
-          );
-        },
+        onChanged: widget.onEdited,
+        labelText: YorksV1MaterialRequestStrings.itemDescription.primary,
+        errorText: widget.errorText,
+        preferredWidth: 480,
+        preferredHeight: 390,
       );
 }
 
@@ -7090,7 +7364,7 @@ class _MrTableCell extends StatelessWidget {
 /// engineer gets useful matches while typing, without leaving the row.
 /// Selecting a result copies only the trusted non-commercial descriptive
 /// projection; quantity remains deliberate user input.
-class _InventoryDescriptionField extends ConsumerStatefulWidget {
+class _InventoryDescriptionField extends StatefulWidget {
   const _InventoryDescriptionField({
     required this.line,
     required this.controller,
@@ -7108,16 +7382,15 @@ class _InventoryDescriptionField extends ConsumerStatefulWidget {
   final String? errorText;
 
   @override
-  ConsumerState<_InventoryDescriptionField> createState() =>
+  State<_InventoryDescriptionField> createState() =>
       _InventoryDescriptionFieldState();
 }
 
 class _InventoryDescriptionFieldState
-    extends ConsumerState<_InventoryDescriptionField> {
+    extends State<_InventoryDescriptionField> {
   late final TextEditingController _textController;
   late final FocusNode _focusNode;
   late String _lastCommitted;
-  int _searchEpoch = 0;
 
   @override
   void initState() {
@@ -7156,44 +7429,6 @@ class _InventoryDescriptionFieldState
     );
   }
 
-  Future<Iterable<YorksV1MaterialRequestInventorySuggestion>> _options(
-    TextEditingValue value,
-  ) async {
-    final epoch = ++_searchEpoch;
-    final query = value.text.trim();
-    final projectId = widget.projectId?.trim();
-    final scopeId = widget.scopeId?.trim();
-    if (!widget.enabled ||
-        projectId == null ||
-        projectId.isEmpty ||
-        scopeId == null ||
-        scopeId.isEmpty ||
-        query.length < 2) {
-      return const <YorksV1MaterialRequestInventorySuggestion>[];
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 220));
-    if (!mounted || epoch != _searchEpoch) {
-      return const <YorksV1MaterialRequestInventorySuggestion>[];
-    }
-    try {
-      final results = await ref.read(
-        yorksV1MaterialRequestInventorySearchProvider(
-          YorksV1MaterialRequestInventorySearchKey(
-            projectId: projectId,
-            scopeId: scopeId,
-            query: query,
-          ),
-        ).future,
-      );
-      if (!mounted || epoch != _searchEpoch) {
-        return const <YorksV1MaterialRequestInventorySuggestion>[];
-      }
-      return results;
-    } catch (_) {
-      return const <YorksV1MaterialRequestInventorySuggestion>[];
-    }
-  }
-
   void _select(YorksV1MaterialRequestInventorySuggestion suggestion) {
     _lastCommitted = suggestion.description;
     widget.controller.updateLine(
@@ -7213,58 +7448,22 @@ class _InventoryDescriptionFieldState
 
   @override
   Widget build(BuildContext context) =>
-      RawAutocomplete<YorksV1MaterialRequestInventorySuggestion>(
-        textEditingController: _textController,
+      _AnchoredMaterialDescriptionAutocomplete(
+        textController: _textController,
         focusNode: _focusNode,
-        optionsViewOpenDirection: OptionsViewOpenDirection.up,
-        displayStringForOption: (option) => option.description,
-        optionsBuilder: _options,
+        enabled: widget.enabled,
+        projectId: widget.projectId,
+        scopeId: widget.scopeId,
         onSelected: _select,
-        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) =>
-            TextFormField(
-              key: ValueKey('${widget.line.id}-description'),
-              controller: controller,
-              focusNode: focusNode,
-              enabled: widget.enabled,
-              textCapitalization: TextCapitalization.sentences,
-              onFieldSubmitted: (_) {
-                _commit();
-                onFieldSubmitted();
-              },
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: YorksV1MaterialRequestStrings.itemDescription.primary,
-                suffixIcon:
-                    widget.enabled &&
-                        widget.projectId != null &&
-                        widget.scopeId != null
-                    ? const Icon(
-                        Icons.search_rounded,
-                        size: 17,
-                        color: AppColors.muted,
-                      )
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 9,
-                ),
-                errorText: widget.errorText,
-              ),
-            ),
-        optionsViewBuilder: (context, onSelected, options) {
-          final values = options.toList(growable: false);
-          return _MaterialSuggestionPanel(
-            values: values,
-            onSelected: onSelected,
-            maxWidth: 540,
-            maxHeight: 410,
-            customQuery: _textController.text,
-            onKeepCustom: () {
-              _commit();
-              _focusNode.unfocus();
-            },
-          );
-        },
+        onCommitted: _commit,
+        fieldKey: ValueKey('${widget.line.id}-description'),
+        hintText: YorksV1MaterialRequestStrings.itemDescription.primary,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+        errorText: widget.errorText,
+        preferredWidth: 560,
+        preferredHeight: 410,
+        suffixIconSize: 17,
       );
 }
 

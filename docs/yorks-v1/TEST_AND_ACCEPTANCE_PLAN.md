@@ -60,6 +60,8 @@ slices extend the same stable sequence without renumbering those originals.
 | AT-38 | External readiness is auditable but nonblocking by default; after Admin publishes enforcement, unconfirmed positive external lines are rejected atomically and confirmed lines with optional date/reference succeed. | arrangement model/widget/RPC/atomic pgTAP |
 | AT-39 | Procurement cannot create a replacement; authorized Engineering/Admin can create one linked private Draft only after explicit cancellation of a saved all-unavailable request, with idempotent retry and exact request/line provenance. | repository/controller/RPC/RLS/idempotency/pgTAP |
 | AT-40 | Phase 3 Admin switches, desktop arrangement row, 360px editor and 360px replacement card remain localized, bounded, keyboard/touch usable and free of client-only authority. | widget/responsive visual/accessibility |
+| AT-41 | MR description suggestions remain anchored to the active field, use a readable grouped BOQ/inventory panel with descriptive metadata, fit the viewport at 1366px, tablet and mobile widths, and copy no commercial value or quantity. | repository/widget/golden/responsive visual |
+| AT-42 | Publishing or discarding Configuration changes clears staged settings/actions with production-safe primary-key predicates; a reviewed non-system category archive and controlled-unit creation publish atomically without weakening authority, history, audit, validation or idempotency. | migration/pgTAP/control-plane regression |
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
@@ -294,11 +296,13 @@ Never waive a failed security/quantity test to meet the rapid-demo timebox.
 - AP-16: the current-user provider initiates its revision subscription before
   the first protected fetch. A confirmed initial snapshot may render read-only
   while the channel joins, but every mutation stays disabled until both the
-  snapshot and invalidation channel are healthy. The provider retains the last
-  confirmed snapshot during routine refresh, purges on
-  logout/inactive/authorization failure, polls safely if Realtime is
-  unavailable, and atomically updates navigation, search targets and actions
-  after a server-confirmed revision.
+  snapshot and invalidation channel are healthy. Once trusted, the provider
+  retains the last confirmed snapshot and keeps eligible actions available
+  during coalesced routine refreshes. An actual revision signal marks that
+  snapshot stale and pauses writes until the replacement is confirmed. The
+  provider purges on logout/inactive/authorization failure, polls safely if
+  Realtime is unavailable, and atomically updates navigation, search targets
+  and actions after a server-confirmed revision.
 - AP-17: User Management presents inherited/granted/denied/protected/shadow
   states, reasoned review, conflict recovery and append-only history at 1366,
   1024, 390 and 360px with keyboard/focus, 200% text, secondary language,

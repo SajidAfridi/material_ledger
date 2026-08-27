@@ -274,9 +274,7 @@ void main() {
       await tester.tap(find.text('Add Custom Item'));
       await tester.pumpAndSettle();
       final description = find.descendant(
-        of: find.byType(
-          RawAutocomplete<YorksV1MaterialRequestInventorySuggestion>,
-        ),
+        of: find.byKey(const ValueKey('mr-material-description-autocomplete')),
         matching: find.byType(TextFormField),
       );
       expect(description, findsOneWidget);
@@ -284,6 +282,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Flexible duct'), findsOneWidget);
+      final panelSize = tester.getSize(
+        find.byKey(const ValueKey('mr-suggestion-panel')),
+      );
+      expect(panelSize.width, greaterThanOrEqualTo(540));
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_suggestion_overlay_desktop.png'),
+      );
       expect(
         find.byKey(const ValueKey('mr-suggestion-group-scope_boq')),
         findsOneWidget,
@@ -1065,6 +1071,74 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final testCase in const [
+    (name: 'mobile', size: Size(390, 844), minimumPanelWidth: 350.0),
+    (name: 'tablet', size: Size(700, 1000), minimumPanelWidth: 470.0),
+  ]) {
+    testWidgets(
+      '${testCase.name} custom material keeps rich suggestions anchored and readable',
+      (tester) async {
+        await _setViewport(tester, testCase.size);
+        final repository = await _pumpDraft(tester);
+        repository.inventorySuggestions = const [
+          YorksV1MaterialRequestInventorySuggestion(
+            id: 'boq-row-mobile-duct',
+            source: YorksV1MaterialRequestSuggestionSource.selectedScopeBoq,
+            description: 'Flexible duct',
+            brandOrigin: 'Superflex',
+            size: '12 inch',
+            model: 'FD-12',
+            unit: 'Meter',
+            sourceBoqGroupId: 'boq-group-duct',
+            sourceBoqRowId: 'boq-row-mobile-duct',
+            sourceScopeId: 'scope-common',
+            sourceScopeName: 'Common / All Buildings',
+          ),
+        ];
+        if (find
+            .byKey(const ValueKey('mobile-mr-primary-action'))
+            .evaluate()
+            .isNotEmpty) {
+          await _continueToMaterials(tester);
+        }
+        await tester.ensureVisible(find.text('Add Custom Item').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Add Custom Item').first);
+        await tester.pumpAndSettle();
+
+        final description = find.descendant(
+          of: find.byKey(
+            const ValueKey('mr-material-description-autocomplete'),
+          ),
+          matching: find.byType(TextFormField),
+        );
+        await tester.enterText(description, 'flex');
+        await tester.pumpAndSettle();
+
+        expect(find.text('Flexible duct'), findsOneWidget);
+        final panelSize = tester.getSize(
+          find.byKey(const ValueKey('mr-suggestion-panel')),
+        );
+        expect(
+          panelSize.width,
+          greaterThanOrEqualTo(testCase.minimumPanelWidth),
+        );
+        expect(panelSize.width, lessThanOrEqualTo(testCase.size.width - 32));
+        expect(find.textContaining('12 inch'), findsOneWidget);
+        expect(find.textContaining('FD-12'), findsOneWidget);
+        expect(find.textContaining('Superflex'), findsOneWidget);
+        expect(find.textContaining('Common / All Buildings'), findsWidgets);
+        await expectLater(
+          find.byType(MaterialApp),
+          matchesGoldenFile(
+            'goldens/mobile_batch3/mr_suggestion_overlay_${testCase.name}.png',
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('mobile custom material explains missing fields on action', (
     tester,

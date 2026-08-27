@@ -312,8 +312,19 @@ workspaces predictable:
   not claim success or block editing.
 
 Desktop, tablet and mobile use the same facts. Mobile presents one paged list
-and 44px controls rather than shrinking the desktop table; realtime and
-foreground refresh retain the last authorized projection while updating.
+and 44px controls rather than shrinking the desktop table. Realtime and
+foreground refresh retain the last authorized projection while updating;
+eligible actions remain available during a routine refresh while the revision
+channel is healthy, and pause only when a real revision makes that projection
+stale or the channel becomes unavailable.
+
+Description autocomplete remains attached to the active material field and
+uses the available viewport instead of inheriting a narrow spreadsheet-cell
+width. Results are grouped by selected-scope BOQ, project BOQ and Inventory,
+show trusted size/model/unit/brand/source metadata, and provide an explicit
+keep-as-custom action. The same panel is capped within 16px viewport margins on
+desktop, tablet and mobile; it may open above only when the visible space below
+the active field cannot contain a usable result list.
 
 Unauthorized viewers receive a non-commercial table with no cost columns.
 
