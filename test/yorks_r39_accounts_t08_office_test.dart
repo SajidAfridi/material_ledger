@@ -239,6 +239,88 @@ void main() {
     );
   });
 
+  testWidgets('supplier bills use the completed desktop register language', (
+    tester,
+  ) async {
+    await _pumpOffice(
+      tester,
+      const Size(1366, 900),
+      section: YorksAccountsOfficeSection.supplierBills,
+      projection: YorksAccountsOfficeProjection.fromRpcJson(
+        _sectionJson(YorksAccountsOfficeSection.supplierBills),
+      ),
+    );
+
+    expect(find.text('Supplier Bills'), findsWidgets);
+    expect(find.text('Total Incl. VAT'), findsWidgets);
+    expect(find.text('Match status'), findsOneWidget);
+    expect(find.text('Fully Matched'), findsOneWidget);
+    expect(find.text('AED 522,460.00'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksAccountsOfficeScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_accounts_t09_supplier_bills_desktop.png',
+      ),
+    );
+  });
+
+  testWidgets('receipts and PDC use a focused mobile record card', (
+    tester,
+  ) async {
+    await _pumpOffice(
+      tester,
+      const Size(390, 844),
+      section: YorksAccountsOfficeSection.clientPayments,
+      projection: YorksAccountsOfficeProjection.fromRpcJson(
+        _sectionJson(YorksAccountsOfficeSection.clientPayments),
+      ),
+    );
+
+    expect(find.byType(DataTable), findsNothing);
+    expect(find.text('PDC'), findsWidgets);
+    await expectLater(
+      find.byType(YorksAccountsOfficeScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_accounts_t09_receipts_pdc_mobile.png',
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.text('First Gulf Bank'),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('First Gulf Bank'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('due schedule shows record type and truthful balances', (
+    tester,
+  ) async {
+    await _pumpOffice(
+      tester,
+      const Size(1366, 900),
+      section: YorksAccountsOfficeSection.dueSchedule,
+      projection: YorksAccountsOfficeProjection.fromRpcJson(
+        _sectionJson(YorksAccountsOfficeSection.dueSchedule),
+      ),
+    );
+
+    expect(find.text('Due Schedule'), findsOneWidget);
+    expect(find.text('Record type'), findsOneWidget);
+    expect(find.text('Client invoice'), findsOneWidget);
+    expect(find.text('Still Due'), findsWidgets);
+    expect(find.text('AED 522,460.00'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksAccountsOfficeScreen),
+      matchesGoldenFile(
+        'goldens/yorks_r39_accounts_t09_due_schedule_desktop.png',
+      ),
+    );
+  });
+
   testWidgets('office refresh keeps confirmed rows visible with progress', (
     tester,
   ) async {
@@ -270,6 +352,8 @@ Future<void> _pumpOffice(
   WidgetTester tester,
   Size size, {
   YorksAccountsOfficeRepository? repository,
+  YorksAccountsOfficeSection section = YorksAccountsOfficeSection.claims,
+  YorksAccountsOfficeProjection? projection,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -298,15 +382,12 @@ Future<void> _pumpOffice(
         yorksAccountsOfficeRepositoryProvider.overrideWithValue(
           repository ??
               _OfficeRepository(
-                YorksAccountsOfficeProjection.fromRpcJson(_officeJson()),
+                projection ??
+                    YorksAccountsOfficeProjection.fromRpcJson(_officeJson()),
               ),
         ),
       ],
-      child: const MaterialApp(
-        home: YorksAccountsOfficeScreen(
-          section: YorksAccountsOfficeSection.claims,
-        ),
-      ),
+      child: MaterialApp(home: YorksAccountsOfficeScreen(section: section)),
     ),
   );
   await tester.pumpAndSettle();
@@ -406,3 +487,48 @@ Map<String, dynamic> _officeJson({
     },
   ],
 };
+
+Map<String, dynamic> _sectionJson(YorksAccountsOfficeSection section) {
+  final json = _officeJson();
+  json['section'] = section.wireValue;
+  final item = Map<String, dynamic>.from(
+    (json['items'] as List<dynamic>).single as Map<String, dynamic>,
+  );
+  switch (section) {
+    case YorksAccountsOfficeSection.clientPayments:
+      item
+        ..['reference'] = 'PDC-0048'
+        ..['secondary_reference'] = 'INV-0048'
+        ..['status'] = 'deposited'
+        ..['record_kind'] = 'pdc'
+        ..['metadata'] = <String, dynamic>{
+          'bank_name': 'First Gulf Bank',
+          'record_version': 2,
+        };
+    case YorksAccountsOfficeSection.supplierBills:
+      item
+        ..['reference'] = 'SUP-YRA313-048'
+        ..['secondary_reference'] = 'LPO-313-048'
+        ..['party'] = 'Gulf Air Controls LLC'
+        ..['status'] = 'approved'
+        ..['record_kind'] = 'supplier_bill'
+        ..['metadata'] = <String, dynamic>{
+          'match_status': 'fully_matched',
+          'vat_amount': '81091.00',
+          'record_version': 2,
+        };
+    case YorksAccountsOfficeSection.dueSchedule:
+      item
+        ..['reference'] = 'INV-0048'
+        ..['secondary_reference'] = 'CLM-00048'
+        ..['status'] = 'overdue'
+        ..['record_kind'] = 'client_invoice_due'
+        ..['metadata'] = <String, dynamic>{'invoice_status': 'certified'};
+    case YorksAccountsOfficeSection.claims:
+    case YorksAccountsOfficeSection.documents:
+    case YorksAccountsOfficeSection.activity:
+      break;
+  }
+  json['items'] = [item];
+  return json;
+}

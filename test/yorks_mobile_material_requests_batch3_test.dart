@@ -25,6 +25,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_workspace_presentation_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_boq_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,6 +114,52 @@ void main() {
     expect(find.byTooltip('Add custom row here'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'desktop draft starts in focused mode and keeps request context optional',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      await _pumpDraft(tester);
+
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      expect(scope.read(yorksV1WorkspaceSidebarExpandedProvider), isFalse);
+      expect(
+        find.byKey(const ValueKey('mr-request-context-panel')),
+        findsNothing,
+      );
+      expect(find.text('Delivery note (optional)'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('mr-request-context-toggle')));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('mr-request-context-panel')),
+        findsOneWidget,
+      );
+      expect(find.text('Request Status'), findsOneWidget);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+
+      final description = find.byKey(
+        const ValueKey('mr-material-description-autocomplete'),
+      );
+      expect(
+        find.descendant(
+          of: description,
+          matching: find.byIcon(Icons.search_rounded),
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'published timing policy defaults a pristine desktop draft and hides disabled urgent',
@@ -205,7 +252,9 @@ void main() {
     expect(find.byTooltip('Add Similar Row'), findsOneWidget);
     expect(find.byTooltip('Add custom row here'), findsOneWidget);
     expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-    await tester.tap(find.byTooltip('Add custom row here'));
+    await tester.ensureVisible(find.byTooltip('Add custom row here'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add custom row here').hitTestable());
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Add Similar Row'), findsNWidgets(2));

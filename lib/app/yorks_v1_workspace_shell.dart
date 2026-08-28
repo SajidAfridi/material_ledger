@@ -26,6 +26,7 @@ import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/providers/yorks_v1_team_chat_provider.dart';
 import '../shared/providers/yorks_v1_workspace_status_provider.dart';
+import '../shared/providers/yorks_v1_workspace_presentation_provider.dart';
 import '../shared/widgets/notification_bell.dart';
 import 'router.dart';
 import 'yorks_v1_workspace_search.dart';
@@ -33,7 +34,7 @@ import 'yorks_v1_workspace_status_label.dart';
 
 /// Desktop-only shell preference. It lives above individual route widgets so
 /// navigating between Yorks screens does not reopen the panel unexpectedly.
-final yorksV1SidebarExpandedProvider = StateProvider<bool>((ref) => true);
+final yorksV1SidebarExpandedProvider = yorksV1WorkspaceSidebarExpandedProvider;
 
 /// R35 workspace chrome for every connected Yorks V1 operational route.
 ///
@@ -121,8 +122,6 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       role: role,
       userName: user?.fullName,
       expanded: sidebarExpanded,
-      onToggle: () => ref.read(yorksV1SidebarExpandedProvider.notifier).state =
-          !sidebarExpanded,
     );
 
     return CallbackShortcuts(
@@ -145,7 +144,6 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                   role: role,
                   userName: user?.fullName,
                   expanded: true,
-                  onToggle: () => Navigator.of(context).maybePop(),
                 ),
               ),
         body: Builder(
@@ -206,6 +204,23 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                         destinations: destinations,
                         teamChatEnabled: teamChatEnabled,
                         unreadChat: chatUnread,
+                        sidebarExpanded: sidebarExpanded,
+                        showBack:
+                            current?.path != null && location != current!.path,
+                        onToggleSidebar: () =>
+                            ref
+                                    .read(
+                                      yorksV1SidebarExpandedProvider.notifier,
+                                    )
+                                    .state =
+                                !sidebarExpanded,
+                        onBack: () {
+                          if (context.canPop()) {
+                            context.pop();
+                            return;
+                          }
+                          context.go(current?.path ?? RoutePaths.engineerHome);
+                        },
                       ),
                       Expanded(
                         child: YorksWorkspaceZoomViewport(
@@ -1188,6 +1203,10 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
     required this.destinations,
     required this.teamChatEnabled,
     required this.unreadChat,
+    required this.sidebarExpanded,
+    required this.showBack,
+    required this.onToggleSidebar,
+    required this.onBack,
   });
 
   final List<TranslatableString> breadcrumbs;
@@ -1196,6 +1215,10 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
   final List<_YorksDestination> destinations;
   final bool teamChatEnabled;
   final int unreadChat;
+  final bool sidebarExpanded;
+  final bool showBack;
+  final VoidCallback onToggleSidebar;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1210,28 +1233,70 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            Text(
-              YorksV1ShellStrings.companyName.primary,
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+            IconButton(
+              key: const ValueKey('yorks-workspace-sidebar-toggle'),
+              tooltip:
+                  (sidebarExpanded
+                          ? YorksV1ShellStrings.collapsePanel
+                          : YorksV1ShellStrings.expandPanel)
+                      .active(language),
+              onPressed: onToggleSidebar,
+              icon: const Icon(Icons.view_sidebar_outlined),
             ),
-            for (final breadcrumb in breadcrumbs) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Text('/', style: TextStyle(color: AppColors.lineStrong)),
-              ),
-              Flexible(
-                child: Text(
-                  breadcrumb.primary,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: AppSpacing.xxs),
+            IconButton(
+              key: const ValueKey('yorks-workspace-back'),
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: showBack ? onBack : null,
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    YorksV1ShellStrings.companyName.primary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.muted,
+                    ),
                   ),
-                ),
+                  for (final breadcrumb in breadcrumbs) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                      child: Text(
+                        '/',
+                        style: TextStyle(color: AppColors.lineStrong),
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        breadcrumb.active(language),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-            const Spacer(),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            SizedBox(
+              width: 300,
+              child: _YorksQuickNavigationButton(
+                destinations: destinations
+                    .where((destination) => destination.path != null)
+                    .toList(growable: false),
+                language: language,
+                role: role,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
             if (teamChatEnabled) ...[
               IconButton(
                 tooltip: YorksV1TeamChatStrings.teamChat.active(language),
@@ -1245,17 +1310,6 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               const SizedBox(width: AppSpacing.xs),
             ],
             const NotificationBell(),
-            const SizedBox(width: AppSpacing.sm),
-            SizedBox(
-              width: 220,
-              child: _YorksQuickNavigationButton(
-                destinations: destinations
-                    .where((destination) => destination.path != null)
-                    .toList(growable: false),
-                language: language,
-                role: role,
-              ),
-            ),
             const SizedBox(width: AppSpacing.lg),
             YorksV1WorkspaceStatusLabel(status: workspaceStatus),
           ],
@@ -1335,7 +1389,6 @@ class _YorksDesktopSidebar extends ConsumerWidget {
     required this.role,
     required this.userName,
     required this.expanded,
-    required this.onToggle,
   });
 
   final List<_YorksDestination> destinations;
@@ -1344,7 +1397,6 @@ class _YorksDesktopSidebar extends ConsumerWidget {
   final YorksV1Role? role;
   final String? userName;
   final bool expanded;
-  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1402,22 +1454,8 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.xs),
-                    _HoverRevealSidebarToggle(
-                      onPressed: onToggle,
-                      tooltip: YorksV1ShellStrings.collapsePanel.primary,
-                    ),
                   ] else
-                    IconButton(
-                      onPressed: onToggle,
-                      icon: const Icon(Icons.chevron_right_rounded),
-                      tooltip: YorksV1ShellStrings.expandPanel.primary,
-                      constraints: const BoxConstraints.tightFor(
-                        width: AppSpacing.minTapTarget,
-                        height: AppSpacing.minTapTarget,
-                      ),
-                      padding: EdgeInsets.zero,
-                    ),
+                    const BrandLogo(size: 36),
                 ],
               ),
             ),
@@ -1586,44 +1624,6 @@ class _YorksDesktopSidebar extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _HoverRevealSidebarToggle extends StatefulWidget {
-  const _HoverRevealSidebarToggle({
-    required this.onPressed,
-    required this.tooltip,
-  });
-
-  final VoidCallback onPressed;
-  final String tooltip;
-
-  @override
-  State<_HoverRevealSidebarToggle> createState() =>
-      _HoverRevealSidebarToggleState();
-}
-
-class _HoverRevealSidebarToggleState extends State<_HoverRevealSidebarToggle> {
-  bool _visible = false;
-
-  @override
-  Widget build(BuildContext context) => MouseRegion(
-    onEnter: (_) => setState(() => _visible = true),
-    onExit: (_) => setState(() => _visible = false),
-    child: Focus(
-      onFocusChange: (focused) => setState(() => _visible = focused),
-      child: AnimatedOpacity(
-        opacity: _visible ? 1 : 0,
-        duration: const Duration(milliseconds: 120),
-        child: IconButton(
-          onPressed: widget.onPressed,
-          icon: const Icon(Icons.chevron_left_rounded),
-          tooltip: widget.tooltip,
-          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-          padding: EdgeInsets.zero,
-        ),
-      ),
-    ),
-  );
 }
 
 void _showYorksProfileDialog(BuildContext context) {

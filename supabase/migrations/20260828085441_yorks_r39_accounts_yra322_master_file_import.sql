@@ -45,10 +45,19 @@ alter table public.v1_accounts_billing_progress_revisions
   add column if not exists source_import_id uuid
     references public.v1_accounts_source_imports (id) on delete restrict;
 
+alter table public.v1_accounts_billing_progress
+  drop constraint if exists v1_accounts_progress_confirmation_evidence_check;
+alter table public.v1_accounts_billing_progress
+  add constraint v1_accounts_progress_confirmation_evidence_check check (
+    confirmed_percent = 0
+    or cardinality(confirmed_evidence_document_ids) > 0
+    or confirmed_source_import_id is not null
+  );
+
 comment on table public.v1_accounts_source_imports is
   'Immutable source reconciliation for approved historical Accounts imports. The source snapshot stores extracted facts and workbook cell provenance; excluded_snapshot records ambiguous or zero-value facts that were deliberately not posted.';
 comment on column public.v1_accounts_billing_progress.confirmed_source_import_id is
-  'Immutable source reconciliation used when an approved historical import, rather than a controlled document upload, established the current confirmed value. Normal commands continue to enforce evidence on increases while allowing controlled decreases.';
+  'Immutable source reconciliation used when an approved historical import, rather than a controlled document upload, established the current confirmed value.';
 comment on column public.v1_accounts_billing_progress_revisions.source_import_id is
   'Historical source reconciliation for this exact confirmed-progress revision.';
 

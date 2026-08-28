@@ -48,6 +48,7 @@ import '../../../../shared/providers/yorks_v1_material_request_repository_provid
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
 import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
+import '../../../../shared/providers/yorks_v1_workspace_presentation_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
 import 'yorks_v1_dispatch_centre.dart';
@@ -62,6 +63,9 @@ import 'yorks_v1_logistics_screen.dart';
 import 'yorks_v1_material_request_centre.dart';
 import 'yorks_v1_returns_documents_screen.dart';
 import '../yorks_v1_feature_action_access.dart';
+
+final yorksV1MaterialRequestInspectorExpandedProvider =
+    StateProvider.autoDispose<bool>((ref) => false);
 
 /// V1 material request overview. It reads only the server projection; drafts
 /// are returned only to their creator by the database contract.
@@ -1537,6 +1541,40 @@ class _YorksV1MaterialRequestDraftScreenState
   bool _hydratedFromServer = false;
   bool _runtimePolicyResolutionScheduled = false;
   bool _runtimePolicyResolved = false;
+  bool _workspacePresentationPrepared = false;
+  bool? _sidebarWasExpanded;
+  void Function(bool expanded)? _setSidebarExpanded;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_workspacePresentationPrepared ||
+        MediaQuery.sizeOf(context).width <
+            AppSpacing.yorksV1ShellDesktopBreakpoint) {
+      return;
+    }
+    _workspacePresentationPrepared = true;
+    _sidebarWasExpanded = ref.read(yorksV1WorkspaceSidebarExpandedProvider);
+    final sidebarController = ref.read(
+      yorksV1WorkspaceSidebarExpandedProvider.notifier,
+    );
+    _setSidebarExpanded = (expanded) => sidebarController.state = expanded;
+    if (_sidebarWasExpanded == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _setSidebarExpanded?.call(false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    final previous = _sidebarWasExpanded;
+    if (previous != null) {
+      _setSidebarExpanded?.call(previous);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2105,6 +2143,9 @@ class _DraftForm extends ConsumerWidget {
         : null;
     final compactRoute =
         MediaQuery.sizeOf(context).width < AppSpacing.yorksV1DesktopBreakpoint;
+    final inspectorExpanded = ref.watch(
+      yorksV1MaterialRequestInspectorExpandedProvider,
+    );
 
     if (YorksMobileUi.isActive(context)) {
       return _MaterialRequestDraftExitGuard(
@@ -2170,7 +2211,6 @@ class _DraftForm extends ConsumerWidget {
                   : () => _save(context, ref, controller, draft);
               final requestNumber = _previewRequestNumber(selectedProject);
               final form = _R35RequestCard(
-                sectionNumber: 1,
                 title: YorksV1MaterialRequestStrings.requestInformation.primary,
                 description: YorksV1MaterialRequestStrings
                     .requestInformationDescription
@@ -2313,6 +2353,15 @@ class _DraftForm extends ConsumerWidget {
                                 state.status ==
                                 YorksV1MaterialRequestDraftSyncStatus
                                     .submitting,
+                            inspectorExpanded: inspectorExpanded,
+                            onToggleInspector: () =>
+                                ref
+                                        .read(
+                                          yorksV1MaterialRequestInspectorExpandedProvider
+                                              .notifier,
+                                        )
+                                        .state =
+                                    !inspectorExpanded,
                           ),
                           const SizedBox(height: AppSpacing.lg),
                         ],
@@ -2335,44 +2384,50 @@ class _DraftForm extends ConsumerWidget {
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: AppSpacing.lg),
-                              SizedBox(
-                                width: 360,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    _R35RequestReview(
-                                      draft: draft,
-                                      projects: projects,
-                                      scopes: scopes,
-                                      requesterName: ref.watch(
-                                        actorNameProvider,
+                              if (inspectorExpanded) ...[
+                                const SizedBox(width: AppSpacing.lg),
+                                SizedBox(
+                                  key: const ValueKey(
+                                    'mr-request-context-panel',
+                                  ),
+                                  width: 360,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _R35RequestReview(
+                                        draft: draft,
+                                        projects: projects,
+                                        scopes: scopes,
+                                        requesterName: ref.watch(
+                                          actorNameProvider,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: AppSpacing.lg),
-                                    if (serverBackedRequest != null)
-                                      serverBackedRequest.when(
-                                        loading: () =>
-                                            const _DraftDiscussionLoading(),
-                                        error: (_, _) => _DraftDiscussionPrompt(
+                                      const SizedBox(height: AppSpacing.lg),
+                                      if (serverBackedRequest != null)
+                                        serverBackedRequest.when(
+                                          loading: () =>
+                                              const _DraftDiscussionLoading(),
+                                          error: (_, _) =>
+                                              _DraftDiscussionPrompt(
+                                                canSave: save != null,
+                                                onSave: save,
+                                              ),
+                                          data: (request) =>
+                                              _MaterialRequestDiscussion(
+                                                request: request,
+                                                compact: true,
+                                              ),
+                                        )
+                                      else
+                                        _DraftDiscussionPrompt(
                                           canSave: save != null,
                                           onSave: save,
                                         ),
-                                        data: (request) =>
-                                            _MaterialRequestDiscussion(
-                                              request: request,
-                                              compact: true,
-                                            ),
-                                      )
-                                    else
-                                      _DraftDiscussionPrompt(
-                                        canSave: save != null,
-                                        onSave: save,
-                                      ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           )
                         else ...[
@@ -4860,6 +4915,8 @@ class _R35RequestHero extends StatelessWidget {
     required this.onSave,
     required this.onSubmit,
     required this.submitting,
+    required this.inspectorExpanded,
+    required this.onToggleInspector,
   });
 
   final String title;
@@ -4870,6 +4927,8 @@ class _R35RequestHero extends StatelessWidget {
   final VoidCallback? onSave;
   final VoidCallback? onSubmit;
   final bool submitting;
+  final bool inspectorExpanded;
+  final VoidCallback onToggleInspector;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -4934,6 +4993,16 @@ class _R35RequestHero extends StatelessWidget {
         runSpacing: AppSpacing.sm,
         alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
         children: [
+          _R35RequestAction(
+            key: const ValueKey('mr-request-context-toggle'),
+            label:
+                (inspectorExpanded
+                        ? YorksV1MaterialRequestStrings.hideRequestContext
+                        : YorksV1MaterialRequestStrings.showRequestContext)
+                    .primary,
+            icon: Icons.view_sidebar_outlined,
+            onPressed: onToggleInspector,
+          ),
           _R35RequestAction(
             label: YorksV1MaterialRequestStrings.saveDraft.primary,
             icon: Icons.save_outlined,
@@ -5704,6 +5773,7 @@ class _DraftDiscussionPrompt extends StatelessWidget {
 
 class _R35RequestAction extends StatelessWidget {
   const _R35RequestAction({
+    super.key,
     required this.label,
     required this.onPressed,
     this.icon,
@@ -5836,17 +5906,21 @@ class _RequestFormFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final wide = constraints.maxWidth >= 680;
-      final title = TextFormField(
-        key: const ValueKey('mr-title'),
-        initialValue: draft.title ?? '',
-        onChanged: controller.setTitle,
-        decoration: InputDecoration(
-          labelText: YorksV1MaterialRequestStrings.requestTitle.primary,
+      final wide = constraints.maxWidth >= 760;
+      final title = _RequestFieldBlock(
+        label: YorksV1MaterialRequestStrings.requestTitle.primary,
+        child: TextFormField(
+          key: const ValueKey('mr-title'),
+          initialValue: draft.title ?? '',
+          onChanged: controller.setTitle,
+          decoration: InputDecoration(
+            hintText: YorksV1MaterialRequestStrings.requestTitle.primary,
+          ),
         ),
       );
-      final fields = <Widget>[
-        _ProjectDropdown(
+      final project = _RequestFieldBlock(
+        label: YorksV1MaterialRequestStrings.project.primary,
+        child: _ProjectDropdown(
           value: draft.projectId,
           projects: projects,
           enabled: !controller.isEditingBeforeApproval,
@@ -5868,7 +5942,10 @@ class _RequestFormFields extends StatelessWidget {
             }
           },
         ),
-        _ScopeDropdown(
+      );
+      final scope = _RequestFieldBlock(
+        label: YorksV1MaterialRequestStrings.buildingOther.primary,
+        child: _ScopeDropdown(
           value: draft.scopeId,
           scopes: scopes,
           onChanged: (scopeId) async {
@@ -5915,104 +5992,84 @@ class _RequestFormFields extends StatelessWidget {
             );
           },
         ),
-        _TimingPicker(
+      );
+      final timing = _RequestFieldBlock(
+        label: YorksV1MaterialRequestStrings.requestTiming.primary,
+        child: _TimingPicker(
           draft: draft,
           controller: controller,
           allowedTimings: allowedTimings,
         ),
-        if (draft.timing == YorksV1MaterialRequestTiming.scheduled)
-          _ScheduledDateField(draft: draft, controller: controller),
-        _OptionalDeliveryNote(draft: draft, controller: controller),
-      ];
+      );
+      final scheduledDate = _RequestFieldBlock(
+        label: YorksV1MaterialRequestStrings.scheduledDate.primary,
+        child: _ScheduledDateField(draft: draft, controller: controller),
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           title,
-          const SizedBox(height: AppSpacing.md),
-          if (!wide)
-            for (final field in fields) ...[
-              field,
-              const SizedBox(height: AppSpacing.md),
-            ]
-          else
-            Column(
+          const SizedBox(height: AppSpacing.lg),
+          if (wide) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 3, child: fields[0]),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(flex: 2, child: fields[1]),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: fields[2]),
-                    if (fields.length > 4) ...[
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(child: fields[3]),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(child: fields[4]),
-                    ] else ...[
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(child: fields[3]),
-                    ],
-                  ],
+                Expanded(child: project),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(child: scope),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: timing),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: draft.timing == YorksV1MaterialRequestTiming.scheduled
+                      ? scheduledDate
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
+          ] else ...[
+            project,
+            const SizedBox(height: AppSpacing.lg),
+            scope,
+            const SizedBox(height: AppSpacing.lg),
+            timing,
+            if (draft.timing == YorksV1MaterialRequestTiming.scheduled) ...[
+              const SizedBox(height: AppSpacing.lg),
+              scheduledDate,
+            ],
+          ],
         ],
       );
     },
   );
 }
 
-class _OptionalDeliveryNote extends StatefulWidget {
-  const _OptionalDeliveryNote({required this.draft, required this.controller});
+class _RequestFieldBlock extends StatelessWidget {
+  const _RequestFieldBlock({required this.label, required this.child});
 
-  final YorksV1MaterialRequestDraft draft;
-  final YorksV1MaterialRequestDraftController controller;
-
-  @override
-  State<_OptionalDeliveryNote> createState() => _OptionalDeliveryNoteState();
-}
-
-class _OptionalDeliveryNoteState extends State<_OptionalDeliveryNote> {
-  late bool _expanded = widget.draft.deliveryNote?.trim().isNotEmpty == true;
+  final String label;
+  final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    if (!_expanded) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: () => setState(() => _expanded = true),
-          icon: const Icon(Icons.add_rounded, size: 18),
-          label: Text(YorksV1MaterialRequestStrings.deliveryNote.primary),
-        ),
-      );
-    }
-    return TextFormField(
-      key: const ValueKey('mr-delivery'),
-      initialValue: widget.draft.deliveryNote ?? '',
-      minLines: 2,
-      maxLines: 3,
-      onChanged: widget.controller.setDeliveryNote,
-      decoration: InputDecoration(
-        labelText: YorksV1MaterialRequestStrings.deliveryNote.primary,
-        suffixIcon: IconButton(
-          tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () {
-            widget.controller.setDeliveryNote(null);
-            setState(() => _expanded = false);
-          },
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        label,
+        style: AppTypography.labelMedium.copyWith(
+          color: AppColors.inkSecondary,
+          fontWeight: FontWeight.w800,
         ),
       ),
-    );
-  }
+      const SizedBox(height: AppSpacing.xs),
+      child,
+    ],
+  );
 }
 
 class _ProjectDropdown extends StatelessWidget {
@@ -6036,7 +6093,7 @@ class _ProjectDropdown extends StatelessWidget {
       initialValue: items.any((item) => item.id == value) ? value : null,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: YorksV1MaterialRequestStrings.project.primary,
+        hintText: YorksV1MaterialRequestStrings.project.primary,
       ),
       items: [
         for (final item in items)
@@ -6072,7 +6129,7 @@ class _ScopeDropdown extends StatelessWidget {
       initialValue: items.any((item) => item.id == value) ? value : null,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: YorksV1MaterialRequestStrings.buildingOther.primary,
+        hintText: YorksV1MaterialRequestStrings.buildingOther.primary,
       ),
       items: [
         for (final item in items)
@@ -6100,7 +6157,7 @@ class _TimingPicker extends StatelessWidget {
         key: const ValueKey('mr-timing-picker'),
         initialValue: draft.timing,
         decoration: InputDecoration(
-          labelText: YorksV1MaterialRequestStrings.requestTiming.primary,
+          hintText: YorksV1MaterialRequestStrings.requestTiming.primary,
         ),
         items: [
           for (final timing in allowedTimings)
@@ -6129,7 +6186,7 @@ class _ScheduledDateField extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Text(
         draft.scheduledDate == null
-            ? YorksV1MaterialRequestStrings.scheduledDate.primary
+            ? YorksV1MaterialRequestStrings.chooseScheduledDate.primary
             : MaterialLocalizations.of(
                 context,
               ).formatMediumDate(draft.scheduledDate!),
@@ -6393,21 +6450,18 @@ class _MaterialSuggestionPanel extends StatelessWidget {
         ),
       );
     }
-    return Align(
-      alignment: AlignmentDirectional.topStart,
-      child: Material(
-        key: const ValueKey('mr-suggestion-panel'),
-        elevation: 8,
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        clipBehavior: Clip.antiAlias,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
-          child: ListView(
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            children: children,
-          ),
+    return Material(
+      key: const ValueKey('mr-suggestion-panel'),
+      elevation: 8,
+      color: AppColors.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth, maxHeight: maxHeight),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+          children: children,
         ),
       ),
     );
@@ -6419,11 +6473,13 @@ class _MaterialSuggestionOverlayGeometry {
     required this.width,
     required this.height,
     required this.offset,
+    required this.opensBelow,
   });
 
   final double width;
   final double height;
   final Offset offset;
+  final bool opensBelow;
 
   static _MaterialSuggestionOverlayGeometry resolve({
     required BuildContext fieldContext,
@@ -6455,10 +6511,8 @@ class _MaterialSuggestionOverlayGeometry {
     return _MaterialSuggestionOverlayGeometry(
       width: width,
       height: height,
-      offset: Offset(
-        clampedX - origin.dx,
-        opensBelow ? fieldBox.size.height + gap : -height - gap,
-      ),
+      offset: Offset(clampedX - origin.dx, opensBelow ? gap : -gap),
+      opensBelow: opensBelow,
     );
   }
 }
@@ -6501,9 +6555,10 @@ class _AnchoredMaterialDescriptionAutocomplete extends ConsumerStatefulWidget {
     this.hintText,
     this.isDense = false,
     this.contentPadding,
-    this.suffixIconSize = 19,
     this.preferredWidth = 560,
     this.preferredHeight = 410,
+    this.showSuffixIcon = true,
+    this.desktopCell = false,
   });
 
   final TextEditingController textController;
@@ -6520,9 +6575,10 @@ class _AnchoredMaterialDescriptionAutocomplete extends ConsumerStatefulWidget {
   final String? hintText;
   final bool isDense;
   final EdgeInsetsGeometry? contentPadding;
-  final double suffixIconSize;
   final double preferredWidth;
   final double preferredHeight;
+  final bool showSuffixIcon;
+  final bool desktopCell;
 
   @override
   ConsumerState<_AnchoredMaterialDescriptionAutocomplete> createState() =>
@@ -6624,6 +6680,12 @@ class _AnchoredMaterialDescriptionAutocompleteState
               CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
+                targetAnchor: geometry.opensBelow
+                    ? Alignment.bottomLeft
+                    : Alignment.topLeft,
+                followerAnchor: geometry.opensBelow
+                    ? Alignment.topLeft
+                    : Alignment.bottomLeft,
                 offset: geometry.offset,
                 child: SizedBox(
                   width: geometry.width,
@@ -6742,17 +6804,22 @@ class _AnchoredMaterialDescriptionAutocompleteState
             labelText: widget.labelText,
             hintText: widget.hintText,
             suffixIcon:
-                widget.enabled &&
+                widget.showSuffixIcon &&
+                    widget.enabled &&
                     widget.projectId != null &&
                     widget.scopeId != null
-                ? Icon(
-                    Icons.search_rounded,
-                    size: widget.suffixIconSize,
-                    color: AppColors.muted,
-                  )
+                ? Icon(Icons.search_rounded, size: 19, color: AppColors.muted)
                 : null,
             contentPadding: widget.contentPadding,
             errorText: widget.errorText,
+            border: widget.desktopCell ? InputBorder.none : null,
+            enabledBorder: widget.desktopCell ? InputBorder.none : null,
+            focusedBorder: widget.desktopCell
+                ? const OutlineInputBorder(
+                    borderRadius: BorderRadius.zero,
+                    borderSide: BorderSide(color: AppColors.blue, width: 2),
+                  )
+                : null,
           ),
         ),
       ),
@@ -7151,9 +7218,12 @@ class _DesktopLinesTable extends StatelessWidget {
             ),
           ),
           _MrTableCell(
-            child: Text(
-              YorksV1MaterialRequestStrings.quantity.primary.toUpperCase(),
-              style: headerStyle,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                YorksV1MaterialRequestStrings.quantity.primary.toUpperCase(),
+                style: headerStyle,
+              ),
             ),
           ),
           _MrTableCell(
@@ -7258,6 +7328,7 @@ class _DesktopLinesTable extends StatelessWidget {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                textAlign: TextAlign.end,
                 errorText: line.hasValidQuantity
                     ? null
                     : YorksV1MaterialRequestStrings.quantityRequired.primary,
@@ -7320,14 +7391,14 @@ class _DesktopLinesTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Table(
           columnWidths: const {
-            0: FixedColumnWidth(50),
-            1: FlexColumnWidth(2.5),
-            2: FlexColumnWidth(1.25),
-            3: FlexColumnWidth(1.4),
-            4: FlexColumnWidth(1.45),
-            5: FlexColumnWidth(.9),
-            6: FixedColumnWidth(106),
-            7: FixedColumnWidth(176),
+            0: FixedColumnWidth(62),
+            1: FlexColumnWidth(2.8),
+            2: FlexColumnWidth(1.55),
+            3: FlexColumnWidth(1.7),
+            4: FlexColumnWidth(1.75),
+            5: FlexColumnWidth(1.05),
+            6: FixedColumnWidth(126),
+            7: FixedColumnWidth(184),
           },
           border: TableBorder(
             horizontalInside: BorderSide(color: AppColors.line),
@@ -7353,10 +7424,13 @@ class _MrTableCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.sm,
-      vertical: AppSpacing.sm,
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.xs,
     ),
-    child: child,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 68),
+      child: Align(alignment: Alignment.centerLeft, child: child),
+    ),
   );
 }
 
@@ -7463,7 +7537,8 @@ class _InventoryDescriptionFieldState
         errorText: widget.errorText,
         preferredWidth: 560,
         preferredHeight: 410,
-        suffixIconSize: 17,
+        showSuffixIcon: false,
+        desktopCell: true,
       );
 }
 
@@ -7571,6 +7646,7 @@ class _LineUnitDropdown extends ConsumerWidget {
       value: initialValue,
       enabled: enabled,
       isDense: true,
+      desktopCell: true,
       errorText: errorText,
       onChanged: onChanged,
     );
@@ -7749,6 +7825,7 @@ class _LineTextField extends StatefulWidget {
     required this.onChanged,
     required this.enabled,
     this.keyboardType,
+    this.textAlign = TextAlign.start,
     this.hintText,
     this.errorText,
   });
@@ -7758,6 +7835,7 @@ class _LineTextField extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final bool enabled;
   final TextInputType? keyboardType;
+  final TextAlign textAlign;
   final String? hintText;
   final String? errorText;
 
@@ -7820,13 +7898,15 @@ class _LineTextFieldState extends State<_LineTextField> {
     focusNode: _focusNode,
     enabled: widget.enabled,
     keyboardType: widget.keyboardType,
+    textAlign: widget.textAlign,
     onFieldSubmitted: (_) => _commit(),
     decoration: const InputDecoration(
       isDense: true,
-      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       border: InputBorder.none,
       enabledBorder: InputBorder.none,
-      focusedBorder: UnderlineInputBorder(
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
         borderSide: BorderSide(color: AppColors.blue, width: 2),
       ),
     ).copyWith(hintText: widget.hintText, errorText: widget.errorText),

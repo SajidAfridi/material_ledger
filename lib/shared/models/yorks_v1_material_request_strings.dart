@@ -1184,6 +1184,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'شیڈول کی تاریخ',
     hi: 'निर्धारित तिथि',
   );
+  static const chooseScheduledDate = TranslatableString(
+    en: 'Choose a date',
+    ar: 'اختر تاريخًا',
+    ur: 'تاریخ منتخب کریں',
+    hi: 'तारीख चुनें',
+  );
   static const deliveryNote = TranslatableString(
     en: 'Delivery note (optional)',
     ar: 'ملاحظة التسليم (اختيارية)',
@@ -1699,6 +1705,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'دورة عمل واضحة واحدة من الإنشاء إلى الإكمال.',
     ur: 'تخلیق سے تکمیل تک ایک واضح لائف سائیکل۔',
     hi: 'निर्माण से पूर्णता तक एक स्पष्ट जीवनचक्र।',
+  );
+  static const showRequestContext = TranslatableString(
+    en: 'Show request context',
+    ar: 'إظهار سياق الطلب',
+    ur: 'درخواست کا سیاق دکھائیں',
+    hi: 'अनुरोध संदर्भ दिखाएं',
+  );
+  static const hideRequestContext = TranslatableString(
+    en: 'Hide request context',
+    ar: 'إخفاء سياق الطلب',
+    ur: 'درخواست کا سیاق چھپائیں',
+    hi: 'अनुरोध संदर्भ छिपाएं',
   );
   static const request = TranslatableString(
     en: 'Request',

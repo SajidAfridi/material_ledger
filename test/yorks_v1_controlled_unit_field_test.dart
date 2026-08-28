@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_controlled_unit_field.dart';
@@ -23,7 +24,7 @@ void main() {
     );
 
     final dropdown = tester.widget<DropdownButtonFormField<String>>(
-      find.byKey(const ValueKey('test-controlled-unit')),
+      _dropdownFinder(),
     );
     expect(dropdown.onChanged, isNull);
     expect(
@@ -47,7 +48,7 @@ void main() {
     );
 
     final dropdown = tester.widget<DropdownButtonFormField<String>>(
-      find.byKey(const ValueKey('test-controlled-unit')),
+      _dropdownFinder(),
     );
     final menu = tester.widget<DropdownButton<String>>(
       find.descendant(
@@ -63,12 +64,44 @@ void main() {
     );
     expect(menu.items!.map((item) => item.value), isNot(contains('Nos')));
   });
+
+  testWidgets('typing a unit prefix cycles matching controlled units', (
+    tester,
+  ) async {
+    final selected = <String>[];
+    await _pumpField(
+      tester,
+      value: '',
+      units: (ref) async => const ['Bundle', 'Box', 'Bag', 'Meter'],
+      onChanged: selected.add,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+    await tester.pump();
+    expect(selected.last, 'Bundle');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+    await tester.pump();
+    expect(selected.last, 'Box');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+    await tester.pump();
+    expect(selected.last, 'Bundle');
+  });
 }
+
+Finder _dropdownFinder() => find.descendant(
+  of: find.byKey(const ValueKey('test-controlled-unit')),
+  matching: find.byType(DropdownButtonFormField<String>),
+);
 
 Future<void> _pumpField(
   WidgetTester tester, {
   required String value,
   required Future<List<String>> Function(Ref ref) units,
+  ValueChanged<String>? onChanged,
 }) async {
   SharedPreferences.setMockInitialValues({});
   final preferences = await SharedPreferences.getInstance();
@@ -86,7 +119,7 @@ Future<void> _pumpField(
             value: value,
             enabled: true,
             showDependencyStatus: true,
-            onChanged: (_) {},
+            onChanged: onChanged ?? (_) {},
           ),
         ),
       ),
