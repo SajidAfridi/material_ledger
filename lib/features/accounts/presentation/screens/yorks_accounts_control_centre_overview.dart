@@ -1931,6 +1931,7 @@ class _OverviewSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+    key: const ValueKey('accounts-overview-skeleton'),
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Wrap(
@@ -2260,7 +2261,11 @@ double _ratio(YorksAccountsDecimal value, YorksAccountsDecimal baseline) {
   return (_decimalDouble(value) / denominator).clamp(0.0, 1.0);
 }
 
-String _percent(double value) => '${(value * 100).toStringAsFixed(1)}%';
+String _percent(double value) {
+  final bounded = value.clamp(0.0, 1.0) * 100;
+  final decimal = YorksAccountsDecimal.parse(bounded.toStringAsFixed(8));
+  return '${decimal.displayText()}%';
+}
 
 String _compactNumber(YorksAccountsDecimal value) =>
     NumberFormat.compact(locale: 'en').format(_decimalDouble(value));

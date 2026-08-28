@@ -75,6 +75,27 @@ final class YorksAccountsDecimal implements Comparable<YorksAccountsDecimal> {
     return negative ? '-$value' : value;
   }
 
+  /// Presentation-safe decimal text with no unnecessary trailing zeroes.
+  ///
+  /// Exact PostgreSQL numeric values remain unchanged for commands and
+  /// comparisons. This method only rounds their visible representation when a
+  /// screen needs a bounded number of fractional digits.
+  String displayText({int maximumFractionDigits = 4}) {
+    if (maximumFractionDigits < 0 || maximumFractionDigits > 8) {
+      throw RangeError.range(maximumFractionDigits, 0, 8);
+    }
+    if (_scale <= maximumFractionDigits) return canonicalText;
+
+    final divisor = _powerOfTen(_scale - maximumFractionDigits);
+    final absolute = _coefficient.abs();
+    var rounded = absolute ~/ divisor;
+    if ((absolute % divisor) * BigInt.from(2) >= divisor) {
+      rounded += BigInt.one;
+    }
+    final signed = _coefficient.isNegative ? -rounded : rounded;
+    return _normalize(signed, maximumFractionDigits).canonicalText;
+  }
+
   /// Safe value to send as a PostgreSQL numeric RPC parameter.
   String get postgresText => canonicalText;
 

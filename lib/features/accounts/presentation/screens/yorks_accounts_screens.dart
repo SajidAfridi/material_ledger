@@ -118,6 +118,21 @@ class _YorksAccountsPortfolioScreenState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final state = ref.watch(yorksAccountsPortfolioControllerProvider);
+    if (state.status == YorksAccountsViewStatus.idle &&
+        state.projection == null) {
+      // Permission/session bootstrap can legitimately recreate the protected
+      // controller while this route remains mounted. Re-arm the initial load
+      // for that fresh controller so `idle` can never become a permanent
+      // skeleton.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final current = ref.read(yorksAccountsPortfolioControllerProvider);
+        if (current.status == YorksAccountsViewStatus.idle &&
+            current.projection == null) {
+          _load();
+        }
+      });
+    }
     final projection = state.projection;
     final loading = state.status == YorksAccountsViewStatus.loading;
     if (widget.controlCentre) {
@@ -1299,7 +1314,7 @@ class _PortfolioProjectTable extends StatelessWidget {
                     width: 110,
                     child: _Progress(
                       value: _percentValue(project.confirmedPercent),
-                      label: '${project.confirmedPercent.canonicalText}%',
+                      label: _percentLabel(project.confirmedPercent),
                     ),
                   ),
                 ),
@@ -1361,7 +1376,7 @@ class _PortfolioProjectCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           _Progress(
             value: _percentValue(project.confirmedPercent),
-            label: '${project.confirmedPercent.canonicalText}%',
+            label: _percentLabel(project.confirmedPercent),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -1778,8 +1793,12 @@ class _BillingProgressViewState extends State<_BillingProgressView> {
                                             : _money(entry.stageValue!),
                                       ),
                                     ),
-                                  DataCell(Text('${entry.suggestedPercent}%')),
-                                  DataCell(Text('${entry.confirmedPercent}%')),
+                                  DataCell(
+                                    Text(_percentLabel(entry.suggestedPercent)),
+                                  ),
+                                  DataCell(
+                                    Text(_percentLabel(entry.confirmedPercent)),
+                                  ),
                                   DataCell(
                                     _Badge(
                                       _wireLabel(
@@ -3354,7 +3373,7 @@ class _BuildingPosition extends StatelessWidget {
               ),
               subtitle: _Progress(
                 value: _percentTextValue(entry['confirmed_percent']),
-                label: '${entry['confirmed_percent']}%',
+                label: _percentLabel(entry['confirmed_percent']),
               ),
               trailing: _Badge(_statusLabel('${entry['review_status'] ?? ''}')),
               onTap: onOpen,
@@ -3435,14 +3454,17 @@ class _ProgressLedgerCard extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         _Progress(
           value: _percentValue(entry.confirmedPercent),
-          label: '${entry.confirmedPercent}%',
+          label: _percentLabel(entry.confirmedPercent),
         ),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
-            _Badge('${_t(language, 'suggested')} ${entry.suggestedPercent}%'),
+            _Badge(
+              '${_t(language, 'suggested')} '
+              '${_percentLabel(entry.suggestedPercent)}',
+            ),
             _Badge(_wireLabel(language, entry.reviewStatus.wireValue)),
           ],
         ),
@@ -4093,6 +4115,13 @@ double _percentValue(YorksAccountsDecimal value) =>
 
 double _percentTextValue(Object? value) =>
     ((double.tryParse('$value') ?? 0) / 100).clamp(0.0, 1.0);
+
+String _percentLabel(Object? value) {
+  final decimal = value is YorksAccountsDecimal
+      ? value
+      : YorksAccountsDecimal.tryParse('$value');
+  return '${(decimal ?? YorksAccountsDecimal.zero).displayText()}%';
+}
 
 String _statusLabel(String value) {
   final normalized = value.replaceAll('_', ' ').trim();

@@ -8,6 +8,10 @@ void main() {
     test('canonicalizes without binary floating point', () {
       expect(YorksAccountsDecimal.parse('8400000.00').canonicalText, '8400000');
       expect(YorksAccountsDecimal.parse('5.2500').canonicalText, '5.25');
+      expect(YorksAccountsDecimal.parse('100.0000').displayText(), '100');
+      expect(YorksAccountsDecimal.parse('90.0000').displayText(), '90');
+      expect(YorksAccountsDecimal.parse('12.3456').displayText(), '12.3456');
+      expect(YorksAccountsDecimal.parse('12.34567').displayText(), '12.3457');
       expect(
         YorksAccountsDecimal.parse('33.3333') +
             YorksAccountsDecimal.parse('66.6667'),

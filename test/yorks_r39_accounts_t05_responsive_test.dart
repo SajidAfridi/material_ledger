@@ -112,6 +112,71 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'Accounts overview reloads after its protected permission epoch changes',
+    (tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      tester.view.physicalSize = const Size(1440, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final epoch = StateProvider<YorksAccountsPermissionEpoch>(
+        (ref) => (
+          revision: 1,
+          trusted: true,
+          stale: false,
+          revisionSignalHealthy: true,
+        ),
+      );
+      final repository = _CountingPortfolioRepository();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1AuthUserIdProvider.overrideWithValue('accountant-1'),
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.accountant,
+            ),
+            yorksAccountsPermissionEpochProvider.overrideWith(
+              (ref) => ref.watch(epoch),
+            ),
+            yorksAccountsPortfolioRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+          ],
+          child: const MaterialApp(
+            home: YorksAccountsPortfolioScreen(controlCentre: true),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.portfolioLoads, 1);
+      expect(find.textContaining('YRA-322'), findsWidgets);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(YorksAccountsPortfolioScreen)),
+      );
+      container.read(epoch.notifier).state = (
+        revision: 2,
+        trusted: true,
+        stale: false,
+        revisionSignalHealthy: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.portfolioLoads, 2);
+      expect(
+        find.byKey(const ValueKey('accounts-overview-skeleton')),
+        findsNothing,
+      );
+      expect(find.textContaining('YRA-322'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Billing Progress exposes protected office columns on desktop', (
     tester,
   ) async {
@@ -471,6 +536,24 @@ final class _Repository implements YorksAccountsPortfolioRepository {
   Future<YorksAccountsPortfolioProjection> getPortfolio(
     YorksAccountsPortfolioFilters filters,
   ) async => _projection;
+
+  @override
+  Future<YorksAccountsProjectOverviewProjection> getProjectOverview(
+    String projectId,
+  ) async => _projectOverview;
+}
+
+final class _CountingPortfolioRepository
+    implements YorksAccountsPortfolioRepository {
+  int portfolioLoads = 0;
+
+  @override
+  Future<YorksAccountsPortfolioProjection> getPortfolio(
+    YorksAccountsPortfolioFilters filters,
+  ) async {
+    portfolioLoads++;
+    return _projection;
+  }
 
   @override
   Future<YorksAccountsProjectOverviewProjection> getProjectOverview(
