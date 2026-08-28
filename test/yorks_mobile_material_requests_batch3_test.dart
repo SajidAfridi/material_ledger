@@ -34,6 +34,21 @@ import 'support/yorks_v1_permission_test_support.dart';
 
 const _draftId = 'mobile-mr-draft';
 const _projectId = 'mobile-mr-project';
+const _alternateProjectId = 'mobile-mr-project-nexus';
+const _draftProjects = [
+  YorksV1MaterialRequestProjectOption(
+    id: _projectId,
+    reference: 'YRA-322',
+    name: 'Al Dhafra Grid Substation HVAC Works',
+    state: 'active',
+  ),
+  YorksV1MaterialRequestProjectOption(
+    id: _alternateProjectId,
+    reference: 'YRA-315',
+    name: 'Nexus 4 Station',
+    state: 'active',
+  ),
+];
 late SharedPreferences _preferences;
 
 void main() {
@@ -203,15 +218,9 @@ void main() {
       runtimeConfiguration: _runtimeConfiguration(urgentEnabled: false),
     );
 
-    expect(find.byKey(const ValueKey('mobile-mr-timing-urgent')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('mobile-mr-timing-normal')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('mobile-mr-timing-scheduled')),
-      findsOneWidget,
-    );
+    expect(find.text('Urgent'), findsNothing);
+    expect(find.text('Normal'), findsOneWidget);
+    expect(find.text('Scheduled'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -263,7 +272,7 @@ void main() {
   });
 
   testWidgets(
-    'desktop incomplete rows name each error and submit reveals the blocker',
+    'desktop incomplete rows keep a stable height with semantic error dots',
     (tester) async {
       await _setViewport(tester, const Size(1366, 768));
       await _pumpDraft(tester);
@@ -271,32 +280,250 @@ void main() {
       await tester.tap(find.text('Add Custom Item'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Item description is required'), findsOneWidget);
-      expect(find.text('Enter a quantity greater than zero'), findsOneWidget);
-      expect(find.text('Select a valid unit'), findsOneWidget);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final controller = scope.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: 'mobile-mr-user',
+            draftId: _draftId,
+          ),
+        ).notifier,
+      );
+      final line = controller.currentDraft.lines.single;
+      final table = find.byType(Table).last;
+      final invalidHeight = tester.getSize(table).height;
+
+      expect(find.text('Item description is required'), findsNothing);
+      expect(find.text('Enter a quantity greater than zero'), findsNothing);
+      expect(find.text('Select a valid unit'), findsNothing);
+      expect(
+        find.byKey(ValueKey('${line.id}-description-error')),
+        findsOneWidget,
+      );
+      expect(find.byKey(ValueKey('${line.id}-quantity-error')), findsOneWidget);
+      expect(find.byKey(ValueKey('${line.id}-unit-error')), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Item description is required'),
+        findsOneWidget,
+      );
       expect(
         find.textContaining('1 material row needs attention'),
         findsOneWidget,
       );
-      final submit = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Submit for Engineering approval'),
-      );
-      expect(submit.onPressed, isNotNull);
 
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'Submit for Engineering approval'),
+      await controller.updateLine(
+        line.id,
+        (current) => current.copyWith(
+          description: 'Access door',
+          quantity: '10',
+          unit: 'Nos',
+        ),
       );
       await tester.pumpAndSettle();
 
+      expect(tester.getSize(table).height, invalidHeight);
       expect(
-        find.textContaining('1 material row needs attention'),
-        findsWidgets,
+        find.byKey(ValueKey('${line.id}-description-error')),
+        findsNothing,
       );
-      await tester.pump(const Duration(seconds: 6));
-      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('${line.id}-quantity-error')), findsNothing);
+      expect(find.byKey(ValueKey('${line.id}-unit-error')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'project picker opens all projects, filters, and commits only a selection',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      await _pumpDraft(tester, projectOptions: _draftProjects);
+
+      final picker = find.byKey(const ValueKey('mr-project'));
+      await tester.tap(picker);
+      await tester.pump();
+
+      final panel = find.byKey(const ValueKey('mr-project-suggestion-panel'));
+      expect(panel, findsOneWidget);
+      expect(
+        find.descendant(
+          of: panel,
+          matching: find.text('Al Dhafra Grid Substation HVAC Works'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: panel, matching: find.text('Nexus 4 Station')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(picker, 'yra315');
+      await tester.pump();
+      expect(
+        find.descendant(of: panel, matching: find.text('Nexus 4 Station')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: panel,
+          matching: find.text('Al Dhafra Grid Substation HVAC Works'),
+        ),
+        findsNothing,
+      );
+
+      await tester.enterText(picker, 'nexus station');
+      await tester.pump();
+
+      expect(
+        find.descendant(of: panel, matching: find.text('Nexus 4 Station')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: panel,
+          matching: find.text('Al Dhafra Grid Substation HVAC Works'),
+        ),
+        findsNothing,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_project_picker_desktop.png'),
+      );
+      await tester.tap(
+        find.descendant(of: panel, matching: find.text('Nexus 4 Station')),
+      );
+      await tester.pumpAndSettle();
+
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final draft = scope.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: 'mobile-mr-user',
+            draftId: _draftId,
+          ),
+        ),
+      );
+      expect(draft.draft.projectId, _alternateProjectId);
+      final field = tester.widget<TextFormField>(picker);
+      expect(field.controller?.text, 'YRA-315 · Nexus 4 Station');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('phone project search and material actions stay touch safe', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pumpDraft(tester, projectOptions: _draftProjects);
+
+    final picker = find.byKey(const ValueKey('mobile-mr-project'));
+    expect(tester.getSize(picker).height, greaterThanOrEqualTo(44));
+    await tester.tap(picker);
+    await tester.pump();
+
+    final panel = find.byKey(const ValueKey('mr-project-suggestion-panel'));
+    expect(panel, findsOneWidget);
+    final panelRect = tester.getRect(panel);
+    expect(panelRect.left, greaterThanOrEqualTo(16));
+    expect(panelRect.right, lessThanOrEqualTo(344));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(panel, findsNothing);
+    expect(
+      tester.widget<TextFormField>(picker).controller?.text,
+      'YRA-322 · Al Dhafra Grid Substation HVAC Works',
+    );
+
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+    );
+    final controller = scope.read(
+      yorksV1MaterialRequestDraftControllerProvider(
+        const YorksV1MaterialRequestDraftKey(
+          ownerAuthUserId: 'mobile-mr-user',
+          draftId: _draftId,
+        ),
+      ).notifier,
+    );
+    await controller.addCustomLine();
+    final line = controller.currentDraft.lines.single;
+    await controller.updateLine(
+      line.id,
+      (current) => current.copyWith(
+        description: 'Access door',
+        quantity: '10',
+        unit: 'Nos',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _continueToMaterials(tester);
+
+    for (final suffix in ['similar', 'custom', 'delete']) {
+      final action = find.byKey(ValueKey('${line.id}-mobile-$suffix'));
+      expect(action, findsOneWidget);
+      expect(tester.getSize(action).width, greaterThanOrEqualTo(44));
+      expect(tester.getSize(action).height, greaterThanOrEqualTo(44));
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tablet uses focused rows and compact validation markers', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1024, 768));
+    await _pumpDraft(tester);
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+    );
+    final controller = scope.read(
+      yorksV1MaterialRequestDraftControllerProvider(
+        const YorksV1MaterialRequestDraftKey(
+          ownerAuthUserId: 'mobile-mr-user',
+          draftId: _draftId,
+        ),
+      ).notifier,
+    );
+    await controller.addCustomLine();
+    await tester.pumpAndSettle();
+    final line = controller.currentDraft.lines.single;
+
+    expect(find.byKey(const ValueKey('mr-project')), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('${line.id}-focused-description-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('${line.id}-focused-quantity-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('${line.id}-focused-unit-error')),
+      findsOneWidget,
+    );
+    expect(find.text('Item description is required'), findsNothing);
+    expect(find.byKey(ValueKey('${line.id}-focused-delete')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tablet request information keeps a balanced workspace', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1024, 768));
+    await _pumpDraft(tester);
+
+    expect(find.byKey(const ValueKey('mr-project')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-mr-information')), findsNothing);
+    expect(find.text('Request Information'), findsWidgets);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_information_tablet_1024x768.png'),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'desktop description typing ranks BOQ before inventory and fills descriptive cells',
@@ -1552,7 +1779,9 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   YorksV1RuntimeConfiguration? runtimeConfiguration,
   YorksV1MaterialRequest? serverRequest,
   String? initialProjectId = _projectId,
+  List<YorksV1MaterialRequestProjectOption>? projectOptions,
 }) async {
+  final projects = projectOptions ?? _draftProjects.take(1).toList();
   final repository = _MaterialRequestRepositoryFixture(
     serverRequest: serverRequest,
   );
@@ -1573,14 +1802,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
         if (boqRepository != null)
           yorksV1BoqRepositoryProvider.overrideWithValue(boqRepository),
         yorksV1MaterialRequestDraftProjectsProvider.overrideWith(
-          (ref) async => const [
-            YorksV1MaterialRequestProjectOption(
-              id: _projectId,
-              reference: 'YRA-322',
-              name: 'Al Dhafra Grid Substation HVAC Works',
-              state: 'active',
-            ),
-          ],
+          (ref) async => projects,
         ),
         yorksV1MaterialRequestScopesProvider(_projectId).overrideWith(
           (ref) async => const [
@@ -1592,6 +1814,17 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
             ),
           ],
         ),
+        for (final project in projects.where((item) => item.id != _projectId))
+          yorksV1MaterialRequestScopesProvider(project.id).overrideWith(
+            (ref) async => [
+              YorksV1MaterialRequestScopeOption(
+                id: 'scope-${project.id}',
+                projectId: project.id,
+                name: 'Common / All Buildings',
+                kind: 'common',
+              ),
+            ],
+          ),
       ],
       child: YorksV1MaterialRequestDraftScreen(
         draftId: _draftId,
