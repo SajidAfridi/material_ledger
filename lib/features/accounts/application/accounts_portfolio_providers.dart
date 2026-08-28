@@ -21,6 +21,10 @@ final yorksAccountsPortfolioControllerProvider =
       YorksAccountsPortfolioController,
       YorksAccountsPortfolioState
     >((ref) {
+      // Preserve the confirmed portfolio while users inspect a project,
+      // export a register, or return through browser history. Identity,
+      // role, and permission-epoch changes below still invalidate the cache.
+      ref.keepAlive();
       ref.watch(yorksV1CurrentRoleProvider);
       ref.watch(yorksV1AuthUserIdProvider);
       ref.watch(yorksAccountsPermissionEpochProvider);

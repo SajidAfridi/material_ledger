@@ -30,6 +30,7 @@ import '../widgets/yorks_accounts_progress_action_sheet.dart';
 import '../widgets/yorks_accounts_receivables_action_sheets.dart';
 import '../widgets/yorks_accounts_records_views.dart';
 import '../widgets/yorks_accounts_supplier_action_sheets.dart';
+import 'yorks_accounts_control_centre_overview.dart';
 
 class YorksAccountsPortfolioScreen extends ConsumerStatefulWidget {
   const YorksAccountsPortfolioScreen({
@@ -119,6 +120,27 @@ class _YorksAccountsPortfolioScreenState
     final state = ref.watch(yorksAccountsPortfolioControllerProvider);
     final projection = state.projection;
     final loading = state.status == YorksAccountsViewStatus.loading;
+    if (widget.controlCentre) {
+      return YorksAccountsControlCentreOverview(
+        state: state,
+        language: language,
+        searchController: _searchController,
+        commercialState: _commercialState,
+        dueState: _dueState,
+        paymentState: _paymentState,
+        activeFilterCount: _activeFilterCount,
+        onSearchChanged: _searchChanged,
+        onApplyFilters: _applyFilters,
+        onClearFilters: _clearFilters,
+        onRetry: _load,
+        onRefresh: () => ref
+            .read(yorksAccountsPortfolioControllerProvider.notifier)
+            .load(_filters),
+        onLoadMore: () => ref
+            .read(yorksAccountsPortfolioControllerProvider.notifier)
+            .loadMore(),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: RefreshIndicator(

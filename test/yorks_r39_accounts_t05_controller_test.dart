@@ -195,6 +195,51 @@ void main() {
       expect(controller.state.projection!.nextProjectId, isNull);
     },
   );
+
+  test(
+    'newer portfolio filters win when an older request finishes last',
+    () async {
+      final repository = _OutOfOrderRepository();
+      final controller = YorksAccountsPortfolioController(repository);
+
+      final older = controller.load(
+        const YorksAccountsPortfolioFilters(search: 'older'),
+      );
+      final newer = controller.load(
+        const YorksAccountsPortfolioFilters(search: 'newer'),
+      );
+
+      repository.newer.complete(_projectionFor(_project2));
+      expect(await newer, isTrue);
+      expect(
+        controller.state.projection!.projects.single.projectId,
+        'project-2',
+      );
+
+      repository.older.complete(_projectionFor(_project));
+      expect(await older, isFalse);
+      expect(
+        controller.state.projection!.projects.single.projectId,
+        'project-2',
+      );
+      expect(controller.state.filters.search, 'newer');
+    },
+  );
+}
+
+final class _OutOfOrderRepository implements YorksAccountsPortfolioRepository {
+  final older = Completer<YorksAccountsPortfolioProjection>();
+  final newer = Completer<YorksAccountsPortfolioProjection>();
+
+  @override
+  Future<YorksAccountsPortfolioProjection> getPortfolio(
+    YorksAccountsPortfolioFilters filters,
+  ) => filters.search == 'older' ? older.future : newer.future;
+
+  @override
+  Future<YorksAccountsProjectOverviewProjection> getProjectOverview(
+    String projectId,
+  ) => throw UnimplementedError();
 }
 
 final class _Repository implements YorksAccountsPortfolioRepository {
@@ -270,6 +315,19 @@ final _pagedTotals = YorksAccountsPortfolioTotals(
   stillDue: _zero,
   pdcExposure: _zero,
   actionCount: 0,
+);
+YorksAccountsPortfolioProjection _projectionFor(
+  YorksAccountsPortfolioProject project,
+) => YorksAccountsPortfolioProjection(
+  actorExactRole: 'accountant',
+  canExport: true,
+  authorizedProjectCount: 1,
+  filteredProjectCount: 1,
+  totals: _totals,
+  projects: [project],
+  actionQueue: const [],
+  nextActivityAt: null,
+  nextProjectId: null,
 );
 final _project = YorksAccountsPortfolioProject(
   projectId: 'project-1',

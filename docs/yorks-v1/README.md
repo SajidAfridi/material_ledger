@@ -47,6 +47,7 @@ explicit V7-to-V1 conflict resolution.
 | [`SCOPED_CAPABILITY_MANAGEMENT.md`](SCOPED_CAPABILITY_MANAGEMENT.md) | Hybrid role-template and person-specific scoped permissions, compatibility, delegation, parity and rollout contract |
 | [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md) | Approved Accounts-only authority, ninth exact role, exact capabilities, defaults, phased rollout and T01 security gate |
 | [`R39_ACCOUNTS_OFFICE_AUDIT_AND_IMPLEMENTATION.md`](R39_ACCOUNTS_OFFICE_AUDIT_AND_IMPLEMENTATION.md) | Source-grounded Accountant landing/office audit, workbook findings, T08 read-projection design, verification and remaining decisions |
+| [`R39_YRA322_MASTER_FILE_RECONCILIATION.md`](R39_YRA322_MASTER_FILE_RECONCILIATION.md) | Audited mapping of the Nexus master workbook into YRA-322 baseline, confirmed progress, exclusions, production evidence and rollback |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |

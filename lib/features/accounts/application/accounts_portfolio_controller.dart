@@ -27,8 +27,10 @@ final class YorksAccountsPortfolioController
     : super(const YorksAccountsPortfolioState());
 
   final YorksAccountsPortfolioRepository _repository;
+  int _loadGeneration = 0;
 
   Future<bool> load([YorksAccountsPortfolioFilters? filters]) async {
+    final generation = ++_loadGeneration;
     final nextFilters = (filters ?? state.filters).copyWith(clearCursor: true);
     state = YorksAccountsPortfolioState(
       status: YorksAccountsViewStatus.loading,
@@ -37,6 +39,7 @@ final class YorksAccountsPortfolioController
     );
     try {
       final projection = await _repository.getPortfolio(nextFilters);
+      if (generation != _loadGeneration) return false;
       state = YorksAccountsPortfolioState(
         status: YorksAccountsViewStatus.success,
         filters: nextFilters,
@@ -44,6 +47,7 @@ final class YorksAccountsPortfolioController
       );
       return true;
     } on YorksV1DomainException catch (error) {
+      if (generation != _loadGeneration) return false;
       final status = _statusFor(error.code);
       state = YorksAccountsPortfolioState(
         status: status,
@@ -65,6 +69,7 @@ final class YorksAccountsPortfolioController
         current.nextProjectId == null) {
       return false;
     }
+    final generation = ++_loadGeneration;
     state = YorksAccountsPortfolioState(
       status: YorksAccountsViewStatus.success,
       filters: state.filters,
@@ -78,6 +83,7 @@ final class YorksAccountsPortfolioController
           beforeProjectId: current.nextProjectId,
         ),
       );
+      if (generation != _loadGeneration) return false;
       final merged = current.append(next);
       state = YorksAccountsPortfolioState(
         status: YorksAccountsViewStatus.success,
@@ -86,6 +92,7 @@ final class YorksAccountsPortfolioController
       );
       return true;
     } on YorksV1DomainException catch (error) {
+      if (generation != _loadGeneration) return false;
       final status = _statusFor(error.code);
       if (status == YorksAccountsViewStatus.forbidden ||
           status == YorksAccountsViewStatus.sessionExpired ||
@@ -105,6 +112,7 @@ final class YorksAccountsPortfolioController
       }
       return false;
     } on FormatException catch (error) {
+      if (generation != _loadGeneration) return false;
       state = YorksAccountsPortfolioState(
         status: YorksAccountsViewStatus.success,
         filters: state.filters,

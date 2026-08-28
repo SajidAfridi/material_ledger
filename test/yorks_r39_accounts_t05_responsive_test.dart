@@ -66,6 +66,52 @@ void main() {
     );
   });
 
+  testWidgets(
+    'Accounts control centre matches the desktop overview hierarchy',
+    (tester) async {
+      await _pumpPortfolio(tester, const Size(1440, 1000), controlCentre: true);
+
+      expect(find.text('Confirmed Work'), findsWidgets);
+      expect(find.text('Available to Claim'), findsWidgets);
+      expect(find.text('Claimed (Submitted)'), findsOneWidget);
+      expect(find.text('Certified by Client'), findsOneWidget);
+      expect(find.text('Paid to Yorks'), findsOneWidget);
+      expect(find.text('Financial Health'), findsOneWidget);
+      expect(find.text('Project Accounts'), findsOneWidget);
+      expect(find.byType(DataTable), findsOneWidget);
+      expect(find.text('Alerts & Notifications'), findsOneWidget);
+      expect(find.text('Recent Activities'), findsOneWidget);
+      expect(find.text('My Action Queues'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(YorksAccountsPortfolioScreen),
+        matchesGoldenFile('goldens/yorks_r39_accounts_overview_desktop.png'),
+      );
+    },
+  );
+
+  testWidgets('Accounts control centre is card-based and usable at 390px', (
+    tester,
+  ) async {
+    await _pumpPortfolio(tester, const Size(390, 844), controlCentre: true);
+
+    expect(find.byType(DataTable), findsNothing);
+    expect(find.text('Financial Health'), findsOneWidget);
+    await expectLater(
+      find.byType(YorksAccountsPortfolioScreen),
+      matchesGoldenFile('goldens/yorks_r39_accounts_overview_mobile.png'),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Project Accounts'),
+      320,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Project Accounts'), findsOneWidget);
+    expect(find.textContaining('YRA-322'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Billing Progress exposes protected office columns on desktop', (
     tester,
   ) async {
@@ -288,7 +334,11 @@ const _releaseViewports = <Size>[
   Size(360, 800),
 ];
 
-Future<void> _pumpPortfolio(WidgetTester tester, Size size) async {
+Future<void> _pumpPortfolio(
+  WidgetTester tester,
+  Size size, {
+  bool controlCentre = false,
+}) async {
   await tester.pumpWidget(const SizedBox.shrink());
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -316,7 +366,7 @@ Future<void> _pumpPortfolio(WidgetTester tester, Size size) async {
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: YorksAccountsPortfolioScreen(),
+        home: YorksAccountsPortfolioScreen(controlCentre: controlCentre),
       ),
     ),
   );
