@@ -353,6 +353,27 @@ void main() {
       expect(find.text('FD-12'), findsWidgets);
       expect(find.text('Superflex'), findsWidgets);
       expect(find.text('Meter'), findsWidgets);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final selectedLine = container
+          .read(
+            yorksV1MaterialRequestDraftControllerProvider(
+              const YorksV1MaterialRequestDraftKey(
+                ownerAuthUserId: 'mobile-mr-user',
+                draftId: _draftId,
+              ),
+            ),
+          )
+          .draft
+          .lines
+          .single;
+      expect(selectedLine.description, 'Flexible duct');
+      expect(selectedLine.size, '12 inch');
+      expect(selectedLine.model, 'FD-12');
+      expect(selectedLine.brandOrigin, 'Superflex');
+      expect(selectedLine.unit, 'Meter');
+      expect(selectedLine.quantity, isEmpty);
       expect(tester.takeException(), isNull);
       expect(
         find.byType(MaterialApp),

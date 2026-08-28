@@ -190,9 +190,11 @@ final yorksV1MaterialRequestPrivateDraftsProvider = FutureProvider.autoDispose
       ref,
       ownerAuthUserId,
     ) {
-      ref.watch(
-        yorksV1MaterialRequestLocalDraftRevisionProvider(ownerAuthUserId),
-      );
+      // Local editor persistence is intentionally not a dependency here.
+      // Every keystroke updates the device recovery index; coupling that
+      // revision to this server index caused a second list RPC after every
+      // row edit. Auto-dispose refreshes this projection when the register is
+      // reopened, while explicit destructive actions invalidate it directly.
       final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
       if (repository is! YorksV1MaterialRequestPhase2Repository) {
         return const <YorksV1PrivateMaterialRequestDraftRecord>[];

@@ -47,12 +47,14 @@ class YorksV1MaterialRequestDraftController
     required YorksV1MaterialRequestRepository repository,
     String Function()? uuidFactory,
     VoidCallback? onLocalDraftsChanged,
+    Duration privateSyncDebounce = const Duration(milliseconds: 1200),
   }) : _ownerAuthUserId = ownerAuthUserId,
        _draftId = draftId,
        _store = store,
        _repository = repository,
        _uuidFactory = uuidFactory ?? const Uuid().v4,
        _onLocalDraftsChanged = onLocalDraftsChanged,
+       _privateSyncDebounceDuration = privateSyncDebounce,
        super(
          YorksV1MaterialRequestDraftState(
            draft: _restoreOrEmpty(
@@ -72,10 +74,16 @@ class YorksV1MaterialRequestDraftController
   final YorksV1MaterialRequestRepository _repository;
   final String Function() _uuidFactory;
   final VoidCallback? _onLocalDraftsChanged;
+  final Duration _privateSyncDebounceDuration;
   Future<void> _persistQueue = Future<void>.value();
   bool _connectedCommandInFlight = false;
   bool _editingBeforeApproval = false;
   Timer? _privateSyncDebounce;
+  Future<void>? _privateHydration;
+  bool _privateHydrationCompleted = false;
+  bool _privateSyncInFlight = false;
+  bool _privateSyncRequested = false;
+  bool _disposed = false;
   late YorksV1MaterialRequestDraft _acceptedDraft;
 
   /// Read-only snapshot for UI callbacks that need to guard a deferred
@@ -101,22 +109,36 @@ class YorksV1MaterialRequestDraftController
   /// Reconciles the owner-only cross-device recovery copy before an untouched
   /// editor starts. A newer local crash-recovery copy always wins; a newer
   /// account copy replaces only an untouched/older device copy.
-  Future<void> hydratePrivateDraft() async {
+  Future<void> hydratePrivateDraft() {
+    if (_privateHydrationCompleted || state.draft.serverRecordVersion > 0) {
+      return Future<void>.value();
+    }
+    return _privateHydration ??= _hydratePrivateDraftOnce().whenComplete(() {
+      _privateHydrationCompleted = true;
+      _privateHydration = null;
+    });
+  }
+
+  Future<void> _hydratePrivateDraftOnce() async {
     final repository = _phase2Repository;
     if (repository == null || state.draft.serverRecordVersion > 0) return;
-    final local = state.draft;
+    final initialLocal = state.draft;
     try {
       final remote = await repository.getPrivateDraft(
         draftId: _draftId,
         ownerAuthUserId: _ownerAuthUserId,
-        submissionIdempotencyKey: local.submissionIdempotencyKey,
+        submissionIdempotencyKey: initialLocal.submissionIdempotencyKey,
       );
+      if (_disposed) return;
+      final current = state.draft;
+      final editedWhileLoading = current.updatedAt != initialLocal.updatedAt;
       if (remote == null) {
-        if (local.hasRecoverableContent) _schedulePrivateSync();
+        if (current.hasRecoverableContent) _schedulePrivateSync();
         return;
       }
-      if (!local.hasRecoverableContent ||
-          remote.clientUpdatedAt.isAfter(local.updatedAt)) {
+      if (!editedWhileLoading &&
+          (!current.hasRecoverableContent ||
+              remote.clientUpdatedAt.isAfter(current.updatedAt))) {
         _acceptedDraft = remote.draft;
         state = YorksV1MaterialRequestDraftState(
           draft: remote.draft,
@@ -125,19 +147,37 @@ class YorksV1MaterialRequestDraftController
         await _persist(remote.draft);
         return;
       }
-      final reconciled = local.copyWith(
+      if (editedWhileLoading &&
+          remote.clientUpdatedAt.isAfter(initialLocal.updatedAt)) {
+        // Both copies changed while the remote recovery read was pending.
+        // Keep every character entered in this editor, but do not adopt the
+        // remote version and silently overwrite the other device on the next
+        // sync. The visible conflict can then be resolved deliberately.
+        state = YorksV1MaterialRequestDraftState(
+          draft: current,
+          status: YorksV1MaterialRequestDraftSyncStatus.conflict,
+          errorCode: YorksV1DomainErrorCode.conflict,
+        );
+        return;
+      }
+      // A delayed hydration response may arrive after the engineer has begun
+      // typing. Preserve that live editor state and merge only the server's
+      // concurrency metadata before scheduling the newest copy for sync.
+      final reconciled = current.copyWith(
         privateSyncVersion: remote.syncVersion,
         privateSyncedAt: remote.serverUpdatedAt,
       );
       state = YorksV1MaterialRequestDraftState(draft: reconciled);
       await _persist(reconciled);
-      if (local.updatedAt.isAfter(remote.clientUpdatedAt)) {
+      if (editedWhileLoading ||
+          current.updatedAt.isAfter(remote.clientUpdatedAt)) {
         _schedulePrivateSync();
       }
     } on YorksV1DomainException catch (error) {
+      if (_disposed) return;
       if (error.code == YorksV1DomainErrorCode.conflict) {
         state = YorksV1MaterialRequestDraftState(
-          draft: local,
+          draft: state.draft,
           status: YorksV1MaterialRequestDraftSyncStatus.conflict,
           errorCode: error.code,
         );
@@ -893,12 +933,37 @@ class YorksV1MaterialRequestDraftController
     }
     _privateSyncDebounce?.cancel();
     _privateSyncDebounce = Timer(
-      const Duration(milliseconds: 850),
-      () => unawaited(_syncPrivateDraft()),
+      _privateSyncDebounceDuration,
+      _requestPrivateSync,
     );
   }
 
-  Future<void> _syncPrivateDraft() async {
+  void _requestPrivateSync() {
+    if (_disposed) return;
+    _privateSyncRequested = true;
+    if (_privateSyncInFlight) return;
+    unawaited(_drainPrivateSync());
+  }
+
+  Future<void> _drainPrivateSync() async {
+    if (_privateSyncInFlight || _disposed) return;
+    _privateSyncInFlight = true;
+    try {
+      while (_privateSyncRequested && !_disposed) {
+        _privateSyncRequested = false;
+        await _syncPrivateDraftOnce();
+      }
+    } finally {
+      _privateSyncInFlight = false;
+      // Close the narrow hand-off race where a debounce fires after the loop
+      // observes no queued work but before this in-flight flag is released.
+      if (_privateSyncRequested && !_disposed) {
+        unawaited(_drainPrivateSync());
+      }
+    }
+  }
+
+  Future<void> _syncPrivateDraftOnce() async {
     final repository = _phase2Repository;
     final snapshot = state.draft;
     if (repository == null || snapshot.serverRecordVersion > 0) return;
@@ -914,6 +979,7 @@ class YorksV1MaterialRequestDraftController
           idempotencyKey: _uuidFactory(),
         ),
       );
+      if (_disposed) return;
       final current = state.draft;
       final reconciled = current.copyWith(
         privateSyncVersion: remote.syncVersion,
@@ -926,10 +992,11 @@ class YorksV1MaterialRequestDraftController
             : YorksV1MaterialRequestDraftSyncStatus.local,
       );
       await _persist(reconciled);
-      if (current.updatedAt != snapshot.updatedAt) _schedulePrivateSync();
     } on YorksV1DomainException catch (error) {
+      if (_disposed) return;
+      final current = state.draft;
       state = YorksV1MaterialRequestDraftState(
-        draft: snapshot,
+        draft: current,
         status: error.code == YorksV1DomainErrorCode.conflict
             ? YorksV1MaterialRequestDraftSyncStatus.conflict
             : YorksV1MaterialRequestDraftSyncStatus.local,
@@ -938,8 +1005,9 @@ class YorksV1MaterialRequestDraftController
             : null,
       );
     } catch (_) {
+      if (_disposed) return;
       state = YorksV1MaterialRequestDraftState(
-        draft: snapshot,
+        draft: state.draft,
         status: YorksV1MaterialRequestDraftSyncStatus.local,
       );
     }
@@ -971,6 +1039,7 @@ class YorksV1MaterialRequestDraftController
 
   @override
   void dispose() {
+    _disposed = true;
     _privateSyncDebounce?.cancel();
     super.dispose();
   }

@@ -1889,6 +1889,109 @@ void main() {
   });
 
   test(
+    'private autosave serializes requests and never restores an older row edit',
+    () async {
+      final repository = _Phase2FakeRequestRepository();
+      final blocker = Completer<void>();
+      repository
+        ..privateSyncDelay = blocker.future
+        ..privateSyncFailure = Exception('offline');
+      final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: store,
+        repository: repository,
+        uuidFactory: _Ids().next,
+        privateSyncDebounce: const Duration(milliseconds: 1),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.addCustomLine();
+      final lineId = controller.state.draft.lines.single.id;
+      await controller.updateLine(
+        lineId,
+        (line) => line.copyWith(
+          description: 'Supply air diffuser',
+          quantity: '10',
+          unit: 'Nos',
+        ),
+      );
+      await repository.firstPrivateSyncStarted.future;
+      expect(repository.activePrivateSyncs, 1);
+
+      await controller.updateLine(
+        lineId,
+        (line) => line.copyWith(quantity: '25'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(repository.maxConcurrentPrivateSyncs, 1);
+
+      blocker.complete();
+      await repository.secondPrivateSyncStarted.future.timeout(
+        const Duration(seconds: 1),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repository.privateSyncCallCount, 2);
+      expect(repository.maxConcurrentPrivateSyncs, 1);
+      expect(controller.state.draft.lines.single.quantity, '25');
+      expect(store.readAll().single.lines.single.quantity, '25');
+    },
+  );
+
+  test(
+    'delayed private hydration cannot overwrite edits made after opening',
+    () async {
+      final repository = _Phase2FakeRequestRepository();
+      final blocker = Completer<void>();
+      final remoteUpdatedAt = DateTime.utc(2026, 8, 28, 8);
+      final remoteDraft =
+          YorksV1MaterialRequestDraft.empty(
+            id: _draftId,
+            ownerAuthUserId: _siteEngineer,
+            submissionIdempotencyKey: 'remote-submission-key',
+          ).copyWith(
+            title: 'Older server title',
+            privateSyncVersion: 1,
+            updatedAt: remoteUpdatedAt,
+          );
+      repository
+        ..privateDraft = YorksV1PrivateMaterialRequestDraftRecord(
+          draftId: _draftId,
+          syncVersion: 1,
+          draft: remoteDraft,
+          clientUpdatedAt: remoteUpdatedAt,
+          serverUpdatedAt: remoteUpdatedAt,
+        )
+        ..privateHydrationDelay = blocker.future;
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: repository,
+        uuidFactory: _Ids().next,
+        privateSyncDebounce: const Duration(hours: 1),
+      );
+      addTearDown(controller.dispose);
+
+      final firstHydration = controller.hydratePrivateDraft();
+      final duplicateHydration = controller.hydratePrivateDraft();
+      await controller.setTitle('Live engineer edit');
+      blocker.complete();
+      await Future.wait([firstHydration, duplicateHydration]);
+
+      expect(repository.privateHydrationCallCount, 1);
+      expect(controller.state.draft.title, 'Live engineer edit');
+      expect(controller.state.draft.privateSyncVersion, 0);
+      expect(
+        controller.state.status,
+        YorksV1MaterialRequestDraftSyncStatus.conflict,
+      );
+    },
+  );
+
+  test(
     'Phase 2 draft recovery follows the owner and deletes across devices',
     () async {
       final repository = _Phase2FakeRequestRepository();
@@ -1898,11 +2001,12 @@ void main() {
         store: _MemoryStore<YorksV1MaterialRequestDraft>(),
         repository: repository,
         uuidFactory: _Ids().next,
+        privateSyncDebounce: const Duration(milliseconds: 10),
       );
       addTearDown(first.dispose);
 
       await first.setTitle('Cross-device dampers');
-      await Future<void>.delayed(const Duration(milliseconds: 900));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
       expect(repository.privateDraft?.syncVersion, 1);
       expect(
         first.state.status,
@@ -2181,6 +2285,15 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
 class _Phase2FakeRequestRepository extends _FakeRequestRepository
     implements YorksV1MaterialRequestPhase2Repository {
   YorksV1PrivateMaterialRequestDraftRecord? privateDraft;
+  Future<void>? privateHydrationDelay;
+  Future<void>? privateSyncDelay;
+  Object? privateSyncFailure;
+  int privateHydrationCallCount = 0;
+  int privateSyncCallCount = 0;
+  int activePrivateSyncs = 0;
+  int maxConcurrentPrivateSyncs = 0;
+  final Completer<void> firstPrivateSyncStarted = Completer<void>();
+  final Completer<void> secondPrivateSyncStarted = Completer<void>();
 
   @override
   Future<void> deletePrivateDraft({
@@ -2201,7 +2314,12 @@ class _Phase2FakeRequestRepository extends _FakeRequestRepository
     required String draftId,
     required String ownerAuthUserId,
     required String submissionIdempotencyKey,
-  }) async => privateDraft?.draftId == draftId ? privateDraft : null;
+  }) async {
+    privateHydrationCallCount++;
+    final delay = privateHydrationDelay;
+    if (delay != null) await delay;
+    return privateDraft?.draftId == draftId ? privateDraft : null;
+  }
 
   @override
   Future<YorksV1MaterialRequestWorkAssignment> getWorkAssignment(
@@ -2266,24 +2384,43 @@ class _Phase2FakeRequestRepository extends _FakeRequestRepository
   Future<YorksV1PrivateMaterialRequestDraftRecord> syncPrivateDraft(
     YorksV1SyncPrivateMaterialRequestDraftInput input,
   ) async {
-    final currentVersion = privateDraft?.syncVersion ?? 0;
-    if (input.draft.privateSyncVersion != currentVersion) {
-      throw const YorksV1DomainException(YorksV1DomainErrorCode.conflict);
+    privateSyncCallCount++;
+    if (privateSyncCallCount == 1 && !firstPrivateSyncStarted.isCompleted) {
+      firstPrivateSyncStarted.complete();
+    } else if (privateSyncCallCount == 2 &&
+        !secondPrivateSyncStarted.isCompleted) {
+      secondPrivateSyncStarted.complete();
     }
-    final now = DateTime.now().toUtc();
-    final version = currentVersion + 1;
-    final record = YorksV1PrivateMaterialRequestDraftRecord(
-      draftId: input.draft.id,
-      syncVersion: version,
-      draft: input.draft.copyWith(
-        privateSyncVersion: version,
-        privateSyncedAt: now,
-      ),
-      clientUpdatedAt: input.draft.updatedAt,
-      serverUpdatedAt: now,
-    );
-    privateDraft = record;
-    return record;
+    activePrivateSyncs++;
+    if (activePrivateSyncs > maxConcurrentPrivateSyncs) {
+      maxConcurrentPrivateSyncs = activePrivateSyncs;
+    }
+    try {
+      final delay = privateSyncDelay;
+      if (delay != null) await delay;
+      final failure = privateSyncFailure;
+      if (failure != null) throw failure;
+      final currentVersion = privateDraft?.syncVersion ?? 0;
+      if (input.draft.privateSyncVersion != currentVersion) {
+        throw const YorksV1DomainException(YorksV1DomainErrorCode.conflict);
+      }
+      final now = DateTime.now().toUtc();
+      final version = currentVersion + 1;
+      final record = YorksV1PrivateMaterialRequestDraftRecord(
+        draftId: input.draft.id,
+        syncVersion: version,
+        draft: input.draft.copyWith(
+          privateSyncVersion: version,
+          privateSyncedAt: now,
+        ),
+        clientUpdatedAt: input.draft.updatedAt,
+        serverUpdatedAt: now,
+      );
+      privateDraft = record;
+      return record;
+    } finally {
+      activePrivateSyncs--;
+    }
   }
 }
 

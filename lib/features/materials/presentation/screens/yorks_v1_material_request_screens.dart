@@ -6323,6 +6323,7 @@ class _MaterialSuggestionPanel extends StatelessWidget {
         children.add(
           InkWell(
             key: ValueKey('mr-suggestion-${item.id}'),
+            canRequestFocus: false,
             onTap: () => onSelected(item),
             onHover: (hovering) {
               if (hovering) onHovered?.call(item);
@@ -6426,6 +6427,7 @@ class _MaterialSuggestionPanel extends StatelessWidget {
       children.add(
         InkWell(
           key: const ValueKey('mr-keep-custom-suggestion'),
+          canRequestFocus: false,
           onTap: onKeepCustom,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -6535,6 +6537,7 @@ YorksV1MaterialRequestLine _applyMaterialSuggestion(
   size: suggestion.size,
   model: suggestion.model,
   equipmentTag: suggestion.equipmentTag,
+  planningModelTag: null,
   unit: suggestion.unit,
   quantityIsSuggested: false,
 );
@@ -6593,6 +6596,7 @@ class _AnchoredMaterialDescriptionAutocompleteState
   List<YorksV1MaterialRequestInventorySuggestion> _values = const [];
   int _highlightedIndex = 0;
   int _searchEpoch = 0;
+  final Object _tapRegionGroupId = Object();
 
   @override
   void initState() {
@@ -6689,22 +6693,25 @@ class _AnchoredMaterialDescriptionAutocompleteState
                 offset: geometry.offset,
                 child: SizedBox(
                   width: geometry.width,
-                  child: _MaterialSuggestionPanel(
-                    values: _values,
-                    onSelected: _select,
-                    maxWidth: geometry.width,
-                    maxHeight: geometry.height,
-                    customQuery: widget.textController.text,
-                    onKeepCustom: _keepCustom,
-                    highlightedId: _values.isEmpty
-                        ? null
-                        : _values[_highlightedIndex].id,
-                    onHovered: (item) {
-                      final index = _values.indexOf(item);
-                      if (index < 0 || index == _highlightedIndex) return;
-                      _highlightedIndex = index;
-                      _overlayEntry?.markNeedsBuild();
-                    },
+                  child: TextFieldTapRegion(
+                    groupId: _tapRegionGroupId,
+                    child: _MaterialSuggestionPanel(
+                      values: _values,
+                      onSelected: _select,
+                      maxWidth: geometry.width,
+                      maxHeight: geometry.height,
+                      customQuery: widget.textController.text,
+                      onKeepCustom: _keepCustom,
+                      highlightedId: _values.isEmpty
+                          ? null
+                          : _values[_highlightedIndex].id,
+                      onHovered: (item) {
+                        final index = _values.indexOf(item);
+                        if (index < 0 || index == _highlightedIndex) return;
+                        _highlightedIndex = index;
+                        _overlayEntry?.markNeedsBuild();
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -6783,6 +6790,7 @@ class _AnchoredMaterialDescriptionAutocompleteState
         link: _layerLink,
         child: TextFormField(
           key: widget.fieldKey,
+          groupId: _tapRegionGroupId,
           controller: widget.textController,
           focusNode: widget.focusNode,
           enabled: widget.enabled,
