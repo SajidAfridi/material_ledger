@@ -462,7 +462,7 @@ void main() {
     await tester.pumpAndSettle();
     await _continueToMaterials(tester);
 
-    for (final suffix in ['similar', 'custom', 'delete']) {
+    for (final suffix in ['edit', 'similar', 'custom', 'delete']) {
       final action = find.byKey(ValueKey('${line.id}-mobile-$suffix'));
       expect(action, findsOneWidget);
       expect(tester.getSize(action).width, greaterThanOrEqualTo(44));
@@ -470,6 +470,106 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'mobile selected material opens its focused editor and updates in place',
+    (tester) async {
+      await _setViewport(tester, const Size(390, 844));
+      await _pumpDraft(tester);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final controller = scope.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: 'mobile-mr-user',
+            draftId: _draftId,
+          ),
+        ).notifier,
+      );
+      await controller.addCustomLine();
+      final original = controller.currentDraft.lines.single;
+      await controller.updateLine(
+        original.id,
+        (current) => current.copyWith(
+          description: 'Access door',
+          brandOrigin: 'Beta UAE',
+          size: '100x100',
+          model: 'AD-100',
+          quantity: '11',
+          unit: 'Nos',
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _continueToMaterials(tester);
+
+      final cardBody = find.text('Access door');
+      expect(cardBody, findsOneWidget);
+      await tester.tap(cardBody);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mobile-mr-custom-material')),
+        findsOneWidget,
+      );
+      expect(find.text('Edit Material'), findsWidgets);
+      final fields = find.byType(TextFormField);
+      expect(
+        tester.widget<TextFormField>(fields.at(0)).controller?.text,
+        'Access door',
+      );
+      expect(
+        tester.widget<TextFormField>(fields.at(1)).controller?.text,
+        'Beta UAE',
+      );
+      expect(
+        tester.widget<TextFormField>(fields.at(2)).controller?.text,
+        '100x100',
+      );
+      expect(
+        tester.widget<TextFormField>(fields.at(3)).controller?.text,
+        'AD-100',
+      );
+      expect(tester.widget<TextFormField>(fields.at(4)).controller?.text, '11');
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_edit_existing_mobile_390x844.png'),
+      );
+
+      await tester.enterText(fields.at(0), 'Access door revised');
+      await tester.enterText(fields.at(4), '12.5');
+      await tester.tap(find.text('Save Changes').hitTestable());
+      await tester.pumpAndSettle();
+
+      final updated = controller.currentDraft.lines.single;
+      expect(updated.id, original.id);
+      expect(updated.description, 'Access door revised');
+      expect(updated.quantity, '12.5');
+      expect(updated.brandOrigin, 'Beta UAE');
+      expect(updated.size, '100x100');
+      expect(updated.model, 'AD-100');
+      expect(updated.unit, 'Nos');
+      expect(find.text('Access door revised'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(ValueKey('${original.id}-mobile-edit')).hitTestable(),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).at(0), 'Not committed');
+      await tester.tap(find.text('Back').hitTestable());
+      await tester.pumpAndSettle();
+
+      expect(controller.currentDraft.lines, hasLength(1));
+      expect(controller.currentDraft.lines.single.id, original.id);
+      expect(
+        controller.currentDraft.lines.single.description,
+        'Access door revised',
+      );
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('tablet uses focused rows and compact validation markers', (
     tester,

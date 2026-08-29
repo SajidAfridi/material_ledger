@@ -3062,6 +3062,7 @@ class _YorksMobileMaterialRequestDraftFlowState
   late final TextEditingController _customModel;
   late final TextEditingController _customQuantity;
   String? _editingCustomLineId;
+  bool _discardCustomLineOnClose = false;
   YorksV1MaterialRequestInventorySuggestion? _customSuggestion;
   String _customUnit = '';
   bool _customValidationAttempted = false;
@@ -3108,7 +3109,9 @@ class _YorksMobileMaterialRequestDraftFlowState
       _MobileMaterialRequestSourcePage.boqRows =>
         YorksV1MaterialRequestStrings.selectedItems.primary,
       _MobileMaterialRequestSourcePage.custom =>
-        YorksV1MaterialRequestStrings.unplannedMaterial.primary,
+        _editingCustomLineId != null && !_discardCustomLineOnClose
+            ? AppStrings.editMaterial.primary
+            : YorksV1MaterialRequestStrings.unplannedMaterial.primary,
     };
     return Scaffold(
       backgroundColor: AppColors.mobileSurface,
@@ -3426,6 +3429,7 @@ class _YorksMobileMaterialRequestDraftFlowState
                 _MobileMrDraftLineCard(
                   line: line,
                   enabled: !_busy,
+                  onEdit: () => _editMaterial(line),
                   onAddSimilar: () => _addSimilarMaterial(line),
                   onAddCustom: () => _addCustomMaterialAfter(line),
                   onRemove: () => widget.controller.removeLine(line.id),
@@ -3825,7 +3829,9 @@ class _YorksMobileMaterialRequestDraftFlowState
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
             children: [
               Text(
-                YorksV1MaterialRequestStrings.unplannedMaterial.primary,
+                _editingCustomLineId != null && !_discardCustomLineOnClose
+                    ? AppStrings.editMaterial.primary
+                    : YorksV1MaterialRequestStrings.unplannedMaterial.primary,
                 style: AppTypography.headlineMedium.copyWith(
                   fontSize: 25,
                   fontWeight: FontWeight.w800,
@@ -3833,7 +3839,13 @@ class _YorksMobileMaterialRequestDraftFlowState
               ),
               const SizedBox(height: 4),
               Text(
-                YorksV1MaterialRequestStrings.requestScopeDescription.primary,
+                _editingCustomLineId != null && !_discardCustomLineOnClose
+                    ? YorksV1MaterialRequestStrings
+                          .editMaterialDescription
+                          .primary
+                    : YorksV1MaterialRequestStrings
+                          .requestScopeDescription
+                          .primary,
                 style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
               ),
               const SizedBox(height: 14),
@@ -4224,6 +4236,8 @@ class _YorksMobileMaterialRequestDraftFlowState
       return;
     }
     final editingLineId = _editingCustomLineId;
+    final editedExistingLine =
+        editingLineId != null && !_discardCustomLineOnClose;
     if (editingLineId == null) await widget.controller.addCustomLine();
     final line = editingLineId == null
         ? widget.controller.currentDraft.lines.lastOrNull
@@ -4251,6 +4265,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     setState(() {
       _sourcePage = _MobileMaterialRequestSourcePage.none;
       _editingCustomLineId = null;
+      _discardCustomLineOnClose = false;
       _customSuggestion = null;
       _customDescription.clear();
       _customBrand.clear();
@@ -4260,7 +4275,28 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customUnit = '';
       _customValidationAttempted = false;
     });
-    _snack(context, YorksV1MaterialRequestStrings.itemAdded.primary);
+    _snack(
+      context,
+      editedExistingLine
+          ? YorksV1MaterialRequestStrings.itemUpdated.primary
+          : YorksV1MaterialRequestStrings.itemAdded.primary,
+    );
+  }
+
+  void _editMaterial(YorksV1MaterialRequestLine line) {
+    setState(() {
+      _editingCustomLineId = line.id;
+      _discardCustomLineOnClose = false;
+      _customSuggestion = null;
+      _customDescription.text = line.description;
+      _customBrand.text = line.brandOrigin ?? '';
+      _customSize.text = line.size ?? '';
+      _customModel.text = line.model ?? line.planningModelTag ?? '';
+      _customQuantity.text = line.quantity;
+      _customUnit = line.unit;
+      _customValidationAttempted = false;
+      _sourcePage = _MobileMaterialRequestSourcePage.custom;
+    });
   }
 
   Future<void> _addSimilarMaterial(YorksV1MaterialRequestLine source) async {
@@ -4271,6 +4307,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     final similar = lines[sourceIndex + 1];
     setState(() {
       _editingCustomLineId = similar.id;
+      _discardCustomLineOnClose = true;
       _customSuggestion = null;
       _customDescription.text = similar.description;
       _customBrand.text = similar.brandOrigin ?? '';
@@ -4293,6 +4330,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     final custom = lines[sourceIndex + 1];
     setState(() {
       _editingCustomLineId = custom.id;
+      _discardCustomLineOnClose = true;
       _customSuggestion = null;
       _customDescription.clear();
       _customBrand.clear();
@@ -4306,7 +4344,9 @@ class _YorksMobileMaterialRequestDraftFlowState
   }
 
   Future<void> _closeCustomMaterialEditor() async {
-    final provisionalLineId = _editingCustomLineId;
+    final provisionalLineId = _discardCustomLineOnClose
+        ? _editingCustomLineId
+        : null;
     if (provisionalLineId != null) {
       await widget.controller.removeLine(provisionalLineId);
     }
@@ -4314,6 +4354,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     setState(() {
       _sourcePage = _MobileMaterialRequestSourcePage.none;
       _editingCustomLineId = null;
+      _discardCustomLineOnClose = false;
       _customSuggestion = null;
       _customDescription.clear();
       _customBrand.clear();
@@ -4553,6 +4594,7 @@ class _MobileMrDraftLineCard extends StatelessWidget {
   const _MobileMrDraftLineCard({
     required this.line,
     required this.enabled,
+    required this.onEdit,
     required this.onAddSimilar,
     required this.onAddCustom,
     required this.onRemove,
@@ -4560,6 +4602,7 @@ class _MobileMrDraftLineCard extends StatelessWidget {
 
   final YorksV1MaterialRequestLine line;
   final bool enabled;
+  final VoidCallback onEdit;
   final VoidCallback onAddSimilar;
   final VoidCallback onAddCustom;
   final VoidCallback onRemove;
@@ -4579,6 +4622,7 @@ class _MobileMrDraftLineCard extends StatelessWidget {
       color: errors.isEmpty
           ? AppColors.surfaceContainerLowest
           : AppColors.errorContainer,
+      onTap: enabled ? onEdit : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -4642,6 +4686,12 @@ class _MobileMrDraftLineCard extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _MrEditButton(
+                  buttonKey: ValueKey('${line.id}-mobile-edit'),
+                  enabled: enabled,
+                  onPressed: onEdit,
+                ),
+                const SizedBox(width: 6),
                 _MrSimilarButton(
                   buttonKey: ValueKey('${line.id}-mobile-similar'),
                   enabled: enabled,
@@ -8256,6 +8306,33 @@ class _MrDeleteButton extends StatelessWidget {
     icon: const Icon(Icons.close_rounded, color: AppColors.error),
     style: IconButton.styleFrom(
       side: const BorderSide(color: AppColors.error),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      minimumSize: const Size(44, 44),
+    ),
+    onPressed: enabled ? onPressed : null,
+  );
+}
+
+class _MrEditButton extends StatelessWidget {
+  const _MrEditButton({
+    this.buttonKey,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final Key? buttonKey;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: buttonKey,
+    tooltip: AppStrings.editMaterial.primary,
+    icon: const Icon(Icons.edit_outlined, color: AppColors.blue),
+    style: IconButton.styleFrom(
+      side: const BorderSide(color: AppColors.line),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
       ),

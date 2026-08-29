@@ -1040,6 +1040,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'آئٹم اس ڈرافٹ میں شامل کر دی گئی ہے۔',
     hi: 'आइटम इस ड्राफ़्ट में जोड़ दी गई है।',
   );
+  static const itemUpdated = TranslatableString(
+    en: 'Item changes saved.',
+    ar: 'تم حفظ تغييرات البند.',
+    ur: 'آئٹم کی تبدیلیاں محفوظ ہو گئی ہیں۔',
+    hi: 'आइटम के बदलाव सहेज दिए गए हैं।',
+  );
+  static const editMaterialDescription = TranslatableString(
+    en: 'Update this item’s description and technical details. Quantity remains editable.',
+    ar: 'حدّث وصف هذا البند وتفاصيله الفنية. تظل الكمية قابلة للتعديل.',
+    ur: 'اس آئٹم کی تفصیل اور تکنیکی معلومات اپ ڈیٹ کریں۔ مقدار قابل ترمیم رہے گی۔',
+    hi: 'इस आइटम का विवरण और तकनीकी जानकारी अपडेट करें। मात्रा संपादन योग्य रहेगी।',
+  );
   static const workflowTimeline = TranslatableString(
     en: 'Workflow timeline',
     ar: 'الجدول الزمني لسير العمل',
