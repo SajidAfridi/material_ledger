@@ -1,6 +1,7 @@
 # YRA-322 Nexus Master File Reconciliation
 
-Status: **production applied on 28 August 2026**
+Status: **initial import applied on 28 August 2026; active-baseline
+reconciliation prepared on 29 August 2026**
 
 Source: `Project Master File - Nexus 4 Station.xlsx`
 
@@ -33,10 +34,26 @@ workbook.
 | DF7W Design | `H42`, `I42`, `W42`, `X42` | 100% of stage / AED 429,800.00 |
 | Overall confirmed work | `W58`, `X58` | 10.00% / AED 1,719,200.00 |
 
-The baseline already matched the workbook and was verified without creating a
-new revision. Four Design progress rows were confirmed against the immutable
-source reconciliation. Material Supply, Installation, Commissioning &
-Handover and Energizing remain zero.
+Baseline revision 1 already matched the workbook and was verified without
+creating a replacement baseline. Four Design progress rows were confirmed
+against the immutable source reconciliation. Material Supply, Installation,
+Commissioning & Handover and Energizing remained zero.
+
+## Active-baseline reconciliation
+
+A later approved management-review-policy change created baseline revision 2.
+Baseline versioning correctly materialized a new 20-row progress grid, so the
+source confirmation remained preserved on superseded revision 1 while the
+active projection returned zero progress. The two revisions retain identical
+source-relevant commercial dimensions: contract value, currency, VAT,
+payment/reminder terms, four 25% building allocations, and the 10/50/30/5/5
+stage allocations. Only the review policy changed.
+
+The 29 August correction therefore reapplies the four already-approved Design
+facts to active revision 2. It links every new confirmation revision to the
+same immutable source-import row and appends new audit events. It does not
+rewrite revision 1, carry progress automatically between arbitrary baselines,
+or infer a new suggestion actor.
 
 ## Deliberate exclusions
 
@@ -56,8 +73,11 @@ enter a real claim, certification, PDC or payment when actual evidence exists.
 
 ## Controls and rollback
 
-Migration:
-`20260828084626_yorks_r39_accounts_yra322_master_file_import.sql`
+Initial migration:
+`20260828085441_yorks_r39_accounts_yra322_master_file_import.sql`
+
+Active-baseline correction:
+`20260829110327_reconcile_yra322_source_progress_to_current_baseline.sql`
 
 The migration:
 
@@ -68,12 +88,24 @@ The migration:
 - is idempotent for the same project and workbook hash;
 - denies direct source-import table access to browser clients.
 
+The correction additionally:
+
+- requires the immutable source facts to exist on superseded revision 1;
+- requires revision 2 to be the active, dimensionally equivalent baseline;
+- refuses to run if any current progress row has been edited or if any
+  receivable/payable transaction exists;
+- locks the project and complete progress grid before mutation;
+- exposes no execution grant to browser or service API roles;
+- confirms exactly four Design rows and verifies the resulting weighted total
+  is exactly 10.0000% / AED 1,719,200.00;
+- is an exact no-op when replayed after a successful reconciliation.
+
 Rollback is corrective, never destructive: create new progress-confirmation
 revisions returning the four Design rows to the approved replacement values,
 retain the source-import and audit rows, and record the correction reason. Do
 not delete the import ledger or its audit history.
 
-## Production verification
+## Initial production verification
 
 The protected project Accounts projection returned:
 
@@ -82,3 +114,9 @@ The protected project Accounts projection returned:
 - four Design rows at `100.0000%`;
 - claims, invoices, certifications, PDCs and payments: `0`;
 - four progress-import audit events and one source-import audit event.
+
+Before the 29 August correction, a live read confirmed that revision 2 was
+current and its fresh grid was still pristine: 20 rows at zero, no revisions,
+and no Accounts transaction records. That fail-closed precondition makes the
+source reapplication safe. Final post-deployment values are recorded after the
+linked migration is applied and queried from the protected production data.
