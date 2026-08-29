@@ -1,7 +1,6 @@
 # YRA-322 Nexus Master File Reconciliation
 
-Status: **initial import applied on 28 August 2026; active-baseline
-reconciliation prepared on 29 August 2026**
+Status: **production applied and verified on 29 August 2026**
 
 Source: `Project Master File - Nexus 4 Station.xlsx`
 
@@ -117,6 +116,46 @@ The protected project Accounts projection returned:
 
 Before the 29 August correction, a live read confirmed that revision 2 was
 current and its fresh grid was still pristine: 20 rows at zero, no revisions,
-and no Accounts transaction records. That fail-closed precondition makes the
-source reapplication safe. Final post-deployment values are recorded after the
-linked migration is applied and queried from the protected production data.
+and no Accounts transaction records. That fail-closed precondition made the
+source reapplication safe.
+
+## Active-baseline production verification
+
+After linked migration `20260829110327` was applied, a direct protected
+production query returned:
+
+- current baseline: revision `2`, AED `17,192,000.00`;
+- progress grid: `20` rows;
+- Design: four rows at `100.0000%`, all linked to the immutable source import;
+- Material Supply, Installation, Commissioning & Handover and Energizing:
+  `16` rows at `0.0000%`;
+- weighted confirmed progress: `10.0000%` / AED `1,719,200.00`;
+- current-baseline source-linked progress revisions: `4`;
+- cumulative import audit events: eight progress events and two source-import
+  events (the original application plus the active-baseline correction);
+- claims, invoices, certifications, client payments, PDCs, PDC events,
+  supplier bills and supplier payments: `0`.
+
+## Release evidence
+
+- Local database reset and the complete pgTAP suite passed: 60 files and
+  1,652 assertions. The two YRA-322 files contributed 19 passing assertions,
+  including conflict, API-grant and exact-replay coverage.
+- `flutter analyze` and the 18 focused Accounts/router tests passed.
+- Accounts-enabled Flutter web and ephemeral-signed Android release builds
+  passed; the Android artifact was 98.8 MB.
+- Production database migration `20260829110327` is aligned in the local and
+  remote ledgers. The post-deploy database advisor command completed without
+  an error-level finding; its warning-level output is the existing broader
+  schema backlog.
+- Vercel deployment `dpl_9RnX6xtiLQhocA1F2xGP5Q9uMgNz` reached `READY` and was
+  promoted to `https://yorks-r35.vercel.app`. Root, Accounts portfolio,
+  billing-progress and the YRA-322 Accounts overview deep route returned HTTP
+  200. The deployed index, bootstrap, manifest, service worker and application
+  bundle matched the production build byte-for-byte.
+
+The repository-wide Flutter run is not represented as globally green: 831
+non-golden tests passed while four pre-existing 1024 px shell/overview tests
+reported the same 139 px top-bar overflow; the golden lane also has unrelated
+baseline pixel drift. Neither failure intersects this SQL-only reconciliation
+or its focused Accounts gates.
