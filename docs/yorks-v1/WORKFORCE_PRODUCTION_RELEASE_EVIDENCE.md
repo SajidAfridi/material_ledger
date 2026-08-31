@@ -336,3 +336,57 @@ hashes were:
 Rollback is promotion of `dpl_9fvVjbYeZLxLpVH6XR8GwYE6otGb`. No production
 worker, login user, permission, team, schedule, assignment, timesheet or
 attendance record was changed by this hotfix.
+
+## Post-release Administration identity-option hotfix
+
+Status: **released and verified on 31 August 2026 at 23:49 PKT**
+
+The exact Admin account could reach Workforce Administration, but its protected
+options projection included two preserved login profiles whose legacy app-user
+IDs remained populated while their server-controlled exact roles were empty.
+Those identities are not valid supervisor or linked-user assignment targets.
+The strict schema-v1 client therefore rejected the complete options response
+instead of accepting an ambiguous identity.
+
+Migration
+`20260831183000_fix_workforce_administration_identity_options.sql` replaces
+only the protected choices reader. It excludes identities without a current
+exact server-controlled role rather than inferring a role or altering the
+preserved Auth/profile rows. Project/scope choices, capability checks,
+ordinary table denial and the non-commercial response shape are unchanged.
+
+| Evidence | Value |
+|---|---|
+| Source commit | `9f19e38830cd70c4448f0dc555dcb6782842c8e2` |
+| GitHub branch | `main` pushed before remote migration |
+| Production migration | `20260831183000_fix_workforce_administration_identity_options.sql` |
+| Migration SQL SHA-256 | `0308f8a03242e8346a519f819c780713284133a9d0fa09df7f257333dc9d5994` |
+| Web deployment | Unchanged: `dpl_DRvHy6UTtkzsgQ5Y1veyDNK6kjJx` |
+| Production alias | Unchanged: `https://yorks-r35.vercel.app` |
+
+The focused regression passed 7 assertions; the complete Administration pair
+passed 27 assertions. A clean local reset applied the complete ledger through
+the hotfix, and the full database gate passed 78 files and 2,370 assertions in
+102 seconds. The 500-worker observation was 14,753.44 ms; T13 observations
+were overview 7,125.18 ms, roster 823.04 ms and queue 2,659.04 ms. These are
+observations rather than product SLAs.
+
+Staging was aligned through the two already-reviewed enablement migrations and
+this hotfix. Exact SQL hashes were checked before reconciling their generated
+apply timestamps to the tracked versions. The staging exact-Admin response
+returned `enforced_administration`, seven valid login choices, zero invalid
+roles and no email/commercial key.
+
+Production received only the pending hotfix. Its exact SQL hash was checked
+before the migration ledger was reconciled to tracked version
+`20260831183000`. Under the reported owner's exact authenticated claims, all
+three initial Administration readers returned `enforced_administration`. The
+combined live response contained 25 valid login choices, nine projects and 36
+project scopes, with zero invalid exact roles and no email/commercial key. No
+production worker, login user, permission, team, schedule, assignment,
+attendance or timesheet row was inserted, updated, deleted or reinterpreted.
+
+This was database-only; rebuilding or promoting an identical Flutter artifact
+would add no corrective behavior. Rollback is a reviewed forward replacement
+of the choices function from migration `20260831155531`; the existing web
+deployment remains the application rollback point.
