@@ -136,6 +136,14 @@ void main() {
               find.byType(
                 DropdownButtonFormField<YorksWorkforceAttendanceStatus>,
               ),
+              findsNWidgets(2),
+            );
+            expect(
+              find.byKey(const Key('workforce-desktop-worker-editor')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const Key('workforce-desktop-completion-footer')),
               findsOneWidget,
             );
           }
@@ -659,38 +667,41 @@ void main() {
             widget.keyboardType == TextInputType.number &&
             widget.controller?.text == '0',
       );
-      expect(regular, findsOneWidget);
-      expect(overtime, findsOneWidget);
+      final roster = find.byKey(const Key('workforce-desktop-roster-grid'));
+      final gridRegular = find.descendant(of: roster, matching: regular);
+      final gridOvertime = find.descendant(of: roster, matching: overtime);
+      expect(gridRegular, findsOneWidget);
+      expect(gridOvertime, findsOneWidget);
 
-      await tester.tap(regular);
+      await tester.tap(gridRegular);
       await tester.pump();
-      _expectFocused(tester, regular);
+      _expectFocused(tester, gridRegular);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
-      _expectFocused(tester, overtime);
+      _expectFocused(tester, gridOvertime);
       await _shiftKey(tester, LogicalKeyboardKey.tab);
-      _expectFocused(tester, regular);
+      _expectFocused(tester, gridRegular);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pump();
-      _expectFocused(tester, overtime);
+      _expectFocused(tester, gridOvertime);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pump();
-      _expectFocused(tester, regular);
+      _expectFocused(tester, gridRegular);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
-      _expectFocused(tester, overtime);
+      _expectFocused(tester, gridOvertime);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
-      _expectFocused(tester, regular);
+      _expectFocused(tester, gridRegular);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
-      _expectFocused(tester, overtime);
+      _expectFocused(tester, gridOvertime);
       await _shiftKey(tester, LogicalKeyboardKey.enter);
-      _expectFocused(tester, regular);
+      _expectFocused(tester, gridRegular);
       expect(tester.takeException(), isNull);
     },
   );
@@ -713,17 +724,80 @@ void main() {
       const ValueKey('70010000-0000-4000-8000-000000000001-target-none'),
     );
     const readOnlyProjectTarget = 'YRA-313 · Common / All Buildings';
-    expect(find.text(readOnlyProjectTarget), findsOneWidget);
+    expect(find.text(readOnlyProjectTarget), findsNWidgets(2));
     await tester.tap(target);
     await tester.pumpAndSettle();
     expect(find.text('Main Workshop'), findsOneWidget);
     expect(
       find.text(readOnlyProjectTarget),
-      findsOneWidget,
+      findsNWidgets(2),
       reason:
           'The read-only assignment label must not be duplicated as a target',
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('desktop worker editor supports a balanced split allocation', (
+    tester,
+  ) async {
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final controller = await _pumpRoster(
+      tester,
+      viewport: const Size(1440, 900),
+      language: AppLanguage.english,
+    );
+    controller.assignProject(
+      _workerId,
+      projectId: _projectId,
+      projectScopeId: _scopeId,
+    );
+    await tester.pumpAndSettle();
+
+    final splitButton = find.byKey(
+      const Key(
+        'workforce-split-allocation-70010000-0000-4000-8000-000000000001',
+      ),
+    );
+    expect(splitButton, findsOneWidget);
+    await tester.tap(splitButton);
+    await tester.pumpAndSettle();
+
+    expect(controller.state.rows.single.allocations, hasLength(2));
+    final splitEditor = find.byKey(
+      const Key(
+        'workforce-allocation-split-editor-70010000-0000-4000-8000-000000000001',
+      ),
+    );
+    await tester.scrollUntilVisible(
+      splitEditor,
+      280,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workforce-desktop-worker-editor')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.drag(
+      find.byKey(const Key('workforce-desktop-worker-editor')),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    expect(splitEditor, findsOneWidget);
+    expect(
+      find.text('Allocated time matches the worker’s day.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(YorksWorkforceDailyAttendanceScreen),
+      matchesGoldenFile(
+        'goldens/yorks_workforce_t05_daily_roster_desktop_split_editor.png',
+      ),
+    );
   });
 
   testWidgets(

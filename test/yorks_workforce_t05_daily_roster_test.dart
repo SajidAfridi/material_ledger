@@ -1010,6 +1010,66 @@ void main() {
     },
   );
 
+  test('focused editor splits time only across authorized targets', () async {
+    final projection = YorksWorkforceDailyRosterProjection.fromRpcJson(
+      _rosterResponse(
+        _currentDate,
+        rows: [
+          _rowJson(
+            workerId: _worker1,
+            workerNumber: 'WF-001',
+            workerName: 'Split Allocation Worker',
+          ),
+        ],
+      ),
+    );
+    final controller = await _controller(
+      _RosterRepository(onGet: (_, _) async => projection),
+    );
+    addTearDown(controller.dispose);
+    expect(await controller.load(workDate: _currentDate), isTrue);
+    controller.selectVisible();
+    controller.applyStandardMinutes();
+    controller.replaceAllocations(_worker1, const [
+      YorksWorkforceAllocationInput(
+        targetKind: YorksWorkforceAllocationTargetKind.projectWork,
+        projectId: _projectId,
+        projectScopeId: _scopeId,
+        activityTask: 'Duct installation',
+        regularMinutes: 360,
+        overtimeMinutes: 0,
+      ),
+      YorksWorkforceAllocationInput(
+        targetKind: YorksWorkforceAllocationTargetKind.internalWork,
+        internalLocationId: _locationId,
+        activityTask: 'Workshop support',
+        regularMinutes: 120,
+        overtimeMinutes: 0,
+      ),
+    ]);
+
+    final split = _draft(controller, _worker1);
+    expect(split.allocations, hasLength(2));
+    expect(
+      split.allocations.fold<int>(
+        0,
+        (sum, allocation) => sum + allocation.regularMinutes,
+      ),
+      split.regularMinutes,
+    );
+    expect(split.isValid, isTrue);
+
+    controller.replaceAllocations(_worker1, const [
+      YorksWorkforceAllocationInput(
+        targetKind: YorksWorkforceAllocationTargetKind.internalWork,
+        internalLocationId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        regularMinutes: 480,
+        overtimeMinutes: 0,
+      ),
+    ]);
+    expect(_draft(controller, _worker1).allocations, same(split.allocations));
+  });
+
   test(
     'previous-day copy uses current schedule and only safe retained target',
     () async {

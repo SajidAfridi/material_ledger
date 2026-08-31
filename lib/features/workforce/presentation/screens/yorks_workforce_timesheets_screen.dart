@@ -775,9 +775,49 @@ class YorksWorkforceMonthlyView extends StatelessWidget {
                               compact: compact,
                               onRetry: onRetry,
                             ),
-                            if (onReviewRetry != null ||
-                                reviewState.status !=
-                                    YorksWorkforceReviewStatus.idle) ...[
+                            if (!dense && state.workerDetail != null) ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _WorkerMonthDetail(
+                                      language: language,
+                                      detail: state.workerDetail!,
+                                      selectedDate: state.selectedDate,
+                                      compact: false,
+                                      onClose: onCloseWorker,
+                                      onDateChanged: onDateChanged,
+                                    ),
+                                  ),
+                                  if (onReviewRetry != null ||
+                                      reviewState.status !=
+                                          YorksWorkforceReviewStatus.idle) ...[
+                                    const SizedBox(width: AppSpacing.lg),
+                                    SizedBox(
+                                      width: 360,
+                                      child: _MonthlyReviewPanel(
+                                        language: language,
+                                        state: reviewState,
+                                        compact: true,
+                                        allowActions: true,
+                                        hasSelectedEntry:
+                                            state.selectedDate != null &&
+                                            reviewState.lifecycle?.periodId ==
+                                                state.projection?.period?.id,
+                                        onRetry: onReviewRetry,
+                                        onQueueSelect: onReviewQueueSelect,
+                                        onAction: onReviewAction,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                            if ((onReviewRetry != null ||
+                                    reviewState.status !=
+                                        YorksWorkforceReviewStatus.idle) &&
+                                (dense || state.workerDetail == null)) ...[
                               const SizedBox(height: AppSpacing.lg),
                               _MonthlyReviewPanel(
                                 language: language,
@@ -864,7 +904,7 @@ class YorksWorkforceMonthlyView extends StatelessWidget {
                                   onIssueFilter: onIssueFilter,
                                   onLoadMoreIssues: onLoadMoreIssues,
                                 ),
-                              if (state.workerDetail != null) ...[
+                              if (state.workerDetail != null && dense) ...[
                                 const SizedBox(height: AppSpacing.lg),
                                 _WorkerMonthDetail(
                                   language: language,
@@ -3122,25 +3162,64 @@ class _WorkerMonthDetail extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _WorkerMetricChip(
+                icon: Icons.schedule_outlined,
+                label: _t('monthly_metric_regular'),
+                value: _minutes(language, detail.worker.regularMinutes),
+                color: AppColors.primary,
+              ),
+              _WorkerMetricChip(
+                icon: Icons.more_time_outlined,
+                label: _t('monthly_metric_overtime'),
+                value: _minutes(language, detail.worker.overtimeMinutes),
+                color: AppColors.warning,
+              ),
+              _WorkerMetricChip(
+                icon: Icons.medical_services_outlined,
+                label: _t('monthly_metric_leave'),
+                value: '${detail.worker.leaveDayCount}',
+                color: AppColors.success,
+              ),
+              _WorkerMetricChip(
+                icon: Icons.event_busy_outlined,
+                label: _t('monthly_metric_weekly_off'),
+                value: '${detail.worker.weeklyOffDayCount}',
+                color: AppColors.purple,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
           Text(
             _t('monthly_calendar'),
             style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: detail.days
-                .map(
-                  (day) => _CalendarDayButton(
-                    language: language,
-                    day: day,
-                    selected: selected?.workDate == day.workDate,
-                    onPressed: () => onDateChanged(day.workDate),
-                  ),
-                )
-                .toList(growable: false),
-          ),
+          if (compact)
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: detail.days
+                  .map(
+                    (day) => _CalendarDayButton(
+                      language: language,
+                      day: day,
+                      selected: selected?.workDate == day.workDate,
+                      onPressed: () => onDateChanged(day.workDate),
+                    ),
+                  )
+                  .toList(growable: false),
+            )
+          else
+            _WorkerDayTable(
+              language: language,
+              days: detail.days,
+              selectedDate: selected?.workDate,
+              onDateChanged: onDateChanged,
+            ),
           if (selected != null) ...[
             const SizedBox(height: AppSpacing.xl),
             const Divider(height: 1),
@@ -3156,6 +3235,127 @@ class _WorkerMonthDetail extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WorkerMetricChip extends StatelessWidget {
+  const _WorkerMetricChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 150),
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .08),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      border: Border.all(color: color.withValues(alpha: .24)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 19),
+        const SizedBox(width: AppSpacing.sm),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AppTypography.labelSmall),
+            Text(
+              value,
+              style: AppTypography.titleMedium.copyWith(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _WorkerDayTable extends StatelessWidget {
+  const _WorkerDayTable({
+    required this.language,
+    required this.days,
+    required this.selectedDate,
+    required this.onDateChanged,
+  });
+
+  final AppLanguage language;
+  final List<YorksWorkforceMonthlyDay> days;
+  final String? selectedDate;
+  final ValueChanged<String> onDateChanged;
+
+  String _t(String key) => YorksV1WorkforceStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) => _HorizontalTableScroller(
+    child: DataTable(
+      headingRowColor: const WidgetStatePropertyAll(
+        AppColors.surfaceContainerLow,
+      ),
+      columns: [
+        DataColumn(label: Text(_t('date'))),
+        DataColumn(label: Text(_t('status'))),
+        DataColumn(label: Text(_t('regular'))),
+        DataColumn(label: Text(_t('overtime'))),
+        DataColumn(label: Text(_t('target'))),
+        DataColumn(label: Text(_t('supervisor'))),
+        DataColumn(label: Text(_t('monthly_worker_issues'))),
+      ],
+      rows: days
+          .map(
+            (day) => DataRow(
+              selected: selectedDate == day.workDate,
+              onSelectChanged: (_) => onDateChanged(day.workDate),
+              cells: [
+                DataCell(Text(day.workDate.substring(8))),
+                DataCell(
+                  _StatusPill(
+                    icon: _dailyIcon(day.dailyStatus),
+                    label: _monthlyAttendanceLabel(language, day),
+                    color: _dailyColor(day.dailyStatus),
+                  ),
+                ),
+                DataCell(Text(_minutes(language, day.regularMinutes))),
+                DataCell(Text(_minutes(language, day.overtimeMinutes))),
+                DataCell(
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 190,
+                      maxWidth: 260,
+                    ),
+                    child: Text(
+                      _monthlyTargetLabel(day),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Text(day.assignment['supervisor_name'] as String? ?? '—'),
+                ),
+                DataCell(
+                  Text('${day.blockingIssueCount + day.warningIssueCount}'),
+                ),
+              ],
+            ),
+          )
+          .toList(growable: false),
+    ),
+  );
 }
 
 class _DayFacts extends StatelessWidget {
@@ -3646,6 +3846,48 @@ String _minutes(AppLanguage language, int value) {
   final minutesUnit = YorksV1WorkforceStrings.text(language, 'minutes');
   return '$hours $hoursUnit ${minutes.toString().padLeft(2, '0')} '
       '$minutesUnit';
+}
+
+String _monthlyAttendanceLabel(
+  AppLanguage language,
+  YorksWorkforceMonthlyDay day,
+) {
+  final status = day.attendance?['attendance_status'];
+  if (status is String && status.isNotEmpty) {
+    return YorksV1WorkforceStrings.text(language, status);
+  }
+  if (day.isRequired && !day.isFuture) {
+    return YorksV1WorkforceStrings.text(language, 'not_entered');
+  }
+  if (day.dayType != null) return _dayTypeLabel(language, day.dayType!);
+  return _dailyStatusLabel(language, day.dailyStatus);
+}
+
+String _monthlyTargetLabel(YorksWorkforceMonthlyDay day) {
+  final targets = day.allocation?['targets'];
+  if (targets is List) {
+    final labels = targets
+        .whereType<Map>()
+        .map((target) {
+          final kind = target['target_kind'];
+          if (kind == 'project_work') {
+            return [target['project_ref'], target['project_scope_name']]
+                .whereType<String>()
+                .where((value) => value.isNotEmpty)
+                .join(' · ');
+          }
+          return target['internal_location_name'] as String? ?? '';
+        })
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    if (labels.isNotEmpty) return labels.join(' + ');
+  }
+  final project = [
+    day.assignment['project_ref'],
+    day.assignment['project_scope_name'],
+  ].whereType<String>().where((value) => value.isNotEmpty).join(' · ');
+  if (project.isNotEmpty) return project;
+  return day.assignment['internal_location_name'] as String? ?? '—';
 }
 
 String _issueLabel(AppLanguage language, String code) =>

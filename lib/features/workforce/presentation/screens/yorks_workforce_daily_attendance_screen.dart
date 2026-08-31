@@ -84,6 +84,11 @@ class _YorksWorkforceDailyAttendanceScreenState
     final desktopBoundary = !mobileBoundary && !tabletBoundary;
     final tabletLandscape =
         tabletBoundary && media.orientation == Orientation.landscape;
+    final activeWorker =
+        state.rows
+            .where((row) => row.workerId == _activeTabletWorkerId)
+            .firstOrNull ??
+        state.rows.firstOrNull;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -256,10 +261,47 @@ class _YorksWorkforceDailyAttendanceScreenState
                                     prompt: _prompt,
                                   ),
                                   const SizedBox(height: AppSpacing.md),
-                                  _RosterGrid(
-                                    language: language,
-                                    state: state,
-                                    controller: controller,
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _RosterGrid(
+                                          language: language,
+                                          state: state,
+                                          controller: controller,
+                                          activeWorkerId:
+                                              activeWorker?.workerId,
+                                          onWorkerSelected: (workerId) {
+                                            setState(() {
+                                              _activeTabletWorkerId = workerId;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      if (activeWorker != null) ...[
+                                        const SizedBox(width: AppSpacing.md),
+                                        SizedBox(
+                                          key: const Key(
+                                            'workforce-desktop-worker-editor',
+                                          ),
+                                          width: 390,
+                                          height: 528,
+                                          child: _TabletWorkerEditor(
+                                            key: ValueKey(
+                                              'desktop-${activeWorker.workerId}',
+                                            ),
+                                            language: language,
+                                            row: activeWorker,
+                                            allocationTargets: state
+                                                .projection!
+                                                .allocationTargets,
+                                            controller: controller,
+                                            mobile: true,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                   if (state.canLoadMore) ...[
                                     const SizedBox(height: AppSpacing.md),
@@ -287,6 +329,15 @@ class _YorksWorkforceDailyAttendanceScreenState
                 ),
                 if (tabletBoundary && state.projection != null)
                   _TabletCompletionFooter(
+                    language: language,
+                    state: state,
+                    onReview: controller.reviewDay,
+                    onBack: controller.backToEdit,
+                    onSave: controller.saveDay,
+                  ),
+                if (desktopBoundary && state.projection != null)
+                  _TabletCompletionFooter(
+                    footerKey: const Key('workforce-desktop-completion-footer'),
                     language: language,
                     state: state,
                     onReview: controller.reviewDay,
@@ -1917,6 +1968,15 @@ class _TabletWorkerEditorState extends State<_TabletWorkerEditor> {
                       ),
                     ],
                   ),
+                  if (row.allocations.length > 1) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _AllocationSplitEditor(
+                      language: widget.language,
+                      row: row,
+                      targetOptions: targetOptions,
+                      controller: widget.controller,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   Wrap(
                     spacing: AppSpacing.sm,
@@ -1952,6 +2012,32 @@ class _TabletWorkerEditorState extends State<_TabletWorkerEditor> {
                           ),
                         ),
                       ),
+                      if (row.allocations.length == 1 &&
+                          targetOptions.length > 1)
+                        SizedBox(
+                          height: 44,
+                          child: OutlinedButton.icon(
+                            key: Key(
+                              'workforce-split-allocation-${row.workerId}',
+                            ),
+                            onPressed: row.isAllocationEditable
+                                ? () => widget.controller.replaceAllocations(
+                                    row.workerId,
+                                    _splitAllocationDraft(
+                                      row.allocations,
+                                      targetOptions,
+                                    ),
+                                  )
+                                : null,
+                            icon: const Icon(Icons.call_split_outlined),
+                            label: Text(
+                              YorksV1WorkforceStrings.text(
+                                widget.language,
+                                'split_allocation',
+                              ),
+                            ),
+                          ),
+                        ),
                       if (!row.isValid)
                         _StatusDot(
                           label: YorksV1WorkforceStrings.text(
@@ -1973,6 +2059,285 @@ class _TabletWorkerEditorState extends State<_TabletWorkerEditor> {
 
   Widget _tabletField(double width, Widget child) =>
       SizedBox(width: math.max(240, width), child: child);
+}
+
+class _AllocationSplitEditor extends StatelessWidget {
+  const _AllocationSplitEditor({
+    required this.language,
+    required this.row,
+    required this.targetOptions,
+    required this.controller,
+  });
+
+  final AppLanguage language;
+  final YorksWorkforceDailyRosterDraftRow row;
+  final List<_TargetOption> targetOptions;
+  final YorksWorkforceDailyRosterController controller;
+
+  String _t(String key) => YorksV1WorkforceStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final allocatedRegular = row.allocations.fold<int>(
+      0,
+      (sum, item) => sum + item.regularMinutes,
+    );
+    final allocatedOvertime = row.allocations.fold<int>(
+      0,
+      (sum, item) => sum + item.overtimeMinutes,
+    );
+    final balanced =
+        allocatedRegular == row.regularMinutes &&
+        allocatedOvertime == row.overtimeMinutes &&
+        row.allocations.every((item) => item.isValid);
+    return Container(
+      key: Key('workforce-allocation-split-editor-${row.workerId}'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.call_split_outlined, color: AppColors.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  _t('split_allocation'),
+                  style: AppTypography.titleMedium,
+                ),
+              ),
+              Text(
+                '${_minutes(allocatedRegular)} + ${_minutes(allocatedOvertime)}',
+                style: AppTypography.labelLarge.copyWith(
+                  color: balanced ? AppColors.success : AppColors.error,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(_t('split_allocation_body'), style: AppTypography.bodySmall),
+          const SizedBox(height: AppSpacing.md),
+          for (var index = 0; index < row.allocations.length; index++) ...[
+            _AllocationLineEditor(
+              language: language,
+              index: index,
+              allocation: row.allocations[index],
+              targetOptions: targetOptions,
+              canRemove: row.allocations.length > 1,
+              onChanged: (next) {
+                final allocations = [...row.allocations];
+                allocations[index] = next;
+                controller.replaceAllocations(row.workerId, allocations);
+              },
+              onRemove: () {
+                final allocations = [...row.allocations];
+                final removed = allocations.removeAt(index);
+                if (allocations.isEmpty) return;
+                allocations[0] = _copyAllocationInput(
+                  allocations[0],
+                  regularMinutes:
+                      allocations[0].regularMinutes + removed.regularMinutes,
+                  overtimeMinutes:
+                      allocations[0].overtimeMinutes + removed.overtimeMinutes,
+                );
+                controller.replaceAllocations(row.workerId, allocations);
+              },
+            ),
+            if (index != row.allocations.length - 1)
+              const SizedBox(height: AppSpacing.sm),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: balanced
+                        ? AppColors.successContainer
+                        : AppColors.errorContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        balanced
+                            ? Icons.check_circle_outline
+                            : Icons.error_outline,
+                        size: 18,
+                        color: balanced ? AppColors.success : AppColors.error,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          _t(
+                            balanced
+                                ? 'allocation_balanced'
+                                : 'allocation_unbalanced',
+                          ),
+                          style: AppTypography.bodySmall.copyWith(
+                            color: balanced
+                                ? AppColors.success
+                                : AppColors.error,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              IconButton.outlined(
+                tooltip: _t('add_allocation'),
+                onPressed: targetOptions.length > 1
+                    ? () => controller.replaceAllocations(
+                        row.workerId,
+                        _splitAllocationDraft(row.allocations, targetOptions),
+                      )
+                    : null,
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AllocationLineEditor extends StatelessWidget {
+  const _AllocationLineEditor({
+    required this.language,
+    required this.index,
+    required this.allocation,
+    required this.targetOptions,
+    required this.canRemove,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final AppLanguage language;
+  final int index;
+  final YorksWorkforceAllocationInput allocation;
+  final List<_TargetOption> targetOptions;
+  final bool canRemove;
+  final ValueChanged<YorksWorkforceAllocationInput> onChanged;
+  final VoidCallback onRemove;
+
+  String _t(String key) => YorksV1WorkforceStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final targetValue = _targetValueForAllocation(allocation);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('allocation-$index-$targetValue'),
+                  initialValue:
+                      targetOptions.any((option) => option.value == targetValue)
+                      ? targetValue
+                      : null,
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: _t('target')),
+                  items: [
+                    for (final option in targetOptions)
+                      DropdownMenuItem(
+                        value: option.value,
+                        child: Text(
+                          option.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    final option = targetOptions
+                        .where((item) => item.value == value)
+                        .firstOrNull;
+                    if (option == null) return;
+                    onChanged(_allocationForTarget(option, allocation));
+                  },
+                ),
+              ),
+              if (canRemove) ...[
+                const SizedBox(width: AppSpacing.xs),
+                IconButton(
+                  tooltip: _t('remove_allocation'),
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close, color: AppColors.error),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey('allocation-$index-regular'),
+                  initialValue: '${allocation.regularMinutes}',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(labelText: _t('regular')),
+                  onChanged: (value) => onChanged(
+                    _copyAllocationInput(
+                      allocation,
+                      regularMinutes: int.tryParse(value) ?? 0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey('allocation-$index-overtime'),
+                  initialValue: '${allocation.overtimeMinutes}',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(labelText: _t('overtime')),
+                  onChanged: (value) => onChanged(
+                    _copyAllocationInput(
+                      allocation,
+                      overtimeMinutes: int.tryParse(value) ?? 0,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextFormField(
+            key: ValueKey('allocation-$index-activity'),
+            initialValue: allocation.activityTask ?? '',
+            maxLength: 500,
+            buildCounter: _RosterDataRowState._noCounter,
+            decoration: InputDecoration(labelText: _t('activity')),
+            onChanged: (value) => onChanged(
+              _copyAllocationInput(allocation, activityTask: value),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MobileMinuteControl extends StatelessWidget {
@@ -2052,6 +2417,7 @@ class _MobileMinuteControl extends StatelessWidget {
 
 class _TabletCompletionFooter extends StatelessWidget {
   const _TabletCompletionFooter({
+    this.footerKey = const Key('workforce-tablet-completion-footer'),
     required this.language,
     required this.state,
     required this.onReview,
@@ -2059,6 +2425,7 @@ class _TabletCompletionFooter extends StatelessWidget {
     required this.onSave,
   });
 
+  final Key footerKey;
   final AppLanguage language;
   final YorksWorkforceDailyRosterState state;
   final bool Function() onReview;
@@ -2083,7 +2450,7 @@ class _TabletCompletionFooter extends StatelessWidget {
       label:
           '${YorksV1WorkforceStrings.text(language, 'tablet_completion')}: $entered/${state.rows.length}',
       child: Material(
-        key: const Key('workforce-tablet-completion-footer'),
+        key: footerKey,
         elevation: 10,
         color: AppColors.surfaceContainerLowest,
         child: SafeArea(
@@ -2203,11 +2570,15 @@ class _RosterGrid extends StatefulWidget {
     required this.language,
     required this.state,
     required this.controller,
+    required this.activeWorkerId,
+    required this.onWorkerSelected,
   });
 
   final AppLanguage language;
   final YorksWorkforceDailyRosterState state;
   final YorksWorkforceDailyRosterController controller;
+  final String? activeWorkerId;
+  final ValueChanged<String> onWorkerSelected;
 
   @override
   State<_RosterGrid> createState() => _RosterGridState();
@@ -2265,6 +2636,7 @@ class _RosterGridState extends State<_RosterGrid> {
       math.max(156.0, widget.state.rows.length * _rowHeight),
     );
     return Card(
+      key: const Key('workforce-desktop-roster-grid'),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
         height: 48 + bodyHeight,
@@ -2331,7 +2703,11 @@ class _RosterGridState extends State<_RosterGrid> {
                         selected: widget.state.selectedWorkerIds.contains(
                           widget.state.rows[index].workerId,
                         ),
+                        focused:
+                            widget.activeWorkerId ==
+                            widget.state.rows[index].workerId,
                         onToggle: widget.controller.toggleSelection,
+                        onOpen: widget.onWorkerSelected,
                       ),
                     ),
                   ),
@@ -2442,57 +2818,87 @@ class _WorkerCell extends StatelessWidget {
   const _WorkerCell({
     required this.row,
     required this.selected,
+    required this.focused,
     required this.onToggle,
+    required this.onOpen,
   });
   final YorksWorkforceDailyRosterDraftRow row;
   final bool selected;
+  final bool focused;
   final ValueChanged<String> onToggle;
+  final ValueChanged<String> onOpen;
 
   @override
   Widget build(BuildContext context) => Semantics(
     label: '${row.source.workerName}, ${row.source.workerNumber}',
     selected: selected,
     excludeSemantics: true,
-    child: Container(
-      decoration: BoxDecoration(
-        color: selected ? AppColors.blueContainer : Colors.white,
-        border: const Border(bottom: BorderSide(color: AppColors.line)),
-      ),
-      child: Row(
-        children: [
-          Checkbox(
-            value: selected,
-            onChanged: row.isEditable ? (_) => onToggle(row.workerId) : null,
-          ),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.source.workerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelLarge,
-                ),
-                Text(
-                  [
-                    row.source.workerNumber,
-                    row.source.tradeName ?? row.source.designation,
-                  ].whereType<String>().join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall,
-                ),
-              ],
+    child: Material(
+      color: focused
+          ? AppColors.primaryContainer
+          : selected
+          ? AppColors.blueContainer
+          : Colors.white,
+      child: InkWell(
+        onTap: () => onOpen(row.workerId),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: const BorderSide(color: AppColors.line),
+              left: BorderSide(
+                color: focused ? AppColors.primary : Colors.transparent,
+                width: 3,
+              ),
             ),
           ),
-          if (!row.isValid)
-            const Padding(
-              padding: EdgeInsets.only(right: AppSpacing.sm),
-              child: Icon(Icons.error, size: 16, color: AppColors.error),
-            ),
-        ],
+          child: Row(
+            children: [
+              Checkbox(
+                value: selected,
+                onChanged: row.isEditable
+                    ? (_) => onToggle(row.workerId)
+                    : null,
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.source.workerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelLarge,
+                    ),
+                    Text(
+                      [
+                        row.source.workerNumber,
+                        row.source.tradeName ?? row.source.designation,
+                      ].whereType<String>().join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (!row.isValid)
+                const Padding(
+                  padding: EdgeInsets.only(right: AppSpacing.sm),
+                  child: Icon(Icons.error, size: 16, color: AppColors.error),
+                )
+              else if (focused)
+                const Padding(
+                  padding: EdgeInsets.only(right: AppSpacing.sm),
+                  child: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     ),
   );
@@ -3461,6 +3867,99 @@ List<_TargetOption> _targetOptions(
         locationId: location.id,
       ),
   ];
+}
+
+String _targetValueForAllocation(YorksWorkforceAllocationInput allocation) =>
+    switch (allocation.targetKind) {
+      YorksWorkforceAllocationTargetKind.projectWork =>
+        'p:${allocation.projectId}:${allocation.projectScopeId}',
+      YorksWorkforceAllocationTargetKind.internalWork =>
+        'i:${allocation.internalLocationId}',
+    };
+
+YorksWorkforceAllocationInput _allocationForTarget(
+  _TargetOption option,
+  YorksWorkforceAllocationInput source,
+) => YorksWorkforceAllocationInput(
+  targetKind: option.kind,
+  projectId: option.projectId,
+  projectScopeId: option.scopeId,
+  internalLocationId: option.locationId,
+  activityTask: source.activityTask,
+  notes: source.notes,
+  regularMinutes: source.regularMinutes,
+  overtimeMinutes: source.overtimeMinutes,
+  startTime: source.startTime,
+  endTime: source.endTime,
+);
+
+YorksWorkforceAllocationInput _copyAllocationInput(
+  YorksWorkforceAllocationInput source, {
+  int? regularMinutes,
+  int? overtimeMinutes,
+  String? activityTask,
+}) => YorksWorkforceAllocationInput(
+  targetKind: source.targetKind,
+  projectId: source.projectId,
+  projectScopeId: source.projectScopeId,
+  internalLocationId: source.internalLocationId,
+  activityTask: activityTask ?? source.activityTask,
+  notes: source.notes,
+  regularMinutes: regularMinutes ?? source.regularMinutes,
+  overtimeMinutes: overtimeMinutes ?? source.overtimeMinutes,
+  startTime: source.startTime,
+  endTime: source.endTime,
+);
+
+List<YorksWorkforceAllocationInput> _splitAllocationDraft(
+  List<YorksWorkforceAllocationInput> current,
+  List<_TargetOption> targetOptions,
+) {
+  if (current.isEmpty || targetOptions.isEmpty) return current;
+  var sourceIndex = 0;
+  for (var index = 1; index < current.length; index++) {
+    final candidate =
+        current[index].regularMinutes + current[index].overtimeMinutes;
+    final source =
+        current[sourceIndex].regularMinutes +
+        current[sourceIndex].overtimeMinutes;
+    if (candidate > source) sourceIndex = index;
+  }
+  final source = current[sourceIndex];
+  final total = source.regularMinutes + source.overtimeMinutes;
+  if (total < 2) return current;
+  final used = current.map(_targetValueForAllocation).toSet();
+  final option =
+      targetOptions.where((item) => !used.contains(item.value)).firstOrNull ??
+      targetOptions.first;
+  var newRegular = source.regularMinutes ~/ 2;
+  var newOvertime = source.overtimeMinutes ~/ 2;
+  if (newRegular + newOvertime == 0) {
+    if (source.regularMinutes > 0) {
+      newRegular = 1;
+    } else {
+      newOvertime = 1;
+    }
+  }
+  final result = [...current];
+  result[sourceIndex] = _copyAllocationInput(
+    source,
+    regularMinutes: source.regularMinutes - newRegular,
+    overtimeMinutes: source.overtimeMinutes - newOvertime,
+  );
+  result.add(
+    YorksWorkforceAllocationInput(
+      targetKind: option.kind,
+      projectId: option.projectId,
+      projectScopeId: option.scopeId,
+      internalLocationId: option.locationId,
+      activityTask: source.activityTask,
+      notes: source.notes,
+      regularMinutes: newRegular,
+      overtimeMinutes: newOvertime,
+    ),
+  );
+  return result;
 }
 
 String? _targetValue(YorksWorkforceDailyRosterDraftRow row) {

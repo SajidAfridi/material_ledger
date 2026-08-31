@@ -126,7 +126,7 @@ void main() {
               find.byKey(const Key('monthly-validate-button')),
               findsOneWidget,
             );
-            expect(find.byType(DataTable), findsOneWidget);
+            expect(find.byType(DataTable), findsWidgets);
           }
           expect(
             tester.takeException(),
@@ -177,6 +177,18 @@ void main() {
       tester,
       viewport: const Size(1366, 768),
       language: AppLanguage.english,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Has blocking issues'),
+      420,
+      scrollable: find
+          .descendant(
+            of: find.byKey(
+              const PageStorageKey<String>('workforce-monthly-view'),
+            ),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
 
     expect(find.byIcon(Icons.error_outline), findsWidgets);

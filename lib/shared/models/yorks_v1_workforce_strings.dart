@@ -10,10 +10,10 @@ abstract final class YorksV1WorkforceStrings {
       'hi': 'कार्यबल',
     },
     'daily_attendance': {
-      'en': 'Daily Attendance',
-      'ar': 'الحضور اليومي',
-      'ur': 'روزانہ حاضری',
-      'hi': 'दैनिक उपस्थिति',
+      'en': 'Daily Crew Timesheet',
+      'ar': 'سجل دوام الفريق اليومي',
+      'ur': 'روزانہ عملے کی ٹائم شیٹ',
+      'hi': 'दैनिक क्रू टाइमशीट',
     },
     'timesheets': {
       'en': 'Timesheets',
@@ -22,14 +22,14 @@ abstract final class YorksV1WorkforceStrings {
       'hi': 'टाइमशीट',
     },
     'monthly_timesheets': {
-      'en': 'Monthly Timesheets',
-      'ar': 'سجلات الدوام الشهرية',
-      'ur': 'ماہانہ ٹائم شیٹس',
-      'hi': 'मासिक टाइमशीट',
+      'en': 'Monthly Timesheet Detail',
+      'ar': 'تفاصيل سجل الدوام الشهري',
+      'ur': 'ماہانہ ٹائم شیٹ کی تفصیل',
+      'hi': 'मासिक टाइमशीट विवरण',
     },
     'monthly_body': {
       'en':
-          'Inspect one server-calculated team month, worker totals, daily evidence and validation issues.',
+          'See one server-calculated team month, worker totals, daily evidence and approval status.',
       'ar':
           'اعرض شهر فريق واحد محسوبًا على الخادم وإجماليات العمال والأدلة اليومية ومشكلات التحقق.',
       'ur':
@@ -872,7 +872,7 @@ abstract final class YorksV1WorkforceStrings {
     },
     'daily_attendance_body': {
       'en':
-          'Record the authorized daily roster, working minutes and overtime before reviewing one server-confirmed day.',
+          'Mark attendance, allocate hours and review one server-confirmed crew day.',
       'ar':
           'سجل كشف الحضور اليومي المصرح به ودقائق العمل والعمل الإضافي قبل مراجعة يوم واحد مؤكد من الخادم.',
       'ur':
@@ -920,6 +920,12 @@ abstract final class YorksV1WorkforceStrings {
       'ar': 'المشروع / الموقع',
       'ur': 'پراجیکٹ / مقام',
       'hi': 'प्रोजेक्ट / स्थान',
+    },
+    'supervisor': {
+      'en': 'Supervisor',
+      'ar': 'المشرف',
+      'ur': 'سپروائزر',
+      'hi': 'पर्यवेक्षक',
     },
     'activity': {
       'en': 'Activity',
@@ -1329,10 +1335,10 @@ abstract final class YorksV1WorkforceStrings {
       'hi': 'टैबलेट रोस्टर',
     },
     'tablet_completion': {
-      'en': 'day completed',
-      'ar': 'اكتمل اليوم',
-      'ur': 'دن مکمل',
-      'hi': 'दिन पूर्ण',
+      'en': 'workers complete',
+      'ar': 'عاملون مكتملون',
+      'ur': 'ورکرز مکمل',
+      'hi': 'कर्मचारी पूर्ण',
     },
     'future_day': {
       'en': 'Future dates are read-only',
@@ -1387,6 +1393,46 @@ abstract final class YorksV1WorkforceStrings {
       'ar': 'توزيعات متعددة',
       'ur': 'متعدد الاٹمنٹس',
       'hi': 'एकाधिक आवंटन',
+    },
+    'split_allocation': {
+      'en': 'Split work allocation',
+      'ar': 'تقسيم توزيع العمل',
+      'ur': 'کام کی تقسیم',
+      'hi': 'कार्य आवंटन विभाजित करें',
+    },
+    'split_allocation_body': {
+      'en':
+          'Allocate the worker’s regular and overtime minutes to exact projects, scopes or Yorks locations.',
+      'ar':
+          'وزّع دقائق العمل العادية والإضافية للعامل على المشاريع أو النطاقات أو مواقع يوركس المحددة.',
+      'ur':
+          'ورکر کے ریگولر اور اوور ٹائم منٹس درست پراجیکٹس، اسکوپس یا یورکس مقامات پر تقسیم کریں۔',
+      'hi':
+          'कर्मचारी के नियमित और ओवरटाइम मिनट सही प्रोजेक्ट, स्कोप या यॉर्क्स स्थान पर बाँटें।',
+    },
+    'add_allocation': {
+      'en': 'Add allocation',
+      'ar': 'إضافة توزيع',
+      'ur': 'الاٹمنٹ شامل کریں',
+      'hi': 'आवंटन जोड़ें',
+    },
+    'remove_allocation': {
+      'en': 'Remove allocation',
+      'ar': 'إزالة التوزيع',
+      'ur': 'الاٹمنٹ ہٹائیں',
+      'hi': 'आवंटन हटाएं',
+    },
+    'allocation_balanced': {
+      'en': 'Allocated time matches the worker’s day.',
+      'ar': 'الوقت الموزع يطابق يوم العامل.',
+      'ur': 'تقسیم شدہ وقت ورکر کے دن سے مطابقت رکھتا ہے۔',
+      'hi': 'आवंटित समय कर्मचारी के दिन से मेल खाता है।',
+    },
+    'allocation_unbalanced': {
+      'en': 'Allocated time must match regular and overtime totals.',
+      'ar': 'يجب أن يطابق الوقت الموزع إجمالي الوقت العادي والإضافي.',
+      'ur': 'تقسیم شدہ وقت ریگولر اور اوور ٹائم کے مجموعے سے ملنا چاہیے۔',
+      'hi': 'आवंटित समय नियमित और ओवरटाइम योग से मेल खाना चाहिए।',
     },
     'load_more': {
       'en': 'Load more',

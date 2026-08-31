@@ -677,6 +677,64 @@ final class YorksWorkforceDailyRosterController
   void updateAllocationNote(String workerId, String? note) =>
       _updateAllocationText(workerId, notes: note, updateNotes: true);
 
+  /// Replaces the local allocation draft for one visible worker.
+  ///
+  /// The server remains authoritative when Save Day is confirmed. This method
+  /// only permits targets included in the protected roster projection and
+  /// deliberately allows temporarily unbalanced minutes so the focused editor
+  /// can show validation feedback while a supervisor is splitting time.
+  void replaceAllocations(
+    String workerId,
+    List<YorksWorkforceAllocationInput> allocations,
+  ) {
+    final targets = state.projection?.allocationTargets;
+    if (targets == null ||
+        allocations.any(
+          (allocation) => !_isAllowedTarget(allocation, targets),
+        )) {
+      return;
+    }
+    _replaceRow(workerId, (row) {
+      if (!row.isAllocationEditable ||
+          state.isBusy ||
+          state.isReviewing ||
+          row.status != YorksWorkforceAttendanceStatus.present ||
+          row.regularMinutes + row.overtimeMinutes <= 0) {
+        return row;
+      }
+      return row.copyWith(
+        allocations: List<YorksWorkforceAllocationInput>.unmodifiable(
+          allocations,
+        ),
+        reason: _rowEditReason,
+        draftSource: YorksWorkforceRosterDraftSource.manual,
+      );
+    });
+  }
+
+  bool _isAllowedTarget(
+    YorksWorkforceAllocationInput allocation,
+    YorksWorkforceRosterAllocationTargets targets,
+  ) => switch (allocation.targetKind) {
+    YorksWorkforceAllocationTargetKind.projectWork =>
+      allocation.projectId != null &&
+          allocation.projectScopeId != null &&
+          allocation.internalLocationId == null &&
+          targets.projects.any((item) => item.id == allocation.projectId) &&
+          targets.projectScopes.any(
+            (item) =>
+                item.projectId == allocation.projectId &&
+                item.id == allocation.projectScopeId,
+          ),
+    YorksWorkforceAllocationTargetKind.internalWork =>
+      allocation.projectId == null &&
+          allocation.projectScopeId == null &&
+          allocation.internalLocationId != null &&
+          targets.internalLocations.any(
+            (item) => item.id == allocation.internalLocationId,
+          ),
+  };
+
   Future<int> copyPreviousDay() async {
     if (!_connectivity.isOnline || state.selectedWorkerIds.isEmpty) return 0;
     final workDate = state.workDate;
