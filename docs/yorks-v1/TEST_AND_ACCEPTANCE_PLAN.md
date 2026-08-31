@@ -1080,6 +1080,11 @@ outstanding. The product owner explicitly authorized production as an
 exception and required T14 setup/UAT next; release evidence must preserve this
 boundary.
 
+The production exception release subsequently passed its technical gates and
+was promoted as deployment `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g`. This live
+smoke evidence remains excluded from the T14 result above; see
+[`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
+
 ## 10. Release evidence package
 
 Batch 10 produces:

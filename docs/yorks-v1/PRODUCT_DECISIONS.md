@@ -1568,3 +1568,10 @@ exception, not a rewrite of either decision above:
   rollback evidence, isolated artifact verification and post-promotion live
   checks remain mandatory. A genuine migration divergence, credential issue or
   destructive ambiguity still stops the release.
+
+The exception release completed on 31 August 2026 from commit
+`a8f31d8466bc115a2fdab894f5c261381adc4a17`. Production migrations aligned
+through `20260831090940`; deployment
+`dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` passed isolated and post-promotion route,
+PWA, configuration and hash checks at `yorks-r35.vercel.app`. This operational
+fact does not change the decision that T14 remains not performed/not passed.

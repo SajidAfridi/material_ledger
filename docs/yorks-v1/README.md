@@ -15,9 +15,9 @@ pass. Dedicated Frankfurt staging project `iqltcyimlqtcwyzlemwx` now carries
 the complete tracked migration ledger and the protected document Function,
 but named-persona/manual UAT is still not performed. Later on 31 August 2026
 the product owner explicitly deferred that UAT until after release and
-authorized production immediately as a recorded release exception. This does
-not convert T14 into a pass; Workforce remains operator-controlled until the
-authorized production artifact is verified and promoted.**
+authorized production immediately as a recorded release exception. The
+verified artifact from commit `a8f31d8466bc115a2fdab894f5c261381adc4a17` is
+now promoted at `yorks-r35.vercel.app`; this does not convert T14 into a pass.**
 
 > **HISTORICAL BATCH MATERIAL — NOT THE CURRENT BUILD CONFIGURATION.** The
 > batch-completion files record the original incremental rollout and therefore
@@ -61,6 +61,7 @@ explicit V7-to-V1 conflict resolution.
 | [`WORKFORCE_ATTENDANCE_TIMESHEETS.md`](WORKFORCE_ATTENDANCE_TIMESHEETS.md) | Approved Workforce authority through independently accepted T13 plus the reinstated T14 staging contract, including RLS, rollout and rollback |
 | [`WORKFORCE_T13_HARDENING_EVIDENCE.md`](WORKFORCE_T13_HARDENING_EVIDENCE.md) | Accepted T13 security, race, scale, responsive, build and limitation evidence; no release action |
 | [`WORKFORCE_T14_STAGING_UAT_EVIDENCE.md`](WORKFORCE_T14_STAGING_UAT_EVIDENCE.md) | Reinstated T14 contract, initialized staging identity, 35-scenario witness matrix and current post-release deferral status |
+| [`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md) | Owner-exception production release: source, migration ledger, artifact/deployment hashes, live routes, rollback and explicit T14 boundary |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |

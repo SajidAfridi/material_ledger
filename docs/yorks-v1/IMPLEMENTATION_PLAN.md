@@ -840,6 +840,9 @@ candidate and human witness remain outstanding. The product owner explicitly
 deferred those T14 activities until after an immediate production-release
 exception; production evidence must not be relabeled as T14. See
 [`WORKFORCE_T14_STAGING_UAT_EVIDENCE.md`](WORKFORCE_T14_STAGING_UAT_EVIDENCE.md).
+The production exception subsequently completed from release commit
+`a8f31d8466bc115a2fdab894f5c261381adc4a17` and verified deployment
+`dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g`; T14 remains the next separate task.
 
 ## Batch completion discipline
 

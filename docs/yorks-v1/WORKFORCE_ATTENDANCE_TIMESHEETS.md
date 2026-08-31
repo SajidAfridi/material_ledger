@@ -1,8 +1,8 @@
 # Yorks Workforce Attendance and Timesheets
 
-Status: **T01 through T13 independently accepted; dedicated staging is
-initialized; T14 named-persona/manual UAT remains not performed and was
-explicitly deferred until after an owner-authorized production exception**
+Status: **T01 through T13 independently accepted and released to production
+under the owner-authorized exception; T14 named-persona/manual UAT remains not
+performed/not passed and is the next follow-up**
 
 Approved Workforce source: 30 August 2026
 Source fingerprint:
@@ -936,4 +936,7 @@ the required persona/scenario matrix are in
 No production action is evidence of T14 acceptance. The later explicit
 production exception authorizes migration, flag enablement and alias promotion
 only after the technical release gates pass; attendance import and exception
-bulk flows remain outside scope. T14 UAT stays the required next follow-up.
+bulk flows remain outside scope. Those gates passed and the verified release is
+recorded in
+[`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
+T14 UAT stays the required next follow-up.

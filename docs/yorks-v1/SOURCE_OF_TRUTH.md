@@ -113,6 +113,12 @@ performed. The product owner then explicitly deferred T14 UAT until after
 production and authorized an immediate production release as an exception.
 That exception is not a T14 pass and does not remove the post-release UAT
 obligation or the technical release, rollback and evidence gates.
+The exception release subsequently completed from commit
+`a8f31d8466bc115a2fdab894f5c261381adc4a17`: production migrations aligned
+through `20260831090940` and verified deployment
+`dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` was promoted to `yorks-r35.vercel.app`.
+Exact gate, route, hash and rollback evidence is in
+[`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
 
 Product-owner resolution later on 30 August 2026 denies attendance creation or
 correction for a future work date. The server compares against the exact

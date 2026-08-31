@@ -1070,6 +1070,12 @@ The product owner explicitly deferred T14 UAT until after an immediate
 production-release exception. Keep staging containment and do not treat the
 production release as a substitute for the later UAT.
 
+The exception release then aligned production ref `czykuksmlwswjsgotrpo`
+through `20260831090940` and promoted verified deployment
+`dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g`. Its prior-deployment, source and
+forward-migration rollback evidence is recorded in
+[`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
+
 ## 9. Migration stop conditions
 
 Stop before production mutation when:

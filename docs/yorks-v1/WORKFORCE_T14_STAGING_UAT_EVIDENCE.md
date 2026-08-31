@@ -1,6 +1,6 @@
 # Workforce T14 Dedicated Staging UAT Evidence
 
-Status: **infrastructure initialized; UAT deferred/not started/not passed**
+Status: **production exception released; UAT deferred/not started/not passed**
 Decision date: 31 August 2026
 Preflight observed at: `2026-08-31T11:18:50Z`
 Approved Workforce source fingerprint:
@@ -30,7 +30,7 @@ promotion or any post-T14 production release.
 
 | Evidence | Result |
 |---|---|
-| Repository baseline | `main` at `eeed1a294abfd686aada03791e605ff06a58124f`; accepted T01–T13 remains uncommitted in the preserved worktree. |
+| Repository baseline | Workforce release source `a8f31d8466bc115a2fdab894f5c261381adc4a17` is committed and pushed to GitHub `main`. |
 | Immutable T14 source fingerprint | **Not formed.** The owner deferred candidate formation and manual UAT until after the production-release exception. |
 | Web/APK artifact hashes | **Not formed.** No T14 build was run. |
 | Staging Supabase project | **Prepared.** `iqltcyimlqtcwyzlemwx` (`yorks-r35-staging`), Frankfurt `eu-central-1`; distinct from rejected shared/production ref `czykuksmlwswjsgotrpo`. |
@@ -39,7 +39,7 @@ promotion or any post-T14 production release.
 | Approved named personas | **Not approved for UAT.** Deterministic technical seed identities exist only for database-test execution; they are not the named human UAT persona/witness set required by T14. |
 | Staging deployment URL/ID | **None.** No preview deployment was created. |
 | Staging migration ledger | **Aligned through T13.** Empty-target dry run was reviewed; all tracked migrations through `20260831090940` applied. `finalize-document-upload` version 1 is active with JWT verification and bundle hash `14a55d912fa2a416b74d6e32923ee4ee4ad5b019c72ca2febec19fd107bf7194`. |
-| Production state | **Untouched.** No production database, flag, Vercel deployment or alias was readied or mutated. |
+| Production state | **Released under the explicit exception.** Production ref `czykuksmlwswjsgotrpo` is aligned through `20260831090940`; verified deployment `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` is promoted at `yorks-r35.vercel.app`. This is not T14 evidence. |
 
 The local `.r35.env` is not staging authority and was not read as a credential
 source. Local pgTAP fixtures and the historic shared project cannot substitute
@@ -169,3 +169,5 @@ production alias or production data. If a later T14 deployment fails, stop the
 unaliased preview, retain diagnostic evidence and reset/discard only the
 approved dedicated staging project. The separately authorized production
 release must use its own recorded rollback point and is not T14 evidence.
+That release and rollback evidence is recorded in
+[`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
