@@ -109,6 +109,35 @@ void main() {
     expect(options.projects.single.scopes.single.kind, 'common');
   });
 
+  test('optional Workforce read dates use the server default', () async {
+    final foundationRpc = _RpcClient((functionName, parameters) {
+      expect(functionName, 'v1_get_workforce_foundation');
+      expect(parameters, {
+        'p_query': null,
+        'p_status': null,
+        'p_limit': 50,
+        'p_offset': 0,
+      });
+      return _foundationResponse();
+    });
+    await _repository(rpc: foundationRpc).getFoundation();
+
+    final optionsRpc = _RpcClient((functionName, parameters) {
+      expect(functionName, 'v1_get_workforce_administration_options');
+      expect(parameters, isEmpty);
+      return {
+        'schema_version': 1,
+        'authorization_mode': 'enforced_administration',
+        'actor_auth_user_id': 'admin-1',
+        'on_date': '2026-08-31',
+        'server_time': '2026-08-31T12:00:00Z',
+        'users': <Object?>[],
+        'projects': <Object?>[],
+      };
+    });
+    await _repository(rpc: optionsRpc).getAdministrationOptions();
+  });
+
   test('assignment transfer sends optimistic history boundary', () async {
     const key = '11111111-1111-4111-8111-111111111111';
     const assignmentId = '22222222-2222-4222-8222-222222222222';

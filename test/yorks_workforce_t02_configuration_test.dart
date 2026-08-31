@@ -33,6 +33,16 @@ void main() {
     expect(projection.teamScheduleLinks.single.shiftCode, 'NIGHT');
   });
 
+  test('configuration without a date uses the server default', () async {
+    final rpc = _RpcClient((functionName, parameters) {
+      expect(functionName, 'v1_get_workforce_configuration');
+      expect(parameters, isEmpty);
+      return _configurationResponse();
+    });
+
+    await _repository(rpc: rpc).getConfiguration();
+  });
+
   test(
     'save calendar sends version and idempotency through typed boundary',
     () async {

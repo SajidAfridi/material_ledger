@@ -1259,9 +1259,12 @@ final class YorksSupabaseWorkforceRepository
         (normalizedDate.isEmpty || !_isIsoDate(normalizedDate))) {
       return _invalidInput();
     }
-    final response = await _invoke('v1_get_workforce_configuration', {
-      'p_on_date': normalizedDate,
-    });
+    final parameters = <String, Object?>{};
+    if (normalizedDate != null) parameters['p_on_date'] = normalizedDate;
+    final response = await _invoke(
+      'v1_get_workforce_configuration',
+      parameters,
+    );
     try {
       return YorksWorkforceConfigurationProjection.fromRpcJson(response);
     } on FormatException catch (error) {
@@ -1281,9 +1284,12 @@ final class YorksSupabaseWorkforceRepository
         (normalizedDate.isEmpty || !_isIsoDate(normalizedDate))) {
       return _invalidInput();
     }
-    final response = await _invoke('v1_get_workforce_administration_options', {
-      'p_on_date': normalizedDate,
-    });
+    final parameters = <String, Object?>{};
+    if (normalizedDate != null) parameters['p_on_date'] = normalizedDate;
+    final response = await _invoke(
+      'v1_get_workforce_administration_options',
+      parameters,
+    );
     try {
       return YorksWorkforceAdministrationOptions.fromRpcJson(response);
     } on FormatException catch (error) {
@@ -1308,13 +1314,14 @@ final class YorksSupabaseWorkforceRepository
         (normalizedDate.isEmpty || DateTime.tryParse(normalizedDate) == null)) {
       return _invalidInput();
     }
-    final response = await _invoke('v1_get_workforce_foundation', {
+    final parameters = <String, Object?>{
       'p_query': _nullableTrimmed(query),
       'p_status': status?.wireValue,
       'p_limit': limit,
       'p_offset': offset,
-      'p_on_date': normalizedDate,
-    });
+    };
+    if (normalizedDate != null) parameters['p_on_date'] = normalizedDate;
+    final response = await _invoke('v1_get_workforce_foundation', parameters);
     try {
       return YorksWorkforceFoundationProjection.fromRpcJson(response);
     } on FormatException catch (error) {
