@@ -1,8 +1,9 @@
 # Workforce T14 Dedicated Staging UAT Evidence
 
-Status: **production exception released; UAT deferred/not started/not passed**
+Status: **immutable staging preview deployed; manual UAT not started/not passed**
 Decision date: 31 August 2026
 Preflight observed at: `2026-08-31T11:18:50Z`
+Preview deployed at: `2026-08-31T22:42:20Z`
 Approved Workforce source fingerprint:
 `3914f3ec6740b5986724ae8dbc44b70f9944ec580fedfd3a526b3605866bf613`
 
@@ -31,14 +32,14 @@ promotion or any post-T14 production release.
 | Evidence | Result |
 |---|---|
 | Repository baseline | Workforce release source `a8f31d8466bc115a2fdab894f5c261381adc4a17` is committed and pushed to GitHub `main`. |
-| Immutable T14 source fingerprint | **Not formed.** The owner deferred candidate formation and manual UAT until after the production-release exception. |
-| Web/APK artifact hashes | **Not formed.** No T14 build was run. |
+| Immutable T14 source fingerprint | **Formed locally, not pushed.** Source commit `4ee6212bfcb8e27616009a5847667a04b9e00384` contains the approved Procore-inspired daily crew and monthly detail presentation. T14 authority still excludes a GitHub push. |
+| Web/APK artifact hashes | **Formed.** Web `main.dart.js` SHA-256 `586bb5e0a11882469227bb814f4a222414d13dc5ec49a22547c7ecc519bbe700`; manifest `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff`; service worker `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c`. Android verification APK `2c21cdd15e689a647218aeff849148f25ef75aae52ea35dd01ba0824bc830f5d` used the explicit ephemeral CI-signing lane and is not publishable. |
 | Staging Supabase project | **Prepared.** `iqltcyimlqtcwyzlemwx` (`yorks-r35-staging`), Frankfurt `eu-central-1`; distinct from rejected shared/production ref `czykuksmlwswjsgotrpo`. |
 | Staging configuration | **Prepared locally.** Ignored `.r35.staging.env` resolves secrets from macOS Keychain and enables Workforce only for staging/release commands. No secret is recorded here. |
-| Vercel Preview configuration | **Missing.** `vercel env ls preview` reports no environment variables for the linked `yorks-r35` project. |
+| Vercel Preview configuration | **Bound into the verified static artifact.** The ignored staging configuration enabled Workforce and Accounts and selected only staging ref `iqltcyimlqtcwyzlemwx`; remote `main.dart.js` contains that ref once and the production ref zero times. No Vercel environment secret was added. |
 | Approved named personas | **Not approved for UAT.** Deterministic technical seed identities exist only for database-test execution; they are not the named human UAT persona/witness set required by T14. |
-| Staging deployment URL/ID | **None.** No preview deployment was created. |
-| Staging migration ledger | **Aligned through T13.** Empty-target dry run was reviewed; all tracked migrations through `20260831090940` applied. `finalize-document-upload` version 1 is active with JWT verification and bundle hash `14a55d912fa2a416b74d6e32923ee4ee4ad5b019c72ca2febec19fd107bf7194`. |
+| Staging deployment URL/ID | **Ready and unaliased.** `dpl_4Y4CqyNnUV1Edu42NL8uL5QPDRp5` at `https://yorks-r35-7lebszhmu-sajid-alis-projects-0ec775a2.vercel.app`. Root and Workforce overview/attendance/timesheets deep routes returned HTTP 200; deep-route HTML and protected artifacts byte-matched the local build. |
+| Staging migration ledger | **Aligned through the current tracked ledger.** Verification on dedicated ref `iqltcyimlqtcwyzlemwx` showed every local migration through `20260831183000` present remotely. `finalize-document-upload` version 1 remains active with JWT verification and bundle hash `14a55d912fa2a416b74d6e32923ee4ee4ad5b019c72ca2febec19fd107bf7194`. |
 | Production state | **Released under the explicit exception.** Production ref `czykuksmlwswjsgotrpo` is aligned through `20260831090940`; verified deployment `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` is promoted at `yorks-r35.vercel.app`. This is not T14 evidence. |
 
 The local `.r35.env` is not staging authority and was not read as a credential
@@ -145,7 +146,7 @@ Every item is currently deferred/not run:
 | P1 product defects | Not assessed; hosted UAT did not start. |
 | Release-blocking prerequisite `T14-ENV-001` | Resolved: dedicated staging project/config and full migration/Function baseline exist. |
 | Release-blocking prerequisite `T14-ID-001` | Approved named non-production personas and approval chain are absent. |
-| Release-blocking prerequisite `T14-RC-001` | Still outstanding: no immutable unaliased Workforce staging candidate or artifact hashes were formed before the owner deferred UAT. |
+| Release-blocking prerequisite `T14-RC-001` | Resolved: local immutable source, staging-bound web/APK hashes and an unaliased Ready preview are recorded above. |
 | Human witness | Not started. Automation cannot waive the required manual scenarios. |
 
 ## Required owner inputs to resume
@@ -153,14 +154,11 @@ Every item is currently deferred/not run:
 1. Provide and approve named non-production accounts for every persona class above,
    including concrete reviewer/final-approver selection and negative actors,
    without placing passwords or service-role credentials in Git or evidence.
-2. Configure only the Vercel Preview/non-production environment for the same
-   staging backend, or authorize deployment of the verified prebuilt static
-   artifact without adding production aliases.
-3. Name the required human UAT witness/release owner.
+2. Name the required human UAT witness/release owner.
 
-After these inputs exist, T14 must continue from immutable-candidate formation,
-preflight/dry-run ledger review and a dedicated staging deployment. No result
-from the deferred UAT may be treated as production evidence or vice versa.
+After these inputs exist, T14 continues on the recorded immutable preview with
+the named-persona/manual scenario matrix. No result from the deferred UAT may
+be treated as production evidence or vice versa.
 
 ## Containment and rollback
 
