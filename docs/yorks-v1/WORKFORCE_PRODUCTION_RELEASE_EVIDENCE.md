@@ -194,3 +194,97 @@ audited dated responsibility must be retained; any database rollback is a
 reviewed forward correction. The authorized overview is intentionally empty
 until real workers, teams, calendars and schedules are configured; no
 production people/master data was invented during this recovery.
+
+## Post-release Workforce Administration enablement
+
+Status: **released and independently verified on 31 August 2026**
+
+This follow-up closes the production configuration gap reported after the
+access recovery. Login accounts remain controlled in User Management; worker
+master records, teams, dated project/internal-location assignments, calendars,
+shifts and team schedules now have a separate guarded Workforce
+Administration workspace. Worker and login-account deletion is not introduced:
+accounts are disabled, workers use retained status, and project/team changes
+close the prior dated assignment before inserting its successor.
+
+| Evidence | Value |
+|---|---|
+| Release source commit | `19c03a39ba0d1fd097f32cefc014ebea30ad9185` |
+| GitHub `main` | Exact match to the release source commit after push |
+| Production migration | `20260831155531_yorks_workforce_administration_enablement.sql` |
+| Previous live deployment | `dpl_F6fomynrt6we4wsG85BreT93trAT` |
+| Release deployment | `dpl_9fvVjbYeZLxLpVH6XR8GwYE6otGb` |
+| Candidate URL | `https://yorks-r35-8z95brofy-sajid-alis-projects-0ec775a2.vercel.app` |
+| Production alias | `https://yorks-r35.vercel.app` |
+
+### Verification and migration proof
+
+- `flutter pub get` passed; 16 changed Dart files passed the no-change format
+  gate; `flutter analyze` passed with no issues.
+- All 149 Workforce Flutter tests passed, including 360 px/mobile and desktop
+  Administration evidence, guarded route/navigation, repository payloads and
+  the retained read-only compact-overview boundary.
+- The broad legacy Flutter suite remains non-green because of the previously
+  recorded golden/layout baseline. It caught one compact action regression in
+  this slice before release; that regression was corrected and the complete
+  Workforce suite then passed. This release does not relabel the global suite
+  as green.
+- A clean `supabase db reset` applied every tracked migration and seed. The
+  complete local database gate passed 77 files and 2,363 assertions in 98
+  seconds. The 500-worker observation was 14,296.19 ms; T13 observations were
+  overview 5,220.08 ms, roster 806.84 ms and queue 2,646.43 ms. These remain
+  observations rather than product SLAs.
+- Database lint found no warning in the new Administration functions after the
+  configuration reader was correctly marked volatile. Retained warnings in
+  unrelated pre-existing functions remain outside this change.
+- The CI release-shaped web build passed. The Android release-shaped gate also
+  passed with the explicit ephemeral CI certificate and produced a 98.7 MB
+  APK; this is not a protected store-signing claim.
+- Before production mutation, the linked ledger matched local history through
+  `20260831142257`. The dry run contained exactly the one Administration
+  migration and no seed or role operation. It applied successfully, and a
+  second linked dry run was empty.
+- The migration promotes only `workforce.workers.manage`,
+  `workforce.teams.manage` and `workforce.configuration.manage`; retains
+  `workforce.view` as their dependency; replaces temporary exact-Admin checks
+  only inside the accepted T01/T02 management consumers; keeps helpers private;
+  and grants authenticated execution only on the two reviewed public RPCs.
+- Positive/negative database evidence covers delegated Project Engineer,
+  Site Engineer and Procurement managers, cross-capability denial, ordinary
+  table/helper denial, safe response shapes, idempotent assignment transfer,
+  stale-version protection, invalid-supervisor rollback and historical-row
+  preservation.
+
+### Production artifact and live proof
+
+The clean production build reported Accounts and Workforce enabled, contained
+the production Supabase ref exactly once, contained neither staging nor CI
+refs, contained no service-role/secret marker, and included the new
+`/yorks/workforce/administration` route. The isolated artifact contained 52
+files; Vercel extracted 51 deployable static files. The deployment was created
+with production configuration and automatic custom-domain promotion disabled,
+verified in `READY` state, and only then promoted.
+
+| Artifact | SHA-256 |
+|---|---|
+| `index.html` | `31af1b140f0dcc6925e234d36061e376be99b608225ef060c1a7bf669639afb5` |
+| `main.dart.js` | `b4169d31938041c96fd7f018c3be79ec398d17c6bacb91eb2736e3996e8b8698` |
+| `flutter_bootstrap.js` | `d01ae9748dc5baccbbe3c0504095e7e0b7c8863764fe216679c56bc795011c8d` |
+| `manifest.json` | `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff` |
+| `flutter_service_worker.js` | `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c` |
+| `firebase-messaging-sw.js` | `e8151cb276b7644627e5cefc1dc5e46b69ad38f952c4a734b1f81a9795437a1e` |
+
+Before and after promotion, `/`, Workforce overview, Administration,
+Attendance and Timesheets, User Management, Projects, Material Requests,
+Accounts and Team Chat each returned HTTP 200 with the exact local
+`index.html` hash. All six runtime/PWA assets above returned HTTP 200 and
+matched local bytes. A final background browser load of the promoted
+Administration hash route reached the Yorks Flutter runtime with the expected
+title, two Flutter view roots and no captured console error.
+
+Rollback is promotion of `dpl_F6fomynrt6we4wsG85BreT93trAT`. The database
+migration is additive and must be retained; contain a client defect by
+promoting the previous artifact, then use a reviewed forward migration for any
+proven database correction. No production worker, user, team, schedule or
+attendance record was created, changed or guessed during this release. Manual
+T14 staging UAT remains outstanding and is not claimed by this evidence.
