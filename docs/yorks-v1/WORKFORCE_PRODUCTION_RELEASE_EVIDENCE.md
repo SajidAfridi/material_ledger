@@ -288,3 +288,51 @@ promoting the previous artifact, then use a reviewed forward migration for any
 proven database correction. No production worker, user, team, schedule or
 attendance record was created, changed or guessed during this release. Manual
 T14 staging UAT remains outstanding and is not claimed by this evidence.
+
+## Post-release Administration default-date hotfix
+
+Status: **released and verified on 31 August 2026 at 22:51 PKT**
+
+The delegated Workforce Administration route was reachable, but its initial
+read sent `p_on_date: null` to the three protected read RPCs. PostgreSQL treats
+an explicitly supplied null as the argument value rather than applying the
+function's current-date default; the foundation reader therefore returned
+`V1_WORKFORCE_FOUNDATION_FILTER_INVALID`. Production grants were independently
+confirmed effective for the reported delegated manager, and the same three
+RPCs succeeded under that actor when called with the server date. The client
+now omits the optional parameter when no date is selected.
+
+| Evidence | Value |
+|---|---|
+| Hotfix source commit | `3f598a4050bd7d26baf86ef11e779751542cd753` |
+| GitHub `main` | Exact match to the hotfix source commit after push |
+| Database migration | None; client parameter-shape correction only |
+| Previous release deployment | `dpl_9fvVjbYeZLxLpVH6XR8GwYE6otGb` |
+| Hotfix deployment | `dpl_DRvHy6UTtkzsgQ5Y1veyDNK6kjJx` |
+| Candidate URL | `https://yorks-r35-o34zlw4c9-sajid-alis-projects-0ec775a2.vercel.app` |
+| Production alias | `https://yorks-r35.vercel.app` |
+
+The three focused repository/widget files passed 21 tests. The complete
+Workforce Flutter set passed 151 tests, `flutter analyze` reported no issues,
+the changed Dart files passed the no-change format gate and `git diff --check`
+passed. A clean production web build reported Accounts and Workforce enabled
+and contained the production Supabase reference.
+
+Before and after promotion, `/`, Workforce overview, Administration,
+Attendance and Timesheets, User Management, Projects, Material Requests,
+Accounts and Team Chat each returned HTTP 200 with the local `index.html`
+hash. The promoted domain resolved to the new READY deployment. Runtime/PWA
+hashes were:
+
+| Artifact | SHA-256 |
+|---|---|
+| `index.html` | `31af1b140f0dcc6925e234d36061e376be99b608225ef060c1a7bf669639afb5` |
+| `main.dart.js` | `fe9a84777464d4f7d4316e789ca5c2d3483143373530ad120bb07f271b6c6cbc` |
+| `flutter_bootstrap.js` | `2f5a8d3abe96a072d4f060c91705badece7e5d30ecc102f9df91853b95668b49` |
+| `manifest.json` | `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff` |
+| `flutter_service_worker.js` | `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c` |
+| `firebase-messaging-sw.js` | `e8151cb276b7644627e5cefc1dc5e46b69ad38f952c4a734b1f81a9795437a1e` |
+
+Rollback is promotion of `dpl_9fvVjbYeZLxLpVH6XR8GwYE6otGb`. No production
+worker, login user, permission, team, schedule, assignment, timesheet or
+attendance record was changed by this hotfix.
