@@ -112,3 +112,85 @@ Next work remains T14 on the dedicated staging project: approve named
 non-production personas and witness, form one immutable staging candidate, and
 execute the 35 manual scenarios. Production smoke checks above cannot be
 credited toward that acceptance.
+
+## Post-release Workforce access enablement recovery
+
+Status: **released and independently verified on 31 August 2026**
+
+### Cause and correction
+
+Masaud Khan had effective organization grants for `workforce.view`,
+`workforce.attendance.maintain` and `workforce.timesheets.maintain`, plus an
+audited organization responsibility, but production had no Workforce workers,
+teams, calendars or schedules. The accepted T10 overview incorrectly treated
+that valid empty setup as an authorization failure and returned
+`V1_WORKFORCE_T10_READ_DENIED`.
+
+Migration `20260831142257_yorks_workforce_access_enablement_recovery.sql`
+preserves the accepted T10/T13 data projection and adds a least-privilege
+wrapper for only the organization-authorized empty state. It also makes the
+capability/responsibility dependency explicit in User Management: reviewed
+Workforce grants include visible missing prerequisites, Admin can atomically
+save the dated organization responsibility, and retained half-enabled users
+receive an audited recovery action. Non-Admin permission viewers receive no
+responsibility metadata or organization-wide master-data counts.
+
+| Evidence | Value |
+|---|---|
+| Release source commit | `023de06d8f711a20fff4a37401c22f2894c0ecb5` |
+| Previous live deployment | `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` |
+| Recovery deployment | `dpl_F6fomynrt6we4wsG85BreT93trAT` |
+| Candidate URL | `https://yorks-r35-38pdwabdm-sajid-alis-projects-0ec775a2.vercel.app` |
+| Production alias | `https://yorks-r35.vercel.app` |
+
+### Verification and production proof
+
+- changed-Dart format gate: passed with zero changed files;
+- `flutter analyze`: passed with no issues;
+- focused permission model/repository/UI gate: 63 tests passed;
+- clean local `supabase db reset`: passed through the recovery migration;
+- complete local database gate: 76 files and 2,343 assertions passed in 97
+  seconds; the 500-worker observation was 14,293.25 ms and T13 observations
+  were overview 5,282.12 ms, roster 786.81 ms and queue 1,886.61 ms;
+- database lint introduced no new warning after removing one dead assertion
+  result; retained warnings predate this recovery;
+- the linked dry run contained exactly the recovery migration, the push
+  applied only that migration, and the second dry run was empty;
+- production-shaped web build passed with Accounts and Workforce enabled and
+  the production Supabase ref; the CI/staging refs and service-role credential
+  key were absent;
+- Android release-shaped build passed with the explicit ephemeral CI
+  certificate and produced a 101.3 MB APK. This is not a store-signing claim;
+  and
+- the complete Flutter suite reproduced the previously recorded unrelated
+  global golden drift (206 failures). It is not relabelled as green; the
+  focused Workforce, analyzer, database and release-build gates above passed.
+
+After migration, a production transaction using Masaud's exact authenticated
+claims returned supervisor overview schema 1 with zero teams and zero workers,
+instead of access denied. The protected Admin workspace independently reported
+effective operational access, the current organization responsibility and
+zero active workers, teams and scheduled teams. The internal accepted overview
+projection remains non-executable by `authenticated`; only the reviewed public
+wrapper is callable.
+
+The isolated candidate extracted 51 deployable files. Before and after
+promotion, `/`, all three Workforce routes, Projects, Material Requests,
+Accounts and Team Chat returned HTTP 200 with the exact local `index.html`
+hash. Runtime/PWA assets matched local bytes:
+
+| Artifact | SHA-256 |
+|---|---|
+| `index.html` | `31af1b140f0dcc6925e234d36061e376be99b608225ef060c1a7bf669639afb5` |
+| `main.dart.js` | `7d872c571b29545f953f6fb56b8e24cf7c5ce5e0bd02c148ae10d2becaf6bed2` |
+| `flutter_bootstrap.js` | `2060fa952cc04c6b7e0fcc8e27207e216f3a64fc31de28f4a13c5f71789673a1` |
+| `manifest.json` | `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff` |
+| `flutter_service_worker.js` | `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c` |
+| `firebase-messaging-sw.js` | `e8151cb276b7644627e5cefc1dc5e46b69ad38f952c4a734b1f81a9795437a1e` |
+
+Rollback remains deployment promotion to
+`dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g`. The additive database migration and the
+audited dated responsibility must be retained; any database rollback is a
+reviewed forward correction. The authorized overview is intentionally empty
+until real workers, teams, calendars and schedules are configured; no
+production people/master data was invented during this recovery.
