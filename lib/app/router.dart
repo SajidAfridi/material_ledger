@@ -68,6 +68,9 @@ import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart'
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/chat/presentation/screens/yorks_v1_team_chat_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
+import '../features/workforce/presentation/screens/yorks_workforce_daily_attendance_screen.dart';
+import '../features/workforce/presentation/screens/yorks_workforce_overview_screen.dart';
+import '../features/workforce/presentation/screens/yorks_workforce_timesheets_screen.dart';
 import '../shared/models/app_config.dart';
 import '../shared/models/app_user.dart';
 import '../shared/models/role_permissions.dart';
@@ -167,6 +170,11 @@ abstract final class RoutePaths {
   static const String yorksV1MaterialReturnNew = '/yorks/returns/new';
   static const String yorksV1MaterialReturn = '/yorks/returns/:returnId';
   static const String yorksV1Configuration = '/yorks/configuration';
+  static const String yorksV1Workforce = '/yorks/workforce';
+  static const String yorksV1WorkforceAttendance =
+      '/yorks/workforce/attendance';
+  static const String yorksV1WorkforceTimesheets =
+      '/yorks/workforce/timesheets';
   static const String yorksV1TeamChat = '/yorks/team-chat';
   static const String yorksV1TeamChatConversation =
       '/yorks/team-chat/:conversationId';
@@ -466,6 +474,7 @@ bool? _isAllowedForRole(
   if (sharedAll.contains(path)) return true;
 
   if (_isYorksV1AccountsPath(path)) return true;
+  if (_isYorksV1WorkforcePath(path)) return true;
 
   // Accountant is an Accounts-only identity. Normalized Accounts paths are
   // accepted above and then resolved through the protected capability guard.
@@ -600,6 +609,15 @@ bool? _isYorksV1RouteAllowedForRole(
       legacyAllowed: false,
       projectId: projectId,
       organizationSummary: false,
+    );
+  }
+
+  if (_isYorksV1WorkforcePath(path)) {
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.workforceView,
+      legacyAllowed: false,
+      organizationSummary: true,
     );
   }
 
@@ -758,6 +776,10 @@ bool _isYorksV1AccountsPath(String path) =>
     path.startsWith('${RoutePaths.yorksV1Accounts}/') ||
     (path.startsWith('/yorks/projects/') && path.contains('/accounts'));
 
+bool _isYorksV1WorkforcePath(String path) =>
+    path == RoutePaths.yorksV1Workforce ||
+    path.startsWith('${RoutePaths.yorksV1Workforce}/');
+
 bool _canOpenAccountsPortfolio(YorksV1Role role) =>
     role == YorksV1Role.admin ||
     role == YorksV1Role.accountant ||
@@ -786,6 +808,7 @@ GoRouter createAppRouter({
   bool yorksV1TeamChatEnabled = false,
   bool yorksV1InventorySuppliersEnabled = false,
   bool yorksV1AccountsEnabled = false,
+  bool yorksV1WorkforceEnabled = false,
   YorksV1Role? yorksV1Role,
   YorksV1HybridPermissionResolver? yorksV1PermissionResolver,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
@@ -890,6 +913,9 @@ GoRouter createAppRouter({
       }
 
       if (_isYorksV1AccountsPath(path) && !yorksV1AccountsEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (_isYorksV1WorkforcePath(path) && !yorksV1WorkforceEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
       if (path == RoutePaths.finance && yorksV1AccountsEnabled) {
@@ -1526,6 +1552,30 @@ GoRouter createAppRouter({
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const YorksV1ConfigurationScreen()),
       ),
+      if (yorksV1WorkforceEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1Workforce,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const YorksWorkforceOverviewScreen(),
+          ),
+        ),
+      if (yorksV1WorkforceEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1WorkforceAttendance,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const YorksWorkforceDailyAttendanceScreen(),
+          ),
+        ),
+      if (yorksV1WorkforceEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1WorkforceTimesheets,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const YorksWorkforceTimesheetsScreen(),
+          ),
+        ),
       GoRoute(
         path: RoutePaths.yorksV1TeamChat,
         pageBuilder: (context, state) =>

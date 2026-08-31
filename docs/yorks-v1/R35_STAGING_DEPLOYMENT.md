@@ -1,6 +1,17 @@
 # Yorks V1 R35 — Dedicated Staging Deployment and Document Witness
 
-Status: **prepared; awaiting a release-owner-created staging project.**
+Status: **dedicated staging project initialized; named-persona/manual UAT
+deferred until after the explicitly authorized production release.**
+
+Workforce T14 was reinstated by the product owner on 31 August 2026 after an
+earlier waiver. The waiver remains historical not-performed evidence; T14 now
+remains a distinct Workforce-enabled candidate and witness obligation.
+Dedicated Frankfurt project `iqltcyimlqtcwyzlemwx` was subsequently created;
+the complete tracked ledger and protected document Function were applied.
+Named personas and manual UAT are not performed. The product owner explicitly
+deferred them until after production and authorized release as an exception;
+that exception is not a T14 pass. See
+[`WORKFORCE_T14_STAGING_UAT_EVIDENCE.md`](WORKFORCE_T14_STAGING_UAT_EVIDENCE.md).
 
 This procedure is intentionally separate from the historic shared remote
 project. It applies every tracked migration to an empty staging project, then

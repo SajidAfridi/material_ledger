@@ -906,3 +906,665 @@ The following fail-closed rules bind the T04 supplier-bill slice:
 
 These rules do not create an RFQ, quotation comparison or full Purchase Order
 workflow. T04 is route-less and inactive while `YORKS_V1_ACCOUNTS` is off.
+
+## 24. Workforce Attendance and Timesheets foundation
+
+The approved 30 August 2026 Workforce contract is a Workforce-only extension.
+It does not add or rename a platform role, turn a worker into a technical
+project member, or replace People/HR and Leave behavior.
+
+The following decisions are frozen for T01:
+
+- a worker is an operational person record and is distinct from a Supabase
+  Auth user. `linked_auth_user_id` is optional and unique when present;
+- worker numbers are case-insensitively unique. Workers, trades, teams,
+  assignments and responsibility scopes are preserved through status and
+  effective dates, never hard-deleted;
+- one effective primary assignment may exist for a date. A bounded temporary
+  assignment may override it for that date without rewriting either history;
+- project-scope assignments prove that the selected Building/Common scope
+  belongs to the selected project. Project and internal-location assignment
+  targets are mutually exclusive;
+- responsibility is an explicit, dated organization, worker, team, project,
+  project-scope or internal-location relation. It never grants a platform role
+  or technical project membership;
+- the exact flag is `YORKS_V1_WORKFORCE`. It defaults off and fails closed on
+  the protected document dependency;
+- the twelve `workforce.*` capability keys are planned, shadow,
+  nonassignable metadata in T01. Exact Admin remains the temporary legacy
+  authority for protected T01 worker-master RPCs;
+- T01 exposes no Workforce route, sidebar entry, attendance action, timesheet
+  action or operational capability consumer; and
+- legacy employee/attendance JSON remains untouched. T01 performs no copy,
+  hydration migration, dual write or inferred identity mapping.
+
+The following decisions are frozen for T02:
+
+- calendar and shift configurations are effective versions with stable codes;
+  versions of the same code cannot overlap;
+- every calendar has an IANA timezone, integer scheduled/break minutes and
+  exactly seven ISO weekdays with at least one regular working day;
+- day type remains separate from attendance status. Dated public holidays,
+  site closures, Ramadan schedules and other overrides cannot synthesize an
+  attendance result;
+- shift start/end values are optional supporting data. Cross-midnight work is
+  attributed to the shift start date in the linked calendar timezone;
+- effective team schedule defaults reference exact retained calendar and
+  optional shift versions and cannot overlap; parent date edits cannot strand
+  retained links or overrides;
+- after any team schedule or dated override references a calendar or shift
+  version, its code, timezone, minutes, weekday meanings, shift kind/times and
+  effective window are immutable. A display-name correction may not alter
+  those resolution facts; semantic change requires a new non-overlapping
+  version;
+- an already-effective team schedule and a past/current dated override are
+  immutable historical facts, including the dated override active state. A
+  future unused link or override remains optimistic-version correctable only
+  while both its old and proposed start remain in the future;
+- every past/current/future boundary is derived from `clock_timestamp()` in
+  the exact linked calendar IANA timezone. Database-session timezone and
+  session `current_date` never authorize a historical edit or retirement;
+- inactive retirement never deletes history. A calendar or shift with only
+  expired references may be retired and remains readable, while current or
+  future links/active overrides block retirement;
+- exact Admin remains temporary audited configuration authority. Capabilities
+  stay planned/shadow/nonassignable, the flag stays default-off and no route or
+  UI is exposed; and
+- T02 creates no daily attendance, time allocation, overtime or timesheet row.
+
+The following decisions are frozen for T03 daily attendance:
+
+- one protected daily attendance fact exists per worker and `work_date`.
+  Attendance status is exactly `present`, `absent`, `annual_leave`,
+  `sick_leave`, `official_leave`, `unpaid_leave` or `not_entered`; calendar day
+  type remains a separate retained fact;
+- `regular_minutes` and `overtime_minutes` are non-negative integers. Each is
+  bounded by 1,440 and their sum cannot exceed 1,440. `present` requires a
+  positive total; every absent, leave and not-entered state requires zero;
+- present work may be recorded on a weekly off, public holiday, site closure or
+  not-scheduled day only as an explicit attendance fact. T03 does not calculate
+  overtime pay, create partial-day absence allocation or infer attendance from
+  a schedule;
+- the server resolves the worker's temporary-over-primary assignment and the
+  exact team calendar, shift and dated/weekday day type for the work date. The
+  first saved row retains those semantic values, names, IDs and versions.
+  A correction may change only status, minutes and reason; it never rebases the
+  retained assignment, responsibility or schedule context;
+- creating a day requires an active worker inside employment and assignment
+  dates. A versioned correction of an existing row remains possible after the
+  worker later becomes inactive, suspended or leaves, but only for an active
+  authorized actor and without changing retained context;
+- `workforce.view` and `workforce.attendance.maintain` are the only Workforce
+  capabilities promoted to operational, enforced and assignable in T03.
+  A non-Admin caller requires both effective capability resolution and an
+  effective responsibility matching the worker's retained team/project/scope/
+  internal-location context. Exact active Admin has audited organization
+  authority. Role, email, editable metadata, technical project membership or a
+  guessed UUID never grants Workforce attendance access;
+- the save payload accepts only worker, date, status, integer minutes and a
+  reason. The command is online/server-confirmed, optimistic-versioned,
+  idempotent and audited once. Direct authenticated table access and hard
+  deletion remain unavailable; and
+- T03 adds no route, sidebar, screen, bulk/copy action, allocation, monthly
+  period, timesheet lifecycle, notification, report/export, legacy migration,
+  feature enablement or deployment. The other ten Workforce capabilities
+  remain planned, shadow and nonassignable.
+
+Product-owner resolution on 30 August 2026 denies all future attendance. A new
+day and a versioned correction both fail when `work_date` is later than the
+calendar-local date derived from `clock_timestamp()` in the exact retained
+calendar IANA timezone. A new row uses the server-resolved schedule timezone;
+an existing row uses its retained `calendar_timezone_snapshot`. Database
+session timezone and client device time never decide this boundary. Any
+pre-existing future row is preserved and readable as historical evidence but
+is read-only until its work date is no longer future; it is never deleted,
+rebased or silently corrected by this rule.
+
+The following decisions are frozen for T04 daily timesheet allocations:
+
+- one attendance day may own one versioned allocation set with multiple
+  immutable allocation revisions. An active revision contains at least one
+  allocation, and its separate regular-minute and overtime-minute sums must
+  equal the parent attendance day exactly;
+- allocation targets are explicit and mutually exclusive. Project work names
+  one active project and one active Building/Common scope belonging to that
+  project. Internal Yorks work names one active internal location and retains
+  that location's Department/Cost Centre meaning. The server never infers a
+  target from the worker's team or assignment;
+- allocation rows retain target identity/display snapshots, optional activity
+  and notes, integer regular/overtime minutes, actor/time and revision
+  evidence. They contain no pay, salary, cost or commercial value;
+- an optional supporting time range must be supplied as a complete pair.
+  Start and end form a half-open interval in the retained calendar timezone,
+  anchored to the attendance `work_date` as the retained shift-start date. On
+  a cross-midnight shift a start earlier than the retained shift start belongs
+  to the following local date; an end earlier than that resolved start time
+  advances once more. Equal start/end is invalid, adjacent intervals are
+  permitted and overlapping intervals are rejected. The interval supports the
+  allocation but does not synthesize or replace authoritative integer minutes;
+- only a `present` attendance day may carry an active allocation revision.
+  Absent, leave and not-entered days carry none. An active allocation set
+  blocks every T03 attendance correction so a parent cannot silently make its
+  child totals or meaning inconsistent;
+- only `workforce.timesheets.maintain` may save or withdraw an allocation set.
+  Withdrawal appends a zero-line immutable revision and changes no attendance
+  fact. After withdrawal, an attendance maintainer may correct the parent; a
+  timesheet maintainer must then save a new active revision against that exact
+  attendance version. Timesheet authority never grants attendance authority;
+- every save is atomic, worker/date locked, optimistic-versioned, UUID-
+  idempotent and audited once. Existing revisions/rows cannot be updated or
+  deleted, and every accepted response is the strict authoritative schema-v1
+  projection;
+- T04 promotes only `workforce.timesheets.maintain` in addition to the two T03
+  consumers. Non-Admin access requires an effective capability and dated
+  responsibility for the retained worker context plus effective capability
+  and explicit dated responsibility over every target. Worker/team
+  responsibility alone does not authorize an unrelated target. Exact active
+  Admin retains audited organization authority; and
+- T04 adds no route, sidebar, screen, roster/bulk action, monthly-period
+  lifecycle, review/verification/approval/reopen workflow, notification,
+  document, report/export, legacy migration, feature enablement or deployment.
+
+The following decisions are frozen for the T05 Supervisor Daily Roster:
+
+- opening or filtering a roster is read-only. The server projects only workers
+  effectively assigned for the selected work date plus authorized retained
+  attendance evidence; schedule/day-type values for missing rows are
+  suggestions and never create attendance;
+- the existing `workforce.view`, `workforce.attendance.maintain` and
+  `workforce.timesheets.maintain` capabilities remain the complete T05
+  authority vocabulary. T05 promotes no additional key and never derives
+  authority from a route, role label, technical project membership or a
+  client-supplied selector;
+- Review Day is a local validation transition. Save Day is the only server
+  mutation and sends one allowlisted, atomic, optimistic-versioned,
+  UUID-idempotent roster command. Worker/date locks are deterministic and a
+  mixed row set fails without a partial attendance, allocation or audit effect;
+- attendance-only authority may preserve a live allocation revision while
+  correcting optional overtime evidence, but it cannot see hidden allocation
+  identifiers or change locked totals. Replacement or withdrawal always needs
+  timesheet authority and the exact visible allocation version;
+- bulk actions and Copy Previous Day transform only the local draft. Copy
+  recomputes the selected date's assignment/schedule/day type, excludes workers
+  no longer assigned, adds newly assigned workers, clears absence/leave,
+  overtime, notes and later-phase evidence, retains only a currently authorized
+  target, and marks copied rows as needing review before explicit Save;
+- the normalized Workforce route, sidebar and search entry exist only while
+  `YORKS_V1_WORKFORCE` is enabled and the server permission snapshot confirms
+  `workforce.view`. Flag-off, denied, inactive or revoked state fails closed and
+  purges protected roster/draft state; and
+- T05 is a desktop roster: 1440x900, 1366x768 and 1024x768 use a sticky Worker
+  column/header with deliberate local grid scrolling, keyboard traversal and
+  visible draft/save states. The 360x800 boundary is deliberately read-only and
+  overflow-free; T11/T12 own tablet/mobile editing. T05 adds no monthly period,
+  submit/review/approve/lock lifecycle, document, notification, report/export,
+  legacy migration, feature enablement or deployment.
+
+The following decisions are frozen for T06 Monthly Period and Validation:
+
+- a monthly period identity is exactly one Workforce `team_id` plus the first
+  Gregorian date of one calendar month. Supervisor, project, Building/Common
+  scope and internal location are retained worker/date evidence and summary
+  dimensions, not alternate period identities. This preserves one controlled
+  team month when workers change supervisor or work target mid-month;
+- opening a Monthly view never creates a period. Initialization and
+  revalidation are explicit online commands. They lock the team/month path,
+  use an optimistic period version plus UUID idempotency key, append one
+  immutable validation run with retained worker/date summaries and issues,
+  advance only the period's current-run pointer/version and emit one audit
+  effect. No prior run, summary, date or issue is updated or deleted;
+- monthly membership is one canonical retained/prospective union. A worker/date
+  with a T03 attendance fact belongs to the exact team and assignment retained
+  by that attendance row and uses its retained calendar/day-type context; a
+  later mutable T01 assignment edit cannot remove it from the original team or
+  make a replacement team absorb it. Only a worker/date with no attendance may
+  derive prospective/missing membership from the accepted T01 effective-
+  assignment resolver. The two branches are mutually exclusive per worker/date,
+  and the current T04 allocation remains attached to its attendance day. Source
+  fingerprinting, authority checks, summaries and drill-down all consume this
+  same canonical source. Each run retains the exact facts it used, and the
+  client cannot add workers, dates or totals;
+- one canonical team-month applicability predicate governs the authorized team
+  selector, absent-period read and initialization/revalidation. A team/month is
+  applicable when its current validity window overlaps the month, retained T03
+  attendance names that team for a date in the month, or a monthly period
+  already exists. Therefore later mutable team dates cannot hide or reject
+  retained history. A non-effective team with no retained attendance and no
+  period remains hidden/rejected, and applicability never bypasses the existing
+  complete worker/date capability, responsibility or allocation-target checks;
+- every date is interpreted in its exact effective calendar IANA timezone.
+  Future calendar-local dates may remain visible as future membership but are
+  excluded from scheduled/missing totals and never create a missing-entry
+  issue. A retained legacy future attendance/allocation fact remains visible
+  in its immutable day evidence, but its regular, overtime and allocation
+  minutes are excluded from authoritative worker/period totals until that
+  calendar-local date arrives; the changed future fingerprint then requires
+  explicit revalidation. A missing calendar is a blocking configuration issue and is never
+  resolved from the database-session or client timezone;
+- the only T06 period states are `draft` and server-derived
+  `ready_for_review`. Any blocking issue or a source fingerprint that changed
+  after the current run makes the effective projection `draft`. Warnings stay
+  explicit but T06 has no acknowledgement or submission transition; T07 owns
+  both acknowledgement and lifecycle commands;
+- later mutable parent state never rewrites a retained T03/T04 fact. A retained
+  attendance row uses its active-at-creation worker/employment/assignment/
+  supervisor identity and a retained allocation uses its commit-time project,
+  Building/Common or internal-location snapshots. A later `left_company`,
+  inactive/suspended worker status or project/scope/location closure does not
+  create a retroactive blocker for that accepted row. Prospective dates with no
+  retained attendance still use current worker state; because inactive and
+  suspended statuses have no dated history in T01, they remain fail-closed as
+  current-unresolved validation evidence rather than being asserted as a past
+  fact. A `left_company` worker remains applicable through the exact leaving
+  date when the assignment window also covers that date;
+- a missing supervisor ID is structurally invalid for both retained and
+  prospective applicable dates. For prospective dates, a non-null supervisor
+  must also be currently active. T03 did not retain dated supervisor-active
+  state, so later supervisor deactivation is not backdated into a different
+  historical identity; the retained ID/name remain the evidence and the
+  absence of a retained supervisor is the only historical status fact T06 can
+  prove without invention;
+- blocking issue codes cover applicable missing/not-entered required dates,
+  invalid attendance/minutes, absent/leave work contradictions, allocation
+  reconciliation/overlap, over-1,440-minute days, invalid employment/worker/
+  assignment/supervisor/target context. A caller's own authority loss denies
+  the RPC before any partial projection or validation run; it is not persisted
+  as an issue. `validation_stale` is projected deterministically when the
+  immutable run fingerprint differs from current source, rather than inserted
+  into retained history. Warnings cover weekly-off/holiday/site-closure work, below-
+  standard minutes, assignment/supervisor changes, missing activity,
+  off-assignment allocation and backdated evidence;
+- accepted T03/T04 constraints remain authoritative. T06 rechecks and reports
+  their applicable facts but never repairs, rebases or duplicates them.
+  Overtime minutes and the optional T05 reason are retained and summarized;
+  because no overtime ceiling or mandatory-reason policy is configured, T06
+  creates no fabricated threshold or missing-reason issue. Optional documents
+  likewise create no validation requirement;
+- `workforce.view` authorizes a complete period read only when exact active
+  Admin authority or dated responsibility covers every retained worker/date in
+  the team month. Initialization/revalidation additionally requires
+  `workforce.timesheets.maintain` over every worker/date and every active
+  allocation target. Partial or redacted monthly totals are never presented as
+  authoritative. No T07 review/verify/approve/reopen key is promoted; and
+- T06 adds the guarded desktop Monthly view inside the existing Workforce
+  shell. It has no Submit button. Desktop viewports show server-derived period,
+  worker/calendar and exception detail; 360x800 remains deliberately read-only
+  and overflow-free. The flag remains default-off and T06 adds no legacy
+  migration, notification, document, report/export, tablet/mobile editor,
+  commit, push, remote migration or deployment.
+
+Later phases must introduce the remaining attendance/timesheet lifecycle, review,
+verification, final approval, reopening, reports and tablet/mobile editing as
+separate tested slices. No later slice may infer attendance or approved time
+from an assignment, calendar, shift, project membership, Auth session or
+legacy record.
+
+The following decisions are frozen for T07 Review and Approval Lifecycle:
+
+- the configurable approval chain is the existing exact capability assignment
+  plus dated Workforce responsibility model. A maintainer needs
+  `workforce.timesheets.maintain`; a reviewer needs
+  `workforce.timesheets.review`; reviewer correction additionally needs
+  `workforce.timesheets.correct_during_review`; Verify & Forward additionally
+  needs `workforce.timesheets.verify`; final approval needs
+  `workforce.timesheets.final_approve`; and reopen authorization needs
+  `workforce.periods.reopen`. Every command rechecks complete retained worker,
+  date and allocation-target scope. Exact role, email and technical project
+  membership are never approval authority;
+- submission accepts only the current non-stale `ready_for_review` T06 run with
+  zero blocking issues. The submitter must acknowledge the exact complete set
+  of retained warning issue IDs when warnings exist. Submit records the
+  authoritative validation run, source fingerprint, totals, actor, exact role,
+  capability, acknowledgement and one approval revision. Opening a review
+  projection creates no state;
+- the default separation is mandatory: the submitter cannot review, correct,
+  verify or finally approve that revision; any actor who returns the revision,
+  applies a reviewer correction or performs Verify & Forward cannot finally
+  approve that same revision. No Admin or role-label exception exists in T07.
+  Return and Verify & Forward are reviewer actions; Approve & Lock is one
+  atomic final-authority command that emits
+  distinct approved and locked audit evidence and leaves the period `locked`;
+- current lifecycle states are `draft`, `ready_for_review`, `submitted`,
+  `under_review`, `returned_for_correction`, `awaiting_final_approval`,
+  `locked` and `reopened`. `under_review` begins only through an explicit
+  reviewer correction; read never changes state. `verified` and `approved` are
+  immutable transition/snapshot facts inside Verify & Forward and Approve &
+  Lock rather than transient client-writable states. `cancelled` has no T07
+  command and remains reserved for a later explicit decision;
+- Return requires a non-empty reason and exact worker/date pairs. Only those
+  pairs are editable after return; unaffected period evidence remains
+  protected. Resubmission reuses the same approval revision after explicit T06
+  revalidation and warning acknowledgement. The optional T08 attachment seam
+  is a nullable external reference only and creates no document in T07;
+- controlled reviewer correction accepts only the existing T03 attendance
+  fields and/or one complete T04 allocation replacement for one affected
+  worker/date. It requires the correction capability, mandatory reason,
+  expected T03/T04 versions and independent UUID command keys. The trusted T03
+  and T04 commands remain the only writers and recheck their minute, status,
+  target, interval, future-date and scope invariants. An immutable correction
+  record retains before/after values and the row is visibly marked; there is
+  no silent rewrite or inheritance of ordinary maintainer capability;
+- ordinary T03/T04 writes are lifecycle-guarded. Submitted/under-review,
+  awaiting-final-approval and locked facts cannot be changed through ordinary
+  save RPCs. Returned/reopened periods expose only their exact affected
+  worker/date pairs. A reviewer-only command can open a transaction-scoped,
+  server-created correction context; a client-created session variable is not
+  trusted;
+- an approved snapshot is immutable and server-derived from the accepted T06
+  run plus current authoritative T03/T04 facts. It retains worker/team/
+  supervisor/project/scope/location identities, daily attendance, regular and
+  overtime minutes, activities, calendar/shift versions, reviewer corrections,
+  submitter/reviewer/approver identities and timestamps, source fingerprint and
+  report revision. Later master-data edits cannot rewrite its JSON bytes or
+  hash;
+- Request Reopen is available to a fully scoped maintainer and records reason
+  plus exact affected worker/date pairs while leaving the approved period
+  locked. A different fully scoped actor with `workforce.periods.reopen`
+  authorizes the request, preserves the prior snapshot, advances to a new
+  approval revision and exposes only those pairs for correction. The new
+  revision must be validated, submitted, reviewed and approved again; a second
+  immutable snapshot is appended and the older snapshot remains readable; and
+- every mutation locks the period and relevant worker/date roots, validates an
+  expected record version, uses request-hash UUID idempotency, writes one
+  append-only transition/correction/reopen/snapshot effect and audit evidence,
+  and returns a schema-v1 authoritative projection. T07 adds no T08 comment,
+  document or notification delivery, T09 report/export, T10 dashboard,
+  T11/T12 editor, legacy migration, feature enablement or release activity.
+
+The following decisions are frozen for T08 Discussion, Evidence and
+Notifications:
+
+- one Workforce monthly period maps to one retained canonical Team Chat group
+  conversation. Its effective participants are recalculated from exact active
+  identity, `workforce.view`, the accepted T07 capability and dated
+  responsibility rules. A stale static conversation-member row is never read
+  or command authority;
+- user comments, replies, mentions, attachments, edit/delete and delivery/read
+  receipts use the accepted Team Chat lifecycle. Comment text such as
+  "Approved" or "Verified" has no workflow meaning. T07 server commands remain
+  the only lifecycle writers;
+- T07 audit events append one non-editable canonical Chat system event per
+  source audit ID. Collaboration delivery failure cannot roll back the
+  originating T07 transition, and retry/deduplication must never create a
+  second system event;
+- Workforce evidence reuses the existing immutable controlled Documents
+  prepare/upload/finalize/version pipeline with `operational` classification.
+  The exact evidence types are medical certificate, leave document, overtime
+  authorization, worker transfer note, site attendance sheet, daily supporting
+  photo, monthly timesheet attachment and other Workforce document. Evidence
+  is linked only to an authorized Worker, retained Attendance Day or Monthly
+  Period; project identity is retained only when the authoritative target has
+  exactly one project and is never inferred from a technical membership;
+- the canonical evidence target is the sole authorization target. Optional
+  Worker/Attendance Day/Monthly Period links must agree with that target and,
+  for a period, with its exact current retained validation-run source. A day
+  link must resolve the same retained worker/date attendance fact. Mismatches
+  fail before idempotency, intent, metadata or Storage authority is created.
+  Secondary links improve discovery but cannot grant read/download authority
+  without authority for the canonical target;
+- evidence authorization reuses the accepted `workforce.view`,
+  `workforce.attendance.maintain` and `workforce.timesheets.maintain`
+  capability-plus-responsibility rules. T08 promotes no capability and ships
+  no browser service credential;
+- lifecycle notifications reuse durable `v1_notifications`, the existing push
+  outbox and recipient preferences. Recipients are derived from the capability
+  required for the next action and complete dated responsibility, never a role
+  label, email, guessed UUID or technical project membership;
+- daily missing-attendance and monthly-incomplete summaries are explicit,
+  idempotent Admin-dispatched digest commands. Daily counts cover the complete
+  authorized roster through bounded paging and never stop at 500 workers.
+  T08 does not invent a scheduler, cron cadence, escalation time or external
+  messaging channel; and
+- the existing Monthly/Review desktop view exposes discussion, evidence and
+  scoped notifications. The 360x800 boundary is deliberately read-only. The
+  feature flag remains default-off and T08 adds no T09 reports/exports, T10
+  dashboard, tablet/mobile editor, legacy migration, commit, remote migration
+  or deployment.
+
+The following decisions are frozen for T09 Excel and PDF Reports:
+
+- final monthly reports are generated only from an exact immutable T07
+  approved snapshot ID, approval revision and snapshot hash. Reopen/new
+  approval revisions append new report sources and never replace old ones;
+- `workforce.reports.export` is the only capability promoted in T09. Every
+  caller, including Admin, must also hold `workforce.view`, both effective at
+  the relevant project/organization scope, and complete dated responsibility
+  for every worker and retained allocation target returned;
+- the server owns report kind, source selection, scope filtering, totals,
+  approval identity, timestamps, sanitized row values, idempotency and audit.
+  Flutter owns only deterministic XLSX/PDF rendering and file/print actions;
+- one immutable artifact payload is the source for both formats. PDF Preview,
+  Download and Print share one generated byte buffer. XLSX cells beginning
+  with `=`, `+`, `-` or `@` are escaped as text unless the cell is a typed
+  server numeric/date value; worker numbers always remain text;
+- artifact generation and export issuance are separate audited commands.
+  First artifact generation appends exactly one `report_generated` event.
+  Preview, download, share or print must first confirm the exact cached
+  artifact/format/action through the online idempotent issuance RPC, which
+  appends exactly one `workforce_export_generated` event and returns the
+  source/payload hashes, actor role, capability, scope and server time. A
+  same-key retry returns the same receipt; a changed payload is rejected;
+- immutable private artifact authority evidence is retained separately from
+  the sanitized export payload so every history read can re-check current
+  capabilities and complete dated responsibility. Authority loss hides prior
+  artifacts without deleting or rewriting them;
+- no report includes wages, salary, payroll, overtime pay, bank fields,
+  commercial fields, service credentials or unrelated-module data. Internal
+  identifiers may exist as protected server references but are never exported
+  as user-visible columns;
+- man-days are the server sum of each approved date's total approved work
+  minutes divided by that date's retained positive standard scheduled minutes.
+  Overtime remains a separate value and no pay meaning is inferred. High
+  Overtime has no invented numeric threshold and is populated only from a
+  retained configured typed validation exception. When no threshold is
+  configured, the High Overtime report contains an explicit typed
+  `not_configured` row instead of an empty or misleading result;
+- the controlled server column sets are report-specific. Daily separates
+  Worker/Number/Trade/Status/Regular/OT/Project/Building/Internal Location/
+  Supervisor/Notes; Worker Monthly includes daily work context plus reviewer,
+  approver and approval dates; Team, Project and Company summaries expose the
+  exact operational counts, hours, allocations, exceptions and lifecycle
+  status frozen in the T09 contract. PDF approved-month headers show both
+  legal names, `MONTHLY TIMESHEET`, and Month/Year; footers show Prepared By,
+  Reviewed By, Approved By, server approval dates, revision and page. Worker
+  and Team use landscape; Project and Company orientation is content-based;
+  and
+- daily/exception reports that are not approved snapshots state their current
+  source status/version/generated-at and must never present themselves as an
+  approved monthly record. Daily reports reject future calendar-local work
+  dates. T09 exception registers are organization-scoped; project/team/worker
+  keys are rejected rather than ignored. Worker, Team and Project report scope
+  must occur in the immutable approved payload and any requested month must
+  equal that payload month; and
+- T09 adds no T10 dashboard, T11/T12 editor, legacy migration, feature
+  enablement or release.
+
+The following decisions are frozen for T10 Admin and management dashboards:
+
+- T10 is read-only. One protected schema-v1 projection returns an explicit
+  Supervisor, Management or Admin shape and performs no audit, notification,
+  report/export or lifecycle mutation;
+- the authoritative date is derived separately for each exact retained or
+  effective calendar IANA timezone from the server clock. Mixed-timezone
+  results return explicit as-of groups and never collapse them into a client or
+  session date;
+- Today Completion counts entered attendance other than `not_entered` over the
+  effective roster. Current Month Completion counts entered required
+  worker-days through each calendar-local today over required worker-days
+  through that date. Future local dates never count as missing;
+- daily status counts use the seven accepted T03 statuses. Leave is annual,
+  sick, official or unpaid leave. Later current worker/project/scope/location
+  state does not reinterpret retained T03/T04 facts;
+- management review rows expose exact retained submitter/team/month/workers/
+  regular minutes/overtime minutes/warnings/reviewer-corrections evidence.
+  Review and approval counts are calculated across the complete authorized
+  candidate set before the compact queue is limited. Exception priority is
+  applied before recency, so an older higher-priority retained exception is
+  not hidden by newer normal rows. A closed team/project/scope/location or a
+  later worker departure does not remove its retained queue/history row;
+  High Overtime and Missing Supporting Evidence are `not_configured` with zero
+  count unless an accepted typed validation issue exists. T10 invents neither
+  an overtime threshold nor a mandatory document rule;
+- Management current-project rows derive from actual effective assignment and
+  active allocation targets, never a team's editable default project. Only
+  the Current Active Projects list applies current project state; retained
+  review/history remains readable after closure;
+- Admin receives aggregate operational counts, not every daily row. Active
+  supervisors are distinct active profiles referenced by effective current
+  assignments. Configuration issues are current typed assignment, schedule,
+  supervisor or allocation-target validation issues, deduplicated by stable
+  issue-code plus team identity across current and retained sources;
+- every shape requires active identity, `workforce.view` and complete dated
+  responsibility. Admin organization scope still requires both the capability
+  and organization responsibility. Management-role labels select presentation
+  only and grant no data. Action booleans require their exact accepted command
+  capability plus full responsibility for every retained assignment and active
+  allocation target in the candidate period; and
+  and
+- cached projections are last-confirmed evidence with visible stale/generated
+  timestamps. Flag-off, revoked/inactive identity, denied deep links and
+  malformed responses purge protected state. T10 adds no T11, migration of
+  legacy data, release, flag enablement, commit, push or deployment.
+
+The following decisions are frozen for T11 tablet attendance and review:
+
+- T11 is presentation-only. It reuses the accepted T05 daily-roster and T07
+  review controllers, repositories, RPCs and server-returned action flags. It
+  adds no relation, migration, capability, route, lifecycle state or client
+  authorization rule;
+- the existing compact boundary below 720 logical pixels remains a deliberate
+  read-only phone experience. Tablet editing applies from 720 through 1199
+  logical pixels; widths of 1200 and above keep the accepted desktop
+  spreadsheet/review layout;
+- landscape tablets use a bounded master roster plus one selected worker/day
+  editor. Portrait tablets use a focused single-column roster and open exactly
+  one selected worker/day editor in a modal sheet. Neither orientation renders
+  the desktop spreadsheet or instantiates editors for every worker;
+- the tablet completion footer is sticky and delegates only to the accepted
+  Review Day, Back to Edit and Save Day controller operations. Draft changes
+  remain local until explicit online review/save, and offline, stale, conflict,
+  uncertain and denied states remain visible and non-optimistic;
+- tablet review is exception-first and uses only the T07 server action flags
+  for Return, Correct, Verify, Approve and Reopen. A visible button never
+  creates authority; and
+- English, Arabic, Urdu and Hindi strings remain localized, Arabic/Urdu are
+  direction-aware, actionable tablet targets are at least 44 by 44 logical
+  pixels, focus order/semantics are explicit and reduced-motion preferences
+  suppress nonessential sheet transition motion. T11 adds no T12 phone editor,
+  legacy migration, feature enablement, commit, push, remote migration or
+  deployment.
+
+The following decisions are frozen for T12 mobile attendance:
+
+- T12 is presentation-only and reuses the accepted T05 projection, controller,
+  local-draft transformations and atomic Save Day command. It adds no schema,
+  migration, RPC, capability, route, lifecycle state or client authority rule;
+- below 720 logical pixels the read-only placeholder is replaced by a native
+  Today’s Team workflow. It renders worker cards and exactly one focused editor
+  at a time; it never shrinks the desktop grid or constructs an editor for each
+  worker;
+- row editability, allocation-detail redaction, target options and command
+  availability come only from the server projection and accepted controller.
+  A readable restricted row remains non-maintainable for that restricted
+  allocation and no role name, email or guessed identifier grants access;
+- mobile bulk operations are explicit local draft transformations with an
+  affected count. The sticky footer delegates only to Review Day, Back to Edit
+  and Save Day. No local edit, review or offline draft claims server success;
+- native date selection does not offer a future local date as a convenience,
+  while the accepted calendar-timezone server rule remains authoritative and
+  rejects all future creation/correction/save attempts; and
+- T12 proves 360x800 and 390x844, English plus Arabic/Urdu RTL, safe keyboard
+  and system insets, text scaling, 44x44 targets, semantics, focus, reduced
+  motion, non-color state cues, large-roster bounded editor creation and the
+  full loading/empty/denied/stale/conflict/uncertain/invalid/saved state set.
+  It preserves tablet/desktop behavior and adds no T13/T14 work, import,
+  legacy migration, feature enablement, commit, push, remote migration or
+  deployment.
+
+The following decisions are frozen for T13 hardening:
+
+- T13 is an evidence-led audit and correction slice over the independently
+  accepted T01–T12 authority. It introduces no new Workforce role,
+  capability, workflow, route, data meaning or release state. A schema or
+  application correction is permitted only for a reproduced security,
+  concurrency, accessibility or performance defect and must preserve retained
+  history through a forward-safe change;
+- every Workforce relation in an exposed schema keeps RLS enabled, no direct
+  `anon` or `authenticated` CRUD, service-role-only direct administration and
+  its accepted hard-delete/immutability guards. Every privileged internal
+  helper remains unavailable to `public`, `anon` and `authenticated`; each
+  public RPC keeps only its intended execute grant, fixed trusted search path,
+  live active-identity check, exact capability and dated responsibility/target
+  checks;
+- T07 lifecycle and T10 dashboard period authorization are role-neutral.
+  Admin has no capability-only shortcut. Organization responsibility must
+  cover the complete calendar month; a future, expired or partial-month
+  organization window cannot fall through as work-date authority. Without
+  complete organization authority, every retained assignment and every active
+  project-scope/internal-location allocation target requires its own effective
+  responsibility. An empty period retains only complete organization or exact
+  team-month responsibility semantics;
+- all critical mutations retain deterministic root/worker-date lock order,
+  expected versions, UUID request-hash idempotency, atomic audit/effect writes
+  and stable conflicts. T13 runs the repository's real independent-session
+  races and may not relabel a sequential retry as concurrency evidence;
+- performance proof uses the approved realistic envelopes: 500 active
+  workers, 50 teams, 30 active projects, 31 dates/15,500 worker-days,
+  multiple daily allocations and retained two-year approved-history query
+  paths where practical. Existing pagination, bounded controller creation,
+  database indexes and background report generation remain mandatory. T13
+  records observed timings and plans without inventing a product SLA;
+- accessibility/responsiveness proof covers 1440x900, 1366x768, 1180x820,
+  1024x768, 820x1180, 768x1024, 430x932, 390x844 and 360x800, localized
+  English/Arabic/Urdu/Hindi behavior, RTL, text scaling, 44x44 actions,
+  keyboard/focus, semantics, reduced motion, non-color state cues and the full
+  loading/empty/error/denied/offline/conflict/uncertain state family; and
+- the product owner waived the dedicated T14 staging UAT phase. The repository
+  records that phase as **waived/not performed**, never passed. The waiver does
+  not enable `YORKS_V1_WORKFORCE`, satisfy production acceptance, authorize a
+  remote migration or permit commit, push or deployment in T13.
+
+The following later 31 August 2026 decision reinstates T14 without rewriting
+that historical waiver:
+
+- T13 is independently accepted. The earlier T14 waiver remains a true record
+  that no staging UAT was performed or passed under that decision;
+- the product owner withdrew the waiver and made T14 a mandatory pre-release
+  gate. A later production-release authorization does not make production part
+  of T14;
+- T14 must use one immutable candidate source/artifact, a dedicated
+  non-production Supabase backend, an unaliased non-production web deployment,
+  `YORKS_V1_WORKFORCE=true` only in that staging candidate and named
+  non-production personas. Local fixtures, the historic shared Supabase
+  project and a production backend are not substitutes;
+- authority is persona-specific capability plus effective dated
+  responsibility and allocation-target scope, never a role label alone. The
+  required chain includes an Admin configuration/reopen persona, a scoped Site
+  Engineer maintainer, a configured scoped reviewer, a distinct configured
+  final approver and unauthorized/revoked/wrong-scope negative personas;
+- automation cannot by itself pass the source's manual daily-entry, lifecycle,
+  responsive, document-byte and PDF Preview/Download/Print witnesses. Evidence
+  must bind every scenario to the same candidate, staging backend, named
+  witness, UTC time and artifact hashes; and
+- T14 stops before build or deployment when the dedicated staging backend or
+  approved persona set is absent. The 31 August preflight found both absent, so
+  T14 remains blocked/not passed and the Workforce production flag remains
+  unchanged.
+
+The following still-later 31 August 2026 product-owner directive is a release
+exception, not a rewrite of either decision above:
+
+- dedicated Frankfurt staging project `iqltcyimlqtcwyzlemwx` was authorized,
+  created and initialized with the complete reviewed migration ledger and
+  protected document Function;
+- named-persona/manual T14 UAT remains not performed and not passed. The
+  product owner explicitly directed that UAT be set up and completed next,
+  after production;
+- production release with `YORKS_V1_WORKFORCE=true` is authorized immediately
+  despite that outstanding gate. Release evidence must state this exception
+  plainly and must not represent migration, automated tests or production
+  smoke checks as T14 UAT; and
+- all technical release gates, safe production-ledger reconciliation,
+  rollback evidence, isolated artifact verification and post-promotion live
+  checks remain mandatory. A genuine migration divergence, credential issue or
+  destructive ambiguity still stops the release.

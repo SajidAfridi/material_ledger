@@ -114,7 +114,7 @@ select 'initialize', public.v1_initialize_project_commercial_baseline(
 
 insert into v1_r39_t05_results (result_key, payload)
 select 'admin_portfolio', public.v1_get_accounts_portfolio(
-  null,null,null,null,null,null,null,null,null,null,25
+  null,null,null,null,null,null,null,'R39-T05',null,null,25
 );
 
 select is(
@@ -124,10 +124,10 @@ select is(
   'Portfolio role comes from the protected exact-role claim'
 );
 select is(
-  (select payload->>'authorized_project_count' from v1_r39_t05_results
+  (select payload->>'filtered_project_count' from v1_r39_t05_results
     where result_key = 'admin_portfolio'),
   '2',
-  'Admin portfolio sees every Accounts-authorized project without membership rows'
+  'Admin portfolio sees both fixture projects without membership rows'
 );
 select is(
   (select payload->'totals'->>'contract_baseline'
@@ -148,18 +148,22 @@ select 'empty_search', public.v1_get_accounts_portfolio(
 );
 select ok(
   (select payload->>'filtered_project_count' = '0'
-      and payload->'totals'->>'project_count' = '2'
+      and payload->'totals'->>'project_count' = (
+        select baseline.payload->'totals'->>'project_count'
+        from v1_r39_t05_results baseline
+        where baseline.result_key = 'admin_portfolio'
+      )
     from v1_r39_t05_results where result_key = 'empty_search'),
   'Filters narrow rows without changing portfolio totals'
 );
 
 insert into v1_r39_t05_results (result_key, payload)
 select 'page_one', public.v1_get_accounts_portfolio(
-  null,null,null,null,null,null,null,null,null,null,1
+  null,null,null,null,null,null,null,'R39-T05',null,null,1
 );
 insert into v1_r39_t05_results (result_key, payload)
 select 'page_two', public.v1_get_accounts_portfolio(
-  null,null,null,null,null,null,null,null,
+  null,null,null,null,null,null,null,'R39-T05',
   (select (payload->'next_cursor'->>'before_activity_at')::timestamptz
     from v1_r39_t05_results where result_key = 'page_one'),
   (select (payload->'next_cursor'->>'before_project_id')::uuid
@@ -242,11 +246,11 @@ select set_config(
 );
 insert into v1_r39_t05_results (result_key, payload)
 select 'accountant_portfolio', public.v1_get_accounts_portfolio(
-  null,null,null,null,null,null,null,null,null,null,25
+  null,null,null,null,null,null,null,'R39-T05',null,null,25
 );
 select ok(
   (select payload->>'actor_exact_role' = 'accountant'
-      and payload->>'authorized_project_count' = '2'
+      and payload->>'filtered_project_count' = '2'
     from v1_r39_t05_results where result_key = 'accountant_portfolio'),
   'Accountant receives the global project-scoped Accounts portfolio without technical membership'
 );
@@ -258,8 +262,8 @@ select set_config(
 );
 select is(
   public.v1_get_accounts_portfolio(
-    null,null,null,null,null,null,null,null,null,null,25
-  )->>'authorized_project_count',
+    null,null,null,null,null,null,null,'R39-T05',null,null,25
+  )->>'filtered_project_count',
   '2',
   'Project Manager portfolio authority is organization-wide and Accounts-specific'
 );

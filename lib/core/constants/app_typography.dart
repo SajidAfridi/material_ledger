@@ -15,6 +15,7 @@ abstract final class AppTypography {
     Color color = AppColors.onSurface,
   }) => TextStyle(
     fontFamily: 'NexusSans',
+    fontFamilyFallback: const ['NotoSansArabic'],
     fontSize: size,
     fontWeight: weight,
     height: height,

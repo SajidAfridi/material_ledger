@@ -5,6 +5,18 @@ import 'app_strings.dart';
 /// Keeping the shell vocabulary here prevents the navigation and sign-in
 /// surfaces from becoming a second, prototype-only set of English strings.
 abstract final class YorksV1ShellStrings {
+  static const workforce = TranslatableString(
+    en: 'Workforce',
+    ar: 'القوى العاملة',
+    ur: 'افرادی قوت',
+    hi: 'कार्यबल',
+  );
+  static const workforceTimesheets = TranslatableString(
+    en: 'Timesheets',
+    ar: 'سجلات الدوام',
+    ur: 'ٹائم شیٹس',
+    hi: 'टाइमशीट',
+  );
   static const accounts = TranslatableString(
     en: 'Accounts',
     ar: 'الحسابات',

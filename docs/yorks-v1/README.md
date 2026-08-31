@@ -7,7 +7,17 @@ evidence passed. Staging acceptance, protected Android signing and deployment
 remain release-owner activities. R39 Accounts was approved on 25 August 2026;
 its T01–T07 protected server/domain/UI slices are complete. The release owner
 explicitly authorized production web enablement on 26 August 2026 while the
-tracked flag default remains off for unconfigured and CI builds.**
+tracked flag default remains off for unconfigured and CI builds. Workforce T01
+through T13 were independently accepted by 31 August 2026. The product owner
+initially waived, then reinstated, the dedicated Workforce T14 staging UAT
+phase; both decisions remain historical and T14 has never been recorded as a
+pass. Dedicated Frankfurt staging project `iqltcyimlqtcwyzlemwx` now carries
+the complete tracked migration ledger and the protected document Function,
+but named-persona/manual UAT is still not performed. Later on 31 August 2026
+the product owner explicitly deferred that UAT until after release and
+authorized production immediately as a recorded release exception. This does
+not convert T14 into a pass; Workforce remains operator-controlled until the
+authorized production artifact is verified and promoted.**
 
 > **HISTORICAL BATCH MATERIAL — NOT THE CURRENT BUILD CONFIGURATION.** The
 > batch-completion files record the original incremental rollout and therefore
@@ -48,6 +58,9 @@ explicit V7-to-V1 conflict resolution.
 | [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md) | Approved Accounts-only authority, ninth exact role, exact capabilities, defaults, phased rollout and T01 security gate |
 | [`R39_ACCOUNTS_OFFICE_AUDIT_AND_IMPLEMENTATION.md`](R39_ACCOUNTS_OFFICE_AUDIT_AND_IMPLEMENTATION.md) | Source-grounded Accountant landing/office audit, workbook findings, T08 read-projection design, verification and remaining decisions |
 | [`R39_YRA322_MASTER_FILE_RECONCILIATION.md`](R39_YRA322_MASTER_FILE_RECONCILIATION.md) | Audited mapping of the Nexus master workbook into YRA-322 baseline, confirmed progress, exclusions, production evidence and rollback |
+| [`WORKFORCE_ATTENDANCE_TIMESHEETS.md`](WORKFORCE_ATTENDANCE_TIMESHEETS.md) | Approved Workforce authority through independently accepted T13 plus the reinstated T14 staging contract, including RLS, rollout and rollback |
+| [`WORKFORCE_T13_HARDENING_EVIDENCE.md`](WORKFORCE_T13_HARDENING_EVIDENCE.md) | Accepted T13 security, race, scale, responsive, build and limitation evidence; no release action |
+| [`WORKFORCE_T14_STAGING_UAT_EVIDENCE.md`](WORKFORCE_T14_STAGING_UAT_EVIDENCE.md) | Reinstated T14 contract, initialized staging identity, 35-scenario witness matrix and current post-release deferral status |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
@@ -117,6 +130,15 @@ RFQ/quotation/PO and general-accounting suites are not part of V1.
 Configuration, Rentals, User Management, Audit Trail, Duct Sizer and ESP
 Calculator remain in place and receive regression coverage rather than
 Accounts-driven redesign.
+
+Workforce adds a separate phased chain behind `YORKS_V1_WORKFORCE`. T01 through
+T04 are additive and route-less; T05 adds the guarded Supervisor Daily Roster.
+T03 promotes `workforce.view` and
+`workforce.attendance.maintain`; T04 promotes only
+`workforce.timesheets.maintain` for protected allocation and later monthly-
+validation RPCs. The remaining nine capability rows stay planned/shadow/
+nonassignable. The tracked flag defaults off. Existing People/HR, Leave and
+legacy attendance collections remain preserved and are not dual-written.
 
 ## How to execute a batch
 

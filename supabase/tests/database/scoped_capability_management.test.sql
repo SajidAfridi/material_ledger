@@ -110,9 +110,12 @@ select ok(
     join public.v1_capability_catalog catalog using (capability_key)
     where catalog.status = 'planned'
       and role_default.is_granted
-      and not public.v1_accounts_is_capability_key(catalog.capability_key)
+      and not (
+        public.v1_accounts_is_capability_key(catalog.capability_key)
+        or public.v1_workforce_is_capability_key(catalog.capability_key)
+      )
   ),
-  'All-project visibility is protected and only R39 future templates may be pre-seeded while planned'
+  'Only approved Accounts and Workforce future templates may be pre-seeded while planned'
 );
 
 select ok(

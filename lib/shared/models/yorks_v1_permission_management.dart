@@ -178,6 +178,35 @@ abstract final class YorksV1CapabilityKeys {
   static const viewSupplierCosts = 'view_supplier_costs';
   static const exportAccountsRegisters = 'export_accounts_registers';
   static const reviewCommercialProgress = 'review_commercial_progress';
+  static const workforceView = 'workforce.view';
+  static const workforceAttendanceMaintain = 'workforce.attendance.maintain';
+  static const workforceTimesheetsMaintain = 'workforce.timesheets.maintain';
+  static const workforceTimesheetsReview = 'workforce.timesheets.review';
+  static const workforceTimesheetsCorrectDuringReview =
+      'workforce.timesheets.correct_during_review';
+  static const workforceTimesheetsVerify = 'workforce.timesheets.verify';
+  static const workforceTimesheetsFinalApprove =
+      'workforce.timesheets.final_approve';
+  static const workforcePeriodsReopen = 'workforce.periods.reopen';
+  static const workforceReportsExport = 'workforce.reports.export';
+  static const workforceWorkersManage = 'workforce.workers.manage';
+  static const workforceTeamsManage = 'workforce.teams.manage';
+  static const workforceConfigurationManage = 'workforce.configuration.manage';
+
+  static const workforce = <String>{
+    workforceView,
+    workforceAttendanceMaintain,
+    workforceTimesheetsMaintain,
+    workforceTimesheetsReview,
+    workforceTimesheetsCorrectDuringReview,
+    workforceTimesheetsVerify,
+    workforceTimesheetsFinalApprove,
+    workforcePeriodsReopen,
+    workforceReportsExport,
+    workforceWorkersManage,
+    workforceTeamsManage,
+    workforceConfigurationManage,
+  };
 
   /// The R39 Accounts contract is the only authority allowed to use bare
   /// snake_case capability keys. Retained operational capabilities remain
@@ -295,6 +324,7 @@ abstract final class YorksV1CapabilityKeys {
     accountsApprove,
     accountsExport,
     ...r39Accounts,
+    ...workforce,
   };
 }
 

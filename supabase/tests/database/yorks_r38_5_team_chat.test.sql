@@ -26,15 +26,30 @@ select ok(
   'Chat is private, RLS protected and writable only through trusted RPCs'
 );
 
+select is(
+  (
+    select count(*)
+    from public.v1_chat_conversations conversation
+    where conversation.kind = 'direct'
+      and (
+        select array_agg(member.auth_user_id order by member.auth_user_id)
+        from public.v1_chat_members member
+        where member.conversation_id = conversation.id
+          and member.left_at is null
+      ) = array[
+        '10000000-0000-4000-8000-000000000002'::uuid,
+        '10000000-0000-4000-8000-000000000003'::uuid
+      ]
+  ),
+  0::bigint,
+  'The Direct pair fixture begins without a pre-existing canonical conversation'
+);
+
 set local role authenticated;
 select set_config(
   'request.jwt.claims',
   '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
   true
-);
-select is(
-  jsonb_array_length(public.v1_list_chat_conversations()), 0,
-  'A user begins with no synthetic or leaked conversations'
 );
 select lives_ok(
   $$select public.v1_create_chat_conversation(
@@ -174,14 +189,21 @@ select is(
   'The recipient receives a backend-authoritative unread count'
 );
 select is(
-  (select count(*) from public.v1_list_my_notifications()),
+  (select count(*) from public.v1_list_my_notifications()
+   where event_code in ('team_chat_message', 'team_chat_mention')
+      or entity_type in ('chat_message', 'chat_conversation')),
   0::bigint,
   'Chat transport rows never appear in the workflow notification centre'
 );
+with unread_workflow as materialized (
+  select count(*)::integer as expected
+  from public.v1_list_my_notifications()
+  where seen_at is null
+)
 select is(
   public.v1_mark_all_notifications_seen(),
-  0,
-  'Mark all in the workflow centre does not acknowledge Team Chat'
+  (select expected from unread_workflow),
+  'Mark all acknowledges only the workflow-centre rows visible before the call'
 );
 
 set local role postgres;

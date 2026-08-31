@@ -11,6 +11,7 @@ import '../features/accounts/application/accounts_portfolio_providers.dart';
 import '../features/accounts/application/accounts_providers.dart';
 import '../features/accounts/application/accounts_receivables_providers.dart';
 import '../features/accounts/application/accounts_supplier_providers.dart';
+import '../features/workforce/application/workforce_providers.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/material_request_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
@@ -75,6 +76,8 @@ void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
   ref.invalidate(yorksAccountsProjectControllerProvider);
   ref.invalidate(yorksAccountsReceivablesControllerProvider);
   ref.invalidate(yorksAccountsSupplierControllerProvider);
+  ref.invalidate(yorksWorkforceDailyRosterControllerProvider);
+  ref.invalidate(yorksWorkforceMonthlyControllerProvider);
 }
 
 /// Provider for the app router — lives here so the incremental
@@ -136,6 +139,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final yorksV1AccountsEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
       .accounts;
+  final yorksV1WorkforceEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .workforce;
   final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
   final connectedV1Permissions =
       yorksV1ProjectsEnabled && ref.watch(supabaseClientProvider) != null;
@@ -173,6 +179,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     yorksV1TeamChatEnabled: yorksV1TeamChatEnabled,
     yorksV1InventorySuppliersEnabled: yorksV1InventorySuppliersEnabled,
     yorksV1AccountsEnabled: yorksV1AccountsEnabled,
+    yorksV1WorkforceEnabled: yorksV1WorkforceEnabled,
     yorksV1Role: yorksV1Role,
     yorksV1PermissionResolver: connectedV1Permissions
         ? (

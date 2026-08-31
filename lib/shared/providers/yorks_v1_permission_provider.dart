@@ -204,6 +204,9 @@ extension YorksV1HybridPermissionStateAccess
     YorksV1PermissionCapabilityAccess capability,
     String capabilityKey,
   ) {
+    if (capabilityKey == YorksV1CapabilityKeys.workforceView) {
+      return allowsWorkforceSummary(capabilityKey);
+    }
     if (!capability.catalog.requiresProjectAccess) {
       return capability.authoritativeEffective == true;
     }
@@ -216,6 +219,26 @@ extension YorksV1HybridPermissionStateAccess
           project.hasAccess &&
           confirmed.allows(capabilityKey, projectId: project.projectId),
     );
+  }
+
+  /// Workforce responsibility is resolved by its own dated server model, not
+  /// technical project membership. A project-scoped grant may therefore open
+  /// the module summary even when the capability catalogue deliberately does
+  /// not require V1 `project_members` access. The roster RPC remains the
+  /// authoritative row filter.
+  bool allowsWorkforceSummary(String capabilityKey) {
+    final confirmed = snapshot;
+    final capability = confirmed?.capability(capabilityKey);
+    if (confirmed == null ||
+        !confirmed.user.isActive ||
+        capability == null ||
+        !capability.catalog.isOperational) {
+      return false;
+    }
+    return capability.authoritativeEffective == true ||
+        capability.projectOverrides.any(
+          (override) => override.authoritativeEffective,
+        );
   }
 
   bool hybridAllows(

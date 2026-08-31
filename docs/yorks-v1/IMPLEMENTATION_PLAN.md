@@ -440,6 +440,407 @@ workflow or bridge normalized data into legacy Finance.
    Procurement and Admin complete staging UAT on the same release commit, no
    P0/P1 issue remains and the release owner records approval.
 
+## Workforce phased execution
+
+### T01 — worker master and effective assignment foundation
+
+1. Register the twelve planned/shadow/nonassignable `workforce.*` capability
+   rows and the complete exact-role matrix without changing runtime authority.
+2. Add private normalized trades, internal locations, teams, workers, effective
+   assignments and responsibility scopes with RLS and history preservation.
+3. Expose exact-Admin, versioned, idempotent foundation RPCs and a strict typed
+   Flutter repository behind default-off `YORKS_V1_WORKFORCE`.
+4. Add no route or Workforce UI. Later attendance/timesheet phases begin only
+   after the T01 database and client gates pass.
+
+### T02 — calendars and shift configuration
+
+1. Add private effective calendar versions, seven ISO weekday rows and dated
+   holiday, closure, Ramadan and other schedule overrides.
+2. Add private effective reusable normal-site, warehouse, workshop, Ramadan,
+   night and other shift versions. Freeze cross-midnight `work_date` to the
+   start date in the linked calendar timezone.
+3. Add non-overlapping dated team defaults referencing exact retained calendar
+   and optional shift versions. Reject any parent edit that would strand a
+   retained link or dated override.
+4. Freeze semantic fields on referenced calendar/shift versions, effective
+   team links and all past/current override fields including active state.
+   Derive every boundary from the exact linked calendar timezone, not the
+   database session. Permit new non-overlapping versions, future unused draft
+   correction and retirement of calendar/shift parents with only expired
+   references without deleting or changing retained meaning.
+5. Expose only exact-Admin, optimistic-versioned, idempotent, audited schema-v1
+   RPC/repository boundaries. Keep capabilities planned/shadow/nonassignable,
+   `YORKS_V1_WORKFORCE` default-off and all routes/UI absent.
+6. Create no daily attendance, allocation, overtime or timesheet fact. Stop
+   before T03 attendance authority.
+
+### T03 — daily attendance domain
+
+1. Add one private, no-hard-delete daily row per worker/work date with closed
+   attendance statuses and integer regular/overtime minutes capped at one day.
+2. Resolve and retain the exact effective assignment, responsibility,
+   calendar, optional shift and day type on first save. Keep those snapshots
+   unchanged during later versioned corrections.
+3. Promote only `workforce.view` and
+   `workforce.attendance.maintain` to operational/enforced/assignable. Require
+   both capability and dated responsibility for non-Admin scope; keep exact
+   active Admin organization authority and all other Workforce keys shadow.
+4. Expose strict schema-v1 scoped read and online/server-confirmed save
+   boundaries with row locking, expected version, UUID idempotency and one
+   append-only audit effect.
+5. Prove Admin/scoped-maintainer positive paths and role, identity, scope,
+   employment, malformed, stale, retry, direct-table and competing-writer
+   negatives in pgTAP plus strict Flutter repository tests. Use
+   `./tool/test_workforce_t03_concurrency.sh` for the actual two-session create
+   and same-version correction races; a sequential call is not concurrency
+   evidence.
+6. Deny both creation and correction for a future work date using the exact
+   retained calendar timezone and server clock. Preserve any pre-existing
+   future row as read-only evidence; never authorize this boundary from the
+   database session timezone or client clock.
+7. Add no route, UI, allocation, monthly period, timesheet, bulk/copy action,
+   notification, report/export, legacy migration, flag enablement or
+   deployment. Stop before T04 allocations.
+
+### T04 — daily timesheet allocations
+
+1. Add a private versioned allocation-set root, immutable allocation revision
+   headers and immutable allocation rows beneath exactly one T03 attendance
+   day. Keep all direct authenticated CRUD denied and retain every revision.
+2. Accept only explicit project-plus-own-Building/Common or internal-location
+   targets. Snapshot target identity and Department/Cost Centre meaning; never
+   infer a target from assignment/team context and store no pay/cost fields.
+3. Reconcile active allocation regular/overtime minute sums separately and
+   exactly to the parent present day. Validate optional paired, non-overlapping
+   calendar-local intervals with shift-start-date cross-midnight semantics.
+4. Guard T03 attendance correction while an active allocation set exists.
+   Provide a distinct timesheet-authorized, versioned withdrawal revision so
+   attendance authority is never inherited by a timesheet-only maintainer.
+5. Promote only `workforce.timesheets.maintain`; require capability plus dated
+   retained-worker responsibility and capability plus explicit dated
+   responsibility for every target. Keep exact Admin audited organization
+   authority and all remaining Workforce capabilities shadow.
+6. Expose strict schema-v1 read/save/withdraw repository/controller boundaries
+   with worker/date locking, expected versions, UUID idempotency and one audit
+   effect. Prove the actual two-session allocation race with
+   `./tool/test_workforce_t04_concurrency.sh`.
+7. Add no route/UI, roster/bulk action, monthly period, lifecycle review,
+   report/export, migration of legacy data, flag enablement or deployment.
+   Stop before T05.
+
+### T05 — Supervisor Daily Roster desktop workflow
+
+1. Add one additive future-date/roster composition migration. Enforce the
+   product-owner no-future-date rule from the exact retained calendar timezone
+   across attendance creation/correction and T04 save/withdraw while preserving
+   any pre-existing future evidence as readable and read-only.
+2. Expose a strict schema-v1 roster projection that returns only authorized,
+   effectively assigned workers, retained attendance/allocation state and
+   server-derived schedule/day-type suggestions. Reading never creates a fact.
+3. Compose explicit Save Day through one sorted worker/date-locking,
+   optimistic-versioned, UUID-idempotent transaction. Preserve active hidden
+   allocations for attendance-only evidence changes and require exact
+   timesheet authority/version for replacement or withdrawal.
+4. Keep Review Day, bulk edits and Copy Previous Day local until Save. Recompute
+   selected-date assignment/schedule/target validity, clear unsafe prior facts
+   and mark copied rows as needing review.
+5. Add strict typed model/repository/controller boundaries plus a default-off,
+   permission-guarded Workforce route/sidebar/search entry. Purge protected
+   roster and draft state on flag, identity or capability loss.
+6. Deliver the desktop-first sticky roster grid, deliberate local scrolling,
+   keyboard/focus/semantics/localization states and overflow-free 1440x900,
+   1366x768 and 1024x768 evidence. Keep 360x800 deliberately read-only and
+   overflow-free; do not shrink the desktop spreadsheet into a mobile editor.
+7. Prove exact role/capability/responsibility/target negatives, malformed/stale/
+   idempotent paths, a true two-session roster race, focused Flutter state and
+   viewport tests, full applicable database/analyzer/build gates and the
+   default-off production shape. Add no monthly lifecycle, approval, document,
+   notification, report/export, legacy migration, flag enablement, remote
+   migration or deployment. Stop before T06.
+
+### T06 — Monthly period and validation
+
+1. Add private team/month period roots plus immutable validation runs,
+   run-scoped worker summaries, worker/date evidence and typed validation
+   issues. Reading creates nothing; explicit initialization/revalidation is
+   versioned, idempotent, atomic and non-destructive.
+2. Derive membership, schedule/day type, daily/worker/period totals and source
+   fingerprints only from accepted T01-T05 facts. Attendance dates use exact
+   retained T03 worker/assignment/team/supervisor/calendar context and retain
+   their T04 allocations; only missing dates use the current effective T01
+   assignment. Do not let later assignment edits, worker status changes,
+   supervisor deactivation or target closure reinterpret accepted history.
+   Exclude exact calendar-local future dates from completeness and never trust
+   client totals.
+   Use the same private team-month applicability predicate for selector, absent
+   read and validation: accept current window overlap, retained T03 team/month
+   evidence or an existing period, while preserving all existing authority
+   checks and rejecting a genuinely non-effective empty team.
+3. Produce stable blocking/warning issue codes. Blocking issues or changed
+   source fingerprints yield effective `draft`; only a clean run yields
+   `ready_for_review`. Missing supervisor IDs and structurally invalid retained
+   windows remain blocking; current supervisor activity applies only to
+   prospective dates because no dated supervisor-status history exists in T03.
+   Add no warning acknowledgement or submission action.
+4. Reuse only `workforce.view` and `workforce.timesheets.maintain`, requiring
+   complete dated worker and allocation-target responsibility for non-Admin
+   callers. Promote no T07 capability and expose no partial authoritative
+   monthly totals.
+5. Add strict schema-v1 model/repository/controller boundaries and a guarded
+   desktop Monthly view with worker summaries, compact calendar, daily drill-
+   down, exception filters and explicit loading/empty/denied/stale/offline
+   states. Keep 360x800 read-only and color-independent.
+6. Prove RLS/ACL, exact authority, history, stale/idempotent/concurrent writes,
+   500-worker/15,500-date performance, malformed client boundaries, desktop/
+   RTL viewports and default-off release builds. Add no T07 submission/review/
+   approval/lock/reopen, document, notification, report/export, migration,
+   remote change or deployment. Stop before T07.
+
+### T07 — Review and approval lifecycle
+
+1. Add one forward-only migration for immutable approval revisions,
+   transitions, exact return/reopen edit scopes, reviewer corrections, reopen
+   requests and approved snapshots. All lifecycle reads are non-mutating.
+2. Promote only the five T07 keys required by the source: review,
+   correct-during-review, verify, final-approve and reopen. Every non-Admin
+   command requires exact active capability plus complete dated worker and
+   allocation-target responsibility. Keep submitter/reviewer/final-approver
+   separation mandatory even for Admin.
+3. Submit only a current `ready_for_review` run with zero blockers and the
+   exact complete warning-ID acknowledgement set. Return and reopen identify
+   exact worker/date pairs; ordinary T03/T04 writers remain blocked outside
+   those server-retained edit scopes.
+4. Reuse T03/T04 writers for controlled reviewer correction inside a trusted
+   transaction context, then append before/after evidence and require explicit
+   revalidation/resubmission. Verify & Forward and Approve & Lock remain
+   distinct authority steps; approval atomically creates an immutable hashed
+   snapshot and locks the period.
+5. Reopen is request then independent authorization. Preserve every earlier
+   snapshot, advance the approval revision and expose only the approved
+   correction scope. Revalidation, resubmission, review and approval are
+   required again.
+6. Add strict schema-v1 lifecycle/queue models, an isolated review repository
+   boundary, protected Riverpod state and desktop actions in the existing
+   Monthly screen. Compact/mobile remains read-only. Feature-off, permission
+   loss, offline, stale, uncertain and malformed states fail closed and clear
+   protected state where authority is lost.
+7. Prove exact positive/negative role and scope authority, no self-action,
+   warning acknowledgement, idempotency, stale writers, immutable history,
+   two independent-session lifecycle writers, strict Flutter decoding and
+   responsive English/RTL output. Add no comments/documents/notifications,
+   reports/exports, dashboard, mobile editor, legacy migration, flag
+   enablement, commit, push, remote migration or deployment. Stop before T08.
+
+### T08 — Discussion, evidence and notifications
+
+1. Reuse the accepted canonical Team Chat, Documents/version store,
+   Notifications and push-outbox services. Add only Workforce mappings,
+   metadata and role-safe schema-v1 RPCs; do not create parallel collaboration,
+   blob or delivery engines.
+2. Map one monthly period to one explicit, idempotently opened group
+   conversation. Resolve effective members from exact active identity,
+   capability and dated responsibility on every read/command. Retain canonical
+   comments/replies/mentions/attachments/edit/delete/receipts; comment text is
+   never lifecycle authority.
+3. Append immutable system messages from accepted T07 audit events and deliver
+   next-action notifications to capability-plus-responsibility scoped actors.
+   Reuse preference-aware durable outbox delivery and deduplicate by the source
+   audit/event/recipient identity.
+4. Add the eight frozen Workforce evidence types through the canonical
+   prepare/upload/finalize/version path with operational classification and
+   Worker/Attendance Day/Monthly Period authority. Resolve the canonical target
+   before idempotency, validate every optional link against the same retained
+   worker/day/current period run, and authorize reads from the canonical target
+   rather than a secondary link. Retain all versions and deny direct
+   table/object-path access.
+5. Add explicit Admin-only, idempotent daily-missing and monthly-incomplete
+   digest dispatch. Page through the complete daily roster so teams above 500
+   workers are counted exactly. Do not invent cron, cadence, escalation or
+   external channel policy.
+6. Add strict repository/controller models and integrate the desktop Monthly/
+   Review view. Keep 360x800 read-only and overflow-free; fail closed and purge
+   protected state on authority loss.
+7. Prove role/scope negatives, static-member revocation, notification/push
+   deduplication, immutable document versions, idempotency, strict Flutter
+   mapping, responsive/RTL output and default-off build gates. Add no T09,
+   route, flag enablement, legacy migration, commit, push, remote migration or
+   deployment. Stop before T09.
+
+### T09 — Protected Excel and PDF reports
+
+1. Add one forward-only migration for immutable report artifact payloads,
+   exact approval-snapshot selection, strict report-kind/scope validation,
+   request-hash idempotency and append-only export audit.
+2. Promote only `workforce.reports.export`. Require it together with
+   `workforce.view` and complete dated responsibility for every returned
+   worker and allocation target, including Admin. Add no worker self-service.
+3. Build Daily, Worker, Team, Project, Company and seven exception report
+   payloads on the server. Monthly final outputs read only immutable T07
+   snapshots; current daily/exception outputs carry explicit non-approved
+   source status/version/time. Use exact report-specific controlled fields;
+   High Overtime returns typed `not_configured` evidence when no threshold is
+   configured.
+4. Reuse Yorks OOXML and PDF engines. Add typed/date/numeric XLSX cells,
+   formula-injection hardening, frozen identity/header panes and filters.
+   Generate one PDF byte buffer per immutable artifact and share it across
+   Preview/Download/Share/Print, with the approved-month legal bilingual
+   header and Prepared/Reviewed/Approved/date/revision/page footer.
+5. Add strict schema-v1 domain/repository/controller boundaries and the
+   guarded Monthly Reports desktop surface. Preserve a read-only 360x800
+   boundary and English/Arabic/Urdu/Hindi localization.
+6. Separate generation audit from explicit issuance: generation writes one
+   `report_generated`; each online idempotent artifact/format/action issuance
+   writes one `workforce_export_generated` before cached bytes are consumed.
+   Prove authorization permutations, immutable source retention, sanitization,
+   totals, idempotency, competing generation, exact audit effects, XLSX
+   structure, PDF short/multi-page/RTL rendering, responsive states and
+   Workforce-off release builds. Stop before T10.
+
+### T10 — Admin and management Workforce dashboards
+
+1. Add one forward-only read-projection migration with explicit Supervisor,
+   Management and Admin response shapes, server-generated timestamps, source
+   version and calendar-local as-of groups.
+2. Reuse accepted capability/responsibility and retained T03-T07 authority.
+   Aggregate complete authorized populations beyond 500 rows without client
+   paging, N+1 RPCs or role-label shortcuts.
+3. Calculate today/month completion, attendance states, warnings, review/
+   approval queues, reopen/configuration issues and action flags on Postgres.
+   Use retained historical facts and prospective dated assignment/calendar
+   context without current-state reinterpretation.
+4. Add strict domain/repository/controller mapping and a guarded Overview route
+   within the existing default-off Workforce shell. Preserve the existing
+   Attendance, Timesheets and Reports surfaces.
+5. Prove formula, mixed-timezone, >500, deduplication, closure/leaver/history,
+   permission and no-side-effect behavior in pgTAP, plus strict Flutter,
+   responsive/RTL/accessibility and Workforce-off release gates. Stop before
+   T11.
+
+Status: independently accepted. The correction gate additionally proves no
+exact-role shortcut, complete retained-target authorization for every action,
+full counts before compact limits, actual assignment/allocation project
+grouping, retained closed-target queues, stable configuration de-duplication
+and typed overtime/evidence issue handling.
+
+### T11 — Purpose-built tablet attendance and review
+
+1. Add no migration, capability, route or lifecycle state. Reuse the accepted
+   T05/T07 controllers, repositories, RPCs and server-returned action flags.
+2. Preserve the deliberate phone boundary below 720 logical pixels for T12
+   and desktop spreadsheet/review behavior at 1200 and above.
+3. Build a 720–1199 tablet attendance editor: landscape master/detail,
+   portrait focused roster plus selected-row sheet, sticky completion footer,
+   one active row editor, explicit Review/Back/Save states and no optimistic
+   server success.
+4. Build an exception-first tablet review hierarchy. Expose Return, Correct,
+   Verify, Approve and Reopen only from accepted T07 flags; keep all lifecycle
+   and separation-of-duties authority on the server.
+5. Prove 1180x820, 1024x768, 820x1180 and 768x1024 plus the unchanged 360x800
+   boundary, English and Arabic/Urdu RTL, 44x44 targets, focus/semantics,
+   reduced motion, no overflow and bounded editor/controller creation.
+6. Run focused T01–T11 Flutter/route regression, retained T01–T10 database
+   gates, analyzer/format/diff/lint and Workforce-off release builds. Stop
+   before T12 and do not commit, push, migrate remotely, enable or deploy.
+
+Status: independently accepted.
+
+### T12 — Purpose-built mobile attendance
+
+1. Add no migration, capability, route or lifecycle state. Reuse the accepted
+   T05 projection/controller/repository/RPC, local drafts and explicit Review/
+   Save boundary.
+2. Replace the phone read-only placeholder below 720 logical pixels with a
+   Today’s Team card roster, one focused worker editor, native date selection,
+   authorized target picker and keyboard-safe minute/status/activity controls.
+3. Add a phone bulk-draft bottom sheet with an affected count and a sticky
+   completion footer exposing only Review Day, Back to Edit and Save Day.
+   Opening or editing creates no server fact; offline drafts remain local and
+   explicit online Save alone may report authoritative success.
+4. Honor server-returned row editability, redaction, capability and target
+   options without role inference. Preserve the accepted no-future-date rule,
+   protected-state purge and visible loading/empty/denied/stale/conflict/
+   uncertain/invalid/saved states.
+5. Prove 360x800 and 390x844 in English and Arabic/Urdu RTL, keyboard/system
+   insets, text scaling, 44x44 actions, semantics/focus/reduced motion,
+   non-color cues and bounded editor/controller creation for large rosters.
+6. Run focused T01–T12 Flutter/route regression, retained T01–T10 database
+   gates, analyzer/format/diff/lint and Workforce-off release builds. Preserve
+   T11 tablet and desktop behavior. Stop before T13 and do not commit, push,
+   migrate remotely, enable or deploy.
+
+Status: independently accepted.
+
+### T13 — Security, concurrency, accessibility and performance hardening
+
+1. Freeze the accepted T01–T12 object/command/surface inventory and audit every
+   relation, RLS/ACL, Storage/document boundary, public RPC and internal
+   privileged helper. Public execution and direct-table access must remain no
+   broader than the accepted capability-plus-responsibility contract.
+2. Rerun every real repository-local independent-session race for critical
+   attendance, allocation, roster, monthly, lifecycle and report commands;
+   verify stable idempotency, stale conflicts, deterministic locks, one
+   authoritative effect and append-only audit. Sequential calls are not race
+   evidence.
+3. Reuse the accepted 500-worker/15,500-date gate and exercise the approved
+   50-team/30-project, multiple-allocation and retained two-year-history paths
+   where practical. Record query plans, wall times, pagination/virtualization,
+   bounded controller creation and release-mode profiling without inventing an
+   unapproved SLA.
+4. Recheck every Workforce surface at 1440x900, 1366x768, 1180x820, 1024x768,
+   820x1180, 768x1024, 430x932, 390x844 and 360x800 with four-language/RTL,
+   text-scale, 44x44, focus/keyboard, semantics, reduced-motion, non-color and
+   complete state-family proof.
+5. Implement only a reproduced hardening defect or an evidence gap. Preserve
+   all retained T01–T12 facts, capabilities, routes and defaults; use a new
+   additive migration for any server correction and never rewrite an accepted
+   migration.
+6. Remove any reproduced T07/T10 role shortcut without merging their distinct
+   boundaries: complete-month organization responsibility may short-circuit;
+   partial/future/expired organization windows may not; exact retained
+   assignment and allocation-target checks remain mandatory for scoped actors,
+   and empty periods retain organization/exact-team semantics.
+7. Run clean reset, focused/full retained-state database gates, every genuine
+   concurrency harness, focused/full Workforce Flutter, analyzer/format/diff/
+   lint, credential scan and Workforce-off web/signed Android release-shaped
+   builds. Stop before release and do not commit, push, migrate remotely,
+   enable or deploy.
+
+Status: independently accepted on 31 August 2026. At acceptance time the
+product owner had waived T14; the repository retains that historical fact as
+not performed/not passed.
+
+### T14 — Dedicated staging UAT
+
+1. Record the later 31 August product-owner withdrawal of the T14 waiver. Do
+   not rewrite the historical waiver into a pass.
+2. Freeze one immutable candidate source/artifact and deploy it only to an
+   unaliased non-production web target with `YORKS_V1_WORKFORCE=true`, backed
+   by an explicitly configured dedicated non-production Supabase project.
+3. Use named non-production Admin, scoped Site Engineer maintainer, configured
+   reviewer, distinct final approver and unauthorized/revoked/wrong-scope
+   personas. Role labels alone are never authority.
+4. Execute the approved source's 35 staging scenarios on that same candidate,
+   including exact capability/responsibility/target negatives, all-future-date
+   denial, daily/monthly/lifecycle/collaboration/report/dashboard coverage and
+   People/HR, Leave, Auth, Projects/BOQ/MR, Inventory, Returns, Accounts, Team
+   Chat, Rentals, Configuration, User Management and Audit non-regression.
+5. Capture candidate/backend/deployment identity, migration ledger, hashes,
+   UTC timestamps, witnesses, screenshots/logs, P0/P1 findings, rollback and
+   manual limitations. Automation does not replace required human witness.
+6. Stop instead of substituting local fixtures, the historic shared project or
+   production when staging configuration or named personas are absent.
+7. Do not commit/push main, migrate production, enable the live flag, promote a
+   Vercel alias or start the later production release.
+
+Status: infrastructure initialized but UAT not performed/passed. Dedicated
+Frankfurt project `iqltcyimlqtcwyzlemwx` carries the complete tracked ledger
+and protected document Function. Named personas, the immutable unaliased
+candidate and human witness remain outstanding. The product owner explicitly
+deferred those T14 activities until after an immediate production-release
+exception; production evidence must not be relabeled as T14. See
+[`WORKFORCE_T14_STAGING_UAT_EVIDENCE.md`](WORKFORCE_T14_STAGING_UAT_EVIDENCE.md).
+
 ## Batch completion discipline
 
 Each batch reports:

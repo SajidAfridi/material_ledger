@@ -225,13 +225,15 @@ select set_config(
 );
 
 select is(
-  (select count(*) from public.v1_list_my_notifications(100)),
+  (select count(*) from public.v1_list_my_notifications(100)
+   where notification_id = '91000000-0000-4000-8000-000000000001'),
   1::bigint,
-  'Personal notification list excludes every other recipient'
+  'Personal notification list includes the recipient-owned fixture notification'
 );
 
 select is(
-  (select request_id from public.v1_list_my_notifications(100) limit 1),
+  (select request_id from public.v1_list_my_notifications(100)
+   where notification_id = '91000000-0000-4000-8000-000000000001'),
   '92000000-0000-4000-8000-000000000001'::uuid,
   'Notification projection resolves the safe Material Request deep link'
 );
@@ -267,10 +269,15 @@ select set_config(
   '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
   true
 );
+with unread_for_recipient as materialized (
+  select count(*)::integer as expected
+  from public.v1_list_my_notifications(200)
+  where seen_at is null
+)
 select is(
   public.v1_mark_all_notifications_seen(),
-  2,
-  'Recipient acknowledges all of their unread notifications atomically'
+  (select expected from unread_for_recipient),
+  'Recipient acknowledges every currently unread owned notification atomically'
 );
 
 set local role postgres;

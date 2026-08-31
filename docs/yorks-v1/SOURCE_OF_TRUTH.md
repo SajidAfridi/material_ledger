@@ -63,6 +63,62 @@ Accounts authority is defined by
 [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md); legacy
 `/admin/finance` remains non-authoritative.
 
+Product-owner approval on 30 August 2026 adds the phased Workforce Attendance
+and Timesheets module. Its supplied implementation contract is authoritative
+for Workforce-only behavior and does not replace the existing People/HR,
+Leave, project membership or exact-role security model. T01 is additive,
+route-less and default-off: it introduces a worker identity distinct from an
+Auth user, normalized trades/teams/effective assignments and responsibility
+scopes, while planned shadow capabilities have no operational consumer. The
+repository-local contract is
+[`WORKFORCE_ATTENDANCE_TIMESHEETS.md`](WORKFORCE_ATTENDANCE_TIMESHEETS.md).
+T02 additively introduces effective calendars, ISO weekdays, dated exceptions,
+reusable shifts and dated team defaults. It remains exact-Admin, route-less,
+default-off and creates no attendance or timesheet facts.
+T03 adds protected retained-context daily attendance. T04 adds immutable daily
+allocation revisions with explicit project/scope or internal-location targets;
+both remain route-less and default-off.
+T05 adds the guarded desktop Supervisor Daily Roster without enabling the
+default-off flag. T01 through T12 were independently accepted by 31 August
+2026. T09 reads the accepted immutable approval snapshots plus the existing
+Yorks OOXML and PDF/print engines for protected Workforce reports. It separates immutable
+artifact generation (`report_generated`) from online idempotent format/action
+issuance (`workforce_export_generated`). T08 reuses
+the protected Team Chat, controlled Documents/version store and durable
+Notifications/outbox services for scoped period discussion, Workforce evidence
+and lifecycle/digest alerts. T10 adds accepted protected operational summaries
+only. T11 is the accepted presentation-only tablet adaptation of the T05
+daily-roster and T07 review controllers/RPCs. T12 is the accepted
+presentation-only phone adaptation of the T05 daily roster: Today’s Team
+cards, one focused worker editor, bulk draft sheet and sticky Review/Save
+footer. T13 was independently accepted on 31 August 2026 as an
+evidence-led hardening audit across the accepted
+Workforce security, concurrency, accessibility and performance boundaries; it
+changes behavior only when a reproduced defect requires a forward-safe
+correction. Its reproduced T10 query defect is corrected only by additive
+migration `20260831090940_yorks_workforce_t13_query_performance.sql`; no
+Workforce product meaning, role, capability or public response shape changes.
+The product owner initially waived the dedicated Workforce T14 staging UAT
+phase. That historical decision remains recorded as not performed and not
+passed. Later on 31 August 2026 the product owner explicitly withdrew the
+waiver and reinstated T14 as a mandatory pre-release gate. Reinstatement does
+not retroactively turn the waiver into a pass and does not authorize production
+migration, flag enablement, alias promotion or deployment. T14 may use only a
+dedicated non-production Supabase project, one immutable Workforce-enabled
+candidate, an unaliased staging deployment and named non-production personas.
+Dedicated Frankfurt project `iqltcyimlqtcwyzlemwx` was later created and the
+complete tracked ledger plus `finalize-document-upload` Function were applied
+without touching production. Named-persona/manual T14 UAT remains not
+performed. The product owner then explicitly deferred T14 UAT until after
+production and authorized an immediate production release as an exception.
+That exception is not a T14 pass and does not remove the post-release UAT
+obligation or the technical release, rollback and evidence gates.
+
+Product-owner resolution later on 30 August 2026 denies attendance creation or
+correction for a future work date. The server compares against the exact
+retained calendar timezone and preserves any pre-existing future row as
+read-only evidence.
+
 ## Approved source artifacts
 
 The original review artifacts remain outside the repository. Their SHA-256
@@ -76,6 +132,7 @@ fingerprints establish exactly which versions were approved:
 | `01_Yorks_Accounts_Requirements_Specification_R39.md` | Approved Accounts-only functional, non-functional, UI and acceptance authority | `31ce5163afc1aae34086560012c25471080c6ea86b7af2f623a28c2c617c514d` |
 | `07_AI_Implementation_Prompt.md` (R39 package) | Accounts T00–T07 sequencing and implementation discipline | `efc142ddd5abe7eea6cb03a90e749c950b3ca2779057f7f1fc282b9294e31a3f` |
 | `08_Decisions_Assumptions_and_NonRegression.md` (R39 package) | Frozen Accounts defaults and non-regression boundary | `ea25b3dcfca7411682ceb524f395ac746f3b3530660a7a474148672f50970df9` |
+| `Yorks Workforce Attendance & Timesheets — Flutter + Supabase Production Implementation Contract` | Approved Workforce-only behavior, data, security and phased delivery authority | `3914f3ec6740b5986724ae8dbc44b70f9944ec580fedfd3a526b3605866bf613` |
 
 If a source artifact changes hash, stop and treat it as a new product input.
 Do not silently replace this baseline.
@@ -95,6 +152,10 @@ Do not silently replace this baseline.
 6. For Accounts-only conflicts, the approved 25 August 2026 R39 package and
    [`R39_ACCOUNTS_FOUNDATION.md`](R39_ACCOUNTS_FOUNDATION.md) supersede older
    deferred/unreachable statements. They do not alter unrelated V1 authority.
+7. For Workforce-only conflicts, the approved 30 August 2026 Workforce
+   contract and [`WORKFORCE_ATTENDANCE_TIMESHEETS.md`](WORKFORCE_ATTENDANCE_TIMESHEETS.md)
+   supersede older attendance/timesheet assumptions. They do not change exact
+   platform roles, technical project membership or unrelated V1 workflows.
 
 ## Confirmed implementation direction
 

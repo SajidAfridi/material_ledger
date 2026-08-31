@@ -20,6 +20,7 @@ class YorksV1FeatureFlags {
     bool returnsDocuments = false,
     bool documents = false,
     bool accounts = false,
+    bool workforce = false,
     bool teamChat = false,
     bool inventorySuppliers = false,
   }) : _foundation = foundation,
@@ -33,6 +34,7 @@ class YorksV1FeatureFlags {
        _returnsDocuments = returnsDocuments,
        _documents = documents,
        _accounts = accounts,
+       _workforce = workforce,
        _teamChat = teamChat,
        _inventorySuppliers = inventorySuppliers;
 
@@ -75,6 +77,10 @@ class YorksV1FeatureFlags {
         'YORKS_V1_ACCOUNTS',
         defaultValue: false,
       ),
+      _workforce = const bool.fromEnvironment(
+        'YORKS_V1_WORKFORCE',
+        defaultValue: false,
+      ),
       _teamChat = const bool.fromEnvironment(
         'YORKS_R38_TEAM_CHAT',
         defaultValue: false,
@@ -95,6 +101,7 @@ class YorksV1FeatureFlags {
   final bool _returnsDocuments;
   final bool _documents;
   final bool _accounts;
+  final bool _workforce;
   final bool _teamChat;
   final bool _inventorySuppliers;
 
@@ -118,6 +125,10 @@ class YorksV1FeatureFlags {
   /// protected document chain and defaults off until its database, permission
   /// and UI acceptance gates have all passed.
   bool get accounts => documents && _accounts;
+
+  /// Workforce is an independently controlled, default-off rollout. Accepted
+  /// routes are exposed only when the release operator explicitly enables it.
+  bool get workforce => documents && _workforce;
 
   bool get teamChat => documents && _teamChat;
 

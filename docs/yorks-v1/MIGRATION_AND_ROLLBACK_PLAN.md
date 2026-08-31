@@ -633,6 +633,443 @@ and revision snapshots so a later compatible client can resume safely. Do not
 drop or rewrite Phase 2 history, and do not copy a private draft into a submitted
 request outside the normal versioned submit command.
 
+## 8H. Workforce T01 foundation
+
+Migration `20260829225746_yorks_workforce_t01_foundation.sql` is additive and
+route-less. It adds private worker, trade, internal-location, team, effective
+assignment and responsibility relations plus exact-Admin protected RPCs. It
+does not copy, reinterpret or dual-write legacy employee/attendance JSON and
+does not create Auth users, technical project memberships or attendance facts.
+Effective assignments fail closed against finite worker/team windows and
+non-active projects. Worker employment-date edits are rejected when they would
+make retained assignment history invalid, and team-window edits use the same
+rule; the history is never silently trimmed, deleted or reinterpreted.
+
+The rollback is to keep `YORKS_V1_WORKFORCE=false`, revoke authenticated RPC
+execution if required and retain all normalized, idempotency and audit rows. A
+correction ships forward; no Workforce relation or history is dropped.
+
+## 8I. Workforce T02 calendars and shifts
+
+Migration `20260830021205_yorks_workforce_t02_calendars_shifts.sql` is additive
+after accepted T01. It adds effective calendars, seven-row ISO weekday sets,
+dated calendar exceptions, reusable effective shifts and non-overlapping dated
+team schedule defaults. It does not alter the T01 migration, copy legacy data,
+create attendance/timesheet rows, enable a capability consumer or add a route.
+
+All new relations use RLS with authenticated direct CRUD revoked and
+service-role-only table access. Exact Admin commands own optimistic versions,
+idempotency and audit. Calendar/shift/team date changes fail when they would
+invalidate retained exceptions or team links; rollback never trims those rows.
+
+Correction migration
+`20260830042048_yorks_workforce_t02_retained_version_semantics.sql` is additive
+after the initial T02 migration. It freezes semantic fields on referenced
+calendar/shift versions and weekdays, freezes effective team links and
+past/current dated overrides, preserves future unused optimistic drafts, and
+permits inactive retirement only when no current/future use is stranded. It
+adds guard-supporting indexes and table-trigger enforcement but no relation,
+public RPC, capability consumer, route, flag change or operational fact.
+
+Follow-up correction migration
+`20260830044311_yorks_workforce_t02_calendar_local_history_guards.sql` replaces
+only the four temporal guard functions. It makes past/current override
+`is_active` immutable and evaluates override, team-link and parent-retirement
+boundaries from `clock_timestamp()` in each exact referenced calendar IANA
+timezone. It adds no public function, table, capability, route, flag or fact;
+rollback remains a forward correction with all retained rows preserved.
+
+T02 rollback is forward-only: keep `YORKS_V1_WORKFORCE=false`, revoke the five
+T02 public RPC grants if required, retain every configuration, idempotency and
+audit row, and ship a corrective migration. Do not drop the five relations,
+reuse a code across overlapping dates, hard-delete history or reinterpret an
+existing team default.
+
+## 8J. Workforce T03 daily attendance
+
+T03 is one additive migration after the accepted T01/T02 chain. It first
+creates the private daily-attendance relation, worker/date and scoped-read
+indexes, RLS/ACL/hard-delete boundaries and exact retained snapshot columns.
+It then installs internal assignment/schedule/responsibility resolution,
+schema-v1 scoped projection and the versioned/idempotent save command. Only
+after those objects exist does it promote `workforce.view` and
+`workforce.attendance.maintain` to operational, enforced and assignable. The
+other ten Workforce capabilities stay planned/shadow/nonassignable.
+
+No legacy employee or attendance collection is copied, reinterpreted or dual-
+written. Existing T01/T02 rows are not rewritten. The first committed daily
+row stores exact assignment, authority and schedule semantics, so later parent
+changes do not alter historical attendance meaning. Corrections update only
+status, minutes, reason, version and actor/timestamp, with before/after audit.
+
+T03 rollback is forward-only: keep `YORKS_V1_WORKFORCE=false`, revoke the two
+T03 public RPC grants if required, return the two capability consumers to
+planned/shadow/nonassignable, and retain every attendance, audit and
+idempotency row. Do not drop the relation, delete a day or rebase a retained
+snapshot. No route, UI, allocation, timesheet, remote migration or deployment
+is part of this phase.
+
+The 30 August 2026 future-attendance resolution ships as a later additive T03
+corrective migration. A table-boundary guard rejects inserts and corrections
+whose work date is later than `clock_timestamp()` in the row's exact retained
+calendar timezone. It copies, deletes and backfills nothing. Existing future
+rows remain readable but read-only until their calendar-local date arrives.
+Rollback is also forward-only: keep the rows and deploy a new corrective
+migration if policy changes; never remove the guard by rewriting the accepted
+T03 migration or purge future evidence.
+
+## 8K. Workforce T04 daily timesheet allocations
+
+T04 is one additive migration after accepted T01-T03. It creates a private
+one-per-attendance allocation-set root, immutable revision headers and
+immutable allocation rows, followed by RLS/ACL/trigger guards, strict
+schema-v1 read/save/withdraw RPCs and indexes. The migration installs a
+table-boundary trigger that rejects T03 attendance semantic changes while an
+active allocation revision exists, and promotes only
+`workforce.timesheets.maintain` to operational/enforced/assignable.
+
+No T01-T03 row or legacy collection is copied, rewritten or dual-written. The
+first save appends target snapshots and an active revision; later saves append
+new revisions and move only the root's current pointer/version. Withdrawal is
+also an immutable revision and does not change the attendance fact.
+
+Rollback is forward-only: keep `YORKS_V1_WORKFORCE=false`, revoke the three T04
+public RPC grants if required, return only `workforce.timesheets.maintain` to
+planned/shadow/nonassignable, retain every root/revision/row/audit/idempotency
+fact and deploy a corrective migration. Never drop or update history, remove
+the attendance child guard while an active set exists, infer target identity,
+or migrate remotely in T04. No route/UI or deployment belongs to this phase.
+
+## 8L. Workforce T05 supervisor daily roster backend
+
+Migration `20260830101500_yorks_workforce_t05_supervisor_daily_roster.sql` is
+additive after the accepted T01-T04 chain and the later T03 future-date guard.
+It adds nullable `overtime_reason` evidence to retained attendance rows,
+installs normalization/history guards, installs a revision-boundary future-date
+guard shared by both T04 save and withdraw, and adds the schema-v1 roster read
+and atomic save RPCs. It promotes no capability, rewrites no existing row,
+backfills no legacy collection and creates no attendance/allocation fact on
+read.
+
+Corrective migration
+`20260830111341_fix_workforce_t05_roster_authority_aggregation_bounds.sql`
+replaces only the T05 roster projection/helper/save definitions. It separates
+view-derived filter selectors from exact dated allocation command targets,
+makes mixed-calendar `is_future` an all-returned-page aggregate, prevents active
+hidden targets from advertising mutation authority, echoes the page context and
+aligns read/save limits at 500. It rewrites no retained row and promotes no
+capability.
+
+The roster save reuses T03/T04 worker/date locks, optimistic row versions,
+idempotency and audit. `replace` and `withdraw` always require an exact visible
+allocation-set version. A restricted evidence-only `preserve` may omit the
+hidden allocation version, but may not change locked totals or expose any set
+identifier/version/state in its response. Optional overtime evidence is not a
+pay, threshold or approval rule, and the prior T03 payload remains compatible.
+
+Rollback is forward-only: keep `YORKS_V1_WORKFORCE=false`, revoke authenticated
+execution on `v1_get_workforce_daily_roster` and
+`v1_save_workforce_daily_roster`, retain the nullable evidence column and every
+attendance/allocation/audit/idempotency row, and ship a corrective migration.
+Do not drop the T04 future-revision guard, delete a roster child fact, expose a
+  restricted allocation identifier, return a current Workforce consumer to
+  shadow solely to undo T05, or migrate/deploy remotely as part of this slice.
+
+## 8M. Workforce T06 monthly period and validation
+
+T06 is one additive migration after accepted T01-T05. It creates private
+team/month period roots, immutable validation runs, run-scoped worker summaries,
+retained worker/date evidence and typed validation issues, followed by RLS/
+ACL/hard-delete guards, indexed projection paths and strict schema-v1 get and
+validate RPCs. It promotes no capability: `workforce.view` and
+`workforce.timesheets.maintain` remain the only read/validation consumers.
+
+Initialization/revalidation inserts a complete new run and advances only the
+period current-run pointer/status/version. It copies, deletes, updates or dual-
+writes no legacy employee/attendance row and never mutates T01-T05 attendance,
+allocation, assignment, calendar or roster facts. Earlier runs and their
+worker/date/issue evidence remain readable and immutable. The period projection
+derives stale state from a server source fingerprint; it does not rewrite a
+prior run when daily evidence changes.
+
+Correction migration
+`20260830140235_fix_workforce_t06_historical_monthly_source.sql` is additive
+and data-preserving. It replaces the shared monthly source with one canonical
+retained/prospective union: accepted T03 dates use their exact worker,
+assignment, team, supervisor and schedule snapshots and keep the authoritative
+T04 allocation attached; only dates without attendance use the T01 effective-
+assignment resolver. It removes current active-state checks from retained
+worker/supervisor/target meaning, while prospective current-unresolved rows
+continue to fail closed. The correction adds only a private insert-time
+structural guard for missing supervisors and retained assignment windows. It
+does not update, delete or re-fingerprint a prior run; explicit revalidation
+appends a new immutable run.
+
+Follow-up correction migration
+`20260830150826_fix_workforce_t06_historical_team_month_applicability.sql` is
+function-only and data-preserving. It adds one private team-month applicability
+predicate and makes the authorized selector, absent-period read and validation
+use it consistently. Current validity overlap, retained T03 team/month evidence
+or an existing period preserves reachability; no period or operational fact is
+created by the predicate/read, and existing capability/responsibility/target
+authorization remains unchanged. The migration is repeatable and neither
+updates nor deletes prior period/run/audit/idempotency evidence.
+
+Rollback is forward-only: keep `YORKS_V1_WORKFORCE=false`, revoke authenticated
+execution on the T06 public RPCs if required, keep the guarded Monthly route
+unreachable, retain every period/run/worker/date/issue/audit/idempotency fact
+and ship a corrective migration. Never drop monthly history, synthesize a
+submission, downgrade accepted T03/T04 invariants, migrate legacy JSON or
+delete a period to undo T06.
+
+## 8N. Workforce T07 review and approval lifecycle
+
+T07 is one additive migration after accepted T01-T06. It widens the protected
+monthly status constraint and adds private approval revisions, transitions,
+exact edit scopes, reviewer-correction evidence, reopen requests, immutable
+approved snapshots and transaction correction contexts. Existing T01-T06
+facts are not rewritten, backfilled, submitted or approved. Opening a queue or
+lifecycle projection creates no record.
+
+The migration replaces only the trusted T03/T04/T05 write guards needed to
+honour submitted, returned, locked and reopened periods; it does not weaken
+their attendance, allocation, target, minute, employment, future-date,
+idempotency or responsibility invariants. Five review capabilities become
+operational/assignable only after the complete migration succeeds; the feature
+flag remains default-off.
+
+Rollback is forward-only and preserves all lifecycle evidence:
+
+1. keep `YORKS_V1_WORKFORCE=false` and remove the guarded UI consumer;
+2. revoke authenticated execution on the T07 public queue/projection/command
+   RPCs;
+3. return the five T07 capability consumers to planned/shadow/nonassignable;
+4. preserve every approval revision, transition, correction, reopen request,
+   snapshot, audit and idempotency result; and
+5. correct defects with a new forward migration. Never drop, unlock, rewrite
+   or hash-regenerate an approved snapshot or prior revision.
+
+No production migration, legacy backfill, feature enablement, push or
+deployment belongs to T07 acceptance.
+
+## 8O. Workforce T08 collaboration, evidence and notifications
+
+T08 is one additive migration after accepted T01-T07. It creates private,
+RLS-enabled period/conversation mapping, Workforce document upload/version
+metadata and notification delivery/digest ledgers. It additively widens only
+the canonical Chat and Documents role/entity allowlists needed for Worker,
+Attendance Day and Monthly Period links, then exposes dedicated role-safe
+schema-v1 RPCs. Existing messages, documents, notifications, T01-T07 facts and
+legacy JSON are neither rewritten nor backfilled.
+
+The T08 prepare boundary resolves canonical Worker/Attendance Day/Monthly
+Period identity and validates optional links against the exact retained period
+run before creating idempotency, upload-intent, metadata or Storage authority.
+Canonical-target authorization governs document reads; secondary retained
+links cannot grant access. Daily digest enumeration is bounded at 500 rows per
+page but continues until the complete eligible roster is counted. These are
+forward-safe command/projection corrections and rewrite no retained evidence.
+
+The canonical controlled-document finalizer remains the only version writer;
+the T08 trigger appends Workforce metadata after successful finalization. The
+T07 audit bridge adds collaboration system events and delivery ledger rows
+without becoming transition authority. New tables revoke all anonymous and
+authenticated CRUD, retain service-role administration and block hard delete.
+
+Rollback is forward-only and preserves evidence:
+
+1. keep `YORKS_V1_WORKFORCE=false` and remove the T08 Monthly UI consumer;
+2. revoke authenticated execution on the six T08 public RPCs;
+3. disable the T08 audit/message/finalization triggers only through a new
+   corrective migration if containment is required;
+4. retain every conversation/message/receipt, document version/link,
+   notification/outbox row, delivery/digest record, audit and idempotency
+   result; and
+5. never delete or rewrite a T07 transition, controlled document version or
+   canonical Chat history to undo T08.
+
+No production migration, legacy backfill, feature enablement, commit, push or
+deployment belongs to T08 acceptance.
+
+## 8P. Workforce T09 protected reports and exports
+
+T09 is one additive migration after accepted T01-T08. It adds a private,
+RLS-enabled, append-only report-artifact ledger whose immutable schema-v1 JSON
+payload identifies the exact source snapshot/current projection, scope,
+server-derived totals, actor and generation time. It promotes only
+`workforce.reports.export`; no existing attendance, allocation, period,
+approval, document or collaboration row is rewritten or backfilled.
+
+Monthly final artifacts reference an immutable T07 approved snapshot and copy
+its snapshot ID/revision/hash into the retained report identity. Current daily
+and exception artifacts retain their source status/fingerprint/version and
+must not be relabelled approved. Generation is transactional, request-hash
+idempotent and emits one append-only `report_generated` effect. Explicit
+artifact/format/action issuance is separately online, request-hash idempotent,
+reauthorizes the artifact and emits one `workforce_export_generated` effect
+before cached bytes are previewed/downloaded/shared/printed. Tables have RLS, no
+authenticated CRUD, service-role administration and hard-delete/update guards.
+Final worker/team/project scope is matched to identities retained in the exact
+approved payload. Daily future dates and ignored/broadened exception scopes are
+rejected at the server boundary; no client scope hint can relabel a source.
+Private immutable authority evidence supports reauthorization of report
+history after capability/responsibility changes and is never included in the
+sanitized report payload, XLSX or PDF.
+
+Rollback is forward-only and preserves evidence:
+
+1. keep `YORKS_V1_WORKFORCE=false` and remove the T09 UI consumer;
+2. revoke authenticated execution on T09 projection, generation and issuance
+   RPCs;
+3. return `workforce.reports.export` to planned/shadow/nonassignable in a new
+   corrective migration if containment is required;
+4. retain every report payload, approved-snapshot reference, hash, audit and
+   idempotency result; and
+5. fix generator/projection defects with an additive migration. Never delete,
+   regenerate or relabel a previously issued artifact.
+
+No production migration, legacy backfill, feature enablement, commit, push or
+deployment belongs to T09 acceptance.
+
+## 8Q. Workforce T10 dashboard projection
+
+T10 is one additive, forward-only function migration after accepted T01-T09.
+It creates no data table, legacy copy, daily attendance, allocation, period,
+report or export fact. It additively admits the two already-defined typed
+validation issue codes used by the read projection but creates no issue row or
+policy fact. The public read RPC is granted only to authenticated;
+all internal SECURITY DEFINER helpers are revoked from public/anon/
+authenticated. Existing RLS and table ACLs remain unchanged.
+
+Rollback is containment without data loss: keep `YORKS_V1_WORKFORCE=false`,
+remove/disable the T10 route consumer and revoke authenticated execute on the
+T10 read RPC in a new forward migration. Correct formula or response defects
+by replacing the function additively. No prior T01-T09 fact, audit,
+idempotency, approval snapshot or report artifact is deleted or rewritten.
+No production migration, feature enablement, commit, push or deployment
+belongs to T10 acceptance.
+
+The corrected projection caches authorized period identities per request,
+orders the complete exception queue before applying compact limits, resolves
+current project rows from actual assignment/allocation targets, and keeps
+retained closed-target history readable. Rollback must not remove the admitted
+typed issue codes because retained rows may use them; contain the consumer and
+replace the projection functions in a later forward migration instead.
+
+Rollback of the correction is also forward-only. Keep every prior and
+corrected run readable, revoke public monthly RPC execution if containment is
+required, and ship another additive function correction. Never move retained
+attendance into a currently edited assignment/team or reactivate a historical
+target merely to satisfy a current-state check.
+
+## 8R. Workforce T11 tablet presentation
+
+T11 has no database migration, backfill, capability promotion, route addition
+or persisted data change. It reuses the accepted T05/T07 server projections
+and commands. Every T01–T10 table, RLS policy, audit event, idempotency result,
+attendance/allocation revision, period snapshot, document and report artifact
+is preserved byte-for-byte.
+
+Rollback is presentation-only containment: keep `YORKS_V1_WORKFORCE=false`
+and revert the tablet-specific attendance/review composition while retaining
+the accepted desktop and phone read-only boundaries. No database rollback is
+required or permitted. A future defect in an accepted server boundary must be
+fixed by a separately authorized additive migration, never by weakening RLS or
+rewriting retained facts. No production migration, feature enablement, commit,
+push or deployment belongs to T11 acceptance.
+
+## 8S. Workforce T12 mobile presentation
+
+T12 has no database migration, backfill, capability promotion, route addition
+or persisted-data change. It reuses the accepted T05 projection, local-draft
+controller and atomic Save Day command. Every T01–T11 relation, RLS policy,
+audit event, idempotency result, attendance/allocation revision, approval
+snapshot, document and report artifact is preserved byte-for-byte.
+
+Rollback is presentation-only containment: keep `YORKS_V1_WORKFORCE=false`
+and restore the prior phone read-only composition while retaining accepted
+tablet and desktop behavior. No database rollback is required or permitted.
+Any server-authority defect requires a separately authorized additive
+migration, never client inference, weakened RLS or rewritten history. No
+production migration, feature enablement, commit, push or deployment belongs
+to T12 acceptance.
+
+## 8T. Workforce T13 hardening
+
+T13 adds no schema by default. It first audits the accepted T01–T12 migration
+chain, relation RLS/ACLs, function execution grants, Storage/document seams,
+indexes, immutable guards, concurrency/idempotency and application release
+artifacts. Evidence-only tests and local harnesses may be added without
+changing retained data meaning.
+
+If the audit reproduces a server defect, the correction must be created with
+the Supabase migration command as a new additive, forward-only migration.
+Never edit an accepted Workforce migration, backfill or delete retained
+history, widen direct authenticated table access, expose an internal helper or
+weaken capability/responsibility/target checks. Application-only corrections
+must likewise preserve route/capability/state authority and remain behind the
+default-off flag.
+
+The local audit reproduced repeated assignment/authorization work in the T10
+overview and approval-queue paths. Forward migration
+`20260831090940_yorks_workforce_t13_query_performance.sql` therefore replaces
+only trusted function definitions: monthly prospective assignment resolution
+uses the same deterministic temporary-before-primary order set-wise, T10 team
+contexts use one set-wise current-source pass, and organization fast paths are
+allowed only when capability and responsibility cover the complete date
+window. It creates no relation, changes no grant, backfills no row and rewrites
+no retained fact. The migration also replaces the T06 empty-period resolver
+and the T07/T10 period-authority definitions separately: no role, including
+Admin, bypasses responsibility; complete-month organization windows are the
+only organization fast path; partial windows cannot fall through; and retained
+assignment/allocation targets keep their exact dated checks. The remaining
+guarded definition patches fail closed if accepted source functions do not
+match their expected inputs.
+
+Rollback is containment and evidence preservation: keep
+`YORKS_V1_WORKFORCE=false`, revoke only a proven defective new consumer through
+a later forward migration if required, redeploy the prior accepted client when
+separately authorized, and retain every T01–T12 fact, revision, snapshot,
+document, notification, audit and idempotency row. T13 performs no production
+migration or deployment. At T13 acceptance the T14 staging phase was waived
+and recorded as not performed/not passed. The later 31 August 2026
+product-owner decision reinstates T14 but does not alter that historical fact.
+If the correction must be contained, keep the feature off and use a later
+forward migration to restore the accepted T06/T07/T10 function definitions;
+do not roll back or delete any T01–T12 history.
+
+## 8U. Workforce T14 staging containment and rollback
+
+T14 may apply the complete tracked ledger through the accepted T13 migration
+only to a dedicated non-production Supabase project named/configured by the
+release owner. The ignored staging config must contain an explicit staging
+project ref, database password, URL and publishable key; the deployment script
+must reject the historic shared ref. The web candidate must use that publishable
+configuration with `YORKS_V1_WORKFORCE=true` and be deployed only to an
+unaliased non-production URL.
+
+Before mutation, record the empty/dedicated target identity, backup/reset
+owner, dry-run ledger, candidate source fingerprint and approved named persona
+seed plan. Apply migrations forward, verify ledger equality, RLS/RPC grants,
+Storage/Edge functions and then create only attributable staging UAT records.
+Never copy production service-role credentials into Flutter, Vercel Preview
+variables, logs or evidence.
+
+Rollback is staging containment: stop traffic to the preview, keep the live
+production flag/alias untouched, retain evidence needed for diagnosis and reset
+or discard only the release-owner-approved dedicated staging project. Do not
+delete or rewrite production history. A corrected T14 candidate must repeat the
+complete applicable ledger and scenario matrix.
+
+Current staging state: release-owner-authorized Frankfurt project
+`iqltcyimlqtcwyzlemwx` was created, its empty ledger was dry-run and the full
+tracked migration chain through T13 plus `finalize-document-upload` were
+applied. Production was not touched by that operation. Named non-production
+personas, the unaliased candidate and manual T14 witness remain outstanding.
+The product owner explicitly deferred T14 UAT until after an immediate
+production-release exception. Keep staging containment and do not treat the
+production release as a substitute for the later UAT.
+
 ## 9. Migration stop conditions
 
 Stop before production mutation when:

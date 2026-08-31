@@ -479,6 +479,607 @@ protected-state purge.
 Local implementation evidence and remaining external staging gates are kept in
 [`R39_ACCOUNTS_T07_RELEASE_EVIDENCE.md`](R39_ACCOUNTS_T07_RELEASE_EVIDENCE.md).
 
+## 9H. Workforce T01 foundation acceptance
+
+T01 has no visual acceptance lane because it exposes no route. Its gate is a
+clean migration reset plus focused/full pgTAP proving the 12-key shadow
+catalogue, complete nine-role matrix, six private RLS relations, independent
+worker identity, exact-Admin RPC boundary, optimistic versions, idempotent
+retry, overlap exclusion, effective temporary precedence, responsibility
+resolution, immutable history and one audit event per command. Every private
+relation is checked across authenticated SELECT, INSERT, UPDATE and DELETE;
+Site Engineer, Project Engineer and Procurement are denied the public RPC even
+when responsibility exists. Assignment tests also prove finite worker/team
+windows, invariant-preserving worker-date updates and active parent projects
+when an otherwise-active project scope remains available.
+
+Flutter acceptance proves the default-off/fail-closed flag, exact client key
+vocabulary, strict schema-v1 decoding, workers without Auth links, exact RPC
+parameters and offline/denied/conflict/malformed-response mapping. Analyzer and
+applicable release builds remain required. No deployment or flag enablement is
+part of this gate.
+
+## 9I. Workforce T02 calendar/shift acceptance
+
+T02 has no visual lane because it exposes no route. Its gate is a clean reset,
+focused/full pgTAP and focused typed repository tests proving:
+
+- all five new relations use RLS, expose no authenticated CRUD and allow
+  direct table administration only to `service_role`;
+- every Workforce capability remains planned, shadow and nonassignable;
+- exact Admin can use every T02 projection/command while Project Engineer,
+  Site Engineer and Procurement fail closed;
+- IANA timezone, ordered effective dates, integer minute bounds, exactly seven
+  unique ISO weekdays, unique dated exceptions and day-type/override
+  consistency are enforced;
+- calendar, shift and team effective configurations cannot overlap where
+  ambiguous; referenced calendar/shift semantic fields, weekday meanings,
+  effective team links and past/current overrides cannot drift in place;
+- a non-overlapping successor version and future unused draft correction remain
+  possible; calendar/shift parents with only expired retained references remain
+  readable/retirable while current/future references cannot be stranded;
+- past/current override active state is immutable, and deterministic boundary
+  fixtures prove that the database session timezone cannot change override,
+  team-link or parent-retirement decisions made in the linked calendar IANA
+  timezone;
+- cross-midnight shifts retain `shift_start_date` work-date semantics;
+- mutations prove optimistic stale-version rejection, same-payload retry,
+  different-payload idempotency conflict, one audit event per retry and no hard
+  delete; and
+- the schema-v1 Dart model/repository fails closed for flag-off, offline,
+  missing backend, malformed response and invalid client input.
+
+The gate also proves that T02 creates no attendance/timesheet fact, route,
+sidebar entry, capability consumer, flag enablement, remote migration or
+deployment. Stop before T03.
+
+## 9J. Workforce T03 daily-attendance acceptance
+
+T03 has no visual lane because it exposes no route. Its clean reset plus
+focused/full pgTAP and focused Flutter gates must prove:
+
+- the attendance relation uses RLS, has no authenticated CRUD, is directly
+  administered only by `service_role` and cannot be hard-deleted;
+- exactly one row exists per worker/date, statuses are closed, minutes are
+  integers bounded by 1,440, present has positive time and every other status
+  has zero time;
+- creation requires active employment and an effective assignment/schedule;
+  explicit work on a non-working day is retained rather than inferred;
+- creation and correction reject a future work date using the exact retained
+  calendar timezone and server clock, independent of the database session
+  timezone; an existing future row remains preserved and read-only;
+- exact assignment, responsibility, calendar, shift and day-type snapshots do
+  not drift when parents change; later worker inactivity alone does not block a
+  controlled versioned correction;
+- only `workforce.view` and `workforce.attendance.maintain` are operational,
+  enforced and assignable. Admin succeeds organization-wide; a genuinely
+  capability-plus-responsibility-scoped maintainer succeeds only in scope;
+  unscoped Project Engineer, Site Engineer, Procurement and inactive/revoked/
+  expired actors fail closed;
+- direct table APIs, wrong worker/date, unknown payload keys, stale version,
+  different-payload idempotency reuse and competing writers fail safely, while
+  identical retry returns one result and creates one audit effect; and
+- the typed repository rejects flag-off, offline, missing backend, denied,
+  stale, invalid input and malformed schema-v1 responses.
+
+The gate also proves T03 adds no allocation/monthly period, timesheet,
+notification, document, report/export, route/sidebar/screen, legacy migration,
+feature enablement, remote migration or deployment. Stop before T04.
+
+The competing-writer evidence is the repeatable local-only command
+`./tool/test_workforce_t03_concurrency.sh`, not a sequential pgTAP substitute.
+It must observe two independent writer sessions blocked inside the same
+worker/date save RPC, then prove one create plus one `40001` loser and one
+same-version correction plus one `40001` loser, with exactly one row and one
+audit/idempotency effect per winning transition.
+
+## 9K. Workforce T04 daily-allocation acceptance
+
+T04 has no visual lane because it exposes no route. Its clean reset, focused
+and complete pgTAP, strict Flutter and local concurrency gates must prove:
+
+- private RLS relations deny authenticated CRUD/helpers, allow service-role
+  administration only, retain immutable revisions and reject hard delete;
+- active project/own-scope and active internal-location target shapes work,
+  while mixed, cross-project, inactive, missing and unknown-key inputs fail;
+- active revision regular/overtime sums reconcile separately and exactly to a
+  present parent day; zero-time statuses, negative/fractional/over-1,440 and
+  mismatched minute inputs fail;
+- optional time evidence is paired, calendar-local, cross-midnight capable and
+  non-overlapping; adjacent half-open intervals remain valid;
+- Admin and a capability-plus-worker-and-target-responsibility maintainer read
+  and write in scope. Role, technical membership, capability without
+  responsibility, responsibility without capability, unauthorized target,
+  inactive/revoked/expired identity and guessed UUIDs fail closed;
+- save/withdraw are optimistic, idempotent and audited once. Identical retry
+  returns one result/effect; stale or same-key/different-payload calls fail;
+- active allocations block attendance correction; only a timesheet-authorized
+  zero-line withdrawal revision releases that guard without changing the
+  attendance row; and
+- the typed model/repository/controller fails closed for flag-off, offline,
+  missing backend, denied, stale, malformed input/response and uncertain
+  network outcome.
+
+The repeatable local-only `./tool/test_workforce_t04_concurrency.sh` must use
+two independent database sessions on the same allocation set and prove one
+winner, one stable conflict, one authoritative revision and no lost update or
+duplicate audit/idempotency effect. The gate also proves there is no T05 route,
+screen, roster action, monthly lifecycle, review, export, feature enablement,
+remote migration or deployment.
+
+T04 database acceptance must also prove that its pgTAP fixtures coexist with
+other valid Workforce allocation history. Run this regression in order, with
+no reset between the concurrency harness, the second focused run and the
+complete suite:
+
+```bash
+npx --yes supabase db reset --local
+npx --yes supabase test db --local \
+  supabase/tests/database/yorks_workforce_t01_foundation.test.sql \
+  supabase/tests/database/yorks_workforce_t02_calendars_shifts.test.sql \
+  supabase/tests/database/yorks_workforce_t03_daily_attendance.test.sql \
+  supabase/tests/database/yorks_workforce_t04_timesheet_allocations.test.sql
+./tool/test_workforce_t04_concurrency.sh
+npx --yes supabase test db --local \
+  supabase/tests/database/yorks_workforce_t01_foundation.test.sql \
+  supabase/tests/database/yorks_workforce_t02_calendars_shifts.test.sql \
+  supabase/tests/database/yorks_workforce_t03_daily_attendance.test.sql \
+  supabase/tests/database/yorks_workforce_t04_timesheet_allocations.test.sql
+npx --yes supabase test db --local
+```
+
+The concurrency harness intentionally retains its local-only `593*` fixtures.
+The second focused run and the complete suite must therefore pass without
+assuming any Workforce allocation relation is empty. Every T04 data assertion,
+snapshot scalar and mutation probe is scoped to the committed `592*` pgTAP
+fixture allocation set, attendance day, revision or idempotency keys.
+
+## 9L. Workforce T05 Supervisor Daily Roster acceptance
+
+The T05 backend lane must prove:
+
+- the migration chain parses from a clean local reset, adds no capability and
+  keeps every internal SECURITY DEFINER helper unavailable to
+  `public`/`anon`/`authenticated`;
+- missing roster rows are a read-only projection with schedule suggestions,
+  while future dates, an empty authorized result and authority-restricted rows
+  expose no command authority or hidden allocation identifiers;
+- read/filter `selectors` are distinct from mandatory `allocation_targets`;
+  worker-only responsibility exposes no command target, while an explicit
+  worker plus internal-location responsibility exposes only that active target;
+- mixed retained calendar timezones keep page-level `is_future` coherent with
+  returned-row command flags, page `limit`/`offset` round-trip exactly, and both
+  roster reads and atomic saves accept at most 500 rows and reject 501;
+- unscoped Project Engineer, Site Engineer and Procurement calls expose zero
+  rows, zero selectors and no maintain flags; capability without dated
+  responsibility, revoked/expired authority, banned identity, mixed worker
+  scope and uncovered allocation target fail atomically;
+- strict allowlists, integer minute bounds, optional overtime evidence,
+  per-row attendance/allocation versions, root/child idempotency and audit all
+  fail closed without partial writes;
+- active allocation totals cannot be changed through `preserve`; `replace` and
+  `withdraw` require their exact set version; and a restricted evidence-only
+  `preserve` with null hidden set version updates attendance evidence while the
+  allocation revision/history stays byte-for-byte authoritative; an active set
+  with an uncovered target advertises no row or aggregate timesheet action;
+- roster future save is denied and retained-future T04 save and withdraw are
+  both rejected at the shared revision boundary; and
+- every T05 scalar/count is scoped to its committed `594*` fixture so the suite
+  passes with unrelated retained Workforce records.
+
+The real two-session race and post-race isolation order is:
+
+```bash
+npx --yes supabase db reset --local
+npx --yes supabase test db --local \
+  supabase/tests/database/yorks_workforce_t03_daily_attendance.test.sql \
+  supabase/tests/database/yorks_workforce_t04_timesheet_allocations.test.sql \
+  supabase/tests/database/yorks_workforce_t05_supervisor_daily_roster.test.sql
+./tool/test_workforce_t05_roster_concurrency.sh
+npx --yes supabase test db --local \
+  supabase/tests/database/yorks_workforce_t05_supervisor_daily_roster.test.sql
+```
+
+The `595*` harness must place two independent create writers and then two
+same-version correction writers inside `v1_save_workforce_daily_roster` behind
+the same canonical advisory-lock barrier. Each race yields one commit, one
+stable `40001` loser, one authoritative row/version and one root
+audit/idempotency effect. The final no-reset pgTAP proves retained valid roster
+history cannot contaminate the isolated acceptance fixture.
+
+Flutter acceptance must additionally prove:
+
+- flag-off, unauthorized/inactive/revoked deep links and capability loss fail
+  closed and purge protected roster/draft state;
+- strict response and save models reject missing backend, offline critical
+  save, denied, stale, malformed, unknown, future and uncertain outcomes while
+  preserving a retryable local draft and stable idempotency key where safe;
+- mixed attendance/timesheet authority, hidden-allocation preservation,
+  selector/target validation, bulk selection, schedule prefill, Copy Previous
+  Day sanitization, local Review Day and atomic Save Day behave exactly as the
+  T05 authority contract requires;
+- 1440x900, 1366x768 and 1024x768 desktop layouts have no page overflow, keep
+  sticky Worker/header context and use deliberate local grid scrolling. The
+  360x800 boundary has no editor or overflow;
+- English plus the configured secondary-language/RTL lane, 44x44 actions,
+  semantic worker labels, visible focus and Tab/Shift+Tab, arrows and
+  Enter/Shift+Enter traversal remain deterministic; and
+- production-shaped web and ephemeral-signed Android releases build with
+  `YORKS_V1_WORKFORCE` off. No T05 test may enable production, migrate remotely,
+  commit, push, deploy or begin the T06 monthly lifecycle.
+
+## 9M. Workforce T06 Monthly Period and Validation acceptance
+
+T06 is accepted only when a clean reset and focused/full database lanes prove:
+
+- private period/run/worker/date/issue relations have RLS, no authenticated
+  CRUD or helper execution, service-role direct administration and no hard
+  delete; reading an absent period creates no row;
+- team-plus-month uniqueness, first-of-month input, server-derived membership,
+  retained effective assignment/supervisor/calendar/day-type/attendance/
+  allocation evidence and immutable prior validation runs;
+- an accepted T03 date remains in its retained team with its exact assignment,
+  schedule and T04 allocation after an allowed T01 past-assignment move, while
+  the replacement team cannot absorb it and no worker/date duplicate appears;
+- after the last current assignment moves and the old team's mutable current
+  window no longer overlaps the month, the authorized selector still returns
+  the retained team, absent-period read creates nothing and explicit validation
+  initializes one period. A replacement team cannot absorb the date, while a
+  non-effective team with no retained attendance or period stays hidden and is
+  rejected by read/validation;
+- legitimate mid-month leaver history and valid retained allocation targets do
+  not become blocking merely because the worker later leaves or a project,
+  scope or internal location later closes. Missing supervisors block both
+  branches, currently inactive prospective supervisors block, and later
+  deactivation does not rewrite a non-null retained supervisor identity;
+- exact calendar-local future dates are visible but excluded from required-day
+  and missing-entry totals, including deterministic extreme-timezone cases;
+- stable blocking/warning codes cover all applicable T06 cases without
+  inventing an overtime ceiling, mandatory overtime reason or document rule;
+- only zero blocking issues and a current source fingerprint produce
+  `ready_for_review`; source change makes the projection stale/effectively
+  `draft` until explicit revalidation;
+- exact active Admin and a complete capability-plus-dated-responsibility
+  maintainer succeed. Role-only Project Engineer, Site Engineer, Procurement,
+  expired/revoked/capability-only/wrong-team/wrong-project and uncovered
+  allocation-target callers fail closed without partial totals;
+- initialization/revalidation is atomic, expected-versioned, UUID-idempotent
+  and audited once; same payload retry returns one run/effect, different
+  payload/stale writers fail, and the real two-session harness yields one
+  winner, one stable conflict and no duplicate run/audit/idempotency effect;
+- a realistic 500-worker, 31-date/15,500-worker-date fixture validates within
+  the recorded local performance budget and uses indexed/paged projections;
+  and
+- focused T01-T06 plus the complete DB suite remain green before and after the
+  concurrency harness's retained fixture.
+
+The repeatable local-only
+`./tool/test_workforce_t06_monthly_period_concurrency.sh` harness uses two
+independent authenticated Admin sessions against the same exact team/month
+lock. It must prove one version-1 winner, one stable optimistic-version
+conflict, one immutable run, one audit/idempotency effect and no orphan
+run-scoped rows. The harness intentionally retains its local-only `598*`
+fixture; rerun the focused T06 pgTAP without a reset before the complete
+database lane to prove fixture-scoped isolation.
+
+Flutter acceptance proves exact schema-v1 mapping, flag/offline/backend/
+denied/stale/malformed failures, server-only totals, paged 500-worker summaries,
+exception-first filtering, compact accessible calendar and daily drill-down,
+including strict retained project/internal target and historical assignment
+fixtures after mutable parent changes.
+Golden/widget evidence covers 1440x900, 1366x768, 1024x768, read-only 360x800
+and Arabic RTL with no page overflow and no color-only status. No Submit,
+review, verify, approve, lock or reopen action may appear. Analyzer, formatting,
+diff/lint, production-shaped web and ephemeral-signed Android builds run with
+`YORKS_V1_WORKFORCE` off. Stop before T07.
+
+## 9N. Workforce T07 review and approval lifecycle
+
+Database acceptance proves:
+
+- private lifecycle relations have RLS, no authenticated direct CRUD and no
+  callable internal helper seam;
+- exact Admin and fully capability-plus-dated-responsibility scoped actors can
+  perform only their approved step, while role-only Project Engineer, Site
+  Engineer, Procurement, capability-only, responsibility-only, expired,
+  revoked and uncovered-target callers fail closed;
+- submit uses the current non-stale T06 run, zero blockers and the exact full
+  warning-ID set; an incomplete, additional or stale acknowledgement fails;
+- submitter/returner/corrector/verifier/final-approver separation, mandatory return scope,
+  controlled reviewer correction, verify/forward, atomic approve/lock,
+  request/authorize reopen and a second approval revision are enforced;
+- ordinary T03/T04 writes cannot bypass locked/review state or edit beyond a
+  returned/reopened worker/date scope; snapshot bytes/hash, transitions,
+  corrections and prior revisions are immutable;
+- stale versions and same-key/different-payload fail, while an identical retry
+  returns one result/effect; and
+- the local two-session harness races Verify & Forward at one expected period
+  version and yields one winner, one stable `40001` conflict, one version
+  advance and one transition/audit/idempotency effect.
+
+Run the local-only concurrency proof with:
+
+```bash
+./tool/test_workforce_t07_lifecycle_concurrency.sh
+```
+
+The harness refuses non-loopback databases and retains only its disposable
+T06/T07 fixtures. Rerun focused T01-T07 pgTAP and the complete database suite
+without resetting afterward so every test proves isolation from valid retained
+records.
+
+Flutter acceptance proves strict schema-v1 queue/lifecycle/action mapping,
+complete paged warning acknowledgement, stable uncertain retry, offline/flag/
+backend/denied/stale/malformed failures, capability-loss purge and explicit
+server-confirmed actions. Widget evidence covers desktop actions at 1440x900,
+1366x768 and 1024x768 plus read-only 360x800 and Arabic RTL, visible focus,
+44x44 targets, status text/icons and no overflow. Production-shaped web and
+ephemeral-signed Android builds keep `YORKS_V1_WORKFORCE` off. Stop before T08.
+
+## 9O. Workforce T08 collaboration, evidence and notifications
+
+Database acceptance proves all new mapping/metadata/delivery relations have
+RLS, no authenticated direct CRUD and no callable internal SECURITY DEFINER
+helper. Exact Admin and complete capability-plus-dated-responsibility actors
+may read only their periods/entities; role-only Project Engineer, Site
+Engineer, Procurement, guessed UUID, revoked/expired capability or
+responsibility, stale static conversation membership and unauthorized document
+path calls fail closed.
+
+The focused suite must prove explicit idempotent conversation opening;
+canonical replies, mentions, attachments, edit/delete and receipt compatibility;
+no lifecycle change from user text; one immutable system event per T07 audit;
+exact notification recipients with preference-aware push-outbox reuse; all
+eight evidence types, immutable versions and current entity authorization;
+canonical-target/secondary-link mismatch rejection before side effects;
+secondary-only read/download denial; unknown/malformed payload rejection; a
+greater-than-500-worker exact daily digest with one recipient/window effect;
+digest idempotency; Push-disabled in-app retention; and retained history without
+hard delete. Every T07 lifecycle event must prove its system event, exact
+next-action recipients and no self/role-only/inactive/stale/out-of-scope leak.
+Run the canonical Team Chat, Documents and Notifications regressions plus
+focused T01-T08 and the complete database suite.
+
+Flutter acceptance proves strict collaboration/discussion/document/
+notification schemas and period context, controlled file boundaries, stable
+uncertain retry, offline/flag/backend/denied/malformed failures and protected-
+state purge. Widget evidence covers desktop discussion/evidence/notifications,
+minimum 44x44 actions, visible focus, 1440x900/1366x768/1024x768, Arabic RTL
+and a deliberate read-only 360x800 summary with no overflow. Analyzer,
+format/diff/advisors and Workforce-off web/signed Android builds remain gates.
+Stop before T09.
+
+## 9P. Workforce T09 protected reports and exports
+
+Database acceptance proves the report ledger has RLS, no authenticated CRUD,
+immutable rows and no callable internal SECURITY DEFINER helper. Exact active
+Admin, Project Engineer, Site Engineer and Procurement permutations must each
+prove that role alone is insufficient: successful generation requires both
+`workforce.view` and `workforce.reports.export` plus complete dated worker and
+allocation-target responsibility. Revoked/expired capability or responsibility,
+technical membership, guessed IDs, worker self-service, unauthorized project/
+internal targets, malformed/unknown payloads and direct table access fail.
+Tests also prove future daily denial, organization-only exception scope, and
+that a forged Team/worker/Project or mismatched month cannot relabel an
+immutable approved source or produce a misleading empty artifact.
+
+Focused tests cover every report kind; immutable approved-snapshot selection;
+old report stability after reopen/new approval; current-report source labels;
+exact required controlled field sets and values; server totals/man-days; an
+explicit High Overtime `not_configured` result when no limit exists; no
+prohibited fields/internal ID columns; same-key
+same-payload retry, same-key different-payload denial, stale/competing artifact
+generation and exactly one `report_generated` effect. Explicit online
+Preview/Download/Share/Print issuance must reauthorize the artifact and return
+exact source/payload hashes, actor role/capability/scope/server time while
+writing one `workforce_export_generated` effect. A local two-session harness
+must prove both generation and issuance same-key races converge to one retained
+artifact/receipt and one audit/idempotency effect each.
+
+Flutter tests validate strict schema-v1 decoding, context echo, feature-off,
+offline/backend/denied/malformed/uncertain failures and protected-state purge.
+XLSX evidence parses OOXML and proves true date/numeric cells, text worker IDs,
+formula-prefix neutralization, filters and frozen panes. PDF evidence renders
+short and multi-page A4 reports, repeated bilingual legal approved-month
+headers, `MONTHLY TIMESHEET`, Month/Year, exact Prepared/Reviewed/Approved,
+server date/revision/page footers, content-based Project/Company orientation
+and RTL without clipping. Preview, Download, Share and Print must consume
+byte-identical cached PDF bytes after online issuance. Widget/golden evidence
+covers 1440x900, 1366x768, 1024x768 and read-only 360x800 in English and RTL.
+Run focused T01-T09, the complete retained-state DB suite, analyzer/format/diff,
+advisors and Workforce-off web/signed Android builds. Stop before T10.
+
+## 9Q. Workforce T10 dashboards
+
+Database acceptance proves one schema-v1 projection returns only its requested
+Supervisor, Management or Admin shape, includes generated/source/as-of
+evidence, and writes no audit, notification, report, issuance or workflow row.
+Tests cover exact today/month formulas, all accepted attendance states,
+calendar-local extreme timezones, mixed-timezone grouping, more than 500
+workers, multiple teams/projects without duplicates, retained leaver/closed
+target history, prospective missing rows, supervisor and configuration issues,
+review lifecycle queues and stable concurrent reads.
+
+The correction regression includes more than 50 authorized retained periods,
+an older high-priority exception, typed `overtime_limit_exceeded` and
+`supporting_evidence_missing` issues, current-versus-retained configuration
+issue overlap, editable team-default drift, and later worker/team/project/
+scope/internal-location closure. Full counts and policies are asserted before
+visible limits; each command flag is tested with and without its exact
+capability and every retained target responsibility.
+
+Positive/negative cases cover exact Admin, Project Engineer, Site Engineer and
+Procurement identities with capability plus responsibility, capability-only,
+responsibility-only, wrong team/project/internal target, revoked/expired or
+inactive actors, technical membership, guessed IDs, direct helper execution and
+malformed/unknown request fields. Action flags must be false unless their exact
+accepted command capability and full dated scope are present.
+
+Flutter acceptance covers strict schema-v1 mapping, response-kind/source/as-of
+validation, flag-off/offline/backend/denied/malformed failures, visible stale
+last-confirmed evidence and protected-state purge. Widget evidence covers
+loading, empty, error, permission and stale states; 1440x900, 1366x768,
+1024x768 and read-only 360x800; English and Arabic RTL; focus order, semantics
+and non-color status cues. Run focused T01-T10, retained/full DB, focused
+Workforce Flutter, analyzer/format/diff/advisors and Workforce-off web/signed
+Android builds. Stop before T11.
+
+Run `./tool/test_workforce_t10_concurrent_reads.sh` only against the
+repository-local Supabase database. It starts two independently authenticated
+Admin RPC sessions, observes both active together, compares the authoritative
+response after excluding only `generated_at`, and proves that audit,
+notification, transition and report counts remain unchanged.
+
+## 9R. Workforce T11 tablet attendance and review
+
+Widget and route tests prove that 1180x820 and 1024x768 landscape tablets use
+a bounded master roster plus one selected worker/day editor, while 820x1180
+and 768x1024 portrait tablets use a focused single-column roster, a selected-
+row modal editor and a sticky completion footer. The tablet path must not
+render or horizontally squeeze the desktop spreadsheet and must not create
+text controllers for every loaded worker. The accepted desktop layout remains
+unchanged at 1200 logical pixels and above; 360x800 and 390-pixel phone widths
+remain deliberate read-only boundaries for T12.
+
+Interaction tests cover selection, direct attendance/minute/allocation edits,
+standard-minute prefill, bulk draft transforms, Copy Previous Day, Review Day,
+Back to Edit and explicit online Save. Offline drafts, loading, empty, denied,
+stale, conflict, uncertain and saved states remain visible and fail closed.
+Review tests prove exception-first period/detail navigation and that Return,
+Correct, Verify, Approve and Reopen appear and invoke controllers only when
+their exact accepted T07 server flag is true.
+
+Accessibility evidence covers 44x44 targets, semantic labels, predictable
+focus order, keyboard traversal, non-color status cues and reduced motion.
+Visual/golden evidence covers English plus Arabic/Urdu RTL without clipping or
+page-level overflow. Run focused T01–T11 Flutter/route tests, retained T01–T10
+pgTAP/full DB regression, analyzer/format/diff/advisors and Workforce-off web/
+signed Android builds. Stop before T12.
+
+## 9S. Workforce T12 mobile attendance
+
+Widget and route tests prove that 360x800 and 390x844 render Today’s Team
+worker cards, native date selection, one focused worker editor, a bulk-draft
+bottom sheet and a sticky completion footer without the desktop grid or page-
+level overflow. English plus Arabic/Urdu RTL, text scaling, keyboard/system
+insets, 44x44 actions, semantic labels, visible focus, reduced motion and
+non-color status cues are required.
+
+Interaction tests cover status/minute/authorized-target/activity/exception
+editing, standard-minute prefill, local bulk transforms and affected counts,
+Review Day, Back to Edit and explicit online Save. Future dates are not offered
+by the picker and remain authoritatively denied by the accepted calendar-
+timezone server rule. Offline drafts never claim server success; loading,
+empty, forbidden, stale, conflict, uncertain, invalid and saved states remain
+explicit. Restricted allocation details/options stay redacted and command
+availability follows server-returned row flags only.
+
+Large-roster tests prove exactly one focused editor/controller is mounted and
+pagination/load-more does not silently omit editable workers. Run focused
+T01–T12 Flutter/route tests, retained T01–T10 pgTAP/full DB regression,
+analyzer/format/diff/advisors and Workforce-off web/signed Android builds.
+Preserve the accepted tablet/desktop layouts and stop before T13.
+
+## 9T. Workforce T13 hardening acceptance
+
+Database/security acceptance inventories all accepted Workforce relations,
+RLS flags, policies, grants, privileged helpers and public RPCs. Every exposed
+relation must retain RLS, no `anon`/`authenticated` CRUD and service-role-only
+direct administration. Internal privileged helpers must be non-executable by
+`public`, `anon` and `authenticated`; public RPCs must keep only their intended
+authenticated execution and live identity/capability/responsibility checks.
+Storage/document paths remain canonical-target authorized, and release web
+assets must contain no service-role/secret credential.
+
+Concurrency acceptance reruns every repository-local genuine two-session
+Workforce harness and proves deterministic lock/version behavior, identical
+retry convergence, different-payload/stale conflict, one authoritative effect
+and one append-only audit/idempotency effect. Sequential pgTAP calls do not
+substitute for these races. Focused T01–T13 and the complete database suite
+must stay green against retained harness fixtures wherever their contracts
+require no-reset coexistence.
+
+Period-authorization acceptance calls both T07 and T10 boundaries directly.
+Admin capability without responsibility, and future/expired/partial-month
+organization responsibility, must fail; complete-month organization authority
+must pass. Project Manager and Senior Mechanical Engineer must receive the
+same result for the same exact retained assignment and allocation-target
+responsibilities. Removing any required project-scope or internal-location
+target must fail both boundaries. Empty periods must preserve complete
+organization or exact team-month semantics without a role shortcut.
+
+Performance acceptance includes the existing 500-worker, 31-date/15,500-date
+validation fixture, 500-row roster/save bounds, greater-than-500 paging and
+dashboard aggregation plus representative 50-team/30-project, multiple-
+allocation and retained two-year-history query paths where practical. Record
+local timings and `EXPLAIN` evidence, confirm supporting indexes and bounded
+Flutter controller/widget creation, and do not invent a numerical SLA absent
+from authority.
+
+Accessibility/responsive acceptance covers every Workforce route/surface at
+1440x900, 1366x768, 1180x820, 1024x768, 820x1180, 768x1024, 430x932, 390x844
+and 360x800. Prove English, Arabic, Urdu and Hindi, RTL, text scaling, keyboard
+and visible focus, semantic labels, reduced motion, 44x44 actions, non-color
+status/error cues, no page overflow and the complete loading/empty/error/
+denied/offline/conflict/uncertain state family.
+
+The final local gate includes clean reset, focused and complete database
+suites, all genuine concurrency harnesses, focused/full Workforce Flutter,
+honest repository-wide Flutter snapshot, analyzer/format/diff/ShellCheck,
+database advisors/lint, credential scans and production-shaped Workforce-off
+web plus ephemeral-signed Android builds. T13 may correct only reproduced
+defects and must preserve all T01–T12 facts. At T13 acceptance the dedicated
+T14 staging UAT was historically waived/not performed, never passed. The later
+31 August product-owner decision withdraws that waiver and reinstates the
+separate T14 gate; it does not change T13 evidence or authorize production.
+
+## 9U. Workforce T14 dedicated staging UAT acceptance
+
+T14 passes only when one immutable Workforce-enabled candidate is deployed to
+an unaliased non-production target backed by an explicitly configured dedicated
+Supabase staging project. Every scenario uses the same candidate, backend and
+named non-production personas. The historic shared Supabase project, local
+fixtures and production are prohibited substitutes.
+
+Required persona classes are capability- and responsibility-based:
+
+| Persona | Required T14 authority/evidence |
+|---|---|
+| Admin configuration/reopen | Exact active Admin plus the effective capabilities and organization responsibility required by each command; all actions audited. |
+| Site Engineer maintainer/supervisor | Exact active Site Engineer, `workforce.view`, attendance/timesheet maintain capabilities and exact dated worker/team/project/scope/internal-target responsibility. |
+| Configured reviewer | A distinct named actor in the accepted approval chain with review and, only for the controlled correction scenario, correct-during-review/verify capabilities plus complete dated scope. |
+| Configured final approver | A distinct named Senior Mechanical Engineer or Project Manager chosen by the staging approval chain, with final-approve capability and complete dated scope. |
+| Negative personas | Named Procurement role-only, Site Engineer role-only or wrong-scope, expired/revoked capability/responsibility and inactive identity cases. |
+
+The approved source's 35 scenarios are the mandatory functional matrix. In
+addition, flag-off and unauthorized deep links, stale/conflict/uncertain/offline
+states, capability/responsibility revocation, all-future-work-date denial,
+target redaction, protected document/report bytes, four-language/RTL,
+desktop/tablet/mobile/accessibility, credential/commercial leakage and the
+listed unrelated Yorks flows must pass. Opening/read paths must have no write
+effect.
+
+Automation is required for migration, RLS/RPC, concurrency/idempotency,
+artifact/hash and non-regression checks, but cannot supply the manual witness
+for roster interaction, lifecycle separation, responsive behavior, controlled
+document bytes or PDF Preview/Download/Print consistency. Record witness name,
+UTC timestamp, URL/deployment ID, candidate fingerprint, backend ref without
+secrets, migration ledger, screenshot/log reference and result for every
+scenario. Zero open P0/P1 product defects is required.
+
+Current result: **not run/not passed; explicitly deferred until after
+production**. Dedicated staging project `iqltcyimlqtcwyzlemwx` was created and
+all tracked migrations plus `finalize-document-upload` were applied. A direct
+hosted database sweep executed 75 files/2,300 assertions: every functional
+assertion passed except the test's explicitly local-only 60-second T06 timing
+budget, which measured 88,447.47 ms on hosted staging; the T10 file lost its
+long sweep connection after 30 passing assertions and then passed 56/56 in an
+isolated rerun. These are technical staging observations, not T14 UAT. Named
+personas, an unaliased candidate and the human 35-scenario witness remain
+outstanding. The product owner explicitly authorized production as an
+exception and required T14 setup/UAT next; release evidence must preserve this
+boundary.
+
 ## 10. Release evidence package
 
 Batch 10 produces:

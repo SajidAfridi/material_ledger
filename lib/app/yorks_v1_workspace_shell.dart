@@ -55,13 +55,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final isAccountant = role == YorksV1Role.accountant;
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
     final accountsEnabled = featureFlags.accounts;
+    final workforceEnabled = featureFlags.workforce;
     final teamChatEnabled = !isAccountant && featureFlags.teamChat;
-    // T05 turns the normalized Accounts projection into an explicit runtime
-    // consumer. Accountant remains isolated when the flag is off, but once it
-    // is on the shell waits for the same protected permission snapshot as all
-    // other authorized roles.
+    // Protected Accounts and Workforce routes are explicit runtime consumers.
+    // Accountant remains isolated from legacy operational navigation, while
+    // either accepted feature still waits for the same confirmed permission
+    // snapshot as every other authorized identity.
     final connectedV1Permissions =
-        (!isAccountant || accountsEnabled) &&
+        (!isAccountant || accountsEnabled || workforceEnabled) &&
         ref.watch(supabaseClientProvider) != null;
     final permissionState = connectedV1Permissions
         ? ref.watch(yorksV1CurrentPermissionSnapshotProvider)
@@ -86,6 +87,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       chatUnread: chatUnread,
       permissionState: permissionState,
       accountsEnabled: accountsEnabled,
+      workforceEnabled: workforceEnabled,
     );
     final current = _currentDestination(destinations, location);
     final desktop =
@@ -109,6 +111,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                 icon: destination.icon,
                 path: destination.path!,
               ),
+          if (destinations.any(
+            (destination) => destination.path == RoutePaths.yorksV1Workforce,
+          ))
+            const YorksV1SearchNavigationTarget(
+              label: YorksV1ShellStrings.workforceTimesheets,
+              icon: Icons.calendar_month_outlined,
+              path: RoutePaths.yorksV1WorkforceTimesheets,
+            ),
         ],
         language: language,
         role: role,
@@ -183,6 +193,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                           chatUnread: chatUnread,
                           permissionState: permissionState,
                           accountsEnabled: accountsEnabled,
+                          workforceEnabled: workforceEnabled,
                         ),
                         activePath: location,
                         language: language,
@@ -272,6 +283,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     int chatUnread = 0,
     YorksV1CurrentPermissionSnapshotState? permissionState,
     bool accountsEnabled = false,
+    bool workforceEnabled = false,
   }) {
     final all = _destinationsFor(
       role,
@@ -279,6 +291,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       chatUnread: chatUnread,
       permissionState: permissionState,
       accountsEnabled: accountsEnabled,
+      workforceEnabled: workforceEnabled,
     );
     _YorksDestination? path(String route) {
       for (final destination in all) {
@@ -397,6 +410,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     int chatUnread = 0,
     YorksV1CurrentPermissionSnapshotState? permissionState,
     bool accountsEnabled = false,
+    bool workforceEnabled = false,
   }) {
     final accountantOffice = accountsEnabled && role == YorksV1Role.accountant
         ? <_YorksDestination>[
@@ -478,6 +492,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           selectedIcon: Icons.account_balance_wallet_rounded,
           path: RoutePaths.yorksV1Accounts,
         ),
+      if (workforceEnabled)
+        _YorksDestination(
+          label: YorksV1ShellStrings.workforce,
+          icon: Icons.groups_2_outlined,
+          selectedIcon: Icons.groups_2_rounded,
+          path: RoutePaths.yorksV1Workforce,
+        ),
       ..._legacyDestinationsFor(
         YorksV1Role.admin,
         teamChatEnabled: teamChatEnabled,
@@ -514,6 +535,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       if (path == RoutePaths.engineerHome) return true;
       if (role == YorksV1Role.accountant &&
           path != RoutePaths.yorksV1Accounts &&
+          path != RoutePaths.yorksV1Workforce &&
           (path == null ||
               !path.startsWith('${RoutePaths.yorksV1Accounts}/'))) {
         return false;
@@ -536,6 +558,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
             structurallyEligible &&
             canViewAccounts &&
             canViewDestination;
+      }
+      if (path == RoutePaths.yorksV1Workforce) {
+        return workforceEnabled &&
+            allows(YorksV1CapabilityKeys.workforceView, false);
       }
       if (path == RoutePaths.yorksV1Projects) {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);
@@ -608,6 +634,22 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
         (destination) => destination.path == RoutePaths.yorksV1MaterialRequests,
       );
       visible.insert(updatedRequestsIndex + 1, accounts);
+    }
+    final workforceIndex = visible.indexWhere(
+      (destination) => destination.path == RoutePaths.yorksV1Workforce,
+    );
+    if (workforceIndex >= 0) {
+      final workforce = visible.removeAt(workforceIndex);
+      final accountsOrRequestsIndex = visible.indexWhere(
+        (destination) => destination.path == RoutePaths.yorksV1Accounts,
+      );
+      final updatedRequestsIndex = visible.indexWhere(
+        (destination) => destination.path == RoutePaths.yorksV1MaterialRequests,
+      );
+      final anchor = accountsOrRequestsIndex >= 0
+          ? accountsOrRequestsIndex
+          : updatedRequestsIndex;
+      visible.insert(anchor >= 0 ? anchor + 1 : visible.length, workforce);
     }
     return visible;
   }
@@ -811,6 +853,8 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
               location.startsWith('/yorks/material-requests')) ||
           (path == RoutePaths.yorksV1TeamChat &&
               location.startsWith(RoutePaths.yorksV1TeamChat)) ||
+          (path == RoutePaths.yorksV1Workforce &&
+              location.startsWith(RoutePaths.yorksV1Workforce)) ||
           (path == RoutePaths.yorksV1Projects &&
               location.startsWith('/yorks/projects'))) {
         return destination;
@@ -835,6 +879,12 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       return const [
         YorksV1ProjectStrings.projects,
         YorksV1ProjectStrings.createProject,
+      ];
+    }
+    if (location == RoutePaths.yorksV1WorkforceTimesheets) {
+      return const [
+        YorksV1ShellStrings.workforce,
+        YorksV1ShellStrings.workforceTimesheets,
       ];
     }
     return [current?.label ?? YorksV1ShellStrings.overview];
@@ -944,10 +994,13 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
     final accountsEnabled = featureFlags.accounts;
+    final workforceEnabled = featureFlags.workforce;
     final teamChatEnabled =
         role != YorksV1Role.accountant && featureFlags.teamChat;
     final connectedV1Permissions =
-        (role != YorksV1Role.accountant || accountsEnabled) &&
+        (role != YorksV1Role.accountant ||
+            accountsEnabled ||
+            workforceEnabled) &&
         ref.watch(supabaseClientProvider) != null;
     final permissionState = connectedV1Permissions
         ? ref.watch(yorksV1CurrentPermissionSnapshotProvider)
@@ -962,6 +1015,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
       chatUnread: chatUnread,
       permissionState: permissionState,
       accountsEnabled: accountsEnabled,
+      workforceEnabled: workforceEnabled,
     );
     final primaryRoutes = shell
         ._mobileDestinationsFor(
@@ -971,6 +1025,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
           chatUnread: chatUnread,
           permissionState: permissionState,
           accountsEnabled: accountsEnabled,
+          workforceEnabled: workforceEnabled,
         )
         .map((destination) => destination.path)
         .whereType<String>()
@@ -2232,6 +2287,14 @@ class _YorksQuickNavigationButton extends StatelessWidget {
                   icon: destination.icon,
                   path: destination.path!,
                 ),
+            if (destinations.any(
+              (destination) => destination.path == RoutePaths.yorksV1Workforce,
+            ))
+              const YorksV1SearchNavigationTarget(
+                label: YorksV1ShellStrings.workforceTimesheets,
+                icon: Icons.calendar_month_outlined,
+                path: RoutePaths.yorksV1WorkforceTimesheets,
+              ),
           ],
           language: language,
           role: role,
