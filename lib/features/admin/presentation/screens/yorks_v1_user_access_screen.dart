@@ -86,6 +86,143 @@ YorksV1DelegableScopeContext yorksV1DelegableScopeContext({
   );
 }
 
+class _PermissionDependencyExpansion {
+  const _PermissionDependencyExpansion({
+    required this.changes,
+    this.unavailableDependencyKey,
+  });
+
+  final List<_StagedPermissionChange> changes;
+  final String? unavailableDependencyKey;
+
+  bool get isComplete => unavailableDependencyKey == null;
+}
+
+/// Expands a reviewed grant with the catalogue-declared prerequisites that
+/// are not already effective for the same scope. Generated rows remain
+/// visible in the review dialog; the client never silently widens authority.
+_PermissionDependencyExpansion _expandPermissionDependencies({
+  required Iterable<_StagedPermissionChange> drafts,
+  required YorksV1UserPermissionWorkspace workspace,
+}) {
+  final catalog = {
+    for (final access in workspace.catalog) access.catalog.key: access,
+  };
+  final expanded = <String, _StagedPermissionChange>{
+    for (final draft in drafts) draft.change.identity: draft,
+  };
+  String? unavailable;
+  final processing = <String>{};
+
+  bool effectiveForScope(
+    YorksV1PermissionCapabilityAccess access,
+    YorksV1PermissionScope scope,
+  ) => switch (scope.kind) {
+    YorksV1PermissionScopeKind.organization =>
+      access.authoritativeEffective == true,
+    YorksV1PermissionScopeKind.project => scope.projectIds.every(
+      access.authoritativeEffectiveForProject,
+    ),
+  };
+
+  void ensureDependencies(_StagedPermissionChange parent) {
+    if (unavailable != null ||
+        parent.change.operation != YorksV1PermissionChangeOperation.set ||
+        parent.change.effect != YorksV1PermissionAssignmentEffect.grant) {
+      return;
+    }
+    final scope = parent.change.scope!;
+    final processKey =
+        '${parent.capabilityKey}:${scope.kind.wireValue}:'
+        '${scope.projectIds.join(',')}';
+    if (!processing.add(processKey)) return;
+    final parentAccess = catalog[parent.capabilityKey];
+    if (parentAccess == null) {
+      unavailable = parent.capabilityKey;
+      return;
+    }
+    for (final dependencyKey in parentAccess.catalog.dependencies) {
+      final dependencyAccess = catalog[dependencyKey];
+      if (dependencyAccess == null) {
+        unavailable = dependencyKey;
+        return;
+      }
+      final dependencyCleared = expanded.values.any(
+        (draft) =>
+            draft.capabilityKey == dependencyKey &&
+            draft.change.operation == YorksV1PermissionChangeOperation.clear,
+      );
+      final identity = [
+        YorksV1PermissionChangeOperation.set.wireValue,
+        dependencyKey,
+        scope.kind.wireValue,
+      ].join(':');
+      final existing = expanded[identity];
+      if (existing == null &&
+          !dependencyCleared &&
+          effectiveForScope(dependencyAccess, scope)) {
+        continue;
+      }
+      if ((existing != null &&
+              existing.change.effect !=
+                  YorksV1PermissionAssignmentEffect.grant) ||
+          (existing == null && dependencyCleared) ||
+          !dependencyAccess.canEdit ||
+          !dependencyAccess.actorDelegableScopes.contains(scope.kind)) {
+        unavailable = dependencyKey;
+        return;
+      }
+
+      var dependencyScope = scope;
+      if (existing?.change.scope?.kind == YorksV1PermissionScopeKind.project) {
+        final projectIds = <String>{
+          ...existing!.change.scope!.projectIds,
+          ...scope.projectIds,
+        }.toList()..sort();
+        dependencyScope = YorksV1PermissionScope(
+          kind: YorksV1PermissionScopeKind.project,
+          projectIds: projectIds,
+        );
+      }
+      final generated = _StagedPermissionChange.set(
+        access: dependencyAccess,
+        effect: YorksV1PermissionAssignmentEffect.grant,
+        scope: dependencyScope,
+        effectiveUntil: _coveringExpiry(
+          existing?.change.effectiveUntil,
+          parent.change.effectiveUntil,
+          hasExisting: existing != null,
+        ),
+        requiredByCapabilityKey:
+            existing?.requiredByCapabilityKey ?? parent.capabilityKey,
+      );
+      expanded[identity] = generated;
+      ensureDependencies(generated);
+      if (unavailable != null) return;
+    }
+    processing.remove(processKey);
+  }
+
+  for (final draft in List<_StagedPermissionChange>.from(expanded.values)) {
+    ensureDependencies(draft);
+    if (unavailable != null) break;
+  }
+  return _PermissionDependencyExpansion(
+    changes: List.unmodifiable(expanded.values),
+    unavailableDependencyKey: unavailable,
+  );
+}
+
+DateTime? _coveringExpiry(
+  DateTime? existing,
+  DateTime? required, {
+  required bool hasExisting,
+}) {
+  if (!hasExisting) return required;
+  if (existing == null || required == null) return null;
+  return existing.isAfter(required) ? existing : required;
+}
+
 class YorksV1UserAccessScreen extends ConsumerStatefulWidget {
   const YorksV1UserAccessScreen({super.key, required this.targetAppUserId});
 
@@ -572,6 +709,44 @@ class _YorksV1UserAccessScreenState
         ),
       );
     }
+    final workforceAccess = workspace.workforceAccess;
+    if (workforceAccess != null &&
+        workforceAccess.hasOperationalAccess &&
+        !workforceAccess.hasOrganizationResponsibility) {
+      banners.add(
+        _WorkspaceBanner(
+          key: const Key('permission-workforce-responsibility-banner'),
+          icon: Icons.badge_outlined,
+          title: _t(language, 'workforce_responsibility_missing_title'),
+          body: _t(language, 'workforce_responsibility_missing_body'),
+          tone: _BannerTone.warning,
+          actionLabel: workforceAccess.canAssignOrganizationResponsibility
+              ? _t(language, 'assign_workforce_responsibility')
+              : null,
+          onAction:
+              workforceAccess.canAssignOrganizationResponsibility &&
+                  !state.isSaving
+              ? () => _assignWorkforceOrganizationResponsibility(
+                  language,
+                  workspace,
+                )
+              : null,
+        ),
+      );
+    } else if (workforceAccess != null &&
+        workforceAccess.hasOperationalAccess &&
+        workforceAccess.hasOrganizationResponsibility &&
+        workforceAccess.isConfigurationEmpty) {
+      banners.add(
+        _WorkspaceBanner(
+          key: const Key('permission-workforce-empty-setup-banner'),
+          icon: Icons.task_alt_rounded,
+          title: _t(language, 'workforce_access_ready_title'),
+          body: _t(language, 'workforce_access_ready_empty_body'),
+          tone: _BannerTone.info,
+        ),
+      );
+    }
     if (conflicted) {
       banners.add(
         _WorkspaceBanner(
@@ -622,6 +797,45 @@ class _YorksV1UserAccessScreenState
         const SizedBox(height: AppSpacing.md),
       ],
     ];
+  }
+
+  Future<void> _assignWorkforceOrganizationResponsibility(
+    AppLanguage language,
+    YorksV1UserPermissionWorkspace workspace,
+  ) async {
+    final reason = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _WorkforceResponsibilityDialog(language: language),
+    );
+    if (reason == null || !mounted) return;
+    final provider = yorksV1UserPermissionWorkspaceControllerProvider(
+      widget.targetAppUserId,
+    );
+    final succeeded = await ref
+        .read(provider.notifier)
+        .assignWorkforceOrganizationResponsibility(
+          reason: reason,
+          expectedRevision: workspace.revision,
+        );
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (succeeded) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            _t(language, 'workforce_responsibility_assign_succeeded'),
+          ),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_saveError(language, ref.read(provider).error)),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _reloadForConflict(
@@ -779,7 +993,22 @@ class _YorksV1UserAccessScreenState
     final actorProjects =
         currentPermissions.snapshot?.projectAccess ??
         const <YorksV1PermissionProjectAccess>[];
-    final draftsWithinCeiling = _drafts.values.every(
+    final expansion = _expandPermissionDependencies(
+      drafts: _drafts.values,
+      workspace: workspace,
+    );
+    if (!expansion.isComplete) {
+      final message = _t(
+        language,
+        'permission_dependency_unavailable',
+      ).replaceAll('{permission}', expansion.unavailableDependencyKey ?? '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    final reviewedChanges = expansion.changes;
+    final draftsWithinCeiling = reviewedChanges.every(
       (draft) => _draftIsDelegable(
         draft: draft,
         workspace: workspace,
@@ -792,16 +1021,29 @@ class _YorksV1UserAccessScreenState
       ).showSnackBar(SnackBar(content: Text(_t(language, 'forbidden_title'))));
       return;
     }
-    final reason = await showDialog<String>(
+    final offersWorkforceResponsibility =
+        workspace.workforceAccess?.canAssignOrganizationResponsibility ==
+            true &&
+        workspace.workforceAccess?.hasOrganizationResponsibility == false &&
+        reviewedChanges.any(
+          (draft) =>
+              draft.change.operation == YorksV1PermissionChangeOperation.set &&
+              draft.change.effect == YorksV1PermissionAssignmentEffect.grant &&
+              draft.change.scope?.kind ==
+                  YorksV1PermissionScopeKind.organization &&
+              draft.capabilityKey.startsWith('workforce.'),
+        );
+    final review = await showDialog<_PermissionReviewResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => _ReviewPermissionChangesDialog(
         language: language,
         workspace: workspace,
-        changes: _drafts.values.toList(growable: false),
+        changes: reviewedChanges,
+        offerWorkforceResponsibility: offersWorkforceResponsibility,
       ),
     );
-    if (reason == null || !mounted) return;
+    if (review == null || !mounted) return;
     final expectedRevision = _baseRevision ?? workspace.revision;
     final provider = yorksV1UserPermissionWorkspaceControllerProvider(
       widget.targetAppUserId,
@@ -809,11 +1051,13 @@ class _YorksV1UserAccessScreenState
     final succeeded = await ref
         .read(provider.notifier)
         .applyChanges(
-          changes: _drafts.values
+          changes: reviewedChanges
               .map((draft) => draft.change)
               .toList(growable: false),
-          reason: reason,
+          reason: review.reason,
           expectedRevision: expectedRevision,
+          assignOrganizationWorkforceResponsibility:
+              review.assignOrganizationWorkforceResponsibility,
         );
     if (!mounted) return;
     if (succeeded) {
@@ -836,6 +1080,10 @@ class _YorksV1UserAccessScreenState
   }
 
   String _saveError(AppLanguage language, Object? error) {
+    if (error is YorksV1DomainException &&
+        error.serverMessage == 'V1_PERMISSION_DEPENDENCY_NOT_EFFECTIVE') {
+      return _t(language, 'permission_dependency_rejected');
+    }
     return switch (_errorCode(error)) {
       YorksV1DomainErrorCode.conflict => _t(language, 'conflict_title'),
       YorksV1DomainErrorCode.offline => _t(language, 'offline_title'),
@@ -1924,6 +2172,7 @@ class _StagedPermissionChange {
     required this.module,
     required this.action,
     this.assignment,
+    this.requiredByCapabilityKey,
   });
 
   final YorksV1PermissionChange change;
@@ -1931,12 +2180,14 @@ class _StagedPermissionChange {
   final String module;
   final String action;
   final YorksV1PermissionAssignment? assignment;
+  final String? requiredByCapabilityKey;
 
   factory _StagedPermissionChange.set({
     required YorksV1PermissionCapabilityAccess access,
     required YorksV1PermissionAssignmentEffect effect,
     required YorksV1PermissionScope scope,
     DateTime? effectiveUntil,
+    String? requiredByCapabilityKey,
   }) => _StagedPermissionChange(
     change: YorksV1PermissionChange.set(
       capabilityKey: access.catalog.key,
@@ -1947,6 +2198,7 @@ class _StagedPermissionChange {
     capabilityKey: access.catalog.key,
     module: access.catalog.module,
     action: access.catalog.action,
+    requiredByCapabilityKey: requiredByCapabilityKey,
   );
 
   factory _StagedPermissionChange.clear({
@@ -1964,6 +2216,16 @@ class _StagedPermissionChange {
 class _PermissionEditResult {
   const _PermissionEditResult(this.changes);
   final List<_StagedPermissionChange> changes;
+}
+
+class _PermissionReviewResult {
+  const _PermissionReviewResult({
+    required this.reason,
+    required this.assignOrganizationWorkforceResponsibility,
+  });
+
+  final String reason;
+  final bool assignOrganizationWorkforceResponsibility;
 }
 
 class _PermissionEditorSheet extends StatefulWidget {
@@ -2455,16 +2717,94 @@ class _PermissionEditorSheetState extends State<_PermissionEditorSheet> {
   }
 }
 
+class _WorkforceResponsibilityDialog extends StatefulWidget {
+  const _WorkforceResponsibilityDialog({required this.language});
+
+  final AppLanguage language;
+
+  @override
+  State<_WorkforceResponsibilityDialog> createState() =>
+      _WorkforceResponsibilityDialogState();
+}
+
+class _WorkforceResponsibilityDialogState
+    extends State<_WorkforceResponsibilityDialog> {
+  final _reasonController = TextEditingController();
+  String? _validation;
+
+  String _t(String key) => YorksV1PermissionStrings.text(widget.language, key);
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    key: const Key('permission-workforce-responsibility-dialog'),
+    title: Text(_t('assign_workforce_responsibility_title')),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(_t('assign_workforce_responsibility_body')),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              key: const Key('workforce-responsibility-reason'),
+              controller: _reasonController,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 500,
+              decoration: InputDecoration(
+                labelText: _t('reason'),
+                hintText: _t('reason_hint'),
+                errorText: _validation,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(_t('cancel')),
+      ),
+      FilledButton(
+        key: const Key('confirm-workforce-responsibility'),
+        onPressed: _confirm,
+        child: Text(_t('assign_workforce_responsibility')),
+      ),
+    ],
+  );
+
+  void _confirm() {
+    final reason = _reasonController.text.trim();
+    if (reason.length < 8) {
+      setState(() => _validation = _t('reason_required'));
+      return;
+    }
+    Navigator.pop(context, reason);
+  }
+}
+
 class _ReviewPermissionChangesDialog extends StatefulWidget {
   const _ReviewPermissionChangesDialog({
     required this.language,
     required this.workspace,
     required this.changes,
+    required this.offerWorkforceResponsibility,
   });
 
   final AppLanguage language;
   final YorksV1UserPermissionWorkspace workspace;
   final List<_StagedPermissionChange> changes;
+  final bool offerWorkforceResponsibility;
 
   @override
   State<_ReviewPermissionChangesDialog> createState() =>
@@ -2475,6 +2815,13 @@ class _ReviewPermissionChangesDialogState
     extends State<_ReviewPermissionChangesDialog> {
   final _reasonController = TextEditingController();
   String? _reasonError;
+  late bool _assignWorkforceResponsibility;
+
+  @override
+  void initState() {
+    super.initState();
+    _assignWorkforceResponsibility = widget.offerWorkforceResponsibility;
+  }
 
   @override
   void dispose() {
@@ -2549,10 +2896,36 @@ class _ReviewPermissionChangesDialogState
                         ),
                       ),
                     ],
+                    if (draft.requiredByCapabilityKey != null) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        _t('permission_dependency_added').replaceAll(
+                          '{permission}',
+                          _capabilityLabel(draft.requiredByCapabilityKey!),
+                        ),
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.blue,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
+            ],
+            if (widget.offerWorkforceResponsibility) ...[
+              const SizedBox(height: AppSpacing.sm),
+              CheckboxListTile(
+                key: const Key('permission-include-workforce-responsibility'),
+                value: _assignWorkforceResponsibility,
+                onChanged: (value) => setState(
+                  () => _assignWorkforceResponsibility = value ?? false,
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                title: Text(_t('include_workforce_responsibility')),
+                subtitle: Text(_t('include_workforce_responsibility_help')),
+              ),
             ],
             const SizedBox(height: AppSpacing.md),
             TextField(
@@ -2595,12 +2968,29 @@ class _ReviewPermissionChangesDialogState
     return id;
   }
 
+  String _capabilityLabel(String key) {
+    for (final access in widget.workspace.catalog) {
+      if (access.catalog.key == key) {
+        return '${YorksV1PermissionStrings.module(widget.language, access.catalog.module)} · '
+            '${YorksV1PermissionStrings.action(widget.language, access.catalog.action)}';
+      }
+    }
+    return key;
+  }
+
   void _confirm() {
     final reason = _reasonController.text.trim();
     if (reason.length < 8) {
       setState(() => _reasonError = _t('reason_required'));
       return;
     }
-    Navigator.pop(context, reason);
+    Navigator.pop(
+      context,
+      _PermissionReviewResult(
+        reason: reason,
+        assignOrganizationWorkforceResponsibility:
+            _assignWorkforceResponsibility,
+      ),
+    );
   }
 }

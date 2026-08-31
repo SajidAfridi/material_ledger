@@ -363,6 +363,53 @@ void main() {
         YorksV1PermissionAssignmentEffect.grant,
       );
     });
+
+    test('workspace parses strict additive Workforce access status', () {
+      final workspaceJson = _workspaceJson();
+      workspaceJson['workforce_access'] = {
+        'reference_date': '2026-08-31',
+        'has_operational_access': true,
+        'can_assign_organization_responsibility': true,
+        'active_worker_count': 0,
+        'active_team_count': 0,
+        'scheduled_team_count': 0,
+        'organization_responsibility': {
+          'responsibility_assignment_id':
+              '5ae50000-0000-4000-8000-000000000001',
+          'valid_from': '2026-08-31',
+          'valid_to': null,
+          'record_version': 1,
+        },
+      };
+
+      final workspace = YorksV1UserPermissionWorkspace.fromRpcJson(
+        workspaceJson,
+      );
+
+      expect(workspace.workforceAccess, isNotNull);
+      expect(workspace.workforceAccess!.hasOrganizationResponsibility, isTrue);
+      expect(workspace.workforceAccess!.isConfigurationEmpty, isTrue);
+
+      final malformed = _workspaceJson();
+      malformed['workforce_access'] = {
+        'reference_date': '2026-08-31',
+        'has_operational_access': true,
+        'can_assign_organization_responsibility': true,
+        'active_worker_count': 0,
+        'active_team_count': 0,
+        'scheduled_team_count': 0,
+        'organization_responsibility': {
+          'responsibility_assignment_id':
+              '5ae50000-0000-4000-8000-000000000001',
+          'valid_from': '2026-08-31',
+          'valid_to': null,
+        },
+      };
+      expect(
+        () => YorksV1UserPermissionWorkspace.fromRpcJson(malformed),
+        throwsFormatException,
+      );
+    });
   });
 
   group('permission repository', () {
@@ -440,6 +487,74 @@ void main() {
         'p_idempotency_key': _idempotencyKey,
       });
       expect(workspace.revision, 8);
+    });
+
+    test('Workforce access recovery uses the exact reviewed RPCs', () async {
+      final combinedRpc = _RecordingPermissionRpc(_workspaceJson(revision: 8));
+      final repository = _repository(rpc: combinedRpc);
+      final input = YorksV1ApplyPermissionChangesInput(
+        targetAppUserId: 'usr-engineer',
+        changes: [
+          YorksV1PermissionChange.set(
+            capabilityKey: YorksV1CapabilityKeys.workforceView,
+            effect: YorksV1PermissionAssignmentEffect.grant,
+            scope: YorksV1PermissionScope(
+              kind: YorksV1PermissionScopeKind.organization,
+            ),
+          ),
+        ],
+        reason: 'Reviewed Workforce responsibility enablement.',
+        expectedRevision: 7,
+        idempotencyKey: _idempotencyKey,
+      );
+
+      await repository.applyChangesWithWorkforce(
+        input: input,
+        assignOrganizationResponsibility: true,
+      );
+
+      expect(
+        combinedRpc.functionName,
+        'v1_apply_user_permission_changes_with_workforce',
+      );
+      expect(combinedRpc.parameters, {
+        'p_target_app_user_id': 'usr-engineer',
+        'p_changes': [
+          {
+            'operation': 'set',
+            'capability_key': YorksV1CapabilityKeys.workforceView,
+            'effect': 'grant',
+            'scope_kind': 'organization',
+            'project_ids': <String>[],
+            'effective_from': null,
+            'effective_until': null,
+          },
+        ],
+        'p_reason': 'Reviewed Workforce responsibility enablement.',
+        'p_expected_revision': 7,
+        'p_assign_organization_responsibility': true,
+        'p_idempotency_key': _idempotencyKey,
+      });
+
+      final standaloneRpc = _RecordingPermissionRpc(
+        _workspaceJson(revision: 8),
+      );
+      await _repository(
+        rpc: standaloneRpc,
+      ).assignWorkforceOrganizationResponsibility(
+        targetAppUserId: 'usr-engineer',
+        reason: 'Restore retained Workforce responsibility.',
+        idempotencyKey: _idempotencyKey,
+      );
+      expect(
+        standaloneRpc.functionName,
+        'v1_assign_user_workforce_organization',
+      );
+      expect(standaloneRpc.parameters, {
+        'p_target_app_user_id': 'usr-engineer',
+        'p_reason': 'Restore retained Workforce responsibility.',
+        'p_idempotency_key': _idempotencyKey,
+      });
     });
 
     test(

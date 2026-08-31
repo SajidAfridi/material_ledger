@@ -1380,6 +1380,7 @@ class YorksV1UserPermissionWorkspace {
     required Iterable<YorksV1PermissionAssignment> assignments,
     required Iterable<YorksV1PermissionProjectAccess> projects,
     required Iterable<YorksV1PermissionHistoryEvent> recentHistory,
+    this.workforceAccess,
   }) : catalog = List.unmodifiable(catalog),
        assignments = List.unmodifiable(assignments),
        projects = List.unmodifiable(projects),
@@ -1410,6 +1411,7 @@ class YorksV1UserPermissionWorkspace {
   final List<YorksV1PermissionAssignment> assignments;
   final List<YorksV1PermissionProjectAccess> projects;
   final List<YorksV1PermissionHistoryEvent> recentHistory;
+  final YorksV1WorkforceAccessStatus? workforceAccess;
 
   List<YorksV1PermissionRoleDefault> get roleDefaults =>
       List.unmodifiable(catalog.map((entry) => entry.roleDefault));
@@ -1442,6 +1444,90 @@ class YorksV1UserPermissionWorkspace {
       recentHistory: _objectList(
         json['recent_history'],
       ).map(YorksV1PermissionHistoryEvent.fromJson),
+      workforceAccess: json['workforce_access'] == null
+          ? null
+          : YorksV1WorkforceAccessStatus.fromJson(
+              _object(json['workforce_access']),
+            ),
+    );
+  }
+}
+
+class YorksV1WorkforceAccessStatus {
+  YorksV1WorkforceAccessStatus({
+    required this.referenceDate,
+    required this.hasOperationalAccess,
+    required this.canAssignOrganizationResponsibility,
+    required this.activeWorkerCount,
+    required this.activeTeamCount,
+    required this.scheduledTeamCount,
+    this.organizationResponsibilityId,
+    this.organizationResponsibilityValidFrom,
+    this.organizationResponsibilityValidTo,
+    this.organizationResponsibilityRecordVersion,
+  }) {
+    final responsibilityValues = <Object?>[
+      organizationResponsibilityId,
+      organizationResponsibilityValidFrom,
+      organizationResponsibilityRecordVersion,
+    ];
+    if (responsibilityValues.any((value) => value == null) &&
+        responsibilityValues.any((value) => value != null)) {
+      throw const FormatException(
+        'Incomplete Workforce organization responsibility',
+      );
+    }
+    if (activeWorkerCount < 0 ||
+        activeTeamCount < 0 ||
+        scheduledTeamCount < 0 ||
+        scheduledTeamCount > activeTeamCount) {
+      throw const FormatException('Invalid Workforce access counts');
+    }
+  }
+
+  final DateTime referenceDate;
+  final bool hasOperationalAccess;
+  final bool canAssignOrganizationResponsibility;
+  final int activeWorkerCount;
+  final int activeTeamCount;
+  final int scheduledTeamCount;
+  final String? organizationResponsibilityId;
+  final DateTime? organizationResponsibilityValidFrom;
+  final DateTime? organizationResponsibilityValidTo;
+  final int? organizationResponsibilityRecordVersion;
+
+  bool get hasOrganizationResponsibility =>
+      organizationResponsibilityId != null;
+
+  bool get isConfigurationEmpty =>
+      activeWorkerCount == 0 && activeTeamCount == 0;
+
+  factory YorksV1WorkforceAccessStatus.fromJson(Map<String, dynamic> json) {
+    final responsibility = json['organization_responsibility'] == null
+        ? null
+        : _object(json['organization_responsibility']);
+    return YorksV1WorkforceAccessStatus(
+      referenceDate: _dateOnly(json['reference_date']),
+      hasOperationalAccess: _boolean(json['has_operational_access']),
+      canAssignOrganizationResponsibility: _boolean(
+        json['can_assign_organization_responsibility'],
+      ),
+      activeWorkerCount: _integer(json['active_worker_count']),
+      activeTeamCount: _integer(json['active_team_count']),
+      scheduledTeamCount: _integer(json['scheduled_team_count']),
+      organizationResponsibilityId: responsibility == null
+          ? null
+          : _text(responsibility['responsibility_assignment_id']),
+      organizationResponsibilityValidFrom: responsibility == null
+          ? null
+          : _dateOnly(responsibility['valid_from']),
+      organizationResponsibilityValidTo:
+          responsibility == null || responsibility['valid_to'] == null
+          ? null
+          : _dateOnly(responsibility['valid_to']),
+      organizationResponsibilityRecordVersion: responsibility == null
+          ? null
+          : _integer(responsibility['record_version']),
     );
   }
 }
@@ -1501,6 +1587,15 @@ DateTime _dateTime(Object? value) {
 DateTime? _nullableDateTime(Object? value) {
   if (value == null) return null;
   return _dateTime(value);
+}
+
+DateTime _dateOnly(Object? value) {
+  if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+    throw const FormatException('Expected date');
+  }
+  final parsed = DateTime.tryParse('${value}T00:00:00Z');
+  if (parsed == null) throw const FormatException('Invalid date');
+  return parsed;
 }
 
 YorksV1Role _role(Object? value) {

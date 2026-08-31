@@ -82,6 +82,20 @@ class YorksV1ApplyPermissionChangesInput {
   final String idempotencyKey;
 }
 
+abstract interface class YorksV1WorkforceAccessPermissionRepository {
+  Future<YorksV1UserPermissionWorkspace> applyChangesWithWorkforce({
+    required YorksV1ApplyPermissionChangesInput input,
+    required bool assignOrganizationResponsibility,
+  });
+
+  Future<YorksV1UserPermissionWorkspace>
+  assignWorkforceOrganizationResponsibility({
+    required String targetAppUserId,
+    required String reason,
+    required String idempotencyKey,
+  });
+}
+
 class YorksV1PermissionHistoryQuery {
   const YorksV1PermissionHistoryQuery({
     required this.targetAppUserId,
@@ -125,7 +139,9 @@ abstract interface class YorksV1PermissionRepository {
 }
 
 class YorksV1SupabasePermissionRepository
-    implements YorksV1PermissionRepository {
+    implements
+        YorksV1PermissionRepository,
+        YorksV1WorkforceAccessPermissionRepository {
   const YorksV1SupabasePermissionRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -293,6 +309,82 @@ class YorksV1SupabasePermissionRepository
       },
     );
     return _decodeWorkspaceForTarget(response, target);
+  }
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> applyChangesWithWorkforce({
+    required YorksV1ApplyPermissionChangesInput input,
+    required bool assignOrganizationResponsibility,
+  }) async {
+    final target = _requiredText(input.targetAppUserId);
+    final reason = _reason(input.reason);
+    _expectedRevision(input.expectedRevision);
+    _uuid(input.idempotencyKey);
+    _validateChanges(input.changes);
+    final response = await _invoke(
+      functionName: 'v1_apply_user_permission_changes_with_workforce',
+      parameters: {
+        'p_target_app_user_id': target,
+        'p_changes': input.changes
+            .map((change) => change.toRpcJson())
+            .toList(growable: false),
+        'p_reason': reason,
+        'p_expected_revision': input.expectedRevision,
+        'p_assign_organization_responsibility':
+            assignOrganizationResponsibility,
+        'p_idempotency_key': input.idempotencyKey.trim(),
+      },
+    );
+    return _decodeWorkspaceForTarget(response, target);
+  }
+
+  @override
+  Future<YorksV1UserPermissionWorkspace>
+  assignWorkforceOrganizationResponsibility({
+    required String targetAppUserId,
+    required String reason,
+    required String idempotencyKey,
+  }) async {
+    final target = _requiredText(targetAppUserId);
+    final normalizedReason = _reason(reason);
+    _uuid(idempotencyKey);
+    final response = await _invoke(
+      functionName: 'v1_assign_user_workforce_organization',
+      parameters: {
+        'p_target_app_user_id': target,
+        'p_reason': normalizedReason,
+        'p_idempotency_key': idempotencyKey.trim(),
+      },
+    );
+    return _decodeWorkspaceForTarget(response, target);
+  }
+
+  void _validateChanges(List<YorksV1PermissionChange> changes) {
+    if (changes.isEmpty || changes.length > 200) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    final identities = <String>{};
+    for (final change in changes) {
+      if (!identities.add(change.identity)) {
+        throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+      }
+      switch (change.operation) {
+        case YorksV1PermissionChangeOperation.set:
+          final capability = _capabilityKey(change.capabilityKey!);
+          if (!YorksV1CapabilityKeys.all.contains(capability)) {
+            throw const YorksV1DomainException(
+              YorksV1DomainErrorCode.invalidInput,
+            );
+          }
+          for (final projectId in change.scope!.projectIds) {
+            _uuid(projectId);
+          }
+          break;
+        case YorksV1PermissionChangeOperation.clear:
+          _uuid(change.assignmentId!);
+          break;
+      }
+    }
   }
 
   @override

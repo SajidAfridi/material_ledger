@@ -1013,6 +1013,7 @@ class YorksV1UserPermissionWorkspaceController
     required List<YorksV1PermissionChange> changes,
     required String reason,
     required int expectedRevision,
+    bool assignOrganizationWorkforceResponsibility = false,
   }) {
     final payload = <String, Object?>{
       'changes': changes
@@ -1020,21 +1021,72 @@ class YorksV1UserPermissionWorkspaceController
           .toList(growable: false),
       'reason': reason.trim(),
       'expected_revision': expectedRevision,
+      'assign_organization_workforce_responsibility':
+          assignOrganizationWorkforceResponsibility,
     };
     return _runCommand(
       operation: 'apply_user_permission_changes',
       entityId: '$_targetAppUserId:reviewed_batch',
       payload: payload,
       expectedRevision: expectedRevision,
-      invoke: (idempotencyKey) => _repository.applyChanges(
-        YorksV1ApplyPermissionChangesInput(
+      invoke: (idempotencyKey) {
+        final input = YorksV1ApplyPermissionChangesInput(
           targetAppUserId: _targetAppUserId,
           changes: List.unmodifiable(changes),
           reason: reason,
           expectedRevision: expectedRevision,
           idempotencyKey: idempotencyKey,
-        ),
-      ),
+        );
+        if (!assignOrganizationWorkforceResponsibility) {
+          return _repository.applyChanges(input);
+        }
+        final workforceRepository = _repository;
+        if (workforceRepository
+            is! YorksV1WorkforceAccessPermissionRepository) {
+          throw const YorksV1DomainException(
+            YorksV1DomainErrorCode.backendUnavailable,
+          );
+        }
+        return (workforceRepository
+                as YorksV1WorkforceAccessPermissionRepository)
+            .applyChangesWithWorkforce(
+              input: input,
+              assignOrganizationResponsibility: true,
+            );
+      },
+    );
+  }
+
+  Future<bool> assignWorkforceOrganizationResponsibility({
+    required String reason,
+    required int expectedRevision,
+  }) {
+    final payload = <String, Object?>{
+      'target_app_user_id': _targetAppUserId,
+      'reason': reason.trim(),
+      'expected_revision': expectedRevision,
+    };
+    return _runCommand(
+      operation: 'assign_user_workforce_organization',
+      entityId: '$_targetAppUserId:workforce:organization',
+      payload: payload,
+      expectedRevision: expectedRevision,
+      invoke: (idempotencyKey) {
+        final workforceRepository = _repository;
+        if (workforceRepository
+            is! YorksV1WorkforceAccessPermissionRepository) {
+          throw const YorksV1DomainException(
+            YorksV1DomainErrorCode.backendUnavailable,
+          );
+        }
+        return (workforceRepository
+                as YorksV1WorkforceAccessPermissionRepository)
+            .assignWorkforceOrganizationResponsibility(
+              targetAppUserId: _targetAppUserId,
+              reason: reason,
+              idempotencyKey: idempotencyKey,
+            );
+      },
     );
   }
 

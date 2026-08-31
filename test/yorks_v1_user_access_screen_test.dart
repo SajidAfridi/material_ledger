@@ -179,6 +179,145 @@ void main() {
   );
 
   testWidgets(
+    'Workforce grant review includes dependency and responsibility explicitly',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _FakePermissionRepository(
+        workspace: _workspace(
+          authorizationMode: YorksV1PermissionAuthorizationMode.enforced,
+          capabilityMode: YorksV1PermissionCapabilityAuthorizationMode.enforced,
+          catalogAccess: [
+            _workforceCapability(
+              key: YorksV1CapabilityKeys.workforceView,
+              action: 'view',
+              dependencies: const [],
+            ),
+            _workforceCapability(
+              key: YorksV1CapabilityKeys.workforceAttendanceMaintain,
+              action: 'attendance_maintain',
+              dependencies: const [YorksV1CapabilityKeys.workforceView],
+            ),
+          ],
+          workforceAccess: YorksV1WorkforceAccessStatus(
+            referenceDate: DateTime.utc(2026, 8, 31),
+            hasOperationalAccess: false,
+            canAssignOrganizationResponsibility: true,
+            activeWorkerCount: 0,
+            activeTeamCount: 0,
+            scheduledTeamCount: 0,
+          ),
+        ),
+        canManage: true,
+      );
+      await _pumpScreen(tester, repository);
+      await tester.pumpAndSettle();
+
+      await _openModule(tester, 'workforce');
+      await tester.pumpAndSettle();
+      final edit = find.byKey(
+        const Key('permission-edit-workforce.attendance.maintain'),
+        skipOffstage: false,
+      );
+      await _bringIntoView(tester, edit);
+      await tester.tap(edit.hitTestable());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('permission-stage-change')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('permission-review-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('permission-review-dialog')), findsOneWidget);
+      expect(find.textContaining('Required prerequisite for'), findsOneWidget);
+      final responsibility = tester.widget<CheckboxListTile>(
+        find.byKey(const Key('permission-include-workforce-responsibility')),
+      );
+      expect(responsibility.value, isTrue);
+      await tester.enterText(
+        find.byKey(const Key('permission-change-reason')),
+        'Enable Masaud attendance responsibility',
+      );
+      await tester.tap(find.byKey(const Key('permission-confirm-save')));
+      await tester.pumpAndSettle();
+
+      expect(repository.lastBatch, isNotNull);
+      expect(
+        repository.lastBatch!.changes
+            .map((change) => change.capabilityKey)
+            .toSet(),
+        {
+          YorksV1CapabilityKeys.workforceView,
+          YorksV1CapabilityKeys.workforceAttendanceMaintain,
+        },
+      );
+      expect(repository.lastAssignOrganizationResponsibility, isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'half-enabled Workforce access exposes an audited responsibility recovery',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _FakePermissionRepository(
+        workspace: _workspace(
+          authorizationMode: YorksV1PermissionAuthorizationMode.enforced,
+          capabilityMode: YorksV1PermissionCapabilityAuthorizationMode.enforced,
+          workforceAccess: YorksV1WorkforceAccessStatus(
+            referenceDate: DateTime.utc(2026, 8, 31),
+            hasOperationalAccess: true,
+            canAssignOrganizationResponsibility: true,
+            activeWorkerCount: 0,
+            activeTeamCount: 0,
+            scheduledTeamCount: 0,
+          ),
+        ),
+        canManage: true,
+      );
+      await _pumpScreen(tester, repository);
+      await tester.pumpAndSettle();
+
+      final banner = find.byKey(
+        const Key('permission-workforce-responsibility-banner'),
+      );
+      expect(banner, findsOneWidget);
+      final action = find.text('Assign responsibility');
+      await _bringIntoView(tester, action);
+      await tester.tap(action.hitTestable());
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('workforce-responsibility-reason')),
+        'Restore retained Workforce responsibility',
+      );
+      await tester.tap(
+        find.byKey(const Key('confirm-workforce-responsibility')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        repository.lastResponsibilityReason,
+        'Restore retained Workforce responsibility',
+      );
+      expect(
+        find.byKey(const Key('permission-workforce-empty-setup-banner')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'continuity permissions are immediate and open ended in the editor',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -670,6 +809,8 @@ YorksV1UserPermissionWorkspace _workspace({
   List<YorksV1PermissionProjectAccess> projects = const [],
   List<YorksV1PermissionProjectEffectiveAccess> projectOverrides = const [],
   List<YorksV1PermissionHistoryEvent> recentHistory = const [],
+  List<YorksV1PermissionCapabilityAccess>? catalogAccess,
+  YorksV1WorkforceAccessStatus? workforceAccess,
   required YorksV1PermissionAuthorizationMode authorizationMode,
   required YorksV1PermissionCapabilityAuthorizationMode capabilityMode,
 }) {
@@ -704,35 +845,103 @@ YorksV1UserPermissionWorkspace _workspace({
       isActive: active,
     ),
     revision: revision,
-    catalog: [
-      YorksV1PermissionCapabilityAccess(
-        catalog: catalog,
-        authorizationMode: capabilityMode,
-        roleDefault: YorksV1PermissionRoleDefault(
-          capabilityKey: catalog.key,
-          role: role,
-          isGranted: true,
-        ),
-        organizationSummaryVisible: true,
-        authoritativeEffective: true,
-        authoritativeSource: active
-            ? YorksV1PermissionEffectiveSource.roleDefault
-            : YorksV1PermissionEffectiveSource.inactive,
-        candidateEffective: true,
-        candidateSource: YorksV1PermissionEffectiveSource.roleDefault,
-        hasParity: true,
-        actorCanDelegate: true,
-        actorDelegableScopes: actorDelegableScopes ?? catalog.allowedScopes,
-        projectOverrides: projectOverrides,
-      ),
-    ],
+    catalog:
+        catalogAccess ??
+        [
+          YorksV1PermissionCapabilityAccess(
+            catalog: catalog,
+            authorizationMode: capabilityMode,
+            roleDefault: YorksV1PermissionRoleDefault(
+              capabilityKey: catalog.key,
+              role: role,
+              isGranted: true,
+            ),
+            organizationSummaryVisible: true,
+            authoritativeEffective: true,
+            authoritativeSource: active
+                ? YorksV1PermissionEffectiveSource.roleDefault
+                : YorksV1PermissionEffectiveSource.inactive,
+            candidateEffective: true,
+            candidateSource: YorksV1PermissionEffectiveSource.roleDefault,
+            hasParity: true,
+            actorCanDelegate: true,
+            actorDelegableScopes: actorDelegableScopes ?? catalog.allowedScopes,
+            projectOverrides: projectOverrides,
+          ),
+        ],
     assignments: const [],
     projects: projects,
     recentHistory: recentHistory,
+    workforceAccess: workforceAccess,
   );
 }
 
-class _FakePermissionRepository implements YorksV1PermissionRepository {
+YorksV1UserPermissionWorkspace _workspaceCopy(
+  YorksV1UserPermissionWorkspace source, {
+  int? revision,
+  YorksV1WorkforceAccessStatus? workforceAccess,
+}) => YorksV1UserPermissionWorkspace(
+  schemaVersion: source.schemaVersion,
+  authorizationMode: source.authorizationMode,
+  generatedAt: source.generatedAt,
+  actor: source.actor,
+  target: source.target,
+  revision: revision ?? source.revision,
+  catalog: source.catalog,
+  assignments: source.assignments,
+  projects: source.projects,
+  recentHistory: source.recentHistory,
+  workforceAccess: workforceAccess ?? source.workforceAccess,
+);
+
+YorksV1PermissionCapabilityAccess _workforceCapability({
+  required String key,
+  required String action,
+  required List<String> dependencies,
+  bool effective = false,
+}) {
+  final catalog = YorksV1PermissionCatalogEntry(
+    key: key,
+    module: 'workforce',
+    action: action,
+    label: action,
+    description: 'Protected Workforce capability.',
+    riskLevel: YorksV1PermissionRiskLevel.critical,
+    allowedScopes: const [YorksV1PermissionScopeKind.organization],
+    requiresProjectAccess: false,
+    dependencies: dependencies,
+    runtimeStatus: YorksV1PermissionRuntimeStatus.operational,
+    isAssignable: true,
+    displayOrder: 410,
+  );
+  return YorksV1PermissionCapabilityAccess(
+    catalog: catalog,
+    authorizationMode: YorksV1PermissionCapabilityAuthorizationMode.enforced,
+    roleDefault: YorksV1PermissionRoleDefault(
+      capabilityKey: key,
+      role: YorksV1Role.projectEngineer,
+      isGranted: false,
+    ),
+    organizationSummaryVisible: true,
+    authoritativeEffective: effective,
+    authoritativeSource: effective
+        ? YorksV1PermissionEffectiveSource.explicitGrant
+        : YorksV1PermissionEffectiveSource.none,
+    candidateEffective: effective,
+    candidateSource: effective
+        ? YorksV1PermissionEffectiveSource.explicitGrant
+        : YorksV1PermissionEffectiveSource.none,
+    hasParity: true,
+    actorCanDelegate: true,
+    actorDelegableScopes: const [YorksV1PermissionScopeKind.organization],
+    projectOverrides: const [],
+  );
+}
+
+class _FakePermissionRepository
+    implements
+        YorksV1PermissionRepository,
+        YorksV1WorkforceAccessPermissionRepository {
   _FakePermissionRepository({
     required this.workspace,
     required this.canManage,
@@ -743,6 +952,8 @@ class _FakePermissionRepository implements YorksV1PermissionRepository {
   final bool canManage;
   final Completer<YorksV1UserPermissionWorkspace>? initialLoad;
   YorksV1ApplyPermissionChangesInput? lastBatch;
+  bool? lastAssignOrganizationResponsibility;
+  String? lastResponsibilityReason;
   var _initialReturned = false;
 
   @override
@@ -765,6 +976,56 @@ class _FakePermissionRepository implements YorksV1PermissionRepository {
       revision: workspace.revision + 1,
       authorizationMode: workspace.authorizationMode,
       capabilityMode: workspace.catalog.single.authorizationMode,
+    );
+    return workspace;
+  }
+
+  @override
+  Future<YorksV1UserPermissionWorkspace> applyChangesWithWorkforce({
+    required YorksV1ApplyPermissionChangesInput input,
+    required bool assignOrganizationResponsibility,
+  }) async {
+    lastBatch = input;
+    lastAssignOrganizationResponsibility = assignOrganizationResponsibility;
+    workspace = _workspaceCopy(
+      workspace,
+      revision: workspace.revision + 1,
+      workforceAccess: YorksV1WorkforceAccessStatus(
+        referenceDate: DateTime.utc(2026, 8, 31),
+        hasOperationalAccess: true,
+        canAssignOrganizationResponsibility: true,
+        activeWorkerCount: 0,
+        activeTeamCount: 0,
+        scheduledTeamCount: 0,
+        organizationResponsibilityId: '5ae50000-0000-4000-8000-000000000001',
+        organizationResponsibilityValidFrom: DateTime.utc(2026, 8, 31),
+        organizationResponsibilityRecordVersion: 1,
+      ),
+    );
+    return workspace;
+  }
+
+  @override
+  Future<YorksV1UserPermissionWorkspace>
+  assignWorkforceOrganizationResponsibility({
+    required String targetAppUserId,
+    required String reason,
+    required String idempotencyKey,
+  }) async {
+    lastResponsibilityReason = reason;
+    workspace = _workspaceCopy(
+      workspace,
+      workforceAccess: YorksV1WorkforceAccessStatus(
+        referenceDate: DateTime.utc(2026, 8, 31),
+        hasOperationalAccess: true,
+        canAssignOrganizationResponsibility: true,
+        activeWorkerCount: 0,
+        activeTeamCount: 0,
+        scheduledTeamCount: 0,
+        organizationResponsibilityId: '5ae50000-0000-4000-8000-000000000002',
+        organizationResponsibilityValidFrom: DateTime.utc(2026, 8, 31),
+        organizationResponsibilityRecordVersion: 1,
+      ),
     );
     return workspace;
   }

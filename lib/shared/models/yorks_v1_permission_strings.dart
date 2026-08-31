@@ -179,6 +179,30 @@ abstract final class YorksV1PermissionStrings {
     'reason_required': 'Enter a meaningful reason of at least 8 characters.',
     'server_confirmed_notice':
         'The server will re-check your authority, scope and the latest revision before saving.',
+    'permission_dependency_added':
+        'Required prerequisite for {permission}; it will be saved in the same reviewed change.',
+    'permission_dependency_unavailable':
+        'The required permission {permission} cannot be assigned within your current delegation scope.',
+    'permission_dependency_rejected':
+        'A required prerequisite is no longer effective. Refresh the workspace, review the added prerequisite, and try again.',
+    'include_workforce_responsibility':
+        'Also assign organization Workforce responsibility',
+    'include_workforce_responsibility_help':
+        'Required in addition to permissions. The server derives the effective date and records an audit event.',
+    'workforce_responsibility_missing_title':
+        'Workforce permission is granted, but responsibility is missing',
+    'workforce_responsibility_missing_body':
+        'This user cannot open or maintain Workforce records until a dated organization responsibility is confirmed.',
+    'assign_workforce_responsibility': 'Assign responsibility',
+    'assign_workforce_responsibility_title':
+        'Assign organization Workforce responsibility',
+    'assign_workforce_responsibility_body':
+        'This is a separate audited authority boundary. It enables access only within the user’s effective Workforce permissions.',
+    'workforce_responsibility_assign_succeeded':
+        'Workforce responsibility assigned',
+    'workforce_access_ready_title': 'Workforce access is ready',
+    'workforce_access_ready_empty_body':
+        'Permissions and responsibility are confirmed. No workers, teams or calendars are configured yet, so the user will see the authorized empty setup.',
     'save_change': 'Save access change',
     'saving': 'Saving…',
     'cancel': 'Cancel',

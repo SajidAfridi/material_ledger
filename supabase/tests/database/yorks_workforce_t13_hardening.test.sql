@@ -188,7 +188,9 @@ create temporary table t13_authenticated_rpc_inventory(
 ) on commit drop;
 
 insert into t13_authenticated_rpc_inventory(signature) values
+  ('v1_apply_user_permission_changes_with_workforce(p_target_app_user_id text, p_changes jsonb, p_reason text, p_expected_revision bigint, p_assign_organization_responsibility boolean, p_idempotency_key uuid)'),
   ('v1_approve_lock_workforce_monthly_period(p_payload jsonb, p_expected_period_version bigint, p_idempotency_key uuid)'),
+  ('v1_assign_user_workforce_organization(p_target_app_user_id text, p_reason text, p_idempotency_key uuid)'),
   ('v1_authorize_workforce_monthly_reopen(p_payload jsonb, p_expected_period_version bigint, p_idempotency_key uuid)'),
   ('v1_chat_is_active_member(p_conversation_id uuid, p_auth_user_id uuid)'),
   ('v1_correct_workforce_monthly_entry_during_review(p_payload jsonb, p_expected_period_version bigint, p_idempotency_key uuid)'),
@@ -207,6 +209,7 @@ insert into t13_authenticated_rpc_inventory(signature) values
   ('v1_get_workforce_monthly_worker_detail(p_period_id uuid, p_validation_run_id uuid, p_worker_id uuid)'),
   ('v1_get_workforce_overview(p_request jsonb)'),
   ('v1_get_workforce_timesheet_allocations(p_work_date date, p_worker_id uuid)'),
+  ('v1_get_user_permission_workspace(p_target_app_user_id text)'),
   ('v1_issue_workforce_report_export(p_payload jsonb, p_idempotency_key uuid)'),
   ('v1_list_workforce_documents(p_period_id uuid, p_attendance_day_id uuid, p_worker_id uuid)'),
   ('v1_list_workforce_monthly_approval_queue(p_status text, p_limit integer, p_offset integer)'),
