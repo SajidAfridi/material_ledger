@@ -53,6 +53,7 @@ void main() {
 
     for (final path in const [
       RoutePaths.yorksV1Workforce,
+      RoutePaths.yorksV1WorkforceAdministration,
       RoutePaths.yorksV1WorkforceAttendance,
       RoutePaths.yorksV1WorkforceTimesheets,
     ]) {
@@ -119,6 +120,59 @@ void main() {
           key: YorksV1CapabilityKeys.workforceView,
           organizationSummary: true,
         )),
+      );
+    },
+  );
+
+  testWidgets(
+    'Workforce Administration requires view plus one management capability',
+    (tester) async {
+      final deniedRouter = _router(
+        workforceEnabled: true,
+        resolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) => capabilityKey == YorksV1CapabilityKeys.workforceView,
+      );
+      addTearDown(deniedRouter.dispose);
+      await _mountRouter(tester, deniedRouter, workforceEnabled: true);
+      await _go(
+        tester,
+        deniedRouter,
+        RoutePaths.yorksV1WorkforceAdministration,
+      );
+      expect(
+        deniedRouter.routeInformationProvider.value.uri.path,
+        RoutePaths.engineerHome,
+      );
+
+      final allowedRouter = _router(
+        workforceEnabled: true,
+        resolver:
+            (
+              capabilityKey, {
+              required legacyAllowed,
+              requireWrite = false,
+              organizationSummary = false,
+              projectId,
+            }) =>
+                capabilityKey == YorksV1CapabilityKeys.workforceView ||
+                capabilityKey == YorksV1CapabilityKeys.workforceWorkersManage,
+      );
+      addTearDown(allowedRouter.dispose);
+      await _mountRouter(tester, allowedRouter, workforceEnabled: true);
+      await _go(
+        tester,
+        allowedRouter,
+        RoutePaths.yorksV1WorkforceAdministration,
+      );
+      expect(
+        allowedRouter.routeInformationProvider.value.uri.path,
+        RoutePaths.yorksV1WorkforceAdministration,
       );
     },
   );
@@ -220,6 +274,36 @@ void main() {
         find.descendant(
           of: find.byType(YorksV1WorkspaceSearchDialog),
           matching: find.text(YorksV1ShellStrings.workforce.primary),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'delegated manager receives a guarded Workforce administration destination',
+    (tester) async {
+      _setViewport(tester, const Size(1366, 768));
+      addTearDown(() => _resetViewport(tester));
+      await _mountShell(
+        tester,
+        allowWorkforceView: true,
+        allowWorkersManage: true,
+      );
+
+      expect(
+        find.text(YorksV1ShellStrings.workforceAdministration.primary),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(YorksV1ShellStrings.searchOrJump.primary));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(YorksV1WorkspaceSearchDialog),
+          matching: find.text(
+            YorksV1ShellStrings.workforceAdministration.primary,
+          ),
         ),
         findsOneWidget,
       );
@@ -400,6 +484,7 @@ Future<void> _mountRouter(
 Future<void> _mountShell(
   WidgetTester tester, {
   required bool allowWorkforceView,
+  bool allowWorkersManage = false,
   bool startOnMore = false,
   String? initialPath,
 }) async {
@@ -414,7 +499,10 @@ Future<void> _mountShell(
     authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     client: null,
     repository: _ResolvedPermissionRepository(
-      _permissionSnapshot(allowWorkforceView: allowWorkforceView),
+      _permissionSnapshot(
+        allowWorkforceView: allowWorkforceView,
+        allowWorkersManage: allowWorkersManage,
+      ),
     ),
     revisionSignalSubscription:
         ({required onSignal, required onUnavailable}) async => true,
@@ -481,6 +569,7 @@ YorksV1FeatureFlags _featureFlags({required bool workforce}) =>
 
 YorksV1CurrentPermissionSnapshot _permissionSnapshot({
   required bool allowWorkforceView,
+  bool allowWorkersManage = false,
   bool? projectWorkforceView,
 }) => YorksV1CurrentPermissionSnapshot.fromRpcJson({
   'schema_version': YorksV1PermissionSchema.current,
@@ -546,6 +635,32 @@ YorksV1CurrentPermissionSnapshot _permissionSnapshot({
               },
             ],
     },
+    if (allowWorkersManage)
+      {
+        'capability_key': YorksV1CapabilityKeys.workforceWorkersManage,
+        'module_key': 'workforce',
+        'action_key': 'workers_manage',
+        'label': 'Manage workers',
+        'description': 'Maintain normalized worker records.',
+        'risk_level': 'critical',
+        'allowed_scope_kinds': ['organization'],
+        'requires_project_access': false,
+        'dependencies': [YorksV1CapabilityKeys.workforceView],
+        'runtime_status': 'operational',
+        'is_assignable': true,
+        'actor_can_delegate': false,
+        'actor_delegable_scope_kinds': <String>[],
+        'display_order': 419,
+        'authorization_mode': 'enforced',
+        'role_default': false,
+        'organization_summary_visible': true,
+        'authoritative_effective': true,
+        'authoritative_source': 'explicit_grant',
+        'candidate_effective': true,
+        'candidate_source': 'explicit_grant',
+        'parity': true,
+        'project_overrides': <Object?>[],
+      },
   ],
   'project_access': <Object?>[],
 });

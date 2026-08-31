@@ -69,6 +69,7 @@ import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/chat/presentation/screens/yorks_v1_team_chat_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
 import '../features/workforce/presentation/screens/yorks_workforce_daily_attendance_screen.dart';
+import '../features/workforce/presentation/screens/yorks_workforce_administration_screen.dart';
 import '../features/workforce/presentation/screens/yorks_workforce_overview_screen.dart';
 import '../features/workforce/presentation/screens/yorks_workforce_timesheets_screen.dart';
 import '../shared/models/app_config.dart';
@@ -171,6 +172,8 @@ abstract final class RoutePaths {
   static const String yorksV1MaterialReturn = '/yorks/returns/:returnId';
   static const String yorksV1Configuration = '/yorks/configuration';
   static const String yorksV1Workforce = '/yorks/workforce';
+  static const String yorksV1WorkforceAdministration =
+      '/yorks/workforce/administration';
   static const String yorksV1WorkforceAttendance =
       '/yorks/workforce/attendance';
   static const String yorksV1WorkforceTimesheets =
@@ -613,6 +616,20 @@ bool? _isYorksV1RouteAllowedForRole(
   }
 
   if (_isYorksV1WorkforcePath(path)) {
+    if (path == RoutePaths.yorksV1WorkforceAdministration) {
+      final canView = _hybridRouteAllows(
+        permissionResolver,
+        YorksV1CapabilityKeys.workforceView,
+        legacyAllowed: false,
+        organizationSummary: true,
+      );
+      if (canView != true) return canView;
+      return _hybridRouteAllowsAny(permissionResolver, const [
+        YorksV1CapabilityKeys.workforceWorkersManage,
+        YorksV1CapabilityKeys.workforceTeamsManage,
+        YorksV1CapabilityKeys.workforceConfigurationManage,
+      ]);
+    }
     return _hybridRouteAllows(
       permissionResolver,
       YorksV1CapabilityKeys.workforceView,
@@ -758,6 +775,24 @@ bool? _hybridRouteAllows(
     organizationSummary: organizationSummary,
     projectId: projectId,
   );
+}
+
+bool? _hybridRouteAllowsAny(
+  YorksV1HybridPermissionResolver? resolver,
+  Iterable<String> capabilityKeys,
+) {
+  if (resolver == null) return false;
+  var unresolved = false;
+  for (final capabilityKey in capabilityKeys) {
+    final decision = resolver(
+      capabilityKey,
+      legacyAllowed: false,
+      organizationSummary: true,
+    );
+    if (decision == true) return true;
+    if (decision == null) unresolved = true;
+  }
+  return unresolved ? null : false;
 }
 
 String? _yorksV1ProjectIdFromPath(String path) {
@@ -1558,6 +1593,14 @@ GoRouter createAppRouter({
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
             const YorksWorkforceOverviewScreen(),
+          ),
+        ),
+      if (yorksV1WorkforceEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1WorkforceAdministration,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const YorksWorkforceAdministrationScreen(),
           ),
         ),
       if (yorksV1WorkforceEnabled)

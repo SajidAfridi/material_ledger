@@ -58,14 +58,17 @@ select is(
     'view_project_commercial_values',
     'view_supplier_costs',
     'workforce.attendance.maintain',
+    'workforce.configuration.manage',
     'workforce.periods.reopen',
     'workforce.reports.export',
+    'workforce.teams.manage',
     'workforce.timesheets.correct_during_review',
     'workforce.timesheets.final_approve',
     'workforce.timesheets.maintain',
     'workforce.timesheets.review',
     'workforce.timesheets.verify',
-    'workforce.view'
+    'workforce.view',
+    'workforce.workers.manage'
   ]::text[],
   'The exact aggregate allowlist contains only fully guarded cutovers'
 );

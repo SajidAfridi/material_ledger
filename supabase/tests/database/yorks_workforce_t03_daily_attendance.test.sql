@@ -40,25 +40,19 @@ select is(
      and catalog.status = 'operational'
      and catalog.authorization_mode = 'enforced'
      and catalog.is_assignable),
-  9::bigint,
-  'Exactly nine Workforce capabilities are operational in the final T09 chain'
+  12::bigint,
+  'All twelve reviewed Workforce capabilities are operational after Administration enablement'
 );
 
 select ok(
-  (select bool_and(
-    catalog.status = 'planned'
-    and catalog.authorization_mode = 'shadow'
-    and not catalog.is_assignable
-  ) from public.v1_capability_catalog catalog
-  where public.v1_workforce_is_capability_key(catalog.capability_key)
-    and catalog.capability_key not in (
-      'workforce.view', 'workforce.attendance.maintain',
-      'workforce.timesheets.maintain', 'workforce.timesheets.review',
-      'workforce.timesheets.correct_during_review',
-      'workforce.timesheets.verify', 'workforce.timesheets.final_approve',
-      'workforce.periods.reopen', 'workforce.reports.export'
-    )),
-  'The other three Workforce capabilities remain planned and nonassignable'
+  not exists (
+    select 1 from public.v1_capability_catalog catalog
+    where public.v1_workforce_is_capability_key(catalog.capability_key)
+      and (catalog.status <> 'operational'
+        or catalog.authorization_mode <> 'enforced'
+        or not catalog.is_assignable)
+  ),
+  'No reviewed Workforce capability remains shadow after Administration enablement'
 );
 
 select ok(

@@ -40,25 +40,8 @@ select ok(
    where public.v1_workforce_is_capability_key(catalog.capability_key)
      and catalog.status = 'operational'
      and catalog.authorization_mode = 'enforced'
-     and catalog.is_assignable) = 9
-  and not exists (
-    select 1
-    from public.v1_capability_catalog catalog
-    where public.v1_workforce_is_capability_key(catalog.capability_key)
-      and catalog.capability_key not in (
-        'workforce.view', 'workforce.attendance.maintain',
-        'workforce.timesheets.maintain', 'workforce.timesheets.review',
-        'workforce.timesheets.correct_during_review',
-        'workforce.timesheets.verify', 'workforce.timesheets.final_approve',
-        'workforce.periods.reopen', 'workforce.reports.export'
-      )
-      and (
-        catalog.status <> 'planned'
-        or catalog.authorization_mode <> 'shadow'
-        or catalog.is_assignable
-      )
-  ),
-  'T09 leaves only the three later Workforce capabilities planned and nonassignable'
+     and catalog.is_assignable) = 12,
+  'The completed Workforce chain enables all twelve reviewed capabilities'
 );
 
 select ok(
@@ -1529,8 +1512,8 @@ select set_config(
 );
 select throws_ok(
   $$select public.v1_get_workforce_configuration(current_date)$$,
-  '42501', 'V1_WORKFORCE_ADMIN_REQUIRED',
-  'Project Engineer receives no T02 configuration authority'
+  '42501', 'V1_WORKFORCE_MANAGEMENT_REQUIRED',
+  'Project Engineer receives no configuration authority without an explicit capability'
 );
 
 select set_config(
@@ -1542,8 +1525,8 @@ select throws_ok(
   $$select public.v1_save_workforce_calendar(
     '{}'::jsonb, null, '58090000-0000-4000-8000-000000000040'::uuid
   )$$,
-  '42501', 'V1_WORKFORCE_ADMIN_REQUIRED',
-  'Site Engineer receives no T02 configuration mutation authority'
+  '42501', 'V1_WORKFORCE_MANAGEMENT_REQUIRED',
+  'Site Engineer receives no configuration mutation authority without an explicit capability'
 );
 
 select set_config(
@@ -1553,8 +1536,8 @@ select set_config(
 );
 select throws_ok(
   $$select public.v1_get_workforce_configuration(current_date)$$,
-  '42501', 'V1_WORKFORCE_ADMIN_REQUIRED',
-  'Procurement receives no T02 configuration authority'
+  '42501', 'V1_WORKFORCE_MANAGEMENT_REQUIRED',
+  'Procurement receives no configuration authority without an explicit capability'
 );
 
 reset role;

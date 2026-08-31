@@ -499,6 +499,14 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           selectedIcon: Icons.groups_2_rounded,
           path: RoutePaths.yorksV1Workforce,
         ),
+      if (workforceEnabled)
+        _YorksDestination(
+          label: YorksV1ShellStrings.workforceAdministration,
+          icon: Icons.badge_outlined,
+          selectedIcon: Icons.badge_rounded,
+          path: RoutePaths.yorksV1WorkforceAdministration,
+          group: YorksV1ShellStrings.administration,
+        ),
       ..._legacyDestinationsFor(
         YorksV1Role.admin,
         teamChatEnabled: teamChatEnabled,
@@ -562,6 +570,16 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       if (path == RoutePaths.yorksV1Workforce) {
         return workforceEnabled &&
             allows(YorksV1CapabilityKeys.workforceView, false);
+      }
+      if (path == RoutePaths.yorksV1WorkforceAdministration) {
+        return workforceEnabled &&
+            allows(YorksV1CapabilityKeys.workforceView, false) &&
+            (allows(YorksV1CapabilityKeys.workforceWorkersManage, false) ||
+                allows(YorksV1CapabilityKeys.workforceTeamsManage, false) ||
+                allows(
+                  YorksV1CapabilityKeys.workforceConfigurationManage,
+                  false,
+                ));
       }
       if (path == RoutePaths.yorksV1Projects) {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);

@@ -2,6 +2,12 @@ import 'app_language.dart';
 
 abstract final class YorksV1WorkforceDashboardStrings {
   static const _copy = <String, Map<String, String>>{
+    'administration': {
+      'en': 'Workforce administration',
+      'ar': 'إدارة القوى العاملة',
+      'ur': 'افرادی قوت کا انتظام',
+      'hi': 'कार्यबल प्रशासन',
+    },
     'title': {
       'en': 'Workforce Overview',
       'ar': 'نظرة عامة على القوى العاملة',

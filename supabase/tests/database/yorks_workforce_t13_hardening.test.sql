@@ -200,6 +200,7 @@ insert into t13_authenticated_rpc_inventory(signature) values
   ('v1_document_target_writable(p_entity_type text, p_entity_id uuid, p_classification text)'),
   ('v1_generate_workforce_report(p_payload jsonb, p_idempotency_key uuid)'),
   ('v1_get_workforce_attendance(p_work_date date, p_worker_id uuid)'),
+  ('v1_get_workforce_administration_options(p_on_date date)'),
   ('v1_get_workforce_collaboration(p_period_id uuid)'),
   ('v1_get_workforce_configuration(p_on_date date)'),
   ('v1_get_workforce_daily_roster(p_work_date date, p_team_id uuid, p_project_id uuid, p_project_scope_id uuid, p_internal_location_id uuid, p_query text, p_limit integer, p_offset integer)'),
@@ -235,6 +236,7 @@ insert into t13_authenticated_rpc_inventory(signature) values
   ('v1_save_workforce_worker_assignment(p_payload jsonb, p_expected_version bigint, p_idempotency_key uuid)'),
   ('v1_send_workforce_timesheet_message(p_payload jsonb, p_idempotency_key uuid)'),
   ('v1_submit_workforce_monthly_period(p_payload jsonb, p_expected_period_version bigint, p_idempotency_key uuid)'),
+  ('v1_transfer_workforce_worker_assignment(p_payload jsonb, p_expected_current_assignment_id uuid, p_expected_current_version bigint, p_idempotency_key uuid)'),
   ('v1_validate_workforce_monthly_period(p_payload jsonb, p_expected_period_version bigint, p_idempotency_key uuid)'),
   ('v1_verify_workforce_monthly_period(p_payload jsonb, p_expected_period_version bigint, p_idempotency_key uuid)'),
   ('v1_withdraw_workforce_timesheet_allocations(p_attendance_day_id uuid, p_reason text, p_expected_version bigint, p_idempotency_key uuid)');
@@ -325,19 +327,19 @@ select is(
   ),
   '[
     {"key":"workforce.attendance.maintain","status":"operational","authorization_mode":"enforced","is_assignable":true},
-    {"key":"workforce.configuration.manage","status":"planned","authorization_mode":"shadow","is_assignable":false},
+    {"key":"workforce.configuration.manage","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.periods.reopen","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.reports.export","status":"operational","authorization_mode":"enforced","is_assignable":true},
-    {"key":"workforce.teams.manage","status":"planned","authorization_mode":"shadow","is_assignable":false},
+    {"key":"workforce.teams.manage","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.timesheets.correct_during_review","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.timesheets.final_approve","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.timesheets.maintain","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.timesheets.review","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.timesheets.verify","status":"operational","authorization_mode":"enforced","is_assignable":true},
     {"key":"workforce.view","status":"operational","authorization_mode":"enforced","is_assignable":true},
-    {"key":"workforce.workers.manage","status":"planned","authorization_mode":"shadow","is_assignable":false}
+    {"key":"workforce.workers.manage","status":"operational","authorization_mode":"enforced","is_assignable":true}
   ]'::jsonb,
-  'T13 preserves the exact accepted operational and shadow capability states'
+  'T13 plus Workforce Administration preserves the exact accepted operational capability states'
 );
 
 select is(

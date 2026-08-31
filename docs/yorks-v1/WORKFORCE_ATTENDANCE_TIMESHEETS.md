@@ -940,3 +940,40 @@ bulk flows remain outside scope. Those gates passed and the verified release is
 recorded in
 [`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
 T14 UAT stays the required next follow-up.
+
+## Post-release Workforce Administration follow-up
+
+The production Workforce workflow originally shipped with attendance,
+timesheet and review consumers enabled while the three master-data consumers
+remained planned and nonassignable. That made an authorized supervisor's
+overview truthful but left no supported product path for creating workers,
+organizing teams, changing dated work assignments or configuring calendars.
+
+The approved follow-up enables these existing catalogue keys without changing
+their original meaning:
+
+- `workforce.workers.manage` creates and updates normalized worker records;
+- `workforce.teams.manage` creates/closes teams and maintains dated worker,
+  supervisor, project, scope and internal-location assignments;
+- `workforce.configuration.manage` maintains trades, internal locations,
+  calendars, shifts and dated team schedules.
+
+All three retain the `workforce.view` dependency. A login account is still
+created, disabled and permissioned only in User Management; a Workforce worker
+record does not create Auth identity. A person marks attendance only when the
+server confirms both the operational attendance/timesheet capabilities and an
+applicable dated organization/team/project/scope/internal-location/worker
+responsibility. Role labels and linked-worker identity do not grant command
+authority.
+
+Worker and team removal is intentionally not exposed. Login accounts are
+disabled, workers become inactive/suspended/left-company with a leaving date,
+teams close through their effective window and project/team changes use an
+atomic transfer command that closes the prior assignment the day before the
+new one. The old assignment, actor, reason, version and audit evidence remain
+available. Ordinary table APIs and internal helpers remain denied.
+
+The responsive Workforce Administration route contains Workers, Teams, Setup
+and Access sections. Each section is independently capability-controlled and
+loads only protected, non-commercial server projections. This follow-up does
+not perform or replace the outstanding T14 named-persona/manual UAT.

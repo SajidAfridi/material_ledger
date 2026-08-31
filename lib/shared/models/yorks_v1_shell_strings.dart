@@ -17,6 +17,12 @@ abstract final class YorksV1ShellStrings {
     ur: 'ٹائم شیٹس',
     hi: 'टाइमशीट',
   );
+  static const workforceAdministration = TranslatableString(
+    en: 'Workforce administration',
+    ar: 'إدارة القوى العاملة',
+    ur: 'افرادی قوت کا انتظام',
+    hi: 'कार्यबल प्रशासन',
+  );
   static const accounts = TranslatableString(
     en: 'Accounts',
     ar: 'الحسابات',

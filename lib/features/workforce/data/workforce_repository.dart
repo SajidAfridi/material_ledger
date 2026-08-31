@@ -8,6 +8,7 @@ import '../../../shared/models/yorks_v1_feature_flags.dart';
 import '../../../shared/sync/connectivity_service.dart';
 import '../../../shared/repositories/yorks_v1_documents_repository.dart';
 import '../domain/workforce_attendance_models.dart';
+import '../domain/workforce_administration_models.dart';
 import '../domain/workforce_configuration_models.dart';
 import '../domain/workforce_collaboration_models.dart';
 import '../domain/workforce_daily_roster_models.dart';
@@ -99,6 +100,10 @@ abstract interface class YorksWorkforceRepository {
     String? onDate,
   });
 
+  Future<YorksWorkforceAdministrationOptions> getAdministrationOptions({
+    String? onDate,
+  });
+
   Future<YorksWorkforceFoundationProjection> getFoundation({
     String? query,
     YorksWorkforceWorkerStatus? status,
@@ -134,6 +139,13 @@ abstract interface class YorksWorkforceRepository {
   Future<YorksWorkforceCommandResult> saveWorkerAssignment(
     Map<String, Object?> payload, {
     int? expectedVersion,
+    required String idempotencyKey,
+  });
+
+  Future<YorksWorkforceCommandResult> transferWorkerAssignment(
+    Map<String, Object?> payload, {
+    String? expectedCurrentAssignmentId,
+    int? expectedCurrentVersion,
     required String idempotencyKey,
   });
 
@@ -1261,6 +1273,28 @@ final class YorksSupabaseWorkforceRepository
   }
 
   @override
+  Future<YorksWorkforceAdministrationOptions> getAdministrationOptions({
+    String? onDate,
+  }) async {
+    final normalizedDate = onDate?.trim();
+    if (normalizedDate != null &&
+        (normalizedDate.isEmpty || !_isIsoDate(normalizedDate))) {
+      return _invalidInput();
+    }
+    final response = await _invoke('v1_get_workforce_administration_options', {
+      'p_on_date': normalizedDate,
+    });
+    try {
+      return YorksWorkforceAdministrationOptions.fromRpcJson(response);
+    } on FormatException catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+        cause: error,
+      );
+    }
+  }
+
+  @override
   Future<YorksWorkforceFoundationProjection> getFoundation({
     String? query,
     YorksWorkforceWorkerStatus? status,
@@ -1350,6 +1384,39 @@ final class YorksSupabaseWorkforceRepository
     expectedVersion: expectedVersion,
     idempotencyKey: idempotencyKey,
   );
+
+  @override
+  Future<YorksWorkforceCommandResult> transferWorkerAssignment(
+    Map<String, Object?> payload, {
+    String? expectedCurrentAssignmentId,
+    int? expectedCurrentVersion,
+    required String idempotencyKey,
+  }) async {
+    final normalizedKey = idempotencyKey.trim();
+    final normalizedAssignmentId = _nullableTrimmed(
+      expectedCurrentAssignmentId,
+    );
+    if (!_isUuid(normalizedKey) ||
+        (normalizedAssignmentId != null && !_isUuid(normalizedAssignmentId)) ||
+        (normalizedAssignmentId == null) != (expectedCurrentVersion == null) ||
+        (expectedCurrentVersion != null && expectedCurrentVersion < 1)) {
+      return _invalidInput();
+    }
+    final response = await _invoke('v1_transfer_workforce_worker_assignment', {
+      'p_payload': payload,
+      'p_expected_current_assignment_id': normalizedAssignmentId,
+      'p_expected_current_version': expectedCurrentVersion,
+      'p_idempotency_key': normalizedKey,
+    });
+    try {
+      return YorksWorkforceCommandResult.fromRpcJson(response);
+    } on FormatException catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+        cause: error,
+      );
+    }
+  }
 
   @override
   Future<YorksWorkforceCommandResult> saveResponsibilityAssignment(

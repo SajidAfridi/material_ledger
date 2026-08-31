@@ -39,6 +39,7 @@ class _YorksWorkforceOverviewScreenState
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final state = ref.watch(yorksWorkforceDashboardControllerProvider);
+    final authority = ref.watch(yorksWorkforceAuthorityEpochProvider);
     final controller = ref.read(
       yorksWorkforceDashboardControllerProvider.notifier,
     );
@@ -74,6 +75,10 @@ class _YorksWorkforceOverviewScreenState
                       language: language,
                       compact: compact,
                       projection: state.projection,
+                      canManageWorkforce:
+                          authority.canManageWorkers ||
+                          authority.canManageTeams ||
+                          authority.canManageConfiguration,
                       onRefresh: controller.load,
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -158,12 +163,14 @@ class _OverviewHeader extends StatelessWidget {
     required this.language,
     required this.compact,
     required this.projection,
+    required this.canManageWorkforce,
     required this.onRefresh,
   });
 
   final AppLanguage language;
   final bool compact;
   final YorksWorkforceOverviewProjection? projection;
+  final bool canManageWorkforce;
   final Future<bool> Function() onRefresh;
 
   @override
@@ -176,35 +183,37 @@ class _OverviewHeader extends StatelessWidget {
         Text(_t(language, 'body'), style: AppTypography.bodyMedium),
       ],
     );
-    final actionSpecs = projection == null
+    // The compact overview is deliberately read-only. Management remains
+    // reachable from the permission-filtered workspace drawer, without
+    // turning the mobile summary into a mutation surface.
+    final actionSpecs = compact
         ? const <_OverviewActionSpec>[]
-        : _overviewActions(projection!);
+        : _overviewActions(projection, canManageWorkforce: canManageWorkforce);
     final actions = Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
       children: [
-        if (!compact)
-          for (final spec in actionSpecs)
-            if (spec.primary)
-              FilledButton.icon(
-                key: Key('workforce-overview-${spec.key}'),
-                onPressed: () => context.go(spec.route),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.minTapTarget),
-                ),
-                icon: Icon(spec.icon),
-                label: Text(_t(language, spec.labelKey)),
-              )
-            else
-              OutlinedButton.icon(
-                key: Key('workforce-overview-${spec.key}'),
-                onPressed: () => context.go(spec.route),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.minTapTarget),
-                ),
-                icon: Icon(spec.icon),
-                label: Text(_t(language, spec.labelKey)),
+        for (final spec in actionSpecs)
+          if (spec.primary)
+            FilledButton.icon(
+              key: Key('workforce-overview-${spec.key}'),
+              onPressed: () => context.go(spec.route),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, AppSpacing.minTapTarget),
               ),
+              icon: Icon(spec.icon),
+              label: Text(_t(language, spec.labelKey)),
+            )
+          else
+            OutlinedButton.icon(
+              key: Key('workforce-overview-${spec.key}'),
+              onPressed: () => context.go(spec.route),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, AppSpacing.minTapTarget),
+              ),
+              icon: Icon(spec.icon),
+              label: Text(_t(language, spec.labelKey)),
+            ),
         IconButton.outlined(
           tooltip: _t(language, 'refresh'),
           onPressed: onRefresh,
@@ -244,55 +253,67 @@ typedef _OverviewActionSpec = ({
 });
 
 List<_OverviewActionSpec> _overviewActions(
-  YorksWorkforceOverviewProjection projection,
-) => switch (projection.kind) {
-  YorksWorkforceOverviewKind.supervisor => [
-    if (projection.actionFlags['can_complete_today_attendance'] == true)
-      (
-        key: 'complete-attendance',
-        labelKey: 'complete_today_attendance',
-        route: '/yorks/workforce/attendance',
-        icon: Icons.fact_check_outlined,
-        primary: true,
-      ),
-  ],
-  YorksWorkforceOverviewKind.management => [
-    if (projection.actionFlags['can_open_review_queue'] == true)
-      (
-        key: 'review-queue',
-        labelKey: 'open_review_queue',
-        route: '/yorks/workforce/timesheets',
-        icon: Icons.rate_review_outlined,
-        primary: true,
-      ),
-    if (projection.actionFlags['can_open_final_approval_queue'] == true)
-      (
-        key: 'final-approval-queue',
-        labelKey: 'open_final_approval_queue',
-        route: '/yorks/workforce/timesheets',
-        icon: Icons.approval_outlined,
-        primary: false,
-      ),
-  ],
-  YorksWorkforceOverviewKind.admin => [
-    if (projection.actionFlags['can_open_reopen_queue'] == true)
-      (
-        key: 'reopen-queue',
-        labelKey: 'open_reopen_queue',
-        route: '/yorks/workforce/timesheets',
-        icon: Icons.lock_open_outlined,
-        primary: true,
-      ),
-    if (projection.actionFlags['can_open_final_approval_queue'] == true)
-      (
-        key: 'final-approval-queue',
-        labelKey: 'open_final_approval_queue',
-        route: '/yorks/workforce/timesheets',
-        icon: Icons.approval_outlined,
-        primary: false,
-      ),
-  ],
-};
+  YorksWorkforceOverviewProjection? projection, {
+  required bool canManageWorkforce,
+}) => [
+  if (canManageWorkforce)
+    (
+      key: 'administration',
+      labelKey: 'administration',
+      route: '/yorks/workforce/administration',
+      icon: Icons.manage_accounts_outlined,
+      primary: projection == null,
+    ),
+  ...switch (projection?.kind) {
+    YorksWorkforceOverviewKind.supervisor => [
+      if (projection!.actionFlags['can_complete_today_attendance'] == true)
+        (
+          key: 'complete-attendance',
+          labelKey: 'complete_today_attendance',
+          route: '/yorks/workforce/attendance',
+          icon: Icons.fact_check_outlined,
+          primary: true,
+        ),
+    ],
+    YorksWorkforceOverviewKind.management => [
+      if (projection!.actionFlags['can_open_review_queue'] == true)
+        (
+          key: 'review-queue',
+          labelKey: 'open_review_queue',
+          route: '/yorks/workforce/timesheets',
+          icon: Icons.rate_review_outlined,
+          primary: true,
+        ),
+      if (projection.actionFlags['can_open_final_approval_queue'] == true)
+        (
+          key: 'final-approval-queue',
+          labelKey: 'open_final_approval_queue',
+          route: '/yorks/workforce/timesheets',
+          icon: Icons.approval_outlined,
+          primary: false,
+        ),
+    ],
+    YorksWorkforceOverviewKind.admin => [
+      if (projection!.actionFlags['can_open_reopen_queue'] == true)
+        (
+          key: 'reopen-queue',
+          labelKey: 'open_reopen_queue',
+          route: '/yorks/workforce/timesheets',
+          icon: Icons.lock_open_outlined,
+          primary: true,
+        ),
+      if (projection.actionFlags['can_open_final_approval_queue'] == true)
+        (
+          key: 'final-approval-queue',
+          labelKey: 'open_final_approval_queue',
+          route: '/yorks/workforce/timesheets',
+          icon: Icons.approval_outlined,
+          primary: false,
+        ),
+    ],
+    null => const <_OverviewActionSpec>[],
+  },
+];
 
 class _OverviewStateBanner extends StatelessWidget {
   const _OverviewStateBanner({

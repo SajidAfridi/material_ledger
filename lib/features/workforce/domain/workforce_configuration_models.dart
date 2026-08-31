@@ -394,7 +394,11 @@ class YorksWorkforceConfigurationProjection {
   ) {
     final schemaVersion = _positiveInteger(json['schema_version']);
     final authorizationMode = _text(json['authorization_mode']);
-    if (schemaVersion != 1 || authorizationMode != 'admin_legacy_t02') {
+    if (schemaVersion != 1 ||
+        !const {
+          'admin_legacy_t02',
+          'enforced_administration',
+        }.contains(authorizationMode)) {
       throw const FormatException(
         'Unsupported Workforce configuration projection',
       );

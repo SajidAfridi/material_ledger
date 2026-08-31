@@ -285,7 +285,11 @@ class YorksWorkforceFoundationProjection {
        teams = List.unmodifiable(teams),
        internalLocations = List.unmodifiable(internalLocations),
        workers = List.unmodifiable(workers) {
-    if (schemaVersion != 1 || authorizationMode != 'admin_legacy_t01') {
+    if (schemaVersion != 1 ||
+        !const {
+          'admin_legacy_t01',
+          'enforced_administration',
+        }.contains(authorizationMode)) {
       throw const FormatException('Unsupported Workforce foundation schema');
     }
     if (workerCount < workers.length) {

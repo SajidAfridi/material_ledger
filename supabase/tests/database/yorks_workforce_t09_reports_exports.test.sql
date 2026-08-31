@@ -7,8 +7,8 @@ select no_plan();
 select is((select count(*) from public.v1_capability_catalog catalog
   where public.v1_workforce_is_capability_key(catalog.capability_key)
     and catalog.status='operational' and catalog.authorization_mode='enforced'
-    and catalog.is_assignable),9::bigint,
-  'T09 promotes only reports.export after the eight accepted capabilities');
+    and catalog.is_assignable),12::bigint,
+  'The completed chain includes reports and the three reviewed Administration consumers');
 select ok(not has_table_privilege('authenticated',
     'public.v1_workforce_report_artifacts','select,insert,update,delete')
   and not has_table_privilege('authenticated',

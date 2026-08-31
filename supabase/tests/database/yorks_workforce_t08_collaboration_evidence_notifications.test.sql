@@ -6,8 +6,8 @@ select no_plan();
 
 select is((select count(*) from public.v1_capability_catalog c
   where c.capability_key like 'workforce.%' and c.status='operational'
-    and c.authorization_mode='enforced' and c.is_assignable),9::bigint,
-  'The final T09 chain adds only reports.export beyond the eight T07 consumers');
+    and c.authorization_mode='enforced' and c.is_assignable),12::bigint,
+  'The completed chain includes the three reviewed Administration consumers');
 select ok(not has_table_privilege('authenticated',
     'public.v1_workforce_timesheet_discussions','select,insert,update,delete')
   and not has_table_privilege('authenticated',

@@ -858,3 +858,30 @@ Each batch reports:
 
 Do not begin a downstream batch while its upstream server authority or gate is
 incomplete.
+
+### WF-A01 — Post-release Workforce Administration completion
+
+1. Promote only `workforce.workers.manage`, `workforce.teams.manage` and
+   `workforce.configuration.manage` from their retained planned/shadow state
+   after the corresponding protected RPC and UI consumers exist. Keep
+   `workforce.view` as the effective dependency and retain explicit audited
+   assignment through User Management.
+2. Replace the bounded temporary Admin assertions only in the reviewed T01/T02
+   foundation, worker/team/assignment and configuration consumers. Keep
+   responsibility assignment, lifecycle, digest and unrelated Workforce
+   commands under their accepted authorities.
+3. Add a protected, non-commercial administration choice projection and an
+   atomic idempotent worker-assignment transfer that locks the current period,
+   checks its id/version, closes it at `new_valid_from - 1` and appends the new
+   period. Never overwrite or delete assignment history.
+4. Add one guarded responsive Administration route with separately visible
+   Workers, Teams, Setup and Access sections. Keep login-account creation and
+   disabling in User Management; explain that worker records and Auth users
+   are separate.
+5. Prove Admin and bounded delegated positive cases plus Project Engineer,
+   Site Engineer and Procurement cross-capability negatives; direct-table and
+   helper denial; safe response shape; idempotency; stale conflict; history
+   retention; desktop/mobile UI and existing Workforce route regression.
+6. Run the complete reset/database/Flutter/analyzer/build/release gates before
+   applying the additive migration and promoting the exact verified web
+   artifact. Preserve the distinct outstanding T14 manual-UAT status.

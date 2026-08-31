@@ -12,6 +12,7 @@ import '../../../shared/sync/connectivity_service.dart';
 import '../data/workforce_repository.dart';
 import '../data/workforce_report_service.dart';
 import '../domain/workforce_dashboard_models.dart';
+import 'workforce_administration_controller.dart';
 import 'workforce_daily_roster_controller.dart';
 import 'workforce_dashboard_controller.dart';
 import 'workforce_collaboration_controller.dart';
@@ -99,6 +100,9 @@ typedef YorksWorkforceAuthorityEpoch = ({
   bool canFinalApproveTimesheets,
   bool canReopenPeriods,
   bool canExportReports,
+  bool canManageWorkers,
+  bool canManageTeams,
+  bool canManageConfiguration,
   bool trustedForWrites,
 });
 
@@ -149,8 +153,50 @@ final yorksWorkforceAuthorityEpochProvider =
         canExportReports:
             snapshot?.allows(YorksV1CapabilityKeys.workforceReportsExport) ==
             true,
+        canManageWorkers:
+            snapshot?.allows(YorksV1CapabilityKeys.workforceWorkersManage) ==
+            true,
+        canManageTeams:
+            snapshot?.allows(YorksV1CapabilityKeys.workforceTeamsManage) ==
+            true,
+        canManageConfiguration:
+            snapshot?.allows(
+              YorksV1CapabilityKeys.workforceConfigurationManage,
+            ) ==
+            true,
         trustedForWrites: permission.isTrustedForWrites,
       );
+    });
+
+final yorksWorkforceAdministrationControllerProvider =
+    StateNotifierProvider.autoDispose<
+      YorksWorkforceAdministrationController,
+      YorksWorkforceAdministrationState
+    >((ref) {
+      ref.keepAlive();
+      final epoch = ref.watch(yorksWorkforceAuthorityEpochProvider);
+      final controller = YorksWorkforceAdministrationController(
+        repository: ref.watch(yorksWorkforceRepositoryProvider),
+        commandKeys: YorksV1CriticalCommandKeyStore(
+          preferences: ref.watch(sharedPreferencesProvider),
+          actorAuthUserId: epoch.actorAuthUserId ?? 'inactive',
+        ),
+        connectivity: ref.watch(connectivityProvider),
+        canManageWorkers: epoch.canManageWorkers,
+        canManageTeams: epoch.canManageTeams,
+        canManageConfiguration: epoch.canManageConfiguration,
+      );
+      if (!epoch.featureEnabled ||
+          epoch.actorAuthUserId == null ||
+          !epoch.active ||
+          !epoch.canView ||
+          !epoch.trustedForWrites ||
+          (!epoch.canManageWorkers &&
+              !epoch.canManageTeams &&
+              !epoch.canManageConfiguration)) {
+        controller.purgeProtectedState(unavailable: !epoch.featureEnabled);
+      }
+      return controller;
     });
 
 final yorksWorkforceDailyRosterControllerProvider =

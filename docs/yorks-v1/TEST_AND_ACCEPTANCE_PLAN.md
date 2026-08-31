@@ -1085,6 +1085,38 @@ was promoted as deployment `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g`. This live
 smoke evidence remains excluded from the T14 result above; see
 [`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md).
 
+## 9V. Post-release Workforce Administration acceptance
+
+The three retained master-data capabilities may become operational only as one
+reviewed follow-up. Acceptance requires the catalogue to expose the exact
+enforced/assignable keys with `workforce.view` dependencies, while the role
+default ceiling remains Admin and every non-Admin grant remains explicit and
+audited.
+
+Database acceptance proves: Admin positive access; a worker manager cannot
+manage teams/configuration; a team manager cannot manage worker masters or
+configuration; a configuration manager cannot manage workers/teams;
+ungranted Project Engineer, Site Engineer and Procurement calls fail; inactive,
+revoked, stale and missing-dependency cases fail; ordinary CRUD and internal
+helpers remain denied; administration choices contain no email/commercial
+fields; retries converge; stale assignment versions conflict; an assignment
+transfer retains and closes exactly one superseded period and creates exactly
+one new period with audit evidence.
+
+Client acceptance proves fail-closed routing unless `workforce.view` plus at
+least one management capability is effective, protected-state purge on loss of
+authority, server-confirmed saves, and desktop/mobile access to Workers, Teams,
+Setup and Access. Worker creation must not imply Auth-user creation. Leaving,
+deactivation and assignment-transfer copy must explain the no-delete/history
+boundary. Calendar creation requires the operator to choose working weekdays;
+the client must not invent Yorks schedule facts.
+
+Release acceptance repeats clean reset, the complete database suite, focused
+and complete Flutter tests, analyze, formatting/diff checks and production-
+shaped web/Android builds. Production migration/deployment identity, live root
+and deep-route behavior, PWA/config/hash identity and rollback must be recorded
+without relabeling this follow-up as T14 UAT.
+
 ## 10. Release evidence package
 
 Batch 10 produces:

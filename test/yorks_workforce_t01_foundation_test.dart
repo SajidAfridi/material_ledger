@@ -62,6 +62,83 @@ void main() {
     );
   });
 
+  test('administration options expose safe user and project choices', () async {
+    final rpc = _RpcClient((functionName, parameters) {
+      expect(functionName, 'v1_get_workforce_administration_options');
+      expect(parameters, {'p_on_date': '2026-08-31'});
+      return {
+        'schema_version': 1,
+        'authorization_mode': 'enforced_administration',
+        'actor_auth_user_id': 'admin-1',
+        'on_date': '2026-08-31',
+        'server_time': '2026-08-31T12:00:00Z',
+        'users': [
+          {
+            'auth_user_id': 'user-1',
+            'app_user_id': 'app-user-1',
+            'display_name': 'Masaud Khan',
+            'exact_role': 'project_engineer',
+            'is_active': true,
+          },
+        ],
+        'projects': [
+          {
+            'project_id': 'project-1',
+            'project_ref': 'YRA-313',
+            'project_name': 'Riyadh Substation',
+            'state': 'active',
+            'scopes': [
+              {
+                'project_scope_id': 'scope-1',
+                'scope_code': 'common',
+                'scope_name': 'Common / All Buildings',
+                'scope_kind': 'common',
+                'is_active': true,
+              },
+            ],
+          },
+        ],
+      };
+    });
+
+    final options = await _repository(
+      rpc: rpc,
+    ).getAdministrationOptions(onDate: '2026-08-31');
+
+    expect(options.users.single.displayName, 'Masaud Khan');
+    expect(options.projects.single.scopes.single.kind, 'common');
+  });
+
+  test('assignment transfer sends optimistic history boundary', () async {
+    const key = '11111111-1111-4111-8111-111111111111';
+    const assignmentId = '22222222-2222-4222-8222-222222222222';
+    final rpc = _RpcClient((functionName, parameters) {
+      expect(functionName, 'v1_transfer_workforce_worker_assignment');
+      expect(parameters, {
+        'p_payload': {'worker_id': 'worker-1'},
+        'p_expected_current_assignment_id': assignmentId,
+        'p_expected_current_version': 4,
+        'p_idempotency_key': key,
+      });
+      return {
+        'schema_version': 1,
+        'assignment_id': 'assignment-2',
+        'record_version': 1,
+        'superseded_assignment_id': assignmentId,
+        'superseded_record_version': 5,
+      };
+    });
+
+    final result = await _repository(rpc: rpc).transferWorkerAssignment(
+      const {'worker_id': 'worker-1'},
+      expectedCurrentAssignmentId: assignmentId,
+      expectedCurrentVersion: 4,
+      idempotencyKey: key,
+    );
+
+    expect(result.entityId, 'assignment-2');
+  });
+
   test('malformed server shape fails closed', () async {
     final response = _foundationResponse()..['schema_version'] = 2;
     final repository = _repository(rpc: _RpcClient((_, _) => response));

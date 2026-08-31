@@ -20,26 +20,8 @@ select ok(
      and catalog.module_key = 'workforce'
      and catalog.status = 'operational'
      and catalog.authorization_mode = 'enforced'
-     and catalog.is_assignable) = 9
-  and not exists (
-    select 1
-    from public.v1_capability_catalog catalog
-    where public.v1_workforce_is_capability_key(catalog.capability_key)
-      and catalog.capability_key not in (
-        'workforce.view', 'workforce.attendance.maintain',
-        'workforce.timesheets.maintain', 'workforce.timesheets.review',
-        'workforce.timesheets.correct_during_review',
-        'workforce.timesheets.verify', 'workforce.timesheets.final_approve',
-        'workforce.periods.reopen', 'workforce.reports.export'
-      )
-      and (
-        catalog.module_key <> 'workforce'
-        or catalog.status <> 'planned'
-        or catalog.authorization_mode <> 'shadow'
-        or catalog.is_assignable
-      )
-  ),
-  'The final T09 chain activates only the nine accepted Workforce consumers'
+     and catalog.is_assignable) = 12,
+  'The accepted Workforce chain plus Administration enables all twelve reviewed consumers'
 );
 
 select is(
@@ -62,7 +44,7 @@ select ok(
       and role_default.role_name <> 'admin'
       and (role_default.is_granted or role_default.can_delegate)
   ),
-  'Only Admin receives a future shadow ceiling and no operational authority changes'
+  'Only Admin receives the built-in Workforce ceiling; delegation remains explicit and audited'
 );
 
 select ok(
@@ -553,8 +535,8 @@ select set_config(
 select throws_ok(
   $$select public.v1_get_workforce_foundation(null,null,50,0,current_date)$$,
   '42501',
-  'V1_WORKFORCE_ADMIN_REQUIRED',
-  'A responsibility assignment does not become operational Worker-master authority in T01'
+  'V1_WORKFORCE_MANAGEMENT_REQUIRED',
+  'A responsibility assignment does not become delegated Worker-master authority'
 );
 
 select set_config(
@@ -566,8 +548,8 @@ select set_config(
 select throws_ok(
   $$select public.v1_get_workforce_foundation(null,null,50,0,current_date)$$,
   '42501',
-  'V1_WORKFORCE_ADMIN_REQUIRED',
-  'Project Engineer receives no operational Worker-master authority in T01'
+  'V1_WORKFORCE_MANAGEMENT_REQUIRED',
+  'Project Engineer receives no Worker-master authority without an explicit capability'
 );
 
 select set_config(
@@ -579,8 +561,8 @@ select set_config(
 select throws_ok(
   $$select public.v1_get_workforce_foundation(null,null,50,0,current_date)$$,
   '42501',
-  'V1_WORKFORCE_ADMIN_REQUIRED',
-  'Procurement receives no operational Worker-master authority in T01'
+  'V1_WORKFORCE_MANAGEMENT_REQUIRED',
+  'Procurement receives no Worker-master authority without an explicit capability'
 );
 
 reset role;
