@@ -149,6 +149,50 @@ Every item is currently deferred/not run:
 | Release-blocking prerequisite `T14-RC-001` | Resolved: local immutable source, staging-bound web/APK hashes and an unaliased Ready preview are recorded above. |
 | Human witness | Not started. Automation cannot waive the required manual scenarios. |
 
+## Staging demonstration fixture — 1 September 2026
+
+At the owner's request, a clearly labelled, non-production demonstration
+dataset was added only to dedicated staging project
+`iqltcyimlqtcwyzlemwx`. The guarded operator fixture is
+`tool/workforce-staging-demo.sql`, invoked through
+`tool/seed-workforce-staging-demo.sh`. Both the shell boundary and SQL guard
+refuse the production/shared project and any database that is not the exact
+seven-persona technical staging target.
+
+The committed staging result contains:
+
+- 2 `STAGING DEMO` projects with Common and Building scopes;
+- 3 `STAGING DEMO` teams covering project and internal Workshop work;
+- 10 `DEMO-W###` workers across Yorks employee, temporary, agency and
+  subcontractor worker types;
+- 1 Asia/Dubai six-day calendar and one 06:30 day shift;
+- 270 server-confirmed attendance days, including Present, Absent, Sick Leave,
+  Annual Leave and Official Leave examples;
+- 266 current allocation sets with project, Building, internal Workshop,
+  overtime and one split project/Workshop example; and
+- 6 immutable August/September monthly validation runs in
+  `ready_for_review`, including retained warnings suitable for review testing.
+
+Protected projection checks then proved:
+
+- Admin: 10 workers, 1 calendar, 1 shift and 2 administration projects;
+- Site Engineer: 10 workers, 10 current-day entries and the affirmative
+  `can_complete_today_attendance` action flag;
+- Project Manager: 10 workers and 2 active demo projects in the management
+  overview; and
+- 36 effective Workforce grants plus three explicit organization
+  responsibilities across the Project Engineer, Site Engineer and Project
+  Manager technical personas.
+
+Running the seed command a second time retained the exact same 2/3/10/270/266/6
+counts. This proves the operator fixture is repeat-safe and does not overwrite
+subsequent UI edits because critical facts replay through their original
+idempotency keys.
+
+This demonstration fixture is technical staging evidence only. The technical
+personas are not approved named users, no human scenario was witnessed, and
+none of the 35 deferred T14 scenarios is reclassified as passed.
+
 ## Required owner inputs to resume
 
 1. Provide and approve named non-production accounts for every persona class above,
