@@ -5,7 +5,9 @@ set local search_path = public, extensions;
 select no_plan();
 
 -- Repository-local scale evidence only. All generated rows roll back with this
--- test and therefore never seed, reinterpret or migrate product data.
+-- test and therefore never seed, reinterpret or migrate product data. Current
+-- master-data rows remain open-ended so the scale gate does not expire, while
+-- the retained 24-month history below stays fixed through August 2026.
 insert into public.v1_projects(
   id, project_ref, name, state, current_action_owner_role,
   created_by_auth_user_id, created_by_role
@@ -37,7 +39,7 @@ select md5('t13-scale-team-' || sequence)::uuid,
   '10000000-0000-4000-8000-000000000004'::uuid,
   md5('t13-scale-project-' || (((sequence - 1) % 30) + 1))::uuid,
   md5('t13-scale-scope-' || (((sequence - 1) % 30) + 1))::uuid,
-  '2024-09-01', '2026-08-31', true,
+  '2024-09-01', null, true,
   '10000000-0000-4000-8000-000000000004'::uuid,
   '10000000-0000-4000-8000-000000000004'::uuid
 from generate_series(1, 50) sequence;
@@ -49,7 +51,7 @@ insert into public.v1_workforce_calendars(
 ) values (
   md5('t13-scale-calendar')::uuid, 'WF-T13-SCALE',
   'T13 Scale Calendar', 'Asia/Dubai', 480, 60,
-  '2024-09-01', '2026-08-31', true,
+  '2024-09-01', null, true,
   '10000000-0000-4000-8000-000000000004',
   '10000000-0000-4000-8000-000000000004'
 );
@@ -71,7 +73,7 @@ insert into public.v1_workforce_team_schedule_links(
 select md5('t13-scale-schedule-' || sequence)::uuid,
   md5('t13-scale-team-' || sequence)::uuid,
   md5('t13-scale-calendar')::uuid,
-  '2024-09-01', '2026-08-31', 'T13 scale schedule',
+  '2024-09-01', null, 'T13 scale schedule',
   '10000000-0000-4000-8000-000000000004'::uuid,
   '10000000-0000-4000-8000-000000000004'::uuid
 from generate_series(1, 50) sequence;
@@ -107,7 +109,7 @@ select md5('t13-scale-assignment-' || sequence)::uuid,
     't13-scale-scope-' ||
     (((((sequence - 1) % 50) + 1 - 1) % 30) + 1)
   )::uuid,
-  '2024-09-01', '2026-08-31', 'T13 scale assignment',
+  '2024-09-01', null, 'T13 scale assignment',
   '10000000-0000-4000-8000-000000000004'::uuid, 'admin',
   '10000000-0000-4000-8000-000000000004'::uuid
 from generate_series(1, 500) sequence;
@@ -156,7 +158,7 @@ insert into public.v1_workforce_responsibility_assignments(
 )
 select md5('t13-scale-management-responsibility')::uuid,
   '10000000-0000-4000-8000-000000000010'::uuid,
-  'organization', '2024-09-01', '2026-08-31',
+  'organization', '2024-09-01', null,
   'T13 repository-local organization scale authority',
   '10000000-0000-4000-8000-000000000004'::uuid, 'admin',
   '10000000-0000-4000-8000-000000000004'::uuid
@@ -166,7 +168,7 @@ where not exists (
   where responsibility.auth_user_id =
     '10000000-0000-4000-8000-000000000010'::uuid
     and responsibility.scope_kind = 'organization'
-    and '2026-08-31' between responsibility.valid_from
+    and current_date between responsibility.valid_from
       and coalesce(responsibility.valid_to, 'infinity'::date)
 );
 
@@ -177,7 +179,7 @@ insert into public.v1_permission_assignments(
 select md5('t13-scale-management-view')::uuid,
   '10000000-0000-4000-8000-000000000010'::uuid,
   'workforce.view', 'grant', 'organization', 'permission_management',
-  '2024-09-01', '2035-12-31',
+  '2024-09-01', null,
   'T13 repository-local Management scale view',
   '10000000-0000-4000-8000-000000000004'::uuid
 where not exists (
@@ -188,7 +190,7 @@ where not exists (
     and assignment.capability_key = 'workforce.view'
     and assignment.effect = 'grant'
     and assignment.scope_kind = 'organization'
-    and '2026-08-31 12:00:00+00'::timestamptz between assignment.effective_from
+    and clock_timestamp() between assignment.effective_from
       and coalesce(assignment.effective_until, 'infinity'::date)
 );
 
