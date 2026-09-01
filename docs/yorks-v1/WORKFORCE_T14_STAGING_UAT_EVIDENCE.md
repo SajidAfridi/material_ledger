@@ -3,7 +3,7 @@
 Status: **immutable staging preview deployed; manual UAT not started/not passed**
 Decision date: 31 August 2026
 Preflight observed at: `2026-08-31T11:18:50Z`
-Preview deployed at: `2026-08-31T22:42:20Z`
+Latest design preview deployed at: `2026-09-01T08:38:43Z`
 Approved Workforce source fingerprint:
 `3914f3ec6740b5986724ae8dbc44b70f9944ec580fedfd3a526b3605866bf613`
 
@@ -32,13 +32,13 @@ promotion or any post-T14 production release.
 | Evidence | Result |
 |---|---|
 | Repository baseline | Workforce release source `a8f31d8466bc115a2fdab894f5c261381adc4a17` is committed and pushed to GitHub `main`. |
-| Immutable T14 source fingerprint | **Formed locally, not pushed.** Source commit `4ee6212bfcb8e27616009a5847667a04b9e00384` contains the approved Procore-inspired daily crew and monthly detail presentation. T14 authority still excludes a GitHub push. |
-| Web/APK artifact hashes | **Formed.** Web `main.dart.js` SHA-256 `586bb5e0a11882469227bb814f4a222414d13dc5ec49a22547c7ecc519bbe700`; manifest `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff`; service worker `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c`. Android verification APK `2c21cdd15e689a647218aeff849148f25ef75aae52ea35dd01ba0824bc830f5d` used the explicit ephemeral CI-signing lane and is not publishable. |
+| Immutable T14 source fingerprint | **Formed locally, not pushed.** Source commit `c3065c0ef7309832d8ac8c1c50c40b665539b63e` matches the accepted daily-timesheet concept while retaining the server-confirmed roster, split-allocation and review/save boundaries. T14 authority still excludes a GitHub push. |
+| Web/APK artifact hashes | **Formed.** Web `main.dart.js` SHA-256 `c15bf51c5ad095d2589f4c3be556137764f4de741712d06d48ef76ad4a4e0bb4`; manifest `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff`; service worker `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c`. Android verification APK `95d7d84ca6d5387aa64eae2c3c6ab65fa28d4b985ce9c40f5824eb21d902a84f` used the explicit ephemeral CI-signing lane and is not publishable. |
 | Staging Supabase project | **Prepared.** `iqltcyimlqtcwyzlemwx` (`yorks-r35-staging`), Frankfurt `eu-central-1`; distinct from rejected shared/production ref `czykuksmlwswjsgotrpo`. |
 | Staging configuration | **Prepared locally.** Ignored `.r35.staging.env` resolves secrets from macOS Keychain and enables Workforce only for staging/release commands. No secret is recorded here. |
 | Vercel Preview configuration | **Bound into the verified static artifact.** The ignored staging configuration enabled Workforce and Accounts and selected only staging ref `iqltcyimlqtcwyzlemwx`; remote `main.dart.js` contains that ref once and the production ref zero times. No Vercel environment secret was added. |
 | Approved named personas | **Not approved for UAT.** Deterministic technical seed identities exist only for database-test execution; they are not the named human UAT persona/witness set required by T14. |
-| Staging deployment URL/ID | **Ready and unaliased.** `dpl_4Y4CqyNnUV1Edu42NL8uL5QPDRp5` at `https://yorks-r35-7lebszhmu-sajid-alis-projects-0ec775a2.vercel.app`. Root and Workforce overview/attendance/timesheets deep routes returned HTTP 200; deep-route HTML and protected artifacts byte-matched the local build. |
+| Staging deployment URL/ID | **Ready and unaliased.** `dpl_9c8RUn2hvnGaN7KzgD7aqcnT2W7q` at `https://yorks-r35-7o0hkwejn-sajid-alis-projects-0ec775a2.vercel.app`. Root and Workforce overview/attendance/timesheets/administration deep routes returned HTTP 200. `main.dart.js`, manifest and service worker byte-matched the local build; after removing Vercel's preview-toolbar line, the served `index.html` also byte-matched. |
 | Staging migration ledger | **Aligned through the current tracked ledger.** Verification on dedicated ref `iqltcyimlqtcwyzlemwx` showed every local migration through `20260831183000` present remotely. `finalize-document-upload` version 1 remains active with JWT verification and bundle hash `14a55d912fa2a416b74d6e32923ee4ee4ad5b019c72ca2febec19fd107bf7194`. |
 | Production state | **Released under the explicit exception.** Production ref `czykuksmlwswjsgotrpo` is aligned through `20260831090940`; verified deployment `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` is promoted at `yorks-r35.vercel.app`. This is not T14 evidence. |
 
