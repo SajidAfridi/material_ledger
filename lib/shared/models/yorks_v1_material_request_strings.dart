@@ -344,10 +344,10 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'मेरे सामग्री अनुरोध',
   );
   static const assignedMaterialRequests = TranslatableString(
-    en: 'Assigned Material Requests',
-    ar: 'طلبات المواد المسندة',
-    ur: 'تفویض شدہ میٹیریل ریکویسٹس',
-    hi: 'सौंपे गए सामग्री अनुरोध',
+    en: 'Coordinated Requests',
+    ar: 'الطلبات المنسقة',
+    ur: 'کوآرڈینیٹ شدہ درخواستیں',
+    hi: 'समन्वित अनुरोध',
   );
   static const savedDrafts = TranslatableString(
     en: 'Saved Drafts',
@@ -1605,6 +1605,114 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'اگلا عمل',
     hi: 'अगली कार्रवाई',
   );
+  static const requestRegister = TranslatableString(
+    en: 'Register',
+    ar: 'السجل',
+    ur: 'رجسٹر',
+    hi: 'रजिस्टर',
+  );
+  static const myWork = TranslatableString(
+    en: 'My Work',
+    ar: 'عملي',
+    ur: 'میرا کام',
+    hi: 'मेरा कार्य',
+  );
+  static const exceptions = TranslatableString(
+    en: 'Exceptions',
+    ar: 'الاستثناءات',
+    ur: 'استثنائی امور',
+    hi: 'अपवाद',
+  );
+  static const insights = TranslatableString(
+    en: 'Insights',
+    ar: 'المؤشرات',
+    ur: 'کارکردگی',
+    hi: 'अंतर्दृष्टि',
+  );
+  static const requiredOnSite = TranslatableString(
+    en: 'Required on site',
+    ar: 'مطلوب في الموقع',
+    ur: 'سائٹ پر درکار',
+    hi: 'साइट पर आवश्यक',
+  );
+  static const actionAge = TranslatableString(
+    en: 'Action age',
+    ar: 'عمر الإجراء',
+    ur: 'عمل کا دورانیہ',
+    hi: 'कार्रवाई की आयु',
+  );
+  static const overdue = TranslatableString(
+    en: 'Overdue',
+    ar: 'متأخر',
+    ur: 'تاخیر شدہ',
+    hi: 'अतिदेय',
+  );
+  static const actionDuePolicyPending = TranslatableString(
+    en: 'Action due dates need an approved Yorks SLA policy. No deadline has been invented.',
+    ar: 'تحتاج تواريخ استحقاق الإجراء إلى سياسة مستوى خدمة معتمدة من يوركس. لم يتم افتراض أي موعد نهائي.',
+    ur: 'عمل کی آخری تاریخ کے لیے منظور شدہ یورکس SLA پالیسی درکار ہے۔ کوئی فرضی آخری تاریخ نہیں بنائی گئی۔',
+    hi: 'कार्रवाई की नियत तिथि के लिए स्वीकृत Yorks SLA नीति चाहिए। कोई काल्पनिक समय-सीमा नहीं बनाई गई है।',
+  );
+  static const averageApprovalTime = TranslatableString(
+    en: 'Average approval time',
+    ar: 'متوسط وقت الموافقة',
+    ur: 'اوسط منظوری کا وقت',
+    hi: 'औसत स्वीकृति समय',
+  );
+  static const averageArrangementTime = TranslatableString(
+    en: 'Average arrangement time',
+    ar: 'متوسط وقت الترتيب',
+    ur: 'اوسط انتظام کا وقت',
+    hi: 'औसत व्यवस्था समय',
+  );
+  static const warehouseFillRate = TranslatableString(
+    en: 'Warehouse fill rate',
+    ar: 'معدل تلبية المستودع',
+    ur: 'گودام فراہمی کی شرح',
+    hi: 'वेयरहाउस पूर्ति दर',
+  );
+  static const receiptTurnaround = TranslatableString(
+    en: 'Receipt turnaround',
+    ar: 'زمن مراجعة الاستلام',
+    ur: 'وصولی مکمل ہونے کا وقت',
+    hi: 'प्राप्ति पूर्णता समय',
+  );
+  static const outstandingReplacement = TranslatableString(
+    en: 'Replacement quantity outstanding',
+    ar: 'كمية الاستبدال المعلقة',
+    ur: 'بقایا متبادل مقدار',
+    hi: 'बकाया प्रतिस्थापन मात्रा',
+  );
+  static const returnClosureTime = TranslatableString(
+    en: 'Return closure time',
+    ar: 'زمن إغلاق المرتجع',
+    ur: 'واپسی مکمل ہونے کا وقت',
+    hi: 'वापसी समापन समय',
+  );
+  static const returnedQuantity = TranslatableString(
+    en: 'Returned',
+    ar: 'مرتجع',
+    ur: 'واپس شدہ',
+    hi: 'वापस किया गया',
+  );
+  static const dispatchedQuantity = TranslatableString(
+    en: 'Dispatched',
+    ar: 'تم إرساله',
+    ur: 'ڈسپیچ شدہ',
+    hi: 'भेजा गया',
+  );
+  static const lineLedger = TranslatableString(
+    en: 'End-to-end line ledger',
+    ar: 'سجل البنود من البداية إلى النهاية',
+    ur: 'مکمل لائن لیجر',
+    hi: 'शुरू से अंत तक लाइन लेजर',
+  );
+  static const lineLedgerDescription = TranslatableString(
+    en: 'One trusted quantity trail from the request through return.',
+    ar: 'مسار كميات موثوق واحد من الطلب حتى المرتجع.',
+    ur: 'درخواست سے واپسی تک مقدار کا ایک قابل اعتماد ریکارڈ۔',
+    hi: 'अनुरोध से वापसी तक मात्रा का एक विश्वसनीय रिकॉर्ड।',
+  );
   static const requester = TranslatableString(
     en: 'Requester',
     ar: 'مقدم الطلب',
@@ -2103,6 +2211,59 @@ TranslatableString yorksV1MaterialRequestOwnerRoleCopy(String? value) {
   }
   return YorksV1ProjectStrings.roleLabel(role);
 }
+
+TranslatableString yorksV1MaterialRequestExceptionCopy(
+  YorksV1MaterialRequestExceptionCode code,
+) => switch (code) {
+  YorksV1MaterialRequestExceptionCode.unavailableSupply =>
+    const TranslatableString(
+      en: 'Unavailable supply',
+      ar: 'توريد غير متاح',
+      ur: 'فراہمی دستیاب نہیں',
+      hi: 'आपूर्ति उपलब्ध नहीं',
+    ),
+  YorksV1MaterialRequestExceptionCode.partialArrangement =>
+    const TranslatableString(
+      en: 'Partial arrangement',
+      ar: 'ترتيب جزئي',
+      ur: 'جزوی انتظام',
+      hi: 'आंशिक व्यवस्था',
+    ),
+  YorksV1MaterialRequestExceptionCode.lateExternalSupply =>
+    const TranslatableString(
+      en: 'Late external supply',
+      ar: 'توريد خارجي متأخر',
+      ur: 'بیرونی فراہمی میں تاخیر',
+      hi: 'बाहरी आपूर्ति में देरी',
+    ),
+  YorksV1MaterialRequestExceptionCode.missingReceipt =>
+    const TranslatableString(
+      en: 'Missing at receipt',
+      ar: 'مفقود عند الاستلام',
+      ur: 'وصولی پر گمشدہ',
+      hi: 'प्राप्ति पर गायब',
+    ),
+  YorksV1MaterialRequestExceptionCode.damagedReceipt =>
+    const TranslatableString(
+      en: 'Damaged at receipt',
+      ar: 'تالف عند الاستلام',
+      ur: 'وصولی پر خراب',
+      hi: 'प्राप्ति पर क्षतिग्रस्त',
+    ),
+  YorksV1MaterialRequestExceptionCode.replacementRequired =>
+    const TranslatableString(
+      en: 'Replacement required',
+      ar: 'يلزم الاستبدال',
+      ur: 'متبادل درکار',
+      hi: 'प्रतिस्थापन आवश्यक',
+    ),
+  YorksV1MaterialRequestExceptionCode.overdueReturn => const TranslatableString(
+    en: 'Overdue return',
+    ar: 'مرتجع متأخر',
+    ur: 'واپسی میں تاخیر',
+    hi: 'वापसी अतिदेय',
+  ),
+};
 
 /// Human next-action copy derived only from the trusted summary/detail
 /// projection. Coordination assignments never participate in this result.

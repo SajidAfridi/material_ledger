@@ -64,7 +64,7 @@ void main() {
 
       if (evidence.size.width < 600) {
         expect(find.textContaining('Awaiting receipt review'), findsWidgets);
-        expect(find.text('dispatched'), findsWidgets);
+        expect(find.text('Dispatched'), findsWidgets);
       }
       await expectLater(
         find.byType(MaterialApp),
@@ -299,11 +299,14 @@ final _partialDispatchDocument = YorksV1MaterialRequestDocumentModel(
       arrangedQuantity: '10',
       cannotProvideQuantity: '0',
       approvedQuantity: '10',
+      reservedQuantity: '5',
       dispatchedQuantity: '5',
       inTransitQuantity: '5',
       goodQuantity: '0',
       missingQuantity: '0',
       damagedQuantity: '0',
+      returnedQuantity: '0',
+      stillNeededQuantity: '5',
       remainingApprovedQuantity: '5',
       replacementEligibleQuantity: '0',
       ordinaryOutstandingQuantity: '5',
@@ -332,11 +335,14 @@ final _reviewedDocument = YorksV1MaterialRequestDocumentModel(
       arrangedQuantity: '10',
       cannotProvideQuantity: '0',
       approvedQuantity: '10',
+      reservedQuantity: '5',
       dispatchedQuantity: '5',
       inTransitQuantity: '0',
       goodQuantity: '3',
       missingQuantity: '2',
       damagedQuantity: '0',
+      returnedQuantity: '0',
+      stillNeededQuantity: '7',
       remainingApprovedQuantity: '7',
       replacementEligibleQuantity: '2',
       ordinaryOutstandingQuantity: '5',

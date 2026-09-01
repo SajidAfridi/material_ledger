@@ -152,6 +152,13 @@ abstract interface class YorksV1MaterialRequestPhase3Repository {
   );
 }
 
+/// Additive read-only action queue and operational reporting boundary.
+abstract interface class YorksV1MaterialRequestOperationsRepository {
+  Future<YorksV1MaterialRequestOperationsDashboard> getOperationsDashboard({
+    String? projectId,
+  });
+}
+
 /// Server-backed normalized MR repository. The only local persistence lives in
 /// a creator-owned recoverable draft controller; submitted state never falls
 /// back to the legacy collection/outbox authority.
@@ -159,7 +166,8 @@ class YorksV1SupabaseMaterialRequestRepository
     implements
         YorksV1MaterialRequestRepository,
         YorksV1MaterialRequestPhase2Repository,
-        YorksV1MaterialRequestPhase3Repository {
+        YorksV1MaterialRequestPhase3Repository,
+        YorksV1MaterialRequestOperationsRepository {
   const YorksV1SupabaseMaterialRequestRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -228,6 +236,26 @@ class YorksV1SupabaseMaterialRequestRepository
       );
     }
     return YorksV1MaterialRequestSummaryPage.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  @override
+  Future<YorksV1MaterialRequestOperationsDashboard> getOperationsDashboard({
+    String? projectId,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_material_request_operations_dashboard',
+      parameters: {
+        'p_project_id': projectId?.trim().isEmpty == true ? null : projectId,
+      },
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestOperationsDashboard.fromRpcJson(
       Map<String, dynamic>.from(response),
     );
   }

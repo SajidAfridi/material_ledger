@@ -53,6 +53,29 @@ The phone tabs are broad work groups rather than individual states:
   awaiting-approval state.
 - **Approved** — approved, dispatch, receipt and closed states.
 
+The role-aware register views answer a different question:
+
+- **My Work** — records where you can perform the protected Current action
+  now. It is based on server authorization, not only the owner label.
+- **Exceptions** — current unavailable, partial, late-supply, receipt,
+  replacement and return issues that need attention.
+- **Coordinated Requests** — records assigned to you for follow-up; this does
+  not make you the workflow owner.
+
+Open **Insights** for approval, arrangement, warehouse fill, receipt,
+replacement and return timing facts. A Scheduled request shows its Required on
+site date and a factual overdue warning. Action age is shown, but an Action due
+date is not displayed until Yorks approves an SLA policy.
+
+## How to read the line ledger
+
+The request detail keeps the complete quantity trail together:
+
+`Requested | Arranged | Reserved | Dispatched | Good | Missing | Damaged | Returned | Still Needed`
+
+This makes partial supply, goods in transit, receipt exceptions, warehouse
+returns and outstanding need visible without comparing separate screens.
+
 ## Who does what
 
 | Role | Main responsibility in this flow |
@@ -84,3 +107,6 @@ Records that already entered the former `awaiting_approval` post-arrangement
 lane keep that factual history and compatibility path. They are not silently
 converted. This exception must not be used as the operating guide for a newly
 submitted request.
+
+Implementation definitions and security boundaries are recorded in
+[`MATERIAL_REQUEST_ACTION_INTELLIGENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE.md).

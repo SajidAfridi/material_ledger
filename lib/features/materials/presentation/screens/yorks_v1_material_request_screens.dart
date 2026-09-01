@@ -104,6 +104,10 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
         repository is YorksV1MaterialRequestPhase2Repository
         ? repository as YorksV1MaterialRequestPhase2Repository
         : null;
+    final operationsRepository =
+        repository is YorksV1MaterialRequestOperationsRepository
+        ? repository as YorksV1MaterialRequestOperationsRepository
+        : null;
     final requestRefreshRevision = ref.watch(
       yorksV1MaterialRequestRealtimeRevisionProvider,
     );
@@ -168,6 +172,11 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
           canCreate: canCreate,
           fixedProjectId: projectId,
           summaryPageLoader: phase2Repository.listRequestSummaries,
+          operationsDashboardLoader: operationsRepository == null
+              ? null
+              : (projectId) => operationsRepository.getOperationsDashboard(
+                  projectId: projectId,
+                ),
           refreshRevision: refreshRevision,
           onCreate: createAccess.canWrite
               ? () => context.push(
@@ -277,6 +286,11 @@ class _YorksMobileMaterialRequestsPageState
 
   Future<void> _refreshRequests() async {
     final repository = ref.read(yorksV1MaterialRequestRepositoryProvider);
+    if (repository is YorksV1MaterialRequestOperationsRepository) {
+      ref.invalidate(
+        yorksV1MaterialRequestOperationsDashboardProvider(widget.projectId),
+      );
+    }
     if (repository is YorksV1MaterialRequestPhase2Repository) {
       final provider = yorksV1MaterialRequestSummaryPageProvider(_summaryQuery);
       ref.invalidate(provider);
@@ -323,6 +337,11 @@ class _YorksMobileMaterialRequestsPageState
               .toList(growable: false);
     final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
     final phase2 = repository is YorksV1MaterialRequestPhase2Repository;
+    final operations = repository is YorksV1MaterialRequestOperationsRepository
+        ? ref.watch(
+            yorksV1MaterialRequestOperationsDashboardProvider(widget.projectId),
+          )
+        : null;
     final accountDrafts =
         ownerAuthUserId == null || ownerAuthUserId.isEmpty || !phase2
         ? const <YorksV1PrivateMaterialRequestDraftRecord>[]
@@ -401,6 +420,14 @@ class _YorksMobileMaterialRequestsPageState
                 page: _page,
                 canCreate: canCreate,
                 localDrafts: savedDrafts,
+                operationsDashboard: operations,
+                onRetryOperations: operations == null
+                    ? null
+                    : () => ref.invalidate(
+                        yorksV1MaterialRequestOperationsDashboardProvider(
+                          widget.projectId,
+                        ),
+                      ),
                 registerView: _registerView,
                 onRegisterViewChanged: (value) => setState(() {
                   _registerView = value;
@@ -458,6 +485,8 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     this.page = 0,
     required this.canCreate,
     required this.localDrafts,
+    this.operationsDashboard,
+    this.onRetryOperations,
     required this.registerView,
     required this.onRegisterViewChanged,
     required this.filter,
@@ -476,6 +505,9 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final int page;
   final bool canCreate;
   final List<YorksV1MaterialRequestDraft> localDrafts;
+  final AsyncValue<YorksV1MaterialRequestOperationsDashboard>?
+  operationsDashboard;
+  final VoidCallback? onRetryOperations;
   final YorksV1MaterialRequestRegisterView registerView;
   final ValueChanged<YorksV1MaterialRequestRegisterView> onRegisterViewChanged;
   final _MobileMaterialRequestFilter filter;
@@ -553,6 +585,16 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
             ),
             const SizedBox(height: 14),
           ],
+          if (operationsDashboard != null) ...[
+            YorksV1MaterialRequestOperationalInsightsPanel(
+              language: language,
+              dashboard: operationsDashboard!.valueOrNull,
+              loading: operationsDashboard!.isLoading,
+              failed: operationsDashboard!.hasError,
+              onRetry: onRetryOperations ?? onRefresh,
+            ),
+            const SizedBox(height: 14),
+          ],
           SizedBox(
             height: AppSpacing.minTapTarget,
             child: ListView(
@@ -566,6 +608,25 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
                       registerView == YorksV1MaterialRequestRegisterView.total,
                   onTap: () => onRegisterViewChanged(
                     YorksV1MaterialRequestRegisterView.total,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _MobileRegisterViewChip(
+                  label: YorksV1MaterialRequestStrings.myWork.primary,
+                  selected:
+                      registerView == YorksV1MaterialRequestRegisterView.myWork,
+                  onTap: () => onRegisterViewChanged(
+                    YorksV1MaterialRequestRegisterView.myWork,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _MobileRegisterViewChip(
+                  label: YorksV1MaterialRequestStrings.exceptions.primary,
+                  selected:
+                      registerView ==
+                      YorksV1MaterialRequestRegisterView.exceptions,
+                  onTap: () => onRegisterViewChanged(
+                    YorksV1MaterialRequestRegisterView.exceptions,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1054,6 +1115,58 @@ class _MobileMaterialRequestCard extends StatelessWidget {
           label: YorksV1MaterialRequestStrings.nextAction.active(language),
           value: yorksV1MaterialRequestNextActionCopy(request).active(language),
         ),
+        if (request.scheduledDate != null) ...[
+          const SizedBox(height: 5),
+          _MobileRequestWorkflowFact(
+            icon: request.requiredOnSiteOverdue
+                ? Icons.event_busy_outlined
+                : Icons.event_outlined,
+            label: YorksV1MaterialRequestStrings.requiredOnSite.active(
+              language,
+            ),
+            value: MaterialLocalizations.of(
+              context,
+            ).formatMediumDate(request.scheduledDate!.toLocal()),
+            alert: request.requiredOnSiteOverdue,
+          ),
+        ],
+        if (request.currentActionAgeHours > 0) ...[
+          const SizedBox(height: 5),
+          _MobileRequestWorkflowFact(
+            icon: Icons.schedule_outlined,
+            label: YorksV1MaterialRequestStrings.actionAge.active(language),
+            value: _formatMaterialRequestActionAge(
+              request.currentActionAgeHours,
+            ),
+          ),
+        ],
+        if (request.exceptionCodes.isNotEmpty) ...[
+          const SizedBox(height: 9),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final code in request.exceptionCodes)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  ),
+                  child: Text(
+                    yorksV1MaterialRequestExceptionCopy(code).active(language),
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.onWarningContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(10),
@@ -1091,17 +1204,19 @@ class _MobileRequestWorkflowFact extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.alert = false,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final bool alert;
 
   @override
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 16, color: AppColors.muted),
+      Icon(icon, size: 16, color: alert ? AppColors.error : AppColors.muted),
       const SizedBox(width: 6),
       Expanded(
         child: Text(
@@ -1109,12 +1224,19 @@ class _MobileRequestWorkflowFact extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: AppTypography.labelSmall.copyWith(
-            color: AppColors.inkSecondary,
+            color: alert ? AppColors.error : AppColors.inkSecondary,
+            fontWeight: alert ? FontWeight.w700 : null,
           ),
         ),
       ),
     ],
   );
+}
+
+String _formatMaterialRequestActionAge(double hours) {
+  if (hours >= 48) return '${(hours / 24).floor()} d';
+  if (hours >= 1) return '${hours.floor()} h';
+  return '<1 h';
 }
 
 class _MobileRequestStateChip extends StatelessWidget {
@@ -10191,7 +10313,11 @@ class _MobileMrLifecycleLineCard extends StatelessWidget {
           '${yorksV1DisplayQuantity(progress.approvedQuantity)} ${line.unit}',
         ),
         (
-          YorksV1LogisticsStrings.dispatched.primary,
+          YorksV1LogisticsStrings.reserved.primary,
+          '${yorksV1DisplayQuantity(progress.reservedQuantity)} ${line.unit}',
+        ),
+        (
+          YorksV1MaterialRequestStrings.dispatchedQuantity.primary,
           '${yorksV1DisplayQuantity(progress.dispatchedQuantity)} ${line.unit}',
         ),
         (
@@ -10207,8 +10333,12 @@ class _MobileMrLifecycleLineCard extends StatelessWidget {
           '${yorksV1DisplayQuantity(progress.damagedQuantity)} ${line.unit}',
         ),
         (
+          YorksV1MaterialRequestStrings.returnedQuantity.primary,
+          '${yorksV1DisplayQuantity(progress.returnedQuantity)} ${line.unit}',
+        ),
+        (
           YorksV1LogisticsStrings.stillNeeded.primary,
-          '${yorksV1DisplayQuantity(progress.remainingApprovedQuantity)} ${line.unit}',
+          '${yorksV1DisplayQuantity(progress.stillNeededQuantity)} ${line.unit}',
         ),
         if (YorksV1DecimalQuantity.tryParse(
               progress.replacementEligibleQuantity,
@@ -12487,6 +12617,172 @@ class _RequestedItemsSurface extends StatelessWidget {
   );
 }
 
+class _RequestLineLifecycleLedger extends StatelessWidget {
+  const _RequestLineLifecycleLedger({
+    required this.request,
+    required this.documentModel,
+  });
+
+  final YorksV1MaterialRequest request;
+  final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _R35RecordSectionHeading(
+        title: YorksV1MaterialRequestStrings.lineLedger.primary,
+        description:
+            YorksV1MaterialRequestStrings.lineLedgerDescription.primary,
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      documentModel.when(
+        loading: () => const _R35RecordSurface(
+          child: LinearProgressIndicator(minHeight: 2),
+        ),
+        error: (_, _) => _R35RecordSurface(
+          child: Text(
+            YorksV1MaterialRequestStrings.controlledDocumentUnavailable.primary,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+          ),
+        ),
+        data: (model) => _R35RecordSurface(
+          padding: EdgeInsets.zero,
+          child: Scrollbar(
+            scrollbarOrientation: ScrollbarOrientation.bottom,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 1280),
+                child: Table(
+                  border: TableBorder.all(color: AppColors.line),
+                  columnWidths: const {
+                    0: FlexColumnWidth(2.4),
+                    1: FixedColumnWidth(98),
+                    2: FixedColumnWidth(98),
+                    3: FixedColumnWidth(98),
+                    4: FixedColumnWidth(98),
+                    5: FixedColumnWidth(98),
+                    6: FixedColumnWidth(90),
+                    7: FixedColumnWidth(90),
+                    8: FixedColumnWidth(90),
+                    9: FixedColumnWidth(106),
+                  },
+                  children: [
+                    TableRow(
+                      decoration: const BoxDecoration(
+                        color: AppColors.surfaceContainerHigh,
+                      ),
+                      children: [
+                        _FormalCell(
+                          YorksV1MaterialRequestStrings.item.primary,
+                          header: true,
+                        ),
+                        _FormalCell(
+                          YorksV1ArrangementStrings.requested.primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          YorksV1ArrangementStrings.arranged.primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          YorksV1LogisticsStrings.reserved.primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          YorksV1MaterialRequestStrings
+                              .dispatchedQuantity
+                              .primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          YorksV1LogisticsStrings.goodReceived.primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          yorksV1ReceiptOutcomeCopy(
+                            YorksV1ReceiptOutcome.missing,
+                          ).primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          yorksV1ReceiptOutcomeCopy(
+                            YorksV1ReceiptOutcome.damaged,
+                          ).primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          YorksV1MaterialRequestStrings
+                              .returnedQuantity
+                              .primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                        _FormalCell(
+                          YorksV1LogisticsStrings.stillNeeded.primary,
+                          header: true,
+                          alignEnd: true,
+                        ),
+                      ],
+                    ),
+                    for (final line in request.lines)
+                      _lineRow(line, model.lineLifecycles[line.id]),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  TableRow _lineRow(
+    YorksV1MaterialRequestLine line,
+    YorksV1MaterialRequestLineLifecycle? progress,
+  ) {
+    String quantity(String value) =>
+        '${yorksV1DisplayQuantity(value)} ${line.unit}';
+    return TableRow(
+      children: [
+        _FormalCell(line.description, supporting: line.brandOrigin),
+        _FormalCell(quantity(line.quantity), alignEnd: true),
+        _FormalCell(
+          quantity(progress?.arrangedQuantity ?? '0'),
+          alignEnd: true,
+        ),
+        _FormalCell(
+          quantity(progress?.reservedQuantity ?? '0'),
+          alignEnd: true,
+        ),
+        _FormalCell(
+          quantity(progress?.dispatchedQuantity ?? '0'),
+          alignEnd: true,
+        ),
+        _FormalCell(quantity(progress?.goodQuantity ?? '0'), alignEnd: true),
+        _FormalCell(quantity(progress?.missingQuantity ?? '0'), alignEnd: true),
+        _FormalCell(quantity(progress?.damagedQuantity ?? '0'), alignEnd: true),
+        _FormalCell(
+          quantity(progress?.returnedQuantity ?? '0'),
+          alignEnd: true,
+        ),
+        _FormalCell(
+          quantity(progress?.stillNeededQuantity ?? line.quantity),
+          alignEnd: true,
+        ),
+      ],
+    );
+  }
+}
+
 class _RequestRecordContent extends StatelessWidget {
   const _RequestRecordContent({
     required this.request,
@@ -12533,6 +12829,11 @@ class _RequestRecordContent extends StatelessWidget {
       ),
       const SizedBox(height: AppSpacing.sm),
       _RequestedItemsSurface(request: request),
+      const SizedBox(height: AppSpacing.lg),
+      _RequestLineLifecycleLedger(
+        request: request,
+        documentModel: documentModel,
+      ),
       const SizedBox(height: AppSpacing.lg),
       _R35RecordSurface(
         padding: EdgeInsets.zero,

@@ -100,11 +100,14 @@ class YorksV1MaterialRequestLineLifecycle {
     required this.arrangedQuantity,
     required this.cannotProvideQuantity,
     required this.approvedQuantity,
+    this.reservedQuantity = '0',
     required this.dispatchedQuantity,
     required this.inTransitQuantity,
     required this.goodQuantity,
     required this.missingQuantity,
     required this.damagedQuantity,
+    this.returnedQuantity = '0',
+    this.stillNeededQuantity = '0',
     required this.remainingApprovedQuantity,
     required this.replacementEligibleQuantity,
     required this.ordinaryOutstandingQuantity,
@@ -120,11 +123,14 @@ class YorksV1MaterialRequestLineLifecycle {
   final String arrangedQuantity;
   final String cannotProvideQuantity;
   final String approvedQuantity;
+  final String reservedQuantity;
   final String dispatchedQuantity;
   final String inTransitQuantity;
   final String goodQuantity;
   final String missingQuantity;
   final String damagedQuantity;
+  final String returnedQuantity;
+  final String stillNeededQuantity;
   final String remainingApprovedQuantity;
   final String replacementEligibleQuantity;
   final String ordinaryOutstandingQuantity;
@@ -142,6 +148,7 @@ class YorksV1MaterialRequestLineLifecycle {
     arrangedQuantity: _quantity(json['arranged_qty']),
     cannotProvideQuantity: _quantity(json['cannot_provide_qty']),
     approvedQuantity: _quantity(json['approved_qty']),
+    reservedQuantity: _quantity(json['reserved_qty']),
     dispatchedQuantity: _quantity(json['dispatched_qty']),
     inTransitQuantity: _quantity(json['in_transit_qty']),
     goodQuantity: _quantity(json['reviewed_good_qty'] ?? json['good_qty']),
@@ -150,6 +157,10 @@ class YorksV1MaterialRequestLineLifecycle {
     ),
     damagedQuantity: _quantity(
       json['reviewed_damaged_qty'] ?? json['damaged_qty'],
+    ),
+    returnedQuantity: _quantity(json['returned_qty']),
+    stillNeededQuantity: _quantity(
+      json['still_needed_qty'] ?? json['remaining_approved_qty'],
     ),
     remainingApprovedQuantity: _quantity(json['remaining_approved_qty']),
     replacementEligibleQuantity: _quantity(json['replacement_eligible_qty']),

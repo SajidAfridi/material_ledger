@@ -103,6 +103,32 @@ final yorksV1MaterialRequestSummaryPageProvider = FutureProvider.autoDispose
           .listRequestSummaries(query);
     });
 
+/// Role- and project-scoped operational facts used by both the desktop and
+/// mobile Material Request registers. The database projection contains only
+/// non-commercial workflow timing and quantity aggregates.
+final yorksV1MaterialRequestOperationsDashboardProvider = FutureProvider
+    .autoDispose
+    .family<YorksV1MaterialRequestOperationsDashboard, String?>((
+      ref,
+      projectId,
+    ) {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestOperationsRepository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return (repository as YorksV1MaterialRequestOperationsRepository)
+          .getOperationsDashboard(projectId: projectId);
+    });
+
 final yorksV1MaterialRequestCommentPageProvider = FutureProvider.autoDispose
     .family<
       YorksV1MaterialRequestCommentPage,

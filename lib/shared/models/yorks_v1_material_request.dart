@@ -277,6 +277,11 @@ class YorksV1MaterialRequestSummary {
     this.requesterExactRole,
     this.currentActionOwnerRole,
     this.currentActionCode,
+    this.currentActionStartedAt,
+    this.currentActionAgeHours = 0,
+    this.requiredOnSiteOverdue = false,
+    this.actorCanAct = false,
+    this.exceptionCodes = const [],
     this.submittedAt,
   });
 
@@ -299,6 +304,11 @@ class YorksV1MaterialRequestSummary {
   final String? requesterExactRole;
   final String? currentActionOwnerRole;
   final String? currentActionCode;
+  final DateTime? currentActionStartedAt;
+  final double currentActionAgeHours;
+  final bool requiredOnSiteOverdue;
+  final bool actorCanAct;
+  final List<YorksV1MaterialRequestExceptionCode> exceptionCodes;
   final int itemCount;
   final DateTime? submittedAt;
   final DateTime createdAt;
@@ -335,6 +345,13 @@ class YorksV1MaterialRequestSummary {
       requesterExactRole: _trimToNull(json['requester_exact_role']),
       currentActionOwnerRole: _trimToNull(json['current_action_owner_role']),
       currentActionCode: _trimToNull(json['current_action_code']),
+      currentActionStartedAt: _nullableDate(json['current_action_started_at']),
+      currentActionAgeHours: _nonNegativeDouble(
+        json['current_action_age_hours'],
+      ),
+      requiredOnSiteOverdue: json['required_on_site_overdue'] == true,
+      actorCanAct: json['actor_can_act'] == true,
+      exceptionCodes: _exceptionCodes(json['exception_codes']),
       itemCount: _nonNegativeInt(json['item_count']),
       submittedAt: _nullableDate(json['submitted_at']),
       createdAt: _requiredDate(json, 'created_at'),
@@ -359,6 +376,9 @@ class YorksV1MaterialRequestSummaryMetrics {
     required this.dispatched,
     required this.received,
     required this.closed,
+    this.myWork = 0,
+    this.exceptions = 0,
+    this.requiredDateOverdue = 0,
   });
 
   final int total;
@@ -367,6 +387,9 @@ class YorksV1MaterialRequestSummaryMetrics {
   final int dispatched;
   final int received;
   final int closed;
+  final int myWork;
+  final int exceptions;
+  final int requiredDateOverdue;
 
   factory YorksV1MaterialRequestSummaryMetrics.fromRpcJson(
     Map<String, dynamic> json,
@@ -377,6 +400,81 @@ class YorksV1MaterialRequestSummaryMetrics {
     dispatched: _nonNegativeInt(json['dispatched']),
     received: _nonNegativeInt(json['received']),
     closed: _nonNegativeInt(json['closed']),
+    myWork: _nonNegativeInt(json['my_work'] ?? 0),
+    exceptions: _nonNegativeInt(json['exceptions'] ?? 0),
+    requiredDateOverdue: _nonNegativeInt(json['required_date_overdue'] ?? 0),
+  );
+}
+
+enum YorksV1MaterialRequestExceptionCode {
+  unavailableSupply('unavailable_supply'),
+  partialArrangement('partial_arrangement'),
+  lateExternalSupply('late_external_supply'),
+  missingReceipt('missing_receipt'),
+  damagedReceipt('damaged_receipt'),
+  replacementRequired('replacement_required'),
+  overdueReturn('overdue_return');
+
+  const YorksV1MaterialRequestExceptionCode(this.wireValue);
+
+  final String wireValue;
+
+  static YorksV1MaterialRequestExceptionCode? fromWireValue(Object? value) {
+    final wireValue = value?.toString().trim();
+    for (final code in values) {
+      if (code.wireValue == wireValue) return code;
+    }
+    return null;
+  }
+}
+
+class YorksV1MaterialRequestOperationsDashboard {
+  const YorksV1MaterialRequestOperationsDashboard({
+    required this.myWorkCount,
+    required this.exceptionRequestCount,
+    required this.requiredDateOverdueCount,
+    required this.actionDuePolicy,
+    required this.outstandingReplacementQuantity,
+    this.averageApprovalHours,
+    this.averageArrangementHours,
+    this.warehouseFillRatePercent,
+    this.averageReceiptTurnaroundHours,
+    this.averageReturnClosureHours,
+  });
+
+  final int myWorkCount;
+  final int exceptionRequestCount;
+  final int requiredDateOverdueCount;
+  final String actionDuePolicy;
+  final double? averageApprovalHours;
+  final double? averageArrangementHours;
+  final double? warehouseFillRatePercent;
+  final double? averageReceiptTurnaroundHours;
+  final String outstandingReplacementQuantity;
+  final double? averageReturnClosureHours;
+
+  factory YorksV1MaterialRequestOperationsDashboard.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1MaterialRequestOperationsDashboard(
+    myWorkCount: _nonNegativeInt(json['my_work_count']),
+    exceptionRequestCount: _nonNegativeInt(json['exception_request_count']),
+    requiredDateOverdueCount: _nonNegativeInt(
+      json['required_date_overdue_count'],
+    ),
+    actionDuePolicy: _trimToNull(json['action_due_policy']) ?? 'not_configured',
+    averageApprovalHours: _nullableDouble(json['average_approval_hours']),
+    averageArrangementHours: _nullableDouble(json['average_arrangement_hours']),
+    warehouseFillRatePercent: _nullableDouble(
+      json['warehouse_fill_rate_percent'],
+    ),
+    averageReceiptTurnaroundHours: _nullableDouble(
+      json['average_receipt_turnaround_hours'],
+    ),
+    outstandingReplacementQuantity:
+        _trimToNull(json['outstanding_replacement_quantity']) ?? '0',
+    averageReturnClosureHours: _nullableDouble(
+      json['average_return_closure_hours'],
+    ),
   );
 }
 
@@ -424,7 +522,9 @@ class YorksV1MaterialRequestSummaryPage {
 enum YorksV1MaterialRequestRegisterView {
   total('total'),
   mine('mine'),
-  assigned('assigned');
+  assigned('assigned'),
+  myWork('my_work'),
+  exceptions('exceptions');
 
   const YorksV1MaterialRequestRegisterView(this.wireValue);
 
@@ -1024,6 +1124,11 @@ class YorksV1MaterialRequest {
     this.documentIdentityVerified = false,
     this.currentActionOwnerRole,
     this.currentActionCode,
+    this.currentActionStartedAt,
+    this.currentActionAgeHours = 0,
+    this.requiredOnSiteOverdue = false,
+    this.actorCanAct = false,
+    this.exceptionCodes = const [],
     this.submittedAt,
     this.cancelledAt,
     this.cancellationReason,
@@ -1061,6 +1166,11 @@ class YorksV1MaterialRequest {
   final bool documentIdentityVerified;
   final String? currentActionOwnerRole;
   final String? currentActionCode;
+  final DateTime? currentActionStartedAt;
+  final double currentActionAgeHours;
+  final bool requiredOnSiteOverdue;
+  final bool actorCanAct;
+  final List<YorksV1MaterialRequestExceptionCode> exceptionCodes;
   final DateTime? submittedAt;
   final DateTime? cancelledAt;
   final String? cancellationReason;
@@ -1122,6 +1232,13 @@ class YorksV1MaterialRequest {
       documentIdentityVerified: json['document_identity_verified'] == true,
       currentActionOwnerRole: _trimToNull(json['current_action_owner_role']),
       currentActionCode: _trimToNull(json['current_action_code']),
+      currentActionStartedAt: _nullableDate(json['current_action_started_at']),
+      currentActionAgeHours: _nonNegativeDouble(
+        json['current_action_age_hours'],
+      ),
+      requiredOnSiteOverdue: json['required_on_site_overdue'] == true,
+      actorCanAct: json['actor_can_act'] == true,
+      exceptionCodes: _exceptionCodes(json['exception_codes']),
       submittedAt: _nullableDate(json['submitted_at']),
       cancelledAt: _nullableDate(json['cancelled_at']),
       cancellationReason: _trimToNull(json['cancellation_reason']),
@@ -1158,6 +1275,11 @@ extension YorksV1MaterialRequestSummaryRegisterAdapter
     requesterExactRole: requesterExactRole,
     currentActionOwnerRole: currentActionOwnerRole,
     currentActionCode: currentActionCode,
+    currentActionStartedAt: currentActionStartedAt,
+    currentActionAgeHours: currentActionAgeHours,
+    requiredOnSiteOverdue: requiredOnSiteOverdue,
+    actorCanAct: actorCanAct,
+    exceptionCodes: exceptionCodes,
     submittedAt: submittedAt,
   );
 }
@@ -1649,6 +1771,27 @@ int _nonNegativeInt(Object? value) => switch (value) {
 int _positiveInt(Object? value) {
   final parsed = _nonNegativeInt(value);
   return parsed > 0 ? parsed : 1;
+}
+
+double _nonNegativeDouble(Object? value) {
+  final parsed = _nullableDouble(value) ?? 0;
+  return parsed < 0 ? 0 : parsed;
+}
+
+double? _nullableDouble(Object? value) => switch (value) {
+  num number => number.toDouble(),
+  String text => double.tryParse(text.trim()),
+  _ => null,
+};
+
+List<YorksV1MaterialRequestExceptionCode> _exceptionCodes(Object? value) {
+  if (value is! List) return const [];
+  final result = <YorksV1MaterialRequestExceptionCode>[];
+  for (final item in value) {
+    final code = YorksV1MaterialRequestExceptionCode.fromWireValue(item);
+    if (code != null) result.add(code);
+  }
+  return List.unmodifiable(result);
 }
 
 DateTime _requiredDate(Map<String, dynamic> json, String key) {

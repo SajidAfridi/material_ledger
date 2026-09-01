@@ -468,6 +468,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(queries.last.registerView, YorksV1MaterialRequestRegisterView.mine);
 
+    await tester.tap(find.text('My Work'));
+    await tester.pumpAndSettle();
+    expect(
+      queries.last.registerView,
+      YorksV1MaterialRequestRegisterView.myWork,
+    );
+
+    await tester.tap(find.text('Exceptions'));
+    await tester.pumpAndSettle();
+    expect(
+      queries.last.registerView,
+      YorksV1MaterialRequestRegisterView.exceptions,
+    );
+
     await tester.tap(
       find.byKey(const ValueKey('material-request-centre-page-next')),
     );
@@ -480,7 +494,158 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('operational insights remain readable at mobile width', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: YorksV1MaterialRequestOperationalInsightsPanel(
+              language: AppLanguage.english,
+              dashboard: const YorksV1MaterialRequestOperationsDashboard(
+                myWorkCount: 4,
+                exceptionRequestCount: 3,
+                requiredDateOverdueCount: 2,
+                actionDuePolicy: 'not_configured',
+                averageApprovalHours: 6.25,
+                averageArrangementHours: 9.5,
+                warehouseFillRatePercent: 82.75,
+                averageReceiptTurnaroundHours: 3.5,
+                outstandingReplacementQuantity: '12.5',
+                averageReturnClosureHours: 18,
+              ),
+              loading: false,
+              failed: false,
+              onRetry: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('material-request-operational-insights')),
+      findsOneWidget,
+    );
+    expect(find.text('4 My Work · 3 Exceptions'), findsOneWidget);
+    await tester.tap(find.text('Insights'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Average approval time'), findsOneWidget);
+    expect(find.text('Warehouse fill rate'), findsOneWidget);
+    expect(find.text('82.8%'), findsOneWidget);
+    expect(find.textContaining('approved Yorks SLA policy'), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_operational_insights_360.png'),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('operational insights use a calm desktop metric grid', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 500));
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(24),
+            child: YorksV1MaterialRequestOperationalInsightsPanel(
+              language: AppLanguage.english,
+              dashboard: const YorksV1MaterialRequestOperationsDashboard(
+                myWorkCount: 4,
+                exceptionRequestCount: 3,
+                requiredDateOverdueCount: 2,
+                actionDuePolicy: 'not_configured',
+                averageApprovalHours: 6.25,
+                averageArrangementHours: 9.5,
+                warehouseFillRatePercent: 82.75,
+                averageReceiptTurnaroundHours: 3.5,
+                outstandingReplacementQuantity: '12.5',
+                averageReturnClosureHours: 18,
+              ),
+              loading: false,
+              failed: false,
+              onRetry: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Insights'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Average arrangement time'), findsOneWidget);
+    expect(find.text('Return closure time'), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_operational_insights_desktop.png'),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('register surfaces action age, due risk and exceptions', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1280, 800));
+    final request = _request(
+      id: 'mr-action-facts',
+      projectId: 'project-action-facts',
+      reference: 'YRA-401',
+      projectName: 'Action facts project',
+      number: 'YRA-401-MR001',
+      title: 'Late external material',
+      scope: 'Building A',
+      state: YorksV1MaterialRequestState.approvedForArrangement,
+      updatedAt: DateTime.utc(2026, 8, 20, 9),
+      action: 'arrangement_required',
+      ownerRole: 'procurement',
+      scheduledDate: DateTime.utc(2026, 8, 19),
+      currentActionAgeHours: 27.5,
+      requiredOnSiteOverdue: true,
+      actorCanAct: true,
+      exceptionCodes: const [
+        YorksV1MaterialRequestExceptionCode.lateExternalSupply,
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: [request],
+            language: AppLanguage.english,
+            canCreate: false,
+            onCreate: null,
+            onOpen: (_) {},
+            onRefresh: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Current owner'), findsOneWidget);
+    expect(find.textContaining('Next action'), findsOneWidget);
+    expect(find.textContaining('Required on site'), findsOneWidget);
+    expect(find.textContaining('Action age'), findsOneWidget);
+    expect(find.text('Late external supply'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
+
+void _noop() {}
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -602,6 +767,11 @@ YorksV1MaterialRequest _request({
   required DateTime updatedAt,
   String? action,
   String? ownerRole,
+  DateTime? scheduledDate,
+  double currentActionAgeHours = 0,
+  bool requiredOnSiteOverdue = false,
+  bool actorCanAct = false,
+  List<YorksV1MaterialRequestExceptionCode> exceptionCodes = const [],
 }) => YorksV1MaterialRequest(
   id: id,
   projectId: projectId,
@@ -613,13 +783,20 @@ YorksV1MaterialRequest _request({
   recordVersion: 1,
   createdAt: updatedAt.subtract(const Duration(days: 1)),
   updatedAt: updatedAt,
-  timing: YorksV1MaterialRequestTiming.normal,
+  timing: scheduledDate == null
+      ? YorksV1MaterialRequestTiming.normal
+      : YorksV1MaterialRequestTiming.scheduled,
+  scheduledDate: scheduledDate,
   requestNumber: number,
   title: title,
   requesterDisplayName: 'Faisal Ahmed',
   requesterProjectRole: 'Project Engineer',
   currentActionCode: action,
   currentActionOwnerRole: ownerRole,
+  currentActionAgeHours: currentActionAgeHours,
+  requiredOnSiteOverdue: requiredOnSiteOverdue,
+  actorCanAct: actorCanAct,
+  exceptionCodes: exceptionCodes,
   lines: const [
     YorksV1MaterialRequestLine(
       id: 'line',

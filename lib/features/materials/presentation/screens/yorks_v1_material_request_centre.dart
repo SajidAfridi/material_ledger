@@ -28,6 +28,7 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     this.localDraftNotice,
     this.fixedProjectId,
     this.summaryPageLoader,
+    this.operationsDashboardLoader,
     this.refreshRevision = 0,
   });
 
@@ -43,6 +44,10 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     YorksV1MaterialRequestSummaryQuery query,
   )?
   summaryPageLoader;
+  final Future<YorksV1MaterialRequestOperationsDashboard> Function(
+    String? projectId,
+  )?
+  operationsDashboardLoader;
   final int refreshRevision;
 
   @override
@@ -86,12 +91,18 @@ class _YorksV1MaterialRequestCentreState
   Object? _serverError;
   bool _serverLoading = false;
   Timer? _serverSearchDebounce;
+  YorksV1MaterialRequestOperationsDashboard? _operationsDashboard;
+  Object? _operationsError;
+  bool _operationsLoading = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.summaryPageLoader != null) {
       unawaited(_loadServerPage());
+    }
+    if (widget.operationsDashboardLoader != null) {
+      unawaited(_loadOperationsDashboard());
     }
   }
 
@@ -102,6 +113,12 @@ class _YorksV1MaterialRequestCentreState
         oldWidget.fixedProjectId != widget.fixedProjectId ||
         oldWidget.refreshRevision != widget.refreshRevision) {
       unawaited(_loadServerPage());
+    }
+    if (oldWidget.operationsDashboardLoader !=
+            widget.operationsDashboardLoader ||
+        oldWidget.fixedProjectId != widget.fixedProjectId ||
+        oldWidget.refreshRevision != widget.refreshRevision) {
+      unawaited(_loadOperationsDashboard());
     }
   }
 
@@ -208,6 +225,29 @@ class _YorksV1MaterialRequestCentreState
     }
   }
 
+  Future<void> _loadOperationsDashboard() async {
+    final loader = widget.operationsDashboardLoader;
+    if (loader == null || !mounted) return;
+    setState(() {
+      _operationsLoading = true;
+      _operationsError = null;
+    });
+    try {
+      final dashboard = await loader(widget.fixedProjectId);
+      if (!mounted) return;
+      setState(() {
+        _operationsDashboard = dashboard;
+        _operationsLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _operationsError = error;
+        _operationsLoading = false;
+      });
+    }
+  }
+
   void _clearFilters() => _update(() {
     _searchController.clear();
     _status = _allSelection;
@@ -279,6 +319,16 @@ class _YorksV1MaterialRequestCentreState
             _view = _MaterialRequestCentreView.allRequests;
           }),
         ),
+        if (widget.operationsDashboardLoader != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          YorksV1MaterialRequestOperationalInsightsPanel(
+            language: widget.language,
+            dashboard: _operationsDashboard,
+            loading: _operationsLoading,
+            failed: _operationsError != null,
+            onRetry: () => unawaited(_loadOperationsDashboard()),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         if (_serverError != null && _serverPage == null)
           _MaterialRequestCentreLoadError(
@@ -484,6 +534,18 @@ class _RegisterScopeSwitcher extends StatelessWidget {
             ),
           ),
         ),
+        ButtonSegment(
+          value: YorksV1MaterialRequestRegisterView.myWork,
+          icon: const Icon(Icons.task_alt_outlined),
+          label: Text(YorksV1MaterialRequestStrings.myWork.active(language)),
+        ),
+        ButtonSegment(
+          value: YorksV1MaterialRequestRegisterView.exceptions,
+          icon: const Icon(Icons.report_problem_outlined),
+          label: Text(
+            YorksV1MaterialRequestStrings.exceptions.active(language),
+          ),
+        ),
       ],
       selected: {selected},
       onSelectionChanged: (values) {
@@ -528,6 +590,172 @@ class _MaterialRequestCentreLoadError extends StatelessWidget {
           ],
         ),
       ),
+    ),
+  );
+}
+
+class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
+  const YorksV1MaterialRequestOperationalInsightsPanel({
+    super.key,
+    required this.language,
+    required this.dashboard,
+    required this.loading,
+    required this.failed,
+    required this.onRetry,
+  });
+
+  final AppLanguage language;
+  final YorksV1MaterialRequestOperationsDashboard? dashboard;
+  final bool loading;
+  final bool failed;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = dashboard;
+    return LedgerCard(
+      padding: EdgeInsets.zero,
+      child: Material(
+        type: MaterialType.transparency,
+        child: ExpansionTile(
+          key: const ValueKey('material-request-operational-insights'),
+          leading: const Icon(Icons.insights_outlined, color: AppColors.blue),
+          title: YorksV1ActiveText(
+            copy: YorksV1MaterialRequestStrings.insights,
+            language: language,
+            style: AppTypography.titleMedium.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          subtitle: value == null
+              ? null
+              : Text(
+                  '${value.myWorkCount} ${YorksV1MaterialRequestStrings.myWork.active(language)} · '
+                  '${value.exceptionRequestCount} ${YorksV1MaterialRequestStrings.exceptions.active(language)}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          children: [
+            if (loading && value == null)
+              const LinearProgressIndicator(minHeight: 2)
+            else if (failed && value == null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: YorksV1ActiveText(
+                    copy: YorksV1MaterialRequestStrings.tryAgain,
+                    language: language,
+                  ),
+                ),
+              )
+            else if (value != null) ...[
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
+                children: [
+                  _OperationalMetric(
+                    label: YorksV1MaterialRequestStrings.averageApprovalTime
+                        .active(language),
+                    value: _hours(value.averageApprovalHours),
+                  ),
+                  _OperationalMetric(
+                    label: YorksV1MaterialRequestStrings.averageArrangementTime
+                        .active(language),
+                    value: _hours(value.averageArrangementHours),
+                  ),
+                  _OperationalMetric(
+                    label: YorksV1MaterialRequestStrings.warehouseFillRate
+                        .active(language),
+                    value: value.warehouseFillRatePercent == null
+                        ? '—'
+                        : '${value.warehouseFillRatePercent!.toStringAsFixed(1)}%',
+                  ),
+                  _OperationalMetric(
+                    label: YorksV1MaterialRequestStrings.receiptTurnaround
+                        .active(language),
+                    value: _hours(value.averageReceiptTurnaroundHours),
+                  ),
+                  _OperationalMetric(
+                    label: YorksV1MaterialRequestStrings.outstandingReplacement
+                        .active(language),
+                    value: value.outstandingReplacementQuantity,
+                  ),
+                  _OperationalMetric(
+                    label: YorksV1MaterialRequestStrings.returnClosureTime
+                        .active(language),
+                    value: _hours(value.averageReturnClosureHours),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.warningContainer,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+                child: YorksV1ActiveText(
+                  copy: YorksV1MaterialRequestStrings.actionDuePolicyPending,
+                  language: language,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.onWarningContainer,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _hours(double? hours) {
+    if (hours == null) return '—';
+    if (hours >= 48) return '${(hours / 24).toStringAsFixed(1)} d';
+    return '${hours.toStringAsFixed(1)} h';
+  }
+}
+
+class _OperationalMetric extends StatelessWidget {
+  const _OperationalMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 190,
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          value,
+          style: AppTypography.titleMedium.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -2151,13 +2379,108 @@ class _RequestActionSummary extends StatelessWidget {
       request.currentActionOwnerRole,
     ).active(language);
     final next = yorksV1MaterialRequestNextActionCopy(request).active(language);
-    return Text(
-      '${YorksV1MaterialRequestStrings.currentOwner.active(language)}: $owner · ${YorksV1MaterialRequestStrings.nextAction.active(language)}: $next',
-      maxLines: compact ? 2 : 1,
-      overflow: TextOverflow.ellipsis,
-      style: AppTypography.labelSmall.copyWith(color: AppColors.inkSecondary),
+    final date = request.scheduledDate;
+    final age = request.currentActionAgeHours;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${YorksV1MaterialRequestStrings.currentOwner.active(language)}: $owner · ${YorksV1MaterialRequestStrings.nextAction.active(language)}: $next',
+          maxLines: compact ? 2 : 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.inkSecondary,
+          ),
+        ),
+        if (date != null || age > 0) ...[
+          const SizedBox(height: 3),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xxs,
+            children: [
+              if (date != null)
+                _RequestOperationalFact(
+                  icon: request.requiredOnSiteOverdue
+                      ? Icons.event_busy_outlined
+                      : Icons.event_outlined,
+                  text:
+                      '${YorksV1MaterialRequestStrings.requiredOnSite.active(language)}: '
+                      '${MaterialLocalizations.of(context).formatMediumDate(date.toLocal())}',
+                  alert: request.requiredOnSiteOverdue,
+                ),
+              if (age > 0)
+                _RequestOperationalFact(
+                  icon: Icons.schedule_outlined,
+                  text:
+                      '${YorksV1MaterialRequestStrings.actionAge.active(language)}: ${_actionAge(age)}',
+                ),
+            ],
+          ),
+        ],
+        if (request.exceptionCodes.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final code in request.exceptionCodes)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xxs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  ),
+                  child: Text(
+                    yorksV1MaterialRequestExceptionCopy(code).active(language),
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.onWarningContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
+
+  static String _actionAge(double hours) {
+    if (hours >= 48) return '${(hours / 24).floor()} d';
+    if (hours >= 1) return '${hours.floor()} h';
+    return '<1 h';
+  }
+}
+
+class _RequestOperationalFact extends StatelessWidget {
+  const _RequestOperationalFact({
+    required this.icon,
+    required this.text,
+    this.alert = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool alert;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 14, color: alert ? AppColors.error : AppColors.muted),
+      const SizedBox(width: 3),
+      Text(
+        text,
+        style: AppTypography.labelSmall.copyWith(
+          color: alert ? AppColors.error : AppColors.muted,
+          fontWeight: alert ? FontWeight.w700 : null,
+        ),
+      ),
+    ],
+  );
 }
 
 class _CentreStatePill extends StatelessWidget {

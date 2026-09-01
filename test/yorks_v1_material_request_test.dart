@@ -111,6 +111,7 @@ void main() {
         'arranged_qty': '10',
         'cannot_provide_qty': '0',
         'approved_qty': '10',
+        'reserved_qty': '3',
         'dispatched_qty': '5',
         'in_transit_qty': '5',
         'reviewed_good_qty': '0',
@@ -119,6 +120,8 @@ void main() {
         'remaining_approved_qty': '5',
         'replacement_eligible_qty': '0',
         'ordinary_outstanding_qty': '5',
+        'returned_qty': '1',
+        'still_needed_qty': '5',
         'source_kind': 'external_supplier',
         'status': 'Awaiting receipt review',
       });
@@ -146,6 +149,9 @@ void main() {
         '5 / 10 dispatched · 5 in transit · external supplier · '
         'Awaiting receipt review',
       );
+      expect(inTransit.reservedQuantity, '3');
+      expect(inTransit.returnedQuantity, '1');
+      expect(inTransit.stillNeededQuantity, '5');
       expect(
         replacement.compactSummary,
         '3 / 10 received · 2 missing · 2 replacement · external supplier · '
@@ -561,6 +567,39 @@ void main() {
           results.single.source,
           YorksV1MaterialRequestSuggestionSource.selectedScopeBoq,
         );
+      },
+    );
+
+    test(
+      'operational dashboard uses the protected project-scoped RPC',
+      () async {
+        final connectivity = DefaultConnectivity();
+        addTearDown(connectivity.dispose);
+        final rpcClient = _OperationsDashboardRpcClient();
+        final repository = YorksV1SupabaseMaterialRequestRepository(
+          featureFlags: const YorksV1FeatureFlags(
+            foundation: true,
+            projects: true,
+            boq: true,
+            excel: true,
+            requests: true,
+          ),
+          connectivity: connectivity,
+          rpcClient: rpcClient,
+        );
+
+        final dashboard = await repository.getOperationsDashboard(
+          projectId: _projectId,
+        );
+
+        expect(
+          rpcClient.functionName,
+          'v1_material_request_operations_dashboard',
+        );
+        expect(rpcClient.parameters, {'p_project_id': _projectId});
+        expect(dashboard.myWorkCount, 2);
+        expect(dashboard.exceptionRequestCount, 1);
+        expect(dashboard.outstandingReplacementQuantity, '3');
       },
     );
 
@@ -1849,6 +1888,11 @@ void main() {
           'request_number': 'YRA313-MR001',
           'title': 'Dampers',
           'timing': 'normal',
+          'current_action_started_at': '2026-08-21T04:00:00Z',
+          'current_action_age_hours': 4.5,
+          'required_on_site_overdue': false,
+          'actor_can_act': true,
+          'exception_codes': ['partial_arrangement', 'late_external_supply'],
           'item_count': 27,
           'created_at': '2026-08-20T08:00:00Z',
           'updated_at': '2026-08-21T08:00:00Z',
@@ -1875,6 +1919,9 @@ void main() {
         'dispatched': 5,
         'received': 4,
         'closed': 5,
+        'my_work': 3,
+        'exceptions': 2,
+        'required_date_overdue': 1,
       },
     });
 
@@ -1886,6 +1933,47 @@ void main() {
     expect(register.comments, isEmpty);
     expect(register.displayItemCount, 27);
     expect(register.requestNumber, 'YRA313-MR001');
+    expect(register.actorCanAct, isTrue);
+    expect(register.currentActionAgeHours, 4.5);
+    expect(register.exceptionCodes, const [
+      YorksV1MaterialRequestExceptionCode.partialArrangement,
+      YorksV1MaterialRequestExceptionCode.lateExternalSupply,
+    ]);
+    expect(page.metrics.myWork, 3);
+    expect(page.metrics.exceptions, 2);
+    expect(page.metrics.requiredDateOverdue, 1);
+  });
+
+  test('action intelligence parses metrics and register views safely', () {
+    final dashboard =
+        YorksV1MaterialRequestOperationsDashboard.fromRpcJson(const {
+          'my_work_count': 4,
+          'exception_request_count': 3,
+          'required_date_overdue_count': 2,
+          'action_due_policy': 'not_configured',
+          'average_approval_hours': 6.25,
+          'average_arrangement_hours': 9.5,
+          'warehouse_fill_rate_percent': 82.75,
+          'average_receipt_turnaround_hours': 3.5,
+          'outstanding_replacement_quantity': '12.5000',
+          'average_return_closure_hours': 18,
+        });
+    final myWorkQuery = YorksV1MaterialRequestSummaryQuery(
+      registerView: YorksV1MaterialRequestRegisterView.myWork,
+    );
+    final exceptionQuery = YorksV1MaterialRequestSummaryQuery(
+      registerView: YorksV1MaterialRequestRegisterView.exceptions,
+    );
+
+    expect(dashboard.myWorkCount, 4);
+    expect(dashboard.exceptionRequestCount, 3);
+    expect(dashboard.requiredDateOverdueCount, 2);
+    expect(dashboard.actionDuePolicy, 'not_configured');
+    expect(dashboard.averageApprovalHours, 6.25);
+    expect(dashboard.warehouseFillRatePercent, 82.75);
+    expect(dashboard.outstandingReplacementQuantity, '12.5000');
+    expect(myWorkQuery.toRpcParameters()['p_register_view'], 'my_work');
+    expect(exceptionQuery.toRpcParameters()['p_register_view'], 'exceptions');
   });
 
   test(
@@ -2530,6 +2618,27 @@ class _CandidateSearchRpcClient implements YorksV1MaterialRequestRpcClient {
         'source_boq_row_id': 'boq-row-1',
       },
     ];
+  }
+}
+
+class _OperationsDashboardRpcClient implements YorksV1MaterialRequestRpcClient {
+  String? functionName;
+  Map<String, Object?>? parameters;
+
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) async {
+    this.functionName = functionName;
+    this.parameters = parameters;
+    return const {
+      'my_work_count': 2,
+      'exception_request_count': 1,
+      'required_date_overdue_count': 1,
+      'action_due_policy': 'not_configured',
+      'outstanding_replacement_quantity': '3',
+    };
   }
 }
 

@@ -1457,6 +1457,63 @@ void main() {
     });
   }
 
+  testWidgets('mobile request card shows the complete trusted line ledger', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final controlledDocument = YorksV1MaterialRequestDocumentModel(
+      request: _submittedRequest,
+      showLineStatus: true,
+      lineLifecycles: const {
+        'submitted-line': YorksV1MaterialRequestLineLifecycle(
+          requestLineId: 'submitted-line',
+          requestedQuantity: '10',
+          arrangedQuantity: '8',
+          cannotProvideQuantity: '2',
+          approvedQuantity: '8',
+          reservedQuantity: '2',
+          dispatchedQuantity: '6',
+          inTransitQuantity: '1',
+          goodQuantity: '4',
+          missingQuantity: '1',
+          damagedQuantity: '1',
+          returnedQuantity: '1',
+          stillNeededQuantity: '5',
+          remainingApprovedQuantity: '3',
+          replacementEligibleQuantity: '2',
+          ordinaryOutstandingQuantity: '1',
+          status: 'Replacement required',
+        ),
+      },
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
+          yorksV1MaterialRequestDetailProvider(
+            _submittedRequest.id,
+          ).overrideWith((ref) async => _submittedRequest),
+          yorksV1MaterialRequestDocumentProvider(
+            _submittedRequest.id,
+          ).overrideWith((ref) async => controlledDocument),
+        ],
+        child: const YorksV1MaterialRequestDetailScreen(
+          requestId: _submittedRequestId,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('mobile-mr-lifecycle')), findsOneWidget);
+    expect(find.text('Reserved'), findsOneWidget);
+    expect(find.text('Returned'), findsOneWidget);
+    expect(find.text('Still needed'), findsOneWidget);
+    expect(find.text('2 Nos'), findsWidgets);
+    expect(find.text('1 Nos'), findsWidgets);
+    expect(find.text('5 Nos'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'mobile MR uses the existing draft controller through custom material',
     (tester) async {
@@ -1737,6 +1794,42 @@ void main() {
     expect(tester.getSize(rail).height, AppSpacing.minTapTarget);
     expect(find.text('All'), findsOneWidget);
     expect(find.text('Approved'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mobile register shows due, age and exception facts', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final request = _summaryProjection(
+      id: 'mobile-action-facts',
+      state: YorksV1MaterialRequestState.approvedForArrangement,
+      itemCount: 7,
+      scheduledDate: DateTime.utc(2026, 8, 19),
+      currentActionAgeHours: 27.5,
+      requiredOnSiteOverdue: true,
+      actorCanAct: true,
+      exceptionCodes: const [
+        YorksV1MaterialRequestExceptionCode.partialArrangement,
+      ],
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
+          yorksV1MaterialRequestListProvider(
+            null,
+          ).overrideWith((ref) async => [request]),
+        ],
+        child: const YorksV1MaterialRequestsScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Required on site'), findsOneWidget);
+    expect(find.textContaining('Action age'), findsOneWidget);
+    expect(find.text('Partial arrangement'), findsOneWidget);
+    expect(find.text('7 items'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -2122,6 +2215,11 @@ YorksV1MaterialRequest _summaryProjection({
   required String id,
   required YorksV1MaterialRequestState state,
   required int itemCount,
+  DateTime? scheduledDate,
+  double currentActionAgeHours = 0,
+  bool requiredOnSiteOverdue = false,
+  bool actorCanAct = false,
+  List<YorksV1MaterialRequestExceptionCode> exceptionCodes = const [],
 }) => YorksV1MaterialRequestSummary(
   id: id,
   projectId: _projectId,
@@ -2133,11 +2231,18 @@ YorksV1MaterialRequest _summaryProjection({
   recordVersion: 2,
   createdAt: DateTime.utc(2026, 8, 9),
   updatedAt: DateTime.utc(2026, 8, 10),
-  timing: YorksV1MaterialRequestTiming.normal,
+  timing: scheduledDate == null
+      ? YorksV1MaterialRequestTiming.normal
+      : YorksV1MaterialRequestTiming.scheduled,
+  scheduledDate: scheduledDate,
   itemCount: itemCount,
   requestNumber: 'MR-${state.wireValue}',
   currentActionOwnerRole: 'procurement',
   currentActionCode: 'arrangement_required',
+  currentActionAgeHours: currentActionAgeHours,
+  requiredOnSiteOverdue: requiredOnSiteOverdue,
+  actorCanAct: actorCanAct,
+  exceptionCodes: exceptionCodes,
   workAssignment: YorksV1MaterialRequestWorkAssignment(
     requestId: id,
     assignmentVersion: 0,
