@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
@@ -88,6 +89,7 @@ class _YorksWorkforceDailyAttendanceScreenState
         state.rows
             .where((row) => row.workerId == _activeTabletWorkerId)
             .firstOrNull ??
+        state.rows.where((row) => row.allocations.length > 1).firstOrNull ??
         state.rows.firstOrNull;
 
     return Scaffold(
@@ -135,6 +137,8 @@ class _YorksWorkforceDailyAttendanceScreenState
                                 : AppSpacing.xxl,
                             mobileBoundary
                                 ? AppSpacing.mobileScreenVertical
+                                : desktopBoundary
+                                ? AppSpacing.lg
                                 : AppSpacing.xxl,
                             mobileBoundary
                                 ? AppSpacing.mobileScreenHorizontal
@@ -143,18 +147,19 @@ class _YorksWorkforceDailyAttendanceScreenState
                           ),
                           sliver: SliverList.list(
                             children: [
-                              _RosterHeader(
-                                language: language,
-                                state: state,
-                                compact: !desktopBoundary,
-                                onDate: () => _pickDate(state, controller),
-                                onReview:
-                                    state.dirtyRows.isEmpty ||
-                                        !state.isOnline ||
-                                        !desktopBoundary
-                                    ? null
-                                    : controller.reviewDay,
-                              ),
+                              if (desktopBoundary)
+                                _DesktopRosterHeader(
+                                  language: language,
+                                  state: state,
+                                )
+                              else
+                                _RosterHeader(
+                                  language: language,
+                                  state: state,
+                                  compact: true,
+                                  onDate: () => _pickDate(state, controller),
+                                  onReview: null,
+                                ),
                               const SizedBox(height: AppSpacing.lg),
                               _RosterStateBanner(
                                 language: language,
@@ -162,7 +167,7 @@ class _YorksWorkforceDailyAttendanceScreenState
                                 onRetry: () => controller.load(),
                               ),
                               if (state.projection != null) ...[
-                                if (!mobileBoundary) ...[
+                                if (tabletBoundary) ...[
                                   _SummaryStrip(
                                     language: language,
                                     rows: state.rows,
@@ -246,76 +251,24 @@ class _YorksWorkforceDailyAttendanceScreenState
                                     ),
                                   ],
                                 ] else ...[
-                                  _RosterFilters(
-                                    language: language,
-                                    state: state,
-                                    searchController: _searchController,
-                                    onSearch: _searchChanged,
-                                    onChanged: controller.changeFilters,
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  _BulkActions(
+                                  _DesktopCrewTimesheetWorkspace(
                                     language: language,
                                     state: state,
                                     controller: controller,
+                                    searchController: _searchController,
+                                    onSearch: _searchChanged,
+                                    onChanged: controller.changeFilters,
                                     prompt: _prompt,
+                                    activeWorker: activeWorker,
+                                    onDate: () => _pickDate(state, controller),
+                                    onRefresh: () =>
+                                        controller.load(preserveDrafts: true),
+                                    onWorkerSelected: (workerId) {
+                                      setState(() {
+                                        _activeTabletWorkerId = workerId;
+                                      });
+                                    },
                                   ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: _RosterGrid(
-                                          language: language,
-                                          state: state,
-                                          controller: controller,
-                                          activeWorkerId:
-                                              activeWorker?.workerId,
-                                          onWorkerSelected: (workerId) {
-                                            setState(() {
-                                              _activeTabletWorkerId = workerId;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      if (activeWorker != null) ...[
-                                        const SizedBox(width: AppSpacing.md),
-                                        SizedBox(
-                                          key: const Key(
-                                            'workforce-desktop-worker-editor',
-                                          ),
-                                          width: 390,
-                                          height: 528,
-                                          child: _TabletWorkerEditor(
-                                            key: ValueKey(
-                                              'desktop-${activeWorker.workerId}',
-                                            ),
-                                            language: language,
-                                            row: activeWorker,
-                                            allocationTargets: state
-                                                .projection!
-                                                .allocationTargets,
-                                            controller: controller,
-                                            mobile: true,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  if (state.canLoadMore) ...[
-                                    const SizedBox(height: AppSpacing.md),
-                                    Align(
-                                      alignment: AlignmentDirectional.center,
-                                      child: OutlinedButton.icon(
-                                        onPressed: state.isBusy
-                                            ? null
-                                            : controller.loadMore,
-                                        icon: const Icon(Icons.expand_more),
-                                        label: Text(_t(language, 'load_more')),
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ] else if (state.status ==
                                   YorksWorkforceDailyRosterStatus.loading)
@@ -336,8 +289,7 @@ class _YorksWorkforceDailyAttendanceScreenState
                     onSave: controller.saveDay,
                   ),
                 if (desktopBoundary && state.projection != null)
-                  _TabletCompletionFooter(
-                    footerKey: const Key('workforce-desktop-completion-footer'),
+                  _DesktopCompletionFooter(
                     language: language,
                     state: state,
                     onReview: controller.reviewDay,
@@ -590,6 +542,736 @@ class _YorksWorkforceDailyAttendanceScreenState
 }
 
 const _workforceDesktopBreakpoint = 1200.0;
+
+class _DesktopRosterHeader extends StatelessWidget {
+  const _DesktopRosterHeader({required this.language, required this.state});
+
+  final AppLanguage language;
+  final YorksWorkforceDailyRosterState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final demo = state.rows.any(
+      (row) => row.source.workerNumber.toUpperCase().startsWith('DEMO-'),
+    );
+    return Semantics(
+      header: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  YorksV1WorkforceStrings.text(language, 'daily_attendance'),
+                  style: AppTypography.headlineMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  YorksV1WorkforceStrings.text(
+                    language,
+                    'daily_attendance_body',
+                  ),
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.inkSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (demo)
+            Container(
+              key: const Key('workforce-demo-data-badge'),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.warningContainer,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: .28),
+                ),
+              ),
+              child: Text(
+                YorksV1WorkforceStrings.text(language, 'demo_data'),
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: .35,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopCrewTimesheetWorkspace extends StatelessWidget {
+  const _DesktopCrewTimesheetWorkspace({
+    required this.language,
+    required this.state,
+    required this.controller,
+    required this.searchController,
+    required this.onSearch,
+    required this.onChanged,
+    required this.prompt,
+    required this.activeWorker,
+    required this.onDate,
+    required this.onRefresh,
+    required this.onWorkerSelected,
+  });
+
+  final AppLanguage language;
+  final YorksWorkforceDailyRosterState state;
+  final YorksWorkforceDailyRosterController controller;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
+  final ValueChanged<YorksWorkforceRosterFilters> onChanged;
+  final _Prompt prompt;
+  final YorksWorkforceDailyRosterDraftRow? activeWorker;
+  final VoidCallback onDate;
+  final VoidCallback onRefresh;
+  final ValueChanged<String> onWorkerSelected;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _DesktopContextBar(
+        language: language,
+        state: state,
+        onDate: onDate,
+        onChanged: onChanged,
+        onRefresh: onRefresh,
+      ),
+      const SizedBox(height: AppSpacing.md),
+      _DesktopDailySummary(language: language, rows: state.rows),
+      const SizedBox(height: AppSpacing.sm),
+      _DesktopWorkspaceTabs(language: language),
+      _DesktopRosterTools(
+        language: language,
+        state: state,
+        controller: controller,
+        searchController: searchController,
+        onSearch: onSearch,
+      ),
+      if (state.selectedWorkerIds.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.sm),
+        _BulkActions(
+          language: language,
+          state: state,
+          controller: controller,
+          prompt: prompt,
+        ),
+      ],
+      const SizedBox(height: AppSpacing.sm),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _RosterGrid(
+              language: language,
+              state: state,
+              controller: controller,
+              activeWorkerId: activeWorker?.workerId,
+              onWorkerSelected: onWorkerSelected,
+            ),
+          ),
+          if (activeWorker != null) ...[
+            const SizedBox(width: AppSpacing.md),
+            SizedBox(
+              key: const Key('workforce-desktop-worker-editor'),
+              width: 404,
+              height: 528,
+              child: _TabletWorkerEditor(
+                key: ValueKey('desktop-${activeWorker!.workerId}'),
+                language: language,
+                row: activeWorker!,
+                allocationTargets: state.projection!.allocationTargets,
+                controller: controller,
+                mobile: true,
+              ),
+            ),
+          ],
+        ],
+      ),
+      if (state.canLoadMore) ...[
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: AlignmentDirectional.center,
+          child: OutlinedButton.icon(
+            onPressed: state.isBusy ? null : controller.loadMore,
+            icon: const Icon(Icons.expand_more),
+            label: Text(YorksV1WorkforceStrings.text(language, 'load_more')),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+class _DesktopContextBar extends StatelessWidget {
+  const _DesktopContextBar({
+    required this.language,
+    required this.state,
+    required this.onDate,
+    required this.onChanged,
+    required this.onRefresh,
+  });
+
+  final AppLanguage language;
+  final YorksWorkforceDailyRosterState state;
+  final VoidCallback onDate;
+  final ValueChanged<YorksWorkforceRosterFilters> onChanged;
+  final VoidCallback onRefresh;
+
+  String _t(String key) => YorksV1WorkforceStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final selectors = state.projection!.selectors;
+    final scopes = selectors.projectScopes
+        .where(
+          (row) =>
+              state.filters.projectId == null ||
+              row.projectId == state.filters.projectId,
+        )
+        .toList(growable: false);
+    return Container(
+      key: const Key('workforce-desktop-context-bar'),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 174,
+            child: _DesktopDateField(
+              label: _t('date'),
+              value: state.workDate,
+              onPressed: onDate,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _FilterSelect(
+              width: double.infinity,
+              label: _t('team'),
+              allLabel: _t('all'),
+              value: state.filters.teamId,
+              values: [for (final row in selectors.teams) (row.id, row.name)],
+              onChanged: (value) => onChanged(
+                state.filters.copyWith(
+                  teamId: value,
+                  clearTeam: value == null,
+                  offset: 0,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: _FilterSelect(
+              width: double.infinity,
+              label: _t('project'),
+              allLabel: _t('all'),
+              value: state.filters.projectId,
+              values: [
+                for (final row in selectors.projects)
+                  (row.id, '${row.reference} · ${row.name}'),
+              ],
+              onChanged: (value) => onChanged(
+                state.filters.copyWith(
+                  projectId: value,
+                  clearProject: value == null,
+                  clearProjectScope: true,
+                  offset: 0,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _FilterSelect(
+              width: double.infinity,
+              label: _t('site'),
+              allLabel: _t('all'),
+              value: state.filters.projectScopeId,
+              values: [for (final row in scopes) (row.id, row.name)],
+              onChanged: (value) => onChanged(
+                state.filters.copyWith(
+                  projectScopeId: value,
+                  clearProjectScope: value == null,
+                  offset: 0,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _FilterSelect(
+              width: double.infinity,
+              label: _t('location'),
+              allLabel: _t('all'),
+              value: state.filters.internalLocationId,
+              values: [
+                for (final row in selectors.internalLocations)
+                  (row.id, row.name),
+              ],
+              onChanged: (value) => onChanged(
+                state.filters.copyWith(
+                  internalLocationId: value,
+                  clearInternalLocation: value == null,
+                  offset: 0,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          SizedBox.square(
+            dimension: 48,
+            child: IconButton.outlined(
+              onPressed: state.isBusy ? null : onRefresh,
+              tooltip: _t('refresh'),
+              icon: const Icon(Icons.refresh),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopDateField extends StatelessWidget {
+  const _DesktopDateField({
+    required this.label,
+    required this.value,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onPressed,
+    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    child: InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+      ),
+      child: Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.labelLarge,
+      ),
+    ),
+  );
+}
+
+class _DesktopDailySummary extends StatelessWidget {
+  const _DesktopDailySummary({required this.language, required this.rows});
+
+  final AppLanguage language;
+  final List<YorksWorkforceDailyRosterDraftRow> rows;
+
+  String _t(String key) => YorksV1WorkforceStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final regular = rows.fold<int>(0, (sum, row) => sum + row.regularMinutes);
+    final overtime = rows.fold<int>(0, (sum, row) => sum + row.overtimeMinutes);
+    final attention = rows
+        .where(
+          (row) =>
+              row.status == YorksWorkforceAttendanceStatus.notEntered ||
+              !row.isValid,
+        )
+        .length;
+    final metrics = <(String, String, IconData, Color)>[
+      (
+        'total_workers',
+        '${rows.length}',
+        Icons.groups_outlined,
+        AppColors.blue,
+      ),
+      (
+        'regular_hours',
+        _compactHours(regular),
+        Icons.schedule_outlined,
+        AppColors.success,
+      ),
+      (
+        'overtime_hours',
+        _compactHours(overtime),
+        Icons.more_time_outlined,
+        AppColors.warning,
+      ),
+      (
+        'need_attention',
+        '$attention',
+        Icons.warning_amber_rounded,
+        AppColors.error,
+      ),
+    ];
+    return Row(
+      children: [
+        for (var index = 0; index < metrics.length; index++) ...[
+          if (index > 0) const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _DesktopMetricCard(
+              metric: metrics[index],
+              label: _t(metrics[index].$1),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DesktopMetricCard extends StatelessWidget {
+  const _DesktopMetricCard({required this.metric, required this.label});
+
+  final (String, String, IconData, Color) metric;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 76,
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      border: Border.all(color: AppColors.line),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: metric.$4.withValues(alpha: .1),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          ),
+          child: Icon(metric.$3, color: metric.$4, size: 23),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(metric.$2, style: AppTypography.titleLarge),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DesktopWorkspaceTabs extends StatelessWidget {
+  const _DesktopWorkspaceTabs({required this.language});
+
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = <(String, String, bool)>[
+      ('overview_tab', '/yorks/workforce', false),
+      ('daily_attendance_tab', '/yorks/workforce/attendance', true),
+      ('timesheets', '/yorks/workforce/timesheets', false),
+      ('administration_tab', '/yorks/workforce/administration', false),
+    ];
+    return Container(
+      height: 44,
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.line)),
+      ),
+      child: Row(
+        children: [
+          for (final tab in tabs)
+            InkWell(
+              onTap: tab.$3 ? null : () => context.go(tab.$2),
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: tab.$3 ? AppColors.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  YorksV1WorkforceStrings.text(language, tab.$1),
+                  style: AppTypography.labelLarge.copyWith(
+                    color: tab.$3 ? AppColors.primary : AppColors.inkSecondary,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopRosterTools extends StatelessWidget {
+  const _DesktopRosterTools({
+    required this.language,
+    required this.state,
+    required this.controller,
+    required this.searchController,
+    required this.onSearch,
+  });
+
+  final AppLanguage language;
+  final YorksWorkforceDailyRosterState state;
+  final YorksWorkforceDailyRosterController controller;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearch;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 260,
+          child: TextField(
+            controller: searchController,
+            onChanged: onSearch,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search, size: 18),
+              hintText: YorksV1WorkforceStrings.text(
+                language,
+                'search_workers',
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        TextButton.icon(
+          onPressed: controller.selectVisible,
+          icon: const Icon(Icons.select_all, size: 18),
+          label: Text(
+            YorksV1WorkforceStrings.text(language, 'select_all_visible'),
+          ),
+        ),
+        const Spacer(),
+        if (state.selectedWorkerIds.isNotEmpty)
+          _StatusDot(
+            label:
+                '${state.selectedWorkerIds.length} ${YorksV1WorkforceStrings.text(language, 'affected')}',
+            color: AppColors.primary,
+          ),
+      ],
+    ),
+  );
+}
+
+class _DesktopCompletionFooter extends StatelessWidget {
+  const _DesktopCompletionFooter({
+    required this.language,
+    required this.state,
+    required this.onReview,
+    required this.onBack,
+    required this.onSave,
+  });
+
+  final AppLanguage language;
+  final YorksWorkforceDailyRosterState state;
+  final bool Function() onReview;
+  final VoidCallback onBack;
+  final Future<YorksWorkforceDailyRosterSaveResult?> Function() onSave;
+
+  String _t(String key) => YorksV1WorkforceStrings.text(language, key);
+
+  @override
+  Widget build(BuildContext context) {
+    final entered = state.rows
+        .where((row) => row.status != YorksWorkforceAttendanceStatus.notEntered)
+        .length;
+    final canReview =
+        state.dirtyRows.isNotEmpty &&
+        state.invalidWorkerIds.isEmpty &&
+        state.isOnline &&
+        !state.isBusy &&
+        state.projection?.isFuture != true;
+    final issues = state.invalidWorkerIds.length;
+    return Material(
+      key: const Key('workforce-desktop-completion-footer'),
+      elevation: 12,
+      color: AppColors.surfaceContainerLowest,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xxl,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.line)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 230,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(_t('day_status'), style: AppTypography.labelSmall),
+                        const SizedBox(width: AppSpacing.sm),
+                        _StatusDot(
+                          label: state.isReviewing
+                              ? _t('reviewing_status')
+                              : _t('draft_status'),
+                          color: state.isReviewing
+                              ? AppColors.blue
+                              : AppColors.warning,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$entered/${state.rows.length} ${_t('tablet_completion')}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _DesktopLifecycle(
+                  language: language,
+                  reviewing: state.isReviewing,
+                ),
+              ),
+              if (state.isReviewing) ...[
+                OutlinedButton(
+                  onPressed: state.isBusy ? null : onBack,
+                  child: Text(_t('back_to_edit')),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                ElevatedButton.icon(
+                  onPressed: canReview ? () => onSave() : null,
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  label: Text(_t('save_day')),
+                ),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: issues == 0 ? null : onReview,
+                  icon: const Icon(Icons.warning_amber_rounded),
+                  label: Text('${_t('review_issues')} ($issues)'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                ElevatedButton.icon(
+                  onPressed: canReview ? () => onReview() : null,
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: Text(_t('review_day')),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopLifecycle extends StatelessWidget {
+  const _DesktopLifecycle({required this.language, required this.reviewing});
+
+  final AppLanguage language;
+  final bool reviewing;
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = ['draft_status', 'reviewing_status', 'saved'];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          YorksV1WorkforceStrings.text(language, 'lifecycle'),
+          style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        for (var index = 0; index < labels.length; index++) ...[
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: index == (reviewing ? 1 : 0)
+                  ? AppColors.primary
+                  : AppColors.surfaceContainerLowest,
+              border: Border.all(
+                color: index <= (reviewing ? 1 : 0)
+                    ? AppColors.primary
+                    : AppColors.lineStrong,
+                width: 2,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            YorksV1WorkforceStrings.text(language, labels[index]),
+            style: AppTypography.labelSmall.copyWith(
+              color: index == (reviewing ? 1 : 0)
+                  ? AppColors.primary
+                  : AppColors.muted,
+            ),
+          ),
+          if (index != labels.length - 1) ...[
+            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(
+              width: 18,
+              child: Divider(color: AppColors.lineStrong),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+String _compactHours(int minutes) {
+  final hours = minutes ~/ 60;
+  final remainder = minutes.remainder(60);
+  return remainder == 0
+      ? '$hours'
+      : '$hours:${remainder.toString().padLeft(2, '0')}';
+}
 
 class _RosterHeader extends StatelessWidget {
   const _RosterHeader({
@@ -2417,7 +3099,6 @@ class _MobileMinuteControl extends StatelessWidget {
 
 class _TabletCompletionFooter extends StatelessWidget {
   const _TabletCompletionFooter({
-    this.footerKey = const Key('workforce-tablet-completion-footer'),
     required this.language,
     required this.state,
     required this.onReview,
@@ -2425,7 +3106,6 @@ class _TabletCompletionFooter extends StatelessWidget {
     required this.onSave,
   });
 
-  final Key footerKey;
   final AppLanguage language;
   final YorksWorkforceDailyRosterState state;
   final bool Function() onReview;
@@ -2450,7 +3130,7 @@ class _TabletCompletionFooter extends StatelessWidget {
       label:
           '${YorksV1WorkforceStrings.text(language, 'tablet_completion')}: $entered/${state.rows.length}',
       child: Material(
-        key: footerKey,
+        key: const Key('workforce-tablet-completion-footer'),
         elevation: 10,
         color: AppColors.surfaceContainerLowest,
         child: SafeArea(
@@ -2585,9 +3265,9 @@ class _RosterGrid extends StatefulWidget {
 }
 
 class _RosterGridState extends State<_RosterGrid> {
-  static const _workerWidth = 250.0;
+  static const _workerWidth = 220.0;
   static const _dataWidth = 1030.0;
-  static const _rowHeight = 78.0;
+  static const _rowHeight = 64.0;
   final _horizontal = ScrollController();
   final _workerVertical = ScrollController();
   final _dataVertical = ScrollController();
@@ -2632,7 +3312,7 @@ class _RosterGridState extends State<_RosterGrid> {
       );
     }
     final bodyHeight = math.min(
-      480.0,
+      416.0,
       math.max(156.0, widget.state.rows.length * _rowHeight),
     );
     return Card(
