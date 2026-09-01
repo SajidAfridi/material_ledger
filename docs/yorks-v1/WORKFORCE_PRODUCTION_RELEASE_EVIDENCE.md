@@ -1,6 +1,7 @@
 # Workforce Production Release Evidence
 
-Status: **released and independently smoke-verified on 31 August 2026**
+Status: **released and independently smoke-verified; latest design release on
+1 September 2026**
 
 T14 boundary: **named-persona/manual staging UAT remains deferred, not
 performed and not passed.** The product owner explicitly authorized this
@@ -390,3 +391,77 @@ This was database-only; rebuilding or promoting an identical Flutter artifact
 would add no corrective behavior. Rollback is a reviewed forward replacement
 of the choices function from migration `20260831155531`; the existing web
 deployment remains the application rollback point.
+
+## Matched Daily Crew Timesheet design release
+
+Status: **released and verified on 1 September 2026 at 15:00 PKT**
+
+This release promotes the accepted Procore-inspired Daily Crew Timesheet and
+monthly workspace refinements from the dedicated staging candidate. Existing
+server-confirmed attendance, split-allocation, review/save, capability and
+dated-responsibility boundaries remain authoritative. The staging demo dataset
+stays staging-only; no production worker, team, schedule, assignment,
+attendance or timesheet row was created or changed.
+
+| Evidence | Value |
+|---|---|
+| Application source commit | `0abe54e93c95d281a80c9a651986ed1e222156e0` |
+| GitHub `main` | Exact match to the application source commit before the later evidence-only documentation commit |
+| Previous live deployment | `dpl_DRvHy6UTtkzsgQ5Y1veyDNK6kjJx` |
+| Release deployment | `dpl_3qFwJVMAQ11YNGdzdxLvg2o6PYQF` |
+| Candidate URL | `https://yorks-r35-5csx8m20r-sajid-alis-projects-0ec775a2.vercel.app` |
+| Production alias | `https://yorks-r35.vercel.app` |
+| Production Supabase ref | `czykuksmlwswjsgotrpo` |
+| Production migration result | No migration applied; linked dry run returned no migrations, seeds or roles |
+
+### Verification and build proof
+
+- seven changed Dart files passed the no-change format gate,
+  `git diff --check` passed and `flutter analyze` reported no issues;
+- all 153 Workforce Flutter tests passed, including Administration,
+  desktop/tablet/mobile, RTL, split allocations, reports, dashboards and
+  authorization failures;
+- a clean local Supabase reset applied the complete tracked ledger through
+  `20260831183000`; all 78 database files and 2,370 assertions passed. The T06
+  500-worker observation was 20,103.62 ms and the T13 observations were
+  overview 6,745.05 ms, roster 1,005.55 ms and queue 2,886.09 ms. These are
+  observations, not product SLAs;
+- the date-sensitive T13 scale fixture was corrected to keep only its current
+  master-data and responsibility rows open-ended. Its fixed 24-month retained
+  history remains unchanged through August 2026. The focused scale file then
+  passed before the complete database rerun;
+- the clean production web build enabled both Accounts and Workforce, contained
+  the production Supabase ref exactly once and contained neither the staging
+  nor CI ref. Its `sb_secret_` and `service_role` literals are guard logic only;
+  no credential-shaped secret or service-role environment key was present; and
+- the Android release-shaped gate produced a 102.1 MB APK with the explicitly
+  ephemeral CI certificate, SHA-256
+  `bf2a952482e92155ab877d321875f6fae2bdc292a69a10a954c96bf7991d52a3`.
+  It is technical build evidence, not a protected store-signing artifact.
+
+The isolated web artifact contained 52 files and Vercel extracted 51
+deployable static files. Before and after promotion, `/`, Workforce overview,
+Attendance, Timesheets and Administration, Projects, Material Requests,
+Accounts and Team Chat each returned HTTP 200. The production alias resolved
+to the READY release deployment and every runtime/PWA asset matched the local
+artifact exactly:
+
+| Artifact | SHA-256 |
+|---|---|
+| `index.html` | `31af1b140f0dcc6925e234d36061e376be99b608225ef060c1a7bf669639afb5` |
+| `main.dart.js` | `7a269e79dcb0bf3423f8d75049cb4f39a8d9c897e64b9d3efc445e62b6b74cef` |
+| `flutter_bootstrap.js` | `9409438a38c61baee2787b133da0902cf4ad2c0948fae3e5edcd69aada783537` |
+| `manifest.json` | `21a31bb90bbe6d13de1723e7e954257ce2d8c62206ceaeb64733aae4bf90c2ff` |
+| `flutter_service_worker.js` | `a131df5ca46154cc4eb79044f7f5a14029c2f8bfccf8cef34e3ec3b5a9f5a88c` |
+| `firebase-messaging-sw.js` | `e8151cb276b7644627e5cefc1dc5e46b69ad38f952c4a734b1f81a9795437a1e` |
+
+The most recent broad Flutter run on this same application candidate reproduced
+the recorded unrelated visual/layout baseline: 1,240 tests passed and 206
+failed. It is not relabelled as globally green; the complete Workforce,
+analyzer, database and production-build gates above passed.
+
+Rollback is promotion of `dpl_DRvHy6UTtkzsgQ5Y1veyDNK6kjJx`. No database
+rollback is needed because this release applied no migration or seed. Retain
+the aligned additive migration history; correct any later database defect with
+a reviewed forward migration. Named-persona/manual T14 staging UAT remains
+outstanding and is not claimed by this production release.

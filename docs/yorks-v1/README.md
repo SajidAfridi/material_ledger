@@ -16,9 +16,10 @@ the complete tracked migration ledger and the protected document Function,
 but named-persona/manual UAT is still not performed. Later on 31 August 2026
 the product owner explicitly deferred that UAT until after release and
 authorized production immediately as a recorded release exception. The
-verified Workforce artifact was later followed by the access recovery and
-Administration enablement. The current artifact from commit
-`19c03a39ba0d1fd097f32cefc014ebea30ad9185` is promoted at
+verified Workforce artifact was later followed by the access recovery,
+Administration enablement and matched Daily Crew Timesheet design. The current
+artifact from commit `0abe54e93c95d281a80c9a651986ed1e222156e0` is promoted
+as deployment `dpl_3qFwJVMAQ11YNGdzdxLvg2o6PYQF` at
 `yorks-r35.vercel.app`; this does not convert T14 into a pass.**
 
 > **HISTORICAL BATCH MATERIAL — NOT THE CURRENT BUILD CONFIGURATION.** The
