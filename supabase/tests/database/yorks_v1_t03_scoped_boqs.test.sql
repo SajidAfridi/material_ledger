@@ -156,7 +156,7 @@ select lives_ok(
     ),
     'a3000000-0000-4000-8000-000000000003'::uuid
   )$$,
-  'Engineer creates one project-wide folder definition from a selected scope'
+  'Engineer creates one folder only in the selected real scope'
 );
 
 set local role postgres;
@@ -176,8 +176,8 @@ select is(
       and name = 'T03 DF3W custom folder'
       and not is_archived
   ),
-  3::bigint,
-  'The custom folder name is available independently in Common and every building'
+  1::bigint,
+  'The custom folder exists only in the selected building scope'
 );
 
 select is(
@@ -198,7 +198,7 @@ select is(
       and group_record.name = 'T03 DF3W custom folder'
   ),
   0::bigint,
-  'Project-wide folder creation never copies material rows between scopes'
+  'Scope-local folder creation does not copy material rows'
 );
 
 select is(
@@ -211,7 +211,7 @@ select is(
     'a3000000-0000-4000-8000-000000000003'::uuid
   ) ->> 'id',
   (select custom_group_id::text from v1_t03_targets),
-  'Project-wide custom folder creation is idempotent for a command retry'
+  'Scope-local custom folder creation is idempotent for a command retry'
 );
 
 set local role authenticated;

@@ -36,6 +36,20 @@ final yorksV1ScopedBoqGroupsProvider = FutureProvider.autoDispose
           .listGroupsForScope(query.projectId, scopeId: query.scopeId);
     });
 
+final yorksV1BoqFolderManagementProvider = FutureProvider.autoDispose
+    .family<List<YorksV1BoqFolderManagementItem>, YorksV1BoqScopeQuery>((
+      ref,
+      query,
+    ) {
+      final scopeId = query.scopeId;
+      if (scopeId == null || scopeId.trim().isEmpty) {
+        return const <YorksV1BoqFolderManagementItem>[];
+      }
+      return ref
+          .watch(yorksV1BoqRepositoryProvider)
+          .listFolderManagement(query.projectId, scopeId: scopeId);
+    });
+
 final yorksV1BoqScopeSelectionProvider = StateProvider.autoDispose
     .family<String?, String>((ref, projectId) => null);
 

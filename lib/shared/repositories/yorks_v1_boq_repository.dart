@@ -38,6 +38,12 @@ abstract interface class YorksV1BoqRepository {
     String? scopeId,
   });
 
+  Future<List<YorksV1BoqFolderManagementItem>> listFolderManagement(
+    String projectId, {
+    required String scopeId,
+    bool includeArchived = true,
+  });
+
   Future<YorksV1BoqWorksheet> getWorksheet(String groupId);
 
   Future<YorksV1BoqWorksheet> saveWorksheet(YorksV1SaveBoqWorksheetInput input);
@@ -48,15 +54,15 @@ abstract interface class YorksV1BoqRepository {
 
   Future<YorksV1BoqGroup> createCustomGroup(YorksV1CreateBoqGroupInput input);
 
+  Future<YorksV1BoqGroup> renameGroup(YorksV1RenameBoqGroupInput input);
+
   Future<YorksV1BoqGroup> assignLegacyGroupScope(
     YorksV1AssignLegacyBoqGroupScopeInput input,
   );
 
-  Future<void> archiveGroup({
-    required String groupId,
-    required int expectedVersion,
-    required String idempotencyKey,
-  });
+  Future<YorksV1BoqGroup> archiveGroup(YorksV1ArchiveBoqGroupInput input);
+
+  Future<YorksV1BoqGroup> restoreGroup(YorksV1RestoreBoqGroupInput input);
 }
 
 /// Server-backed BOQ repository.  A worksheet save is one version-checked
@@ -112,6 +118,35 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
       for (final item in response)
         if (item is Map)
           YorksV1BoqGroup.fromRpcJson(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  @override
+  Future<List<YorksV1BoqFolderManagementItem>> listFolderManagement(
+    String projectId, {
+    required String scopeId,
+    bool includeArchived = true,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_list_boq_folder_management',
+      parameters: {
+        'p_project_id': projectId,
+        'p_scope_id': scopeId,
+        'p_include_archived': includeArchived,
+      },
+      requiresOnline: false,
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final item in response)
+        if (item is Map)
+          YorksV1BoqFolderManagementItem.fromRpcJson(
+            Map<String, dynamic>.from(item),
+          ),
     ];
   }
 
@@ -189,6 +224,23 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
   }
 
   @override
+  Future<YorksV1BoqGroup> renameGroup(YorksV1RenameBoqGroupInput input) async {
+    final response = await _invoke(
+      functionName: 'v1_rename_boq_group',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1BoqGroup.fromRpcJson(Map<String, dynamic>.from(response));
+  }
+
+  @override
   Future<YorksV1BoqGroup> assignLegacyGroupScope(
     YorksV1AssignLegacyBoqGroupScopeInput input,
   ) async {
@@ -208,18 +260,41 @@ class YorksV1SupabaseBoqRepository implements YorksV1BoqRepository {
   }
 
   @override
-  Future<void> archiveGroup({
-    required String groupId,
-    required int expectedVersion,
-    required String idempotencyKey,
-  }) async {
-    await _invoke(
+  Future<YorksV1BoqGroup> archiveGroup(
+    YorksV1ArchiveBoqGroupInput input,
+  ) async {
+    final response = await _invoke(
       functionName: 'v1_archive_boq_group',
       parameters: {
-        'p_payload': {'group_id': groupId, 'expected_version': expectedVersion},
-        'p_idempotency_key': idempotencyKey,
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
       },
     );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1BoqGroup.fromRpcJson(Map<String, dynamic>.from(response));
+  }
+
+  @override
+  Future<YorksV1BoqGroup> restoreGroup(
+    YorksV1RestoreBoqGroupInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_restore_boq_group',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1BoqGroup.fromRpcJson(Map<String, dynamic>.from(response));
   }
 
   Future<Object?> _invoke({

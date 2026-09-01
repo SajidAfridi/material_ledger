@@ -279,7 +279,7 @@ positive/negative permission tests ship in the same release:
 
 - Projects: `projects.view`, `projects.create`, `projects.edit`,
   `projects.archive`;
-- BOQ: `boq.view`, `boq.edit`;
+- BOQ: `boq.view`, `boq.edit`, `boq.manage_folders`;
 - Material Requests and logistics: `material_requests.view`,
   `material_requests.create`, `material_requests.edit`,
   `material_requests.submit`, `material_requests.approve`,
@@ -310,10 +310,11 @@ dated Project Engineer membership required by the product contract.
 
 All other operational catalogue rows remain `shadow` until their complete
 read/command surface is separable and tested. In particular, project-team and
-project-state management, granular BOQ import/export/folder actions, printing,
+project-state management, granular BOQ import/export actions, printing,
 embedded logistics reads/evidence and warehouse return confirmation remain
-legacy-authoritative. R39 Accounts keys remain shadow and nonassignable during
-T01; audit-corrective-note controls remain planned, disabled and nonassignable.
+legacy-authoritative. Folder structure management is the enforced exception
+described above. R39 Accounts keys remain shadow and nonassignable during T01;
+audit-corrective-note controls remain planned, disabled and nonassignable.
 
 Rollback disables the new consumer and returns to the prior server check. It
 does not drop capability data, remove audit history or rewrite roles. A

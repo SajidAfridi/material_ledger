@@ -150,9 +150,11 @@ names, editable metadata and client-provided role strings are never authority.
 - `v1_list_boq_groups_for_scope(project, null)` is the Overview projection;
   null is not a database scope. A non-null scope returns only that independent
   Common/building workbook set. The compatibility list RPC returns Common only.
-- Custom BOQ folder names are project-wide definitions materialized as one
-  independent empty group per active real scope. The read path never merges or
-  copies their rows, columns, quantities, exports or MR sources.
+- BOQ folders are owned by one real Common/building scope. Custom creation and
+  visible-name changes affect only that selected scope; the read path never
+  merges, clones or propagates folder structure, rows, columns, quantities,
+  exports or MR sources across scopes. Every new scope receives its own active
+  default template group, currently Workshop Materials.
 - Draft MR queries are creator/Admin-only.
 - Submitted operational data uses role-specific secure views or RPC-returned
   records.

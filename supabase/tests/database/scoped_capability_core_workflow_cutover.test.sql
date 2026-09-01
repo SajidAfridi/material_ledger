@@ -14,6 +14,7 @@ select is(
   array[
     'approve_supplier_bill_payment',
     'boq.edit',
+    'boq.manage_folders',
     'boq.view',
     'configure_project_commercials',
     'confirm_billing_progress',
@@ -79,7 +80,7 @@ select ok(
     from public.v1_capability_catalog catalog
     where catalog.capability_key = any(array[
       'projects.change_state', 'projects.manage_team',
-      'boq.import', 'boq.export', 'boq.manage_folders',
+      'boq.import', 'boq.export',
       'material_requests.print', 'procurement.view',
       'procurement.external_readiness.manage', 'dispatch.view',
       'delivery_reports.print', 'receipts.view',

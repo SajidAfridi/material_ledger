@@ -235,11 +235,9 @@ class _RetryImportRepository implements YorksV1BoqRepository {
   Future<YorksV1BoqWorksheet> getWorksheet(String groupId) async => worksheet;
 
   @override
-  Future<void> archiveGroup({
-    required String groupId,
-    required int expectedVersion,
-    required String idempotencyKey,
-  }) async {}
+  Future<YorksV1BoqGroup> archiveGroup(
+    YorksV1ArchiveBoqGroupInput input,
+  ) async => worksheet.group;
 
   @override
   Future<YorksV1BoqGroup> assignLegacyGroupScope(
@@ -252,6 +250,15 @@ class _RetryImportRepository implements YorksV1BoqRepository {
   ) async => worksheet.group;
 
   @override
+  Future<YorksV1BoqGroup> renameGroup(YorksV1RenameBoqGroupInput input) async =>
+      worksheet.group;
+
+  @override
+  Future<YorksV1BoqGroup> restoreGroup(
+    YorksV1RestoreBoqGroupInput input,
+  ) async => worksheet.group;
+
+  @override
   Future<List<YorksV1BoqGroup>> listGroups(String projectId) async => [
     worksheet.group,
   ];
@@ -261,6 +268,21 @@ class _RetryImportRepository implements YorksV1BoqRepository {
     String projectId, {
     String? scopeId,
   }) async => [worksheet.group];
+
+  @override
+  Future<List<YorksV1BoqFolderManagementItem>> listFolderManagement(
+    String projectId, {
+    required String scopeId,
+    bool includeArchived = true,
+  }) async => [
+    YorksV1BoqFolderManagementItem(
+      group: worksheet.group,
+      isSystemDefault: !worksheet.group.isCustom,
+      canRename: true,
+      canArchive: worksheet.group.isCustom,
+      canRestore: false,
+    ),
+  ];
 
   @override
   Future<YorksV1BoqWorksheet> saveWorksheet(

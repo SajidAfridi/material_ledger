@@ -2366,11 +2366,9 @@ class _BoqRepositoryFixture implements YorksV1BoqRepository {
   );
 
   @override
-  Future<void> archiveGroup({
-    required String groupId,
-    required int expectedVersion,
-    required String idempotencyKey,
-  }) async {}
+  Future<YorksV1BoqGroup> archiveGroup(
+    YorksV1ArchiveBoqGroupInput input,
+  ) async => _group;
 
   @override
   Future<YorksV1BoqGroup> assignLegacyGroupScope(
@@ -2383,6 +2381,15 @@ class _BoqRepositoryFixture implements YorksV1BoqRepository {
   ) async => _group;
 
   @override
+  Future<YorksV1BoqGroup> renameGroup(YorksV1RenameBoqGroupInput input) async =>
+      _group;
+
+  @override
+  Future<YorksV1BoqGroup> restoreGroup(
+    YorksV1RestoreBoqGroupInput input,
+  ) async => _group;
+
+  @override
   Future<YorksV1BoqWorksheet> getWorksheet(String groupId) async => _worksheet;
 
   @override
@@ -2392,6 +2399,23 @@ class _BoqRepositoryFixture implements YorksV1BoqRepository {
 
   @override
   Future<List<YorksV1BoqGroup>> listGroups(String projectId) async => _groups;
+
+  @override
+  Future<List<YorksV1BoqFolderManagementItem>> listFolderManagement(
+    String projectId, {
+    required String scopeId,
+    bool includeArchived = true,
+  }) async => [
+    for (final group in _groups)
+      if (group.scopeId == scopeId && (includeArchived || !group.isArchived))
+        YorksV1BoqFolderManagementItem(
+          group: group,
+          isSystemDefault: !group.isCustom,
+          canRename: !group.isArchived,
+          canArchive: group.isCustom && !group.isArchived,
+          canRestore: group.isCustom && group.isArchived,
+        ),
+  ];
 
   @override
   Future<List<YorksV1BoqGroup>> listGroupsForScope(

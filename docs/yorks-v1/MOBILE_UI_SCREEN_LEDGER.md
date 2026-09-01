@@ -38,7 +38,7 @@ evidence is tracked under
 | 13 | Project Overview | Projects | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/13_project_overview/deltas.md); loading/error remains distinct from zero; no weighted progress |
 | 14 | Project Details & Team | Projects | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/14_project_details_team/deltas.md); membership history/global-role authority retained |
 | 15 | BOQ Scope Overview | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/15_boq_scope_overview/deltas.md); Overview is summary-only; Common/buildings are real scopes |
-| 16 | Building BOQ Folders | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/16_boq_building_folders/deltas.md); folder shells align without implicit row copying |
+| 16 | Building BOQ Folders | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/16_boq_building_folders/deltas.md); the historical shell evidence is retained, while current Common/building folder catalogues are scope-local and independent |
 | 17 | BOQ Materials | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/17_boq_materials/deltas.md); dynamic/capability-safe compact list |
 | 18 | Add / Edit Material | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/18_boq_material_editor/deltas.md); dynamic editor, conflict and dirty-exit handling retained |
 | 19 | Excel Import — Upload | BOQ | Batch 2 | Verified | [Evidence](evidence/mobile-batch-02/19_excel_import_upload/deltas.md); local reversible selection, no server mutation |

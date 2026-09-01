@@ -1484,15 +1484,22 @@ class _FakeBoqRepository implements YorksV1BoqRepository {
   final List<YorksV1SaveBoqWorksheetInput> saved = [];
 
   @override
-  Future<void> archiveGroup({
-    required String groupId,
-    required int expectedVersion,
-    required String idempotencyKey,
-  }) async {}
+  Future<YorksV1BoqGroup> archiveGroup(
+    YorksV1ArchiveBoqGroupInput input,
+  ) async => worksheet.group;
 
   @override
   Future<YorksV1BoqGroup> createCustomGroup(
     YorksV1CreateBoqGroupInput input,
+  ) async => worksheet.group;
+
+  @override
+  Future<YorksV1BoqGroup> renameGroup(YorksV1RenameBoqGroupInput input) async =>
+      worksheet.group;
+
+  @override
+  Future<YorksV1BoqGroup> restoreGroup(
+    YorksV1RestoreBoqGroupInput input,
   ) async => worksheet.group;
 
   @override
@@ -1529,6 +1536,21 @@ class _FakeBoqRepository implements YorksV1BoqRepository {
     String projectId, {
     String? scopeId,
   }) async => [worksheet.group];
+
+  @override
+  Future<List<YorksV1BoqFolderManagementItem>> listFolderManagement(
+    String projectId, {
+    required String scopeId,
+    bool includeArchived = true,
+  }) async => [
+    YorksV1BoqFolderManagementItem(
+      group: worksheet.group,
+      isSystemDefault: !worksheet.group.isCustom,
+      canRename: true,
+      canArchive: worksheet.group.isCustom,
+      canRestore: false,
+    ),
+  ];
 
   @override
   Future<YorksV1BoqWorksheet> saveWorksheet(

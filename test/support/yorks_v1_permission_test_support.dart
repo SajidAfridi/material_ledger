@@ -10,6 +10,7 @@ const yorksV1EnforcedFeatureActionCapabilities = <String>{
   YorksV1CapabilityKeys.projectsArchive,
   YorksV1CapabilityKeys.boqView,
   YorksV1CapabilityKeys.boqEdit,
+  YorksV1CapabilityKeys.boqManageFolders,
   YorksV1CapabilityKeys.materialRequestsView,
   YorksV1CapabilityKeys.materialRequestsCreate,
   YorksV1CapabilityKeys.materialRequestsEdit,

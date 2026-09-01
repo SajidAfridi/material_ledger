@@ -395,7 +395,7 @@ abstract final class YorksV1ConfigurationStrings {
         'Rows, quantities, imports and request sources do not merge across buildings.',
     'default_folders': 'Workshop Materials default folder',
     'default_folders_body':
-        'Every new real scope receives Workshop Materials plus project-wide custom folder names.',
+        'Every real scope receives its own Workshop Materials folder. Custom folders remain local to the Common/building scope where they are created.',
     'master_draft_help':
         'New and archived choices stay in the draft until publication.',
     'units_active_help':

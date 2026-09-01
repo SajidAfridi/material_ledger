@@ -124,6 +124,50 @@ class YorksV1BoqGroup {
   }
 }
 
+/// Server-confirmed lifecycle controls for one scope-local BOQ folder.
+///
+/// The ordinary folder projection intentionally excludes archived records.
+/// Folder management uses this protected shape so Flutter never infers
+/// rename/archive/restore authority from a role label or from whether the
+/// folder happens to look custom.
+class YorksV1BoqFolderManagementItem {
+  const YorksV1BoqFolderManagementItem({
+    required this.group,
+    required this.isSystemDefault,
+    required this.canRename,
+    required this.canArchive,
+    required this.canRestore,
+    this.templateKey,
+    this.archivedAt,
+    this.archiveBlocker,
+    this.restoreBlocker,
+  });
+
+  final YorksV1BoqGroup group;
+  final String? templateKey;
+  final bool isSystemDefault;
+  final DateTime? archivedAt;
+  final bool canRename;
+  final bool canArchive;
+  final bool canRestore;
+  final String? archiveBlocker;
+  final String? restoreBlocker;
+
+  factory YorksV1BoqFolderManagementItem.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1BoqFolderManagementItem(
+    group: YorksV1BoqGroup.fromRpcJson(json),
+    templateKey: _nullableString(json['template_key']),
+    isSystemDefault: json['is_system_default'] == true,
+    archivedAt: _nullableDate(json['archived_at']),
+    canRename: json['can_rename'] == true,
+    canArchive: json['can_archive'] == true,
+    canRestore: json['can_restore'] == true,
+    archiveBlocker: _nullableString(json['archive_blocker']),
+    restoreBlocker: _nullableString(json['restore_blocker']),
+  );
+}
+
 /// A visible BOQ worksheet column.  Commercial columns are never returned to
 /// a user without the server-controlled capability; the normal editor only
 /// handles the operational projection.
@@ -317,6 +361,69 @@ class YorksV1CreateBoqGroupInput {
     'project_id': projectId,
     'scope_id': scopeId,
     'name': name.trim(),
+  };
+}
+
+class YorksV1RenameBoqGroupInput {
+  const YorksV1RenameBoqGroupInput({
+    required this.groupId,
+    required this.expectedVersion,
+    required this.name,
+    required this.reason,
+    required this.idempotencyKey,
+  });
+
+  final String groupId;
+  final int expectedVersion;
+  final String name;
+  final String reason;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'group_id': groupId,
+    'expected_version': expectedVersion,
+    'name': name.trim(),
+    'reason': reason.trim(),
+  };
+}
+
+class YorksV1ArchiveBoqGroupInput {
+  const YorksV1ArchiveBoqGroupInput({
+    required this.groupId,
+    required this.expectedVersion,
+    required this.reason,
+    required this.idempotencyKey,
+  });
+
+  final String groupId;
+  final int expectedVersion;
+  final String reason;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'group_id': groupId,
+    'expected_version': expectedVersion,
+    'reason': reason.trim(),
+  };
+}
+
+class YorksV1RestoreBoqGroupInput {
+  const YorksV1RestoreBoqGroupInput({
+    required this.groupId,
+    required this.expectedVersion,
+    required this.reason,
+    required this.idempotencyKey,
+  });
+
+  final String groupId;
+  final int expectedVersion;
+  final String reason;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'group_id': groupId,
+    'expected_version': expectedVersion,
+    'reason': reason.trim(),
   };
 }
 

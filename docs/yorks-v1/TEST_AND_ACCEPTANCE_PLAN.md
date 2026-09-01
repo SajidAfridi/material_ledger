@@ -21,7 +21,7 @@ slices extend the same stable sequence without renumbering those originals.
 | ID | Scenario | Primary automated/manual evidence |
 |---|---|---|
 | AT-01 | Site Engineer creates a project, assigns a Project Engineer and multiple buildings; Procurement cannot create/edit it. | RPC/RLS/route/widget/integration |
-| AT-02 | New project receives one independent Workshop Materials BOQ group for Common and each physical building; creating a custom folder name materializes an independent empty sibling in every real scope without copying rows. Historical populated template folders remain visible while untouched inactive shells are suppressed. | database/repository/widget |
+| AT-02 | New project receives one independent Workshop Materials BOQ group for Common and each physical building. Creating, renaming, archiving or restoring a custom folder changes only the selected real scope; another scope and future scopes do not inherit it. Workshop Materials is independently renameable while its protected template identity remains stable. Historical populated folders and previously materialized sibling shells remain preserved. | database/repository/widget |
 | AT-03 | MSD worksheet imports title, seven columns and all rows into the direct-edit grid. | workbook fixture/integration |
 | AT-04 | User edits/deletes a cell, row and non-protected column; a later import may use fresh IDs and a changed column/row order without archived-key collisions, and export reproduces the changed worksheet. | controller/workbook/database round-trip |
 | AT-05 | Similar Row inserts directly below and preserves configured fields with sequential S:No. | unit/widget |
@@ -66,7 +66,7 @@ slices extend the same stable sequence without renumbering those originals.
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
 one Workshop Materials folder per real scope, Overview aggregation,
-project-wide custom-folder naming with row isolation, Procurement write denial,
+scope-local folder creation/rename/archive/restore with row and reference isolation, Procurement write denial,
 legacy assignment idempotency and save/submit MR scope negatives.
 
 ## 3. Additional production gates

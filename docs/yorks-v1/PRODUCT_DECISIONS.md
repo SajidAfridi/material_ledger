@@ -222,13 +222,30 @@ workflow. Existing progress data remains historical and isolated.
 ## 6. BOQ groups, columns and rows
 
 - Every Common/building scope starts with one independent **Workshop
-  Materials** BOQ group. Admin-configured custom folder names remain
-  project-wide structural definitions.
-- A custom folder name is a project-wide structural definition. Creating it
-  from one real scope creates an independent empty group with the same name in
-  Common and every active building, and future scopes receive the name too.
-  Rows, columns, quantities, imports, exports and MR sources never copy between
-  those sibling groups.
+  Materials** BOQ group. Its protected template identity remains
+  `workshop_materials`, but an authorized user may rename its visible folder
+  name independently in that scope.
+- Folder structure is scope-local. Creating, renaming, archiving or restoring a
+  custom folder affects only the selected Common/building scope. Another
+  building may deliberately use a different folder set or different names, and
+  future scopes receive only their own active default template folders.
+- The folder name and worksheet title are separate. The folder name organizes
+  one scope; the optional worksheet title describes that one worksheet. Neither
+  change moves or copies rows, columns, quantities, imports, exports, documents
+  or MR sources.
+- The historical 8 August 2026 project-wide creation rule may have already
+  produced same-name empty sibling groups. Those records remain valid,
+  independent scope folders and are never merged or physically removed by the
+  scope-local correction.
+- Folder structure changes require the enforced, project-scoped
+  `boq.manage_folders` capability plus existing project access. They are
+  online, version-checked, idempotent and audited. Procurement and Accountant
+  cannot mutate BOQ folder structure.
+- A custom folder is archived/restored rather than physically deleted. The
+  Workshop Materials default may be renamed but is not archivable. A whole
+  operational BOQ is never hard-deleted: a completed project is archived, or a
+  later explicitly approved BOQ supersession retains the former structure and
+  downstream history.
 - Overview shows per-scope folder, started-folder and material
   counts. It does not merge rows, permit worksheet mutation or serve as an MR
   source.

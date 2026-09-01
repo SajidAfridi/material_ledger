@@ -14,6 +14,7 @@ import 'package:material_ledger/shared/models/yorks_v1_boq_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq_workbook.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
@@ -23,9 +24,12 @@ import 'package:material_ledger/shared/providers/yorks_v1_boq_repository_provide
 import 'package:material_ledger/shared/providers/yorks_v1_boq_workbook_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_boq_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_boq_workbook_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 const _projectId = 'mobile-boq-project';
 const _groupId = 'mobile-boq-ac-units';
@@ -291,6 +295,84 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final entry in <({Size size, String suffix})>[
+    (size: const Size(390, 844), suffix: 'mobile'),
+    (size: const Size(1366, 768), suffix: 'desktop'),
+  ]) {
+    testWidgets('scope-local folder manager is usable on ${entry.suffix}', (
+      tester,
+    ) async {
+      await _setViewport(tester, entry.size);
+      final repository = _FixtureBoqRepository(
+        worksheet: _worksheet,
+        groups: _groups,
+      );
+      await _pumpGroups(
+        tester,
+        selectedScopeId: _df3wScopeId,
+        repository: repository,
+      );
+
+      if (entry.suffix == 'mobile') {
+        await tester.tap(
+          find.byKey(const ValueKey('boq-manage-folders-mobile')),
+        );
+      } else {
+        await tester.tap(find.text(YorksV1BoqStrings.manageFolders.primary));
+      }
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('boq-folder-manager')), findsOneWidget);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('boq-folder-manager-create')))
+            .height,
+        greaterThanOrEqualTo(AppSpacing.minTapTarget),
+      );
+      final rename = tester.widget<IconButton>(
+        find.byKey(const ValueKey('boq-folder-rename-mobile-boq-ac-units')),
+      );
+      final archive = tester.widget<IconButton>(
+        find.byKey(const ValueKey('boq-folder-archive-mobile-boq-ac-units')),
+      );
+      expect(rename.onPressed, isNotNull);
+      expect(archive.onPressed, isNull);
+
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/boq_folder_manager_${entry.suffix}.png'),
+      );
+
+      if (entry.suffix == 'mobile') {
+        await tester.tap(
+          find.byKey(const ValueKey('boq-folder-rename-mobile-boq-ac-units')),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextField).at(0),
+          'Tower A equipment package',
+        );
+        await tester.enterText(
+          find.byType(TextField).at(1),
+          'Match the site filing convention',
+        );
+        await tester.tap(find.text(YorksV1BoqStrings.save.primary));
+        await tester.pumpAndSettle();
+        expect(repository.renameInputs, hasLength(1));
+        expect(repository.renameInputs.single.groupId, _groupId);
+        expect(
+          repository.renameInputs.single.name,
+          'Tower A equipment package',
+        );
+        expect(
+          repository.renameInputs.single.reason,
+          'Match the site filing convention',
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('embedded project BOQ keeps every folder scrollable', (
     tester,
@@ -675,26 +757,31 @@ Future<_BoqHarness> _pumpGroups(
   WidgetTester tester, {
   String? selectedScopeId,
   bool embedded = false,
+  _FixtureBoqRepository? repository,
 }) async {
-  final repository = _FixtureBoqRepository(
-    worksheet: _worksheet,
-    groups: _groups,
-  );
+  final effectiveRepository =
+      repository ??
+      _FixtureBoqRepository(worksheet: _worksheet, groups: _groups);
   final preferences = await SharedPreferences.getInstance();
   final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(preferences),
       yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.projectEngineer),
+      yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+        (ref) => YorksV1TestPermissionController(
+          yorksV1TrustedFeaturePermissionState(
+            role: YorksV1Role.projectEngineer,
+          ),
+        ),
+      ),
       canViewCommercialsProvider.overrideWithValue(false),
-      yorksV1BoqRepositoryProvider.overrideWithValue(repository),
+      yorksV1BoqRepositoryProvider.overrideWithValue(effectiveRepository),
       yorksV1MaterialRequestScopesProvider(
         _projectId,
       ).overrideWith((ref) async => _scopes),
     ],
   );
   addTearDown(container.dispose);
-  container.read(yorksV1BoqScopeSelectionProvider(_projectId).notifier).state =
-      selectedScopeId;
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
@@ -705,8 +792,10 @@ Future<_BoqHarness> _pumpGroups(
       ),
     ),
   );
+  container.read(yorksV1BoqScopeSelectionProvider(_projectId).notifier).state =
+      selectedScopeId;
   await tester.pumpAndSettle();
-  return _BoqHarness(container: container, repository: repository);
+  return _BoqHarness(container: container, repository: effectiveRepository);
 }
 
 Future<_BoqHarness> _pumpWorksheet(
@@ -731,6 +820,16 @@ Future<_BoqHarness> _pumpWorksheet(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(preferences),
       yorksV1CurrentRoleProvider.overrideWithValue(role),
+      yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+        (ref) => YorksV1TestPermissionController(
+          yorksV1TrustedFeaturePermissionState(
+            role: role,
+            capabilities: role == YorksV1Role.procurement
+                ? const {YorksV1CapabilityKeys.boqView}
+                : yorksV1EnforcedFeatureActionCapabilities,
+          ),
+        ),
+      ),
       canViewCommercialsProvider.overrideWithValue(false),
       canManageCommercialsProvider.overrideWithValue(canManageCommercials),
       yorksV1BoqRepositoryProvider.overrideWithValue(effectiveRepository),
@@ -829,6 +928,9 @@ class _FixtureBoqRepository implements YorksV1BoqRepository {
   final Completer<YorksV1BoqWorksheet>? pendingImport;
   final List<YorksV1SaveBoqWorksheetInput> saveInputs = [];
   final List<YorksV1ImportBoqWorksheetInput> importInputs = [];
+  final List<YorksV1RenameBoqGroupInput> renameInputs = [];
+  final List<YorksV1ArchiveBoqGroupInput> archiveInputs = [];
+  final List<YorksV1RestoreBoqGroupInput> restoreInputs = [];
 
   @override
   Future<List<YorksV1BoqGroup>> listGroups(String projectId) async => groups;
@@ -840,6 +942,23 @@ class _FixtureBoqRepository implements YorksV1BoqRepository {
   }) async => scopeId == null
       ? groups
       : groups.where((group) => group.scopeId == scopeId).toList();
+
+  @override
+  Future<List<YorksV1BoqFolderManagementItem>> listFolderManagement(
+    String projectId, {
+    required String scopeId,
+    bool includeArchived = true,
+  }) async => [
+    for (final group in groups)
+      if (group.scopeId == scopeId && (includeArchived || !group.isArchived))
+        YorksV1BoqFolderManagementItem(
+          group: group,
+          isSystemDefault: !group.isCustom,
+          canRename: !group.isArchived,
+          canArchive: group.isCustom && !group.isArchived,
+          canRestore: group.isCustom && group.isArchived,
+        ),
+  ];
 
   @override
   Future<YorksV1BoqWorksheet> getWorksheet(String groupId) async => worksheet;
@@ -873,16 +992,31 @@ class _FixtureBoqRepository implements YorksV1BoqRepository {
   ) async => groups.first;
 
   @override
+  Future<YorksV1BoqGroup> renameGroup(YorksV1RenameBoqGroupInput input) async {
+    renameInputs.add(input);
+    return groups.firstWhere((group) => group.id == input.groupId);
+  }
+
+  @override
   Future<YorksV1BoqGroup> assignLegacyGroupScope(
     YorksV1AssignLegacyBoqGroupScopeInput input,
   ) async => groups.first;
 
   @override
-  Future<void> archiveGroup({
-    required String groupId,
-    required int expectedVersion,
-    required String idempotencyKey,
-  }) async {}
+  Future<YorksV1BoqGroup> archiveGroup(
+    YorksV1ArchiveBoqGroupInput input,
+  ) async {
+    archiveInputs.add(input);
+    return groups.firstWhere((group) => group.id == input.groupId);
+  }
+
+  @override
+  Future<YorksV1BoqGroup> restoreGroup(
+    YorksV1RestoreBoqGroupInput input,
+  ) async {
+    restoreInputs.add(input);
+    return groups.firstWhere((group) => group.id == input.groupId);
+  }
 }
 
 const _scopes = [

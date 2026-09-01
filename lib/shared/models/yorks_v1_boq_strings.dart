@@ -177,10 +177,106 @@ abstract final class YorksV1BoqStrings {
     hi: 'नया समूह',
   );
   static const customGroupName = TranslatableString(
-    en: 'Folder name (created in every building)',
-    ar: 'اسم المجلد (يُنشأ في كل مبنى)',
-    ur: 'فولڈر کا نام (ہر عمارت میں بنایا جائے گا)',
-    hi: 'फ़ोल्डर का नाम (हर बिल्डिंग में बनाया जाएगा)',
+    en: 'Folder name (this Common/building scope)',
+    ar: 'اسم المجلد (لهذا النطاق المشترك/المبنى)',
+    ur: 'فولڈر کا نام (اس کامن/بلڈنگ اسکوپ کے لیے)',
+    hi: 'फ़ोल्डर का नाम (इस कॉमन/बिल्डिंग स्कोप के लिए)',
+  );
+  static const manageFolders = TranslatableString(
+    en: 'Manage folders',
+    ar: 'إدارة المجلدات',
+    ur: 'فولڈرز کا انتظام',
+    hi: 'फ़ोल्डर प्रबंधित करें',
+  );
+  static const manageFoldersDescription = TranslatableString(
+    en: 'Names and lifecycle apply only to the selected Common or building scope.',
+    ar: 'تسري الأسماء ودورة الحياة فقط على النطاق المشترك أو المبنى المحدد.',
+    ur: 'نام اور لائف سائیکل صرف منتخب کامن یا بلڈنگ اسکوپ پر لاگو ہوتے ہیں۔',
+    hi: 'नाम और जीवनचक्र केवल चुने हुए कॉमन या बिल्डिंग स्कोप पर लागू होते हैं।',
+  );
+  static const renameFolder = TranslatableString(
+    en: 'Rename folder',
+    ar: 'إعادة تسمية المجلد',
+    ur: 'فولڈر کا نام تبدیل کریں',
+    hi: 'फ़ोल्डर का नाम बदलें',
+  );
+  static const renameFolderDescription = TranslatableString(
+    en: 'Only this scope changes. Rows, documents and linked requests keep their stable references.',
+    ar: 'يتغير هذا النطاق فقط. تحتفظ الصفوف والمستندات والطلبات المرتبطة بمراجعها الثابتة.',
+    ur: 'صرف یہ اسکوپ تبدیل ہوگا۔ قطاریں، دستاویزات اور لنک شدہ ریکویسٹ اپنے مستقل حوالہ جات رکھیں گے۔',
+    hi: 'केवल यह स्कोप बदलेगा। पंक्तियाँ, दस्तावेज़ और लिंक किए गए अनुरोध अपने स्थिर संदर्भ रखेंगे।',
+  );
+  static const changeReason = TranslatableString(
+    en: 'Reason for change',
+    ar: 'سبب التغيير',
+    ur: 'تبدیلی کی وجہ',
+    hi: 'बदलाव का कारण',
+  );
+  static const reasonRequired = TranslatableString(
+    en: 'Enter a short reason for the audit history.',
+    ar: 'أدخل سبباً قصيراً لسجل التدقيق.',
+    ur: 'آڈٹ ہسٹری کے لیے مختصر وجہ درج کریں۔',
+    hi: 'ऑडिट इतिहास के लिए एक छोटा कारण दर्ज करें।',
+  );
+  static const folderNameRequired = TranslatableString(
+    en: 'Enter a folder name.',
+    ar: 'أدخل اسم المجلد.',
+    ur: 'فولڈر کا نام درج کریں۔',
+    hi: 'फ़ोल्डर का नाम दर्ज करें।',
+  );
+  static const folderNameUnchanged = TranslatableString(
+    en: 'Enter a different folder name.',
+    ar: 'أدخل اسماً مختلفاً للمجلد.',
+    ur: 'فولڈر کا مختلف نام درج کریں۔',
+    hi: 'फ़ोल्डर का अलग नाम दर्ज करें।',
+  );
+  static const editWorksheet = TranslatableString(
+    en: 'Open worksheet',
+    ar: 'فتح ورقة العمل',
+    ur: 'ورک شیٹ کھولیں',
+    hi: 'वर्कशीट खोलें',
+  );
+  static const activeFolders = TranslatableString(
+    en: 'Active folders',
+    ar: 'المجلدات النشطة',
+    ur: 'فعال فولڈرز',
+    hi: 'सक्रिय फ़ोल्डर',
+  );
+  static const archivedFolders = TranslatableString(
+    en: 'Archived folders',
+    ar: 'المجلدات المؤرشفة',
+    ur: 'آرکائیو شدہ فولڈرز',
+    hi: 'आर्काइव किए गए फ़ोल्डर',
+  );
+  static const restoreFolder = TranslatableString(
+    en: 'Restore folder',
+    ar: 'استعادة المجلد',
+    ur: 'فولڈر بحال کریں',
+    hi: 'फ़ोल्डर पुनर्स्थापित करें',
+  );
+  static const restoreFolderDescription = TranslatableString(
+    en: 'Restore this folder to the selected scope. Its retained worksheet and links become active again.',
+    ar: 'استعد هذا المجلد إلى النطاق المحدد. ستصبح ورقة العمل والروابط المحفوظة نشطة مرة أخرى.',
+    ur: 'اس فولڈر کو منتخب اسکوپ میں بحال کریں۔ اس کی محفوظ ورک شیٹ اور لنکس دوبارہ فعال ہو جائیں گے۔',
+    hi: 'इस फ़ोल्डर को चुने हुए स्कोप में पुनर्स्थापित करें। इसकी सुरक्षित वर्कशीट और लिंक फिर सक्रिय होंगे।',
+  );
+  static const systemFolder = TranslatableString(
+    en: 'Protected system folder',
+    ar: 'مجلد نظام محمي',
+    ur: 'محفوظ سسٹم فولڈر',
+    hi: 'संरक्षित सिस्टम फ़ोल्डर',
+  );
+  static const systemFolderCannotArchive = TranslatableString(
+    en: 'Protected system folders can be renamed but not archived.',
+    ar: 'يمكن إعادة تسمية مجلدات النظام المحمية ولكن لا يمكن أرشفتها.',
+    ur: 'محفوظ سسٹم فولڈرز کا نام تبدیل کیا جا سکتا ہے لیکن انہیں آرکائیو نہیں کیا جا سکتا۔',
+    hi: 'संरक्षित सिस्टम फ़ोल्डर का नाम बदला जा सकता है, लेकिन उन्हें आर्काइव नहीं किया जा सकता।',
+  );
+  static const lifecycleGuidance = TranslatableString(
+    en: 'Whole-BOQ deletion is not available. Archive the project from Project settings when work is complete; Yorks keeps worksheets and linked request history.',
+    ar: 'حذف جدول الكميات بالكامل غير متاح. أرشف المشروع من إعدادات المشروع عند اكتمال العمل؛ يحتفظ يوركس بأوراق العمل وسجل الطلبات المرتبطة.',
+    ur: 'مکمل BOQ حذف کرنا دستیاب نہیں۔ کام مکمل ہونے پر پراجیکٹ سیٹنگز سے پراجیکٹ آرکائیو کریں؛ یورکس ورک شیٹس اور لنک شدہ ریکویسٹ ہسٹری محفوظ رکھتا ہے۔',
+    hi: 'पूरा BOQ हटाना उपलब्ध नहीं है। काम पूरा होने पर प्रोजेक्ट सेटिंग्स से प्रोजेक्ट आर्काइव करें; Yorks वर्कशीट और लिंक अनुरोध इतिहास सुरक्षित रखता है।',
   );
   static const noGroups = TranslatableString(
     en: 'No BOQ worksheets are available for this project.',
@@ -555,10 +651,10 @@ abstract final class YorksV1BoqStrings {
     hi: 'रद्द करें',
   );
   static const archiveGroupConfirmation = TranslatableString(
-    en: 'Hide this custom folder only from the current Common/building scope? Other scopes are unchanged, and this worksheet remains in audit history.',
-    ar: 'إخفاء هذا المجلد المخصص من النطاق المشترك/المبنى الحالي فقط؟ لن تتغير النطاقات الأخرى وستبقى ورقة العمل في سجل التدقيق.',
-    ur: 'کیا یہ کسٹم فولڈر صرف موجودہ کامن/بلڈنگ اسکوپ سے چھپائیں؟ دوسرے اسکوپس تبدیل نہیں ہوں گے اور یہ ورک شیٹ آڈٹ ہسٹری میں رہے گی۔',
-    hi: 'क्या इस कस्टम फ़ोल्डर को केवल वर्तमान कॉमन/बिल्डिंग स्कोप से छिपाना है? अन्य स्कोप नहीं बदलेंगे और यह वर्कशीट ऑडिट इतिहास में रहेगी।',
+    en: 'Archive this custom folder only in the current Common/building scope? Its worksheet, documents and request links stay in audit history.',
+    ar: 'أرشفة هذا المجلد المخصص في النطاق المشترك/المبنى الحالي فقط؟ ستبقى ورقة العمل والمستندات وروابط الطلبات في سجل التدقيق.',
+    ur: 'کیا یہ کسٹم فولڈر صرف موجودہ کامن/بلڈنگ اسکوپ میں آرکائیو کریں؟ اس کی ورک شیٹ، دستاویزات اور ریکویسٹ لنکس آڈٹ ہسٹری میں رہیں گے۔',
+    hi: 'क्या इस कस्टम फ़ोल्डर को केवल वर्तमान कॉमन/बिल्डिंग स्कोप में आर्काइव करना है? इसकी वर्कशीट, दस्तावेज़ और अनुरोध लिंक ऑडिट इतिहास में रहेंगे।',
   );
   static const saveFailed = TranslatableString(
     en: 'Could not save this worksheet. Check the highlighted details and try again.',

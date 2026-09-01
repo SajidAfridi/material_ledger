@@ -14,11 +14,21 @@ per-building worksheets. Its Overview option is read-only; it is never a
 persisted scope or cross-building write/MR source. The data-preserving details
 and reconciliation rule are recorded in [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md).
 
-Product-owner change approval on 8 August 2026 makes BOQ folder names a
-project-wide structural definition: creating a custom folder makes an empty
-folder with the same name available in Common and every active building, while
-rows, columns, quantities, imports, exports and MR sources remain independent
-per real scope. Legacy rows are never cloned or inferred by this rule.
+The historical product-owner change approved on 8 August 2026 made BOQ folder
+names project-wide structural definitions. That creation/seed behavior is
+superseded by the later 1 September 2026 decision below. Existing sibling
+folders materialized under the historical rule remain preserved as independent
+scope records; they are never merged, copied or deleted by the correction.
+
+Product-owner change approval on 1 September 2026 makes BOQ folders fully
+scope-local. Common and each physical building may have different folder names
+and folder sets. Creating, renaming, archiving or restoring a custom folder
+affects only the selected real scope. Every new scope still receives its own
+Workshop Materials default, whose visible name may be changed for that scope
+without changing its protected `workshop_materials` template identity. Future
+scopes do not inherit custom folders from another scope. Existing group, row,
+column, document and Material Request references retain their stable IDs and
+history.
 
 Product-owner change approval on 9 August 2026 grants the exact Senior
 Mechanical Engineer role access to the audited User Management surface and its

@@ -74,11 +74,14 @@ Legacy role handling:
   scope. It never creates an `Overview` scope. The prior 29 template records
   remain inactive historical definitions, and populated legacy folders remain
   visible without cloning or deleting their contents.
-- The 8 August folder-structure correction additively materialises each active
-  custom folder name as an empty sibling group in Common and every active
-  building, and seeds those names into future scopes. Existing groups and all
-  child rows/columns remain untouched; rollback disables the replacement
-  creation/seed function but does not delete the additive empty shells.
+- The historical 8 August folder-structure correction additively materialised
+  active custom folder names as empty siblings across then-active scopes. The
+  1 September scope-local correction preserves every such group and child ID,
+  but replaces future command behavior: custom creation/rename/archive/restore
+  applies only to the selected real scope, and a future scope receives only
+  active default templates. No historical sibling shell is merged or deleted.
+  Rollback may restore the prior command bodies but must not rewrite folder
+  names or remove later audited scope-local records.
 - Existing project-level groups remain `scope_id = null`, are visible only in
   the Overview summary as legacy/unassigned, and require an explicit audited,
   version-checked mapping to one active real scope. Do not copy, infer or

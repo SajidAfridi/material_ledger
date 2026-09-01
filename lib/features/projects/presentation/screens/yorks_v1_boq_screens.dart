@@ -90,6 +90,12 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
       legacyAllowed: legacyEditable,
       projectId: projectId,
     );
+    final folderAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.boqManageFolders,
+      legacyAllowed: role?.isEngineering == true || role == YorksV1Role.admin,
+      projectId: projectId,
+    );
     final requestCreateAccess = yorksV1FeatureActionAccess(
       permissionState,
       YorksV1CapabilityKeys.materialRequestsCreate,
@@ -99,8 +105,8 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
     final editable = editAccess.canWrite;
     final showEditActions = editAccess.isVisible;
     final isAllAggregate = selectedScopeId == null;
-    final canMutateSelectedScope = editable && !isAllAggregate;
-    final showMutateSelectedScope = showEditActions && !isAllAggregate;
+    final canManageSelectedScope = folderAccess.canWrite && !isAllAggregate;
+    final showManageSelectedScope = folderAccess.isVisible && !isAllAggregate;
     final selectedRealScopeId = selectedScopeId;
     final requestsEnabled = ref.watch(yorksV1FeatureFlagsProvider).requests;
     final documentsEnabled = ref.watch(yorksV1FeatureFlagsProvider).documents;
@@ -133,12 +139,22 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
         groups: groups,
         scopeSelector: scopeSelector,
         isAllAggregate: isAllAggregate,
-        editable: canMutateSelectedScope,
-        showEditActions: showMutateSelectedScope,
+        editable: editable && !isAllAggregate,
+        showEditActions: showEditActions && !isAllAggregate,
+        canManageFolders: canManageSelectedScope,
+        showManageFolders: showManageSelectedScope,
         excelEnabled: excelEnabled,
         onSelectScope: selectScope,
         onAssignLegacyScope: onAssignLegacyScope,
         onCreateGroup: () => _createGroup(context, ref, selectedRealScopeId),
+        onManageFolders: () => _showFolderManager(
+          context,
+          ref,
+          selectedRealScopeId,
+          canWrite: canManageSelectedScope,
+        ),
+        onRenameGroup: (group) => _renameGroup(context, ref, group),
+        onArchiveGroup: (group) => _archiveGroup(context, ref, group),
         onExport: () => _exportProjectWorkbook(context, ref, selectedScopeId),
         onPrint: () => _printProjectBoq(
           context,
@@ -223,13 +239,19 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
               ],
             )
           : null,
-      floatingActionButton: compactRoute && showMutateSelectedScope
+      floatingActionButton: compactRoute && showManageSelectedScope
           ? FloatingActionButton.extended(
-              onPressed: canMutateSelectedScope
-                  ? () => _createGroup(context, ref, selectedRealScopeId)
+              key: const ValueKey('boq-manage-folders-mobile'),
+              onPressed: canManageSelectedScope
+                  ? () => _showFolderManager(
+                      context,
+                      ref,
+                      selectedRealScopeId,
+                      canWrite: true,
+                    )
                   : null,
-              icon: const Icon(Icons.create_new_folder_outlined),
-              label: Text(YorksV1BoqStrings.newGroup.primary),
+              icon: const Icon(Icons.folder_copy_outlined),
+              label: Text(YorksV1BoqStrings.manageFolders.active(language)),
             )
           : null,
       body: SafeArea(
@@ -300,11 +322,29 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    if (showMutateSelectedScope)
+                    if (showManageSelectedScope)
+                      SizedBox(
+                        height: AppSpacing.minTapTarget,
+                        child: OutlinedButton.icon(
+                          onPressed: canManageSelectedScope
+                              ? () => _showFolderManager(
+                                  context,
+                                  ref,
+                                  selectedRealScopeId,
+                                  canWrite: true,
+                                )
+                              : null,
+                          icon: const Icon(Icons.folder_copy_outlined),
+                          label: Text(
+                            YorksV1BoqStrings.manageFolders.active(language),
+                          ),
+                        ),
+                      ),
+                    if (showManageSelectedScope)
                       SizedBox(
                         height: AppSpacing.minTapTarget,
                         child: FilledButton.icon(
-                          onPressed: canMutateSelectedScope
+                          onPressed: canManageSelectedScope
                               ? () => _createGroup(
                                   context,
                                   ref,
@@ -339,13 +379,18 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
                     groups: items,
                     language: language,
                     projectId: projectId,
-                    editable: canMutateSelectedScope,
-                    showEditActions: showMutateSelectedScope,
+                    editable: editable && !isAllAggregate,
+                    showEditActions: showEditActions && !isAllAggregate,
+                    canManageFolders: canManageSelectedScope,
+                    showManageFolders: showManageSelectedScope,
                     aggregateReadOnly: isAllAggregate,
                     onSelectScope: selectScope,
                     onAssignLegacyScope: onAssignLegacyScope,
                     onAddGroup: () =>
                         _createGroup(context, ref, selectedRealScopeId),
+                    onRenameGroup: (group) => _renameGroup(context, ref, group),
+                    onArchiveGroup: (group) =>
+                        _archiveGroup(context, ref, group),
                   ),
                 ),
               ),
@@ -379,10 +424,157 @@ class YorksV1BoqGroupsScreen extends ConsumerWidget {
               idempotencyKey: const Uuid().v4(),
             ),
           );
-      ref.invalidate(yorksV1BoqGroupsProvider(projectId));
-      // The server creates this folder definition for every active scope, so
-      // clear all family entries rather than leaving sibling caches stale.
-      ref.invalidate(yorksV1ScopedBoqGroupsProvider);
+      // Folder creation is scope-local. Refresh the selected scope and the All
+      // aggregate, which summarizes every independent Common/building scope.
+      _invalidateFolderManagement(ref, projectId, scopeId);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1BoqStrings.saveFailed.primary)),
+      );
+    }
+  }
+
+  Future<void> _showFolderManager(
+    BuildContext context,
+    WidgetRef ref,
+    String? scopeId, {
+    required bool canWrite,
+  }) async {
+    if (scopeId == null || scopeId.trim().isEmpty) return;
+    final content = _BoqFolderManager(
+      projectId: projectId,
+      scopeId: scopeId,
+      canWrite: canWrite,
+      onCreate: () => _createGroup(context, ref, scopeId),
+      onRename: (group) => _renameGroup(context, ref, group),
+      onArchive: (group) => _archiveGroup(context, ref, group),
+      onRestore: (group) => _restoreGroup(context, ref, group),
+    );
+    if (YorksMobileUi.isActive(context)) {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (_) => FractionallySizedBox(heightFactor: 0.9, child: content),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      animationStyle: AnimationStyle.noAnimation,
+      builder: (_) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760, maxHeight: 720),
+          child: content,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _renameGroup(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1BoqGroup group,
+  ) async {
+    final change = await _promptForFolderRename(
+      context,
+      group,
+      ref.read(languageProvider),
+    );
+    if (change == null || !context.mounted) return;
+    try {
+      await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .renameGroup(
+            YorksV1RenameBoqGroupInput(
+              groupId: group.id,
+              expectedVersion: group.version,
+              name: change.name,
+              reason: change.reason,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      _invalidateFolderManagement(ref, projectId, group.scopeId);
+      ref.invalidate(yorksV1BoqWorksheetControllerProvider(group.id));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(YorksV1BoqStrings.saved.primary)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1BoqStrings.saveFailed.primary)),
+      );
+    }
+  }
+
+  Future<void> _archiveGroup(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1BoqGroup group,
+  ) async {
+    final reason = await _promptForFolderReason(
+      context,
+      title: YorksV1BoqStrings.archiveGroup,
+      description: YorksV1BoqStrings.archiveGroupConfirmation,
+      language: ref.read(languageProvider),
+    );
+    if (reason == null || !context.mounted) return;
+    try {
+      await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .archiveGroup(
+            YorksV1ArchiveBoqGroupInput(
+              groupId: group.id,
+              expectedVersion: group.version,
+              reason: reason,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      _invalidateFolderManagement(ref, projectId, group.scopeId);
+      ref.invalidate(yorksV1BoqWorksheetControllerProvider(group.id));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(YorksV1BoqStrings.saved.primary)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(YorksV1BoqStrings.saveFailed.primary)),
+      );
+    }
+  }
+
+  Future<void> _restoreGroup(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1BoqGroup group,
+  ) async {
+    final reason = await _promptForFolderReason(
+      context,
+      title: YorksV1BoqStrings.restoreFolder,
+      description: YorksV1BoqStrings.restoreFolderDescription,
+      language: ref.read(languageProvider),
+    );
+    if (reason == null || !context.mounted) return;
+    try {
+      await ref
+          .read(yorksV1BoqRepositoryProvider)
+          .restoreGroup(
+            YorksV1RestoreBoqGroupInput(
+              groupId: group.id,
+              expectedVersion: group.version,
+              reason: reason,
+              idempotencyKey: const Uuid().v4(),
+            ),
+          );
+      _invalidateFolderManagement(ref, projectId, group.scopeId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(YorksV1BoqStrings.saved.primary)));
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -713,7 +905,11 @@ class _GroupsBody extends StatelessWidget {
     required this.projectId,
     required this.editable,
     required this.showEditActions,
+    required this.canManageFolders,
+    required this.showManageFolders,
     required this.onAddGroup,
+    required this.onRenameGroup,
+    required this.onArchiveGroup,
     this.aggregateReadOnly = false,
     this.embedded = false,
     this.onSelectScope,
@@ -725,7 +921,11 @@ class _GroupsBody extends StatelessWidget {
   final String projectId;
   final bool editable;
   final bool showEditActions;
+  final bool canManageFolders;
+  final bool showManageFolders;
   final VoidCallback? onAddGroup;
+  final ValueChanged<YorksV1BoqGroup> onRenameGroup;
+  final ValueChanged<YorksV1BoqGroup> onArchiveGroup;
   final bool aggregateReadOnly;
   final bool embedded;
   final ValueChanged<String>? onSelectScope;
@@ -784,6 +984,10 @@ class _GroupsBody extends StatelessWidget {
         onOpen: (group) => context.push(
           RoutePaths.yorksV1BoqWorksheetPath(projectId, group.id),
         ),
+        canManageFolders: canManageFolders,
+        showManageFolders: showManageFolders,
+        onRename: onRenameGroup,
+        onArchive: onArchiveGroup,
       );
     }
 
@@ -828,6 +1032,12 @@ class _GroupsBody extends StatelessWidget {
                               group.id,
                             ),
                           ),
+                    canManageFolders: canManageFolders,
+                    showManageFolders: showManageFolders,
+                    onRename: () => onRenameGroup(group),
+                    onArchive: group.isCustom
+                        ? () => onArchiveGroup(group)
+                        : null,
                   );
                 },
               )
@@ -855,6 +1065,12 @@ class _GroupsBody extends StatelessWidget {
                                 group.id,
                               ),
                             ),
+                      canManageFolders: canManageFolders,
+                      showManageFolders: showManageFolders,
+                      onRename: () => onRenameGroup(group),
+                      onArchive: group.isCustom
+                          ? () => onArchiveGroup(group)
+                          : null,
                     );
                   },
                 ),
@@ -874,12 +1090,20 @@ class _MobileBoqFolderList extends StatefulWidget {
     required this.language,
     required this.embedded,
     required this.onOpen,
+    required this.canManageFolders,
+    required this.showManageFolders,
+    required this.onRename,
+    required this.onArchive,
   });
 
   final List<YorksV1BoqGroup> groups;
   final AppLanguage language;
   final bool embedded;
   final ValueChanged<YorksV1BoqGroup> onOpen;
+  final bool canManageFolders;
+  final bool showManageFolders;
+  final ValueChanged<YorksV1BoqGroup> onRename;
+  final ValueChanged<YorksV1BoqGroup> onArchive;
 
   @override
   State<_MobileBoqFolderList> createState() => _MobileBoqFolderListState();
@@ -956,8 +1180,14 @@ class _MobileBoqFolderListState extends State<_MobileBoqFolderList> {
       ],
     );
 
-    Widget row(YorksV1BoqGroup group) =>
-        _MobileBoqFolderRow(group: group, onTap: () => widget.onOpen(group));
+    Widget row(YorksV1BoqGroup group) => _MobileBoqFolderRow(
+      group: group,
+      onTap: () => widget.onOpen(group),
+      canManageFolders: widget.canManageFolders,
+      showManageFolders: widget.showManageFolders,
+      onRename: () => widget.onRename(group),
+      onArchive: group.isCustom ? () => widget.onArchive(group) : null,
+    );
 
     if (widget.embedded) {
       return Column(
@@ -1015,10 +1245,21 @@ class _MobileFolderFilterButton extends StatelessWidget {
 }
 
 class _MobileBoqFolderRow extends StatelessWidget {
-  const _MobileBoqFolderRow({required this.group, required this.onTap});
+  const _MobileBoqFolderRow({
+    required this.group,
+    required this.onTap,
+    required this.canManageFolders,
+    required this.showManageFolders,
+    required this.onRename,
+    this.onArchive,
+  });
 
   final YorksV1BoqGroup group;
   final VoidCallback onTap;
+  final bool canManageFolders;
+  final bool showManageFolders;
+  final VoidCallback onRename;
+  final VoidCallback? onArchive;
 
   @override
   Widget build(BuildContext context) => YorksMobileCard(
@@ -1092,8 +1333,16 @@ class _MobileBoqFolderRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            const SizedBox(width: AppSpacing.xs),
+            if (showManageFolders)
+              _BoqFolderActionsMenu(
+                canWrite: canManageFolders,
+                onOpen: onTap,
+                onRename: onRename,
+                onArchive: onArchive,
+              )
+            else
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           ],
         ),
       ),
@@ -1557,10 +1806,15 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
     required this.isAllAggregate,
     required this.editable,
     required this.showEditActions,
+    required this.canManageFolders,
+    required this.showManageFolders,
     required this.excelEnabled,
     required this.onSelectScope,
     this.onAssignLegacyScope,
     required this.onCreateGroup,
+    required this.onManageFolders,
+    required this.onRenameGroup,
+    required this.onArchiveGroup,
     required this.onExport,
     required this.onPrint,
     required this.onRetry,
@@ -1573,10 +1827,15 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
   final bool isAllAggregate;
   final bool editable;
   final bool showEditActions;
+  final bool canManageFolders;
+  final bool showManageFolders;
   final bool excelEnabled;
   final ValueChanged<String> onSelectScope;
   final ValueChanged<YorksV1BoqGroup>? onAssignLegacyScope;
   final VoidCallback onCreateGroup;
+  final VoidCallback onManageFolders;
+  final ValueChanged<YorksV1BoqGroup> onRenameGroup;
+  final ValueChanged<YorksV1BoqGroup> onArchiveGroup;
   final VoidCallback onExport;
   final VoidCallback onPrint;
   final VoidCallback onRetry;
@@ -1617,9 +1876,15 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
                     icon: const Icon(Icons.print_outlined, size: 18),
                     label: Text(YorksV1BoqStrings.printBoq.primary),
                   ),
-                  if (showEditActions)
+                  if (showManageFolders)
+                    OutlinedButton.icon(
+                      onPressed: canManageFolders ? onManageFolders : null,
+                      icon: const Icon(Icons.folder_copy_outlined, size: 18),
+                      label: Text(YorksV1BoqStrings.manageFolders.primary),
+                    ),
+                  if (showManageFolders)
                     FilledButton.icon(
-                      onPressed: editable ? onCreateGroup : null,
+                      onPressed: canManageFolders ? onCreateGroup : null,
                       icon: const Icon(
                         Icons.create_new_folder_outlined,
                         size: 18,
@@ -1659,10 +1924,14 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
               projectId: projectId,
               editable: editable,
               showEditActions: showEditActions,
+              canManageFolders: canManageFolders,
+              showManageFolders: showManageFolders,
               aggregateReadOnly: isAllAggregate,
               onSelectScope: onSelectScope,
               onAssignLegacyScope: onAssignLegacyScope,
               onAddGroup: onCreateGroup,
+              onRenameGroup: onRenameGroup,
+              onArchiveGroup: onArchiveGroup,
               embedded: true,
             ),
           ),
@@ -1715,9 +1984,15 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
                     icon: const Icon(Icons.print_outlined, size: 18),
                     label: Text(YorksV1BoqStrings.printBoq.primary),
                   ),
-                if (showEditActions)
+                if (showManageFolders)
+                  OutlinedButton.icon(
+                    onPressed: canManageFolders ? onManageFolders : null,
+                    icon: const Icon(Icons.folder_copy_outlined, size: 18),
+                    label: Text(YorksV1BoqStrings.manageFolders.primary),
+                  ),
+                if (showManageFolders)
                   FilledButton.icon(
-                    onPressed: editable ? onCreateGroup : null,
+                    onPressed: canManageFolders ? onCreateGroup : null,
                     icon: const Icon(
                       Icons.create_new_folder_outlined,
                       size: 18,
@@ -1747,14 +2022,416 @@ class _EmbeddedBoqGroupsWorkspace extends StatelessWidget {
             projectId: projectId,
             editable: editable,
             showEditActions: showEditActions,
+            canManageFolders: canManageFolders,
+            showManageFolders: showManageFolders,
             aggregateReadOnly: isAllAggregate,
             onSelectScope: onSelectScope,
             onAssignLegacyScope: onAssignLegacyScope,
             onAddGroup: onCreateGroup,
+            onRenameGroup: onRenameGroup,
+            onArchiveGroup: onArchiveGroup,
             embedded: true,
           ),
         ),
       ],
+    );
+  }
+}
+
+enum _BoqFolderAction { open, rename, archive }
+
+class _BoqFolderActionsMenu extends StatelessWidget {
+  const _BoqFolderActionsMenu({
+    required this.canWrite,
+    required this.onOpen,
+    required this.onRename,
+    this.onArchive,
+  });
+
+  final bool canWrite;
+  final VoidCallback? onOpen;
+  final VoidCallback onRename;
+  final VoidCallback? onArchive;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: AppSpacing.minTapTarget,
+    child: PopupMenuButton<_BoqFolderAction>(
+      tooltip: YorksV1BoqStrings.manageFolders.primary,
+      icon: const Icon(Icons.more_vert_rounded),
+      onSelected: (action) {
+        switch (action) {
+          case _BoqFolderAction.open:
+            onOpen?.call();
+            break;
+          case _BoqFolderAction.rename:
+            onRename();
+            break;
+          case _BoqFolderAction.archive:
+            onArchive?.call();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        if (onOpen != null)
+          PopupMenuItem(
+            value: _BoqFolderAction.open,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.edit_note_outlined),
+              title: Text(YorksV1BoqStrings.editWorksheet.primary),
+            ),
+          ),
+        PopupMenuItem(
+          value: _BoqFolderAction.rename,
+          enabled: canWrite,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.drive_file_rename_outline),
+            title: Text(YorksV1BoqStrings.renameFolder.primary),
+          ),
+        ),
+        if (onArchive != null)
+          PopupMenuItem(
+            value: _BoqFolderAction.archive,
+            enabled: canWrite,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.archive_outlined),
+              title: Text(YorksV1BoqStrings.archiveGroup.primary),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _BoqFolderManager extends ConsumerWidget {
+  const _BoqFolderManager({
+    required this.projectId,
+    required this.scopeId,
+    required this.canWrite,
+    required this.onCreate,
+    required this.onRename,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final String projectId;
+  final String scopeId;
+  final bool canWrite;
+  final VoidCallback onCreate;
+  final ValueChanged<YorksV1BoqGroup> onRename;
+  final ValueChanged<YorksV1BoqGroup> onArchive;
+  final ValueChanged<YorksV1BoqGroup> onRestore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
+    final query = YorksV1BoqScopeQuery(projectId: projectId, scopeId: scopeId);
+    final state = ref.watch(yorksV1BoqFolderManagementProvider(query));
+    return Padding(
+      key: const ValueKey('boq-folder-manager'),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _CopyText(
+                      copy: YorksV1BoqStrings.manageFolders,
+                      language: language,
+                      style: AppTypography.titleLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    _CopyText(
+                      copy: YorksV1BoqStrings.manageFoldersDescription,
+                      language: language,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: YorksV1BoqStrings.refresh.active(language),
+                onPressed: () =>
+                    ref.invalidate(yorksV1BoqFolderManagementProvider(query)),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+              IconButton(
+                tooltip: YorksV1BoqStrings.cancel.active(language),
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: SizedBox(
+              height: AppSpacing.minTapTarget,
+              child: FilledButton.icon(
+                key: const ValueKey('boq-folder-manager-create'),
+                onPressed: canWrite ? onCreate : null,
+                icon: const Icon(Icons.create_new_folder_outlined),
+                label: Text(YorksV1BoqStrings.newGroup.active(language)),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Expanded(
+            child: state.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, _) => _ErrorState(
+                language: language,
+                onRetry: () =>
+                    ref.invalidate(yorksV1BoqFolderManagementProvider(query)),
+              ),
+              data: (items) {
+                final active = items
+                    .where((item) => !item.group.isArchived)
+                    .toList(growable: false);
+                final archived = items
+                    .where((item) => item.group.isArchived)
+                    .toList(growable: false);
+                return ListView(
+                  children: [
+                    _BoqFolderManagerSection(
+                      title: YorksV1BoqStrings.activeFolders,
+                      language: language,
+                      items: active,
+                      canWrite: canWrite,
+                      onRename: onRename,
+                      onArchive: onArchive,
+                      onRestore: onRestore,
+                    ),
+                    if (archived.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      _BoqFolderManagerSection(
+                        title: YorksV1BoqStrings.archivedFolders,
+                        language: language,
+                        items: archived,
+                        canWrite: canWrite,
+                        onRename: onRename,
+                        onArchive: onArchive,
+                        onRestore: onRestore,
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.xl),
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.blueContainer,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusMd,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            color: AppColors.blue,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: _CopyText(
+                              copy: YorksV1BoqStrings.lifecycleGuidance,
+                              language: language,
+                              style: AppTypography.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BoqFolderManagerSection extends StatelessWidget {
+  const _BoqFolderManagerSection({
+    required this.title,
+    required this.language,
+    required this.items,
+    required this.canWrite,
+    required this.onRename,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final TranslatableString title;
+  final AppLanguage language;
+  final List<YorksV1BoqFolderManagementItem> items;
+  final bool canWrite;
+  final ValueChanged<YorksV1BoqGroup> onRename;
+  final ValueChanged<YorksV1BoqGroup> onArchive;
+  final ValueChanged<YorksV1BoqGroup> onRestore;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: _CopyText(
+              copy: title,
+              language: language,
+              style: AppTypography.titleSmall.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text('${items.length}', style: AppTypography.labelLarge),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      for (var index = 0; index < items.length; index++) ...[
+        _BoqFolderManagerRow(
+          item: items[index],
+          language: language,
+          canWrite: canWrite,
+          onRename: () => onRename(items[index].group),
+          onArchive: () => onArchive(items[index].group),
+          onRestore: () => onRestore(items[index].group),
+        ),
+        if (index != items.length - 1) const SizedBox(height: AppSpacing.sm),
+      ],
+    ],
+  );
+}
+
+class _BoqFolderManagerRow extends StatelessWidget {
+  const _BoqFolderManagerRow({
+    required this.item,
+    required this.language,
+    required this.canWrite,
+    required this.onRename,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final YorksV1BoqFolderManagementItem item;
+  final AppLanguage language;
+  final bool canWrite;
+  final VoidCallback onRename;
+  final VoidCallback onArchive;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = item.group;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: AppSpacing.minTapTarget,
+            height: AppSpacing.minTapTarget,
+            decoration: BoxDecoration(
+              color: group.isArchived
+                  ? AppColors.surfaceContainer
+                  : item.isSystemDefault
+                  ? AppColors.blueContainer
+                  : AppColors.purpleContainer,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            ),
+            child: Icon(
+              group.isArchived
+                  ? Icons.inventory_2_outlined
+                  : Icons.folder_outlined,
+              color: group.isArchived
+                  ? AppColors.muted
+                  : item.isSystemDefault
+                  ? AppColors.blue
+                  : AppColors.purple,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  group.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.titleSmall.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  '${group.rowCount} ${YorksV1BoqStrings.rows.active(language)} · '
+                  '${group.linkedRequestCount} ${YorksV1BoqStrings.linkedRequests.active(language)} · '
+                  '${group.documentCount} ${YorksV1BoqStrings.linkedDocuments.active(language)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                  ),
+                ),
+                if (item.isSystemDefault) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  _CopyText(
+                    copy: YorksV1BoqStrings.systemFolder,
+                    language: language,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.blue,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          if (group.isArchived)
+            IconButton(
+              key: ValueKey('boq-folder-restore-${group.id}'),
+              tooltip: item.restoreBlocker == 'active_name_exists'
+                  ? YorksV1BoqStrings.folderNameUnchanged.active(language)
+                  : YorksV1BoqStrings.restoreFolder.active(language),
+              onPressed: canWrite && item.canRestore ? onRestore : null,
+              icon: const Icon(Icons.restore_rounded),
+            )
+          else ...[
+            IconButton(
+              key: ValueKey('boq-folder-rename-${group.id}'),
+              tooltip: YorksV1BoqStrings.renameFolder.active(language),
+              onPressed: canWrite && item.canRename ? onRename : null,
+              icon: const Icon(Icons.drive_file_rename_outline),
+            ),
+            IconButton(
+              key: ValueKey('boq-folder-archive-${group.id}'),
+              tooltip: item.archiveBlocker == 'system_default'
+                  ? YorksV1BoqStrings.systemFolderCannotArchive.active(language)
+                  : YorksV1BoqStrings.archiveGroup.active(language),
+              onPressed: canWrite && item.canArchive ? onArchive : null,
+              icon: const Icon(Icons.archive_outlined),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1765,12 +2442,20 @@ class _BoqGroupCard extends StatelessWidget {
     required this.language,
     required this.onOpen,
     required this.aggregateReadOnly,
+    required this.canManageFolders,
+    required this.showManageFolders,
+    required this.onRename,
+    this.onArchive,
   });
 
   final YorksV1BoqGroup group;
   final AppLanguage language;
   final VoidCallback? onOpen;
   final bool aggregateReadOnly;
+  final bool canManageFolders;
+  final bool showManageFolders;
+  final VoidCallback onRename;
+  final VoidCallback? onArchive;
 
   @override
   Widget build(BuildContext context) {
@@ -1813,6 +2498,15 @@ class _BoqGroupCard extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
+                    if (showManageFolders) ...[
+                      _BoqFolderActionsMenu(
+                        canWrite: canManageFolders,
+                        onOpen: onOpen,
+                        onRename: onRename,
+                        onArchive: onArchive,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                    ],
                     Text(
                       '${group.displayOrder}'.padLeft(2, '0'),
                       style: AppTypography.labelLarge.copyWith(
@@ -2296,19 +2990,23 @@ class YorksV1BoqWorksheetScreen extends ConsumerWidget {
     WidgetRef ref,
     YorksV1BoqGroup group,
   ) async {
-    final confirmed = await _confirm(
-      context: context,
+    final reason = await _promptForFolderReason(
+      context,
       title: YorksV1BoqStrings.archiveGroup,
-      body: YorksV1BoqStrings.archiveGroupConfirmation,
+      description: YorksV1BoqStrings.archiveGroupConfirmation,
+      language: ref.read(languageProvider),
     );
-    if (confirmed != true) return;
+    if (reason == null) return;
     try {
       await ref
           .read(yorksV1BoqRepositoryProvider)
           .archiveGroup(
-            groupId: group.id,
-            expectedVersion: group.version,
-            idempotencyKey: const Uuid().v4(),
+            YorksV1ArchiveBoqGroupInput(
+              groupId: group.id,
+              expectedVersion: group.version,
+              reason: reason,
+              idempotencyKey: const Uuid().v4(),
+            ),
           );
       _invalidateGroupLists(ref, projectId, group.scopeId);
       if (context.mounted) context.pop();
@@ -2578,6 +3276,20 @@ void _invalidateGroupLists(WidgetRef ref, String projectId, String? scopeId) {
   if (scopeId == null) return;
   ref.invalidate(
     yorksV1ScopedBoqGroupsProvider(
+      YorksV1BoqScopeQuery(projectId: projectId, scopeId: scopeId),
+    ),
+  );
+}
+
+void _invalidateFolderManagement(
+  WidgetRef ref,
+  String projectId,
+  String? scopeId,
+) {
+  _invalidateGroupLists(ref, projectId, scopeId);
+  if (scopeId == null || scopeId.trim().isEmpty) return;
+  ref.invalidate(
+    yorksV1BoqFolderManagementProvider(
       YorksV1BoqScopeQuery(projectId: projectId, scopeId: scopeId),
     ),
   );
@@ -6928,6 +7640,219 @@ Future<String?> _promptForText({
       ],
     ),
   ).whenComplete(controller.dispose);
+}
+
+class _BoqFolderRenameChange {
+  const _BoqFolderRenameChange({required this.name, required this.reason});
+
+  final String name;
+  final String reason;
+}
+
+Future<_BoqFolderRenameChange?> _promptForFolderRename(
+  BuildContext context,
+  YorksV1BoqGroup group,
+  AppLanguage language,
+) => showDialog<_BoqFolderRenameChange>(
+  context: context,
+  barrierDismissible: false,
+  builder: (_) => _BoqFolderRenameDialog(group: group, language: language),
+);
+
+Future<String?> _promptForFolderReason(
+  BuildContext context, {
+  required TranslatableString title,
+  required TranslatableString description,
+  required AppLanguage language,
+}) => showDialog<String>(
+  context: context,
+  barrierDismissible: false,
+  builder: (_) => _BoqFolderReasonDialog(
+    title: title,
+    description: description,
+    language: language,
+  ),
+);
+
+class _BoqFolderRenameDialog extends StatefulWidget {
+  const _BoqFolderRenameDialog({required this.group, required this.language});
+
+  final YorksV1BoqGroup group;
+  final AppLanguage language;
+
+  @override
+  State<_BoqFolderRenameDialog> createState() => _BoqFolderRenameDialogState();
+}
+
+class _BoqFolderRenameDialogState extends State<_BoqFolderRenameDialog> {
+  late final TextEditingController _nameController;
+  final TextEditingController _reasonController = TextEditingController();
+  String? _nameError;
+  String? _reasonError;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.group.name);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _nameController.text.trim();
+    final reason = _reasonController.text.trim();
+    setState(() {
+      _nameError = name.isEmpty
+          ? YorksV1BoqStrings.folderNameRequired.active(widget.language)
+          : name.toLowerCase() == widget.group.name.trim().toLowerCase()
+          ? YorksV1BoqStrings.folderNameUnchanged.active(widget.language)
+          : null;
+      _reasonError = reason.isEmpty
+          ? YorksV1BoqStrings.reasonRequired.active(widget.language)
+          : null;
+    });
+    if (_nameError != null || _reasonError != null) return;
+    Navigator.pop(context, _BoqFolderRenameChange(name: name, reason: reason));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(YorksV1BoqStrings.renameFolder.active(widget.language)),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              YorksV1BoqStrings.renameFolderDescription.active(widget.language),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _nameController,
+              autofocus: true,
+              maxLength: 120,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: YorksV1BoqStrings.customGroupName.active(
+                  widget.language,
+                ),
+                errorText: _nameError,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _reasonController,
+              maxLength: 2000,
+              minLines: 2,
+              maxLines: 4,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: YorksV1BoqStrings.changeReason.active(
+                  widget.language,
+                ),
+                errorText: _reasonError,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(YorksV1BoqStrings.cancel.active(widget.language)),
+      ),
+      FilledButton(
+        onPressed: _submit,
+        child: Text(YorksV1BoqStrings.save.active(widget.language)),
+      ),
+    ],
+  );
+}
+
+class _BoqFolderReasonDialog extends StatefulWidget {
+  const _BoqFolderReasonDialog({
+    required this.title,
+    required this.description,
+    required this.language,
+  });
+
+  final TranslatableString title;
+  final TranslatableString description;
+  final AppLanguage language;
+
+  @override
+  State<_BoqFolderReasonDialog> createState() => _BoqFolderReasonDialogState();
+}
+
+class _BoqFolderReasonDialogState extends State<_BoqFolderReasonDialog> {
+  final TextEditingController _controller = TextEditingController();
+  String? _reasonError;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final reason = _controller.text.trim();
+    setState(() {
+      _reasonError = reason.isEmpty
+          ? YorksV1BoqStrings.reasonRequired.active(widget.language)
+          : null;
+    });
+    if (_reasonError != null) return;
+    Navigator.pop(context, reason);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title.active(widget.language)),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.description.active(widget.language)),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLength: 2000,
+            minLines: 2,
+            maxLines: 4,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: YorksV1BoqStrings.changeReason.active(widget.language),
+              errorText: _reasonError,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(YorksV1BoqStrings.cancel.active(widget.language)),
+      ),
+      FilledButton(
+        onPressed: _submit,
+        child: Text(widget.title.active(widget.language)),
+      ),
+    ],
+  );
 }
 
 Future<bool?> _confirm({
