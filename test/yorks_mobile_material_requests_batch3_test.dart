@@ -1741,6 +1741,58 @@ void main() {
   });
 
   testWidgets(
+    'mobile Submitted tab retains every approval and arrangement state',
+    (tester) async {
+      await _setViewport(tester, const Size(360, 800));
+      for (final state in yorksV1MaterialRequestSubmittedRegisterStates) {
+        final request = _summaryProjection(
+          id: 'submitted-${state.wireValue}',
+          state: state,
+          itemCount: 27,
+        );
+        await tester.pumpWidget(
+          _scope(
+            overrides: [
+              yorksV1CurrentRoleProvider.overrideWithValue(
+                YorksV1Role.projectEngineer,
+              ),
+              yorksV1MaterialRequestListProvider(
+                null,
+              ).overrideWith((ref) async => [request]),
+            ],
+            child: const YorksV1MaterialRequestsScreen(),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(
+              const ValueKey('mobile-material-request-filter-rail'),
+            ),
+            matching: find.text('Submitted'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('MR-${state.wireValue}'),
+          findsOneWidget,
+          reason: 'state ${state.wireValue}',
+        );
+        expect(find.text('27 items'), findsOneWidget);
+        expect(
+          find.textContaining('Current owner: Procurement'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Next action:'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'cancelled all-unavailable replacement action stacks cleanly at 360px',
     (tester) async {
       await _setViewport(tester, const Size(360, 800));
@@ -2065,6 +2117,33 @@ final _submittedRequest = YorksV1MaterialRequest(
     ),
   ],
 );
+
+YorksV1MaterialRequest _summaryProjection({
+  required String id,
+  required YorksV1MaterialRequestState state,
+  required int itemCount,
+}) => YorksV1MaterialRequestSummary(
+  id: id,
+  projectId: _projectId,
+  projectReference: 'YRA-322',
+  projectName: 'Al Dhafra Grid Substation HVAC Works',
+  scopeId: 'scope-common',
+  scopeName: 'Common / All Buildings',
+  state: state,
+  recordVersion: 2,
+  createdAt: DateTime.utc(2026, 8, 9),
+  updatedAt: DateTime.utc(2026, 8, 10),
+  timing: YorksV1MaterialRequestTiming.normal,
+  itemCount: itemCount,
+  requestNumber: 'MR-${state.wireValue}',
+  currentActionOwnerRole: 'procurement',
+  currentActionCode: 'arrangement_required',
+  workAssignment: YorksV1MaterialRequestWorkAssignment(
+    requestId: id,
+    assignmentVersion: 0,
+    canManage: false,
+  ),
+).toRegisterProjection();
 
 YorksV1MaterialRequest _requestVariant({
   required String id,

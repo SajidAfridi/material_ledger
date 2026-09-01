@@ -1889,6 +1889,80 @@ void main() {
   });
 
   test(
+    'phone register groups every current and retained workflow state once',
+    () {
+      expect(
+        yorksV1MaterialRequestSubmittedRegisterStates,
+        equals({
+          YorksV1MaterialRequestState.submitted,
+          YorksV1MaterialRequestState.awaitingRequestApproval,
+          YorksV1MaterialRequestState.changesRequested,
+          YorksV1MaterialRequestState.approvedForArrangement,
+          YorksV1MaterialRequestState.arranging,
+          YorksV1MaterialRequestState.awaitingApproval,
+        }),
+      );
+      expect(
+        yorksV1MaterialRequestApprovedRegisterStates,
+        equals({
+          YorksV1MaterialRequestState.approved,
+          YorksV1MaterialRequestState.partiallyDispatched,
+          YorksV1MaterialRequestState.dispatched,
+          YorksV1MaterialRequestState.partiallyReceived,
+          YorksV1MaterialRequestState.received,
+          YorksV1MaterialRequestState.closed,
+        }),
+      );
+      expect(
+        yorksV1MaterialRequestSubmittedRegisterStates.intersection(
+          yorksV1MaterialRequestApprovedRegisterStates,
+        ),
+        isEmpty,
+      );
+      expect(
+        yorksV1MaterialRequestSubmittedRegisterStates.contains(
+          YorksV1MaterialRequestState.cancelled,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('register owner and next action use authoritative projection facts', () {
+    final request = YorksV1MaterialRequest(
+      id: 'owner-action-request',
+      projectId: 'project-1',
+      projectReference: 'YRA-001',
+      projectName: 'Project one',
+      scopeId: 'scope-1',
+      scopeName: 'Building A',
+      state: YorksV1MaterialRequestState.partiallyReceived,
+      recordVersion: 1,
+      createdAt: DateTime.utc(2026, 8, 1),
+      updatedAt: DateTime.utc(2026, 8, 2),
+      timing: YorksV1MaterialRequestTiming.normal,
+      lines: const [],
+      currentActionOwnerRole: 'procurement',
+      currentActionCode: 'replacement_dispatch_required',
+    );
+
+    expect(
+      yorksV1MaterialRequestOwnerRoleCopy(
+        request.currentActionOwnerRole,
+      ).primary,
+      'Procurement',
+    );
+    expect(
+      yorksV1MaterialRequestNextActionCopy(request).primary,
+      'Replacement dispatch required',
+    );
+    expect(
+      yorksV1MaterialRequestOwnerRoleCopy(null).primary,
+      'No active owner',
+    );
+  });
+
+  test(
     'private autosave serializes requests and never restores an older row edit',
     () async {
       final repository = _Phase2FakeRequestRepository();

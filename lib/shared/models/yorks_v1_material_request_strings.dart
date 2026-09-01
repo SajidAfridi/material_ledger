@@ -2,6 +2,7 @@ import 'app_strings.dart';
 import 'yorks_v1_domain_error.dart';
 import 'yorks_v1_company_document_strings.dart';
 import 'yorks_v1_material_request.dart';
+import 'yorks_v1_project_strings.dart';
 
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
@@ -29,6 +30,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'مسند إلى',
     ur: 'ذمہ دار',
     hi: 'इन्हें सौंपा गया',
+  );
+  static const coordinator = TranslatableString(
+    en: 'Coordinator',
+    ar: 'منسق الطلب',
+    ur: 'درخواست کوآرڈینیٹر',
+    hi: 'अनुरोध समन्वयक',
+  );
+  static const coordinatorMeaning = TranslatableString(
+    en: 'Coordinates follow-up only. Workflow authority remains with the current owner shown above.',
+    ar: 'ينسق المتابعة فقط. تبقى صلاحية سير العمل لدى المالك الحالي الموضح أعلاه.',
+    ur: 'صرف فالو اپ کوآرڈینیٹ کرتا ہے۔ ورک فلو اختیار اوپر دکھائے گئے موجودہ ذمہ دار کے پاس رہتا ہے۔',
+    hi: 'केवल फॉलो-अप का समन्वय करता है। कार्यप्रवाह अधिकार ऊपर दिखाए गए वर्तमान स्वामी के पास रहता है।',
   );
   static const unassigned = TranslatableString(
     en: 'Unassigned',
@@ -2077,3 +2090,60 @@ TranslatableString yorksV1MaterialRequestStateCopy(
   YorksV1MaterialRequestState.cancelled =>
     YorksV1MaterialRequestStrings.cancelled,
 };
+
+TranslatableString yorksV1MaterialRequestOwnerRoleCopy(String? value) {
+  final role = value?.trim();
+  if (role == null || role.isEmpty) {
+    return const TranslatableString(
+      en: 'No active owner',
+      ar: 'لا يوجد مسؤول حالي',
+      ur: 'کوئی موجودہ ذمہ دار نہیں',
+      hi: 'कोई सक्रिय ज़िम्मेदार नहीं',
+    );
+  }
+  return YorksV1ProjectStrings.roleLabel(role);
+}
+
+/// Human next-action copy derived only from the trusted summary/detail
+/// projection. Coordination assignments never participate in this result.
+TranslatableString yorksV1MaterialRequestNextActionCopy(
+  YorksV1MaterialRequest value,
+) {
+  if (value.currentActionCode == 'replacement_dispatch_required') {
+    return YorksV1MaterialRequestStrings.replacementDispatchRequired;
+  }
+  if (value.currentActionCode == 'receipt_review_required') {
+    return YorksV1MaterialRequestStrings.awaitingReceipt;
+  }
+  if (value.currentActionCode == 'material_request_close_review' ||
+      value.currentActionCode == 'close_request') {
+    return YorksV1MaterialRequestStrings.closeReviewRequired;
+  }
+  return switch (value.state) {
+    YorksV1MaterialRequestState.submitted ||
+    YorksV1MaterialRequestState.awaitingRequestApproval =>
+      YorksV1MaterialRequestStrings.awaitingRequestApproval,
+    YorksV1MaterialRequestState.changesRequested =>
+      YorksV1MaterialRequestStrings.changesRequested,
+    YorksV1MaterialRequestState.approvedForArrangement ||
+    YorksV1MaterialRequestState.arranging =>
+      YorksV1MaterialRequestStrings.procurementArranging,
+    YorksV1MaterialRequestState.awaitingApproval =>
+      YorksV1MaterialRequestStrings.waitingForApproval,
+    YorksV1MaterialRequestState.approved =>
+      YorksV1MaterialRequestStrings.readyForDispatch,
+    YorksV1MaterialRequestState.partiallyDispatched ||
+    YorksV1MaterialRequestState.dispatched =>
+      YorksV1MaterialRequestStrings.awaitingReceipt,
+    YorksV1MaterialRequestState.partiallyReceived =>
+      YorksV1MaterialRequestStrings.replacementDispatchRequired,
+    YorksV1MaterialRequestState.received =>
+      YorksV1MaterialRequestStrings.closeReviewRequired,
+    YorksV1MaterialRequestState.closed =>
+      YorksV1MaterialRequestStrings.receiptCompleted,
+    YorksV1MaterialRequestState.draft =>
+      YorksV1MaterialRequestStrings.draftPrivate,
+    YorksV1MaterialRequestState.cancelled =>
+      YorksV1MaterialRequestStrings.cancelled,
+  };
+}

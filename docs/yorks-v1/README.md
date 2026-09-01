@@ -67,6 +67,7 @@ explicit V7-to-V1 conflict resolution.
 | [`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md) | Owner-exception production release: source, migration ledger, artifact/deployment hashes, live routes, rollback and explicit T14 boundary |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
+| [`CURRENT_MATERIAL_REQUEST_USER_GUIDE.md`](CURRENT_MATERIAL_REQUEST_USER_GUIDE.md) | Current approval-first MR operating guide, roles, screen cues and legacy-record boundary |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
 | [`R38_4_RENTAL_PROPERTIES.md`](R38_4_RENTAL_PROPERTIES.md) | Admin-only rental property, lease, rent, cheque, import/export and controlled-document implementation |
 | [`R38_5_TEAM_CHAT_IMPLEMENTATION.md`](R38_5_TEAM_CHAT_IMPLEMENTATION.md) | R38.5 contextual Team Chat architecture, permissions, Storage, notification, responsive UI and rollback contract |
@@ -124,7 +125,13 @@ legacy `NEXUS_V7_*` flags to an R35 command.
 
 ## Canonical operational chain
 
-`Project -> BOQ -> MR Draft -> Submit -> Arrange/Reserve -> Project Engineer Approval -> Dispatch -> Receipt Review -> Delivery Order -> Return`
+`Project -> BOQ -> MR Draft -> Submit -> Engineering Approval -> Arrange/Reserve -> Dispatch -> Delivery Order -> Receipt Review -> Return`
+
+The Delivery Order snapshots a committed dispatch and is available immediately
+after that dispatch. Receipt review records later good, missing and damaged
+facts without rewriting the Delivery Order. Only historical requests that
+already entered the former post-arrangement approval path retain that recorded
+lane; new requests always use approval before Procurement arrangement.
 
 R39 adds normalized project commercial-control Accounts through phases T01–T07
 without changing this operational chain. T01 is additive/shadow-only; later

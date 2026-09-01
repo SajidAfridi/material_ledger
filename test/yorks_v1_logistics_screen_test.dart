@@ -121,6 +121,11 @@ void main() {
 
       expect(find.text('Delivery Order ready'), findsOneWidget);
       expect(repository.returnsWorkspaceCalls, greaterThanOrEqualTo(2));
+      expect(find.text('Dispatch committed'), findsOneWidget);
+      expect(
+        find.textContaining('Y-001-DSP001 · 1 line committed'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       await tester.pump(const Duration(seconds: 6));
     },
@@ -263,6 +268,42 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Review delivered materials'), findsNothing);
+      await tester.pump(const Duration(seconds: 6));
+    },
+  );
+
+  testWidgets(
+    'server-confirmed receipt reports line and exception counts before closing',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      final repository = _FakeLogisticsRepository();
+
+      await tester.pumpWidget(
+        _testApp(
+          preferences: preferences,
+          repository: repository,
+          exactRole: YorksV1Role.projectEngineer,
+          child: const YorksV1LogisticsScreen(
+            requestId: 'receipt-focus',
+            focusReceiptReview: true,
+            focusedDispatchId: 'dispatch-focus',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Save receipt review'), findsOneWidget);
+      await tester.tap(find.text('All dispatch lines have been reviewed.'));
+      await tester.pump();
+      await tester.tap(find.text('Save receipt review'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Receipt confirmed'), findsOneWidget);
+      expect(
+        find.text('1 line confirmed · 0 exceptions recorded.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
       await tester.pump(const Duration(seconds: 6));
     },
   );

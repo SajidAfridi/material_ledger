@@ -828,12 +828,15 @@ class _DispatchEditorState extends ConsumerState<_DispatchEditor> {
           : updated.dispatches.first;
       YorksAppToast.show(
         context,
-        title: YorksV1LogisticsStrings.dispatched.primary,
+        title: YorksV1LogisticsStrings.dispatchConfirmed.primary,
         message: confirmedDispatch == null
             ? YorksV1LogisticsStrings.receiptReview.primary
-            : '${confirmedDispatch.number} · '
-                  '${confirmedDispatch.dispatchedByDisplayName} · '
-                  '${YorksV1LogisticsStrings.receiptReview.primary}',
+            : YorksV1LogisticsStrings.dispatchConfirmedSummary(
+                number: confirmedDispatch.number,
+                lines: confirmedDispatch.lines.isEmpty
+                    ? lines.length
+                    : confirmedDispatch.lines.length,
+              ).primary,
         tone: YorksAppToastTone.success,
       );
       for (final controller in _quantities.values) {
@@ -2257,20 +2260,29 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
       if (!mounted) return;
       _receiptIdempotencyKey = const Uuid().v4();
       widget.onChanged();
-      YorksV1ReceiptReview? confirmedReview;
+      YorksV1MaterialDispatch? confirmedDispatch;
       for (final dispatch in confirmedWorkspace.dispatches) {
         if (dispatch.id == widget.dispatch.id) {
-          confirmedReview = dispatch.receiptReview;
+          confirmedDispatch = dispatch;
           break;
         }
       }
+      final confirmedReview = confirmedDispatch?.receiptReview;
       if (confirmedReview != null) {
+        final confirmedLines = confirmedDispatch!.lines;
+        final exceptionLines = confirmedLines
+            .where(
+              (line) => line.receiptOutcome != YorksV1ReceiptOutcome.received,
+            )
+            .length;
         final attachNow = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
             title: Text(YorksV1LogisticsStrings.receiptConfirmed.primary),
-            content: Text(YorksV1LogisticsStrings.attachPhotoPrompt.primary),
+            content: Text(
+              '${YorksV1LogisticsStrings.receiptConfirmedSummary(lines: confirmedLines.length, exceptionLines: exceptionLines).primary}\n\n${YorksV1LogisticsStrings.attachPhotoPrompt.primary}',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -2294,6 +2306,18 @@ class _ReceiptReviewSheetState extends ConsumerState<_ReceiptReviewSheet> {
           );
           if (uploaded) _photoIdempotencyKey = const Uuid().v4();
         }
+      } else {
+        YorksAppToast.show(
+          context,
+          title: YorksV1LogisticsStrings.receiptConfirmed.primary,
+          message: YorksV1LogisticsStrings.receiptConfirmedSummary(
+            lines: lines.length,
+            exceptionLines: lines
+                .where((line) => line.outcome != YorksV1ReceiptOutcome.received)
+                .length,
+          ).primary,
+          tone: YorksAppToastTone.success,
+        );
       }
       if (!mounted) return;
       Navigator.of(context).pop(true);

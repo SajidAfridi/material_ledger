@@ -973,9 +973,13 @@ class _YorksV1MaterialReturnEditorScreenState
       context.go(RoutePaths.yorksV1MaterialReturnPath(saved.id));
       _toast(
         context,
-        submit
-            ? YorksV1MaterialReturnStrings.updated.active(language)
-            : YorksV1MaterialReturnStrings.saved.active(language),
+        YorksV1MaterialReturnStrings.commandConfirmed(
+          reference:
+              saved.number ??
+              YorksV1MaterialReturnStrings.newReturn.active(language),
+          state: saved.state,
+          lines: saved.lines.length,
+        ).active(language),
       );
     } catch (_) {
       if (mounted) {
@@ -1635,11 +1639,20 @@ class _YorksV1MaterialReturnDetailScreenState
     final language = ref.read(languageProvider);
     setState(() => _working = true);
     try {
-      await command();
+      final confirmed = await command();
       ref.invalidate(yorksV1ProjectMaterialReturnProvider(widget.returnId));
       ref.invalidate(yorksV1MaterialReturnRegisterProvider);
       if (mounted) {
-        _toast(context, YorksV1MaterialReturnStrings.updated.active(language));
+        _toast(
+          context,
+          YorksV1MaterialReturnStrings.commandConfirmed(
+            reference:
+                confirmed.number ??
+                YorksV1MaterialReturnStrings.newReturn.active(language),
+            state: confirmed.state,
+            lines: confirmed.lines.length,
+          ).active(language),
+        );
       }
     } catch (_) {
       if (mounted) {

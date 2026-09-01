@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_return_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_return_workflow.dart';
 
 void main() {
@@ -75,4 +76,20 @@ void main() {
       );
     },
   );
+
+  test('post-command return confirmation names state and confirmed lines', () {
+    final copy = YorksV1MaterialReturnStrings.commandConfirmed(
+      reference: 'YRA313-RTN001',
+      state: YorksV1ProjectMaterialReturnState.confirmed,
+      lines: 3,
+    );
+
+    expect(
+      copy.primary,
+      'YRA313-RTN001 · Received by warehouse · 3 lines confirmed.',
+    );
+    expect(copy.ar, contains('YRA313-RTN001'));
+    expect(copy.ur, contains('3'));
+    expect(copy.hi, contains('3'));
+  });
 }

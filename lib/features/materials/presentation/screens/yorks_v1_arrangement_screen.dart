@@ -1047,7 +1047,32 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-    if (saved && mounted) widget.onCompleted?.call();
+    if (saved && mounted) {
+      final full = inputs
+          .where((line) => line.decision == YorksV1ArrangementDecision.full)
+          .length;
+      final partial = inputs
+          .where((line) => line.decision == YorksV1ArrangementDecision.partial)
+          .length;
+      final unavailable = inputs
+          .where(
+            (line) => line.decision == YorksV1ArrangementDecision.unavailable,
+          )
+          .length;
+      YorksAppToast.show(
+        context,
+        title: YorksV1ArrangementStrings.arrangementSaved.active(
+          widget.language,
+        ),
+        message: YorksV1ArrangementStrings.arrangementSavedSummary(
+          full: full,
+          partial: partial,
+          unavailable: unavailable,
+        ).active(widget.language),
+        tone: YorksAppToastTone.success,
+      );
+      widget.onCompleted?.call();
+    }
   }
 
   void _initializeLineControllers() {

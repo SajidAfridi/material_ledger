@@ -4,6 +4,11 @@ Status: **verified locally**
 References: **22–28**
 Acceptance viewports: **390×844** and **360×800 logical pixels**
 
+> Historical visual evidence: this pack records the Batch 03 implementation at
+> the time it was accepted. For the current approval-first operating sequence,
+> register ownership/next-action cues and terminology, use
+> [`../../CURRENT_MATERIAL_REQUEST_USER_GUIDE.md`](../../CURRENT_MATERIAL_REQUEST_USER_GUIDE.md).
+
 This batch implements the controller-backed Material Request phone flow:
 
 1. Material Request register

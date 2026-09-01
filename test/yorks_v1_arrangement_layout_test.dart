@@ -99,6 +99,12 @@ void main() {
 
       expect(repository.saveInputs, hasLength(1));
       expect(completed, isTrue);
+      expect(find.text('Arrangement saved and confirmed'), findsOneWidget);
+      expect(
+        find.textContaining('1 full · 0 partial · 0 unavailable'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
   );
@@ -154,6 +160,7 @@ void main() {
 
       expect(repository.saveInputs, hasLength(1));
       expect(repository.saveInputs.single.lines.single.unitCost, isNull);
+      await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
   );
@@ -223,6 +230,7 @@ void main() {
     expect(line.decision, YorksV1ArrangementDecision.full);
     expect(line.externalSupplier, isNull);
     expect(line.reason, isNull);
+    await tester.pump(const Duration(seconds: 6));
     expect(tester.takeException(), isNull);
   });
 
@@ -433,6 +441,7 @@ void main() {
         repository.saveInputs.single.lines.single.inventoryItemId,
         'inventory-2',
       );
+      await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
   );
@@ -571,6 +580,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.saveInputs, hasLength(1));
+      await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
   );

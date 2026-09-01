@@ -265,20 +265,10 @@ class _YorksMobileMaterialRequestsPageState
             YorksV1MaterialRequestState.draft,
           ],
           _MobileMaterialRequestFilter.submitted => const [
-            YorksV1MaterialRequestState.submitted,
-            YorksV1MaterialRequestState.awaitingRequestApproval,
-            YorksV1MaterialRequestState.changesRequested,
-            YorksV1MaterialRequestState.approvedForArrangement,
-            YorksV1MaterialRequestState.arranging,
-            YorksV1MaterialRequestState.awaitingApproval,
+            ...yorksV1MaterialRequestSubmittedRegisterStates,
           ],
           _MobileMaterialRequestFilter.approved => const [
-            YorksV1MaterialRequestState.approved,
-            YorksV1MaterialRequestState.partiallyDispatched,
-            YorksV1MaterialRequestState.dispatched,
-            YorksV1MaterialRequestState.partiallyReceived,
-            YorksV1MaterialRequestState.received,
-            YorksV1MaterialRequestState.closed,
+            ...yorksV1MaterialRequestApprovedRegisterStates,
           ],
         },
         limit: 15,
@@ -404,6 +394,7 @@ class _YorksMobileMaterialRequestsPageState
               ),
               data: (items) => _MobileMaterialRequestRegister(
                 items: items,
+                language: language,
                 totalCount: summary?.hasError == true
                     ? null
                     : summary?.valueOrNull?.totalCount,
@@ -462,6 +453,7 @@ class _YorksMobileMaterialRequestsPageState
 class _MobileMaterialRequestRegister extends StatelessWidget {
   const _MobileMaterialRequestRegister({
     required this.items,
+    required this.language,
     this.totalCount,
     this.page = 0,
     required this.canCreate,
@@ -479,6 +471,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   });
 
   final List<YorksV1MaterialRequest> items;
+  final AppLanguage language;
   final int? totalCount;
   final int page;
   final bool canCreate;
@@ -652,6 +645,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
             for (final request in visible) ...[
               _MobileMaterialRequestCard(
                 request: request,
+                language: language,
                 onTap: () => onOpen(request),
               ),
               const SizedBox(height: 10),
@@ -673,16 +667,9 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     _MobileMaterialRequestFilter.all => true,
     _MobileMaterialRequestFilter.draft => request.state.isDraft,
     _MobileMaterialRequestFilter.submitted =>
-      request.state == YorksV1MaterialRequestState.submitted ||
-          request.state == YorksV1MaterialRequestState.arranging ||
-          request.state == YorksV1MaterialRequestState.awaitingApproval,
+      yorksV1MaterialRequestSubmittedRegisterStates.contains(request.state),
     _MobileMaterialRequestFilter.approved =>
-      request.state == YorksV1MaterialRequestState.approved ||
-          request.state == YorksV1MaterialRequestState.partiallyDispatched ||
-          request.state == YorksV1MaterialRequestState.dispatched ||
-          request.state == YorksV1MaterialRequestState.partiallyReceived ||
-          request.state == YorksV1MaterialRequestState.received ||
-          request.state == YorksV1MaterialRequestState.closed,
+      yorksV1MaterialRequestApprovedRegisterStates.contains(request.state),
   };
 }
 
@@ -1005,10 +992,12 @@ class _MobileMaterialRequestFilterTab extends StatelessWidget {
 class _MobileMaterialRequestCard extends StatelessWidget {
   const _MobileMaterialRequestCard({
     required this.request,
+    required this.language,
     required this.onTap,
   });
 
   final YorksV1MaterialRequest request;
+  final AppLanguage language;
   final VoidCallback onTap;
 
   @override
@@ -1051,6 +1040,20 @@ class _MobileMaterialRequestCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
         ),
+        const SizedBox(height: 9),
+        _MobileRequestWorkflowFact(
+          icon: Icons.person_outline_rounded,
+          label: YorksV1MaterialRequestStrings.currentOwner.active(language),
+          value: yorksV1MaterialRequestOwnerRoleCopy(
+            request.currentActionOwnerRole,
+          ).active(language),
+        ),
+        const SizedBox(height: 5),
+        _MobileRequestWorkflowFact(
+          icon: Icons.arrow_forward_rounded,
+          label: YorksV1MaterialRequestStrings.nextAction.active(language),
+          value: yorksV1MaterialRequestNextActionCopy(request).active(language),
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(10),
@@ -1068,7 +1071,9 @@ class _MobileMaterialRequestCard extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  '${request.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                  YorksV1MaterialRequestStrings.itemsCount(
+                    request.displayItemCount,
+                  ).active(language),
                   style: AppTypography.labelMedium,
                 ),
               ),
@@ -1078,6 +1083,37 @@ class _MobileMaterialRequestCard extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+class _MobileRequestWorkflowFact extends StatelessWidget {
+  const _MobileRequestWorkflowFact({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(icon, size: 16, color: AppColors.muted),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(
+          '$label: $value',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.inkSecondary,
+          ),
+        ),
+      ),
+    ],
   );
 }
 
@@ -1326,7 +1362,11 @@ class YorksV1WorkflowQueueScreen extends ConsumerWidget {
                     ),
                     const Divider(height: 1, color: AppColors.line),
                     for (var index = 0; index < visible.length; index++) ...[
-                      _WorkflowQueueRow(request: visible[index], kind: kind),
+                      _WorkflowQueueRow(
+                        request: visible[index],
+                        kind: kind,
+                        language: language,
+                      ),
                       if (index + 1 < visible.length)
                         const Divider(height: 1, color: AppColors.line),
                     ],
@@ -1365,10 +1405,15 @@ class YorksV1WorkflowQueueScreen extends ConsumerWidget {
 }
 
 class _WorkflowQueueRow extends StatelessWidget {
-  const _WorkflowQueueRow({required this.request, required this.kind});
+  const _WorkflowQueueRow({
+    required this.request,
+    required this.kind,
+    required this.language,
+  });
 
   final YorksV1MaterialRequest request;
   final YorksV1WorkflowQueueKind kind;
+  final AppLanguage language;
 
   @override
   Widget build(BuildContext context) {
@@ -1417,11 +1462,20 @@ class _WorkflowQueueRow extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      '${request.projectReference} · ${request.scopeName} · ${request.lines.length}',
+                      '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      '${YorksV1MaterialRequestStrings.currentOwner.active(language)}: ${yorksV1MaterialRequestOwnerRoleCopy(request.currentActionOwnerRole).active(language)} · ${YorksV1MaterialRequestStrings.nextAction.active(language)}: ${yorksV1MaterialRequestNextActionCopy(request).active(language)}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.inkSecondary,
                       ),
                     ),
                   ],
@@ -4947,41 +5001,7 @@ List<TranslatableString> get _materialRequestCompactStageLabels => const [
 ];
 
 String _materialRequestNextAction(YorksV1MaterialRequest value) {
-  if (value.currentActionCode == 'replacement_dispatch_required') {
-    return YorksV1MaterialRequestStrings.replacementDispatchRequired.primary;
-  }
-  if (value.currentActionCode == 'receipt_review_required') {
-    return YorksV1MaterialRequestStrings.awaitingReceipt.primary;
-  }
-  if (value.currentActionCode == 'material_request_close_review') {
-    return YorksV1MaterialRequestStrings.closeReviewRequired.primary;
-  }
-  return switch (value.state) {
-    YorksV1MaterialRequestState.submitted ||
-    YorksV1MaterialRequestState.awaitingRequestApproval =>
-      YorksV1MaterialRequestStrings.awaitingRequestApproval.primary,
-    YorksV1MaterialRequestState.changesRequested =>
-      YorksV1MaterialRequestStrings.changesRequested.primary,
-    YorksV1MaterialRequestState.approvedForArrangement ||
-    YorksV1MaterialRequestState.arranging =>
-      YorksV1MaterialRequestStrings.procurementArranging.primary,
-    YorksV1MaterialRequestState.awaitingApproval =>
-      YorksV1MaterialRequestStrings.waitingForApproval.primary,
-    YorksV1MaterialRequestState.approved =>
-      YorksV1MaterialRequestStrings.readyForDispatch.primary,
-    YorksV1MaterialRequestState.partiallyDispatched ||
-    YorksV1MaterialRequestState.dispatched =>
-      YorksV1MaterialRequestStrings.awaitingReceipt.primary,
-    YorksV1MaterialRequestState.partiallyReceived =>
-      YorksV1MaterialRequestStrings.replacementDispatchRequired.primary,
-    YorksV1MaterialRequestState.received ||
-    YorksV1MaterialRequestState.closed =>
-      YorksV1MaterialRequestStrings.receiptCompleted.primary,
-    YorksV1MaterialRequestState.draft =>
-      YorksV1MaterialRequestStrings.draftPrivate.primary,
-    YorksV1MaterialRequestState.cancelled =>
-      YorksV1MaterialRequestStrings.cancelled.primary,
-  };
+  return yorksV1MaterialRequestNextActionCopy(value).primary;
 }
 
 class _TabletMrDraftActions extends StatelessWidget {
@@ -10124,11 +10144,9 @@ class _MobileMaterialRequestLifecycle extends StatelessWidget {
   };
 
   String _mobileOwner(YorksV1MaterialRequest value) {
-    final raw = value.currentActionOwnerRole?.trim();
-    if (raw == null || raw.isEmpty) {
-      return YorksV1MaterialRequestStrings.notProvided.primary;
-    }
-    return _displayWorkflowRole(raw, AppLanguage.english);
+    return yorksV1MaterialRequestOwnerRoleCopy(
+      value.currentActionOwnerRole,
+    ).active(AppLanguage.english);
   }
 
   String _mobileNextAction(YorksV1MaterialRequest value) {
@@ -10694,7 +10712,7 @@ class _MaterialRequestWorkAssignmentCardState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     YorksV1ActiveText(
-                      copy: YorksV1MaterialRequestStrings.assignedTo,
+                      copy: YorksV1MaterialRequestStrings.coordinator,
                       language: widget.language,
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.muted,
@@ -10722,6 +10740,16 @@ class _MaterialRequestWorkAssignmentCardState
                           color: AppColors.muted,
                         ),
                       ),
+                    const SizedBox(height: 2),
+                    YorksV1ActiveText(
+                      copy: YorksV1MaterialRequestStrings.coordinatorMeaning,
+                      language: widget.language,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
                   ],
                 ),
               ),

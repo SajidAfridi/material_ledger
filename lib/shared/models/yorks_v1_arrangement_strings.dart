@@ -459,6 +459,22 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'یہ انتظام محفوظ نہیں ہو سکا۔ ریفریش کریں اور موجودہ ورژن دیکھیں۔',
     hi: 'यह व्यवस्था सहेजी नहीं जा सकी। रीफ़्रेश करके वर्तमान संस्करण देखें।',
   );
+  static const arrangementSaved = TranslatableString(
+    en: 'Arrangement saved and confirmed',
+    ar: 'تم حفظ الترتيب وتأكيده',
+    ur: 'انتظام محفوظ اور تصدیق شدہ ہے',
+    hi: 'व्यवस्था सहेजी और पुष्ट की गई',
+  );
+  static TranslatableString arrangementSavedSummary({
+    required int full,
+    required int partial,
+    required int unavailable,
+  }) => TranslatableString(
+    en: '$full full · $partial partial · $unavailable unavailable. Positive arranged quantities are ready for controlled dispatch.',
+    ar: '$full كامل · $partial جزئي · $unavailable غير متاح. الكميات المرتبة الموجبة جاهزة للإرسال المنضبط.',
+    ur: '$full مکمل · $partial جزوی · $unavailable غیر دستیاب۔ مثبت ترتیب شدہ مقدار کنٹرولڈ ڈسپیچ کے لیے تیار ہے۔',
+    hi: '$full पूर्ण · $partial आंशिक · $unavailable अनुपलब्ध। सकारात्मक व्यवस्थित मात्राएँ नियंत्रित डिस्पैच के लिए तैयार हैं।',
+  );
   static const stockChangedBeforeSave = TranslatableString(
     en: 'Warehouse availability changed before the arrangement could be saved. Review the refreshed stock, reduce the quantity, or choose Partial, Cannot Provide Now, or External supplier.',
     ar: 'تغيّر توفر المستودع قبل حفظ الترتيب. راجع المخزون المحدّث، أو قلّل الكمية، أو اختر جزئياً أو لا يمكن توفيره الآن أو مورداً خارجياً.',

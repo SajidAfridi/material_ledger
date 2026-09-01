@@ -6,6 +6,12 @@ References: **29–39**
 
 Acceptance viewports: **390×844** and **360×800 logical pixels**
 
+> Historical visual evidence: this pack preserves the Batch 04 screens and
+> wording as originally accepted. It is not authority for the current order of
+> Engineering approval and Procurement arrangement. Use
+> [`../../CURRENT_MATERIAL_REQUEST_USER_GUIDE.md`](../../CURRENT_MATERIAL_REQUEST_USER_GUIDE.md)
+> for the current operating flow.
+
 This batch implements the controller-backed operational phone flow:
 
 1. Procurement arrangement list, focused line and review

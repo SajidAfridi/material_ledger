@@ -350,6 +350,20 @@ abstract final class YorksV1MaterialReturnStrings {
     ur: 'میٹریل واپسی اپ ڈیٹ ہو گئی۔',
     hi: 'सामग्री वापसी अपडेट हुई।',
   );
+  static TranslatableString commandConfirmed({
+    required String reference,
+    required YorksV1ProjectMaterialReturnState state,
+    required int lines,
+  }) {
+    final stateCopy = yorksV1ProjectMaterialReturnStateCopy(state);
+    return TranslatableString(
+      en: '$reference · ${stateCopy.en} · $lines ${lines == 1 ? 'line' : 'lines'} confirmed.',
+      ar: '$reference · ${stateCopy.ar} · تم تأكيد $lines من البنود.',
+      ur: '$reference · ${stateCopy.ur} · $lines لائنوں کی تصدیق۔',
+      hi: '$reference · ${stateCopy.hi} · $lines पंक्तियाँ पुष्ट।',
+    );
+  }
+
   static const failed = TranslatableString(
     en: 'The material return could not be updated. Review the values and try again.',
     ar: 'تعذر تحديث مرتجع المواد. راجع القيم وحاول مرة أخرى.',

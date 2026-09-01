@@ -62,6 +62,29 @@ enum YorksV1MaterialRequestState {
   bool get isSubmittedOrLater => !isDraft;
 }
 
+/// The coarse phone-register groups are deliberately defined once so the
+/// server query and the local fallback cannot disagree about which workflow
+/// records belong under the same tab.
+const yorksV1MaterialRequestSubmittedRegisterStates =
+    <YorksV1MaterialRequestState>{
+      YorksV1MaterialRequestState.submitted,
+      YorksV1MaterialRequestState.awaitingRequestApproval,
+      YorksV1MaterialRequestState.changesRequested,
+      YorksV1MaterialRequestState.approvedForArrangement,
+      YorksV1MaterialRequestState.arranging,
+      YorksV1MaterialRequestState.awaitingApproval,
+    };
+
+const yorksV1MaterialRequestApprovedRegisterStates =
+    <YorksV1MaterialRequestState>{
+      YorksV1MaterialRequestState.approved,
+      YorksV1MaterialRequestState.partiallyDispatched,
+      YorksV1MaterialRequestState.dispatched,
+      YorksV1MaterialRequestState.partiallyReceived,
+      YorksV1MaterialRequestState.received,
+      YorksV1MaterialRequestState.closed,
+    };
+
 class YorksV1MaterialRequestMention {
   const YorksV1MaterialRequestMention({
     required this.authUserId,

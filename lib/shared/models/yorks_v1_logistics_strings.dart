@@ -28,6 +28,15 @@ abstract final class YorksV1LogisticsStrings {
     ur: 'وصولی کی تصدیق ہو گئی',
     hi: 'प्राप्ति की पुष्टि हो गई',
   );
+  static TranslatableString receiptConfirmedSummary({
+    required int lines,
+    required int exceptionLines,
+  }) => TranslatableString(
+    en: '$lines ${lines == 1 ? 'line' : 'lines'} confirmed · $exceptionLines ${exceptionLines == 1 ? 'exception' : 'exceptions'} recorded.',
+    ar: 'تم تأكيد $lines من البنود · تم تسجيل $exceptionLines من الاستثناءات.',
+    ur: '$lines لائنوں کی تصدیق · $exceptionLines استثناء ریکارڈ ہوئے۔',
+    hi: '$lines पंक्तियाँ पुष्ट · $exceptionLines अपवाद दर्ज।',
+  );
   static const attachPhotoPrompt = TranslatableString(
     en: 'Would you like to attach a site photo to this confirmed receipt?',
     ar: 'هل ترغب في إرفاق صورة من الموقع بهذا الاستلام المؤكد؟',
@@ -406,6 +415,21 @@ abstract final class YorksV1LogisticsStrings {
     ar: 'تم إرساله',
     ur: 'ڈسپیچ کیا گیا',
     hi: 'भेजा गया',
+  );
+  static const dispatchConfirmed = TranslatableString(
+    en: 'Dispatch committed',
+    ar: 'تم اعتماد الإرسال',
+    ur: 'ڈسپیچ مکمل ہو گیا',
+    hi: 'डिस्पैच प्रतिबद्ध हुआ',
+  );
+  static TranslatableString dispatchConfirmedSummary({
+    required String number,
+    required int lines,
+  }) => TranslatableString(
+    en: '$number · $lines ${lines == 1 ? 'line' : 'lines'} committed · Receipt review is next.',
+    ar: '$number · تم اعتماد $lines من البنود · مراجعة الاستلام هي الخطوة التالية.',
+    ur: '$number · $lines لائنیں مکمل · اگلا مرحلہ وصولی کا جائزہ ہے۔',
+    hi: '$number · $lines पंक्तियाँ प्रतिबद्ध · अगला चरण प्राप्ति समीक्षा है।',
   );
   static const dispatchDate = TranslatableString(
     en: 'Dispatch date',

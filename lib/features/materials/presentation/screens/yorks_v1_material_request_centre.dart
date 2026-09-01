@@ -1777,6 +1777,12 @@ class _ExplorerRequestRow extends StatelessWidget {
                         color: AppColors.muted,
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    _RequestActionSummary(
+                      request: request,
+                      language: language,
+                      compact: true,
+                    ),
                   ],
                 ),
               ),
@@ -2060,6 +2066,12 @@ class _RequestCentreRow extends StatelessWidget {
                     color: AppColors.muted,
                   ),
                 ),
+                const SizedBox(height: 4),
+                _RequestActionSummary(
+                  request: request,
+                  language: language,
+                  compact: compact,
+                ),
               ],
             );
             final state = _CentreStatePill(
@@ -2120,6 +2132,32 @@ class _RequestCentreRow extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _RequestActionSummary extends StatelessWidget {
+  const _RequestActionSummary({
+    required this.request,
+    required this.language,
+    required this.compact,
+  });
+
+  final YorksV1MaterialRequest request;
+  final AppLanguage language;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = yorksV1MaterialRequestOwnerRoleCopy(
+      request.currentActionOwnerRole,
+    ).active(language);
+    final next = yorksV1MaterialRequestNextActionCopy(request).active(language);
+    return Text(
+      '${YorksV1MaterialRequestStrings.currentOwner.active(language)}: $owner · ${YorksV1MaterialRequestStrings.nextAction.active(language)}: $next',
+      maxLines: compact ? 2 : 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.labelSmall.copyWith(color: AppColors.inkSecondary),
+    );
+  }
 }
 
 class _CentreStatePill extends StatelessWidget {

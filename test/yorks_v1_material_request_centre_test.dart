@@ -163,6 +163,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(applyFilters);
     await tester.pumpAndSettle();
+    await tester.fling(
+      find.byKey(const ValueKey('material-request-centre')),
+      const Offset(0, 1200),
+      2000,
+    );
+    await tester.pumpAndSettle();
 
     final closedMetric = find
         .byKey(const ValueKey('material-request-metric-closed'))
@@ -529,6 +535,7 @@ final _requests = <YorksV1MaterialRequest>[
     state: YorksV1MaterialRequestState.awaitingRequestApproval,
     updatedAt: DateTime.utc(2026, 8, 20, 8),
     action: 'engineering_approval_required',
+    ownerRole: 'project_engineer',
   ),
   _request(
     id: 'mr-314-dispatched',
@@ -541,6 +548,7 @@ final _requests = <YorksV1MaterialRequest>[
     state: YorksV1MaterialRequestState.dispatched,
     updatedAt: DateTime.utc(2026, 8, 19, 9),
     action: 'receipt_review_required',
+    ownerRole: 'project_engineer',
   ),
   _request(
     id: 'mr-313-received',
@@ -553,6 +561,7 @@ final _requests = <YorksV1MaterialRequest>[
     state: YorksV1MaterialRequestState.received,
     updatedAt: DateTime.utc(2026, 8, 18, 9),
     action: 'close_request',
+    ownerRole: 'project_engineer',
   ),
 ];
 
@@ -592,6 +601,7 @@ YorksV1MaterialRequest _request({
   required YorksV1MaterialRequestState state,
   required DateTime updatedAt,
   String? action,
+  String? ownerRole,
 }) => YorksV1MaterialRequest(
   id: id,
   projectId: projectId,
@@ -609,6 +619,7 @@ YorksV1MaterialRequest _request({
   requesterDisplayName: 'Faisal Ahmed',
   requesterProjectRole: 'Project Engineer',
   currentActionCode: action,
+  currentActionOwnerRole: ownerRole,
   lines: const [
     YorksV1MaterialRequestLine(
       id: 'line',
