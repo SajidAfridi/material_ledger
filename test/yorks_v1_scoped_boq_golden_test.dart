@@ -5,12 +5,16 @@ import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_boq_screens.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_boq_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 /// Deterministic R38 evidence: Overview is project summary, while each actual
 /// Common/building BOQ remains an independent workspace behind its own scope.
@@ -35,6 +39,18 @@ void main() {
             sharedPreferencesProvider.overrideWithValue(preferences),
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
+            ),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(
+                  role: YorksV1Role.projectEngineer,
+                  capabilities: const {
+                    YorksV1CapabilityKeys.boqView,
+                    YorksV1CapabilityKeys.boqEdit,
+                    YorksV1CapabilityKeys.boqManageFolders,
+                  },
+                ),
+              ),
             ),
             yorksV1MaterialRequestScopesProvider(
               _projectId,

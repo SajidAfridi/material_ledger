@@ -203,12 +203,15 @@ only in that BOQ worksheet; they do not silently become standard MR columns.
 
 Each real Common/building scope owns its own BOQ folder catalogue. New scopes
 receive only the active default template, currently Workshop Materials.
-Creating, renaming, archiving or restoring a custom folder affects only the
-selected real scope; it never propagates a folder name or shell to another
-building. The visible Workshop Materials name may be changed per scope while
-its protected `workshop_materials` template identity remains stable. Preserve
-all historical same-name sibling shells, group/row/column IDs, documents and MR
-references created under the superseded project-wide rule.
+Creating, renaming, archiving or restoring a folder affects only the selected
+real scope; it never propagates a folder name or shell to another building.
+The visible Workshop Materials name may be changed, archived and restored per
+scope while its stable `workshop_materials` template identity remains intact.
+AC Units is not seeded or protected; any retained scope-local `ac_units` folder
+may also be renamed, archived and restored. Archive is recoverable removal and
+never deletes rows, documents, Material Request references or audit history.
+Preserve all historical same-name sibling shells, group/row/column IDs,
+documents and MR references created under the superseded project-wide rule.
 
 The controlled MR Excel/PDF/print table is:
 

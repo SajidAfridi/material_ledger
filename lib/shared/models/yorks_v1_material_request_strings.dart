@@ -1003,18 +1003,6 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'ابھی کوئی میٹیریل شامل نہیں کیا گیا۔',
     hi: 'अभी कोई सामग्री नहीं जोड़ी गई है।',
   );
-  static const technicalDetailsOptional = TranslatableString(
-    en: 'Technical details (optional)',
-    ar: 'التفاصيل الفنية (اختيارية)',
-    ur: 'تکنیکی تفصیل (اختیاری)',
-    hi: 'तकनीकी विवरण (वैकल्पिक)',
-  );
-  static const hideTechnicalDetails = TranslatableString(
-    en: 'Hide technical details',
-    ar: 'إخفاء التفاصيل الفنية',
-    ur: 'تکنیکی تفصیل چھپائیں',
-    hi: 'तकनीकी विवरण छिपाएँ',
-  );
   static const rowTools = TranslatableString(
     en: 'Row tools',
     ar: 'أدوات الصفوف',

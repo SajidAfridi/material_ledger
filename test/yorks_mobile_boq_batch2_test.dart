@@ -304,9 +304,22 @@ void main() {
       tester,
     ) async {
       await _setViewport(tester, entry.size);
+      final managerGroups = [
+        for (final group in _groups)
+          if (group.id == 'df3w-fans')
+            _group(
+              id: _workshopGroupId,
+              scope: _scopes[1],
+              order: 2,
+              title: 'Workshop Materials',
+              rows: 8,
+            )
+          else
+            group,
+      ];
       final repository = _FixtureBoqRepository(
         worksheet: _worksheet,
-        groups: _groups,
+        groups: managerGroups,
       );
       await _pumpGroups(
         tester,
@@ -337,7 +350,17 @@ void main() {
         find.byKey(const ValueKey('boq-folder-archive-mobile-boq-ac-units')),
       );
       expect(rename.onPressed, isNotNull);
-      expect(archive.onPressed, isNull);
+      expect(archive.onPressed, isNotNull);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(
+                const ValueKey('boq-folder-archive-$_workshopGroupId'),
+              ),
+            )
+            .onPressed,
+        isNotNull,
+      );
 
       await expectLater(
         find.byType(MaterialApp),
@@ -368,6 +391,28 @@ void main() {
         expect(
           repository.renameInputs.single.reason,
           'Match the site filing convention',
+        );
+      } else {
+        await tester.tap(
+          find.byKey(const ValueKey('boq-folder-archive-mobile-boq-ac-units')),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byType(TextField),
+          'The scope no longer uses this package',
+        );
+        await tester.tap(
+          find.descendant(
+            of: find.byType(FilledButton),
+            matching: find.text(YorksV1BoqStrings.archiveGroup.primary),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(repository.archiveInputs, hasLength(1));
+        expect(repository.archiveInputs.single.groupId, _groupId);
+        expect(
+          repository.archiveInputs.single.reason,
+          'The scope no longer uses this package',
         );
       }
       expect(tester.takeException(), isNull);
@@ -955,8 +1000,16 @@ class _FixtureBoqRepository implements YorksV1BoqRepository {
           group: group,
           isSystemDefault: !group.isCustom,
           canRename: !group.isArchived,
-          canArchive: group.isCustom && !group.isArchived,
-          canRestore: group.isCustom && group.isArchived,
+          canArchive:
+              (group.isCustom ||
+                  group.id == _groupId ||
+                  group.id == _workshopGroupId) &&
+              !group.isArchived,
+          canRestore:
+              (group.isCustom ||
+                  group.id == _groupId ||
+                  group.id == _workshopGroupId) &&
+              group.isArchived,
         ),
   ];
 
@@ -1105,6 +1158,8 @@ final _groups = [
     rows: 3,
   ),
 ];
+
+const _workshopGroupId = 'mobile-boq-workshop-materials';
 
 YorksV1BoqGroup _group({
   required String id,

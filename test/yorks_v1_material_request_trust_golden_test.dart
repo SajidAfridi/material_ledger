@@ -154,6 +154,10 @@ Future<void> _pump(
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 200));
   await tester.pump(const Duration(milliseconds: 200));
+  if (size.width < 600) {
+    await tester.tap(find.text('Full details'));
+    await tester.pumpAndSettle();
+  }
 }
 
 YorksV1ArrangementWorkspace _arrangementWorkspace(

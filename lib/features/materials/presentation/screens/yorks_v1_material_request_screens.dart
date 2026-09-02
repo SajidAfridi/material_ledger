@@ -2040,7 +2040,7 @@ class _YorksV1MaterialRequestDraftScreenState
   bool _runtimePolicyResolved = false;
   bool _workspacePresentationPrepared = false;
   bool? _sidebarWasExpanded;
-  void Function(bool expanded)? _setSidebarExpanded;
+  StateController<bool>? _sidebarController;
 
   @override
   void didChangeDependencies() {
@@ -2052,14 +2052,13 @@ class _YorksV1MaterialRequestDraftScreenState
     }
     _workspacePresentationPrepared = true;
     _sidebarWasExpanded = ref.read(yorksV1WorkspaceSidebarExpandedProvider);
-    final sidebarController = ref.read(
+    _sidebarController = ref.read(
       yorksV1WorkspaceSidebarExpandedProvider.notifier,
     );
-    _setSidebarExpanded = (expanded) => sidebarController.state = expanded;
     if (_sidebarWasExpanded == true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _setSidebarExpanded?.call(false);
+        _sidebarController?.state = false;
       });
     }
   }
@@ -2067,8 +2066,13 @@ class _YorksV1MaterialRequestDraftScreenState
   @override
   void dispose() {
     final previous = _sidebarWasExpanded;
-    if (previous != null) {
-      _setSidebarExpanded?.call(previous);
+    final sidebarController = _sidebarController;
+    if (previous != null && sidebarController != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (sidebarController.mounted) {
+          sidebarController.state = previous;
+        }
+      });
     }
     super.dispose();
   }
@@ -3656,7 +3660,6 @@ class _YorksMobileMaterialRequestDraftFlowState
   YorksV1MaterialRequestInventorySuggestion? _customSuggestion;
   String _customUnit = '';
   bool _customValidationAttempted = false;
-  bool _showCustomTechnicalDetails = false;
 
   @override
   void initState() {
@@ -4023,7 +4026,6 @@ class _YorksMobileMaterialRequestDraftFlowState
                         ? null
                         : () => setState(() {
                             _customValidationAttempted = false;
-                            _showCustomTechnicalDetails = false;
                             _sourcePage =
                                 _MobileMaterialRequestSourcePage.custom;
                           }),
@@ -4517,10 +4519,6 @@ class _YorksMobileMaterialRequestDraftFlowState
                           _customSize.text = suggestion.size ?? '';
                           _customModel.text = suggestion.model ?? '';
                           _customUnit = suggestion.unit;
-                          _showCustomTechnicalDetails =
-                              _customBrand.text.isNotEmpty ||
-                              _customSize.text.isNotEmpty ||
-                              _customModel.text.isNotEmpty;
                         }),
                         errorText:
                             _customValidationAttempted && !descriptionReady
@@ -4577,66 +4575,35 @@ class _YorksMobileMaterialRequestDraftFlowState
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: TextButton.icon(
-                        key: const ValueKey(
-                          'mobile-custom-technical-details-toggle',
-                        ),
-                        onPressed: _busy
-                            ? null
-                            : () => setState(
-                                () => _showCustomTechnicalDetails =
-                                    !_showCustomTechnicalDetails,
-                              ),
-                        icon: Icon(
-                          _showCustomTechnicalDetails
-                              ? Icons.expand_less_rounded
-                              : Icons.tune_rounded,
-                          size: 18,
-                        ),
-                        label: Text(
-                          (_showCustomTechnicalDetails
-                                  ? YorksV1MaterialRequestStrings
-                                        .hideTechnicalDetails
-                                  : YorksV1MaterialRequestStrings
-                                        .technicalDetailsOptional)
-                              .active(_language),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const ValueKey('mobile-custom-brand'),
+                      controller: _customBrand,
+                      decoration: InputDecoration(
+                        labelText: YorksV1MaterialRequestStrings.brandOrigin
+                            .active(_language),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const ValueKey('mobile-custom-size'),
+                      controller: _customSize,
+                      decoration: InputDecoration(
+                        labelText: YorksV1MaterialRequestStrings.size.active(
+                          _language,
                         ),
                       ),
                     ),
-                    if (_showCustomTechnicalDetails) ...[
-                      const SizedBox(height: 4),
-                      TextFormField(
-                        key: const ValueKey('mobile-custom-brand'),
-                        controller: _customBrand,
-                        decoration: InputDecoration(
-                          labelText: YorksV1MaterialRequestStrings.brandOrigin
-                              .active(_language),
-                        ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const ValueKey('mobile-custom-model'),
+                      controller: _customModel,
+                      decoration: InputDecoration(
+                        labelText: YorksV1MaterialRequestStrings
+                            .planningModelTag
+                            .active(_language),
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: const ValueKey('mobile-custom-size'),
-                        controller: _customSize,
-                        decoration: InputDecoration(
-                          labelText: YorksV1MaterialRequestStrings.size.active(
-                            _language,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: const ValueKey('mobile-custom-model'),
-                        controller: _customModel,
-                        decoration: InputDecoration(
-                          labelText: YorksV1MaterialRequestStrings
-                              .planningModelTag
-                              .active(_language),
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -4970,7 +4937,6 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customQuantity.text = '1';
       _customUnit = '';
       _customValidationAttempted = false;
-      _showCustomTechnicalDetails = false;
     });
     _snack(
       context,
@@ -4992,10 +4958,6 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customQuantity.text = line.quantity;
       _customUnit = line.unit;
       _customValidationAttempted = false;
-      _showCustomTechnicalDetails =
-          _customBrand.text.isNotEmpty ||
-          _customSize.text.isNotEmpty ||
-          _customModel.text.isNotEmpty;
       _sourcePage = _MobileMaterialRequestSourcePage.custom;
     });
   }
@@ -5017,10 +4979,6 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customQuantity.clear();
       _customUnit = similar.unit;
       _customValidationAttempted = false;
-      _showCustomTechnicalDetails =
-          _customBrand.text.isNotEmpty ||
-          _customSize.text.isNotEmpty ||
-          _customModel.text.isNotEmpty;
       _sourcePage = _MobileMaterialRequestSourcePage.custom;
     });
   }
@@ -5044,7 +5002,6 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customQuantity.text = '1';
       _customUnit = '';
       _customValidationAttempted = false;
-      _showCustomTechnicalDetails = false;
       _sourcePage = _MobileMaterialRequestSourcePage.custom;
     });
   }
@@ -5069,7 +5026,6 @@ class _YorksMobileMaterialRequestDraftFlowState
       _customQuantity.text = '1';
       _customUnit = '';
       _customValidationAttempted = false;
-      _showCustomTechnicalDetails = false;
     });
   }
 
@@ -5783,38 +5739,45 @@ class _R35RequestHero extends StatelessWidget {
           ),
         ],
       );
-      final actions = Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.sm,
-        alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
-        children: [
-          _R35RequestAction(
-            key: const ValueKey('mr-request-context-toggle'),
-            label:
-                (inspectorExpanded
-                        ? YorksV1MaterialRequestStrings.hideRequestContext
-                        : YorksV1MaterialRequestStrings.showRequestContext)
-                    .primary,
-            icon: Icons.view_sidebar_outlined,
-            onPressed: onToggleInspector,
-          ),
-          _R35RequestAction(
-            label: YorksV1MaterialRequestStrings.saveDraft.primary,
-            icon: Icons.save_outlined,
-            onPressed: onSave,
-          ),
-          _R35RequestAction(
-            label: YorksV1MaterialRequestStrings.cancel.primary,
-            onPressed: onCancel,
-          ),
-          _R35RequestAction(
-            label: YorksV1MaterialRequestStrings.submitToProcurement.primary,
-            icon: Icons.arrow_forward_rounded,
-            primary: true,
-            onPressed: onSubmit,
-            loading: submitting,
-          ),
-        ],
+      final actions = ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: stacked
+              ? constraints.maxWidth
+              : math.min(680, constraints.maxWidth * .58),
+        ),
+        child: Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          alignment: stacked ? WrapAlignment.start : WrapAlignment.end,
+          children: [
+            _R35RequestAction(
+              key: const ValueKey('mr-request-context-toggle'),
+              label:
+                  (inspectorExpanded
+                          ? YorksV1MaterialRequestStrings.hideRequestContext
+                          : YorksV1MaterialRequestStrings.showRequestContext)
+                      .primary,
+              icon: Icons.view_sidebar_outlined,
+              onPressed: onToggleInspector,
+            ),
+            _R35RequestAction(
+              label: YorksV1MaterialRequestStrings.saveDraft.primary,
+              icon: Icons.save_outlined,
+              onPressed: onSave,
+            ),
+            _R35RequestAction(
+              label: YorksV1MaterialRequestStrings.cancel.primary,
+              onPressed: onCancel,
+            ),
+            _R35RequestAction(
+              label: YorksV1MaterialRequestStrings.submitToProcurement.primary,
+              icon: Icons.arrow_forward_rounded,
+              primary: true,
+              onPressed: onSubmit,
+              loading: submitting,
+            ),
+          ],
+        ),
       );
       return Container(
         padding: const EdgeInsets.only(bottom: AppSpacing.lg),

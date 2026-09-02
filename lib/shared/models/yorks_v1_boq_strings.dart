@@ -261,10 +261,10 @@ abstract final class YorksV1BoqStrings {
     hi: 'इस फ़ोल्डर को चुने हुए स्कोप में पुनर्स्थापित करें। इसकी सुरक्षित वर्कशीट और लिंक फिर सक्रिय होंगे।',
   );
   static const systemFolder = TranslatableString(
-    en: 'Protected system folder',
-    ar: 'مجلد نظام محمي',
-    ur: 'محفوظ سسٹم فولڈر',
-    hi: 'संरक्षित सिस्टम फ़ोल्डर',
+    en: 'Yorks template folder',
+    ar: 'مجلد قالب يوركس',
+    ur: 'یورکس ٹیمپلیٹ فولڈر',
+    hi: 'Yorks टेम्पलेट फ़ोल्डर',
   );
   static const systemFolderCannotArchive = TranslatableString(
     en: 'Protected system folders can be renamed but not archived.',
@@ -651,10 +651,10 @@ abstract final class YorksV1BoqStrings {
     hi: 'रद्द करें',
   );
   static const archiveGroupConfirmation = TranslatableString(
-    en: 'Archive this custom folder only in the current Common/building scope? Its worksheet, documents and request links stay in audit history.',
-    ar: 'أرشفة هذا المجلد المخصص في النطاق المشترك/المبنى الحالي فقط؟ ستبقى ورقة العمل والمستندات وروابط الطلبات في سجل التدقيق.',
-    ur: 'کیا یہ کسٹم فولڈر صرف موجودہ کامن/بلڈنگ اسکوپ میں آرکائیو کریں؟ اس کی ورک شیٹ، دستاویزات اور ریکویسٹ لنکس آڈٹ ہسٹری میں رہیں گے۔',
-    hi: 'क्या इस कस्टम फ़ोल्डर को केवल वर्तमान कॉमन/बिल्डिंग स्कोप में आर्काइव करना है? इसकी वर्कशीट, दस्तावेज़ और अनुरोध लिंक ऑडिट इतिहास में रहेंगे।',
+    en: 'Archive this folder only in the current Common/building scope? Its worksheet, documents and request links stay in audit history and can be restored.',
+    ar: 'أرشفة هذا المجلد في النطاق المشترك/المبنى الحالي فقط؟ ستبقى ورقة العمل والمستندات وروابط الطلبات في سجل التدقيق ويمكن استعادتها.',
+    ur: 'کیا یہ فولڈر صرف موجودہ کامن/بلڈنگ اسکوپ میں آرکائیو کریں؟ اس کی ورک شیٹ، دستاویزات اور ریکویسٹ لنکس آڈٹ ہسٹری میں رہیں گے اور اسے بحال کیا جا سکے گا۔',
+    hi: 'क्या इस फ़ोल्डर को केवल वर्तमान कॉमन/बिल्डिंग स्कोप में आर्काइव करना है? इसकी वर्कशीट, दस्तावेज़ और अनुरोध लिंक ऑडिट इतिहास में रहेंगे और इसे पुनर्स्थापित किया जा सकेगा।',
   );
   static const saveFailed = TranslatableString(
     en: 'Could not save this worksheet. Check the highlighted details and try again.',

@@ -229,6 +229,7 @@ void main() {
       ),
       isTrue,
     );
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('mixed receipt remains exact and usable at 360px', (
@@ -275,6 +276,7 @@ void main() {
     expect(mixed.goodQuantity, '2');
     expect(mixed.missingQuantity, '1');
     expect(mixed.damagedQuantity, '1');
+    await tester.pump(const Duration(seconds: 6));
     expect(tester.takeException(), isNull);
   });
 
@@ -328,6 +330,7 @@ void main() {
       repository.receipts.first.idempotencyKey,
       repository.receipts.last.idempotencyKey,
     );
+    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('return draft retry reuses the same command identity', (

@@ -30,6 +30,15 @@ scopes do not inherit custom folders from another scope. Existing group, row,
 column, document and Material Request references retain their stable IDs and
 history.
 
+Product-owner change approval on 2 September 2026 removes AC Units from the
+protected/default BOQ lifecycle. New scopes continue to receive Workshop
+Materials only. Existing scope-local AC Units folders are retained but may be
+renamed, archived and restored. Workshop Materials remains the new-scope
+default and retains its stable `workshop_materials` identity, but an authorized
+scope owner may also rename, archive and restore it. Archive is the supported
+recoverable removal: no existing row, column, document, Material Request source
+or audit event is automatically deleted or rewritten.
+
 Product-owner change approval on 9 August 2026 grants the exact Senior
 Mechanical Engineer role access to the audited User Management surface and its
 protected commands. Project Manager and other engineering roles remain denied;

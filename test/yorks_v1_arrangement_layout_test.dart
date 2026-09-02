@@ -314,6 +314,7 @@ void main() {
     expect(line.externalSourceReady, isTrue);
     expect(line.externalExpectedDate, '2026-09-01');
     expect(line.externalReference, 'QUOTE-2026-91');
+    await tester.pump(const Duration(seconds: 6));
     expect(tester.takeException(), isNull);
   });
 

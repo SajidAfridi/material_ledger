@@ -1327,12 +1327,14 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
             Expanded(
               child: Row(
                 children: [
-                  Text(
-                    YorksV1ShellStrings.companyName.primary,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.muted,
+                  Flexible(
+                    child: Text(
+                      YorksV1ShellStrings.companyName.primary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.muted,
+                      ),
                     ),
                   ),
                   for (final breadcrumb in breadcrumbs) ...[

@@ -222,9 +222,14 @@ workflow. Existing progress data remains historical and isolated.
 ## 6. BOQ groups, columns and rows
 
 - Every Common/building scope starts with one independent **Workshop
-  Materials** BOQ group. Its protected template identity remains
+  Materials** BOQ group. Its stable template identity remains
   `workshop_materials`, but an authorized user may rename its visible folder
-  name independently in that scope.
+  name independently in that scope or archive/restore that folder without
+  changing its retained worksheet and downstream history.
+- **AC Units** is no longer a default or protected folder. It is not seeded for
+  a new scope. Any retained scope-local folder with the stable `ac_units`
+  template identity may be renamed, archived and restored like an ordinary
+  folder; it is never bulk-deleted by migration.
 - Folder structure is scope-local. Creating, renaming, archiving or restoring a
   custom folder affects only the selected Common/building scope. Another
   building may deliberately use a different folder set or different names, and
@@ -241,8 +246,9 @@ workflow. Existing progress data remains historical and isolated.
   `boq.manage_folders` capability plus existing project access. They are
   online, version-checked, idempotent and audited. Procurement and Accountant
   cannot mutate BOQ folder structure.
-- A custom folder is archived/restored rather than physically deleted. The
-  Workshop Materials default may be renamed but is not archivable. A whole
+- A folder is archived/restored rather than physically deleted. This includes
+  custom folders and the approved `workshop_materials` and `ac_units` template
+  identities. A whole
   operational BOQ is never hard-deleted: a completed project is archived, or a
   later explicitly approved BOQ supersession retains the former structure and
   downstream history.

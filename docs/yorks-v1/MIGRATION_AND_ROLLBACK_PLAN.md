@@ -82,6 +82,11 @@ Legacy role handling:
   active default templates. No historical sibling shell is merged or deleted.
   Rollback may restore the prior command bodies but must not rewrite folder
   names or remove later audited scope-local records.
+- The 2 September lifecycle policy keeps AC Units inactive so it is never
+  seeded, and marks only `ac_units` and `workshop_materials` template identities
+  as scope-archivable. It performs no bulk archive or delete. A rollback may
+  restore the previous command checks but must not rename, unarchive or erase a
+  folder already managed under the approved policy.
 - Existing project-level groups remain `scope_id = null`, are visible only in
   the Overview summary as legacy/unassigned, and require an explicit audited,
   version-checked mapping to one active real scope. Do not copy, infer or

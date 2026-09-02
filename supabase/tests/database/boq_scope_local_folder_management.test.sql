@@ -307,17 +307,44 @@ select is(
   'Rename retry is idempotent and does not advance the version twice'
 );
 
-select throws_ok(
+select is(
+  (
+    select item ->> 'can_archive'
+    from jsonb_array_elements(public.v1_list_boq_folder_management(
+      (select project_id from boq_scope_local_targets),
+      (select common_scope_id from boq_scope_local_targets),
+      true
+    )) item
+    where item ->> 'id' = (
+      select common_workshop_id::text from boq_scope_local_targets
+    )
+  ),
+  'true',
+  'Workshop Materials exposes server-confirmed archive authority'
+);
+
+select lives_ok(
   $$select public.v1_archive_boq_group(
     jsonb_build_object(
       'group_id', (select common_workshop_id from boq_scope_local_targets),
       'expected_version', 2,
-      'reason', 'Protected-default negative test'
+      'reason', 'Temporarily hide the Common default folder'
     ),
     'fa100000-0000-4000-8000-000000000007'::uuid
   )$$,
-  '22023', 'V1_DEFAULT_BOQ_GROUP_CANNOT_BE_ARCHIVED',
-  'Workshop Materials remains non-archivable after its visible rename'
+  'Workshop Materials may be soft-archived after its visible rename'
+);
+
+select lives_ok(
+  $$select public.v1_restore_boq_group(
+    jsonb_build_object(
+      'group_id', (select common_workshop_id from boq_scope_local_targets),
+      'expected_version', 3,
+      'reason', 'Return the retained Common default folder'
+    ),
+    'fa100000-0000-4000-8000-000000000011'::uuid
+  )$$,
+  'Workshop Materials restores with the same stable group identity'
 );
 
 select lives_ok(
@@ -381,8 +408,8 @@ select is(
         'boq_group_renamed', 'boq_group_archived', 'boq_group_restored'
       )
   ),
-  4::bigint,
-  'Rename, archive and restore produce one append-only audit event each'
+  6::bigint,
+  'Template and custom rename/archive/restore each produce one append-only audit event'
 );
 
 insert into public.v1_permission_assignments (

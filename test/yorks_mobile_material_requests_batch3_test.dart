@@ -514,31 +514,55 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Edit Material'), findsWidgets);
-      final fields = find.byType(TextFormField);
+      final descriptionField = find.descendant(
+        of: find.byKey(const ValueKey('mobile-custom-description')),
+        matching: find.byType(TextFormField),
+      );
+      final quantityField = find.byKey(
+        const ValueKey('mobile-custom-quantity'),
+      );
       expect(
-        tester.widget<TextFormField>(fields.at(0)).controller?.text,
+        tester.widget<TextFormField>(descriptionField).controller?.text,
         'Access door',
       );
       expect(
-        tester.widget<TextFormField>(fields.at(1)).controller?.text,
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('mobile-custom-brand')),
+            )
+            .controller
+            ?.text,
         'Beta UAE',
       );
       expect(
-        tester.widget<TextFormField>(fields.at(2)).controller?.text,
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('mobile-custom-size')),
+            )
+            .controller
+            ?.text,
         '100x100',
       );
       expect(
-        tester.widget<TextFormField>(fields.at(3)).controller?.text,
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('mobile-custom-model')),
+            )
+            .controller
+            ?.text,
         'AD-100',
       );
-      expect(tester.widget<TextFormField>(fields.at(4)).controller?.text, '11');
+      expect(
+        tester.widget<TextFormField>(quantityField).controller?.text,
+        '11',
+      );
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/r35/mr_edit_existing_mobile_390x844.png'),
       );
 
-      await tester.enterText(fields.at(0), 'Access door revised');
-      await tester.enterText(fields.at(4), '12.5');
+      await tester.enterText(descriptionField, 'Access door revised');
+      await tester.enterText(quantityField, '12.5');
       await tester.tap(find.text('Save Changes').hitTestable());
       await tester.pumpAndSettle();
 
@@ -1463,9 +1487,11 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('mobile-custom-technical-details-toggle')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.byKey(const ValueKey('mobile-custom-brand')), findsNothing);
+      expect(find.byKey(const ValueKey('mobile-custom-brand')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile-custom-size')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile-custom-model')), findsOneWidget);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile(
@@ -1714,7 +1740,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('mobile custom material reveals optional technical fields', (
+  testWidgets('mobile custom material keeps all detail fields open', (
     tester,
   ) async {
     await _setViewport(tester, const Size(360, 800));
@@ -1723,18 +1749,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('mobile-mr-add-custom')));
     await tester.pumpAndSettle();
 
-    final toggle = find.byKey(
-      const ValueKey('mobile-custom-technical-details-toggle'),
-    );
-    expect(find.byKey(const ValueKey('mobile-custom-brand')), findsNothing);
     expect(
-      tester.getSize(toggle).height,
-      greaterThanOrEqualTo(AppSpacing.minTapTarget),
+      find.byKey(const ValueKey('mobile-custom-technical-details-toggle')),
+      findsNothing,
     );
-
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-
     expect(find.byKey(const ValueKey('mobile-custom-brand')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-custom-size')), findsOneWidget);
     expect(find.byKey(const ValueKey('mobile-custom-model')), findsOneWidget);
@@ -1905,21 +1923,23 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('mobile-mr-add-custom')));
     await tester.pumpAndSettle();
-    final optionalTechnicalDetails = find.byKey(
-      const ValueKey('mobile-custom-technical-details-toggle'),
-    );
-    expect(optionalTechnicalDetails, findsOneWidget);
     expect(
       find.text(
-        YorksV1MaterialRequestStrings.technicalDetailsOptional.active(
-          AppLanguage.arabic,
-        ),
+        YorksV1MaterialRequestStrings.brandOrigin.active(AppLanguage.arabic),
       ),
       findsOneWidget,
     );
     expect(
-      tester.getSize(optionalTechnicalDetails).height,
-      greaterThanOrEqualTo(AppSpacing.minTapTarget),
+      find.text(YorksV1MaterialRequestStrings.size.active(AppLanguage.arabic)),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        YorksV1MaterialRequestStrings.planningModelTag.active(
+          AppLanguage.arabic,
+        ),
+      ),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });

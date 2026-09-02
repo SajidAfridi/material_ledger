@@ -42,9 +42,9 @@ The composer has three short steps: **Details**, **Items** and **Review**.
    optional title, timing and delivery note stay with that request.
 2. In Items, use **Add from BOQ** or **Add Custom Item**. The Material basket
    remains visible with its current count; tap a material to edit it. A custom
-   item asks first for description, quantity and controlled unit. Brand,
-   size and planning model/tag remain available under optional Technical
-   details.
+   item keeps description, quantity, controlled unit, Brand/Origin, Size and
+   Planning Model/Tag visible together so no material detail is hidden behind
+   an extra disclosure action.
 3. In Review, check the scope and each quantity, confirm the review statement,
    then submit. Save draft remains separate from Submit. Procurement receives
    nothing until the protected Submit command succeeds.
