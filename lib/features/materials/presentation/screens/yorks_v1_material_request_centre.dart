@@ -94,6 +94,7 @@ class _YorksV1MaterialRequestCentreState
   YorksV1MaterialRequestOperationsDashboard? _operationsDashboard;
   Object? _operationsError;
   bool _operationsLoading = false;
+  String? _selectedRequestId;
 
   @override
   void initState() {
@@ -268,6 +269,16 @@ class _YorksV1MaterialRequestCentreState
                   .toList(growable: false) ??
               const <YorksV1MaterialRequest>[]);
     final visible = _visibleRequests(source);
+    YorksV1MaterialRequest? selectedRequest;
+    if (visible.isNotEmpty) {
+      selectedRequest = visible.first;
+      for (final request in visible) {
+        if (request.id == _selectedRequestId) {
+          selectedRequest = request;
+          break;
+        }
+      }
+    }
     final folders = _foldersFor(visible, newestFirst: _newestFirst);
     final metrics = _serverPage == null
         ? _MaterialRequestCentreMetrics.fromRequests(source)
@@ -275,145 +286,155 @@ class _YorksV1MaterialRequestCentreState
     final isCompact =
         MediaQuery.sizeOf(context).width < AppSpacing.compactBreakpoint;
 
-    return ListView(
-      key: const ValueKey('material-request-centre'),
-      padding: EdgeInsets.fromLTRB(
-        isCompact ? AppSpacing.md : AppSpacing.xl,
-        isCompact ? AppSpacing.md : AppSpacing.lg,
-        isCompact ? AppSpacing.md : AppSpacing.xxl,
-        AppSpacing.xxxl,
-      ),
-      children: [
-        _CentreHeader(
-          language: widget.language,
-          canCreate: widget.canCreate,
-          onCreate: widget.onCreate,
-          onRefresh: widget.summaryPageLoader == null
-              ? widget.onRefresh
-              : () => unawaited(_loadServerPage()),
+    return Directionality(
+      textDirection: widget.language.isRtl
+          ? TextDirection.rtl
+          : TextDirection.ltr,
+      child: ListView(
+        key: const ValueKey('material-request-centre'),
+        padding: EdgeInsets.fromLTRB(
+          isCompact ? AppSpacing.md : AppSpacing.xl,
+          isCompact ? AppSpacing.md : AppSpacing.lg,
+          isCompact ? AppSpacing.md : AppSpacing.xxl,
+          AppSpacing.xxxl,
         ),
-        if (widget.localDraftNotice != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          widget.localDraftNotice!,
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: _RegisterScopeSwitcher(
+        children: [
+          _CentreHeader(
             language: widget.language,
-            selected: _registerView,
-            onChanged: (value) => _update(() {
-              _registerView = value;
-              _view = _MaterialRequestCentreView.allRequests;
-              _metricFilter = _MaterialRequestMetricFilter.all;
-            }),
+            canCreate: widget.canCreate,
+            onCreate: widget.onCreate,
+            onRefresh: widget.summaryPageLoader == null
+                ? widget.onRefresh
+                : () => unawaited(_loadServerPage()),
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _MetricsGrid(
-          metrics: metrics,
-          language: widget.language,
-          selected: _metricFilter,
-          onSelected: (value) => _update(() {
-            _metricFilter = value;
-            _view = _MaterialRequestCentreView.allRequests;
-          }),
-        ),
-        if (widget.operationsDashboardLoader != null) ...[
+          if (widget.localDraftNotice != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            widget.localDraftNotice!,
+          ],
           const SizedBox(height: AppSpacing.lg),
-          YorksV1MaterialRequestOperationalInsightsPanel(
-            language: widget.language,
-            dashboard: _operationsDashboard,
-            loading: _operationsLoading,
-            failed: _operationsError != null,
-            onRetry: () => unawaited(_loadOperationsDashboard()),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        if (_serverError != null && _serverPage == null)
-          _MaterialRequestCentreLoadError(
-            language: widget.language,
-            onRetry: () => unawaited(_loadServerPage()),
-          )
-        else
-          _MainCentrePanel(
-            language: widget.language,
-            searchController: _searchController,
-            onSearchChanged: (_) => _update(() {}, search: true),
-            newestFirst: _newestFirst,
-            onSortChanged: (value) => _update(() => _newestFirst = value),
-            view: _view,
-            onViewChanged: (value) => _update(() => _view = value),
-            filtersExpanded: _filtersExpanded,
-            onFiltersExpandedChanged: (value) =>
-                setState(() => _filtersExpanded = value),
-            activeFilterCount: _activeFilterCount,
-            filter: _FilterForm(
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: _RegisterScopeSwitcher(
               language: widget.language,
-              status: _status,
-              project: _project,
-              scope: _scope,
-              requester: _requester,
-              dateRange: _dateRange,
-              attentionOnly: _attentionOnly,
-              requests: source,
-              fixedProjectId: widget.fixedProjectId,
-              onStatusChanged: (value) => _update(() => _status = value),
-              onProjectChanged: (value) => _update(() => _project = value),
-              onScopeChanged: (value) => _update(() => _scope = value),
-              onRequesterChanged: (value) => _update(() => _requester = value),
-              onDateRangeChanged: (value) => _update(() => _dateRange = value),
-              onAttentionOnlyChanged: (value) =>
-                  _update(() => _attentionOnly = value),
-              onClear: _clearFilters,
-              onApply: () => setState(() => _filtersExpanded = false),
+              selected: _registerView,
+              onChanged: (value) => _update(() {
+                _registerView = value;
+                _view = _MaterialRequestCentreView.allRequests;
+                _metricFilter = _MaterialRequestMetricFilter.all;
+              }),
             ),
-            folders: folders,
-            requests: visible,
-            serverTotalItems:
-                widget.summaryPageLoader != null &&
-                    _view == _MaterialRequestCentreView.allRequests
-                ? _serverPage?.totalCount
-                : null,
-            serverPageMode:
-                widget.summaryPageLoader != null &&
-                _view == _MaterialRequestCentreView.allRequests,
-            expandedProjectIds: _expandedProjectIds,
-            onProjectExpanded: (projectId) => setState(() {
-              if (!_expandedProjectIds.add(projectId)) {
-                _expandedProjectIds.remove(projectId);
-              }
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _MetricsGrid(
+            metrics: metrics,
+            language: widget.language,
+            selected: _metricFilter,
+            onSelected: (value) => _update(() {
+              _metricFilter = value;
+              _view = _MaterialRequestCentreView.allRequests;
             }),
-            page: _page,
-            onPageChanged: (value) {
-              setState(() => _page = value);
-              if (widget.summaryPageLoader != null) {
-                unawaited(_loadServerPage());
-              }
-            },
-            onOpen: widget.onOpen,
           ),
-        if (_serverLoading)
-          const Padding(
-            padding: EdgeInsets.only(top: AppSpacing.sm),
-            child: LinearProgressIndicator(minHeight: 2),
-          ),
-        if (_serverError != null && _serverPage != null)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => unawaited(_loadServerPage()),
-                icon: const Icon(Icons.refresh_rounded),
-                label: YorksV1ActiveText(
-                  copy: YorksV1MaterialRequestStrings.tryAgain,
-                  language: widget.language,
+          if (widget.operationsDashboardLoader != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            YorksV1MaterialRequestOperationalInsightsPanel(
+              language: widget.language,
+              dashboard: _operationsDashboard,
+              loading: _operationsLoading,
+              failed: _operationsError != null,
+              onRetry: () => unawaited(_loadOperationsDashboard()),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          if (_serverError != null && _serverPage == null)
+            _MaterialRequestCentreLoadError(
+              language: widget.language,
+              onRetry: () => unawaited(_loadServerPage()),
+            )
+          else
+            _MainCentrePanel(
+              language: widget.language,
+              searchController: _searchController,
+              onSearchChanged: (_) => _update(() {}, search: true),
+              newestFirst: _newestFirst,
+              onSortChanged: (value) => _update(() => _newestFirst = value),
+              view: _view,
+              onViewChanged: (value) => _update(() => _view = value),
+              filtersExpanded: _filtersExpanded,
+              onFiltersExpandedChanged: (value) =>
+                  setState(() => _filtersExpanded = value),
+              activeFilterCount: _activeFilterCount,
+              filter: _FilterForm(
+                language: widget.language,
+                status: _status,
+                project: _project,
+                scope: _scope,
+                requester: _requester,
+                dateRange: _dateRange,
+                attentionOnly: _attentionOnly,
+                requests: source,
+                fixedProjectId: widget.fixedProjectId,
+                onStatusChanged: (value) => _update(() => _status = value),
+                onProjectChanged: (value) => _update(() => _project = value),
+                onScopeChanged: (value) => _update(() => _scope = value),
+                onRequesterChanged: (value) =>
+                    _update(() => _requester = value),
+                onDateRangeChanged: (value) =>
+                    _update(() => _dateRange = value),
+                onAttentionOnlyChanged: (value) =>
+                    _update(() => _attentionOnly = value),
+                onClear: _clearFilters,
+                onApply: () => setState(() => _filtersExpanded = false),
+              ),
+              folders: folders,
+              requests: visible,
+              selectedRequest: selectedRequest,
+              onSelectRequest: (request) =>
+                  setState(() => _selectedRequestId = request.id),
+              serverTotalItems:
+                  widget.summaryPageLoader != null &&
+                      _view == _MaterialRequestCentreView.allRequests
+                  ? _serverPage?.totalCount
+                  : null,
+              serverPageMode:
+                  widget.summaryPageLoader != null &&
+                  _view == _MaterialRequestCentreView.allRequests,
+              expandedProjectIds: _expandedProjectIds,
+              onProjectExpanded: (projectId) => setState(() {
+                if (!_expandedProjectIds.add(projectId)) {
+                  _expandedProjectIds.remove(projectId);
+                }
+              }),
+              page: _page,
+              onPageChanged: (value) {
+                setState(() => _page = value);
+                if (widget.summaryPageLoader != null) {
+                  unawaited(_loadServerPage());
+                }
+              },
+              onOpen: widget.onOpen,
+            ),
+          if (_serverLoading)
+            const Padding(
+              padding: EdgeInsets.only(top: AppSpacing.sm),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+          if (_serverError != null && _serverPage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => unawaited(_loadServerPage()),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: YorksV1ActiveText(
+                    copy: YorksV1MaterialRequestStrings.tryAgain,
+                    language: widget.language,
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1289,6 +1310,8 @@ class _MainCentrePanel extends StatelessWidget {
     required this.filter,
     required this.folders,
     required this.requests,
+    required this.selectedRequest,
+    required this.onSelectRequest,
     this.serverTotalItems,
     this.serverPageMode = false,
     required this.expandedProjectIds,
@@ -1311,6 +1334,8 @@ class _MainCentrePanel extends StatelessWidget {
   final Widget filter;
   final List<_ProjectRequestFolder> folders;
   final List<YorksV1MaterialRequest> requests;
+  final YorksV1MaterialRequest? selectedRequest;
+  final ValueChanged<YorksV1MaterialRequest> onSelectRequest;
   final int? serverTotalItems;
   final bool serverPageMode;
   final Set<String> expandedProjectIds;
@@ -1339,6 +1364,10 @@ class _MainCentrePanel extends StatelessWidget {
     final pageRequests = showProjects
         ? const <YorksV1MaterialRequest>[]
         : requests.sublist(start, end);
+    final tabletMasterDetail =
+        !showProjects &&
+        MediaQuery.sizeOf(context).width >= 820 &&
+        MediaQuery.sizeOf(context).width < 1100;
 
     return LedgerCard(
       padding: EdgeInsets.zero,
@@ -1449,6 +1478,14 @@ class _MainCentrePanel extends StatelessWidget {
                     language: language,
                     expandedProjectIds: expandedProjectIds,
                     onProjectExpanded: onProjectExpanded,
+                    onOpen: onOpen,
+                  )
+                : tabletMasterDetail
+                ? _TabletRequestWorkspace(
+                    requests: pageRequests,
+                    selectedRequest: selectedRequest,
+                    language: language,
+                    onSelect: onSelectRequest,
                     onOpen: onOpen,
                   )
                 : _RequestResults(
@@ -2223,139 +2260,324 @@ class _RequestResults extends StatelessWidget {
   );
 }
 
-class _RequestCentreRow extends StatelessWidget {
-  const _RequestCentreRow({
+class _TabletRequestWorkspace extends StatelessWidget {
+  const _TabletRequestWorkspace({
+    required this.requests,
+    required this.selectedRequest,
+    required this.language,
+    required this.onSelect,
+    required this.onOpen,
+  });
+
+  final List<YorksV1MaterialRequest> requests;
+  final YorksV1MaterialRequest? selectedRequest;
+  final AppLanguage language;
+  final ValueChanged<YorksV1MaterialRequest> onSelect;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('material-request-tablet-master-detail'),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(
+        flex: 5,
+        child: Column(
+          children: [
+            for (var index = 0; index < requests.length; index++) ...[
+              _RequestCentreRow(
+                request: requests[index],
+                language: language,
+                selected: requests[index].id == selectedRequest?.id,
+                onOpen: onSelect,
+              ),
+              if (index != requests.length - 1)
+                const SizedBox(height: AppSpacing.sm),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
+        flex: 4,
+        child: _TabletRequestPreview(
+          request: selectedRequest,
+          language: language,
+          onOpen: selectedRequest == null
+              ? null
+              : () => onOpen(selectedRequest!),
+        ),
+      ),
+    ],
+  );
+}
+
+class _TabletRequestPreview extends StatelessWidget {
+  const _TabletRequestPreview({
     required this.request,
     required this.language,
     required this.onOpen,
   });
 
-  final YorksV1MaterialRequest request;
+  final YorksV1MaterialRequest? request;
   final AppLanguage language;
-  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final VoidCallback? onOpen;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: AppColors.surfaceContainerLowest,
-    borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-    child: InkWell(
-      key: ValueKey('material-request-row-${request.id}'),
-      onTap: () => onOpen(request),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.line),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 640;
-            final identity = Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.blueContainer,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: const Icon(
-                Icons.description_outlined,
-                color: AppColors.blue,
-              ),
-            );
-            final details = Column(
+  Widget build(BuildContext context) {
+    final request = this.request;
+    return Container(
+      key: const ValueKey('material-request-tablet-preview'),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      ),
+      child: request == null
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  request.requestNumber ??
-                      YorksV1MaterialRequestStrings.draft.active(language),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelLarge.copyWith(
-                    color: AppColors.blue,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  request.projectName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.titleSmall.copyWith(
+                const Icon(Icons.touch_app_outlined, color: AppColors.blue),
+                const SizedBox(height: AppSpacing.sm),
+                YorksV1ActiveText(
+                  copy: YorksV1MaterialRequestStrings.requestPreview,
+                  language: language,
+                  style: AppTypography.titleMedium.copyWith(
                     fontWeight: FontWeight.w800,
-                    height: 1.18,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: AppSpacing.xs),
+                YorksV1ActiveText(
+                  copy: YorksV1MaterialRequestStrings.requestPreviewDescription,
+                  language: language,
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.muted,
                   ),
                 ),
-                const SizedBox(height: 4),
-                _RequestActionSummary(
-                  request: request,
-                  language: language,
-                  compact: compact,
-                ),
               ],
-            );
-            final state = _CentreStatePill(
-              request: request,
-              language: language,
-            );
-            if (compact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      identity,
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(child: details),
-                      const SizedBox(width: AppSpacing.xs),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.muted,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: AppSpacing.minTapTarget + AppSpacing.sm,
-                    ),
-                    child: Align(alignment: Alignment.centerLeft, child: state),
-                  ),
-                ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                identity,
-                const SizedBox(width: AppSpacing.md),
-                Expanded(child: details),
-                const SizedBox(width: AppSpacing.lg),
-                SizedBox(
-                  width: 144,
-                  child: Align(alignment: Alignment.centerLeft, child: state),
+                Row(
+                  children: [
+                    Expanded(
+                      child: YorksV1ActiveText(
+                        copy: YorksV1MaterialRequestStrings.requestPreview,
+                        language: language,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.muted,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    _CentreStatePill(request: request, language: language),
+                  ],
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                const SizedBox(
-                  width: AppSpacing.minTapTarget,
-                  height: AppSpacing.minTapTarget,
-                  child: Icon(
-                    Icons.chevron_right_rounded,
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  request.requestNumber ??
+                      YorksV1MaterialRequestStrings.draft.active(language),
+                  style: AppTypography.titleLarge.copyWith(
+                    color: AppColors.blue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  request.title?.trim().isNotEmpty == true
+                      ? request.title!
+                      : request.projectName,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '${request.projectReference} · ${request.scopeName} · '
+                  '${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
+                  style: AppTypography.bodySmall.copyWith(
                     color: AppColors.muted,
                   ),
                 ),
+                const Divider(height: AppSpacing.xl),
+                _RequestActionSummary(
+                  request: request,
+                  language: language,
+                  compact: true,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                FilledButton.icon(
+                  key: const ValueKey('material-request-tablet-open'),
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: YorksV1ActiveText(
+                    copy: YorksV1MaterialRequestStrings.openRequest,
+                    language: language,
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(AppSpacing.minTapTarget),
+                  ),
+                ),
               ],
-            );
-          },
+            ),
+    );
+  }
+}
+
+class _RequestCentreRow extends StatelessWidget {
+  const _RequestCentreRow({
+    required this.request,
+    required this.language,
+    required this.onOpen,
+    this.selected = false,
+  });
+
+  final YorksV1MaterialRequest request;
+  final AppLanguage language;
+  final ValueChanged<YorksV1MaterialRequest> onOpen;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    button: true,
+    child: Material(
+      color: selected
+          ? AppColors.blueContainer.withValues(alpha: 0.48)
+          : AppColors.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      child: InkWell(
+        key: ValueKey('material-request-row-${request.id}'),
+        onTap: () => onOpen(request),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        child: Container(
+          key: selected
+              ? ValueKey('material-request-selected-${request.id}')
+              : null,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: selected ? AppColors.blue : AppColors.line,
+              width: selected ? 1.5 : 1,
+            ),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 640;
+              final identity = Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.blueContainer,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+                child: const Icon(
+                  Icons.description_outlined,
+                  color: AppColors.blue,
+                ),
+              );
+              final details = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    request.requestNumber ??
+                        YorksV1MaterialRequestStrings.draft.active(language),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.blue,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    request.projectName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                      height: 1.18,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${request.projectReference} · ${request.scopeName} · ${YorksV1MaterialRequestStrings.itemsCount(request.displayItemCount).active(language)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _RequestActionSummary(
+                    request: request,
+                    language: language,
+                    compact: compact,
+                  ),
+                ],
+              );
+              final state = _CentreStatePill(
+                request: request,
+                language: language,
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        identity,
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: details),
+                        const SizedBox(width: AppSpacing.xs),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.muted,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        left: AppSpacing.minTapTarget + AppSpacing.sm,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: state,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  identity,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: details),
+                  const SizedBox(width: AppSpacing.lg),
+                  SizedBox(
+                    width: 144,
+                    child: Align(alignment: Alignment.centerLeft, child: state),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  const SizedBox(
+                    width: AppSpacing.minTapTarget,
+                    height: AppSpacing.minTapTarget,
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     ),

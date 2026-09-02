@@ -1497,7 +1497,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
           children: [
             PrimaryButton(
               key: const ValueKey('mobile-arrangement-review-action'),
-              label: YorksV1ArrangementStrings.saveForApproval.active(
+              label: YorksV1MaterialRequestStrings.reviewArrangement.active(
                 widget.language,
               ),
               onPressed: widget.busy || !widget.enabled
@@ -1552,50 +1552,11 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                     widget.language,
                   ),
                 ),
-                YorksMobileSegmentedControl<YorksV1ArrangementDecision>(
-                  options: [
-                    for (final decision in YorksV1ArrangementDecision.values)
-                      YorksMobileSegmentOption(
-                        value: decision,
-                        label: yorksV1ArrangementDecisionCopy(
-                          decision,
-                        ).active(widget.language),
-                      ),
-                  ],
+                _MobileArrangementDecisionSelector(
                   selected: draft.decision,
                   enabled: widget.enabled && !widget.busy,
-                  onSelected: (decision) {
-                    widget.onChanged(
-                      draft.copyWith(
-                        decision: decision,
-                        arrangedQuantity:
-                            decision == YorksV1ArrangementDecision.unavailable
-                            ? '0'
-                            : draft.arrangedQuantity,
-                        inventoryItemId:
-                            decision == YorksV1ArrangementDecision.unavailable
-                            ? null
-                            : _keep,
-                        externalSupplier:
-                            decision == YorksV1ArrangementDecision.unavailable
-                            ? null
-                            : _keep,
-                        externalSourceReady:
-                            decision == YorksV1ArrangementDecision.unavailable
-                            ? false
-                            : null,
-                        externalExpectedDate:
-                            decision == YorksV1ArrangementDecision.unavailable
-                            ? null
-                            : _keep,
-                        externalReference:
-                            decision == YorksV1ArrangementDecision.unavailable
-                            ? null
-                            : _keep,
-                      ),
-                    );
-                    setState(() {});
-                  },
+                  language: widget.language,
+                  onSelected: (decision) => _selectDecision(draft, decision),
                 ),
                 const SizedBox(height: 14),
                 _SourcePicker(
@@ -1722,6 +1683,36 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
         ),
       ],
     );
+  }
+
+  void _selectDecision(
+    _EditableArrangementLine draft,
+    YorksV1ArrangementDecision decision,
+  ) {
+    widget.onChanged(
+      draft.copyWith(
+        decision: decision,
+        arrangedQuantity: decision == YorksV1ArrangementDecision.unavailable
+            ? '0'
+            : draft.arrangedQuantity,
+        inventoryItemId: decision == YorksV1ArrangementDecision.unavailable
+            ? null
+            : _keep,
+        externalSupplier: decision == YorksV1ArrangementDecision.unavailable
+            ? null
+            : _keep,
+        externalSourceReady: decision == YorksV1ArrangementDecision.unavailable
+            ? false
+            : null,
+        externalExpectedDate: decision == YorksV1ArrangementDecision.unavailable
+            ? null
+            : _keep,
+        externalReference: decision == YorksV1ArrangementDecision.unavailable
+            ? null
+            : _keep,
+      ),
+    );
+    setState(() {});
   }
 
   Widget _buildReview() {
@@ -1885,6 +1876,74 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
       return;
     }
     setState(() => _lineIndex++);
+  }
+}
+
+class _MobileArrangementDecisionSelector extends StatelessWidget {
+  const _MobileArrangementDecisionSelector({
+    required this.selected,
+    required this.enabled,
+    required this.language,
+    required this.onSelected,
+  });
+
+  final YorksV1ArrangementDecision selected;
+  final bool enabled;
+  final AppLanguage language;
+  final ValueChanged<YorksV1ArrangementDecision> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(
+        children: [
+          Expanded(child: _option(YorksV1ArrangementDecision.full)),
+          const SizedBox(width: 8),
+          Expanded(child: _option(YorksV1ArrangementDecision.partial)),
+        ],
+      ),
+      const SizedBox(height: 8),
+      _option(YorksV1ArrangementDecision.unavailable),
+    ],
+  );
+
+  Widget _option(YorksV1ArrangementDecision decision) {
+    final isSelected = selected == decision;
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      child: SizedBox(
+        key: ValueKey('mobile-arrangement-decision-${decision.name}'),
+        height: AppSpacing.minTapTarget,
+        child: Material(
+          color: isSelected
+              ? AppColors.blueContainer
+              : AppColors.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            side: BorderSide(
+              color: isSelected ? AppColors.blue : AppColors.line,
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            onTap: enabled ? () => onSelected(decision) : null,
+            child: Center(
+              child: Text(
+                yorksV1ArrangementDecisionCopy(decision).active(language),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.labelLarge.copyWith(
+                  color: isSelected ? AppColors.blue : AppColors.muted,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

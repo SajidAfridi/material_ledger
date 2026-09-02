@@ -211,6 +211,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'انجینئر اور پروکیورمنٹ ایک ہی درخواست نمبر، آئٹم ترتیب اور حالت دیکھتے ہیں۔',
     hi: 'इंजीनियर और खरीद विभाग को वही अनुरोध संख्या, आइटम क्रम और स्थिति दिखाई देती है।',
   );
+  static const mobileRequestsDescription = TranslatableString(
+    en: 'Start a request or continue the work waiting for you.',
+    ar: 'ابدأ طلبًا أو تابع العمل الذي ينتظرك.',
+    ur: 'نئی درخواست شروع کریں یا اپنا زیرِ التوا کام جاری رکھیں۔',
+    hi: 'नया अनुरोध शुरू करें या अपने लंबित कार्य को जारी रखें।',
+  );
   static const materialRequestCentre = TranslatableString(
     en: 'Material Request Centre',
     ar: 'مركز طلبات المواد',
@@ -336,6 +342,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'كل الطلبات',
     ur: 'تمام درخواستیں',
     hi: 'सभी अनुरोध',
+  );
+  static const requestView = TranslatableString(
+    en: 'Requests to show',
+    ar: 'الطلبات المعروضة',
+    ur: 'دکھائی جانے والی درخواستیں',
+    hi: 'दिखाए जाने वाले अनुरोध',
+  );
+  static const requestStatusFilter = TranslatableString(
+    en: 'Workflow status',
+    ar: 'حالة سير العمل',
+    ur: 'ورک فلو اسٹیٹس',
+    hi: 'कार्यप्रवाह स्थिति',
   );
   static const myMaterialRequests = TranslatableString(
     en: 'My Material Requests',
@@ -655,6 +673,36 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'نئی مواد کی درخواست',
     hi: 'नया सामग्री अनुरोध',
   );
+  static const newRequestShort = TranslatableString(
+    en: 'New request',
+    ar: 'طلب جديد',
+    ur: 'نئی درخواست',
+    hi: 'नया अनुरोध',
+  );
+  static const continueDraft = TranslatableString(
+    en: 'Continue draft',
+    ar: 'متابعة المسودة',
+    ur: 'ڈرافٹ جاری رکھیں',
+    hi: 'ड्राफ़्ट जारी रखें',
+  );
+  static const reviewRequest = TranslatableString(
+    en: 'Review request',
+    ar: 'مراجعة الطلب',
+    ur: 'درخواست کا جائزہ لیں',
+    hi: 'अनुरोध की समीक्षा करें',
+  );
+  static const updateRequest = TranslatableString(
+    en: 'Update request',
+    ar: 'تحديث الطلب',
+    ur: 'درخواست اپ ڈیٹ کریں',
+    hi: 'अनुरोध अपडेट करें',
+  );
+  static const reviewArrangement = TranslatableString(
+    en: 'Review arrangement',
+    ar: 'مراجعة الترتيب',
+    ur: 'انتظام کا جائزہ لیں',
+    hi: 'व्यवस्था की समीक्षा करें',
+  );
   static const editDraft = TranslatableString(
     en: 'Edit material request draft',
     ar: 'تحرير مسودة طلب المواد',
@@ -901,6 +949,24 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'یہ معلومات پروکیورمنٹ کو دکھائی جاتی ہیں اور مواد کی درخواست پر پرنٹ ہوتی ہیں۔',
     hi: 'यह जानकारी खरीद विभाग को दिखाई जाती है और सामग्री अनुरोध पर मुद्रित होती है।',
   );
+  static const detailsStep = TranslatableString(
+    en: 'Details',
+    ar: 'التفاصيل',
+    ur: 'تفصیل',
+    hi: 'विवरण',
+  );
+  static const whereNeeded = TranslatableString(
+    en: 'Where is it needed?',
+    ar: 'أين تلزم المواد؟',
+    ur: 'یہ کہاں درکار ہے؟',
+    hi: 'यह कहाँ चाहिए?',
+  );
+  static const whereNeededDescription = TranslatableString(
+    en: 'Choose the project and exact building or Common scope first.',
+    ar: 'اختر المشروع والمبنى المحدد أو النطاق المشترك أولاً.',
+    ur: 'پہلے پروجیکٹ اور درست عمارت یا مشترکہ دائرہ منتخب کریں۔',
+    hi: 'पहले प्रोजेक्ट और सटीक भवन या कॉमन स्कोप चुनें।',
+  );
   static const requestScopeDescription = TranslatableString(
     en: 'Choose one building or Common / All Buildings. Add custom items, choose items from BOQ folders, or import an Excel file.',
     ar: 'اختر مبنى واحدًا أو المشترك / جميع المباني. أضف عناصر مخصصة أو اختر عناصر من مجلدات جدول الكميات أو استورد ملف Excel.',
@@ -918,6 +984,36 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'اكتب وصف الصنف للبحث في جدول كميات هذا النطاق ثم المشروع ثم المخزون، أو أدخل صنفًا مخصصًا.',
     ur: 'اس دائرے کے BOQ، پھر پراجیکٹ BOQ اور پھر انوینٹری میں تلاش کے لیے تفصیل لکھیں، یا کسٹم آئٹم درج کریں۔',
     hi: 'इस स्कोप के बीओक्यू, फिर प्रोजेक्ट बीओक्यू और फिर इन्वेंटरी में खोजने के लिए विवरण लिखें—या कस्टम आइटम दर्ज करें।',
+  );
+  static const materialBasket = TranslatableString(
+    en: 'Material basket',
+    ar: 'سلة المواد',
+    ur: 'میٹیریل باسکٹ',
+    hi: 'सामग्री बास्केट',
+  );
+  static const materialBasketDescription = TranslatableString(
+    en: 'Add approved BOQ items or enter a custom material, then review every quantity.',
+    ar: 'أضف بنود جدول الكميات المعتمدة أو مادة مخصصة، ثم راجع كل كمية.',
+    ur: 'منظور شدہ BOQ آئٹمز یا کسٹم میٹیریل شامل کریں، پھر ہر مقدار چیک کریں۔',
+    hi: 'स्वीकृत बीओक्यू आइटम या कस्टम सामग्री जोड़ें, फिर हर मात्रा जाँचें।',
+  );
+  static const materialBasketEmpty = TranslatableString(
+    en: 'No materials added yet.',
+    ar: 'لم تتم إضافة مواد بعد.',
+    ur: 'ابھی کوئی میٹیریل شامل نہیں کیا گیا۔',
+    hi: 'अभी कोई सामग्री नहीं जोड़ी गई है।',
+  );
+  static const technicalDetailsOptional = TranslatableString(
+    en: 'Technical details (optional)',
+    ar: 'التفاصيل الفنية (اختيارية)',
+    ur: 'تکنیکی تفصیل (اختیاری)',
+    hi: 'तकनीकी विवरण (वैकल्पिक)',
+  );
+  static const hideTechnicalDetails = TranslatableString(
+    en: 'Hide technical details',
+    ar: 'إخفاء التفاصيل الفنية',
+    ur: 'تکنیکی تفصیل چھپائیں',
+    hi: 'तकनीकी विवरण छिपाएँ',
   );
   static const rowTools = TranslatableString(
     en: 'Row tools',
@@ -1070,6 +1166,48 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'الجدول الزمني لسير العمل',
     ur: 'ورک فلو ٹائم لائن',
     hi: 'वर्कफ़्लो समय-रेखा',
+  );
+  static const simpleView = TranslatableString(
+    en: 'Simple',
+    ar: 'مبسّط',
+    ur: 'سادہ',
+    hi: 'सरल',
+  );
+  static const fullDetails = TranslatableString(
+    en: 'Full details',
+    ar: 'التفاصيل الكاملة',
+    ur: 'مکمل تفصیل',
+    hi: 'पूरी जानकारी',
+  );
+  static const simpleViewDescription = TranslatableString(
+    en: 'Shows the current action, key quantities and exceptions.',
+    ar: 'يعرض الإجراء الحالي والكميات الأساسية والاستثناءات.',
+    ur: 'موجودہ کارروائی، اہم مقداریں اور مسائل دکھاتا ہے۔',
+    hi: 'वर्तमान कार्रवाई, मुख्य मात्राएँ और अपवाद दिखाता है।',
+  );
+  static const fullDetailsDescription = TranslatableString(
+    en: 'Shows the complete quantity ledger, history, discussion and tools.',
+    ar: 'يعرض سجل الكميات الكامل والسجل والمناقشة والأدوات.',
+    ur: 'مکمل مقدار لیجر، تاریخ، گفتگو اور ٹولز دکھاتا ہے۔',
+    hi: 'पूरा मात्रा लेजर, इतिहास, चर्चा और टूल दिखाता है।',
+  );
+  static const requestPreview = TranslatableString(
+    en: 'Request preview',
+    ar: 'معاينة الطلب',
+    ur: 'درخواست کا پیش نظارہ',
+    hi: 'अनुरोध पूर्वावलोकन',
+  );
+  static const requestPreviewDescription = TranslatableString(
+    en: 'Select a request to review its current owner and next action.',
+    ar: 'حدد طلبًا لمراجعة المسؤول الحالي والإجراء التالي.',
+    ur: 'موجودہ ذمہ دار اور اگلا عمل دیکھنے کے لیے درخواست منتخب کریں۔',
+    hi: 'वर्तमान स्वामी और अगली कार्रवाई देखने के लिए अनुरोध चुनें।',
+  );
+  static const openRequest = TranslatableString(
+    en: 'Open request',
+    ar: 'فتح الطلب',
+    ur: 'درخواست کھولیں',
+    hi: 'अनुरोध खोलें',
   );
   static const recentActivity = TranslatableString(
     en: 'Recent activity',

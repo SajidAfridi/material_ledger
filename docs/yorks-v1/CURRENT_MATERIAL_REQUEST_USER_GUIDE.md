@@ -34,6 +34,21 @@ evidence of their original releases, not current workflow authority.
    dispatches it back. Procurement confirms physical warehouse receipt before
    inventory is restored.
 
+## Creating a request on a phone
+
+The composer has three short steps: **Details**, **Items** and **Review**.
+
+1. In Details, choose the project and exact Common/building scope first. The
+   optional title, timing and delivery note stay with that request.
+2. In Items, use **Add from BOQ** or **Add Custom Item**. The Material basket
+   remains visible with its current count; tap a material to edit it. A custom
+   item asks first for description, quantity and controlled unit. Brand,
+   size and planning model/tag remain available under optional Technical
+   details.
+3. In Review, check the scope and each quantity, confirm the review statement,
+   then submit. Save draft remains separate from Submit. Procurement receives
+   nothing until the protected Submit command succeeds.
+
 ## What the register tells you
 
 Every request card shows four different facts:
@@ -45,15 +60,18 @@ Every request card shows four different facts:
   or reassigning a Coordinator never changes status, authority or Current
   owner.
 
-The phone tabs are broad work groups rather than individual states:
+The phone register begins with two simple views:
 
-- **Draft** — private editable drafts.
-- **Submitted** — submitted, awaiting Engineering approval, returned for
-  changes, approved for arrangement, arranging and the preserved legacy
-  awaiting-approval state.
-- **Approved** — approved, dispatch, receipt and closed states.
+- **My Work** — the default. It shows records where you can perform the
+  protected Current action now.
+- **All Requests** — every request you are authorized to read.
 
-The role-aware register views answer a different question:
+Use the single **Filters** control when you need Exceptions, Coordinated
+Requests or one workflow status. Search checks the visible project, request
+number, title, scope, Current owner and Next action. This replaces the former
+two horizontal tab rails, so narrow phones do not hide filters off-screen.
+
+The role-aware filters answer a different question:
 
 - **My Work** — records where you can perform the protected Current action
   now. It is based on server authorization, not only the owner label.
@@ -62,10 +80,31 @@ The role-aware register views answer a different question:
 - **Coordinated Requests** — records assigned to you for follow-up; this does
   not make you the workflow owner.
 
+When the server confirms that you can perform the Current action, the request
+card shows a direct action such as **Continue draft**, **Review request**,
+**Arrange items**, **Dispatch** or **Review delivery**. Opening the card still
+shows the complete request and never bypasses the protected server command.
+
 Open **Insights** for approval, arrangement, warehouse fill, receipt,
 replacement and return timing facts. A Scheduled request shows its Required on
 site date and a factual overdue warning. Action age is shown, but an Action due
 date is not displayed until Yorks approves an SLA policy.
+
+On a tablet, the register becomes a master/detail workspace. Select a request
+on the left to review its status, Current owner and Next action on the right,
+then choose **Open request**. Selection does not perform a workflow command or
+load unauthorized detail; the full record is fetched only when it is opened.
+
+## Simple and Full request views on a phone
+
+Every committed request opens in **Simple** view. This keeps the Current owner,
+Next action, key quantities and any Missing, Damaged or Still needed exception
+close to the top. The protected action remains fixed above the phone safe area.
+
+Choose **Full details** when you need the entire quantity ledger, actor history,
+workflow timeline, discussion, recent activity, documents, logistics tools or
+an authorized cancellation. This changes presentation only: it does not change
+the request, its authority or its state, and no facts are removed.
 
 ## How to read the line ledger
 
@@ -96,6 +135,11 @@ after the protected server command returns:
 - dispatch: identifies the committed dispatch and line count;
 - receipt: identifies confirmed lines and recorded exception lines;
 - material return: identifies the return, resulting state and line count.
+
+In Procurement arrangement, the register action is **Review arrangement**.
+The actual **Save arrangement** command appears only after every line has an
+explicit Full, Partial or Cannot Provide Now decision and its required source
+or reason. This keeps navigation separate from the protected commit.
 
 If a command times out or fails, refresh the record before retrying. The same
 idempotency identity is retained until confirmation so a retry cannot create a

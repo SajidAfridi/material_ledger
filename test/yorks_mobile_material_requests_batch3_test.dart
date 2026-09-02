@@ -10,6 +10,7 @@ import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
 import 'package:material_ledger/core/constants/constants.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
+import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
@@ -840,6 +841,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _showFullMaterialRequestDetails(tester);
 
     final composer = find.byKey(
       const ValueKey('material-request-comment-composer'),
@@ -1006,6 +1008,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _showFullMaterialRequestDetails(tester);
 
     final region = find.byKey(
       const ValueKey('material-request-discussion-scroll'),
@@ -1112,6 +1115,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _showFullMaterialRequestDetails(tester);
 
     final workflow = find.byKey(
       const ValueKey('material-request-mobile-workflow'),
@@ -1297,13 +1301,52 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(RefreshIndicator), findsOneWidget);
-      expect(find.text('All'), findsOneWidget);
+      expect(find.text('My Work'), findsOneWidget);
+      expect(find.text('All Requests'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mobile-mr-new-request')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('mobile-mr-search')), findsOneWidget);
+      expect(find.byKey(const ValueKey('mobile-mr-filters')), findsOneWidget);
       expect(find.text('YRA-322-MR101'), findsOneWidget);
       expect(find.text('Draft'), findsWidgets);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('goldens/mobile_batch3/mr_register_$suffix.png'),
       );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('mobile MR filter sheet stays complete at $suffix', (
+      tester,
+    ) async {
+      await _setViewport(tester, size);
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestListProvider(
+              null,
+            ).overrideWith((ref) async => [_submittedRequest, _draftRequest]),
+          ],
+          child: const YorksV1MaterialRequestsScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('mobile-mr-filters')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Requests to show'), findsOneWidget);
+      expect(find.text('Exceptions'), findsOneWidget);
+      expect(find.text('My Material Requests'), findsOneWidget);
+      expect(find.text('Coordinated Requests'), findsOneWidget);
+      expect(find.text('Workflow status'), findsOneWidget);
+      expect(find.text('All statuses'), findsOneWidget);
+      expect(find.text('Apply filters'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1352,6 +1395,36 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('mobile material basket stays compact at $suffix', (
+      tester,
+    ) async {
+      await _setViewport(tester, size);
+      await _pumpDraft(tester);
+      await _continueToMaterials(tester);
+
+      expect(find.text('Material basket'), findsOneWidget);
+      expect(find.text('No materials added yet.'), findsOneWidget);
+      final fromBoq = find.byKey(const ValueKey('mobile-mr-add-from-boq'));
+      final custom = find.byKey(const ValueKey('mobile-mr-add-custom'));
+      expect(fromBoq, findsOneWidget);
+      expect(custom, findsOneWidget);
+      expect(
+        tester.getSize(fromBoq).height,
+        greaterThanOrEqualTo(AppSpacing.minTapTarget),
+      );
+      expect(
+        tester.getSize(custom).height,
+        greaterThanOrEqualTo(AppSpacing.minTapTarget),
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/mobile_batch3/mr_material_basket_empty_$suffix.png',
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('mobile Batch 3 MR BOQ folders $suffix', (tester) async {
       await _setViewport(tester, size);
       await _pumpDraft(tester, boqRepository: _BoqRepositoryFixture());
@@ -1384,6 +1457,15 @@ void main() {
         find.byKey(const ValueKey('mobile-mr-custom-material')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('mobile-custom-quantity')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-custom-technical-details-toggle')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('mobile-custom-brand')), findsNothing);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile(
@@ -1457,7 +1539,7 @@ void main() {
     });
   }
 
-  testWidgets('mobile request card shows the complete trusted line ledger', (
+  testWidgets('mobile request switches from key facts to the full ledger', (
     tester,
   ) async {
     await _setViewport(tester, const Size(360, 800));
@@ -1505,12 +1587,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('mobile-mr-lifecycle')), findsOneWidget);
+    expect(find.text('Simple'), findsOneWidget);
+    expect(find.text('Full details'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('mobile-mr-detail-mode')))
+          .height,
+      greaterThanOrEqualTo(AppSpacing.minTapTarget),
+    );
+    expect(find.text('Reserved'), findsNothing);
+    expect(find.text('Still needed'), findsOneWidget);
+    expect(find.text('Missing'), findsOneWidget);
+    expect(find.text('Damaged'), findsOneWidget);
+
+    await _showFullMaterialRequestDetails(tester);
+
     expect(find.text('Reserved'), findsOneWidget);
     expect(find.text('Returned'), findsOneWidget);
     expect(find.text('Still needed'), findsOneWidget);
     expect(find.text('2 Nos'), findsWidgets);
     expect(find.text('1 Nos'), findsWidgets);
     expect(find.text('5 Nos'), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/mobile_batch3/mr_lifecycle_full_360x800.png'),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -1613,6 +1714,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('mobile custom material reveals optional technical fields', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pumpDraft(tester);
+    await _continueToMaterials(tester);
+    await tester.tap(find.byKey(const ValueKey('mobile-mr-add-custom')));
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(
+      const ValueKey('mobile-custom-technical-details-toggle'),
+    );
+    expect(find.byKey(const ValueKey('mobile-custom-brand')), findsNothing);
+    expect(
+      tester.getSize(toggle).height,
+      greaterThanOrEqualTo(AppSpacing.minTapTarget),
+    );
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('mobile-custom-brand')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-custom-size')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-custom-model')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('small mobile duplicates a selected row and reviews its details', (
     tester,
   ) async {
@@ -1636,7 +1764,10 @@ void main() {
       find.byKey(const ValueKey('mobile-mr-custom-material')),
       findsOneWidget,
     );
-    await tester.enterText(find.byType(TextFormField).at(4), '3');
+    await tester.enterText(
+      find.byKey(const ValueKey('mobile-custom-quantity')),
+      '3',
+    );
     await tester.tap(find.text('Save Changes').hitTestable());
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
@@ -1722,10 +1853,76 @@ void main() {
       expect(find.byKey(const ValueKey('mobile-mr-lifecycle')), findsOneWidget);
       expect(find.text('Arrange Items'), findsNothing);
       expect(find.text('Current owner'), findsOneWidget);
+      expect(find.text('Simple'), findsOneWidget);
+      expect(find.text('Request Discussion'), findsNothing);
       expect(find.textContaining('Unit Cost'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('mobile composer follows the active Arabic RTL language', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pumpDraft(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+    );
+    await container
+        .read(languageProvider.notifier)
+        .setLanguage(AppLanguage.arabic);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        YorksV1MaterialRequestStrings.whereNeeded.active(AppLanguage.arabic),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      Directionality.of(
+        tester.element(find.byKey(const ValueKey('mobile-mr-information'))),
+      ),
+      TextDirection.rtl,
+    );
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile(
+        'goldens/mobile_batch3/mr_information_arabic_rtl_360x800.png',
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-mr-primary-action')).hitTestable(),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        YorksV1MaterialRequestStrings.materialBasket.active(AppLanguage.arabic),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('mobile-mr-add-custom')));
+    await tester.pumpAndSettle();
+    final optionalTechnicalDetails = find.byKey(
+      const ValueKey('mobile-custom-technical-details-toggle'),
+    );
+    expect(optionalTechnicalDetails, findsOneWidget);
+    expect(
+      find.text(
+        YorksV1MaterialRequestStrings.technicalDetailsOptional.active(
+          AppLanguage.arabic,
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(optionalTechnicalDetails).height,
+      greaterThanOrEqualTo(AppSpacing.minTapTarget),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('mobile MR routes use one feature header with shell navigation', (
     tester,
@@ -1768,7 +1965,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('mobile MR filters remain one touch-safe scroll rail', (
+  testWidgets('mobile MR filters stay consolidated and touch safe', (
     tester,
   ) async {
     await _setViewport(tester, const Size(360, 800));
@@ -1787,13 +1984,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final rail = find.byKey(
-      const ValueKey('mobile-material-request-filter-rail'),
+    final filters = find.byKey(const ValueKey('mobile-mr-filters'));
+    expect(filters, findsOneWidget);
+    expect(tester.getSize(filters).height, greaterThanOrEqualTo(48));
+    expect(
+      find.byKey(const ValueKey('mobile-mr-primary-views')),
+      findsOneWidget,
     );
-    expect(rail, findsOneWidget);
-    expect(tester.getSize(rail).height, AppSpacing.minTapTarget);
-    expect(find.text('All'), findsOneWidget);
-    expect(find.text('Approved'), findsOneWidget);
+    expect(find.text('My Work'), findsOneWidget);
+    expect(find.text('All Requests'), findsOneWidget);
+
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    expect(find.text('Requests to show'), findsOneWidget);
+    expect(find.text('Workflow status'), findsOneWidget);
+    expect(find.text('Apply filters'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1830,11 +2035,16 @@ void main() {
     expect(find.textContaining('Action age'), findsOneWidget);
     expect(find.text('Partial arrangement'), findsOneWidget);
     expect(find.text('7 items'), findsOneWidget);
+    expect(find.text('Arrange Items'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('mobile-mr-card-action-mobile-action-facts')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-    'mobile Submitted tab retains every approval and arrangement state',
+    'mobile All Requests retains every approval and arrangement state',
     (tester) async {
       await _setViewport(tester, const Size(360, 800));
       for (final state in yorksV1MaterialRequestSubmittedRegisterStates) {
@@ -1857,14 +2067,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byKey(
-              const ValueKey('mobile-material-request-filter-rail'),
-            ),
-            matching: find.text('Submitted'),
-          ),
-        );
+        await tester.tap(find.text('All Requests'));
         await tester.pumpAndSettle();
 
         expect(
@@ -2099,8 +2302,17 @@ Future<void> _addCustomMaterial(WidgetTester tester) async {
     findsOneWidget,
   );
 
-  await tester.enterText(find.byType(TextFormField).at(0), 'Flexible duct');
-  await tester.enterText(find.byType(TextFormField).at(4), '2');
+  await tester.enterText(
+    find.descendant(
+      of: find.byKey(const ValueKey('mobile-custom-description')),
+      matching: find.byType(TextFormField),
+    ),
+    'Flexible duct',
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('mobile-custom-quantity')),
+    '2',
+  );
   await tester.tap(
     find
         .descendant(
@@ -2126,6 +2338,16 @@ Future<void> _openReview(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
   expect(find.byKey(const ValueKey('mobile-mr-review')), findsOneWidget);
+}
+
+Future<void> _showFullMaterialRequestDetails(WidgetTester tester) async {
+  final fullDetails = find.descendant(
+    of: find.byKey(const ValueKey('mobile-mr-detail-mode')),
+    matching: find.text('Full details'),
+  );
+  expect(fullDetails, findsOneWidget);
+  await tester.tap(fullDetails);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpLifecycle(WidgetTester tester) async {

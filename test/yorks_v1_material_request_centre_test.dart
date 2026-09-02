@@ -193,6 +193,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('tablet centre uses a selectable master detail workspace', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(820, 1180));
+    String? openedRequestId;
+    await _pump(tester, onOpen: (request) => openedRequestId = request.id);
+
+    expect(
+      find.byKey(const ValueKey('material-request-tablet-master-detail')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-tablet-preview')),
+      findsOneWidget,
+    );
+    expect(find.text('Request preview'), findsOneWidget);
+    expect(find.textContaining('Current owner:'), findsWidgets);
+    expect(find.textContaining('Next action:'), findsWidgets);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_centre_tablet_820x1180.png'),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-row-mr-314-dispatched')),
+    );
+    await tester.pumpAndSettle();
+    expect(openedRequestId, isNull);
+    expect(
+      find.byKey(const ValueKey('material-request-selected-mr-314-dispatched')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-tablet-open')),
+    );
+    expect(openedRequestId, 'mr-314-dispatched');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('All Requests uses fifteen-row pages', (tester) async {
     await _setViewport(tester, const Size(1280, 3200));
     final requests = List.generate(

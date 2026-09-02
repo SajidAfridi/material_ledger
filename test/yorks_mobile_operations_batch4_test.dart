@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ledger/core/constants/app_spacing.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
@@ -59,6 +60,8 @@ void main() {
         find.byKey(const ValueKey('mobile-arrangement-list')),
         findsOneWidget,
       );
+      expect(find.text('Review arrangement'), findsOneWidget);
+      expect(find.text('Save arrangement'), findsNothing);
       await _golden(tester, '29_arrangement_list_$suffix');
     });
 
@@ -71,6 +74,19 @@ void main() {
         find.byKey(const ValueKey('mobile-arrangement-line')),
         findsOneWidget,
       );
+      expect(find.text('Cannot Provide Now'), findsOneWidget);
+      for (final decision in YorksV1ArrangementDecision.values) {
+        expect(
+          tester
+              .getSize(
+                find.byKey(
+                  ValueKey('mobile-arrangement-decision-${decision.name}'),
+                ),
+              )
+              .height,
+          greaterThanOrEqualTo(AppSpacing.minTapTarget),
+        );
+      }
       await _golden(tester, '30_arrangement_line_$suffix');
     });
 
