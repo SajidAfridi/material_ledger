@@ -6,13 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/commercial_record.dart';
-import '../models/yorks_v1_commercial_capability.dart';
+import '../models/yorks_v1_permission_management.dart';
 import 'language_provider.dart';
 import 'permissions_provider.dart';
 import 'session_provider.dart';
-import 'yorks_v1_current_commercial_capability_provider.dart';
 import 'yorks_v1_feature_flags_provider.dart';
 import 'yorks_v1_identity_provider.dart';
+import 'yorks_v1_permission_provider.dart';
 
 const commercialLocalDevelopmentCacheKey =
     'commercial_records_local_development_v1';
@@ -52,14 +52,13 @@ final commercialRecordsProvider =
         // may retain this notifier reference. Purge this exact object as soon
         // as a capability/profile signal makes the current session denied or
         // unknown, before an authorized refresh could expose stale costs.
-        ref.listen<AsyncValue<YorksV1CommercialCapabilities?>>(
-          yorksV1CurrentCommercialCapabilitiesProvider,
+        ref.listen<YorksV1CurrentPermissionSnapshotState>(
+          yorksV1CurrentPermissionSnapshotProvider,
           (_, next) {
-            final stillAllowed =
-                next
-                    .valueOrNull?[YorksV1CommercialCapability.viewCommercials]
-                    .effective ??
-                false;
+            final stillAllowed = yorksV1TrustedCommercialAccess(
+              next,
+              YorksV1CapabilityKeys.commercialsView,
+            );
             if (!stillAllowed) {
               unawaited(notifier.purgeProtectedState());
             }

@@ -215,9 +215,13 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
         clearError: true,
       );
       try {
-        await _repository.markDelivered(
-          conversations.map((conversation) => conversation.id),
-        );
+        final pendingDeliveryIds = conversations
+            .where((conversation) => conversation.needsDeliveryAcknowledgement)
+            .map((conversation) => conversation.id)
+            .toList(growable: false);
+        if (pendingDeliveryIds.isNotEmpty) {
+          await _repository.markDelivered(pendingDeliveryIds);
+        }
       } on YorksV1DomainException {
         // Delivery acknowledgement must never clear a usable authorized list.
         // The next foreground, Realtime or safety refresh retries it.

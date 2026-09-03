@@ -9,7 +9,9 @@ import 'package:material_ledger/shared/models/app_user.dart';
 import 'package:material_ledger/shared/models/commercial_record.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_commercial_capability.dart';
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/models/yorks_v1_permission_management.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/commercial_records_provider.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
@@ -18,7 +20,10 @@ import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_current_commercial_capability_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_current_commercial_capability_repository.dart';
+
+import 'support/yorks_v1_permission_test_support.dart';
 
 YorksV1CommercialCapabilities _capabilities({
   required bool view,
@@ -386,9 +391,9 @@ void main() {
             const YorksV1FeatureFlags(foundation: true),
           ),
           yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
-          yorksV1CurrentCommercialCapabilitiesProvider.overrideWith(
-            (ref) => _FixedCurrentCapabilitiesNotifier(
-              AsyncData(_capabilities(view: false, manage: false)),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(capabilities: const []),
             ),
           ),
         ],
@@ -410,8 +415,13 @@ void main() {
         'test-publishable-key',
       );
       addTearDown(client.dispose);
-      final capabilityNotifier = _MutableCurrentCapabilitiesNotifier(
-        AsyncData(_capabilities(view: true, manage: true)),
+      final permissionController = YorksV1TestPermissionController(
+        yorksV1TrustedFeaturePermissionState(
+          capabilities: const {
+            YorksV1CapabilityKeys.commercialsView,
+            YorksV1CapabilityKeys.commercialsManage,
+          },
+        ),
       );
       final container = ProviderContainer(
         overrides: [
@@ -430,8 +440,8 @@ void main() {
             const YorksV1FeatureFlags(foundation: true),
           ),
           yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.procurement),
-          yorksV1CurrentCommercialCapabilitiesProvider.overrideWith(
-            (ref) => capabilityNotifier,
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => permissionController,
           ),
         ],
       );
@@ -448,8 +458,8 @@ void main() {
       };
       expect(oldNotifier.state, isNotEmpty);
 
-      capabilityNotifier.set(
-        AsyncData(_capabilities(view: false, manage: false)),
+      permissionController.invalidateForAuthorizationFailure(
+        const YorksV1DomainException(YorksV1DomainErrorCode.backendUnavailable),
       );
       await Future<void>.delayed(Duration.zero);
 
@@ -462,24 +472,4 @@ void main() {
       );
     },
   );
-}
-
-class _FixedCurrentCapabilitiesNotifier
-    extends YorksV1CurrentCommercialCapabilitiesNotifier {
-  _FixedCurrentCapabilitiesNotifier(
-    AsyncValue<YorksV1CommercialCapabilities?> value,
-  ) : super(enabled: false, authUserId: null, client: null, repository: null) {
-    state = value;
-  }
-}
-
-class _MutableCurrentCapabilitiesNotifier
-    extends YorksV1CurrentCommercialCapabilitiesNotifier {
-  _MutableCurrentCapabilitiesNotifier(
-    AsyncValue<YorksV1CommercialCapabilities?> value,
-  ) : super(enabled: false, authUserId: null, client: null, repository: null) {
-    state = value;
-  }
-
-  void set(AsyncValue<YorksV1CommercialCapabilities?> value) => state = value;
 }
