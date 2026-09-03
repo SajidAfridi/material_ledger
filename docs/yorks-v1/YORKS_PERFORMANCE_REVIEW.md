@@ -48,7 +48,7 @@ command is still re-authorized by Postgres.
 
 | Signal | Observed evidence | Interpretation |
 |---|---:|---|
-| Realtime change polling | 2,149,890 calls; 24h 21m cumulative execution; 56.0% of recorded DB execution | Primary sustained database load surface |
+| Realtime change polling | 2,149,890 calls; 24h 21m cumulative execution; 56.0% of recorded DB execution | Largest completed-statement bucket; the failed retry storm was omitted from this ranking |
 | PostgREST session setup | 345,776,121 calls; 2h 07m cumulative execution | Very high request/connection churn, not one slow business query |
 | Realtime subscription writes | 708,256 cumulative writes | Persistent subscription churn is material on a Nano project |
 | Commercial capability RPC | 193,819 calls; 14m 30s cumulative execution | Mostly historical feedback-loop load; only 12 additional calls between review snapshots |
@@ -123,7 +123,13 @@ migration alone.
 | 17:40–17:45 | 29,995 | 30,000 |
 | 17:45–17:50 | 29,994 | 29,999 |
 | 18:15–18:20 | 0 | 14 |
-| 18:20–18:25 | 0 | 20 |
+| 18:20–18:25 | 0 | 23 |
+| 18:25–18:30 | 0 | 21 |
+
+The final re-query covered 15 complete minutes after recovery and found zero
+SQLSTATE `40001` errors or events for any of the three affected query IDs.
+The 18:20 window increased from 20 to 23 ordinary log events after ingestion;
+its conflict count stayed zero. All five services remained healthy.
 
 At 18:29:10, DB, REST, Auth, Realtime and Storage all reported
 `ACTIVE_HEALTHY`; no active PostgREST query was stuck. Ten retained private
