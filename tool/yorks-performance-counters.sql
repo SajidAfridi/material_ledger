@@ -18,6 +18,7 @@ with rpc as (
 )
 select jsonb_build_object(
   'observed_at', clock_timestamp(),
+  'postmaster_started_at', pg_postmaster_start_time(),
   'rpc', (select jsonb_agg(rpc_totals order by name) from rpc_totals),
   'realtime', (select jsonb_build_object('calls', sum(calls),
     'total_ms', round(sum(total_exec_time)::numeric, 3))
@@ -37,6 +38,7 @@ select jsonb_build_object(
       or (schemaname = 'realtime' and relname = 'subscription')
   ) x),
   'database', (select jsonb_build_object('stats_reset', stats_reset,
+    'committed_transactions', xact_commit, 'rolled_back_transactions', xact_rollback,
     'blocks_read', blks_read, 'blocks_hit', blks_hit,
     'temp_bytes', temp_bytes, 'deadlocks', deadlocks)
     from pg_stat_database where datname = current_database())

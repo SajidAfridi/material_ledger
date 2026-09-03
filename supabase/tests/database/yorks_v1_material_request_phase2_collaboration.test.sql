@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(39);
+select plan(41);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -15,6 +15,9 @@ select ok(
   )
   and not has_table_privilege(
     'authenticated', 'public.v1_material_request_work_assignments', 'select'
+  )
+  and not has_function_privilege(
+    'authenticated', 'public.v1_raise_version_conflict(text)', 'execute'
   ),
   'Phase 2 working data is RLS protected and command-only'
 );
@@ -479,6 +482,30 @@ select throws_ok(
   'Cancelled requests cannot be claimed or reassigned'
 );
 
+select throws_ok(
+  $$select public.v1_delete_my_material_request_private_draft(
+    '{"draft_id":"b2200000-0000-4000-8000-000000000001","expected_sync_version":2}'::jsonb,
+    'b2400000-0000-4000-8000-000000000003'
+  )$$,
+  '40001',
+  'V1_PRIVATE_DRAFT_VERSION_CONFLICT',
+  'A direct stale delete retains the established 40001 conflict contract'
+);
+select set_config('request.method', 'POST', true);
+select throws_ok(
+  $$select public.v1_delete_my_material_request_private_draft(
+    '{"draft_id":"b2200000-0000-4000-8000-000000000001","expected_sync_version":2}'::jsonb,
+    'b2400000-0000-4000-8000-000000000002'
+  )$$,
+  'PGRST',
+  jsonb_build_object(
+    'code', '40001',
+    'message', 'V1_PRIVATE_DRAFT_VERSION_CONFLICT',
+    'details', null,
+    'hint', null
+  )::text,
+  'A stale REST delete returns one non-retryable 409 conflict envelope'
+);
 select lives_ok(
   $$select public.v1_delete_my_material_request_private_draft(
     '{"draft_id":"b2200000-0000-4000-8000-000000000001","expected_sync_version":1}'::jsonb,

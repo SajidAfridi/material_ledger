@@ -2,8 +2,8 @@
 
 Date: 2026-09-03
 Owner: Codex investigation, implementation and verification
-Status: **first performance batch released: both database fixes and verified
-web client live in production. Broader load attribution remains open.**
+Status: **performance client and four database migrations live in production;
+confirmed PostgREST retry storm contained. Broader load attribution remains open.**
 
 ## Guardrails
 
@@ -66,6 +66,102 @@ consistent with pool pressure but does not by itself prove one query is at
 fault.
 
 ## Prioritized findings
+
+### P0 — Confirmed PostgREST serialization retry storm (contained)
+
+The earlier `pg_stat_statements` ranking did not reveal failed executions:
+the dominant failing RPC had only 84 successful recorded calls. Log attribution
+changed the priority from broad Realtime cost to a specific runaway transaction.
+
+For the 24-hour window ending 2026-09-03 17:45 UTC, the unified logs contained
+8,455,497 PostgreSQL errors for query ID `6525452760638922684`, mapped through
+the statement text to `v1_delete_my_material_request_private_draft`.
+The errors were SQLSTATE `40001` under `PostgREST 14.5`.
+Only seven completed POST requests to that endpoint appeared in edge logs in
+the same window (plus four OPTIONS). These are not 8.45M client requests.
+The same error class also appeared for approval edits (15,074) and private-draft
+saves (465).
+
+**Root cause:** application optimistic-version conflicts were raised using
+PostgreSQL's reserved serialization-failure code. PostgREST 14.5's transaction
+library can retry that code indefinitely, even after the HTTP caller is gone.
+The Flutter repository invokes each mutation once; there is no mutation retry
+loop there. The upstream [PostgREST issue](https://github.com/PostgREST/postgrest/issues/3673)
+and [changelog](https://github.com/PostgREST/postgrest/blob/main/CHANGELOG.md)
+document this internal retry behaviour and its later fix.
+
+**Fix:** the private helper `v1_raise_version_conflict` emits PostgREST's
+non-retryable `PGRST` SQLSTATE envelope when `request.method` is set, returning
+HTTP 409 with the existing body code `40001` and unchanged domain message.
+Direct SQL callers retain SQLSTATE `40001`. Existing Flutter clients still
+classify the response as a conflict; authorization, locks, version comparisons,
+transaction rollback and idempotency remain unchanged. The helper is not granted
+to `anon` or `authenticated`. This uses the documented
+[custom-error mechanism](https://docs.postgrest.org/en/v14/references/errors.html#add-http-headers-with-raise).
+
+Two migrations were staged and then applied through the normal production
+migration ledger:
+
+- `20260903175500_stop_postgrest_version_conflict_retries.sql`: the live
+  private-draft delete loop; confirmed present in production at 18:20:33 UTC.
+- `20260903182500_bound_material_request_conflict_responses.sql`: the other
+  two measured RPCs, private-draft save and approval edit; confirmed present
+  at 18:29:10 UTC.
+
+**Recovery:** production database access became unavailable before migration
+could be applied: both the CLI login role and the privileged query API timed
+out. Database-only restart requests were accepted but did not restore access.
+The full project restart was then requested and confirmed `RESTARTING`;
+Postgres restarted at 18:14:42 UTC and DB/REST were healthy by 18:19.
+The staged delete guard was applied immediately after recovery. No production
+rows, RLS policies, grants on existing RPCs, compute tier or memory settings
+were changed. Do not attribute the recovery interval or counter resets to the
+migration alone.
+
+| UTC window | Delete-conflict log events | All Postgres log events |
+|---|---:|---:|
+| 17:40–17:45 | 29,995 | 30,000 |
+| 17:45–17:50 | 29,994 | 29,999 |
+| 18:15–18:20 | 0 | 14 |
+| 18:20–18:25 | 0 | 20 |
+
+At 18:29:10, DB, REST, Auth, Realtime and Storage all reported
+`ACTIVE_HEALTHY`; no active PostgREST query was stuck. Ten retained private
+drafts remained present. Temporary bytes stayed at 1,802,240 between the
+18:25 and 18:29 snapshots; cumulative counters across restart are not directly
+comparable with the earlier 67 GB. These are short recovery observations,
+not a production p95 or egress-savings claim.
+
+A paired Prometheus scrape from 18:29:54.818 to 18:31:16.130 UTC (81.312 seconds)
+measured 20.58% non-idle CPU: 11.71% active work excluding I/O wait and 8.87%
+I/O wait. Memory non-available was 65.26%; disk busy time was 22.26% on
+`nvme1n1` and 0.90% on `nvme0n1`, with load1 0.46. This is a short
+post-recovery sample, not a controlled percentage improvement against the
+operator's earlier 100% CPU / 91% I/O reading. Restart/cold caches and active
+user counts differ. No compute upgrade was purchased or applied.
+
+**Proof:** fresh local reset and full pgTAP passed 86 files / 2,501 assertions;
+the additional approval REST assertion then passed in its 46-assertion focused
+suite locally and on staging. The new 16-assertion guard suite passed locally
+and on staging, covering non-retryable envelopes, unchanged client codes,
+no stale overwrite/delete, rolled-back idempotency claims, current-version
+success and exact replay. The earlier full Phase 2 staging suite retained
+three known fixture-total failures (one pre-existing request), while the
+conflict assertions passed; no staging data was reset to force those totals.
+
+The real staging HTTP probe passed: stale save 409 in 713 ms, stale delete 409
+in 378 ms, valid save/delete 200, exact save retry identical. The probe removes
+only its synthetic owner draft and signs out; it refuses production targets.
+Reproduce with [the probe](../../tool/yorks-performance-conflict-probe.mjs).
+The emitted HTTP body remains `code=40001`; the database SQLSTATE is `PGRST`,
+so PostgREST's serialization retry never starts.
+
+**Rollback:** restore the preceding function definitions only if required;
+this reintroduces the retry risk. No data rollback is necessary. A managed
+PostgREST upgrade is a separate provider operation, not silently bundled here.
+Other unobserved application-level `40001` raises remain a P1 audit item and
+must be migrated with their module's contract tests, not a blind repository-wide
+rewrite.
 
 ### P0 — Realtime and connection churn
 
