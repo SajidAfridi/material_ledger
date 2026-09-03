@@ -1,7 +1,7 @@
 # Yorks Performance Review
 
-Date: 2026-09-03  
-Owner: Codex investigation, implementation and verification  
+Date: 2026-09-03
+Owner: Codex investigation, implementation and verification
 Status: **first performance batch released: both database fixes and verified
 web client live in production. Broader load attribution remains open.**
 
