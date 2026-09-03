@@ -342,7 +342,7 @@ subscriptions per accidental second start and a logout-time listener leak. The
 normal one-start path still owns exactly 14 table subscriptions. It does not
 claim that duplicate start was observed in production or caused the historical
 Realtime total. Client-only rollback is the prior `RealtimeSync` lifecycle.
-Status: **staging/release verification in progress**.
+Status: **released in the verified production web client**.
 
 ## Verification ledger
 
@@ -377,7 +377,9 @@ Status: **staging/release verification in progress**.
 | Final isolated CI Android build | Passed; ephemeral signing, not a production Android release |
 | Updated staging browser | Sign-in rendered; earlier four-second worker warning absent |
 | Staging, temporary production, promoted public URL | Eight routes/assets each hash-verified |
-| Production web app deployment | Promoted `dpl_5rYk4zY8UZhxxah6vkVgVHw8zbTv` |
+| Legacy sync lifecycle | 4 regression tests; 33 focused and 1,494 full Flutter tests passed |
+| Second-slice CI web / CI Android / staging / production web builds | Passed; Android used ephemeral signing |
+| Production web app deployment | Promoted `dpl_Zei7RhZrfm84Cyti5XMnNS1MrnGR` |
 
 ## Released batch and remaining measurement boundary
 
@@ -432,14 +434,28 @@ deployment `dpl_HeN2Nq6BpiRDpdgQeLCcvsgvLqzH`.
 Its 9,525,450-byte JS is SHA-256
 `008738943e9203a416c4badd8e4ef1e7f0bad523282562b184003dbaeddaf5dd`.
 
-Final production (same source, production backend configuration):
-[Yorks production](https://yorks-r35.vercel.app),
+Initial production release (same source, production backend configuration):
 [immutable deployment](https://yorks-r35-qtw9agq3y-sajid-alis-projects-0ec775a2.vercel.app),
 deployment `dpl_5rYk4zY8UZhxxah6vkVgVHw8zbTv`, promoted September 3 at
 approximately 13:58 UTC. Its isolated build is
 `/private/tmp/yorks-performance-release-web.wbHf5q`.
 Production `main.dart.js` is 9,525,530 bytes, SHA-256
 `231dbf9a7e480525cbc4b06138b78188961dd36c6de41f315adb45a6f069683d`.
+The production backend is present; staging and CI placeholders are absent.
+
+Single-owner lifecycle staging (source commit `90ea359`):
+[Yorks lifecycle staging](https://yorks-r35-cbf9rdtod-sajid-alis-projects-0ec775a2.vercel.app),
+deployment `dpl_4MBGpWdSFbY4EgFsK8ivsiuuZLdu`. All eight artifact checks passed;
+signed-out sign-in rendered with no browser warnings or errors.
+
+Current production:
+[Yorks production](https://yorks-r35.vercel.app),
+[immutable deployment](https://yorks-r35-6pq30qlmr-sajid-alis-projects-0ec775a2.vercel.app),
+deployment `dpl_Zei7RhZrfm84Cyti5XMnNS1MrnGR`, promoted September 3 at
+approximately 17:42 UTC. Its isolated build is
+`/private/tmp/yorks-performance-sync-production.seICWn`. Production
+`main.dart.js` is 9,525,603 bytes, SHA-256
+`a127622245cc70d426c9ed31bd93be866a7a9898c34334cad7aa20c612d8d218`.
 The production backend is present; staging and CI placeholders are absent.
 
 Both temporary deployments and the promoted public URL passed the same eight
@@ -457,6 +473,13 @@ cumulative Realtime polls, 395,901 subscription registrations, 45,885 chat list
 calls, 10,927 delivery calls and 65,549,063,003 cumulative temporary bytes.
 Profiles and idempotency writes remained unchanged from 13:00. This establishes
 an after-release baseline, **not** a CPU/message/egress reduction verdict.
+
+After the lifecycle release, the 17:43:10 UTC snapshot had 32 live subscription
+rows, 2,165,112 cumulative Realtime polls, 397,439 subscription registrations,
+46,042 chat list calls, 11,083 delivery calls and 67,022,063,032 cumulative
+temporary bytes. The four-hour interval and subscriber-count change make it
+unsuitable for a controlled before/after rate claim; it is retained as the new
+production baseline.
 
 Rollback: retain the prior known deployment for artifact rollback; the two
 database changes are backward compatible, so no destructive rollback or row
