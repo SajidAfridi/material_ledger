@@ -78,9 +78,12 @@ class RealtimeSync {
   final Ref _ref;
   final List<RealtimeChannel> _channels = [];
   StreamSubscription<AuthState>? _authSub;
+  bool _started = false;
   bool _stopped = false;
 
   Future<void> start() async {
+    if (_started || _stopped) return;
+    _started = true;
     final prefs = _ref.read(sharedPreferencesProvider);
 
     // RLS is evaluated against the socket's JWT — without this the realtime
@@ -88,11 +91,12 @@ class RealtimeSync {
     // nothing. Set the current token first, and re-set it whenever it refreshes.
     final token = _client.auth.currentSession?.accessToken;
     if (token != null) await _client.realtime.setAuth(token);
+    if (_stopped) return; // logout may have completed during token setup
     _authSub = _client.auth.onAuthStateChange.listen((s) {
+      if (_stopped) return;
       final t = s.session?.accessToken;
       if (t != null) _client.realtime.setAuth(t);
     });
-    if (_stopped) return; // logged out again while awaiting setAuth
 
     for (final c in _synced()) {
       final channel = _client
@@ -126,6 +130,7 @@ class RealtimeSync {
     _Synced c,
     PostgresChangePayload payload,
   ) {
+    if (_stopped) return;
     try {
       final raw = prefs.getString(c.storeKey);
       final list = (raw == null || raw.isEmpty)

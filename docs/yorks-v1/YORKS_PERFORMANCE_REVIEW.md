@@ -322,6 +322,28 @@ The supplied 4.706 GB egress reading is close to quota, but this review has not
 yet obtained a provider breakdown by Storage object, REST response, Realtime or
 web asset. No compression or cache change is safe without that attribution.
 
+### P1 — Legacy sync ownership and logout finality
+
+**Evidence/root cause:** the root-owned legacy collection sync had no idempotent
+`start` guard. Two calls on one instance registered 28 channels instead of 14.
+If logout stopped the object while its initial Realtime token setup was still
+awaiting, startup then attached an auth listener after shutdown. A queued
+Postgres callback also remained able to modify the logged-out local cache.
+
+**Fix:** startup is single-owner and cannot run after stop; shutdown during
+token setup is checked before the auth listener is attached; refreshed-token
+and row callbacks become no-ops once stopped. No table, event type, RLS rule,
+local data shape or foreground refresh is removed.
+
+**Measured contract/risk:** four regression tests first reproduced all four
+failures, then passed after the guard. The focused auth/session/sync run passed
+33 tests and the isolated full suite passed 1,494. This prevents 14 duplicate
+subscriptions per accidental second start and a logout-time listener leak. The
+normal one-start path still owns exactly 14 table subscriptions. It does not
+claim that duplicate start was observed in production or caused the historical
+Realtime total. Client-only rollback is the prior `RealtimeSync` lifecycle.
+Status: **staging/release verification in progress**.
+
 ## Verification ledger
 
 | Gate | Result |
