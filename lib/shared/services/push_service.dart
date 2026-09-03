@@ -429,8 +429,8 @@ class FcmPushService implements PushService {
     }
     return FirebaseMessaging.instance.getToken(
       vapidKey: _webPushVapidKey,
-      // This service worker imports Flutter's generated cache worker, so FCM
-      // does not replace the PWA/offline worker at the root scope.
+      // The dedicated FCM worker owns push without importing Flutter's
+      // generated cleanup worker or blocking the application's first paint.
       serviceWorkerScriptPath: 'firebase-messaging-sw.js',
     );
   }
