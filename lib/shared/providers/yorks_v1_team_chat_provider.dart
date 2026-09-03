@@ -9,6 +9,7 @@ import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_team_chat.dart';
 import '../repositories/yorks_v1_team_chat_repository.dart';
 import '../services/yorks_v1_chat_file_service.dart';
+import '../sync/authorized_refresh_queue.dart';
 import '../sync/connectivity_service.dart';
 import 'language_provider.dart';
 import 'yorks_v1_feature_flags_provider.dart';
@@ -167,13 +168,18 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
   StreamSubscription<AuthState>? _authSubscription;
   Timer? _fallback;
   bool _disposed = false;
-  bool _refreshing = false;
+  bool _started = false;
+  bool _includeThreadOnRefresh = false;
+  final _realtimeReadiness = AuthorizedRefreshReadiness();
+  late final _listRefreshQueue = AuthorizedRefreshQueue(_loadConversations);
+  late final _refreshQueue = AuthorizedRefreshQueue(_loadRefresh);
   bool _observingLifecycle = false;
   bool _leftForeground = false;
-  bool _hasRealtimeSubscription = false;
   String _activeSearchQuery = '';
 
   Future<void> start() async {
+    if (_started || _disposed) return;
+    _started = true;
     if (!_enabled) {
       state = state.copyWith(
         loadingList: false,
@@ -191,41 +197,55 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
     WidgetsBinding.instance.addObserver(this);
     _observingLifecycle = true;
     await refreshConversations();
+    if (_disposed) return;
     final subscribed = await _subscribe();
     if (!subscribed) _startFallback();
   }
 
-  Future<void> refresh({bool includeThread = true}) async {
+  Future<void> refresh({bool includeThread = true}) {
+    _includeThreadOnRefresh |= includeThread;
+    return _refreshQueue.request();
+  }
+
+  Future<void> _loadRefresh() async {
+    final includeThread = _includeThreadOnRefresh;
+    _includeThreadOnRefresh = false;
     await refreshConversations();
-    if (includeThread && state.selectedConversationId != null) {
+    if (!_disposed && includeThread && state.selectedConversationId != null) {
       await _refreshThread(state.selectedConversationId!, markRead: false);
     }
   }
 
-  Future<void> refreshConversations() async {
-    if (_refreshing || _disposed || _repository == null) return;
-    _refreshing = true;
+  Future<void> refreshConversations() => _listRefreshQueue.request();
+
+  Future<void> _loadConversations() async {
+    if (_disposed || _repository == null) return;
     try {
       final conversations = _activeSearchQuery.length >= 2
           ? await _repository.search(_activeSearchQuery)
           : await _repository.listConversations();
+      if (_disposed) return;
       state = state.copyWith(
         conversations: conversations,
         loadingList: false,
         clearError: true,
       );
       try {
-        await _repository.markDelivered(
-          conversations.map((conversation) => conversation.id),
-        );
+        final pendingDeliveryIds = conversations
+            .where((conversation) => conversation.needsDeliveryAcknowledgement)
+            .map((conversation) => conversation.id)
+            .toList(growable: false);
+        if (pendingDeliveryIds.isNotEmpty) {
+          await _repository.markDelivered(pendingDeliveryIds);
+        }
       } on YorksV1DomainException {
         // Delivery acknowledgement must never clear a usable authorized list.
         // The next foreground, Realtime or safety refresh retries it.
       }
     } on YorksV1DomainException catch (error) {
-      state = state.copyWith(loadingList: false, error: error.code);
-    } finally {
-      _refreshing = false;
+      if (!_disposed) {
+        state = state.copyWith(loadingList: false, error: error.code);
+      }
     }
   }
 
@@ -257,7 +277,7 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
     if (repository == null || _disposed) return;
     try {
       final fetched = await repository.getConversation(conversationId);
-      if (state.selectedConversationId != conversationId) return;
+      if (_disposed || state.selectedConversationId != conversationId) return;
       var thread = fetched;
       final current = state.thread;
       if (!markRead &&
@@ -289,7 +309,9 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
         await refreshConversations();
       }
     } on YorksV1DomainException catch (error) {
-      state = state.copyWith(loadingThread: false, error: error.code);
+      if (!_disposed) {
+        state = state.copyWith(loadingThread: false, error: error.code);
+      }
     }
   }
 
@@ -555,6 +577,7 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
       final token = client.auth.currentSession?.accessToken;
       if (token == null) return false;
       await client.realtime.setAuth(token);
+      if (_disposed) return false;
       _authSubscription = client.auth.onAuthStateChange.listen((event) {
         final refreshed = event.session?.accessToken;
         if (refreshed != null) unawaited(client.realtime.setAuth(refreshed));
@@ -584,20 +607,18 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
           .subscribe((status, _) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
-              final reconnected = _hasRealtimeSubscription;
-              _hasRealtimeSubscription = true;
+              final needsRefresh = _realtimeReadiness.markAvailable();
               _stopFallback();
               if (!joined.isCompleted) {
                 joined.complete(true);
-              } else if (reconnected) {
-                unawaited(refresh());
               }
+              if (needsRefresh) unawaited(refresh());
               return;
             }
             if (status == RealtimeSubscribeStatus.channelError ||
                 status == RealtimeSubscribeStatus.timedOut ||
                 status == RealtimeSubscribeStatus.closed) {
-              _hasRealtimeSubscription = false;
+              _realtimeReadiness.markUnavailable();
               _startFallback();
               if (!joined.isCompleted) joined.complete(false);
             }
@@ -638,6 +659,8 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
   @override
   void dispose() {
     _disposed = true;
+    _listRefreshQueue.dispose();
+    _refreshQueue.dispose();
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
       _observingLifecycle = false;

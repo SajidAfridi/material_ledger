@@ -234,6 +234,7 @@ class YorksV1ChatConversation {
     required this.isArchived,
     required this.unreadCount,
     required this.participantCount,
+    this.needsDeliveryAcknowledgement = true,
     this.description,
     this.projectId,
     this.materialRequestId,
@@ -256,35 +257,45 @@ class YorksV1ChatConversation {
   final bool isArchived;
   final int unreadCount;
   final int participantCount;
+  final bool needsDeliveryAcknowledgement;
   final YorksV1ChatMessage? lastMessage;
   final String? searchPreview;
 
   bool get hasUnread => unreadCount > 0;
 
-  factory YorksV1ChatConversation.fromRpcJson(
-    Map<String, dynamic> json,
-  ) => YorksV1ChatConversation(
-    id: _requiredString(json['id']),
-    kind: YorksV1ChatKind.parse(json['kind']),
-    title: _requiredString(json['title']),
-    description: _nullableString(json['description']),
-    projectId: _nullableString(json['project_id']),
-    materialRequestId: _nullableString(json['material_request_id']),
-    createdAt: DateTime.parse(_requiredString(json['created_at'])).toLocal(),
-    updatedAt: DateTime.parse(_requiredString(json['updated_at'])).toLocal(),
-    lastMessageAt: _nullableDate(json['last_message_at']),
-    isPinned: json['is_pinned'] == true,
-    isMuted: json['is_muted'] == true,
-    isArchived: json['is_archived'] == true,
-    unreadCount: _requiredInt(json['unread_count']),
-    participantCount: _requiredInt(json['participant_count']),
-    lastMessage: json['last_message'] is Map
-        ? YorksV1ChatMessage.fromRpcJson(
-            Map<String, dynamic>.from(json['last_message'] as Map),
-          )
-        : null,
-    searchPreview: _nullableString(json['search_preview']),
-  );
+  factory YorksV1ChatConversation.fromRpcJson(Map<String, dynamic> json) {
+    final needsDeliveryAcknowledgement = json['needs_delivery_ack'];
+    if (needsDeliveryAcknowledgement != null &&
+        needsDeliveryAcknowledgement is! bool) {
+      throw const FormatException('Invalid chat delivery state.');
+    }
+    return YorksV1ChatConversation(
+      id: _requiredString(json['id']),
+      kind: YorksV1ChatKind.parse(json['kind']),
+      title: _requiredString(json['title']),
+      description: _nullableString(json['description']),
+      projectId: _nullableString(json['project_id']),
+      materialRequestId: _nullableString(json['material_request_id']),
+      createdAt: DateTime.parse(_requiredString(json['created_at'])).toLocal(),
+      updatedAt: DateTime.parse(_requiredString(json['updated_at'])).toLocal(),
+      lastMessageAt: _nullableDate(json['last_message_at']),
+      isPinned: json['is_pinned'] == true,
+      isMuted: json['is_muted'] == true,
+      isArchived: json['is_archived'] == true,
+      unreadCount: _requiredInt(json['unread_count']),
+      participantCount: _requiredInt(json['participant_count']),
+      // Missing means an older backend. Preserve the original conservative
+      // behaviour during rolling deploys; the new projection makes it exact.
+      needsDeliveryAcknowledgement:
+          needsDeliveryAcknowledgement as bool? ?? true,
+      lastMessage: json['last_message'] is Map
+          ? YorksV1ChatMessage.fromRpcJson(
+              Map<String, dynamic>.from(json['last_message'] as Map),
+            )
+          : null,
+      searchPreview: _nullableString(json['search_preview']),
+    );
+  }
 }
 
 class YorksV1ChatContextTarget {

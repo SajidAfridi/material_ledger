@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_notification.dart';
 import '../models/yorks_v1_notification.dart';
 import '../repositories/yorks_v1_notification_repository.dart';
+import '../sync/authorized_refresh_queue.dart';
 import 'language_provider.dart';
 
 final yorksV1NotificationRepositoryProvider =
@@ -66,10 +67,10 @@ class YorksV1NotificationsNotifier
   Timer? _fallbackTimer;
   bool _started = false;
   bool _disposed = false;
-  bool _loading = false;
+  late final _refreshQueue = AuthorizedRefreshQueue(_loadNotifications);
+  final _realtimeReadiness = AuthorizedRefreshReadiness();
   bool _observingLifecycle = false;
   bool _leftForeground = false;
-  bool _hasRealtimeSubscription = false;
 
   Future<void> start() async {
     if (_started || _disposed) return;
@@ -88,14 +89,20 @@ class YorksV1NotificationsNotifier
     if (!subscribed) _startFallback();
   }
 
-  Future<void> refresh({bool showLoading = false}) async {
+  Future<void> refresh({bool showLoading = false}) {
+    if (!_disposed && showLoading && state.valueOrNull == null) {
+      state = const AsyncLoading();
+    }
+    return _refreshQueue.request();
+  }
+
+  Future<void> _loadNotifications() async {
     final repository = _repository;
-    if (repository == null || _loading || _disposed) return;
-    _loading = true;
+    if (repository == null || _disposed) return;
     final previous = state.valueOrNull;
-    if (showLoading && previous == null) state = const AsyncLoading();
     try {
       final records = await repository.listMine();
+      if (_disposed) return;
       // Retain the recipient's protected transport rows in this internal feed
       // so the global alert host can provide a foreground Team Chat tone/toast
       // even before FCM permission is granted. Public notification-centre
@@ -103,14 +110,13 @@ class YorksV1NotificationsNotifier
       // unread authority and Chat never enters the workflow bell.
       state = AsyncData(records);
     } catch (error, stackTrace) {
+      if (_disposed) return;
       // Preserve the last authorized list during a temporary network failure;
       // the retry timer/Realtime reconnect will reconcile it.
       if (previous == null || previous.isEmpty) {
         state = AsyncError(error, stackTrace);
       }
       _startFallback();
-    } finally {
-      _loading = false;
     }
   }
 
@@ -172,6 +178,7 @@ class YorksV1NotificationsNotifier
       final token = client.auth.currentSession?.accessToken;
       if (token == null || token.isEmpty) return false;
       await client.realtime.setAuth(token);
+      if (_disposed) return false;
       _authSubscription = client.auth.onAuthStateChange.listen((event) {
         final refreshed = event.session?.accessToken;
         if (refreshed != null && refreshed.isNotEmpty) {
@@ -195,12 +202,12 @@ class YorksV1NotificationsNotifier
           .subscribe((status, _) {
             if (_disposed) return;
             if (status == RealtimeSubscribeStatus.subscribed) {
-              final reconnected = _hasRealtimeSubscription;
-              _hasRealtimeSubscription = true;
+              final needsRefresh = _realtimeReadiness.markAvailable();
               _stopFallback();
               if (!joined.isCompleted) {
                 joined.complete(true);
-              } else if (reconnected) {
+              }
+              if (needsRefresh) {
                 // The channel may have missed a row while reconnecting.  One
                 // authoritative fetch closes that gap without a timer loop.
                 unawaited(refresh());
@@ -208,7 +215,7 @@ class YorksV1NotificationsNotifier
             } else if (status == RealtimeSubscribeStatus.channelError ||
                 status == RealtimeSubscribeStatus.timedOut ||
                 status == RealtimeSubscribeStatus.closed) {
-              _hasRealtimeSubscription = false;
+              _realtimeReadiness.markUnavailable();
               _startFallback();
               if (!joined.isCompleted) joined.complete(false);
             }
@@ -249,6 +256,7 @@ class YorksV1NotificationsNotifier
   @override
   void dispose() {
     _disposed = true;
+    _refreshQueue.dispose();
     if (_observingLifecycle) {
       WidgetsBinding.instance.removeObserver(this);
       _observingLifecycle = false;

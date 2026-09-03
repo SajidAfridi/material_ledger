@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(45);
+select plan(46);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -336,6 +336,20 @@ select throws_ok(
   '40001', 'V1_MATERIAL_REQUEST_VERSION_CONFLICT',
   'A stale Engineering edit fails without overwriting the request'
 );
+select set_config('request.method', 'POST', true);
+select throws_ok(
+  $$select public.v1_update_material_request_for_approval(
+    (select payload from v1_af_payload) || jsonb_build_object(
+      'expected_version', 2,
+      'title', 'Stale REST overwrite'
+    ), 'af400000-0000-4000-8000-000000000099'::uuid
+  )$$,
+  'PGRST',
+  jsonb_build_object('code', '40001', 'message',
+    'V1_MATERIAL_REQUEST_VERSION_CONFLICT', 'details', null, 'hint', null)::text,
+  'A stale REST approval edit fails without a transaction retry'
+);
+select set_config('request.method', '', true);
 select lives_ok(
   $$select public.v1_decide_material_request(
     jsonb_build_object(

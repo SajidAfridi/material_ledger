@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/role_permissions.dart';
-import '../models/yorks_v1_commercial_capability.dart';
+import '../models/yorks_v1_permission_management.dart';
 import 'role_permissions_provider.dart';
 import 'session_provider.dart';
 import 'language_provider.dart' show supabaseClientProvider;
-import 'yorks_v1_current_commercial_capability_provider.dart';
 import 'yorks_v1_feature_flags_provider.dart';
 import 'yorks_v1_identity_provider.dart';
+import 'yorks_v1_permission_provider.dart';
 
 /// Effective-capability providers — the single place UI/guards read access from.
 /// Resolution layers (highest wins): per-user override → editable role default
@@ -32,14 +32,30 @@ bool _usesProtectedYorksV1CommercialAuthority(Ref ref) {
       ref.watch(yorksV1CurrentRoleProvider) != null;
 }
 
+/// Reuses the global current-session permission snapshot for the two
+/// commercial boundaries. This avoids a second capability RPC and two extra
+/// Realtime channels while preserving the original fail-closed guarantee.
+///
+/// A plain confirmed snapshot is not sufficient: commercial projections are
+/// trusted only while the user is active, the revision signal is healthy and
+/// no permission replacement is pending. Postgres RLS/RPC checks remain the
+/// final authority for every protected read and command.
+bool yorksV1TrustedCommercialAccess(
+  YorksV1CurrentPermissionSnapshotState state,
+  String capabilityKey,
+) =>
+    state.error == null &&
+    state.isTrustedForWrites &&
+    state.allows(capabilityKey);
+
 final canViewCommercialsProvider = Provider<bool>((ref) {
   if (!_usesProtectedYorksV1CommercialAuthority(ref)) {
     return _cap(ref, RoleCapability.viewCommercials);
   }
-  final snapshot = ref.watch(yorksV1CurrentCommercialCapabilitiesProvider);
-  final capabilities = snapshot.valueOrNull;
-  return capabilities?[YorksV1CommercialCapability.viewCommercials].effective ??
-      false;
+  return yorksV1TrustedCommercialAccess(
+    ref.watch(yorksV1CurrentPermissionSnapshotProvider),
+    YorksV1CapabilityKeys.commercialsView,
+  );
 });
 
 /// V1 commercial writes require the separate protected `manage_commercials`
@@ -49,11 +65,10 @@ final canManageCommercialsProvider = Provider<bool>((ref) {
   if (!_usesProtectedYorksV1CommercialAuthority(ref)) {
     return _cap(ref, RoleCapability.viewCommercials);
   }
-  final snapshot = ref.watch(yorksV1CurrentCommercialCapabilitiesProvider);
-  final capabilities = snapshot.valueOrNull;
-  return capabilities?[YorksV1CommercialCapability.manageCommercials]
-          .effective ??
-      false;
+  return yorksV1TrustedCommercialAccess(
+    ref.watch(yorksV1CurrentPermissionSnapshotProvider),
+    YorksV1CapabilityKeys.commercialsManage,
+  );
 });
 
 /// Transitional alias for existing cost-aware widgets.

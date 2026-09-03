@@ -1,9 +1,8 @@
 /* global firebase */
 
-// Keep Flutter's generated offline/cache handlers in the same root worker.
-// A browser permits only one service worker for this scope, so a separate FCM
-// registration would otherwise replace Flutter's cache worker on each launch.
-importScripts('flutter_service_worker.js');
+// This is the single root worker and owns push only. Flutter no longer emits a
+// cache worker; importing its generated cleanup stub would unregister this
+// registration and can delay every application launch.
 importScripts('https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/12.15.0/firebase-messaging-compat.js');
 

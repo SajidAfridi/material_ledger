@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(24);
+select plan(26);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -186,6 +186,11 @@ select throws_ok(
   '42501', 'V1_CHAT_MESSAGE_EDIT_DENIED',
   'Another active participant cannot edit the sender message'
 );
+select ok(
+  (public.v1_list_chat_conversations()
+    -> 0 ->> 'needs_delivery_ack')::boolean,
+  'Conversation projection requests a delivery acknowledgement only while pending'
+);
 select is(
   public.v1_mark_chat_delivered(array[
     (select conversation_id from v1_chat_lifecycle_conversation)
@@ -199,6 +204,11 @@ select is(
   ]),
   0,
   'Repeated synchronization does not churn the delivery cursor'
+);
+select ok(
+  not (public.v1_list_chat_conversations()
+    -> 0 ->> 'needs_delivery_ack')::boolean,
+  'Conversation projection suppresses redundant delivery acknowledgements'
 );
 
 set local role authenticated;

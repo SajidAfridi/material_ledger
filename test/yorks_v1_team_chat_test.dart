@@ -11,6 +11,7 @@ import 'package:material_ledger/shared/models/yorks_v1_team_chat.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_team_chat_provider.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_team_chat_repository.dart';
 import 'package:material_ledger/shared/services/push_service.dart';
 import 'package:material_ledger/shared/services/yorks_v1_chat_file_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +31,7 @@ void main() {
 
     expect(thread.conversation.kind, YorksV1ChatKind.group);
     expect(thread.conversation.unreadCount, 2);
+    expect(thread.conversation.needsDeliveryAcknowledgement, isFalse);
     expect(thread.participants, hasLength(3));
     expect(thread.participants.first.isOwner, isTrue);
     expect(thread.messages, hasLength(4));
@@ -38,6 +40,22 @@ void main() {
     expect(thread.messages.last.replyPreview?.body, 'Site handover at 3 PM.');
     expect(thread.messages[2].receiptStatus, YorksV1ChatReceiptStatus.read);
     expect(thread.messages[2].canEdit, isTrue);
+  });
+
+  test('an older backend conservatively retains delivery acknowledgements', () {
+    final json = _threadRpcFixture()..remove('needs_delivery_ack');
+    expect(
+      YorksV1ChatConversation.fromRpcJson(json).needsDeliveryAcknowledgement,
+      isTrue,
+    );
+  });
+
+  test('malformed delivery metadata is not silently treated as delivered', () {
+    final json = _threadRpcFixture()..['needs_delivery_ack'] = 'false';
+    expect(
+      () => YorksV1ChatConversation.fromRpcJson(json),
+      throwsFormatException,
+    );
   });
 
   test('chat command payloads trim text and retain server identifiers', () {
@@ -128,6 +146,48 @@ void main() {
 
     expect(state.unreadCount, 5);
   });
+
+  test(
+    'chat refresh acknowledges only server-projected pending deliveries',
+    () async {
+      final repository = _RecordingTeamChatRepository([
+        _conversation(
+          id: 'already-delivered',
+          kind: YorksV1ChatKind.direct,
+          title: 'Delivered',
+          description: 'No acknowledgement needed',
+          unreadCount: 0,
+          needsDeliveryAcknowledgement: false,
+        ),
+      ]);
+      final controller = YorksV1TeamChatController(
+        repository: repository,
+        client: null,
+        authUserId: 'user-admin',
+        enabled: true,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.refreshConversations();
+      expect(repository.deliveryAcknowledgements, isEmpty);
+
+      repository.conversations = [
+        _conversation(
+          id: 'pending-delivery',
+          kind: YorksV1ChatKind.direct,
+          title: 'Pending',
+          description: 'Acknowledgement required',
+          unreadCount: 1,
+          needsDeliveryAcknowledgement: true,
+        ),
+      ];
+      await controller.refreshConversations();
+
+      expect(repository.deliveryAcknowledgements, [
+        ['pending-delivery'],
+      ]);
+    },
+  );
 
   testWidgets('desktop renders the full three-pane Team Chat workspace', (
     tester,
@@ -441,6 +501,25 @@ class _FixtureTeamChatController extends YorksV1TeamChatController {
   }
 }
 
+class _RecordingTeamChatRepository implements YorksV1TeamChatRepository {
+  _RecordingTeamChatRepository(this.conversations);
+
+  List<YorksV1ChatConversation> conversations;
+  final List<List<String>> deliveryAcknowledgements = [];
+
+  @override
+  Future<List<YorksV1ChatConversation>> listConversations() async =>
+      conversations;
+
+  @override
+  Future<void> markDelivered(Iterable<String> conversationIds) async {
+    deliveryAcknowledgements.add(conversationIds.toList(growable: false));
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 YorksV1TeamChatState _chatState({required bool selected}) {
   final conversations = _conversationFixtures();
   final conversation = conversations.first;
@@ -537,6 +616,7 @@ YorksV1ChatConversation _conversation({
   String? materialRequestId,
   bool isPinned = false,
   bool isMuted = false,
+  bool needsDeliveryAcknowledgement = true,
 }) => YorksV1ChatConversation(
   id: id,
   kind: kind,
@@ -552,6 +632,7 @@ YorksV1ChatConversation _conversation({
   isArchived: false,
   unreadCount: unreadCount,
   participantCount: kind == YorksV1ChatKind.direct ? 2 : 3,
+  needsDeliveryAcknowledgement: needsDeliveryAcknowledgement,
   lastMessage: lastMessage,
 );
 
@@ -675,6 +756,7 @@ Map<String, dynamic> _threadRpcFixture() => {
   'is_muted': false,
   'is_archived': false,
   'unread_count': 2,
+  'needs_delivery_ack': false,
   'participant_count': 3,
   'last_message': null,
   'participants': [
