@@ -42,6 +42,22 @@ void main() {
     expect(thread.messages[2].canEdit, isTrue);
   });
 
+  test('an older backend conservatively retains delivery acknowledgements', () {
+    final json = _threadRpcFixture()..remove('needs_delivery_ack');
+    expect(
+      YorksV1ChatConversation.fromRpcJson(json).needsDeliveryAcknowledgement,
+      isTrue,
+    );
+  });
+
+  test('malformed delivery metadata is not silently treated as delivered', () {
+    final json = _threadRpcFixture()..['needs_delivery_ack'] = 'false';
+    expect(
+      () => YorksV1ChatConversation.fromRpcJson(json),
+      throwsFormatException,
+    );
+  });
+
   test('chat command payloads trim text and retain server identifiers', () {
     const create = YorksV1ChatCreateInput(
       kind: YorksV1ChatKind.group,
