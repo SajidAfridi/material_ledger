@@ -12,6 +12,7 @@ select is(
     where catalog.authorization_mode = 'enforced'
   ),
   array[
+    'analytics.view',
     'approve_supplier_bill_payment',
     'boq.edit',
     'boq.manage_folders',

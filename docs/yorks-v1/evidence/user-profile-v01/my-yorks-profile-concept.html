@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Yorks profile concept</title>
+  <style>
+    :root {
+      --navy:#0d2f57; --blue:#1769d2; --ink:#17263a; --muted:#68778a;
+      --line:#dfe6ee; --soft:#f5f8fc; --white:#fff; --good:#0c8a61;
+      --warn:#b77916; --danger:#c53b45; --shadow:0 12px 32px rgba(13,47,87,.08);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;overflow-x:hidden;background:#edf3f9;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    button,select{font:inherit}
+    .concept-note{background:var(--navy);color:#fff;padding:10px 18px;font-size:13px;text-align:center}
+    .shell{min-height:calc(100vh - 38px);display:grid;grid-template-columns:274px minmax(0,1fr)}
+    .sidebar{background:#fbfdff;border-right:1px solid var(--line);padding:24px 18px;display:flex;flex-direction:column;gap:28px}
+    .brand{display:flex;align-items:center;gap:12px;font-weight:800;color:var(--navy)}
+    .seal{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#ead8a9;border:2px solid #c8aa62;font-size:11px}
+    .nav-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:8px}
+    .nav-item{min-height:44px;display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:10px;color:#45566c;margin:3px 0}
+    .nav-item.active{background:#e8f1ff;color:var(--blue);font-weight:800}
+    .profile-stamp{margin-top:auto;border:1px solid var(--line);border-radius:13px;background:#fff;padding:10px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)}
+    .avatar{width:44px;height:44px;border-radius:50%;background:#e7f0fc;color:var(--navy);font-weight:900;display:grid;place-items:center;position:relative;flex:0 0 auto}
+    .avatar:after{content:"";position:absolute;right:0;bottom:1px;width:10px;height:10px;border-radius:50%;background:var(--good);border:2px solid #fff}
+    .profile-stamp b,.profile-stamp small{display:block}.profile-stamp small{color:var(--muted);margin-top:2px}
+    .main{min-width:0}
+    .topbar{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 30px;gap:16px}
+    .crumb{color:var(--muted)}.crumb b{color:var(--ink)}
+    .top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+    .sync{color:var(--good);font-weight:750;font-size:13px}.sync:before{content:"●";margin-right:6px}
+    .content{max-width:1280px;margin:0 auto;padding:32px}
+    .title-row{display:flex;align-items:flex-start;gap:18px;margin-bottom:22px}
+    h1{font-size:30px;margin:0 0 6px;letter-spacing:-.025em}.subtitle{color:var(--muted);margin:0}
+    .role-picker{margin-left:auto;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);padding:8px 10px;border-radius:12px}
+    .role-picker label{font-size:12px;color:var(--muted);font-weight:750}.role-picker select{border:0;color:var(--navy);font-weight:800;background:transparent;max-width:230px}
+    .layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:20px;align-items:start}
+    .stack{display:grid;gap:16px}.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 4px 20px rgba(13,47,87,.035);padding:20px}
+    .identity{background:linear-gradient(145deg,#0d2f57,#174a80);color:#fff;border:0;box-shadow:var(--shadow)}
+    .identity-head{display:flex;align-items:center;gap:14px}.identity .avatar{width:56px;height:56px;background:rgba(255,255,255,.16);color:#fff}.identity .avatar:after{border-color:#174a80}
+    .identity h2{font-size:20px;margin:0 0 4px}.identity p{margin:0;color:rgba(255,255,255,.78);font-size:14px}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.chip{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:#edf3f9;color:#4b5d73;font-size:12px;font-weight:800}.identity .chip{background:rgba(255,255,255,.13);color:#fff}.chip.good{background:#e6f6f0;color:var(--good)}
+    .section-title{display:flex;align-items:center;gap:10px;margin-bottom:14px}.section-title h3{margin:0;font-size:17px}.section-title span{margin-left:auto;font-size:12px;color:var(--muted)}
+    .access-row{display:flex;gap:10px;padding:11px 0;border-top:1px solid #edf1f5}.access-row:first-of-type{border-top:0}.access-row>div:last-child{min-width:0}.icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:#eaf2ff;color:var(--blue);font-weight:900;flex:0 0 auto}.access-row b,.access-row small{display:block}.access-row small{color:var(--muted);margin-top:3px;line-height:1.35;overflow-wrap:anywhere}
+    .link-button{border:0;background:transparent;color:var(--blue);font-weight:800;padding:8px 0;cursor:pointer}
+    .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.metric{border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:16px;min-height:110px}.metric .value{font-size:25px;font-weight:900;color:var(--navy);margin:8px 0 5px}.metric small{color:var(--muted);line-height:1.35}.metric .label{font-size:12px;font-weight:800;color:#53657b}
+    .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.action{min-height:66px;border:1px solid var(--line);border-radius:11px;background:#fff;text-align:left;padding:12px;display:flex;align-items:center;gap:11px;color:var(--ink);cursor:pointer}.action b,.action small{display:block}.action small{color:var(--muted);margin-top:3px}.action:hover,.action:focus-visible{border-color:var(--blue);outline:3px solid rgba(23,105,210,.16)}
+    .preference{display:flex;align-items:center;gap:12px;min-height:58px;border-top:1px solid #edf1f5}.preference:first-of-type{border-top:0}.preference b,.preference small{display:block}.preference small{color:var(--muted);margin-top:3px}.preference .value{margin-left:auto;color:#4d6075;font-weight:750}.chevron{color:#9aa7b7;margin-left:8px}
+    .notice{border:1px solid #bfe6d8;background:#edf9f5;color:#17664e;border-radius:12px;padding:13px;display:flex;gap:10px;font-size:13px;line-height:1.45}.notice b{display:block}
+    .bottom-nav{display:none}
+    @media(max-width:1099px){
+      .shell{grid-template-columns:88px minmax(0,1fr)}.sidebar{padding:20px 12px;align-items:center}.brand span,.nav-label,.nav-item span,.profile-stamp>div:not(.avatar){display:none}.nav-item{width:48px;justify-content:center}.profile-stamp{padding:6px;border:0;box-shadow:none;background:transparent}.content{padding:26px}.layout{grid-template-columns:300px minmax(0,1fr)}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.metric:last-child{grid-column:1/-1}
+    }
+    @media(max-width:720px){
+      .concept-note{font-size:11px}.shell{display:block}.sidebar{display:none}.topbar{height:58px;padding:0 16px}.topbar .crumb{font-weight:800;color:var(--ink)}.sync{font-size:0}.sync:before{font-size:14px;margin:0}.content{padding:20px 16px 96px}.title-row{display:block;margin-bottom:16px}h1{font-size:25px}.subtitle{font-size:14px}.role-picker{margin:14px 0 0;width:100%;justify-content:space-between}.role-picker select{min-width:0;max-width:200px}.layout{display:flex;flex-direction:column;gap:14px}.stack{display:contents}.identity-card{order:1}.today-card{order:2}.access-card{order:3}.actions-card{order:4}.work-card{order:5}.server-notice{order:6}.preferences-card{order:7}.identity{padding:17px}.identity h2{font-size:18px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.metric{min-height:100px;padding:13px}.metric:last-child{grid-column:1/-1}.actions{grid-template-columns:1fr}.card{padding:17px}.bottom-nav{position:fixed;display:flex;left:0;right:0;bottom:0;height:70px;padding-bottom:env(safe-area-inset-bottom);background:#fff;border-top:1px solid var(--line);z-index:4;align-items:center}.bottom-nav span{flex:1;text-align:center;font-size:11px;color:var(--muted);font-weight:750}.bottom-nav .active{color:var(--blue)}
+    }
+    @media(max-height:500px) and (orientation:landscape) and (max-width:960px){
+      .topbar{height:50px}.content{padding:14px 18px 70px}.title-row{display:flex;align-items:center}.title-row h1{font-size:22px}.subtitle{display:none}.role-picker{margin:0 0 0 auto;width:auto}.layout{display:grid;grid-template-columns:280px minmax(0,1fr)}.stack{display:grid;order:initial;gap:10px}.identity-card,.today-card,.access-card,.actions-card,.work-card,.server-notice,.preferences-card{order:initial}.identity{padding:14px}.identity .chips{margin-top:10px}.card{padding:14px}.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.metric:last-child{grid-column:auto}.section-title{margin-bottom:9px}
+    }
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+    body.capture-390{width:390px}
+    body.capture-390 .bottom-nav{right:auto;width:390px}
+  </style>
+</head>
+<body>
+  <div class="concept-note">Design fixture only — it demonstrates one canonical My Yorks experience and does not grant permissions.</div>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="seal">YORKS</div><span>Yorks AC. &amp; Ref.</span></div>
+      <div>
+        <div class="nav-label">Workspace</div>
+        <div class="nav-item">▦ <span>Overview</span></div>
+        <div class="nav-item">▥ <span>Projects</span></div>
+        <div class="nav-item">☷ <span>Material Requests</span></div>
+        <div class="nav-item">♙ <span>Workforce</span></div>
+        <div class="nav-item active">● <span>My Yorks</span></div>
+      </div>
+      <div class="profile-stamp"><div class="avatar">OF</div><div><b>Omar Farooq</b><small id="stamp-role">Project Engineer</small></div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="crumb">Yorks AC. &amp; Ref. &nbsp;/&nbsp; <b>My Yorks</b></div><div class="top-actions"><span class="sync">Workspace connected</span></div></header>
+      <div class="content">
+        <div class="title-row">
+          <div><h1>My Yorks</h1><p class="subtitle">Your identity, access, work context and preferences.</p></div>
+          <div class="role-picker"><label for="role">Concept role</label><select id="role" aria-label="Choose a role fixture">
+            <option>Project Engineer</option><option>Site Engineer</option><option>Senior Mechanical Engineer</option><option>Project Manager</option><option>Workshop In-Charge</option><option>Document Controller</option><option>Procurement</option><option>Accountant</option><option>Admin</option>
+          </select></div>
+        </div>
+        <div class="layout">
+          <div class="stack">
+            <section class="card identity identity-card">
+              <div class="identity-head"><div class="avatar">OF</div><div><h2>Omar Farooq</h2><p id="identity-role">Project Engineer · Engineering Workspace</p></div></div>
+              <div class="chips"><span class="chip">Account active</span><span class="chip">Employee linked</span></div>
+            </section>
+            <section class="card access-card">
+              <div class="section-title"><h3>Access &amp; scope</h3><span>Verified now</span></div>
+              <div class="access-row"><div class="icon">✓</div><div><b id="access-title">Project workflow</b><small id="access-copy">Create requests and manage assigned project work.</small></div></div>
+              <div class="access-row"><div class="icon">⌖</div><div><b id="scope-title">2 assigned projects</b><small id="scope-copy">YRA-322 and Volta Tower · dated membership applies</small></div></div>
+              <button class="link-button">View access details →</button>
+            </section>
+            <section class="card work-card">
+              <div class="section-title"><h3>Work identity</h3><span>Optional link</span></div>
+              <div class="preference"><div class="icon">ID</div><div><b>Project Engineer</b><small>Employee YRK-014 · Engineering</small></div><span class="chevron">›</span></div>
+              <div class="preference"><div class="icon">◷</div><div><b>Attendance &amp; leave</b><small>Work record, not account authority</small></div><span class="chevron">›</span></div>
+            </section>
+          </div>
+          <div class="stack">
+            <section class="card today-card">
+              <div class="section-title"><h3>Your Yorks today</h3><span id="today-context">Project responsibility</span></div>
+              <div class="metrics" id="metrics"></div>
+            </section>
+            <section class="card actions-card">
+              <div class="section-title"><h3>Quick actions</h3><span>Effective access only</span></div>
+              <div class="actions" id="actions"></div>
+            </section>
+            <div class="notice server-notice"><b>✓</b><div><b>Your access is server-confirmed.</b>If a role or scope changes, this page refreshes without requiring sign out.</div></div>
+            <section class="card preferences-card">
+              <div class="section-title"><h3>Preferences</h3></div>
+              <div class="preference"><div class="icon">文</div><div><b>Secondary language</b><small>Urdu · right-to-left supported</small></div><div class="value">Urdu</div><span class="chevron">›</span></div>
+              <div class="preference"><div class="icon">♢</div><div><b>Notifications</b><small>Task, approval and system preferences</small></div><div class="value">On</div><span class="chevron">›</span></div>
+              <div class="preference"><div class="icon">⌘</div><div><b>Security &amp; sync</b><small>App lock, current session and workspace status</small></div><span class="chevron">›</span></div>
+              <div class="preference"><div class="icon">?</div><div><b>Help &amp; about</b><small>Report a problem · version · privacy</small></div><span class="chevron">›</span></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <nav class="bottom-nav" aria-label="Mobile navigation"><span>Overview</span><span>Projects</span><span>Requests</span><span class="active">My Yorks</span></nav>
+  <script>
+    if(new URLSearchParams(location.search).get("capture")==="390")document.body.classList.add("capture-390");
+    const fixtures={
+      "Project Engineer":{workspace:"Engineering Workspace",access:["Project workflow","Create requests and manage assigned project work."],scope:["2 assigned projects","YRA-322 and Volta Tower · dated membership applies"],context:"Project responsibility",metrics:[["2","Assigned projects","Current scope"],["3","Approvals waiting","You own the next action"],["1","Receipt to confirm","Due today"]],actions:[["Review arrangement","Engineering approval"],["Open project","Continue project work"],["Create material request","Start a controlled draft"]]},
+      "Site Engineer":{workspace:"Engineering Workspace",access:["Site workflow","Create requests and confirm receipts in assigned projects."],scope:["1 assigned project","Volta Tower · dated Site Engineer membership"],context:"Site responsibility",metrics:[["1","Assigned project","Current scope"],["2","Draft requests","Continue before submission"],["1","Receipt action","Awaiting confirmation"]],actions:[["Continue draft","Complete material request"],["Confirm receipt","Record received, missing or damaged"],["Create return","Return eligible materials"]]},
+      "Senior Mechanical Engineer":{workspace:"Engineering Workspace",access:["Organization engineering","Project Engineer authority across all projects; user administration is separate."],scope:["Organization scope","Read-only inventory browsing included"],context:"Organization engineering",metrics:[["18","Active projects","Organization scope"],["4","Review actions","Across project workflows"],["2","Access requests","User administration"]],actions:[["Project portfolio","Review organization work"],["Manage users","Audited access control"],["Browse inventory","Read-only warehouse context"]]},
+      "Project Manager":{workspace:"Engineering Workspace",access:["Organization engineering","Project Engineer workflow authority across all projects."],scope:["Organization scope","Commercial access appears only when separately granted"],context:"Portfolio responsibility",metrics:[["18","Active projects","Organization scope"],["6","Reviews waiting","Engineering next actions"],["1","Commercial alert","Separate capability"]],actions:[["Project portfolio","Open project attention"],["Approval queue","Review engineering actions"],["Project accounts","Shown only when granted"]]},
+      "Workshop In-Charge":{workspace:"Engineering Workspace",access:["Workshop supervision","Manage authorized teams, attendance and project work."],scope:["Workshop + granted teams","Internal location and project scopes are explicit"],context:"Workshop responsibility",metrics:[["3","Active teams","Workshop scope"],["4","Attendance gaps","Need supervisor action"],["2","Workshop requests","Awaiting attention"]],actions:[["Open team","Manage the current roster"],["Maintain attendance","Record daily work facts"],["Workshop requests","Open material workflow"]]},
+      "Document Controller":{workspace:"Engineering Workspace",access:["Project documents","Organization-wide Project Engineer workflow authority."],scope:["Organization projects","Document access follows entity classification"],context:"Document responsibility",metrics:[["18","Project files","Accessible projects"],["5","Document actions","Need attention"],["3","Recent requests","Context to review"]],actions:[["Open documents","Review controlled files"],["Project activity","See recent changes"],["Material requests","Open linked context"]]},
+      "Procurement":{workspace:"Procurement Workspace",access:["Procurement operations","Arrange, maintain inventory, dispatch and confirm returns."],scope:["Organization procurement","Cannot create engineering projects, BOQs or self-approve"],context:"Procurement responsibility",metrics:[["7","To arrange","You own the next action"],["4","Dispatches ready","Approved quantities"],["2","Returns to confirm","Physical receipt required"]],actions:[["Arrange request","Record full, partial or unavailable"],["Dispatch materials","Commit approved stock"],["Confirm return","Receive eligible material"]]},
+      "Accountant":{workspace:"Accountant Workspace",access:["Project commercial control","Accounts-only access from protected capabilities."],scope:["4 authorized projects","No technical project membership implied"],context:"Commercial responsibility",metrics:[["4","Authorized projects","Accounts scope"],["3","Claims to review","Current owner: Accountant"],["5","Due actions","Receipts, PDCs and bills"]],actions:[["Open claims","Review certification"],["Record receipt","Client payment control"],["Due schedule","Review upcoming actions"]]},
+      "Admin":{workspace:"Management Workspace",access:["Controlled administration","Audited configuration and override authority."],scope:["Organization scope","Administration does not replace workflow history"],context:"System responsibility",metrics:[["2","Access exceptions","Need review"],["4","Audit alerts","Organization scope"],["1","Workforce issue","Configuration attention"]],actions:[["Manage access","Audited permission control"],["Open audit trail","Review recorded changes"],["Workforce setup","Configure protected operations"]]}
+    };
+    const role=document.getElementById("role"),metrics=document.getElementById("metrics"),actions=document.getElementById("actions");
+    function render(){const r=role.value,f=fixtures[r];document.getElementById("stamp-role").textContent=r;document.getElementById("identity-role").textContent=`${r} · ${f.workspace}`;document.getElementById("access-title").textContent=f.access[0];document.getElementById("access-copy").textContent=f.access[1];document.getElementById("scope-title").textContent=f.scope[0];document.getElementById("scope-copy").textContent=f.scope[1];document.getElementById("today-context").textContent=f.context;metrics.innerHTML=f.metrics.map(m=>`<div class="metric"><div class="label">${m[1]}</div><div class="value">${m[0]}</div><small>${m[2]}</small></div>`).join("");actions.innerHTML=f.actions.map(a=>`<button class="action"><div class="icon">→</div><div><b>${a[0]}</b><small>${a[1]}</small></div></button>`).join("")}
+    role.addEventListener("change",render);render();
+  </script>
+</body>
+</html>

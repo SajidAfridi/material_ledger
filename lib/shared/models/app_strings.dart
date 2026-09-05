@@ -1895,10 +1895,34 @@ abstract final class AppStrings {
     hi: 'ब्राउज़',
   );
   static const profile = TranslatableString(
-    en: 'Profile',
-    ar: 'الملف الشخصي',
-    ur: 'پروفائل',
-    hi: 'प्रोफ़ाइल',
+    en: 'My Yorks',
+    ar: 'يوركس الخاصة بي',
+    ur: 'میرا یورکس',
+    hi: 'मेरा यॉर्क्स',
+  );
+  static const openMyYorks = TranslatableString(
+    en: 'Open My Yorks',
+    ar: 'افتح يوركس الخاصة بي',
+    ur: 'میرا یورکس کھولیں',
+    hi: 'मेरा यॉर्क्स खोलें',
+  );
+  static const verifyingAccount = TranslatableString(
+    en: 'Verifying account',
+    ar: 'جارٍ التحقق من الحساب',
+    ur: 'اکاؤنٹ کی تصدیق ہو رہی ہے',
+    hi: 'खाते की पुष्टि हो रही है',
+  );
+  static const accountUnavailable = TranslatableString(
+    en: 'Account details unavailable',
+    ar: 'تفاصيل الحساب غير متاحة',
+    ur: 'اکاؤنٹ کی تفصیلات دستیاب نہیں',
+    hi: 'खाते का विवरण उपलब्ध नहीं है',
+  );
+  static const workspaceSync = TranslatableString(
+    en: 'Workspace sync',
+    ar: 'مزامنة مساحة العمل',
+    ur: 'ورک اسپیس ہم آہنگی',
+    hi: 'वर्कस्पेस सिंक',
   );
 
   // ─── Engineer — Status Labels ────────────────────────────────

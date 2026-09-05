@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,9 +13,9 @@ import '../features/accounts/application/accounts_portfolio_providers.dart';
 import '../features/accounts/application/accounts_providers.dart';
 import '../features/accounts/application/accounts_receivables_providers.dart';
 import '../features/accounts/application/accounts_supplier_providers.dart';
+import '../features/company_overview/application/company_analytics_providers.dart';
 import '../features/workforce/application/workforce_providers.dart';
 import '../shared/providers/language_provider.dart';
-import '../shared/providers/material_request_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/yorks_v1_arrangement_provider.dart';
@@ -23,18 +25,14 @@ import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/providers/yorks_v1_logistics_provider.dart';
 import '../shared/providers/yorks_v1_material_request_provider.dart';
-import '../shared/providers/yorks_v1_notification_provider.dart';
 import '../shared/providers/yorks_v1_permission_provider.dart';
 import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/services/app_config_service.dart';
-import '../shared/sync/realtime_sync.dart';
-import '../shared/sync/sync_engine.dart';
 import '../shared/widgets/notification_alert_host.dart';
 import '../shared/widgets/notification_attention_host.dart';
-import 'document_expiry_monitor.dart';
-import 'idle_request_monitor.dart';
-import 'push_bridge.dart';
 import 'router.dart';
+import 'startup/app_startup_coordinator.dart';
+import 'yorks_localizations.dart';
 
 /// Bridges [rolePermissionsProvider] changes to the router's refreshListenable.
 class _RouterRefresh extends ChangeNotifier {
@@ -46,6 +44,7 @@ void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
   // Destroy each protected cache so a revoked project/request cannot remain in
   // memory while the same actor retains access to other projects.
   ref.invalidate(yorksV1ProjectPortfolioProvider);
+  ref.invalidate(yorksV1ProjectOverviewProvider);
   ref.invalidate(yorksV1BoqGroupsProvider);
   ref.invalidate(yorksV1ScopedBoqGroupsProvider);
   ref.invalidate(yorksV1BoqWorksheetControllerProvider);
@@ -78,6 +77,7 @@ void _invalidateYorksV1ProtectedProjectionCaches(Ref ref) {
   ref.invalidate(yorksAccountsSupplierControllerProvider);
   ref.invalidate(yorksWorkforceDailyRosterControllerProvider);
   ref.invalidate(yorksWorkforceMonthlyControllerProvider);
+  ref.invalidate(companyAnalyticsProjectionProvider);
 }
 
 /// Provider for the app router — lives here so the incremental
@@ -142,6 +142,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final yorksV1WorkforceEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
       .workforce;
+  final yorksV1AnalyticsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .analytics;
   final yorksV1Role = ref.watch(yorksV1CurrentRoleProvider);
   final connectedV1Permissions =
       yorksV1ProjectsEnabled && ref.watch(supabaseClientProvider) != null;
@@ -180,6 +183,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     yorksV1InventorySuppliersEnabled: yorksV1InventorySuppliersEnabled,
     yorksV1AccountsEnabled: yorksV1AccountsEnabled,
     yorksV1WorkforceEnabled: yorksV1WorkforceEnabled,
+    yorksV1AnalyticsEnabled: yorksV1AnalyticsEnabled,
     yorksV1Role: yorksV1Role,
     yorksV1PermissionResolver: connectedV1Permissions
         ? (
@@ -226,51 +230,61 @@ final hardwareActionProvider = Provider<HardwareActionService>((ref) {
 ///
 /// Uses [ConsumerWidget] to read the router from Riverpod,
 /// which rebuilds when onboarding state changes (redirect logic).
-class MaterialLedgerApp extends ConsumerWidget {
+class MaterialLedgerApp extends ConsumerStatefulWidget {
   const MaterialLedgerApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Keep the local compatibility shell synchronized with Supabase Auth. This
-    // verifies restored sessions, clears remote sign-outs and re-reads exact
-    // role claims after token refresh before route guards run on stale state.
-    ref.watch(authSessionLifecycleProvider);
+  ConsumerState<MaterialLedgerApp> createState() => _MaterialLedgerAppState();
+}
+
+class _MaterialLedgerAppState extends ConsumerState<MaterialLedgerApp> {
+  Timer? _notificationChromeTimer;
+  bool _notificationChromeReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _notificationChromeTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _notificationChromeReady = true);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationChromeTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The coordinator starts auth immediately, then mounts independent global
+    // services after the first route has had an uncontested render window.
+    ref.watch(appStartupCoordinatorProvider);
+    if (_notificationChromeReady) ref.watch(hardwareActionProvider);
     final router = ref.watch(appRouterProvider);
-    // Start the sync engine at launch (heartbeat, reconnect-flush, and resume
-    // of any operations queued in a previous session).
-    ref.watch(syncEngineProvider);
-    // Live sync: subscribe to Postgres changes while signed in (no-op offline /
-    // logged out / in tests) so other devices' writes appear without a relaunch.
-    ref.watch(realtimeSyncProvider);
-    // Keep inventory reservations reconciled with open requests (self-healing:
-    // fixes seed under-reservation, missed releases, and cross-device edits).
-    ref.watch(inventoryReconcilerProvider);
-    // Listen for the hardware action button / demo key.
-    ref.watch(hardwareActionProvider);
-    // Flag any request idle 24h+ to admin (FR-066) — runs once at launch.
-    ref.watch(idleRequestMonitorProvider);
-    // Flag any employee visa/Emirates-ID/passport expiring within 30 days.
-    ref.watch(documentExpiryMonitorProvider);
-    // Register this device for push whenever the signed-in user changes.
-    ref.watch(pushBridgeProvider);
-    // Mount the recipient-scoped normalized notification feed globally. This
-    // powers the badge/centre and provides a polling fallback if Realtime is
-    // temporarily unavailable.
-    ref.watch(yorksV1NotificationsProvider);
+    final language = ref.watch(languageProvider);
 
     return MaterialApp.router(
       title: 'Yorks AC. & Ref.',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: Locale(language.code),
+      supportedLocales: yorksSupportedLocales,
+      localizationsDelegates: yorksLocalizationDelegates,
       routerConfig: router,
       scrollBehavior: const YorksScrollBehavior(),
       // Overlay the lock screen above whatever is on screen (preserves
       // navigation), and reset the idle timer on any interaction.
-      builder: (context, child) => NotificationAttentionHost(
-        child: _AppChrome(
-          child: NotificationAlertHost(child: child ?? const SizedBox.shrink()),
-        ),
-      ),
+      builder: (context, child) {
+        final content = _AppChrome(child: child ?? const SizedBox.shrink());
+        if (!_notificationChromeReady) return content;
+        return NotificationAttentionHost(
+          child: NotificationAlertHost(child: content),
+        );
+      },
     );
   }
 }

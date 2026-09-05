@@ -14,6 +14,7 @@ import '../providers/language_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/yorks_v1_feature_flags_provider.dart';
 import '../providers/yorks_v1_notification_provider.dart';
+import '../providers/yorks_v1_notification_preferences_provider.dart';
 import '../providers/yorks_v1_team_chat_provider.dart';
 import '../services/notification_alert_sound.dart';
 import '../services/push_service.dart';
@@ -206,13 +207,16 @@ class _NotificationAlertHostState extends ConsumerState<NotificationAlertHost>
       unawaited(_markRead(notification));
       return;
     }
+    if (!ref.read(yorksV1ForegroundAlertsEnabledProvider)) return;
     if (notification.id.isNotEmpty) {
       if (_alertedIds.contains(notification.id)) return;
       _alertedIds.add(notification.id);
     }
     final now = DateTime.now();
-    if (_lastSoundAt == null ||
-        now.difference(_lastSoundAt!) > const Duration(milliseconds: 700)) {
+    if (ref.read(yorksV1NotificationSoundEnabledProvider) &&
+        (_lastSoundAt == null ||
+            now.difference(_lastSoundAt!) >
+                const Duration(milliseconds: 700))) {
       _lastSoundAt = now;
       unawaited(_playSound());
     }

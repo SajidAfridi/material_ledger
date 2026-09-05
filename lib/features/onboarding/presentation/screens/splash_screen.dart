@@ -24,8 +24,6 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  Timer? _continueTimer;
-
   @override
   void initState() {
     super.initState();
@@ -39,34 +37,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final mobile = YorksMobileUi.isActive(context);
-      _continueTimer = Timer(
-        // Every phone launch—including a restored/warm authenticated session—
-        // starts at this route. Keep the branded hand-off long enough to read
-        // without delaying the desktop workspace.
-        mobile ? const Duration(milliseconds: 1600) : Duration.zero,
-        () {
-          if (!mounted) return;
-          // The approved R35 prototype goes directly from splash to sign-in. The
-          // old first-run language gate could redirect that hand-off back to
-          // splash forever on a fresh browser profile. English is the configured
-          // default; users can change the display language later from Profile.
-          if (!ref.read(onboardingCompleteProvider)) {
-            // Persist the one-way preference without leaving a navigation
-            // continuation alive after this route (or its test router) has
-            // been disposed. The router remains the authority for the handoff.
-            unawaited(ref.read(onboardingCompleteProvider.notifier).complete());
-          }
-          context.go(RoutePaths.login);
-        },
-      );
+      // This retained route exists only to complete the historical first-run
+      // preference. Platform and runtime boot surfaces now own brand continuity;
+      // no user waits on a presentation timer.
+      if (!ref.read(onboardingCompleteProvider)) {
+        unawaited(ref.read(onboardingCompleteProvider.notifier).complete());
+      }
+      context.go(RoutePaths.login);
     });
-  }
-
-  @override
-  void dispose() {
-    _continueTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -195,7 +173,6 @@ class _SplashMobileContent extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
               child: const LinearProgressIndicator(
-                value: .37,
                 minHeight: 5,
                 backgroundColor: Color(0xFF12345F),
                 valueColor: AlwaysStoppedAnimation(Color(0xFF1677FF)),

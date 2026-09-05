@@ -9,6 +9,7 @@ import '../models/app_language.dart';
 import '../models/app_strings.dart';
 import '../providers/language_provider.dart';
 import '../providers/session_provider.dart';
+import '../providers/yorks_v1_notification_preferences_provider.dart';
 import '../services/notification_alert_sound.dart';
 import '../services/push_service.dart';
 
@@ -40,8 +41,13 @@ class _NotificationDeliveryPromptState
     final asyncStatus = ref.watch(pushDeliveryStatusProvider);
     final status =
         asyncStatus.valueOrNull ?? ref.watch(pushServiceProvider).status;
+    final pushEnabled = ref
+        .watch(yorksV1NotificationPreferencesProvider)
+        .valueOrNull
+        ?.pushEnabled;
     final shouldShow =
         currentUser != null &&
+        pushEnabled == true &&
         !_dismissed &&
         status.authorization != PushAuthorizationState.checking &&
         status.authorization != PushAuthorizationState.unsupported &&

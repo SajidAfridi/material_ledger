@@ -36,6 +36,7 @@ operator_r35_environment="${R35_ENVIRONMENT:-}"
 operator_firebase_web_vapid_key="${FIREBASE_WEB_VAPID_KEY:-}"
 operator_accounts_flag="${YORKS_V1_ACCOUNTS:-}"
 operator_workforce_flag="${YORKS_V1_WORKFORCE:-}"
+operator_analytics_flag="${YORKS_V1_ANALYTICS:-}"
 
 # Configuration is deliberately explicit. A missing file is acceptable only
 # when CI/operator environment variables already provide the complete pair.
@@ -54,6 +55,7 @@ r35_environment="${operator_r35_environment:-${R35_ENVIRONMENT:-}}"
 firebase_web_vapid_key="${operator_firebase_web_vapid_key:-${FIREBASE_WEB_VAPID_KEY:-}}"
 accounts_flag="${operator_accounts_flag:-${YORKS_V1_ACCOUNTS:-false}}"
 workforce_flag="${operator_workforce_flag:-${YORKS_V1_WORKFORCE:-false}}"
+analytics_flag="${operator_analytics_flag:-${YORKS_V1_ANALYTICS:-false}}"
 
 # A developer's ignored production file must not silently enable Accounts in a
 # CI build. An explicit process-level value still wins for a deliberate CI
@@ -63,6 +65,9 @@ if [[ "$r35_environment" == "ci" && -z "$operator_accounts_flag" ]]; then
 fi
 if [[ "$r35_environment" == "ci" && -z "$operator_workforce_flag" ]]; then
   workforce_flag=false
+fi
+if [[ "$r35_environment" == "ci" && -z "$operator_analytics_flag" ]]; then
+  analytics_flag=false
 fi
 
 if [[ -z "$r35_environment" ]]; then
@@ -95,6 +100,13 @@ case "$workforce_flag" in
     exit 64
     ;;
 esac
+case "$analytics_flag" in
+  true|false) ;;
+  *)
+    echo "YORKS_V1_ANALYTICS must be true or false." >&2
+    exit 64
+    ;;
+esac
 if [[ "$r35_environment" == "production"
    && ("$command" == "run" || "$command" == "build-web")
    && -z "$firebase_web_vapid_key" ]]; then
@@ -119,6 +131,7 @@ r35_defines=(
   '--dart-define=YORKS_V1_DOCUMENTS=true'
   "--dart-define=YORKS_V1_ACCOUNTS=${accounts_flag}"
   "--dart-define=YORKS_V1_WORKFORCE=${workforce_flag}"
+  "--dart-define=YORKS_V1_ANALYTICS=${analytics_flag}"
   '--dart-define=YORKS_R38_TEAM_CHAT=true'
   '--dart-define=YORKS_R38_9_INVENTORY_SUPPLIERS=true'
   '--dart-define=use_arabic=true'
@@ -128,6 +141,7 @@ r35_defines=(
 # exposing backend configuration or public-notification credentials.
 echo "Yorks Accounts rollout: ${accounts_flag}" >&2
 echo "Yorks Workforce rollout: ${workforce_flag}" >&2
+echo "Yorks Analytics rollout: ${analytics_flag}" >&2
 
 # The VAPID public key is not a secret, but it is environment-specific. It is
 # mandatory for production browser commands and may be omitted by native or
@@ -149,7 +163,8 @@ case "$command" in
       echo "Run flutter clean, then rebuild from explicit R35 configuration." >&2
       exit 65
     fi
-    exec flutter build web --release "${r35_defines[@]}" "$@"
+    flutter build web --release "${r35_defines[@]}" "$@"
+    dart run tool/verify_startup_performance.dart build/web
     ;;
   build-apk)
     exec flutter build apk --release "${r35_defines[@]}" "$@"

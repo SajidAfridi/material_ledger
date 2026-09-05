@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/constants/constants.dart';
 import '../shared/models/app_strings.dart';
+import '../shared/models/app_language.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/models/yorks_v1_workspace_status.dart';
 
@@ -13,10 +14,12 @@ class YorksV1WorkspaceStatusLabel extends StatelessWidget {
     super.key,
     required this.status,
     this.compact = false,
+    this.language,
   });
 
   final YorksV1WorkspaceStatus status;
   final bool compact;
+  final AppLanguage? language;
 
   static Color colorFor(YorksV1WorkspaceConnectionState state) =>
       switch (state) {
@@ -66,7 +69,9 @@ class YorksV1WorkspaceStatusLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = colorFor(status.state);
     return Semantics(
-      label: _copyFor(status.state).primary,
+      label: language == null
+          ? _copyFor(status.state).primary
+          : _copyFor(status.state).active(language!),
       liveRegion: status.state != YorksV1WorkspaceConnectionState.connected,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -74,7 +79,9 @@ class YorksV1WorkspaceStatusLabel extends StatelessWidget {
           Icon(_iconFor(status.state), size: compact ? 14 : 16, color: color),
           const SizedBox(width: AppSpacing.xs),
           Text(
-            _copyFor(status.state).primary,
+            language == null
+                ? _copyFor(status.state).primary
+                : _copyFor(status.state).active(language!),
             style:
                 (compact ? AppTypography.labelSmall : AppTypography.labelMedium)
                     .copyWith(

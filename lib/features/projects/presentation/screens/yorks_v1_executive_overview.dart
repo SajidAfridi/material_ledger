@@ -21,8 +21,11 @@ import '../../../../shared/models/yorks_v1_rental.dart';
 import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/models/yorks_v1_shell_strings.dart';
 import '../../../../shared/models/yorks_v1_team_chat_strings.dart';
+import '../../../../shared/models/yorks_v1_feature_flags.dart';
 import '../../../../shared/providers/yorks_v1_audit_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
+import '../../../company_overview/domain/company_analytics_models.dart';
+import '../../../company_overview/presentation/company_analytics_screen.dart';
 
 /// Read-only executive command surface for Admin and global engineering roles.
 ///
@@ -43,14 +46,21 @@ class YorksV1ExecutiveOverview extends StatelessWidget {
     required this.activeUsers,
     required this.canBrowseInventory,
     required this.canAccessRentals,
+    this.canOpenAnalytics = false,
+    this.companyAnalytics = const AsyncData(null),
+    this.featureFlags = const YorksV1FeatureFlags(),
     required this.onRefresh,
+    this.projectOverview,
+    this.requestOverview,
   });
 
   final AppLanguage language;
   final YorksV1Role role;
   final String? displayName;
   final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final YorksV1ProjectOverview? projectOverview;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final YorksV1MaterialRequestOverview? requestOverview;
   final AsyncValue<YorksV1InventoryWorkspace?> inventory;
   final AsyncValue<YorksV1ConfigurationCentre?> configuration;
   final AsyncValue<YorksV1RentalPortfolio?> rentals;
@@ -58,6 +68,9 @@ class YorksV1ExecutiveOverview extends StatelessWidget {
   final int? activeUsers;
   final bool canBrowseInventory;
   final bool canAccessRentals;
+  final bool canOpenAnalytics;
+  final AsyncValue<CompanyAnalyticsProjection?> companyAnalytics;
+  final YorksV1FeatureFlags featureFlags;
   final Future<void> Function() onRefresh;
 
   bool get _admin => role == YorksV1Role.admin;
@@ -68,7 +81,14 @@ class YorksV1ExecutiveOverview extends StatelessWidget {
         projects.valueOrNull ?? const <YorksV1ProjectPortfolioItem>[];
     final requestItems =
         requests.valueOrNull ?? const <YorksV1MaterialRequest>[];
-    final stats = _ExecutiveStats(projectItems, requestItems, role);
+    final companyProjection = companyAnalytics.valueOrNull;
+    final stats = _ExecutiveStats(
+      projectItems,
+      requestItems,
+      role,
+      projectOverview,
+      requestOverview,
+    );
     final partial =
         projects.hasError ||
         requests.hasError ||
@@ -76,7 +96,8 @@ class YorksV1ExecutiveOverview extends StatelessWidget {
         (_admin &&
             (configuration.hasError ||
                 rentals.hasError ||
-                audit?.error != null));
+                audit?.error != null)) ||
+        (canOpenAnalytics && companyAnalytics.hasError);
 
     return ColoredBox(
       color: AppColors.surface,
@@ -108,47 +129,60 @@ class YorksV1ExecutiveOverview extends StatelessWidget {
                         displayName: displayName,
                         admin: _admin,
                         compact: compact,
+                        canOpenAnalytics: canOpenAnalytics,
                       ),
                       const SizedBox(height: 20),
-                      _KpiStrip(
-                        language: language,
-                        admin: _admin,
-                        compact: compact,
-                        stats: stats,
-                        projects: projects,
-                        requests: requests,
-                        inventory: inventory,
-                        rentals: rentals,
-                        activeUsers: activeUsers,
-                        canAccessRentals: canAccessRentals,
-                      ),
-                      if (partial) ...[
-                        const SizedBox(height: 14),
-                        _PartialDataNotice(language: language),
+                      if (_admin && companyProjection != null) ...[
+                        CompanyAnalyticsOverviewSummary(
+                          language: language,
+                          projection: companyProjection,
+                          flags: featureFlags,
+                        ),
+                        if (partial) ...[
+                          const SizedBox(height: 14),
+                          _PartialDataNotice(language: language),
+                        ],
+                      ] else ...[
+                        _KpiStrip(
+                          language: language,
+                          admin: _admin,
+                          compact: compact,
+                          stats: stats,
+                          projects: projects,
+                          requests: requests,
+                          inventory: inventory,
+                          rentals: rentals,
+                          activeUsers: activeUsers,
+                          canAccessRentals: canAccessRentals,
+                        ),
+                        if (partial) ...[
+                          const SizedBox(height: 14),
+                          _PartialDataNotice(language: language),
+                        ],
+                        const SizedBox(height: 16),
+                        _MainExecutiveGrid(
+                          language: language,
+                          admin: _admin,
+                          stacked: stacked,
+                          stats: stats,
+                          projects: projectItems,
+                          requests: requestItems,
+                          inventory: inventory,
+                          configuration: configuration,
+                          rentals: rentals,
+                          audit: audit,
+                          canBrowseInventory: canBrowseInventory,
+                          canAccessRentals: canAccessRentals,
+                          healthLoading: _admin
+                              ? requests.isLoading
+                              : projects.isLoading,
+                          healthError: _admin
+                              ? requests.hasError
+                              : projects.hasError,
+                          coreLoading: projects.isLoading || requests.isLoading,
+                          coreError: projects.hasError || requests.hasError,
+                        ),
                       ],
-                      const SizedBox(height: 16),
-                      _MainExecutiveGrid(
-                        language: language,
-                        admin: _admin,
-                        stacked: stacked,
-                        stats: stats,
-                        projects: projectItems,
-                        requests: requestItems,
-                        inventory: inventory,
-                        configuration: configuration,
-                        rentals: rentals,
-                        audit: audit,
-                        canBrowseInventory: canBrowseInventory,
-                        canAccessRentals: canAccessRentals,
-                        healthLoading: _admin
-                            ? requests.isLoading
-                            : projects.isLoading,
-                        healthError: _admin
-                            ? requests.hasError
-                            : projects.hasError,
-                        coreLoading: projects.isLoading || requests.isLoading,
-                        coreError: projects.hasError || requests.hasError,
-                      ),
                       const SizedBox(height: 16),
                       if (_admin)
                         _AdminControlGrid(
@@ -192,60 +226,94 @@ class _ExecutiveStats {
     List<YorksV1ProjectPortfolioItem> projects,
     List<YorksV1MaterialRequest> requests,
     YorksV1Role role,
-  ) : totalProjects = projects.length,
-      activeProjects = projects
-          .where((item) => item.project.state == YorksV1ProjectLifecycle.active)
-          .length,
-      projectsOnHold = projects
-          .where((item) => item.project.state == YorksV1ProjectLifecycle.onHold)
-          .length,
-      completedProjects = projects
-          .where(
-            (item) => item.project.state == YorksV1ProjectLifecycle.completed,
-          )
-          .length,
-      openRequests = requests.where(_isOpen).length,
-      needsAction = requests
-          .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
-          .length,
-      approvals = requests
-          .where(
-            (item) =>
-                item.state ==
-                    YorksV1MaterialRequestState.awaitingRequestApproval ||
-                item.state == YorksV1MaterialRequestState.awaitingApproval,
-          )
-          .length,
-      procurementExceptions = requests
-          .where(
-            (item) =>
-                item.state == YorksV1MaterialRequestState.changesRequested ||
-                item.state == YorksV1MaterialRequestState.partiallyDispatched ||
-                item.state == YorksV1MaterialRequestState.partiallyReceived,
-          )
-          .length,
-      dispatchReady = requests
-          .where(
-            (item) =>
-                item.state == YorksV1MaterialRequestState.approved ||
-                item.state == YorksV1MaterialRequestState.partiallyDispatched,
-          )
-          .length,
-      inTransit = requests
-          .where(
-            (item) =>
-                item.state == YorksV1MaterialRequestState.dispatched ||
-                item.state == YorksV1MaterialRequestState.partiallyReceived,
-          )
-          .length,
-      received = requests
-          .where((item) => item.state == YorksV1MaterialRequestState.received)
-          .length,
-      closed = requests
-          .where((item) => item.state == YorksV1MaterialRequestState.closed)
-          .length;
+    YorksV1ProjectOverview? projectOverview,
+    YorksV1MaterialRequestOverview? overview,
+  ) : totalProjects = projectOverview?.total ?? projects.length,
+      totalRequests = overview?.total ?? requests.length,
+      activeProjects =
+          projectOverview?.active ??
+          projects
+              .where(
+                (item) => item.project.state == YorksV1ProjectLifecycle.active,
+              )
+              .length,
+      projectsOnHold =
+          projectOverview?.onHold ??
+          projects
+              .where(
+                (item) => item.project.state == YorksV1ProjectLifecycle.onHold,
+              )
+              .length,
+      completedProjects =
+          projectOverview?.completed ??
+          projects
+              .where(
+                (item) =>
+                    item.project.state == YorksV1ProjectLifecycle.completed,
+              )
+              .length,
+      openRequests = overview?.open ?? requests.where(_isOpen).length,
+      needsAction =
+          overview?.needsAction ??
+          requests
+              .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
+              .length,
+      approvals =
+          overview?.approvals ??
+          requests
+              .where(
+                (item) =>
+                    item.state ==
+                        YorksV1MaterialRequestState.awaitingRequestApproval ||
+                    item.state == YorksV1MaterialRequestState.awaitingApproval,
+              )
+              .length,
+      procurementExceptions =
+          overview?.deliveryExceptions ??
+          requests
+              .where(
+                (item) =>
+                    item.state ==
+                        YorksV1MaterialRequestState.changesRequested ||
+                    item.state ==
+                        YorksV1MaterialRequestState.partiallyDispatched ||
+                    item.state == YorksV1MaterialRequestState.partiallyReceived,
+              )
+              .length,
+      dispatchReady =
+          overview?.dispatchReady ??
+          requests
+              .where(
+                (item) =>
+                    item.state == YorksV1MaterialRequestState.approved ||
+                    item.state ==
+                        YorksV1MaterialRequestState.partiallyDispatched,
+              )
+              .length,
+      inTransit =
+          overview?.receiptPending ??
+          requests
+              .where(
+                (item) =>
+                    item.state == YorksV1MaterialRequestState.dispatched ||
+                    item.state == YorksV1MaterialRequestState.partiallyReceived,
+              )
+              .length,
+      received =
+          overview?.received ??
+          requests
+              .where(
+                (item) => item.state == YorksV1MaterialRequestState.received,
+              )
+              .length,
+      closed =
+          overview?.closed ??
+          requests
+              .where((item) => item.state == YorksV1MaterialRequestState.closed)
+              .length;
 
   final int totalProjects;
+  final int totalRequests;
   final int activeProjects;
   final int projectsOnHold;
   final int completedProjects;
@@ -275,6 +343,7 @@ class _ExecutiveHeader extends StatelessWidget {
     required this.displayName,
     required this.admin,
     required this.compact,
+    required this.canOpenAnalytics,
   });
 
   final AppLanguage language;
@@ -282,6 +351,7 @@ class _ExecutiveHeader extends StatelessWidget {
   final String? displayName;
   final bool admin;
   final bool compact;
+  final bool canOpenAnalytics;
 
   @override
   Widget build(BuildContext context) {
@@ -310,27 +380,28 @@ class _ExecutiveHeader extends StatelessWidget {
               color: AppColors.inkSecondary,
             ),
           ),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpacing.xs),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 10,
-          runSpacing: 8,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
             Text(
               title,
               key: const ValueKey('executive-overview-title'),
-              style: AppTypography.headlineLarge.copyWith(
-                fontSize: compact ? 27 : 32,
-                height: 1.1,
-                fontWeight: FontWeight.w800,
-              ),
+              style: compact
+                  ? AppTypography.headlineMedium
+                  : AppTypography.displaySmall,
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
               decoration: BoxDecoration(
                 color: AppColors.blueContainer,
                 border: Border.all(color: AppColors.blueContainerStrong),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               ),
               child: Text(
                 roleLabel,
@@ -342,43 +413,67 @@ class _ExecutiveHeader extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: AppSpacing.sm),
         Text(
           description,
           style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
         ),
       ],
     );
-    final actions = Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        if (admin)
-          _HeaderButton(
+    final analyticsAction = canOpenAnalytics
+        ? _HeaderButton(
+            label: YorksV1ShellStrings.analytics.active(language),
+            icon: Icons.insights_outlined,
+            primary: false,
+            onTap: () => context.go(RoutePaths.yorksV1Analytics),
+          )
+        : null;
+    final projectAction = admin
+        ? _HeaderButton(
             label: YorksV1ProjectStrings.newProject.active(language),
             icon: Icons.add_business_outlined,
             primary: true,
             onTap: () => context.push(RoutePaths.engineerCreateProject),
-          ),
-        _HeaderButton(
-          label: YorksV1ShellStrings.viewAllRequests.active(language),
-          icon: Icons.assignment_outlined,
-          primary: !admin,
-          onTap: () => context.go(RoutePaths.yorksV1MaterialRequests),
-        ),
-      ],
+          )
+        : null;
+    final requestsAction = _HeaderButton(
+      label: YorksV1ShellStrings.viewAllRequests.active(language),
+      icon: Icons.assignment_outlined,
+      primary: !admin,
+      onTap: () => context.go(RoutePaths.yorksV1MaterialRequests),
+    );
+    final actions = Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [?analyticsAction, ?projectAction, requestsAction],
     );
     if (compact) {
+      final secondaryActions = <Widget>[?analyticsAction, requestsAction];
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [copy, const SizedBox(height: 14), actions],
+        children: [
+          copy,
+          const SizedBox(height: AppSpacing.lg),
+          if (projectAction != null) ...[
+            SizedBox(width: double.infinity, child: projectAction),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          Row(
+            children: [
+              for (var index = 0; index < secondaryActions.length; index++) ...[
+                if (index > 0) const SizedBox(width: AppSpacing.sm),
+                Expanded(child: secondaryActions[index]),
+              ],
+            ],
+          ),
+        ],
       );
     }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Expanded(child: copy),
-        const SizedBox(width: 20),
+        const SizedBox(width: AppSpacing.xl),
         actions,
       ],
     );
@@ -400,17 +495,17 @@ class _HeaderButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 44,
+    height: AppSpacing.minTapTarget,
     child: primary
         ? FilledButton.icon(
             onPressed: onTap,
-            icon: Icon(icon, size: 19),
+            icon: Icon(icon, size: AppSpacing.xl),
             label: Text(label),
             style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
           )
         : OutlinedButton.icon(
             onPressed: onTap,
-            icon: Icon(icon, size: 19),
+            icon: Icon(icon, size: AppSpacing.xl),
             label: Text(label),
           ),
   );
@@ -855,9 +950,7 @@ class _HealthPanel extends StatelessWidget {
               AppColors.mutedLight,
             ),
           ];
-    final total = admin
-        ? stats.openRequests + stats.received + stats.closed
-        : stats.totalProjects;
+    final total = admin ? stats.totalRequests : stats.totalProjects;
     return _ExecutivePanel(
       title:
           (admin
@@ -881,7 +974,7 @@ class _HealthPanel extends StatelessWidget {
                 final narrow = constraints.maxWidth < 620;
                 final totalLabel =
                     (admin
-                            ? YorksV1OverviewStrings.openMaterialRequests
+                            ? YorksV1OverviewStrings.allMaterialRequests
                             : YorksV1OverviewStrings.totalProjects)
                         .active(language);
                 final ring = SizedBox(

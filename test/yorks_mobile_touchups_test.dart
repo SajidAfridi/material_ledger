@@ -157,11 +157,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('mobile-profile-entry')));
-    await tester.pumpAndSettle();
+    final profileEntry = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(const ValueKey('mobile-profile-entry')),
+        matching: find.byType(InkWell),
+      ),
+    );
+    profileEntry.onTap!();
+    // This route intentionally owns live protected profile projections. A
+    // bounded pump completes navigation without waiting for their progress
+    // indicators, which may remain active in this offline shell fixture.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byType(YorksMobileAppBar), findsOneWidget);
-    expect(find.text('Workspace sync'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('canonical-my-yorks-page')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

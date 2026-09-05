@@ -43,6 +43,38 @@ void main() {
     );
   });
 
+  test('returning users start at a useful route without a splash hop', () {
+    final signedOut = createAppRouter(
+      isOnboarded: true,
+      isLoggedIn: false,
+      role: UserRole.engineer,
+    );
+    final signedIn = createAppRouter(
+      isOnboarded: true,
+      isLoggedIn: true,
+      role: UserRole.engineer,
+    );
+    addTearDown(signedOut.dispose);
+    addTearDown(signedIn.dispose);
+
+    expect(signedOut.routeInformationProvider.value.uri.path, RoutePaths.login);
+    expect(
+      signedIn.routeInformationProvider.value.uri.path,
+      RoutePaths.engineerHome,
+    );
+  });
+
+  test('only a genuine first run enters the compatibility splash', () {
+    final router = createAppRouter(
+      isOnboarded: false,
+      isLoggedIn: false,
+      role: UserRole.engineer,
+    );
+    addTearDown(router.dispose);
+
+    expect(router.routeInformationProvider.value.uri.path, RoutePaths.splash);
+  });
+
   group('createAppRouter builds a valid tree for every role', () {
     for (final role in UserRole.values) {
       test('role: ${role.name}', () {

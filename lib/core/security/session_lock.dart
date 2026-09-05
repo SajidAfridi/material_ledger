@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -5,20 +7,29 @@ import '../../shared/providers/language_provider.dart';
 
 const _kLockEnabledKey = 'app_lock_enabled';
 
-/// User setting: require a biometric / passcode unlock when the app is launched
-/// fresh (cold start). Off by default. Toggled from the engineer profile.
+/// Retained compatibility provider for the removed local App Lock preference.
+///
+/// Yorks authentication and server-controlled session policy remain the
+/// authority. P06 removes this device-only profile option, and deliberately
+/// clears a previously stored value so an older enabled preference cannot lock
+/// somebody out after the control used to disable it has disappeared.
 final appLockEnabledProvider =
     StateNotifierProvider<_LockEnabledNotifier, bool>((ref) {
       return _LockEnabledNotifier(ref.watch(sharedPreferencesProvider));
     });
 
 class _LockEnabledNotifier extends StateNotifier<bool> {
-  _LockEnabledNotifier(this._prefs)
-    : super(_prefs.getBool(_kLockEnabledKey) ?? false);
+  _LockEnabledNotifier(this._prefs) : super(false) {
+    if (_prefs.containsKey(_kLockEnabledKey)) {
+      unawaited(_prefs.remove(_kLockEnabledKey));
+    }
+  }
   final SharedPreferences _prefs;
+
+  @Deprecated('The Yorks profile App Lock preference was removed in P06.')
   Future<void> setEnabled(bool v) async {
-    await _prefs.setBool(_kLockEnabledKey, v);
-    state = v;
+    await _prefs.remove(_kLockEnabledKey);
+    state = false;
   }
 }
 

@@ -5,6 +5,12 @@ import 'app_strings.dart';
 /// Keeping the shell vocabulary here prevents the navigation and sign-in
 /// surfaces from becoming a second, prototype-only set of English strings.
 abstract final class YorksV1ShellStrings {
+  static const analytics = TranslatableString(
+    en: 'Analytics',
+    ar: 'التحليلات',
+    ur: 'تجزیات',
+    hi: 'विश्लेषण',
+  );
   static const workforce = TranslatableString(
     en: 'Workforce',
     ar: 'القوى العاملة',
@@ -124,6 +130,24 @@ abstract final class YorksV1ShellStrings {
     ar: 'جارٍ تجهيز مساحة العمل…',
     ur: 'آپ کا ورک اسپیس تیار کیا جا رہا ہے…',
     hi: 'आपका कार्यक्षेत्र तैयार किया जा रहा है…',
+  );
+  static const openingYorks = TranslatableString(
+    en: 'Opening Yorks…',
+    ar: 'جارٍ فتح يوركس…',
+    ur: 'یارکس کھولا جا رہا ہے…',
+    hi: 'यॉर्क्स खोला जा रहा है…',
+  );
+  static const startupFailedTitle = TranslatableString(
+    en: 'Yorks could not start',
+    ar: 'تعذر تشغيل يوركس',
+    ur: 'یارکس شروع نہیں ہو سکا',
+    hi: 'यॉर्क्स शुरू नहीं हो सका',
+  );
+  static const startupFailedBody = TranslatableString(
+    en: 'Check your connection and try again. Your work has not been changed.',
+    ar: 'تحقق من الاتصال وحاول مرة أخرى. لم يتم تغيير عملك.',
+    ur: 'اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔ آپ کے کام میں کوئی تبدیلی نہیں ہوئی۔',
+    hi: 'अपना कनेक्शन जांचें और फिर कोशिश करें। आपका काम बदला नहीं गया है।',
   );
   static const secureProjectWorkspace = TranslatableString(
     en: 'Secure project workspace',

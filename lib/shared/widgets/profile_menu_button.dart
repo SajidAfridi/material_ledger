@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/router.dart';
 import '../../core/constants/constants.dart';
 import '../models/app_strings.dart';
+import '../providers/language_provider.dart';
 
 /// Top-right account avatar shown on the Home dashboards. Office roles
 /// (procurement / admin) have no dedicated Profile tab, so this is their way in.
@@ -16,8 +17,9 @@ class ProfileMenuButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(languageProvider);
     return Tooltip(
-      message: AppStrings.profile.primary,
+      message: AppStrings.profile.active(language),
       child: InkWell(
         onTap: () => context.push(RoutePaths.engineerProfile),
         customBorder: const CircleBorder(),

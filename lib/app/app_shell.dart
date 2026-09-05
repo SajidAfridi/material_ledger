@@ -333,7 +333,7 @@ class _BottomBarItemState extends State<_BottomBarItem> {
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            destination.label.primary,
+            destination.label.active(widget.lang),
             style: GoogleFonts.inter(
               fontSize: 11,
               fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
@@ -436,6 +436,7 @@ class _LedgerRail extends StatelessWidget {
                 ),
                 child: _RailNewRequestButton(
                   isExtended: isExtended,
+                  lang: lang,
                   onTap: () =>
                       GoRouter.of(context).push(RoutePaths.engineerNewRequest),
                 ),
@@ -544,7 +545,7 @@ class _RailItem extends StatelessWidget {
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
-                      destination.label.primary,
+                      destination.label.active(lang),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: isActive
@@ -568,9 +569,14 @@ class _RailItem extends StatelessWidget {
 }
 
 class _RailNewRequestButton extends StatelessWidget {
-  const _RailNewRequestButton({required this.isExtended, required this.onTap});
+  const _RailNewRequestButton({
+    required this.isExtended,
+    required this.lang,
+    required this.onTap,
+  });
 
   final bool isExtended;
+  final AppLanguage lang;
   final VoidCallback onTap;
 
   @override
@@ -597,7 +603,7 @@ class _RailNewRequestButton extends StatelessWidget {
               if (isExtended) ...[
                 const SizedBox(width: AppSpacing.sm),
                 Text(
-                  AppStrings.newRequest.primary,
+                  AppStrings.newRequest.active(lang),
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,

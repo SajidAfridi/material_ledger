@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/push_bridge.dart';
+import '../../app/router.dart';
 import '../../core/constants/constants.dart';
 import '../models/app_language.dart';
 import '../models/app_strings.dart';
+import '../models/yorks_v1_notification_preferences_strings.dart';
 import '../providers/language_provider.dart';
+import '../providers/yorks_v1_notification_preferences_provider.dart';
 import '../services/notification_alert_sound.dart';
 import '../services/push_service.dart';
 
@@ -28,10 +32,26 @@ class _NotificationDeliveryCardState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final personalPreferences = ref
+        .watch(yorksV1NotificationPreferencesProvider)
+        .valueOrNull;
     final asyncStatus = ref.watch(pushDeliveryStatusProvider);
     final status =
         asyncStatus.valueOrNull ?? ref.watch(pushServiceProvider).status;
-    final presentation = _presentation(status, language);
+    final pushDisabled = personalPreferences?.pushEnabled == false;
+    final presentation = pushDisabled
+        ? _DeliveryPresentation(
+            icon: Icons.notifications_off_outlined,
+            color: AppColors.muted,
+            title: YorksV1NotificationPreferenceStrings.pushNotifications
+                .active(language),
+            body: YorksV1NotificationPreferenceStrings.pushNotificationsBody
+                .active(language),
+            actionLabel: YorksV1NotificationPreferenceStrings.title.active(
+              language,
+            ),
+          )
+        : _presentation(status, language);
     return Semantics(
       liveRegion: true,
       label: '${presentation.title}. ${presentation.body}',
@@ -88,7 +108,12 @@ class _NotificationDeliveryCardState
                   if (presentation.actionLabel != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     OutlinedButton.icon(
-                      onPressed: _working ? null : _enable,
+                      onPressed: _working
+                          ? null
+                          : pushDisabled
+                          ? () =>
+                                context.push(RoutePaths.notificationPreferences)
+                          : _enable,
                       icon: const Icon(Icons.notifications_active_outlined),
                       label: Text(presentation.actionLabel!),
                     ),

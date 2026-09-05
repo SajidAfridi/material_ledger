@@ -154,6 +154,8 @@ abstract interface class YorksV1MaterialRequestPhase3Repository {
 
 /// Additive read-only action queue and operational reporting boundary.
 abstract interface class YorksV1MaterialRequestOperationsRepository {
+  Future<YorksV1MaterialRequestOverview> getOverview({int limit = 6});
+
   Future<YorksV1MaterialRequestOperationsDashboard> getOperationsDashboard({
     String? projectId,
   });
@@ -256,6 +258,22 @@ class YorksV1SupabaseMaterialRequestRepository
       );
     }
     return YorksV1MaterialRequestOperationsDashboard.fromRpcJson(
+      Map<String, dynamic>.from(response),
+    );
+  }
+
+  @override
+  Future<YorksV1MaterialRequestOverview> getOverview({int limit = 6}) async {
+    final response = await _invoke(
+      functionName: 'v1_material_request_overview',
+      parameters: {'p_limit': limit},
+    );
+    if (response is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1MaterialRequestOverview.fromRpcJson(
       Map<String, dynamic>.from(response),
     );
   }

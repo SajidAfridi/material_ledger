@@ -406,6 +406,141 @@ class YorksV1MaterialRequestSummaryMetrics {
   );
 }
 
+/// Bounded, non-commercial read model for the first operational screen.
+///
+/// Counts cover the complete authorized request set, while [items] contains
+/// only the newest/most relevant summary rows. No request lines, comments or
+/// commercial fields are present; opening an item fetches its normal protected
+/// detail projection by ID.
+class YorksV1MaterialRequestOverview {
+  YorksV1MaterialRequestOverview({
+    required List<YorksV1MaterialRequest> items,
+    required this.total,
+    required this.open,
+    required this.needsAction,
+    required this.approvals,
+    required this.deliveryExceptions,
+    required this.receiptPending,
+    required this.draftsAndChanges,
+    required this.received,
+    required this.closed,
+    required this.dispatchReady,
+    required this.newToArrange,
+  }) : items = List.unmodifiable(items);
+
+  final List<YorksV1MaterialRequest> items;
+  final int total;
+  final int open;
+  final int needsAction;
+  final int approvals;
+  final int deliveryExceptions;
+  final int receiptPending;
+  final int draftsAndChanges;
+  final int received;
+  final int closed;
+  final int dispatchReady;
+  final int newToArrange;
+
+  factory YorksV1MaterialRequestOverview.fromRpcJson(
+    Map<String, dynamic> json,
+  ) {
+    final counts = json['counts'];
+    if (counts is! Map) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    final values = Map<String, dynamic>.from(counts);
+    return YorksV1MaterialRequestOverview(
+      items: _maps(json['items'])
+          .map(YorksV1MaterialRequestSummary.fromRpcJson)
+          .map((item) => item.toRegisterProjection())
+          .toList(growable: false),
+      total: _nonNegativeInt(values['total']),
+      open: _nonNegativeInt(values['open']),
+      needsAction: _nonNegativeInt(values['needs_action']),
+      approvals: _nonNegativeInt(values['approvals']),
+      deliveryExceptions: _nonNegativeInt(values['delivery_exceptions']),
+      receiptPending: _nonNegativeInt(values['receipt_pending']),
+      draftsAndChanges: _nonNegativeInt(values['drafts_and_changes']),
+      received: _nonNegativeInt(values['received']),
+      closed: _nonNegativeInt(values['closed']),
+      dispatchReady: _nonNegativeInt(values['dispatch_ready']),
+      newToArrange: _nonNegativeInt(values['new_to_arrange']),
+    );
+  }
+
+  factory YorksV1MaterialRequestOverview.fromRequests({
+    required List<YorksV1MaterialRequest> requests,
+    required int needsAction,
+    int limit = 6,
+  }) => YorksV1MaterialRequestOverview(
+    items: requests.take(limit.clamp(1, 15)).toList(growable: false),
+    total: requests.length,
+    open: requests
+        .where(
+          (item) =>
+              item.state != YorksV1MaterialRequestState.draft &&
+              item.state != YorksV1MaterialRequestState.received &&
+              item.state != YorksV1MaterialRequestState.closed &&
+              item.state != YorksV1MaterialRequestState.cancelled,
+        )
+        .length,
+    needsAction: needsAction,
+    approvals: requests
+        .where(
+          (item) =>
+              item.state ==
+                  YorksV1MaterialRequestState.awaitingRequestApproval ||
+              item.state == YorksV1MaterialRequestState.awaitingApproval,
+        )
+        .length,
+    deliveryExceptions: requests
+        .where(
+          (item) =>
+              item.state == YorksV1MaterialRequestState.changesRequested ||
+              item.state == YorksV1MaterialRequestState.partiallyDispatched ||
+              item.state == YorksV1MaterialRequestState.partiallyReceived,
+        )
+        .length,
+    receiptPending: requests
+        .where(
+          (item) =>
+              item.state == YorksV1MaterialRequestState.dispatched ||
+              item.state == YorksV1MaterialRequestState.partiallyReceived,
+        )
+        .length,
+    draftsAndChanges: requests
+        .where(
+          (item) =>
+              item.state == YorksV1MaterialRequestState.draft ||
+              item.state == YorksV1MaterialRequestState.changesRequested,
+        )
+        .length,
+    received: requests
+        .where((item) => item.state == YorksV1MaterialRequestState.received)
+        .length,
+    closed: requests
+        .where((item) => item.state == YorksV1MaterialRequestState.closed)
+        .length,
+    dispatchReady: requests
+        .where(
+          (item) =>
+              item.state == YorksV1MaterialRequestState.approved ||
+              item.state == YorksV1MaterialRequestState.partiallyDispatched,
+        )
+        .length,
+    newToArrange: requests
+        .where(
+          (item) =>
+              item.state ==
+                  YorksV1MaterialRequestState.approvedForArrangement ||
+              item.state == YorksV1MaterialRequestState.arranging,
+        )
+        .length,
+  );
+}
+
 enum YorksV1MaterialRequestExceptionCode {
   unavailableSupply('unavailable_supply'),
   partialArrangement('partial_arrangement'),

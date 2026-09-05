@@ -15,20 +15,21 @@ import '../shared/models/yorks_v1_project_strings.dart';
 import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/models/yorks_v1_team_chat_strings.dart';
+import '../shared/models/yorks_v1_workspace_status.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/notification_provider.dart';
 import '../shared/providers/session_provider.dart';
-import '../shared/providers/employee_provider.dart';
-import '../shared/providers/yorks_v1_material_request_provider.dart';
+import '../shared/providers/yorks_v1_my_profile_provider.dart';
 import '../shared/providers/yorks_v1_permission_provider.dart';
-import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/providers/yorks_v1_identity_provider.dart';
 import '../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../shared/providers/yorks_v1_team_chat_provider.dart';
 import '../shared/providers/yorks_v1_workspace_status_provider.dart';
 import '../shared/providers/yorks_v1_workspace_presentation_provider.dart';
 import '../shared/widgets/notification_bell.dart';
+import '../shared/widgets/yorks_sign_out_action.dart';
 import 'router.dart';
+import 'yorks_navigation_history.dart';
 import 'yorks_v1_workspace_search.dart';
 import 'yorks_v1_workspace_status_label.dart';
 
@@ -51,18 +52,29 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final language = ref.watch(languageProvider);
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final user = ref.watch(currentUserProvider);
-    final location = GoRouterState.of(context).uri.path;
+    final routeUri = GoRouterState.of(context).uri;
+    final location = routeUri.path;
+    final currentLocation = routeUri.toString();
+    final navigationHistory = ref.watch(yorksNavigationHistoryProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      ref.read(yorksNavigationHistoryProvider.notifier).record(currentLocation);
+    });
     final isAccountant = role == YorksV1Role.accountant;
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
     final accountsEnabled = featureFlags.accounts;
     final workforceEnabled = featureFlags.workforce;
+    final analyticsEnabled = featureFlags.analytics;
     final teamChatEnabled = !isAccountant && featureFlags.teamChat;
     // Protected Accounts and Workforce routes are explicit runtime consumers.
     // Accountant remains isolated from legacy operational navigation, while
     // either accepted feature still waits for the same confirmed permission
     // snapshot as every other authorized identity.
     final connectedV1Permissions =
-        (!isAccountant || accountsEnabled || workforceEnabled) &&
+        (!isAccountant ||
+            accountsEnabled ||
+            workforceEnabled ||
+            analyticsEnabled) &&
         ref.watch(supabaseClientProvider) != null;
     final permissionState = connectedV1Permissions
         ? ref.watch(yorksV1CurrentPermissionSnapshotProvider)
@@ -88,6 +100,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       permissionState: permissionState,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
+      analyticsEnabled: analyticsEnabled,
     );
     final current = _currentDestination(destinations, location);
     final desktop =
@@ -133,106 +146,77 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       userName: user?.fullName,
       expanded: sidebarExpanded,
     );
+    final canPopNatively = Navigator.maybeOf(context)?.canPop() ?? false;
+    final canUseWorkspaceHistory = navigationHistory.canGoBack(currentLocation);
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): openSearch,
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-            openSearch,
+    return PopScope(
+      // Root destinations in StatefulShellRoute have no Navigator page to pop.
+      // Intercept system/gesture Back there and consume the shared workspace
+      // history. Native nested routes keep their normal pop semantics.
+      canPop: canPopNatively || !canUseWorkspaceHistory,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !canUseWorkspaceHistory) return;
+        yorksNavigateBack(
+          context,
+          ref,
+          currentLocation,
+          fallback: current?.path ?? RoutePaths.engineerHome,
+        );
       },
-      child: Scaffold(
-        backgroundColor: AppColors.surface,
-        drawer: desktop
-            ? null
-            : Drawer(
-                width: 246,
-                shape: const RoundedRectangleBorder(),
-                child: _YorksDesktopSidebar(
-                  destinations: destinations,
-                  activePath: current?.path,
-                  language: language,
-                  role: role,
-                  userName: user?.fullName,
-                  expanded: true,
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+              openSearch,
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+              openSearch,
+        },
+        child: Scaffold(
+          backgroundColor: AppColors.surface,
+          drawer: desktop
+              ? null
+              : Drawer(
+                  width: 246,
+                  shape: const RoundedRectangleBorder(),
+                  child: _YorksDesktopSidebar(
+                    destinations: destinations,
+                    activePath: current?.path,
+                    language: language,
+                    role: role,
+                    userName: user?.fullName,
+                    expanded: true,
+                  ),
                 ),
-              ),
-        body: Builder(
-          builder: (scaffoldContext) {
-            if (!desktop) {
-              final unread = ref.watch(unreadNotificationCountProvider);
-              return ColoredBox(
-                color: AppColors.mobileSurface,
-                child: Column(
-                  children: [
-                    if (!(YorksMobileUi.isActive(context) &&
-                        featureOwnsMobileTopBar))
-                      _YorksWorkspaceMobileTopBar(
-                        breadcrumbs: breadcrumbs,
-                        location: location,
-                        unreadNotifications: unread,
-                        teamChatEnabled: teamChatEnabled,
-                        unreadChat: chatUnread,
-                        onMenu: () => context.go(RoutePaths.yorksV1MobileMore),
-                        onBack: () => context.canPop()
-                            ? context.pop()
-                            : context.go(RoutePaths.yorksV1Projects),
-                      ),
-                    Expanded(
-                      child: YorksWorkspaceZoomViewport(
-                        routeKey: location,
-                        language: language,
-                        child: child,
-                      ),
-                    ),
-                    if (!focusedMobileRoute)
-                      _YorksMobileNavigation(
-                        destinations: _mobileDestinationsFor(
-                          role,
-                          nativeMobile: YorksMobileUi.isActive(context),
-                          teamChatEnabled: teamChatEnabled,
-                          chatUnread: chatUnread,
-                          permissionState: permissionState,
-                          accountsEnabled: accountsEnabled,
-                          workforceEnabled: workforceEnabled,
-                        ),
-                        activePath: location,
-                        language: language,
-                      ),
-                  ],
-                ),
-              );
-            }
-            return Row(
-              children: [
-                sidebar,
-                Expanded(
+          body: Builder(
+            builder: (scaffoldContext) {
+              if (!desktop) {
+                final unread = ref.watch(unreadNotificationCountProvider);
+                return ColoredBox(
+                  color: AppColors.mobileSurface,
                   child: Column(
                     children: [
-                      _YorksWorkspaceTopBar(
-                        breadcrumbs: breadcrumbs,
-                        language: language,
-                        role: role,
-                        destinations: destinations,
-                        teamChatEnabled: teamChatEnabled,
-                        unreadChat: chatUnread,
-                        sidebarExpanded: sidebarExpanded,
-                        showBack:
-                            current?.path != null && location != current!.path,
-                        onToggleSidebar: () =>
-                            ref
-                                    .read(
-                                      yorksV1SidebarExpandedProvider.notifier,
-                                    )
-                                    .state =
-                                !sidebarExpanded,
-                        onBack: () {
-                          if (context.canPop()) {
-                            context.pop();
-                            return;
-                          }
-                          context.go(current?.path ?? RoutePaths.engineerHome);
-                        },
-                      ),
+                      if (!(YorksMobileUi.isActive(context) &&
+                          featureOwnsMobileTopBar))
+                        _YorksWorkspaceMobileTopBar(
+                          breadcrumbs: breadcrumbs,
+                          language: language,
+                          location: location,
+                          showBack: yorksCanNavigateBack(
+                            context,
+                            ref,
+                            currentLocation,
+                          ),
+                          unreadNotifications: unread,
+                          teamChatEnabled: teamChatEnabled,
+                          unreadChat: chatUnread,
+                          onMenu: () =>
+                              context.go(RoutePaths.yorksV1MobileMore),
+                          onBack: () => yorksNavigateBack(
+                            context,
+                            ref,
+                            currentLocation,
+                            fallback: current?.path ?? RoutePaths.engineerHome,
+                          ),
+                        ),
                       Expanded(
                         child: YorksWorkspaceZoomViewport(
                           routeKey: location,
@@ -240,12 +224,75 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                           child: child,
                         ),
                       ),
+                      if (!focusedMobileRoute)
+                        _YorksMobileNavigation(
+                          destinations: _mobileDestinationsFor(
+                            role,
+                            nativeMobile: YorksMobileUi.isActive(context),
+                            teamChatEnabled: teamChatEnabled,
+                            chatUnread: chatUnread,
+                            permissionState: permissionState,
+                            accountsEnabled: accountsEnabled,
+                            workforceEnabled: workforceEnabled,
+                            analyticsEnabled: analyticsEnabled,
+                          ),
+                          activePath: location,
+                          language: language,
+                        ),
                     ],
                   ),
-                ),
-              ],
-            );
-          },
+                );
+              }
+              return Row(
+                children: [
+                  sidebar,
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _YorksWorkspaceTopBar(
+                          breadcrumbs: breadcrumbs,
+                          language: language,
+                          role: role,
+                          destinations: destinations,
+                          teamChatEnabled: teamChatEnabled,
+                          unreadChat: chatUnread,
+                          sidebarExpanded: sidebarExpanded,
+                          showBack:
+                              yorksCanNavigateBack(
+                                context,
+                                ref,
+                                currentLocation,
+                              ) ||
+                              (current?.path != null &&
+                                  location != current!.path),
+                          onToggleSidebar: () =>
+                              ref
+                                      .read(
+                                        yorksV1SidebarExpandedProvider.notifier,
+                                      )
+                                      .state =
+                                  !sidebarExpanded,
+                          onBack: () => yorksNavigateBack(
+                            context,
+                            ref,
+                            currentLocation,
+                            fallback: current?.path ?? RoutePaths.engineerHome,
+                          ),
+                        ),
+                        Expanded(
+                          child: YorksWorkspaceZoomViewport(
+                            routeKey: location,
+                            language: language,
+                            child: child,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -263,6 +310,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     if (location == RoutePaths.yorksV1DuctSizer ||
         location == RoutePaths.yorksV1EspCalculator ||
         location == RoutePaths.engineerProfile ||
+        location == RoutePaths.notificationPreferences ||
         location.startsWith(RoutePaths.yorksV1TeamChat)) {
       return true;
     }
@@ -284,6 +332,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     YorksV1CurrentPermissionSnapshotState? permissionState,
     bool accountsEnabled = false,
     bool workforceEnabled = false,
+    bool analyticsEnabled = false,
   }) {
     final all = _destinationsFor(
       role,
@@ -292,6 +341,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
       permissionState: permissionState,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
+      analyticsEnabled: analyticsEnabled,
     );
     _YorksDestination? path(String route) {
       for (final destination in all) {
@@ -411,6 +461,7 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     YorksV1CurrentPermissionSnapshotState? permissionState,
     bool accountsEnabled = false,
     bool workforceEnabled = false,
+    bool analyticsEnabled = false,
   }) {
     final accountantOffice = accountsEnabled && role == YorksV1Role.accountant
         ? <_YorksDestination>[
@@ -485,6 +536,13 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           chatUnread: chatUnread,
         ),
       ...accountantOffice,
+      if (analyticsEnabled)
+        _YorksDestination(
+          label: YorksV1ShellStrings.analytics,
+          icon: Icons.insights_outlined,
+          selectedIcon: Icons.insights_rounded,
+          path: RoutePaths.yorksV1Analytics,
+        ),
       if (accountsEnabled && role != YorksV1Role.accountant)
         _YorksDestination(
           label: YorksV1ShellStrings.accounts,
@@ -581,6 +639,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                   false,
                 ));
       }
+      if (path == RoutePaths.yorksV1Analytics) {
+        return analyticsEnabled &&
+            allows(YorksV1CapabilityKeys.analyticsView, false);
+      }
       if (path == RoutePaths.yorksV1Projects) {
         return allows(YorksV1CapabilityKeys.projectsView, role != null);
       }
@@ -668,6 +730,16 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
           ? accountsOrRequestsIndex
           : updatedRequestsIndex;
       visible.insert(anchor >= 0 ? anchor + 1 : visible.length, workforce);
+    }
+    final analyticsIndex = visible.indexWhere(
+      (destination) => destination.path == RoutePaths.yorksV1Analytics,
+    );
+    if (analyticsIndex >= 0) {
+      final analytics = visible.removeAt(analyticsIndex);
+      final overviewIndex = visible.indexWhere(
+        (destination) => destination.path == RoutePaths.engineerHome,
+      );
+      visible.insert(overviewIndex >= 0 ? overviewIndex + 1 : 0, analytics);
     }
     return visible;
   }
@@ -1013,12 +1085,14 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
     final accountsEnabled = featureFlags.accounts;
     final workforceEnabled = featureFlags.workforce;
+    final analyticsEnabled = featureFlags.analytics;
     final teamChatEnabled =
         role != YorksV1Role.accountant && featureFlags.teamChat;
     final connectedV1Permissions =
         (role != YorksV1Role.accountant ||
             accountsEnabled ||
-            workforceEnabled) &&
+            workforceEnabled ||
+            analyticsEnabled) &&
         ref.watch(supabaseClientProvider) != null;
     final permissionState = connectedV1Permissions
         ? ref.watch(yorksV1CurrentPermissionSnapshotProvider)
@@ -1034,6 +1108,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
       permissionState: permissionState,
       accountsEnabled: accountsEnabled,
       workforceEnabled: workforceEnabled,
+      analyticsEnabled: analyticsEnabled,
     );
     final primaryRoutes = shell
         ._mobileDestinationsFor(
@@ -1044,6 +1119,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
           permissionState: permissionState,
           accountsEnabled: accountsEnabled,
           workforceEnabled: workforceEnabled,
+          analyticsEnabled: analyticsEnabled,
         )
         .map((destination) => destination.path)
         .whereType<String>()
@@ -1066,7 +1142,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
             label: AppStrings.profile.active(language),
             child: YorksMobileCard(
               key: const ValueKey('mobile-profile-entry'),
-              onTap: () => context.go(RoutePaths.engineerProfile),
+              onTap: () => context.push(RoutePaths.engineerProfile),
               child: Row(
                 children: [
                   _Avatar(name: user?.fullName ?? '', size: 48),
@@ -1161,7 +1237,7 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
                 Semantics(
                   button: true,
                   child: InkWell(
-                    onTap: () => _signOut(context, ref, language),
+                    onTap: () => showYorksSignOut(context, ref),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(minHeight: 52),
                       child: Padding(
@@ -1193,33 +1269,6 @@ class YorksV1MobileMoreScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _signOut(
-    BuildContext context,
-    WidgetRef ref,
-    AppLanguage language,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(AppStrings.signOut.active(language)),
-        content: Text(AppStrings.logoutConfirmBody.active(language)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(AppStrings.cancel.active(language)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(AppStrings.signOut.active(language)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await ref.read(authControllerProvider).signOut();
-    if (context.mounted) context.go(RoutePaths.login);
   }
 }
 
@@ -1329,7 +1378,7 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      YorksV1ShellStrings.companyName.primary,
+                      YorksV1ShellStrings.companyName.active(language),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMedium.copyWith(
@@ -1397,7 +1446,9 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
 class _YorksWorkspaceMobileTopBar extends StatelessWidget {
   const _YorksWorkspaceMobileTopBar({
     required this.breadcrumbs,
+    required this.language,
     required this.location,
+    required this.showBack,
     required this.unreadNotifications,
     required this.teamChatEnabled,
     required this.unreadChat,
@@ -1406,7 +1457,9 @@ class _YorksWorkspaceMobileTopBar extends StatelessWidget {
   });
 
   final List<TranslatableString> breadcrumbs;
+  final AppLanguage language;
   final String location;
+  final bool showBack;
   final int unreadNotifications;
   final bool teamChatEnabled;
   final int unreadChat;
@@ -1418,19 +1471,21 @@ class _YorksWorkspaceMobileTopBar extends StatelessWidget {
     final focused = location == RoutePaths.engineerCreateProject;
     final home = location == RoutePaths.engineerHome;
     final title = home
-        ? YorksV1ShellStrings.companyName.primary
-        : breadcrumbs.last.primary;
+        ? YorksV1ShellStrings.companyName.active(language)
+        : breadcrumbs.last.active(language);
     return YorksMobileAppBar(
       title: title,
       brand: home,
       leading: home
           ? null
           : YorksMobileIconButton(
-              icon: focused ? Icons.arrow_back_rounded : Icons.menu_rounded,
-              tooltip: focused
+              icon: focused || showBack
+                  ? Icons.arrow_back_rounded
+                  : Icons.menu_rounded,
+              tooltip: focused || showBack
                   ? MaterialLocalizations.of(context).backButtonTooltip
                   : MaterialLocalizations.of(context).openAppDrawerTooltip,
-              onPressed: focused ? onBack : onMenu,
+              onPressed: focused || showBack ? onBack : onMenu,
             ),
       trailing: home
           ? Row(
@@ -1439,13 +1494,13 @@ class _YorksWorkspaceMobileTopBar extends StatelessWidget {
                 if (teamChatEnabled)
                   YorksMobileIconButton(
                     icon: Icons.chat_bubble_outline_rounded,
-                    tooltip: YorksV1TeamChatStrings.teamChat.primary,
+                    tooltip: YorksV1TeamChatStrings.teamChat.active(language),
                     badge: unreadChat > 0,
                     onPressed: () => context.go(RoutePaths.yorksV1TeamChat),
                   ),
                 YorksMobileIconButton(
                   icon: Icons.notifications_none_rounded,
-                  tooltip: AppStrings.notifications.primary,
+                  tooltip: AppStrings.notifications.active(language),
                   badge: unreadNotifications > 0,
                   onPressed: () => context.push(RoutePaths.notifications),
                 ),
@@ -1509,7 +1564,7 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            YorksV1ShellStrings.companyName.primary,
+                            YorksV1ShellStrings.companyName.active(language),
                             style: AppTypography.titleSmall.copyWith(
                               color: AppColors.navy,
                               fontSize: 14,
@@ -1519,7 +1574,9 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            YorksV1ShellStrings.companyLegalName.primary,
+                            YorksV1ShellStrings.companyLegalName.active(
+                              language,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: AppTypography.bodySmall.copyWith(
@@ -1558,7 +1615,7 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                             AppSpacing.sm,
                           ),
                           child: Text(
-                            destination.group!.primary.toUpperCase(),
+                            destination.group!.active(language).toUpperCase(),
                             style: AppTypography.labelSmall.copyWith(
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.8,
@@ -1582,91 +1639,12 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                 ],
               ),
             ),
-            Container(
-              margin: EdgeInsets.fromLTRB(
-                expanded ? AppSpacing.md : AppSpacing.xs,
-                AppSpacing.sm,
-                expanded ? AppSpacing.md : AppSpacing.xs,
-                AppSpacing.md,
-              ),
-              padding: EdgeInsets.zero,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
-                border: Border.all(color: AppColors.line),
-                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                  onTap: () => _showYorksProfileDialog(context),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 7,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: expanded
-                          ? MainAxisAlignment.start
-                          : MainAxisAlignment.center,
-                      children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            _Avatar(name: displayName, size: 36),
-                            Positioned(
-                              right: -1,
-                              bottom: -1,
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: YorksV1WorkspaceStatusLabel.colorFor(
-                                    workspaceStatus.state,
-                                  ),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: AppColors.surfaceContainerLowest,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (expanded) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  displayName.isEmpty
-                                      ? YorksV1ShellStrings.account.primary
-                                      : displayName,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.labelLarge.copyWith(
-                                    color: AppColors.ink,
-                                  ),
-                                ),
-                                Text(
-                                  _roleCopy(role).primary,
-                                  style: AppTypography.labelSmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 18,
-                            color: AppColors.muted,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            YorksAccountEntry(
+              displayName: displayName,
+              role: role,
+              language: language,
+              workspaceStatus: workspaceStatus,
+              expanded: expanded,
             ),
             const Divider(height: 1, color: AppColors.line),
             if (expanded)
@@ -1683,10 +1661,13 @@ class _YorksDesktopSidebar extends ConsumerWidget {
                     YorksV1WorkspaceStatusLabel(
                       status: workspaceStatus,
                       compact: true,
+                      language: language,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      YorksV1ShellStrings.connectedProjectControl.primary,
+                      YorksV1ShellStrings.connectedProjectControl.active(
+                        language,
+                      ),
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.muted,
                       ),
@@ -1701,311 +1682,402 @@ class _YorksDesktopSidebar extends ConsumerWidget {
   }
 }
 
-void _showYorksProfileDialog(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    barrierColor: AppColors.scrim.withValues(alpha: 0.38),
-    builder: (_) => const _YorksProfileDialog(),
-  );
-}
+class YorksAccountEntry extends ConsumerStatefulWidget {
+  const YorksAccountEntry({
+    super.key,
+    required this.displayName,
+    required this.role,
+    required this.language,
+    required this.workspaceStatus,
+    required this.expanded,
+  });
 
-class _YorksProfileDialog extends ConsumerWidget {
-  const _YorksProfileDialog();
+  final String displayName;
+  final YorksV1Role? role;
+  final AppLanguage language;
+  final YorksV1WorkspaceStatus workspaceStatus;
+  final bool expanded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
-    final role = ref.watch(yorksV1CurrentRoleProvider);
-    final language = ref.watch(languageProvider);
-    final profile = ref.watch(employeeProvider);
-    final isAccountant = role == YorksV1Role.accountant;
-    var assignedProjectCount = 0;
-    var openRequestCount = 0;
-    if (!isAccountant) {
-      final permissionState = ref.watch(
-        yorksV1CurrentPermissionSnapshotProvider,
-      );
-      assignedProjectCount =
-          ref
-              .watch(yorksV1AuthorizedProjectPortfolioProvider)
-              .valueOrNull
-              ?.length ??
-          0;
-      openRequestCount =
-          ref
-              .watch(yorksV1MaterialRequestListProvider(null))
-              .valueOrNull
-              ?.where(
-                (item) => permissionState.hybridAllows(
-                  YorksV1CapabilityKeys.materialRequestsView,
-                  legacyAllowed: true,
-                  projectId: item.projectId,
-                ),
-              )
-              .length ??
-          0;
-    }
-    final name = profile.name == '—'
-        ? (user?.fullName ?? 'Yorks user')
-        : profile.name;
-    final email = profile.email == '—' ? (user?.email ?? '—') : profile.email;
+  ConsumerState<YorksAccountEntry> createState() => _YorksAccountEntryState();
+}
 
-    return Dialog(
-      backgroundColor: AppColors.surfaceContainerLowest,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+class _YorksAccountEntryState extends ConsumerState<YorksAccountEntry> {
+  final MenuController _menu = MenuController();
+
+  void _closeThenGo(String location) {
+    _menu.close();
+    // MenuAnchor owns an overlay route. Replacing the location cannot become
+    // that overlay's pop target; the shared workspace history still provides
+    // the expected Back destination after this root-level navigation.
+    context.go(location);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fallbackName = widget.displayName.isEmpty
+        ? YorksV1ShellStrings.account.active(widget.language)
+        : widget.displayName;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        widget.expanded ? AppSpacing.md : AppSpacing.xs,
+        AppSpacing.sm,
+        widget.expanded ? AppSpacing.md : AppSpacing.xs,
+        AppSpacing.md,
       ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 704),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Profile', style: AppTypography.headlineSmall),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Account, project assignments and workspace access.',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
+      child: MenuAnchor(
+        key: const ValueKey('yorks-account-popover-anchor'),
+        controller: _menu,
+        alignmentOffset: const Offset(8, -8),
+        style: MenuStyle(
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          backgroundColor: const WidgetStatePropertyAll(
+            AppColors.surfaceContainerLowest,
+          ),
+          elevation: const WidgetStatePropertyAll(12),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              side: const BorderSide(color: AppColors.line),
+            ),
+          ),
+        ),
+        menuChildren: [
+          YorksAccountPopover(
+            fallbackName: fallbackName,
+            fallbackRole: widget.role,
+            language: widget.language,
+            workspaceStatus: widget.workspaceStatus,
+            onOpenProfile: () => _closeThenGo(RoutePaths.engineerProfile),
+            onNotifications: () => _closeThenGo(RoutePaths.notifications),
+            onHelp: () => _closeThenGo(RoutePaths.about),
+            onSignOut: () async {
+              _menu.close();
+              await showYorksSignOut(context, ref);
+            },
+          ),
+        ],
+        builder: (context, controller, child) => Semantics(
+          button: true,
+          expanded: controller.isOpen,
+          label: AppStrings.profile.active(widget.language),
+          child: Material(
+            color: AppColors.surfaceContainerLowest,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+              side: const BorderSide(color: AppColors.line),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('yorks-account-entry'),
+              onTap: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 52),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 7,
                   ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const Divider(height: AppSpacing.xl),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.blueContainer.withValues(alpha: 0.24),
-                  border: Border.all(color: AppColors.blueContainerStrong),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-                ),
-                child: Row(
-                  children: [
-                    _Avatar(name: name, size: 64),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisAlignment: widget.expanded
+                        ? MainAxisAlignment.start
+                        : MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
                         children: [
-                          Text(name, style: AppTypography.titleLarge),
-                          const SizedBox(height: 2),
-                          Text(
-                            _roleCopy(role).primary,
-                            style: AppTypography.bodyMedium.copyWith(
-                              color: AppColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.xs,
-                            children: [
-                              _ProfileStatusChip(
-                                label: 'Active',
-                                color: AppColors.success,
-                              ),
-                              if (!isAccountant)
-                                _ProfileStatusChip(
-                                  label:
-                                      '$assignedProjectCount assigned projects',
-                                  color: AppColors.blue,
+                          _Avatar(name: fallbackName, size: 36),
+                          Positioned(
+                            right: -1,
+                            bottom: -1,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: YorksV1WorkspaceStatusLabel.colorFor(
+                                  widget.workspaceStatus.state,
                                 ),
-                            ],
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.surfaceContainerLowest,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ProfileStat(
-                      label: 'Assigned projects',
-                      value: isAccountant ? '—' : '$assignedProjectCount',
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _ProfileStat(
-                      label: 'Open requests',
-                      value: isAccountant ? '—' : '$openRequestCount',
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _ProfileStat(
-                      label: 'Workspace',
-                      value: isAccountant
-                          ? YorksV1ShellStrings.accountantWorkspace.active(
-                              language,
-                            )
-                          : 'BOQ · MR · Docs',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.successContainer.withValues(alpha: 0.55),
-                  border: Border.all(
-                    color: AppColors.success.withValues(alpha: 0.25),
-                  ),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.verified_user_outlined,
-                      color: AppColors.success,
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(
-                              text: 'Signed in securely\n',
-                              style: TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            TextSpan(
-                              text:
-                                  '$email · Every request, approval, dispatch and receipt is attributed to this account.',
-                            ),
-                          ],
+                      if (widget.expanded) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                fallbackName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.labelLarge.copyWith(
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                              Text(
+                                _roleCopy(widget.role).active(widget.language),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.labelSmall,
+                              ),
+                            ],
+                          ),
                         ),
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.success,
+                        Icon(
+                          controller.isOpen
+                              ? Icons.expand_more_rounded
+                              : Icons.expand_less_rounded,
+                          size: 18,
+                          color: AppColors.muted,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class YorksAccountPopover extends ConsumerWidget {
+  const YorksAccountPopover({
+    super.key,
+    required this.fallbackName,
+    required this.fallbackRole,
+    required this.language,
+    required this.workspaceStatus,
+    required this.onOpenProfile,
+    required this.onNotifications,
+    required this.onHelp,
+    required this.onSignOut,
+  });
+
+  final String fallbackName;
+  final YorksV1Role? fallbackRole;
+  final AppLanguage language;
+  final YorksV1WorkspaceStatus workspaceStatus;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onNotifications;
+  final VoidCallback onHelp;
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileState = ref.watch(yorksV1MyProfileProvider);
+    final profile = profileState.valueOrNull;
+    final protectedName = profile?.displayName.trim();
+    final name = protectedName == null || protectedName.isEmpty
+        ? fallbackName
+        : protectedName;
+    final role = profile?.exactRole ?? fallbackRole;
+    final accountStatus = profileState.when(
+      data: (_) => (
+        AppStrings.accountActive.active(language),
+        Icons.verified_user_outlined,
+        AppColors.success,
+      ),
+      loading: () => (
+        AppStrings.verifyingAccount.active(language),
+        Icons.sync_rounded,
+        AppColors.blue,
+      ),
+      error: (_, _) => (
+        AppStrings.accountUnavailable.active(language),
+        Icons.error_outline_rounded,
+        AppColors.error,
+      ),
+    );
+    return SizedBox(
+      key: const ValueKey('yorks-account-popover'),
+      width: 320,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                _Avatar(name: name, size: 44),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.titleSmall,
+                      ),
+                      Text(
+                        _roleCopy(role).active(language),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.muted,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const Divider(height: AppSpacing.xl),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _YorksAccountStatusRow(
+              key: const ValueKey('yorks-account-authority-status'),
+              icon: accountStatus.$2,
+              label: accountStatus.$1,
+              color: accountStatus.$3,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _signOut(context, ref),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Sign Out'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
+                  Text(
+                    AppStrings.workspaceSync.active(language),
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.muted,
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Done'),
+                  const SizedBox(height: 2),
+                  YorksV1WorkspaceStatusLabel(
+                    status: workspaceStatus,
+                    compact: true,
+                    language: language,
                   ),
                 ],
+              ),
+            ),
+            const Divider(height: AppSpacing.xl),
+            FilledButton.icon(
+              key: const ValueKey('open-my-yorks'),
+              onPressed: onOpenProfile,
+              icon: const Icon(Icons.person_outline_rounded),
+              label: Text(AppStrings.openMyYorks.active(language)),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _YorksAccountPopoverAction(
+              icon: Icons.notifications_outlined,
+              label: AppStrings.notifications.active(language),
+              onTap: onNotifications,
+            ),
+            _YorksAccountPopoverAction(
+              icon: Icons.help_outline_rounded,
+              label: AppStrings.about.active(language),
+              onTap: onHelp,
+            ),
+            _YorksAccountPopoverAction(
+              icon: Icons.logout_rounded,
+              label: AppStrings.signOut.active(language),
+              color: AppColors.error,
+              onTap: onSignOut,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _YorksAccountStatusRow extends StatelessWidget {
+  const _YorksAccountStatusRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.labelMedium.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _YorksAccountPopoverAction extends StatelessWidget {
+  const _YorksAccountPopoverAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color = AppColors.ink,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: color.withValues(alpha: 0.65),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
-    final shouldSignOut = await showDialog<bool>(
-      context: context,
-      builder: (confirmContext) => AlertDialog(
-        title: const Text('Sign Out?'),
-        content: const Text('You will need to sign in again to access Yorks.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(confirmContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(confirmContext, true),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-    if (shouldSignOut != true) return;
-    await ref.read(authControllerProvider).signOut();
-    if (!context.mounted) return;
-    Navigator.pop(context);
-    context.go(RoutePaths.login);
-  }
-}
-
-class _ProfileStatusChip extends StatelessWidget {
-  const _ProfileStatusChip({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.sm,
-      vertical: AppSpacing.xs,
-    ),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-    ),
-    child: Text(label, style: AppTypography.labelMedium.copyWith(color: color)),
-  );
-}
-
-class _ProfileStat extends StatelessWidget {
-  const _ProfileStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 74),
-    padding: const EdgeInsets.all(AppSpacing.md),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLowest,
-      border: Border.all(color: AppColors.line),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppTypography.labelSmall.copyWith(letterSpacing: 0.6),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.titleMedium,
-        ),
-      ],
     ),
   );
 }
@@ -2105,7 +2177,7 @@ class _YorksNavigationTile extends StatelessWidget {
       button: !disabled,
       selected: selected,
       enabled: !disabled,
-      label: destination.label.primary,
+      label: destination.label.active(language),
       child: Tooltip(
         message: destination.label.active(language),
         child: Material(
@@ -2138,7 +2210,7 @@ class _YorksNavigationTile extends StatelessWidget {
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
-                          destination.label.primary,
+                          destination.label.active(language),
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.bodyMedium.copyWith(
                             color: disabled
@@ -2154,7 +2226,7 @@ class _YorksNavigationTile extends StatelessWidget {
                       ),
                       if (destination.suffix != null)
                         Text(
-                          destination.suffix!.primary,
+                          destination.suffix!.active(language),
                           style: AppTypography.labelSmall,
                         ),
                     ],
@@ -2186,7 +2258,7 @@ class _YorksMobileItem extends StatelessWidget {
       return Semantics(
         button: true,
         selected: selected,
-        label: destination.label.primary,
+        label: destination.label.active(language),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: () => context.go(destination.path!),
@@ -2207,7 +2279,9 @@ class _YorksMobileItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    (destination.compactLabel ?? destination.label).primary,
+                    (destination.compactLabel ?? destination.label).active(
+                      language,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.labelSmall.copyWith(
@@ -2227,7 +2301,7 @@ class _YorksMobileItem extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: destination.label.primary,
+      label: destination.label.active(language),
       child: Material(
         color: selected
             ? AppColors.onPrimary.withValues(alpha: .12)
@@ -2256,7 +2330,9 @@ class _YorksMobileItem extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    (destination.compactLabel ?? destination.label).primary,
+                    (destination.compactLabel ?? destination.label).active(
+                      language,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.labelSmall.copyWith(
@@ -2292,7 +2368,7 @@ class _YorksQuickNavigationButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: YorksV1ShellStrings.quickNavigation.primary,
+    label: YorksV1ShellStrings.quickNavigation.active(language),
     child: Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2337,7 +2413,7 @@ class _YorksQuickNavigationButton extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  YorksV1ShellStrings.searchOrJump.primary,
+                  YorksV1ShellStrings.searchOrJump.active(language),
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.muted,
                   ),
