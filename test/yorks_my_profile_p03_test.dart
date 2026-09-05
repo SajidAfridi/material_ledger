@@ -180,7 +180,7 @@ void main() {
   testWidgets('keyboard activates section navigation in logical order', (
     tester,
   ) async {
-    await _setViewport(tester, const Size(1440, 900));
+    await _setViewport(tester, const Size(820, 1180));
     await _pumpProfile(tester);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -188,7 +188,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(
-      tester.widget(find.byKey(const ValueKey('my-yorks-section-today'))),
+      tester.widget(
+        find.byKey(const ValueKey('my-yorks-section-accessAndScope')),
+      ),
       isA<FilledButton>(),
     );
     expect(tester.takeException(), isNull);
@@ -421,12 +423,19 @@ class _WorkspaceRepository implements YorksV1MyProfileWorkspaceRepository {
     'next_transition_at': null,
     'permission_revision': 4,
     'account': {'auth_user_id': _actor, 'exact_role': 'admin'},
-    'today': {'state': 'available', 'metrics': <Object?>[]},
+    'today': {
+      'state': 'available',
+      'metrics': <Object?>[
+        {'metric_key': 'technical_projects', 'value': 9},
+        {'metric_key': 'material_requests_needing_action', 'value': 5},
+        {'metric_key': 'material_requests_open', 'value': 25},
+      ],
+    },
     'access_scope': {
-      'technical_project_count': 0,
+      'technical_project_count': 9,
       'accounts_project_count': 0,
       'active_direct_membership_count': 0,
-      'effective_source_kinds': <Object?>[],
+      'effective_source_kinds': <Object?>['role_default'],
       'accounts_portfolio_available': false,
     },
     'work_identity': {
@@ -474,8 +483,47 @@ YorksV1MyProfile _profile(YorksV1Role role) => YorksV1MyProfile.fromRpcJson({
     'has_more': false,
     'items': <Object?>[],
   },
-  'capabilities': <Object?>[],
-  'actions': <Object?>[],
+  'capabilities': <Object?>[
+    for (final key in const [
+      'projects.view',
+      'material_requests.view',
+      'users.view',
+      'audit.view',
+    ])
+      {
+        'capability_key': key,
+        'authorization_mode': 'enforced',
+        'requires_record_check': true,
+        'organization': {'effective': true, 'source': 'role_default'},
+        'projects': <Object?>[],
+      },
+  ],
+  'actions': <Object?>[
+    {
+      'action_id': 'open_projects',
+      'capability_key': 'projects.view',
+      'required_feature': 'projects',
+      'kind': 'navigation',
+    },
+    {
+      'action_id': 'open_material_requests',
+      'capability_key': 'material_requests.view',
+      'required_feature': 'requests',
+      'kind': 'navigation',
+    },
+    {
+      'action_id': 'open_users',
+      'capability_key': 'users.view',
+      'required_feature': 'foundation',
+      'kind': 'navigation',
+    },
+    {
+      'action_id': 'open_audit',
+      'capability_key': 'audit.view',
+      'required_feature': 'foundation',
+      'kind': 'navigation',
+    },
+  ],
   'operational_summary_state': 'not_projected',
   'workforce_scope_state': 'requires_work_date_context',
 });
