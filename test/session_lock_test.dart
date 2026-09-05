@@ -13,47 +13,44 @@ ProviderContainer _container(SharedPreferences prefs) {
 }
 
 void main() {
-  group('SessionLockController — cold-start policy', () {
-    test('starts UNLOCKED when App Lock is disabled', () async {
+  group('removed profile App Lock compatibility', () {
+    test('starts unlocked when the old preference is disabled', () async {
       SharedPreferences.setMockInitialValues({'app_lock_enabled': false});
       final prefs = await SharedPreferences.getInstance();
       final c = _container(prefs);
       expect(c.read(sessionLockedProvider), isFalse);
     });
 
-    test('starts LOCKED on cold start when App Lock is enabled', () async {
+    test('ignores an old enabled value and starts unlocked', () async {
       SharedPreferences.setMockInitialValues({'app_lock_enabled': true});
       final prefs = await SharedPreferences.getInstance();
       final c = _container(prefs);
-      // Cold start with the setting on → locked (the overlay then gates on a
-      // signed-in session in _AppChrome).
-      expect(c.read(sessionLockedProvider), isTrue);
+      expect(c.read(appLockEnabledProvider), isFalse);
+      expect(c.read(sessionLockedProvider), isFalse);
     });
 
-    test('unlock() clears the lock (e.g. after biometric / fresh login)',
-        () async {
+    test('unlock remains a safe no-op for retained callers', () async {
       SharedPreferences.setMockInitialValues({'app_lock_enabled': true});
       final prefs = await SharedPreferences.getInstance();
       final c = _container(prefs);
-      expect(c.read(sessionLockedProvider), isTrue);
+      expect(c.read(sessionLockedProvider), isFalse);
 
       c.read(sessionLockedProvider.notifier).unlock();
       expect(c.read(sessionLockedProvider), isFalse);
     });
 
-    test('enabling App Lock mid-session does NOT lock the current session',
-        () async {
-      // The setting starts off → controller constructs unlocked.
-      SharedPreferences.setMockInitialValues({'app_lock_enabled': false});
-      final prefs = await SharedPreferences.getInstance();
-      final c = _container(prefs);
-      expect(c.read(sessionLockedProvider), isFalse);
+    test(
+      'obsolete enable calls cannot restore the removed preference',
+      () async {
+        SharedPreferences.setMockInitialValues({'app_lock_enabled': false});
+        final prefs = await SharedPreferences.getInstance();
+        final c = _container(prefs);
+        expect(c.read(sessionLockedProvider), isFalse);
 
-      // Turn it on while using the app — current session stays unlocked; the
-      // lock only takes effect on the next cold start.
-      await c.read(appLockEnabledProvider.notifier).setEnabled(true);
-      expect(c.read(appLockEnabledProvider), isTrue);
-      expect(c.read(sessionLockedProvider), isFalse);
-    });
+        await c.read(appLockEnabledProvider.notifier).setEnabled(true);
+        expect(c.read(appLockEnabledProvider), isFalse);
+        expect(c.read(sessionLockedProvider), isFalse);
+      },
+    );
   });
 }

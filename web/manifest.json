@@ -5,8 +5,8 @@
     "scope": "/",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#F7F3E8",
-    "theme_color": "#12365E",
+    "background_color": "#041E42",
+    "theme_color": "#041E42",
     "description": "Yorks Airconditioning & Refrigeration LLC-SPC — controlled projects, materials, procurement and documents.",
     "prefer_related_applications": false,
     "icons": [

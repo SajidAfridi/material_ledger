@@ -129,6 +129,38 @@ final yorksV1MaterialRequestOperationsDashboardProvider = FutureProvider
           .getOperationsDashboard(projectId: projectId);
     });
 
+/// One bounded request projection for the landing screen. The provider keeps
+/// the same permission-revision invalidation contract as the full register,
+/// but never downloads request lines or comments.
+final yorksV1MaterialRequestOverviewProvider = FutureProvider.autoDispose
+    .family<YorksV1MaterialRequestOverview, int>((ref, limit) async {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      if (ref.watch(supabaseClientProvider) == null) {
+        final requests = await ref.watch(
+          yorksV1MaterialRequestListProvider(null).future,
+        );
+        return YorksV1MaterialRequestOverview.fromRequests(
+          requests: requests,
+          needsAction: requests.where((item) => item.actorCanAct).length,
+          limit: limit,
+        );
+      }
+      final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is! YorksV1MaterialRequestOperationsRepository) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.featureDisabled,
+        );
+      }
+      return await (repository as YorksV1MaterialRequestOperationsRepository)
+          .getOverview(limit: limit);
+    });
+
 final yorksV1MaterialRequestCommentPageProvider = FutureProvider.autoDispose
     .family<
       YorksV1MaterialRequestCommentPage,

@@ -53,7 +53,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         body: Column(
           children: [
             YorksMobileAppBar(
-              title: AppStrings.notifications.primary,
+              title: AppStrings.notifications.active(lang),
               leading: YorksMobileIconButton(
                 icon: Icons.arrow_back_rounded,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
@@ -64,7 +64,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       onPressed: () =>
                           ref.read(notificationActionsProvider).markAllRead(),
                       child: Text(
-                        AppStrings.markAllRead.primary,
+                        AppStrings.markAllRead.active(lang),
                         style: AppTypography.labelSmall.copyWith(
                           color: AppColors.blue,
                         ),
@@ -117,22 +117,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        title: BilingualText(
-          english: AppStrings.notifications.primary,
-          secondary: AppStrings.notifications.secondary(lang),
-          englishStyle: AppTypography.titleLarge.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-          secondaryStyle: AppTypography.labelSmall.copyWith(
-            color: AppColors.onSurfaceVariant,
-          ),
+        title: Text(
+          AppStrings.notifications.active(lang),
+          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w800),
         ),
         actions: [
           if (unread > 0)
             TextButton(
               onPressed: () =>
                   ref.read(notificationActionsProvider).markAllRead(),
-              child: Text(AppStrings.markAllRead.primary),
+              child: Text(AppStrings.markAllRead.active(lang)),
             ),
         ],
       ),
@@ -430,18 +424,11 @@ class _EmptyState extends StatelessWidget {
             ),
             const Gap(AppSpacing.lg),
             Text(
-              AppStrings.allCaughtUp.primary,
+              AppStrings.allCaughtUp.active(lang),
               style: AppTypography.titleMedium.copyWith(
                 color: AppColors.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
-            ),
-            const Gap(AppSpacing.xs),
-            Text(
-              AppStrings.allCaughtUp.secondary(lang),
-              style: AppTypography.bodySmall,
-              textAlign: TextAlign.center,
-              textDirection: lang.isRtl ? TextDirection.rtl : TextDirection.ltr,
             ),
           ],
         ),

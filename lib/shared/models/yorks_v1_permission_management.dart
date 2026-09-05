@@ -159,6 +159,8 @@ abstract final class YorksV1CapabilityKeys {
   static const auditView = 'audit.view';
   static const auditExport = 'audit.export';
   static const auditReviewNoteAppend = 'audit.review_note.append';
+  static const analyticsView = 'analytics.view';
+  static const analyticsExport = 'analytics.export';
   static const accountsView = 'accounts.view';
   static const accountsEdit = 'accounts.edit';
   static const accountsApprove = 'accounts.approve';
@@ -319,6 +321,8 @@ abstract final class YorksV1CapabilityKeys {
     auditView,
     auditExport,
     auditReviewNoteAppend,
+    analyticsView,
+    analyticsExport,
     accountsView,
     accountsEdit,
     accountsApprove,

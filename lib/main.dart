@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart'
     show debugPrint, kDebugMode, kReleaseMode;
@@ -10,8 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
+import 'core/constants/app_colors.dart';
+import 'core/widgets/brand_logo.dart';
+import 'shared/models/app_strings.dart';
 import 'shared/models/backend_configuration.dart';
 import 'shared/models/backend_failure_copy.dart';
+import 'shared/models/yorks_v1_shell_strings.dart';
 import 'shared/models/yorks_v1_feature_flags.dart';
 import 'shared/providers/language_provider.dart';
 import 'shared/services/app_config_service.dart';
@@ -46,26 +51,59 @@ const _localDemoPassword = String.fromEnvironment('LOCAL_DEMO_PASSWORD');
 const _buildDiagnostic = bool.fromEnvironment('YORKS_BUILD_DIAGNOSTIC');
 
 void main() {
-  // No DSN configured → boot with the no-op reporter (unchanged behaviour).
-  if (_sentryDsn.isEmpty) {
-    _bootstrap(const NoopObservability());
-    return;
-  }
-  // DSN present → initialise Sentry, then boot with the Sentry-backed reporter.
-  SentryFlutter.init((options) {
-    options.dsn = _sentryDsn;
-    options.environment = const String.fromEnvironment(
-      'SENTRY_ENV',
-      defaultValue: 'production',
+  final observability = _StartupObservability();
+  _bootstrap(observability);
+  // Crash transport is useful but never a prerequisite for useful pixels.
+  // Start it after the native/Flutter launch surface has painted; the stable
+  // proxy below upgrades every existing caller once initialization succeeds.
+  if (_sentryDsn.isNotEmpty) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(observability.initializeSentry()),
     );
-    // Privacy first — this app holds salaries, financials and HR data.
-    options.sendDefaultPii = false; // no IP, device name, etc.
-    options.beforeBreadcrumb = SentryObservability.scrubBreadcrumb;
-    options.beforeSend = SentryObservability.scrubEvent;
-    options.attachStacktrace = true;
-    // Internal tool, tiny user base → skip performance-tracing overhead.
-    options.tracesSampleRate = 0.0;
-  }, appRunner: () => _bootstrap(const SentryObservability()));
+  }
+}
+
+class _StartupObservability implements ObservabilityService {
+  ObservabilityService _delegate = const NoopObservability();
+
+  Future<void> initializeSentry() async {
+    try {
+      await SentryFlutter.init((options) {
+        options.dsn = _sentryDsn;
+        options.environment = const String.fromEnvironment(
+          'SENTRY_ENV',
+          defaultValue: 'production',
+        );
+        // Privacy first — this app holds salaries, financials and HR data.
+        options.sendDefaultPii = false;
+        options.beforeBreadcrumb = SentryObservability.scrubBreadcrumb;
+        options.beforeSend = SentryObservability.scrubEvent;
+        options.attachStacktrace = true;
+        options.tracesSampleRate = 0.0;
+      });
+      _delegate = const SentryObservability();
+      _StartupTimeline.mark('observability_ready');
+    } catch (error, stack) {
+      await _delegate.recordError(
+        error,
+        stack,
+        reason: 'SENTRY_INITIALIZATION_FAILED',
+      );
+    }
+  }
+
+  @override
+  Future<void> recordError(
+    Object error,
+    StackTrace? stack, {
+    bool fatal = false,
+    String? reason,
+  }) => _delegate.recordError(error, stack, fatal: fatal, reason: reason);
+
+  @override
+  void logEvent(String name, {Map<String, Object?> params = const {}}) {
+    _delegate.logEvent(name, params: params);
+  }
 }
 
 /// Boots the app with [observability] wired into every error path. Identical
@@ -73,9 +111,10 @@ void main() {
 /// no call site ever branches on the backend.
 void _bootstrap(ObservabilityService observability) {
   runZonedGuarded(
-    () async {
+    () {
       final binding = WidgetsFlutterBinding.ensureInitialized();
       registerFirebaseBackgroundHandler();
+      _StartupTimeline.mark('binding_ready');
 
       // Framework + platform errors → crash reporting.
       FlutterError.onError = (details) {
@@ -96,101 +135,284 @@ void _bootstrap(ObservabilityService observability) {
       // screen can't take the whole app down. Debug still surfaces the details.
       ErrorWidget.builder = (details) => _CrashFallback(details: details);
 
-      final prefs = await SharedPreferences.getInstance();
-      final backend = BackendConfiguration.resolve(
-        supabaseUrl: _envSupabaseUrl,
-        supabaseAnonKey: _envSupabaseKey,
-        isRelease: kReleaseMode,
-        allowLocalDevelopment: _allowLocalDevelopment,
-        localDemoPassword: _localDemoPassword,
-      );
-      if (backend.mode == BackendStartupMode.blocked) {
-        runApp(_BackendConfigurationFailure(reason: backend.failureReason));
-        return;
-      }
-      const r35Flags = YorksV1FeatureFlags.fromEnvironment();
-      if (kReleaseMode && !r35Flags.isCompleteR35) {
-        runApp(
-          const _BackendConfigurationFailure(
-            reason: 'The complete Yorks V1 R35 feature chain is required.',
-          ),
-        );
-        return;
-      }
-      if (kDebugMode || _buildDiagnostic) {
-        final backendHost = backend.usesSupabase
-            ? Uri.tryParse(backend.supabaseUrl)?.host ?? 'configured'
-            : 'local development';
-        debugPrint(
-          'Yorks V1 build profile: '
-          '${r35Flags.isCompleteR35 ? 'R35 COMPLETE' : 'INCOMPLETE'}\n'
-          'Backend: $backendHost\n'
-          'Feature chain: '
-          '${r35Flags.isCompleteR35 ? '9/9 enabled' : 'not complete'}\n'
-          'Legacy operational routes: disabled',
-        );
-      }
-
-      // Installed version/build — drives the force-update gate + version footers.
-      final versionInfo = AppVersionInfo(
-        version: _appVersion,
-        build: int.tryParse(_appBuild) ?? 1,
-      );
-
-      // Set system UI style to match the light, open aesthetic
+      // Match the native launch surface before the first Flutter frame. The
+      // normal application theme takes over as soon as startup completes.
       SystemChrome.setSystemUIOverlayStyle(
         const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          systemNavigationBarColor: Colors.white,
-          systemNavigationBarIconBrightness: Brightness.dark,
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: Color(0xFF041E42),
+          systemNavigationBarIconBrightness: Brightness.light,
         ),
       );
-
-      final overrides = <Override>[
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        appVersionProvider.overrideWithValue(versionInfo),
-        observabilityProvider.overrideWithValue(observability),
-      ];
-
-      // Local storage is available only through explicit non-release
-      // ALLOW_LOCAL_DEVELOPMENT. Production is fail-closed above.
-      if (backend.usesSupabase) {
-        await Supabase.initialize(
-          url: backend.supabaseUrl,
-          // Public client key (anon-equivalent). A self-hosted instance supplies
-          // its own here.
-          publishableKey: backend.supabaseAnonKey,
-        );
-        final client = Supabase.instance.client;
-        // Expose the client so the auth layer signs in against Supabase Auth,
-        // and route data writes through the authenticated sync backend.
-        overrides.add(supabaseClientProvider.overrideWithValue(client));
-        overrides.add(
-          syncBackendProvider.overrideWithValue(SupabaseSyncBackend(client)),
-        );
-        // The generic snapshot bootstrap is retained only for legacy modules.
-        // R35 transactions have normalized repositories and trusted RPCs; the
-        // bootstrap's historical JSON upserts target legacy tables that strict
-        // RLS correctly rejects for Yorks roles. Do not run it in the complete
-        // Yorks workspace, where it is neither a source of truth nor a valid
-        // transport for Projects, BOQ, requests or notifications.
-        if (client.auth.currentSession != null && !r35Flags.isCompleteR35) {
-          await SupabaseBootstrap(client, prefs).run();
-        } else if (client.auth.currentSession == null) {
-          // No live Supabase session → clear any stale app session so the app
-          // opens at login rather than a "ghost" signed-in state whose writes
-          // RLS would silently deny.
-          await prefs.remove(kAuthUserIdPrefKey);
-        }
-      }
-
-      runApp(
-        ProviderScope(overrides: overrides, child: const MaterialLedgerApp()),
-      );
+      runApp(_RuntimeBootstrapHost(observability: observability));
     },
     // Uncaught async errors.
     (error, stack) => observability.recordError(error, stack, fatal: true),
+  );
+}
+
+/// Mounts useful pixels before any disk or network initialization. The old
+/// startup awaited the complete SharedPreferences cache and Supabase before
+/// calling runApp, leaving the platform surface blank and unrecoverable when a
+/// plugin failed. This host makes initialization an explicit, retryable state.
+class _RuntimeBootstrapHost extends StatefulWidget {
+  const _RuntimeBootstrapHost({required this.observability});
+
+  final ObservabilityService observability;
+
+  @override
+  State<_RuntimeBootstrapHost> createState() => _RuntimeBootstrapHostState();
+}
+
+class _RuntimeBootstrapHostState extends State<_RuntimeBootstrapHost> {
+  Future<Widget>? _initialization;
+  bool _reportedInitializationError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _StartupTimeline.mark('first_flutter_frame');
+      if (mounted) _start();
+    });
+  }
+
+  void _start() {
+    setState(() {
+      _reportedInitializationError = false;
+      _initialization = _initializeRuntime(widget.observability);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final initialization = _initialization;
+    if (initialization == null) return const _StartupSurface();
+    return FutureBuilder<Widget>(
+      future: initialization,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          if (!_reportedInitializationError) {
+            _reportedInitializationError = true;
+            unawaited(
+              widget.observability.recordError(
+                snapshot.error!,
+                snapshot.stackTrace,
+                fatal: true,
+              ),
+            );
+          }
+          return _StartupFailure(onRetry: _start);
+        }
+        final application = snapshot.data;
+        if (application == null) return const _StartupSurface();
+        return _ApplicationReadyReporter(child: application);
+      },
+    );
+  }
+}
+
+Future<Widget> _initializeRuntime(ObservabilityService observability) async {
+  _StartupTimeline.mark('runtime_initialization_started');
+  final prefs = await SharedPreferences.getInstance();
+  _StartupTimeline.mark('preferences_ready');
+  final backend = BackendConfiguration.resolve(
+    supabaseUrl: _envSupabaseUrl,
+    supabaseAnonKey: _envSupabaseKey,
+    isRelease: kReleaseMode,
+    allowLocalDevelopment: _allowLocalDevelopment,
+    localDemoPassword: _localDemoPassword,
+  );
+  if (backend.mode == BackendStartupMode.blocked) {
+    return _BackendConfigurationFailure(reason: backend.failureReason);
+  }
+  const r35Flags = YorksV1FeatureFlags.fromEnvironment();
+  if (kReleaseMode && !r35Flags.isCompleteR35) {
+    return const _BackendConfigurationFailure(
+      reason: 'The complete Yorks V1 R35 feature chain is required.',
+    );
+  }
+  if (kDebugMode || _buildDiagnostic) {
+    final backendHost = backend.usesSupabase
+        ? Uri.tryParse(backend.supabaseUrl)?.host ?? 'configured'
+        : 'local development';
+    debugPrint(
+      'Yorks V1 build profile: '
+      '${r35Flags.isCompleteR35 ? 'R35 COMPLETE' : 'INCOMPLETE'}\n'
+      'Backend: $backendHost\n'
+      'Feature chain: '
+      '${r35Flags.isCompleteR35 ? '9/9 enabled' : 'not complete'}\n'
+      'Legacy operational routes: disabled',
+    );
+  }
+
+  final versionInfo = AppVersionInfo(
+    version: _appVersion,
+    build: int.tryParse(_appBuild) ?? 1,
+  );
+  final overrides = <Override>[
+    sharedPreferencesProvider.overrideWithValue(prefs),
+    appVersionProvider.overrideWithValue(versionInfo),
+    observabilityProvider.overrideWithValue(observability),
+  ];
+
+  if (backend.usesSupabase) {
+    await Supabase.initialize(
+      url: backend.supabaseUrl,
+      publishableKey: backend.supabaseAnonKey,
+    );
+    _StartupTimeline.mark('supabase_ready');
+    final client = Supabase.instance.client;
+    overrides.add(supabaseClientProvider.overrideWithValue(client));
+    overrides.add(
+      syncBackendProvider.overrideWithValue(SupabaseSyncBackend(client)),
+    );
+    // Retain the legacy bootstrap only for deliberately incomplete local V1
+    // builds. Complete R35 repositories are normalized and server-authorized.
+    if (client.auth.currentSession != null && !r35Flags.isCompleteR35) {
+      await SupabaseBootstrap(client, prefs).run();
+    } else if (client.auth.currentSession == null) {
+      await prefs.remove(kAuthUserIdPrefKey);
+    }
+  }
+
+  _StartupTimeline.mark('application_dependencies_ready');
+  return ProviderScope(overrides: overrides, child: const MaterialLedgerApp());
+}
+
+class _ApplicationReadyReporter extends StatefulWidget {
+  const _ApplicationReadyReporter({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ApplicationReadyReporter> createState() =>
+      _ApplicationReadyReporterState();
+}
+
+class _ApplicationReadyReporterState extends State<_ApplicationReadyReporter> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _StartupTimeline.mark('application_shell_frame'),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+abstract final class _StartupTimeline {
+  static final Stopwatch _clock = Stopwatch()..start();
+
+  static void mark(String name) {
+    developer.Timeline.instantSync(
+      'yorks.startup.$name',
+      arguments: {'elapsed_ms': _clock.elapsedMilliseconds},
+    );
+  }
+}
+
+class _StartupSurface extends StatelessWidget {
+  const _StartupSurface();
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: Scaffold(
+      backgroundColor: const Color(0xFF041E42),
+      body: Semantics(
+        liveRegion: true,
+        label: YorksV1ShellStrings.preparingWorkspace.primary,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const BrandLogo(size: 88),
+              const SizedBox(height: 18),
+              Text(
+                YorksV1ShellStrings.companyName.primary,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 23,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                YorksV1ShellStrings.preparingWorkspace.primary,
+                style: const TextStyle(color: Color(0xC2FFFFFF), fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              const SizedBox(
+                width: 42,
+                child: LinearProgressIndicator(
+                  minHeight: 3,
+                  backgroundColor: Color(0x29FFFFFF),
+                  color: Color(0xFF3B97FF),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _StartupFailure extends StatelessWidget {
+  const _StartupFailure({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: Scaffold(
+      backgroundColor: AppColors.surface,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.cloud_off_outlined,
+                  size: 46,
+                  color: AppColors.muted,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  YorksV1ShellStrings.startupFailedTitle.primary,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  YorksV1ShellStrings.startupFailedBody.primary,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(AppStrings.retry.primary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
 

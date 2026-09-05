@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../app/router.dart';
 import '../../../../core/constants/constants.dart';
@@ -10,9 +9,9 @@ import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/nexus_feature_flags_provider.dart';
-import '../../../../shared/providers/session_provider.dart';
 import '../../../../shared/sync/sync_engine.dart';
 import '../../../../shared/widgets/notification_bell.dart';
+import '../../../../shared/widgets/yorks_sign_out_action.dart';
 
 /// "More" tab — administration ONLY (admin role). The operational modules that
 /// used to live in the old Admin Panel (procurement, inventory, requests,
@@ -118,62 +117,16 @@ class MoreHubScreen extends ConsumerWidget {
             _NavCard(
               icon: Icons.logout_rounded,
               iconColor: AppColors.error,
-              title: AppStrings.signOut.primary,
+              title: AppStrings.signOut.active(lang),
               subtitle: AppStrings.logout.secondary(lang),
               titleColor: AppColors.error,
-              onTap: () => _signOut(context, ref),
+              onTap: () => showYorksSignOut(context, ref),
             ),
             const Gap(AppSpacing.huge),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surfaceContainerLowest,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        ),
-        title: Text(
-          AppStrings.logout.primary,
-          style: GoogleFonts.inter(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.onSurface,
-          ),
-        ),
-        content: Text(
-          AppStrings.logoutConfirmBody.primary,
-          style: AppTypography.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              'Cancel',
-              style: AppTypography.labelLarge.copyWith(
-                color: AppColors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              AppStrings.logout.primary,
-              style: AppTypography.labelLarge.copyWith(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await ref.read(authControllerProvider).signOut();
-    if (!context.mounted) return;
-    context.go(RoutePaths.login);
   }
 }
 

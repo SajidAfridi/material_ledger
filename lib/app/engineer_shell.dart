@@ -192,6 +192,7 @@ class EngineerShellScreen extends ConsumerWidget {
       bottomNavigationBar: _LedgerBottomBar(
         currentIndex: currentIndex,
         items: navItems,
+        lang: lang,
         onItemTap: onNavItemTap,
         showCenterAction: showLegacyRequestAction,
       ),
@@ -262,12 +263,14 @@ class _LedgerBottomBar extends StatelessWidget {
   const _LedgerBottomBar({
     required this.currentIndex,
     required this.items,
+    required this.lang,
     required this.onItemTap,
     required this.showCenterAction,
   });
 
   final int currentIndex;
   final List<_NavItem> items;
+  final AppLanguage lang;
   final ValueChanged<int> onItemTap;
   final bool showCenterAction;
 
@@ -312,6 +315,7 @@ class _LedgerBottomBar extends StatelessWidget {
                       child: _BottomBarItem(
                         item: items[index],
                         isActive: currentIndex == index,
+                        lang: lang,
                         onTap: () => onItemTap(index),
                       ),
                     ),
@@ -332,11 +336,13 @@ class _BottomBarItem extends StatefulWidget {
   const _BottomBarItem({
     required this.item,
     required this.isActive,
+    required this.lang,
     required this.onTap,
   });
 
   final _NavItem item;
   final bool isActive;
+  final AppLanguage lang;
   final VoidCallback onTap;
 
   @override
@@ -385,7 +391,7 @@ class _BottomBarItemState extends State<_BottomBarItem> {
                   : AppColors.onPrimary.withValues(alpha: 0.75),
               letterSpacing: 0.2,
             ),
-            child: Text(item.translatable.primary),
+            child: Text(item.translatable.active(widget.lang)),
           ),
         ],
       ),
@@ -663,7 +669,7 @@ class _RailItem extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        item.translatable.primary,
+                        item.translatable.active(lang),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: isActive
@@ -673,23 +679,6 @@ class _RailItem extends StatelessWidget {
                               ? AppColors.primary
                               : AppColors.onSurfaceVariant,
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        item.translatable.secondary(lang),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                          color: isActive
-                              ? AppColors.primary.withValues(alpha: 0.5)
-                              : AppColors.onSurfaceVariant.withValues(
-                                  alpha: 0.45,
-                                ),
-                          height: 1.4,
-                        ),
-                        textDirection: lang.isRtl
-                            ? TextDirection.rtl
-                            : TextDirection.ltr,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -749,7 +738,7 @@ class _RailItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  item.translatable.secondary(lang),
+                  item.translatable.active(lang),
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
@@ -826,7 +815,7 @@ class _RailNewRequestButton extends StatelessWidget {
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Text(
-                      AppStrings.newRequest.primary,
+                      AppStrings.newRequest.active(lang),
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -835,19 +824,6 @@ class _RailNewRequestButton extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  AppStrings.newRequest.secondary(lang),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.onPrimary.withValues(alpha: 0.7),
-                    height: 1.3,
-                  ),
-                  textDirection: lang.isRtl
-                      ? TextDirection.rtl
-                      : TextDirection.ltr,
                 ),
               ],
             ),

@@ -16,6 +16,14 @@ final yorksV1ProjectPortfolioDataClientProvider =
           : SupabaseYorksV1ProjectPortfolioDataClient(client);
     });
 
+final yorksV1ProjectOverviewDataClientProvider =
+    Provider<YorksV1ProjectOverviewDataClient?>((ref) {
+      final client = ref.watch(supabaseClientProvider);
+      return client == null
+          ? null
+          : SupabaseYorksV1ProjectOverviewDataClient(client);
+    });
+
 final yorksV1ProjectPortfolioRepositoryProvider =
     Provider<YorksV1ProjectPortfolioRepository>((ref) {
       return YorksV1SupabaseProjectPortfolioRepository(
@@ -42,6 +50,30 @@ final yorksV1ProjectPortfolioProvider =
       return ref
           .watch(yorksV1ProjectPortfolioRepositoryProvider)
           .listPortfolio();
+    });
+
+/// Bounded startup projection. Connected builds use one protected RPC;
+/// disconnected test/demo builds derive the same shape from the retained
+/// portfolio provider so there is no second source of truth.
+final yorksV1ProjectOverviewProvider =
+    FutureProvider.autoDispose<YorksV1ProjectOverview>((ref) async {
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
+      ref.listen<int>(yorksV1MaterialRequestRealtimeRevisionProvider, (
+        previous,
+        next,
+      ) {
+        if (previous != null && previous != next) ref.invalidateSelf();
+      });
+      final client = ref.watch(yorksV1ProjectOverviewDataClientProvider);
+      if (client == null) {
+        return YorksV1ProjectOverview.fromItems(
+          await ref.watch(yorksV1ProjectPortfolioProvider.future),
+        );
+      }
+      return YorksV1ProjectOverviewRepository(
+        featureFlags: ref.watch(yorksV1FeatureFlagsProvider),
+        dataClient: client,
+      ).getOverview();
     });
 
 /// Immediately removes projects denied by the latest confirmed permission

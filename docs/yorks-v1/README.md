@@ -67,6 +67,8 @@ explicit V7-to-V1 conflict resolution.
 | [`WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md`](WORKFORCE_PRODUCTION_RELEASE_EVIDENCE.md) | Owner-exception production release: source, migration ledger, artifact/deployment hashes, live routes, rollback and explicit T14 boundary |
 | [`STATE_RPC_RLS_MATRIX.md`](STATE_RPC_RLS_MATRIX.md) | States, server commands, locks, idempotency and access |
 | [`R35_UI_CONTRACT.md`](R35_UI_CONTRACT.md) | Role navigation, screens, components and responsive behavior |
+| [`OPERATIONAL_ANALYTICS_AND_FOUNDER_OVERVIEW.md`](OPERATIONAL_ANALYTICS_AND_FOUNDER_OVERVIEW.md) | Approved Overview and separately authorized read-only Analytics data, UX, responsive and rollout contract |
+| [`USER_PROFILE_UX_AUDIT_AND_REDESIGN.md`](USER_PROFILE_UX_AUDIT_AND_REDESIGN.md) | Unified My Yorks audit and roadmap; P01–P05 are locally accepted, including protected role-aware summaries, access scope, quick links and separate Workforce identity; the P06 dedicated staging candidate is deployed and named-persona UAT remains pending |
 | [`CURRENT_MATERIAL_REQUEST_USER_GUIDE.md`](CURRENT_MATERIAL_REQUEST_USER_GUIDE.md) | Current approval-first MR operating guide, roles, screen cues and legacy-record boundary |
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE.md) | My Work, Exceptions, required-date/age indicators, trusted line ledger, operational metrics and the explicit SLA boundary |
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE_EVIDENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE_EVIDENCE.md) | Local database, Flutter, visual and production-shaped build evidence for the action-intelligence release |

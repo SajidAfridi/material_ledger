@@ -13,11 +13,21 @@ const run = promisify(execFile);
 const hash = data => createHash('sha256').update(data).digest('hex');
 const maxSingleRequestBytes = 2 * 1024 * 1024;
 const rangeBytes = 1024 * 1024;
+const deferredParts = fs.readdirSync(directory)
+  .filter(file => file.endsWith('.part.js'))
+  .sort();
 const checks = [
   ['/', 'index.html'],
+  ['/about', 'index.html'],
+  ['/profile', 'index.html'],
+  ['/notification-preferences', 'index.html'],
+  ['/yorks/analytics', 'index.html'],
+  ['/yorks/workforce', 'index.html'],
+  ['/yorks/rentals', 'index.html'],
   ['/yorks/material-requests', 'index.html'],
   ['/yorks/team-chat', 'index.html'],
   ...['main.dart.js', 'flutter_bootstrap.js', 'flutter_service_worker.js', 'firebase-messaging-sw.js', 'manifest.json'].map(file => [`/${file}`, file]),
+  ...deferredParts.map(file => [`/${file}`, file]),
 ];
 // Limit concurrency; the large JS response remains compressed in transit.
 for (let offset = 0; offset < checks.length; offset += 2) {

@@ -45,9 +45,133 @@
     html, body, flt-glass-pane {
       touch-action: pan-x pan-y;
     }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: #041E42;
+    }
+
+    #yorks-boot {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: grid;
+      place-items: center;
+      box-sizing: border-box;
+      padding: 24px;
+      color: #FFFFFF;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(22, 119, 255, 0.18), transparent 34%),
+        linear-gradient(145deg, #041E42 0%, #00183A 55%, #000E26 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      transition: opacity 140ms ease-out;
+    }
+
+    #yorks-boot[hidden] {
+      display: none;
+    }
+
+    .yorks-boot-card {
+      display: grid;
+      justify-items: center;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .yorks-boot-logo {
+      width: 88px;
+      height: 88px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #FFFFFF;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+    }
+
+    .yorks-boot-logo img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .yorks-boot-title {
+      margin: 0;
+      font-size: 23px;
+      font-weight: 750;
+      letter-spacing: -0.02em;
+    }
+
+    .yorks-boot-status {
+      min-height: 22px;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.76);
+      font-size: 14px;
+    }
+
+    .yorks-boot-pulse {
+      width: 42px;
+      height: 3px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    .yorks-boot-pulse::after {
+      display: block;
+      width: 52%;
+      height: 100%;
+      border-radius: inherit;
+      background: #3B97FF;
+      content: "";
+      animation: yorks-boot-pulse 900ms ease-in-out infinite alternate;
+    }
+
+    #yorks-boot-retry {
+      display: none;
+      min-width: 112px;
+      min-height: 44px;
+      border: 1px solid rgba(255, 255, 255, 0.42);
+      border-radius: 10px;
+      color: #FFFFFF;
+      background: rgba(255, 255, 255, 0.08);
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    html[data-yorks-boot-failed="true"] #yorks-boot-retry {
+      display: block;
+    }
+
+    html[data-yorks-boot-failed="true"] .yorks-boot-pulse {
+      display: none;
+    }
+
+    @keyframes yorks-boot-pulse {
+      from { transform: translateX(-42%); opacity: 0.58; }
+      to { transform: translateX(92%); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #yorks-boot { transition: none; }
+      .yorks-boot-pulse::after { animation: none; transform: none; }
+    }
   </style>
 </head>
 <body>
+  <div id="yorks-boot" role="status" aria-live="polite" aria-busy="true">
+    <div class="yorks-boot-card">
+      <div class="yorks-boot-logo" aria-hidden="true">
+        <img src="assets/assets/branding/yorks_emblem_web.png" alt="">
+      </div>
+      <h1 class="yorks-boot-title">Yorks AC. &amp; Ref.</h1>
+      <p class="yorks-boot-status" data-yorks-boot-status>Opening Yorks…</p>
+      <div class="yorks-boot-pulse" aria-hidden="true"></div>
+      <button id="yorks-boot-retry" type="button">Retry</button>
+    </div>
+  </div>
   <script>
     // Prevent browser-wide zoom only. The event still reaches Flutter, whose
     // focused workspace listener handles Ctrl/Command-wheel and shortcuts.
@@ -90,6 +214,23 @@
       window.addEventListener('gesturestart', (event) => event.preventDefault(), {
         passive: false,
       });
+
+      const boot = document.getElementById('yorks-boot');
+      const retry = document.getElementById('yorks-boot-retry');
+      retry?.addEventListener('click', () => window.location.reload());
+      window.addEventListener('flutter-first-frame', () => {
+        if (!boot) return;
+        boot.setAttribute('aria-busy', 'false');
+        boot.style.opacity = '0';
+        window.setTimeout(() => boot.remove(), 160);
+      }, { once: true });
+
+      window.setTimeout(() => {
+        if (!boot || !document.body.contains(boot)) return;
+        document.documentElement.dataset.yorksBootFailed = 'true';
+        const status = boot.querySelector('[data-yorks-boot-status]');
+        if (status) status.textContent = 'Yorks is taking longer than expected.';
+      }, 12000);
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>

@@ -81,18 +81,15 @@ final currencyProvider = StateNotifierProvider<CurrencyNotifier, AppCurrency>((
 });
 
 class CurrencyNotifier extends StateNotifier<AppCurrency> {
-  CurrencyNotifier(this._prefs)
-    : super(
-        AppCurrency.fromCode(
-          _prefs.getString(_kCurrencyKey) ?? AppCurrency.aed.code,
-        ),
-      );
+  // Yorks' company reporting currency is fixed. A retained device-only choice
+  // from the earlier prototype is deliberately ignored.
+  CurrencyNotifier(this._prefs) : super(AppCurrency.aed);
 
   final SharedPreferences _prefs;
 
   Future<void> setCurrency(AppCurrency currency) async {
-    await _prefs.setString(_kCurrencyKey, currency.code);
-    state = currency;
+    await _prefs.remove(_kCurrencyKey);
+    state = AppCurrency.aed;
   }
 }
 

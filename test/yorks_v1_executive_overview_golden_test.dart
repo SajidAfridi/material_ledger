@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_executive_overview.dart';
+import 'package:material_ledger/features/company_overview/domain/company_analytics_models.dart';
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_audit_workspace.dart';
 import 'package:material_ledger/shared/models/yorks_v1_configuration.dart';
@@ -13,8 +14,11 @@ import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project.dart';
 import 'package:material_ledger/shared/models/yorks_v1_project_portfolio.dart';
+import 'package:material_ledger/shared/models/yorks_v1_project_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_rental.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_shell_strings.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_audit_provider.dart';
 
 void main() {
@@ -25,6 +29,11 @@ void main() {
     (
       name: 'admin_command_centre_desktop.png',
       size: const Size(1440, 900),
+      role: YorksV1Role.admin,
+    ),
+    (
+      name: 'admin_overview_mobile.png',
+      size: const Size(390, 844),
       role: YorksV1Role.admin,
     ),
     (
@@ -73,6 +82,11 @@ void main() {
                 activeUsers: 18,
                 canBrowseInventory: true,
                 canAccessRentals: true,
+                canOpenAnalytics: evidence.role == YorksV1Role.admin,
+                companyAnalytics: evidence.role == YorksV1Role.admin
+                    ? AsyncData(_companyProjection)
+                    : const AsyncData<CompanyAnalyticsProjection?>(null),
+                featureFlags: _companyFlags,
                 onRefresh: () async {},
               ),
             ),
@@ -82,6 +96,29 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+      if (evidence.role == YorksV1Role.admin && evidence.size.width < 720) {
+        final primaryAction = tester.getRect(
+          find.ancestor(
+            of: find.text(YorksV1ProjectStrings.newProject.primary),
+            matching: find.byType(FilledButton),
+          ),
+        );
+        final analyticsAction = tester.getRect(
+          find.ancestor(
+            of: find.text(YorksV1ShellStrings.analytics.primary),
+            matching: find.byType(OutlinedButton),
+          ),
+        );
+        final requestsAction = tester.getRect(
+          find.ancestor(
+            of: find.text(YorksV1ShellStrings.viewAllRequests.primary),
+            matching: find.byType(OutlinedButton),
+          ),
+        );
+        expect(primaryAction.width, greaterThan(analyticsAction.width * 1.9));
+        expect(analyticsAction.width, closeTo(requestsAction.width, 1));
+        expect(analyticsAction.top, closeTo(requestsAction.top, 1));
+      }
       await expectLater(
         find.byType(YorksV1ExecutiveOverview),
         matchesGoldenFile('goldens/r38_10/${evidence.name}'),
@@ -89,6 +126,249 @@ void main() {
     });
   }
 }
+
+const _companyFlags = YorksV1FeatureFlags(
+  foundation: true,
+  projects: true,
+  boq: true,
+  excel: true,
+  requests: true,
+  arrangement: true,
+  logistics: true,
+  returnsDocuments: true,
+  documents: true,
+  accounts: true,
+  workforce: true,
+  analytics: true,
+);
+
+final _companyProjection = CompanyAnalyticsProjection(
+  generatedAt: DateTime.utc(2026, 9, 4, 12),
+  projectId: null,
+  months: 6,
+  timezone: 'UTC',
+  isPartial: true,
+  coverage: const {
+    'projects': CompanyAnalyticsCoverageItem(
+      domain: 'projects',
+      state: CompanyAnalyticsCoverageState.available,
+    ),
+    'material_requests': CompanyAnalyticsCoverageItem(
+      domain: 'material_requests',
+      state: CompanyAnalyticsCoverageState.available,
+    ),
+    'accounts': CompanyAnalyticsCoverageItem(
+      domain: 'accounts',
+      state: CompanyAnalyticsCoverageState.available,
+    ),
+    'workforce': CompanyAnalyticsCoverageItem(
+      domain: 'workforce',
+      state: CompanyAnalyticsCoverageState.available,
+    ),
+    'rentals': CompanyAnalyticsCoverageItem(
+      domain: 'rentals',
+      state: CompanyAnalyticsCoverageState.available,
+    ),
+    'inventory': CompanyAnalyticsCoverageItem(
+      domain: 'inventory',
+      state: CompanyAnalyticsCoverageState.sourceOnly,
+      reason: 'separate_protected_workspace',
+    ),
+    'audit': CompanyAnalyticsCoverageItem(
+      domain: 'audit',
+      state: CompanyAnalyticsCoverageState.sourceOnly,
+      reason: 'separate_protected_workspace',
+    ),
+  },
+  warnings: const [],
+  projects: CompanyProjectAnalytics(
+    total: 9,
+    draft: 0,
+    active: 6,
+    onHold: 1,
+    completed: 2,
+    archived: 0,
+    register: [
+      CompanyProjectRegisterItem(
+        projectId: 'p-1',
+        reference: 'YRA-322',
+        name: 'Nexus Power Bulk Transmission',
+        site: 'Abu Dhabi',
+        state: 'active',
+        currentOwnerRole: 'Project Engineer',
+        startDate: DateTime.utc(2026, 1),
+        targetCompletionDate: DateTime.utc(2026, 12),
+        openRequestCount: 8,
+        requestActionCount: 2,
+        latestActivityAt: DateTime.utc(2026, 9, 4, 11),
+      ),
+    ],
+  ),
+  materialRequests: CompanyMaterialRequestAnalytics(
+    total: 25,
+    open: 17,
+    needsAction: 3,
+    drafts: 2,
+    awaitingEngineeringApproval: 3,
+    toArrange: 4,
+    changesRequested: 1,
+    dispatchReady: 4,
+    receiptPending: 5,
+    deliveryExceptions: 3,
+    received: 2,
+    closed: 4,
+    cancelled: 0,
+    monthlyFlow: const [
+      CompanyMaterialRequestMonth(month: '2026-04', submitted: 9, closed: 5),
+      CompanyMaterialRequestMonth(month: '2026-05', submitted: 12, closed: 8),
+      CompanyMaterialRequestMonth(month: '2026-06', submitted: 10, closed: 9),
+      CompanyMaterialRequestMonth(month: '2026-07', submitted: 14, closed: 11),
+      CompanyMaterialRequestMonth(month: '2026-08', submitted: 13, closed: 12),
+      CompanyMaterialRequestMonth(month: '2026-09', submitted: 8, closed: 6),
+    ],
+    attention: [
+      CompanyMaterialRequestAttentionItem(
+        requestId: 'request-1',
+        requestNumber: 'MR-1048',
+        title: 'Copper fittings',
+        projectId: 'p-1',
+        projectReference: 'YRA-322',
+        projectName: 'Nexus Power Bulk Transmission',
+        state: 'partially_received',
+        timing: 'overdue',
+        currentOwnerRole: 'Project Engineer',
+        nextActionCode: 'receipt_review_required',
+        actorCanAct: true,
+        exceptionCodes: const ['missing_quantity'],
+        ageHours: 18,
+        updatedAt: DateTime.utc(2026, 9, 3, 18),
+      ),
+    ],
+  ),
+  accounts: CompanyAccountAnalytics(
+    authorizedProjectCount: 8,
+    unconfiguredProjectCount: 0,
+    attentionCount: 3,
+    currencyGroups: [
+      CompanyAccountCurrency(
+        currencyCode: 'AED',
+        projectCount: 8,
+        contractValue: '28500000.00',
+        claimed: '2100000.00',
+        certified: '1660000.00',
+        received: '1240000.00',
+        outstanding: '420000.00',
+        overdueCount: 1,
+        dueSoonCount: 1,
+        returnedCount: 0,
+        pdcAttentionCount: 1,
+        monthlyFlow: const [
+          CompanyAccountMonth(
+            month: '2026-04',
+            claimed: '850000.00',
+            certified: '650000.00',
+            received: '510000.00',
+          ),
+          CompanyAccountMonth(
+            month: '2026-05',
+            claimed: '1050000.00',
+            certified: '820000.00',
+            received: '590000.00',
+          ),
+          CompanyAccountMonth(
+            month: '2026-06',
+            claimed: '920000.00',
+            certified: '780000.00',
+            received: '610000.00',
+          ),
+          CompanyAccountMonth(
+            month: '2026-07',
+            claimed: '1350000.00',
+            certified: '1040000.00',
+            received: '790000.00',
+          ),
+          CompanyAccountMonth(
+            month: '2026-08',
+            claimed: '1510000.00',
+            certified: '1190000.00',
+            received: '910000.00',
+          ),
+          CompanyAccountMonth(
+            month: '2026-09',
+            claimed: '2100000.00',
+            certified: '1660000.00',
+            received: '1240000.00',
+          ),
+        ],
+      ),
+    ],
+  ),
+  workforce: CompanyWorkforceAnalytics(
+    activeWorkerCount: 46,
+    activeSupervisorCount: 8,
+    missingTodayCount: 4,
+    monthlyPendingCount: 1,
+    returnedCount: 0,
+    awaitingFinalCount: 1,
+    lockedCount: 18,
+    reopenRequestCount: 0,
+    configurationIssueCount: 0,
+    confirmedPeriodCount: 24,
+    confirmedRegularMinutes: 420000,
+    confirmedOvertimeMinutes: 48000,
+    monthlyFlow: const [
+      CompanyWorkforceMonth(
+        month: '2026-04',
+        regularMinutes: 66000,
+        overtimeMinutes: 7200,
+      ),
+      CompanyWorkforceMonth(
+        month: '2026-05',
+        regularMinutes: 69000,
+        overtimeMinutes: 7500,
+      ),
+      CompanyWorkforceMonth(
+        month: '2026-06',
+        regularMinutes: 67500,
+        overtimeMinutes: 7800,
+      ),
+      CompanyWorkforceMonth(
+        month: '2026-07',
+        regularMinutes: 72000,
+        overtimeMinutes: 8400,
+      ),
+      CompanyWorkforceMonth(
+        month: '2026-08',
+        regularMinutes: 75000,
+        overtimeMinutes: 9000,
+      ),
+      CompanyWorkforceMonth(
+        month: '2026-09',
+        regularMinutes: 70500,
+        overtimeMinutes: 8100,
+      ),
+    ],
+  ),
+  rentals: CompanyRentalAnalytics(
+    currencyCode: 'AED',
+    totalProperties: 33,
+    occupied: 31,
+    monthlyRentRoll: '209000.00',
+    collectedThisMonth: '185000.00',
+    outstanding: '24000.00',
+    securityDeposits: '142000.00',
+    expiringWithin90: 1,
+    chequeAttention: 1,
+    monthlyFlow: const [
+      CompanyRentalMonth(month: '2026-04', collected: '172000.00'),
+      CompanyRentalMonth(month: '2026-05', collected: '178000.00'),
+      CompanyRentalMonth(month: '2026-06', collected: '181000.00'),
+      CompanyRentalMonth(month: '2026-07', collected: '187000.00'),
+      CompanyRentalMonth(month: '2026-08', collected: '191000.00'),
+      CompanyRentalMonth(month: '2026-09', collected: '185000.00'),
+    ],
+  ),
+);
 
 final _projects = <YorksV1ProjectPortfolioItem>[
   _project(

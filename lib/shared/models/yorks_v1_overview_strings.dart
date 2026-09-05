@@ -19,16 +19,22 @@ abstract final class YorksV1OverviewStrings {
   );
 
   static const adminCommandCentre = TranslatableString(
-    en: 'Yorks Command Centre',
-    ar: 'مركز قيادة يوركس',
-    ur: 'یارکس کمانڈ سینٹر',
-    hi: 'यॉर्क्स कमांड सेंटर',
+    en: 'Overview',
+    ar: 'نظرة عامة',
+    ur: 'جائزہ',
+    hi: 'अवलोकन',
   );
   static const adminCommandDescription = TranslatableString(
-    en: 'A real-time view of operations, system controls and the exceptions that need Administrator attention.',
-    ar: 'رؤية فورية للعمليات وضوابط النظام والاستثناءات التي تحتاج إلى انتباه المسؤول.',
-    ur: 'آپریشنز، سسٹم کنٹرولز اور ایڈمن کی توجہ طلب استثنائی امور کا فوری منظر۔',
-    hi: 'संचालन, सिस्टम नियंत्रण और व्यवस्थापक के ध्यान वाले अपवादों का रियल-टाइम दृश्य।',
+    en: 'A server-confirmed company view of operations, controls and the exceptions that need attention.',
+    ar: 'عرض مؤكد من الخادم لعمليات الشركة وضوابطها والاستثناءات التي تحتاج إلى اهتمام.',
+    ur: 'کمپنی کے آپریشنز، کنٹرولز اور توجہ طلب معاملات کا سرور سے تصدیق شدہ جائزہ۔',
+    hi: 'कंपनी संचालन, नियंत्रण और ध्यान मांगने वाले अपवादों का सर्वर-पुष्ट दृश्य।',
+  );
+  static const allMaterialRequests = TranslatableString(
+    en: 'All material requests',
+    ar: 'كل طلبات المواد',
+    ur: 'تمام میٹریل ریکویسٹ',
+    hi: 'सभी मटेरियल रिक्वेस्ट',
   );
   static const portfolioOverview = TranslatableString(
     en: 'Project Portfolio Overview',

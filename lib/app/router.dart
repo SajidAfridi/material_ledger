@@ -25,7 +25,9 @@ import '../features/engineer/presentation/screens/engineer_create_project_screen
 import '../features/engineer/presentation/screens/engineer_home_screen.dart';
 import '../features/engineer/presentation/screens/engineer_new_request_screen.dart';
 import '../features/engineer/presentation/screens/engineer_projects_screen.dart';
-import '../features/engineer/presentation/screens/engineer_profile_screen.dart';
+import '../features/engineer/presentation/screens/engineer_profile_screen.dart'
+    deferred as engineer_profile;
+import '../features/engineer/presentation/screens/notification_preferences_screen.dart';
 import '../features/engineer/presentation/screens/material_picker_screen.dart';
 import '../features/engineer/presentation/screens/confirm_receipt_screen.dart';
 import '../features/engineer/presentation/screens/employee_detail_screen.dart';
@@ -67,6 +69,7 @@ import '../features/projects/presentation/screens/yorks_v1_projects_screen.dart'
 import '../features/rentals/presentation/screens/rental_unit_detail_screen.dart';
 import '../features/rentals/presentation/screens/rentals_dashboard_screen.dart';
 import '../features/chat/presentation/screens/yorks_v1_team_chat_screen.dart';
+import '../features/company_overview/presentation/company_analytics_screen.dart';
 import '../features/transactions/presentation/screens/transactions_screen.dart';
 import '../features/workforce/presentation/screens/yorks_workforce_daily_attendance_screen.dart';
 import '../features/workforce/presentation/screens/yorks_workforce_administration_screen.dart';
@@ -113,6 +116,7 @@ abstract final class RoutePaths {
   static const String engineerCreateProject = '/projects/new';
   static const String projectWorkspace = '/projects/:id';
   static const String yorksV1Projects = '/yorks/projects';
+  static const String yorksV1Analytics = '/yorks/analytics';
   static const String yorksV1Project = '/yorks/projects/:projectId';
   static const String yorksV1ProjectEdit = '/yorks/projects/:projectId/edit';
   static const String yorksV1BoqGroups = '/yorks/projects/:projectId/boq';
@@ -386,6 +390,7 @@ abstract final class RoutePaths {
   static const String about = '/about';
   static const String activityLog = '/activity';
   static const String notifications = '/notifications';
+  static const String notificationPreferences = '/notification-preferences';
   static const String yorksV1MobileMore = '/yorks/more';
   static const String privacyPolicy = '/privacy-policy';
   static const String termsOfService = '/terms-of-service';
@@ -468,6 +473,7 @@ bool? _isAllowedForRole(
     RoutePaths.engineerHome,
     RoutePaths.about,
     RoutePaths.notifications,
+    RoutePaths.notificationPreferences,
     RoutePaths.yorksV1MobileMore,
     RoutePaths.privacyPolicy,
     RoutePaths.termsOfService,
@@ -478,6 +484,7 @@ bool? _isAllowedForRole(
 
   if (_isYorksV1AccountsPath(path)) return true;
   if (_isYorksV1WorkforcePath(path)) return true;
+  if (_isYorksV1AnalyticsPath(path)) return true;
 
   // Accountant is an Accounts-only identity. Normalized Accounts paths are
   // accepted above and then resolved through the protected capability guard.
@@ -576,6 +583,15 @@ bool? _isYorksV1RouteAllowedForRole(
 
   if (!path.startsWith('/yorks/')) return true;
   if (role == null) return false;
+
+  if (_isYorksV1AnalyticsPath(path)) {
+    return _hybridRouteAllows(
+      permissionResolver,
+      YorksV1CapabilityKeys.analyticsView,
+      legacyAllowed: false,
+      organizationSummary: true,
+    );
+  }
 
   if (_isYorksV1AccountsPath(path)) {
     final projectId = _yorksV1ProjectIdFromPath(path);
@@ -815,6 +831,10 @@ bool _isYorksV1WorkforcePath(String path) =>
     path == RoutePaths.yorksV1Workforce ||
     path.startsWith('${RoutePaths.yorksV1Workforce}/');
 
+bool _isYorksV1AnalyticsPath(String path) =>
+    path == RoutePaths.yorksV1Analytics ||
+    path.startsWith('${RoutePaths.yorksV1Analytics}/');
+
 bool _canOpenAccountsPortfolio(YorksV1Role role) =>
     role == YorksV1Role.admin ||
     role == YorksV1Role.accountant ||
@@ -844,6 +864,7 @@ GoRouter createAppRouter({
   bool yorksV1InventorySuppliersEnabled = false,
   bool yorksV1AccountsEnabled = false,
   bool yorksV1WorkforceEnabled = false,
+  bool yorksV1AnalyticsEnabled = false,
   YorksV1Role? yorksV1Role,
   YorksV1HybridPermissionResolver? yorksV1PermissionResolver,
   // Live editable role-permission defaults. A getter (not a snapshot) + the
@@ -856,13 +877,22 @@ GoRouter createAppRouter({
   // rollout is active, engineers use the same R35 workspace shell as the
   // connected project routes so the desktop rail does not disappear at Home.
   final useEngineerShell = !role.usesAdminPanel;
+  final initialLocation = !isOnboarded
+      ? RoutePaths.splash
+      : !isLoggedIn
+      ? RoutePaths.login
+      : yorksV1AccountsEnabled && yorksV1Role == YorksV1Role.accountant
+      ? RoutePaths.yorksV1Accounts
+      : RoutePaths.engineerHome;
   return GoRouter(
-    initialLocation: RoutePaths.splash,
+    initialLocation: initialLocation,
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final path = state.uri.path;
 
-      if (path == RoutePaths.splash) return null;
+      // Splash is only a one-frame first-run compatibility handoff. Returning
+      // users and signed-out users start directly at their useful destination.
+      if (path == RoutePaths.splash && !isOnboarded) return null;
 
       // Hard global gates block everything (incl. login) until cleared.
       if (gate == AppGate.updateRequired) {
@@ -951,6 +981,9 @@ GoRouter createAppRouter({
         return _yorksV1ProjectFallbackPath();
       }
       if (_isYorksV1WorkforcePath(path) && !yorksV1WorkforceEnabled) {
+        return _yorksV1ProjectFallbackPath();
+      }
+      if (_isYorksV1AnalyticsPath(path) && !yorksV1AnalyticsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
       if (path == RoutePaths.finance && yorksV1AccountsEnabled) {
@@ -1160,8 +1193,9 @@ GoRouter createAppRouter({
               routes: [
                 GoRoute(
                   path: RoutePaths.engineerProfile,
-                  pageBuilder: (context, state) =>
-                      const NoTransitionPage(child: EngineerProfileScreen()),
+                  pageBuilder: (context, state) => const NoTransitionPage(
+                    child: _DeferredEngineerProfileScreen(),
+                  ),
                 ),
               ],
             ),
@@ -1240,8 +1274,11 @@ GoRouter createAppRouter({
           path: RoutePaths.engineerProfile,
           pageBuilder: (context, state) =>
               yorksV1ProjectsEnabled && yorksV1Role != null
-              ? _yorksV1Slide(state.pageKey, const EngineerProfileScreen())
-              : _framed(state.pageKey, const EngineerProfileScreen()),
+              ? _yorksV1Slide(
+                  state.pageKey,
+                  const _DeferredEngineerProfileScreen(),
+                )
+              : _framed(state.pageKey, const _DeferredEngineerProfileScreen()),
         ),
       if (!useEngineerShell)
         GoRoute(
@@ -1271,6 +1308,12 @@ GoRouter createAppRouter({
         pageBuilder: (context, state) =>
             _yorksV1Slide(state.pageKey, const YorksV1ProjectsScreen()),
       ),
+      if (yorksV1AnalyticsEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1Analytics,
+          pageBuilder: (context, state) =>
+              _yorksV1Slide(state.pageKey, const CompanyAnalyticsScreen()),
+        ),
       GoRoute(
         path: RoutePaths.yorksV1Accounts,
         pageBuilder: (context, state) => _yorksV1Slide(
@@ -1897,6 +1940,16 @@ GoRouter createAppRouter({
         ),
       ),
       GoRoute(
+        path: RoutePaths.notificationPreferences,
+        pageBuilder: (context, state) =>
+            yorksV1ProjectsEnabled && yorksV1Role != null
+            ? _yorksV1Slide(
+                state.pageKey,
+                const NotificationPreferencesScreen(),
+              )
+            : _slide(state.pageKey, const NotificationPreferencesScreen()),
+      ),
+      GoRoute(
         path: RoutePaths.privacyPolicy,
         pageBuilder: (context, state) =>
             _slide(state.pageKey, const PrivacyPolicyScreen()),
@@ -1914,6 +1967,60 @@ GoRouter createAppRouter({
         ),
     ],
   );
+}
+
+/// Keeps the rich My Yorks workspace out of the initial web download. Native
+/// builds resolve this deferred library immediately; web loads the same
+/// reviewed screen only when the person opens Profile.
+class _DeferredEngineerProfileScreen extends StatefulWidget {
+  const _DeferredEngineerProfileScreen();
+
+  @override
+  State<_DeferredEngineerProfileScreen> createState() =>
+      _DeferredEngineerProfileScreenState();
+}
+
+class _DeferredEngineerProfileScreenState
+    extends State<_DeferredEngineerProfileScreen> {
+  static Future<void>? _sharedLoad;
+  late Future<void> _load;
+
+  @override
+  void initState() {
+    super.initState();
+    _load = _sharedLoad ??= engineer_profile.loadLibrary();
+  }
+
+  void _retry() {
+    setState(() {
+      _load = _sharedLoad = engineer_profile.loadLibrary();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _load,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            !snapshot.hasError) {
+          return engineer_profile.EngineerProfileScreen();
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: MaterialLocalizations.of(
+                context,
+              ).refreshIndicatorSemanticLabel,
+              onPressed: _retry,
+            ),
+          );
+        }
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+  }
 }
 
 /// The only Batch 2 V1 project landing that is registered for the current

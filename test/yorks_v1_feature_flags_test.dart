@@ -22,6 +22,7 @@ void main() {
       expect(flags.documents, false);
       expect(flags.accounts, false);
       expect(flags.workforce, false);
+      expect(flags.analytics, false);
       expect(flags.inventorySuppliers, false);
     });
 
@@ -49,6 +50,7 @@ void main() {
       expect(flags.documents, false);
       expect(flags.accounts, false);
       expect(flags.workforce, false);
+      expect(flags.analytics, false);
       expect(flags.inventorySuppliers, false);
     });
 
@@ -76,6 +78,7 @@ void main() {
       expect(flags.documents, false);
       expect(flags.accounts, false);
       expect(flags.workforce, false);
+      expect(flags.analytics, false);
       expect(flags.inventorySuppliers, false);
     });
 
@@ -173,6 +176,40 @@ void main() {
         expect(missingDocuments.workforce, false);
         expect(complete.workforce, true);
         expect(complete.isCompleteR35, true);
+      },
+    );
+
+    test(
+      'Analytics stays off by default and requires the protected document chain',
+      () {
+        const defaultEnvironment = YorksV1FeatureFlags.fromEnvironment();
+        const missingDocuments = YorksV1FeatureFlags(
+          foundation: true,
+          projects: true,
+          boq: true,
+          excel: true,
+          requests: true,
+          arrangement: true,
+          logistics: true,
+          returnsDocuments: true,
+          analytics: true,
+        );
+        const complete = YorksV1FeatureFlags(
+          foundation: true,
+          projects: true,
+          boq: true,
+          excel: true,
+          requests: true,
+          arrangement: true,
+          logistics: true,
+          returnsDocuments: true,
+          documents: true,
+          analytics: true,
+        );
+
+        expect(defaultEnvironment.analytics, false);
+        expect(missingDocuments.analytics, false);
+        expect(complete.analytics, true);
       },
     );
 

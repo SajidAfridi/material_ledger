@@ -32,7 +32,9 @@ final _fixtureUser = AppUser(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('Yorks mobile splash — 390×844', (tester) async {
+  testWidgets('Yorks mobile first run has no artificial splash hold', (
+    tester,
+  ) async {
     await _setViewport(tester, const Size(390, 844));
     final preferences = await SharedPreferences.getInstance();
     final router = GoRouter(
@@ -48,16 +50,9 @@ void main() {
         child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 100));
-    await _settleLogo(tester, find.byType(SplashScreen));
-    await expectLater(
-      find.byType(SplashScreen),
-      matchesGoldenFile('goldens/mobile_batch1/splash_390.png'),
-    );
-    await tester.pump(const Duration(milliseconds: 1500));
-    expect(find.byType(SplashScreen), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
     await tester.pumpAndSettle();
+    expect(find.byType(SplashScreen), findsNothing);
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 

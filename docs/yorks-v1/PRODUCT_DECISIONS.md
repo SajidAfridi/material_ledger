@@ -1598,3 +1598,35 @@ through `20260831090940`; deployment
 `dpl_BFzK5dURC5qvRxpatmxW5B4FuR4g` passed isolated and post-promotion route,
 PWA, configuration and hash checks at `yorks-r35.vercel.app`. This operational
 fact does not change the decision that T14 remains not performed/not passed.
+
+## 25. My Yorks personal controls and navigation
+
+The following product-owner decisions are frozen for the P06 pre-production
+profile hardening on 5 September 2026:
+
+- the bell and existing notification centre remain the single durable inbox
+  for authorized workflow and Team Chat history. **My Yorks -> Notifications**
+  opens personal delivery controls; it does not create a second inbox or allow
+  required in-app history to be hidden or deleted;
+- optional controls are push delivery, workflow push, Team Chat push,
+  foreground pop-ups and sound. They are server-owned per authenticated user,
+  direct table access is denied, critical history remains server-owned, and a
+  stale different write conflicts rather than silently overwriting a newer
+  choice;
+- Yorks company reporting currency is AED. My Yorks displays that policy as a
+  read-only fact and ignores/removes obsolete device currency selections;
+- the device-only App Lock preference is removed from My Yorks. A retained
+  enabled value is cleared so an older installation cannot become locked
+  behind a control that no longer exists. Supabase authentication, exact-role
+  claims and server session policy remain authoritative;
+- the selected language is the one visible interface language across the app
+  shell, including company name, side navigation, mobile bottom navigation,
+  page labels, controls and platform localization/direction. Stable business
+  names, emails, IDs and source documents are not translated or rewritten;
+- Back means return to the previous Yorks place. Nested pages use the native
+  Navigator stack; root workspace switches retain a bounded per-session route
+  history, so actions such as Overview -> Rental Properties return to Overview
+  from the header button and from system/gesture Back. Transient notification
+  acknowledgement metadata is never stored as a destination; and
+- this is an additive, staging-first correction. It does not widen any
+  capability, mutate business records or authorize a production release.

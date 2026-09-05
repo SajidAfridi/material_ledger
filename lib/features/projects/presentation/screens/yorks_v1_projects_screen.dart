@@ -30,7 +30,6 @@ import '../../../../shared/models/yorks_v1_team_chat_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/permissions_provider.dart';
 import '../../../../shared/providers/session_provider.dart';
-import '../../../../shared/providers/users_provider.dart';
 import '../../../../shared/providers/yorks_v1_audit_provider.dart';
 import '../../../../shared/providers/yorks_v1_configuration_provider.dart';
 import '../../../../shared/providers/yorks_v1_identity_provider.dart';
@@ -48,6 +47,8 @@ import '../../../../shared/providers/yorks_v1_team_chat_provider.dart';
 import 'yorks_v1_boq_screens.dart';
 import 'yorks_v1_documents_screen.dart';
 import 'yorks_v1_executive_overview.dart';
+import '../../../company_overview/application/company_analytics_providers.dart';
+import '../../../company_overview/domain/company_analytics_models.dart';
 import '../../../materials/presentation/yorks_v1_feature_action_access.dart';
 import '../../../materials/presentation/screens/yorks_v1_material_request_screens.dart';
 
@@ -88,21 +89,34 @@ class YorksV1OverviewScreen extends ConsumerWidget {
     ref.watch(yorksV1MaterialRequestLiveRefreshProvider);
     final permissions = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final user = ref.watch(currentUserProvider);
-    final projects = ref.watch(yorksV1AuthorizedProjectPortfolioProvider);
-    final requests = ref
-        .watch(yorksV1MaterialRequestListProvider(null))
-        .whenData(
-          (items) => items
-              .where(
-                (item) => yorksV1CanReadProjectRecord(
-                  permissions,
-                  YorksV1CapabilityKeys.materialRequestsView,
-                  legacyAllowed: true,
-                  projectId: item.projectId,
-                ),
-              )
-              .toList(growable: false),
-        );
+    final projectOverview = ref.watch(yorksV1ProjectOverviewProvider);
+    final projects = projectOverview.whenData(
+      (overview) => overview.items
+          .where(
+            (item) => yorksV1CanReadProjectRecord(
+              permissions,
+              YorksV1CapabilityKeys.projectsView,
+              legacyAllowed: true,
+              projectId: item.project.id,
+            ),
+          )
+          .toList(growable: false),
+    );
+    final requestOverview = ref.watch(
+      yorksV1MaterialRequestOverviewProvider(6),
+    );
+    final requests = requestOverview.whenData(
+      (overview) => overview.items
+          .where(
+            (item) => yorksV1CanReadProjectRecord(
+              permissions,
+              YorksV1CapabilityKeys.materialRequestsView,
+              legacyAllowed: true,
+              projectId: item.projectId,
+            ),
+          )
+          .toList(growable: false),
+    );
     final createProjectAccess = yorksV1FeatureActionAccess(
       permissions,
       YorksV1CapabilityKeys.projectsCreate,
@@ -125,6 +139,24 @@ class YorksV1OverviewScreen extends ConsumerWidget {
     final executive =
         role == YorksV1Role.admin || (role?.isGlobalProjectEngineer ?? false);
     final admin = role == YorksV1Role.admin;
+    final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
+    final canOpenAnalytics =
+        featureFlags.analytics &&
+        permissions.hybridAllows(
+          YorksV1CapabilityKeys.analyticsView,
+          legacyAllowed: false,
+          organizationSummary: true,
+        );
+    final AsyncValue<CompanyAnalyticsProjection?> companyAnalytics =
+        canOpenAnalytics
+        ? ref
+              .watch(
+                companyAnalyticsProjectionProvider(
+                  const CompanyAnalyticsFilters(months: 6),
+                ),
+              )
+              .whenData<CompanyAnalyticsProjection?>((value) => value)
+        : const AsyncData<CompanyAnalyticsProjection?>(null);
     final canAccessRentals = admin && ref.watch(canAccessRentalsProvider);
     final AsyncValue<YorksV1InventoryWorkspace?> inventory = canBrowseInventory
         ? ref
@@ -132,29 +164,11 @@ class YorksV1OverviewScreen extends ConsumerWidget {
               .whenData<YorksV1InventoryWorkspace?>((value) => value)
         : const AsyncData<YorksV1InventoryWorkspace?>(null);
 
-    final projectItems =
-        projects.valueOrNull ?? const <YorksV1ProjectPortfolioItem>[];
-    final requestItems =
-        requests.valueOrNull ?? const <YorksV1MaterialRequest>[];
-    final openRequests = requestItems
-        .where(
-          (item) =>
-              item.state != YorksV1MaterialRequestState.draft &&
-              item.state != YorksV1MaterialRequestState.received &&
-              item.state != YorksV1MaterialRequestState.closed &&
-              item.state != YorksV1MaterialRequestState.cancelled,
-        )
-        .length;
-    final needsAction = requestItems
-        .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
-        .length;
-    final dispatchReady = requestItems
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.approved ||
-              item.state == YorksV1MaterialRequestState.partiallyDispatched,
-        )
-        .length;
+    final projectCounts = projectOverview.valueOrNull;
+    final requestCounts = requestOverview.valueOrNull;
+    final openRequests = requestCounts?.open ?? 0;
+    final needsAction = requestCounts?.needsAction ?? 0;
+    final dispatchReady = requestCounts?.dispatchReady ?? 0;
 
     if (executive && role != null) {
       final configuration = admin
@@ -168,13 +182,15 @@ class YorksV1OverviewScreen extends ConsumerWidget {
                 .whenData<YorksV1RentalPortfolio?>((value) => value)
           : const AsyncData<YorksV1RentalPortfolio?>(null);
       final audit = admin ? ref.watch(yorksV1AuditControllerProvider) : null;
-      final activeUsers = admin ? ref.watch(activeUserCountProvider) : null;
+      final activeUsers = admin ? audit?.workspace?.summary.activeUsers : null;
       return YorksV1ExecutiveOverview(
         language: language,
         role: role,
         displayName: user?.fullName,
         projects: projects,
+        projectOverview: projectCounts,
         requests: requests,
+        requestOverview: requestCounts,
         inventory: inventory,
         configuration: configuration,
         rentals: rentals,
@@ -182,15 +198,24 @@ class YorksV1OverviewScreen extends ConsumerWidget {
         activeUsers: activeUsers,
         canBrowseInventory: canBrowseInventory,
         canAccessRentals: canAccessRentals,
+        canOpenAnalytics: canOpenAnalytics,
+        companyAnalytics: companyAnalytics,
+        featureFlags: featureFlags,
         onRefresh: () async {
           final operations = <Future<Object?>>[
-            ref.refresh(yorksV1ProjectPortfolioProvider.future),
-            ref.refresh(yorksV1MaterialRequestListProvider(null).future),
+            ref.refresh(yorksV1ProjectOverviewProvider.future),
+            ref.refresh(yorksV1MaterialRequestOverviewProvider(6).future),
             if (canBrowseInventory)
               ref.refresh(yorksV1InventoryWorkspaceProvider(null).future),
             if (admin) ref.refresh(yorksV1ConfigurationCentreProvider.future),
             if (canAccessRentals)
               ref.refresh(yorksV1RentalPortfolioProvider.future),
+            if (canOpenAnalytics)
+              ref.refresh(
+                companyAnalyticsProjectionProvider(
+                  const CompanyAnalyticsFilters(months: 6),
+                ).future,
+              ),
           ];
           await Future.wait(
             operations.map((future) => future.catchError((_) => null)),
@@ -207,8 +232,10 @@ class YorksV1OverviewScreen extends ConsumerWidget {
       role: role,
       displayName: user?.fullName,
       projects: projects,
+      projectOverview: projectCounts,
       requests: requests,
-      projectCount: projectItems.length,
+      requestOverview: requestCounts,
+      projectCount: projectCounts?.total ?? 0,
       openRequests: openRequests,
       needsAction: needsAction,
       dispatchReady: dispatchReady,
@@ -227,8 +254,9 @@ class YorksV1OverviewScreen extends ConsumerWidget {
           : null,
       onOpenProjects: () => context.go(RoutePaths.yorksV1Projects),
       onOpenRequests: () => context.go(RoutePaths.yorksV1MaterialRequests),
-      onRetryProjects: () => ref.invalidate(yorksV1ProjectPortfolioProvider),
-      onRetryRequests: () => ref.invalidate(yorksV1MaterialRequestListProvider),
+      onRetryProjects: () => ref.invalidate(yorksV1ProjectOverviewProvider),
+      onRetryRequests: () =>
+          ref.invalidate(yorksV1MaterialRequestOverviewProvider),
     );
   }
 }
@@ -239,7 +267,9 @@ class _R35OverviewPage extends StatelessWidget {
     required this.role,
     required this.displayName,
     required this.projects,
+    required this.projectOverview,
     required this.requests,
+    required this.requestOverview,
     required this.projectCount,
     required this.openRequests,
     required this.needsAction,
@@ -261,7 +291,9 @@ class _R35OverviewPage extends StatelessWidget {
   final YorksV1Role? role;
   final String? displayName;
   final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final YorksV1ProjectOverview? projectOverview;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final YorksV1MaterialRequestOverview? requestOverview;
   final int projectCount;
   final int openRequests;
   final int needsAction;
@@ -286,7 +318,9 @@ class _R35OverviewPage extends StatelessWidget {
         role: role,
         displayName: displayName,
         projects: projects,
+        projectOverview: projectOverview,
         requests: requests,
+        requestOverview: requestOverview,
         projectCount: projectCount,
         openRequests: openRequests,
         needsAction: needsAction,
@@ -306,6 +340,7 @@ class _R35OverviewPage extends StatelessWidget {
     if (procurement) {
       return _R35ProcurementOverview(
         requests: requests,
+        requestOverview: requestOverview,
         inventory: inventory,
         onOpenRequests: onOpenRequests,
         onOpenProjects: onOpenProjects,
@@ -316,7 +351,9 @@ class _R35OverviewPage extends StatelessWidget {
       role: role,
       displayName: displayName,
       projects: projects,
+      projectOverview: projectOverview,
       requests: requests,
+      requestOverview: requestOverview,
       inventory: inventory,
       projectCount: projectCount,
       openRequests: openRequests,
@@ -341,7 +378,9 @@ class _YorksMobileOverview extends StatelessWidget {
     required this.role,
     required this.displayName,
     required this.projects,
+    required this.projectOverview,
     required this.requests,
+    required this.requestOverview,
     required this.projectCount,
     required this.openRequests,
     required this.needsAction,
@@ -362,7 +401,9 @@ class _YorksMobileOverview extends StatelessWidget {
   final YorksV1Role? role;
   final String? displayName;
   final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final YorksV1ProjectOverview? projectOverview;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final YorksV1MaterialRequestOverview? requestOverview;
   final int projectCount;
   final int openRequests;
   final int needsAction;
@@ -384,7 +425,9 @@ class _YorksMobileOverview extends StatelessWidget {
     role: role,
     displayName: displayName,
     projects: projects,
+    projectOverview: projectOverview,
     requests: requests,
+    requestOverview: requestOverview,
     inventory: inventory,
     projectCount: projectCount,
     openRequests: openRequests,
@@ -694,71 +737,101 @@ class _OverviewStats {
     required List<YorksV1ProjectPortfolioItem> projects,
     required List<YorksV1MaterialRequest> requests,
     required YorksV1Role? role,
+    YorksV1ProjectOverview? projectOverview,
+    YorksV1MaterialRequestOverview? overview,
   }) => _OverviewStats(
-    projects: projects.length,
-    activeProjects: projects
-        .where((item) => item.project.state == YorksV1ProjectLifecycle.active)
-        .length,
-    projectsOnHold: projects
-        .where((item) => item.project.state == YorksV1ProjectLifecycle.onHold)
-        .length,
-    completedProjects: projects
-        .where(
-          (item) => item.project.state == YorksV1ProjectLifecycle.completed,
-        )
-        .length,
-    openRequests: requests.where(_isOpenOverviewRequest).length,
-    needsAction: requests
-        .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
-        .length,
-    approvals: requests
-        .where(
-          (item) =>
-              item.state ==
-                  YorksV1MaterialRequestState.awaitingRequestApproval ||
-              item.state == YorksV1MaterialRequestState.awaitingApproval,
-        )
-        .length,
-    deliveryExceptions: requests
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.changesRequested ||
-              item.state == YorksV1MaterialRequestState.partiallyDispatched ||
-              item.state == YorksV1MaterialRequestState.partiallyReceived,
-        )
-        .length,
-    receiptPending: requests
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.dispatched ||
-              item.state == YorksV1MaterialRequestState.partiallyReceived,
-        )
-        .length,
-    draftsAndChanges: requests
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.draft ||
-              item.state == YorksV1MaterialRequestState.changesRequested,
-        )
-        .length,
-    closedRequests: requests
-        .where((item) => item.state == YorksV1MaterialRequestState.closed)
-        .length,
-    dispatchReady: requests
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.approved ||
-              item.state == YorksV1MaterialRequestState.partiallyDispatched,
-        )
-        .length,
-    newToArrange: requests
-        .where(
-          (item) =>
-              item.state ==
-                  YorksV1MaterialRequestState.approvedForArrangement ||
-              item.state == YorksV1MaterialRequestState.arranging,
-        )
-        .length,
+    projects: projectOverview?.total ?? projects.length,
+    activeProjects:
+        projectOverview?.active ??
+        projects
+            .where(
+              (item) => item.project.state == YorksV1ProjectLifecycle.active,
+            )
+            .length,
+    projectsOnHold:
+        projectOverview?.onHold ??
+        projects
+            .where(
+              (item) => item.project.state == YorksV1ProjectLifecycle.onHold,
+            )
+            .length,
+    completedProjects:
+        projectOverview?.completed ??
+        projects
+            .where(
+              (item) => item.project.state == YorksV1ProjectLifecycle.completed,
+            )
+            .length,
+    openRequests:
+        overview?.open ?? requests.where(_isOpenOverviewRequest).length,
+    needsAction:
+        overview?.needsAction ??
+        requests
+            .where((item) => yorksV1MaterialRequestNeedsAction(item, role))
+            .length,
+    approvals:
+        overview?.approvals ??
+        requests
+            .where(
+              (item) =>
+                  item.state ==
+                      YorksV1MaterialRequestState.awaitingRequestApproval ||
+                  item.state == YorksV1MaterialRequestState.awaitingApproval,
+            )
+            .length,
+    deliveryExceptions:
+        overview?.deliveryExceptions ??
+        requests
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.changesRequested ||
+                  item.state ==
+                      YorksV1MaterialRequestState.partiallyDispatched ||
+                  item.state == YorksV1MaterialRequestState.partiallyReceived,
+            )
+            .length,
+    receiptPending:
+        overview?.receiptPending ??
+        requests
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.dispatched ||
+                  item.state == YorksV1MaterialRequestState.partiallyReceived,
+            )
+            .length,
+    draftsAndChanges:
+        overview?.draftsAndChanges ??
+        requests
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.draft ||
+                  item.state == YorksV1MaterialRequestState.changesRequested,
+            )
+            .length,
+    closedRequests:
+        overview?.closed ??
+        requests
+            .where((item) => item.state == YorksV1MaterialRequestState.closed)
+            .length,
+    dispatchReady:
+        overview?.dispatchReady ??
+        requests
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.approved ||
+                  item.state == YorksV1MaterialRequestState.partiallyDispatched,
+            )
+            .length,
+    newToArrange:
+        overview?.newToArrange ??
+        requests
+            .where(
+              (item) =>
+                  item.state ==
+                      YorksV1MaterialRequestState.approvedForArrangement ||
+                  item.state == YorksV1MaterialRequestState.arranging,
+            )
+            .length,
   );
 }
 
@@ -774,7 +847,9 @@ class _R35RoleAwareOverview extends StatelessWidget {
     required this.role,
     required this.displayName,
     required this.projects,
+    required this.projectOverview,
     required this.requests,
+    required this.requestOverview,
     required this.inventory,
     required this.projectCount,
     required this.openRequests,
@@ -796,7 +871,9 @@ class _R35RoleAwareOverview extends StatelessWidget {
   final YorksV1Role? role;
   final String? displayName;
   final AsyncValue<List<YorksV1ProjectPortfolioItem>> projects;
+  final YorksV1ProjectOverview? projectOverview;
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final YorksV1MaterialRequestOverview? requestOverview;
   final AsyncValue<YorksV1InventoryWorkspace?> inventory;
   final int projectCount;
   final int openRequests;
@@ -824,6 +901,8 @@ class _R35RoleAwareOverview extends StatelessWidget {
       projects: projectItems,
       requests: requestItems,
       role: role,
+      projectOverview: projectOverview,
+      overview: requestOverview,
     );
     assert(stats.projects == projectCount);
     assert(stats.openRequests == openRequests);
@@ -2342,12 +2421,14 @@ class _OverviewPanelHeader extends StatelessWidget {
 class _R35ProcurementOverview extends StatelessWidget {
   const _R35ProcurementOverview({
     required this.requests,
+    required this.requestOverview,
     required this.inventory,
     required this.onOpenRequests,
     required this.onOpenProjects,
   });
 
   final AsyncValue<List<YorksV1MaterialRequest>> requests;
+  final YorksV1MaterialRequestOverview? requestOverview;
   final AsyncValue<YorksV1InventoryWorkspace?> inventory;
   final VoidCallback onOpenRequests;
   final VoidCallback onOpenProjects;
@@ -2363,31 +2444,42 @@ class _R35ProcurementOverview extends StatelessWidget {
               item.state == YorksV1MaterialRequestState.arranging,
         )
         .toList();
-    final needsAction = records
-        .where(
-          (item) =>
-              yorksV1MaterialRequestNeedsAction(item, YorksV1Role.procurement),
-        )
-        .length;
-    final awaitingApproval = records
-        .where(
-          (item) => item.state == YorksV1MaterialRequestState.awaitingApproval,
-        )
-        .length;
-    final approved = records
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.approved ||
-              item.state == YorksV1MaterialRequestState.partiallyDispatched,
-        )
-        .length;
-    final awaitingReceipt = records
-        .where(
-          (item) =>
-              item.state == YorksV1MaterialRequestState.dispatched ||
-              item.state == YorksV1MaterialRequestState.partiallyReceived,
-        )
-        .length;
+    final needsAction =
+        requestOverview?.needsAction ??
+        records
+            .where(
+              (item) => yorksV1MaterialRequestNeedsAction(
+                item,
+                YorksV1Role.procurement,
+              ),
+            )
+            .length;
+    final awaitingApproval =
+        requestOverview?.approvals ??
+        records
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.awaitingApproval,
+            )
+            .length;
+    final approved =
+        requestOverview?.dispatchReady ??
+        records
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.approved ||
+                  item.state == YorksV1MaterialRequestState.partiallyDispatched,
+            )
+            .length;
+    final awaitingReceipt =
+        requestOverview?.receiptPending ??
+        records
+            .where(
+              (item) =>
+                  item.state == YorksV1MaterialRequestState.dispatched ||
+                  item.state == YorksV1MaterialRequestState.partiallyReceived,
+            )
+            .length;
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop =
@@ -2866,7 +2958,7 @@ class _ProcurementRequestQueue extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.xxs),
                         Text(
-                          '${request.projectReference} · ${request.scopeName} · ${request.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+                          '${request.projectReference} · ${request.scopeName} · ${request.displayItemCount} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
                           style: AppTypography.bodySmall.copyWith(
                             color: AppColors.muted,
                           ),
@@ -3216,7 +3308,7 @@ class _OverviewRequestRow extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            '${item.projectReference} · ${item.scopeName} · ${item.lines.length}',
+            '${item.projectReference} · ${item.scopeName} · ${item.displayItemCount}',
             maxLines: compact ? 2 : 1,
             overflow: TextOverflow.ellipsis,
             style: AppTypography.bodySmall.copyWith(color: AppColors.muted),

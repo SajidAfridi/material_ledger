@@ -5,6 +5,69 @@ import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_project.dart';
 import '../models/yorks_v1_project_portfolio.dart';
 
+abstract interface class YorksV1ProjectOverviewDataClient {
+  Future<Map<String, dynamic>> getOverview({required int limit});
+}
+
+class SupabaseYorksV1ProjectOverviewDataClient
+    implements YorksV1ProjectOverviewDataClient {
+  const SupabaseYorksV1ProjectOverviewDataClient(this._client);
+
+  final SupabaseClient _client;
+
+  @override
+  Future<Map<String, dynamic>> getOverview({required int limit}) async {
+    final response = await _client.rpc(
+      'v1_project_overview',
+      params: {'p_limit': limit},
+    );
+    if (response is Map) return Map<String, dynamic>.from(response);
+    throw const YorksV1DomainException(
+      YorksV1DomainErrorCode.unexpectedResponse,
+    );
+  }
+}
+
+class YorksV1ProjectOverviewRepository {
+  const YorksV1ProjectOverviewRepository({
+    required YorksV1FeatureFlags featureFlags,
+    required YorksV1ProjectOverviewDataClient dataClient,
+  }) : _featureFlags = featureFlags,
+       _dataClient = dataClient;
+
+  final YorksV1FeatureFlags _featureFlags;
+  final YorksV1ProjectOverviewDataClient _dataClient;
+
+  Future<YorksV1ProjectOverview> getOverview({int limit = 6}) async {
+    if (!_featureFlags.projects) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.featureDisabled,
+      );
+    }
+    try {
+      return YorksV1ProjectOverview.fromRpcJson(
+        await _dataClient.getOverview(limit: limit.clamp(1, 15)),
+      );
+    } on YorksV1DomainException {
+      rethrow;
+    } on PostgrestException catch (error) {
+      final code = error.code;
+      throw YorksV1DomainException(
+        code == '42501' || code == '28000'
+            ? YorksV1DomainErrorCode.unauthorized
+            : YorksV1DomainErrorCode.serverRejected,
+        serverCode: code,
+        cause: error,
+      );
+    } catch (error) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: error,
+      );
+    }
+  }
+}
+
 /// Read seam for the R35 project portfolio.  Widgets only depend on the typed
 /// repository below and therefore cannot construct a broader Supabase query.
 abstract interface class YorksV1ProjectPortfolioDataClient {

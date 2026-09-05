@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../shared/models/app_user.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/yorks_v1_notification_provider.dart';
+import '../shared/providers/yorks_v1_notification_preferences_provider.dart';
 import '../shared/services/push_service.dart';
 import 'app.dart' show appRouterProvider;
 
@@ -21,6 +22,8 @@ final pushBridgeProvider = Provider<void>((ref) {
   // Registration is retried below once a user exists, keeping the token
   // strictly owner-bound in Supabase.
   final push = ref.read(pushServiceProvider);
+  final preferences = ref.watch(yorksV1NotificationPreferencesProvider);
+  final pushEnabled = preferences.valueOrNull?.pushEnabled;
   final router = ref.watch(appRouterProvider);
   final acknowledgedRouteIds = <String>{};
 
@@ -54,7 +57,11 @@ final pushBridgeProvider = Provider<void>((ref) {
     () =>
         router.routeInformationProvider.removeListener(acknowledgeCurrentRoute),
   );
-  unawaited(push.register());
+  if (pushEnabled == true) {
+    unawaited(push.register());
+  } else if (pushEnabled == false && push is FcmPushService) {
+    unawaited(push.unregisterToken());
+  }
   ref.listen<AppUser?>(currentUserProvider, (previous, next) {
     if (next == null) {
       if (previous != null && push is FcmPushService) {
@@ -62,7 +69,7 @@ final pushBridgeProvider = Provider<void>((ref) {
       }
       return;
     }
-    unawaited(push.register());
+    if (pushEnabled == true) unawaited(push.register());
     acknowledgeCurrentRoute();
   }, fireImmediately: true);
 });

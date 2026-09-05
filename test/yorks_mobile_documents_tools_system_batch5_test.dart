@@ -12,6 +12,8 @@ import 'package:material_ledger/shared/models/employee.dart';
 import 'package:material_ledger/shared/models/user_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
+import 'package:material_ledger/shared/models/yorks_v1_my_profile.dart';
+import 'package:material_ledger/shared/models/yorks_v1_my_profile_workspace.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_workspace_status.dart';
 import 'package:material_ledger/shared/providers/employee_provider.dart';
@@ -20,11 +22,16 @@ import 'package:material_ledger/shared/providers/session_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_documents_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_my_profile_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_my_profile_workspace_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_status_provider.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_my_profile_repository.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_my_profile_workspace_repository.dart';
 import 'package:material_ledger/shared/services/app_config_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _projectId = 'mobile-batch-five-project';
+const _profileActor = '10000000-0000-4000-8000-000000000024';
 
 void main() {
   setUpAll(() async {
@@ -97,7 +104,7 @@ void main() {
       await _pumpProfile(tester);
 
       expect(find.text('Workspace sync'), findsOneWidget);
-      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('Preferences'), findsWidgets);
       expect(find.text('Omar Farooq'), findsOneWidget);
       await _golden(tester, '50_profile_settings_$suffix');
     });
@@ -111,6 +118,8 @@ void main() {
           pendingChangeCount: 2,
         ),
       );
+      await tester.ensureVisible(find.text('Workspace sync'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Workspace sync'));
       await tester.pumpAndSettle();
 
@@ -156,6 +165,8 @@ void main() {
         state: YorksV1WorkspaceConnectionState.connected,
       ),
     );
+    await tester.ensureVisible(find.text('Workspace sync'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Workspace sync'));
     await tester.pumpAndSettle();
 
@@ -236,8 +247,15 @@ Future<void> _pumpProfile(
           ),
         ),
         currentRoleProvider.overrideWithValue(UserRole.engineer),
+        yorksV1AuthUserIdProvider.overrideWithValue(_profileActor),
         yorksV1CurrentRoleProvider.overrideWithValue(
           YorksV1Role.projectEngineer,
+        ),
+        yorksV1MyProfileRepositoryProvider.overrideWithValue(
+          const _ProfileRepository(),
+        ),
+        yorksV1MyProfileWorkspaceRepositoryProvider.overrideWithValue(
+          const _ProfileWorkspaceRepository(),
         ),
         yorksV1WorkspaceStatusProvider.overrideWithValue(status),
         yorksV1FeatureFlagsProvider.overrideWithValue(_features),
@@ -253,6 +271,93 @@ Future<void> _pumpProfile(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class _ProfileRepository implements YorksV1MyProfileRepository {
+  const _ProfileRepository();
+
+  @override
+  Future<YorksV1MyProfile> load({
+    required String expectedAuthUserId,
+    required YorksV1Role expectedRole,
+    int projectOffset = 0,
+    int projectLimit = 25,
+  }) async => YorksV1MyProfile.fromRpcJson({
+    'schema_version': 1,
+    'generated_at': '2026-09-05T00:00:00Z',
+    'next_transition_at': null,
+    'permission_revision': 4,
+    'account': {
+      'auth_user_id': _profileActor,
+      'app_user_id': 'usr-omar',
+      'display_name': 'Omar Farooq',
+      'email': 'omar@yorks.ae',
+      'exact_role': YorksV1Role.projectEngineer.claimValue,
+      'status': 'active',
+      'workspace_key': YorksV1Role.projectEngineer.claimValue,
+    },
+    'work_identity': {
+      'legacy_employee': {'state': 'not_projected'},
+      'workforce_worker': {
+        'state': 'unlinked',
+        'worker_id': null,
+        'grants_self_service': false,
+      },
+    },
+    'projects': {
+      'total': 0,
+      'offset': 0,
+      'has_more': false,
+      'items': <Object?>[],
+    },
+    'capabilities': <Object?>[],
+    'actions': <Object?>[],
+    'operational_summary_state': 'not_projected',
+    'workforce_scope_state': 'requires_work_date_context',
+  });
+}
+
+class _ProfileWorkspaceRepository
+    implements YorksV1MyProfileWorkspaceRepository {
+  const _ProfileWorkspaceRepository();
+
+  @override
+  Future<YorksV1MyProfileWorkspace> load({
+    required String expectedAuthUserId,
+    required YorksV1Role expectedRole,
+    required int expectedPermissionRevision,
+  }) async => YorksV1MyProfileWorkspace.fromRpcJson({
+    'schema_version': 1,
+    'generated_at': '2026-09-05T00:00:00Z',
+    'next_transition_at': null,
+    'permission_revision': expectedPermissionRevision,
+    'account': {
+      'auth_user_id': expectedAuthUserId,
+      'exact_role': expectedRole.claimValue,
+    },
+    'today': {'state': 'available', 'metrics': <Object?>[]},
+    'access_scope': {
+      'technical_project_count': 0,
+      'accounts_project_count': 0,
+      'active_direct_membership_count': 0,
+      'effective_source_kinds': <Object?>[],
+      'accounts_portfolio_available': false,
+    },
+    'work_identity': {
+      'legacy_employee': {'state': 'not_projected'},
+      'workforce_worker': {
+        'state': 'unlinked',
+        'worker_id': null,
+        'worker_number': null,
+        'display_name': null,
+        'designation': null,
+        'department': null,
+        'worker_type': null,
+        'current_status': null,
+        'grants_self_service': false,
+      },
+    },
+  });
 }
 
 const _features = YorksV1FeatureFlags(

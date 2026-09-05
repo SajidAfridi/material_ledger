@@ -1,0 +1,1217 @@
+import 'package:flutter/material.dart';
+
+import '../../../../core/constants/constants.dart';
+import '../../../../shared/models/app_language.dart';
+import '../../../../shared/models/app_strings.dart';
+import '../../../../shared/models/yorks_v1_my_profile_workspace.dart';
+import '../../../../shared/models/yorks_v1_profile_strings.dart';
+import '../../../../shared/models/yorks_v1_role.dart';
+
+enum YorksMyProfileSection {
+  account,
+  today,
+  accessAndScope,
+  workIdentity,
+  preferences,
+  helpAndSecurity,
+}
+
+enum YorksMyProfileLayout { compact, medium, expanded }
+
+enum YorksAccountEvidenceState { loading, verified, unavailable }
+
+class YorksProfileSectionDefinition {
+  const YorksProfileSectionDefinition({
+    required this.section,
+    required this.label,
+    required this.icon,
+  });
+
+  final YorksMyProfileSection section;
+  final String label;
+  final IconData icon;
+}
+
+/// Resolves the profile presentation without changing its content model.
+YorksMyProfileLayout yorksMyProfileLayoutFor(double width) {
+  if (width <= AppSpacing.compactBreakpoint) {
+    return YorksMyProfileLayout.compact;
+  }
+  if (width < AppSpacing.yorksV1DesktopBreakpoint) {
+    return YorksMyProfileLayout.medium;
+  }
+  return YorksMyProfileLayout.expanded;
+}
+
+class YorksProfileSectionNavigation extends StatelessWidget {
+  const YorksProfileSectionNavigation({
+    super.key,
+    required this.language,
+    required this.sections,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final AppLanguage language;
+  final List<YorksProfileSectionDefinition> sections;
+  final YorksMyProfileSection selected;
+  final ValueChanged<YorksMyProfileSection> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: YorksV1ProfileStrings.sectionNavigation.active(language),
+      child: FocusTraversalGroup(
+        policy: OrderedTraversalPolicy(),
+        child: Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (var index = 0; index < sections.length; index++)
+              Semantics(
+                selected: selected == sections[index].section,
+                button: true,
+                child: ExcludeSemantics(
+                  child: SizedBox(
+                    height: AppSpacing.minTapTarget,
+                    child: selected == sections[index].section
+                        ? FilledButton.tonalIcon(
+                            key: ValueKey(
+                              'my-yorks-section-${sections[index].section.name}',
+                            ),
+                            onPressed: () =>
+                                onSelected(sections[index].section),
+                            icon: Icon(sections[index].icon, size: 18),
+                            label: Text(sections[index].label),
+                          )
+                        : OutlinedButton.icon(
+                            key: ValueKey(
+                              'my-yorks-section-${sections[index].section.name}',
+                            ),
+                            onPressed: () =>
+                                onSelected(sections[index].section),
+                            icon: Icon(sections[index].icon, size: 18),
+                            label: Text(sections[index].label),
+                          ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YorksIdentityHero extends StatelessWidget {
+  const YorksIdentityHero({
+    super.key,
+    required this.language,
+    required this.state,
+    this.displayName,
+    this.email,
+    this.role,
+    this.onRetry,
+    this.compact = false,
+  });
+
+  final AppLanguage language;
+  final YorksAccountEvidenceState state;
+  final String? displayName;
+  final String? email;
+  final YorksV1Role? role;
+  final VoidCallback? onRetry;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final verified = state == YorksAccountEvidenceState.verified;
+    final name = displayName?.trim();
+    final safeName = name == null || name.isEmpty
+        ? AppStrings.profile.active(language)
+        : name;
+    final roleLabel = role == null
+        ? null
+        : YorksV1ProfileStrings.role(role!, language);
+    final semantics = [
+      YorksV1ProfileStrings.accountCardSemantic.active(language),
+      if (verified) safeName,
+      ?roleLabel,
+      if (verified && email?.trim().isNotEmpty == true) email!.trim(),
+    ].join(', ');
+
+    return Semantics(
+      container: true,
+      label: semantics,
+      child: Container(
+        key: const ValueKey('my-yorks-identity-hero'),
+        padding: EdgeInsets.all(compact ? AppSpacing.lg : AppSpacing.xxl),
+        decoration: BoxDecoration(
+          color: AppColors.navy,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A0D2F57),
+              blurRadius: 28,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ExcludeSemantics(
+                  child: Container(
+                    width: compact ? 54 : 66,
+                    height: compact ? 54 : 66,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .13),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: .24),
+                      ),
+                    ),
+                    child: Text(
+                      verified ? _initials(safeName) : 'Y',
+                      style:
+                          (compact
+                                  ? AppTypography.titleLarge
+                                  : AppTypography.headlineMedium)
+                              .copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        YorksV1ProfileStrings.account.active(language),
+                        style: AppTypography.eyebrow.copyWith(
+                          color: const Color(0xFFBFD7F4),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          verified
+                              ? safeName
+                              : state == YorksAccountEvidenceState.loading
+                              ? YorksV1ProfileStrings.verifyingAccount.active(
+                                  language,
+                                )
+                              : YorksV1ProfileStrings.accountUnavailable.active(
+                                  language,
+                                ),
+                          style:
+                              (compact
+                                      ? AppTypography.headlineSmall
+                                      : AppTypography.headlineMedium)
+                                  .copyWith(color: Colors.white),
+                        ),
+                      ),
+                      if (roleLabel != null && verified) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          roleLabel,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: const Color(0xFFD7E7F7),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            YorksAccountStateBanner(
+              language: language,
+              state: state,
+              onRetry: onRetry,
+            ),
+            if (verified) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  if (roleLabel != null)
+                    _IdentityFact(
+                      label: YorksV1ProfileStrings.exactAccountRole.active(
+                        language,
+                      ),
+                      value: roleLabel,
+                    ),
+                  if (email?.trim().isNotEmpty == true)
+                    _IdentityFact(
+                      label: YorksV1ProfileStrings.signedInEmail.active(
+                        language,
+                      ),
+                      value: email!.trim(),
+                      forceLtr: true,
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YorksAccountStateBanner extends StatelessWidget {
+  const YorksAccountStateBanner({
+    super.key,
+    required this.language,
+    required this.state,
+    this.onRetry,
+  });
+
+  final AppLanguage language;
+  final YorksAccountEvidenceState state;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, title, description, foreground, background) = switch (state) {
+      YorksAccountEvidenceState.verified => (
+        Icons.verified_user_outlined,
+        YorksV1ProfileStrings.verifiedAccount.active(language),
+        YorksV1ProfileStrings.verifiedByYorks.active(language),
+        const Color(0xFFDAF7EC),
+        Colors.white.withValues(alpha: .10),
+      ),
+      YorksAccountEvidenceState.loading => (
+        Icons.sync_rounded,
+        YorksV1ProfileStrings.verifyingAccount.active(language),
+        YorksV1ProfileStrings.verifyingAccountDescription.active(language),
+        const Color(0xFFD7E7F7),
+        Colors.white.withValues(alpha: .08),
+      ),
+      YorksAccountEvidenceState.unavailable => (
+        Icons.error_outline_rounded,
+        YorksV1ProfileStrings.accountUnavailable.active(language),
+        YorksV1ProfileStrings.accountUnavailableDescription.active(language),
+        const Color(0xFFFFDEDE),
+        const Color(0x33C23737),
+      ),
+    };
+    return Semantics(
+      liveRegion: state != YorksAccountEvidenceState.verified,
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: foreground.withValues(alpha: .28)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: foreground, size: 21),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTypography.titleSmall.copyWith(
+                          color: foreground,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        description,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: foreground.withValues(alpha: .90),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (state == YorksAccountEvidenceState.loading) ...[
+              const SizedBox(height: AppSpacing.md),
+              const LinearProgressIndicator(
+                minHeight: 2,
+                color: Color(0xFFD7E7F7),
+                backgroundColor: Color(0x33FFFFFF),
+              ),
+            ],
+            if (state == YorksAccountEvidenceState.unavailable &&
+                onRetry != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: onRetry,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0x99FFFFFF)),
+                    minimumSize: const Size(44, 44),
+                  ),
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(YorksV1ProfileStrings.tryAgain.active(language)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YorksProfileSectionCard extends StatelessWidget {
+  const YorksProfileSectionCard({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.children,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        border: Border.all(color: AppColors.line),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: AppSpacing.ambientBlur,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: Icon(icon, color: AppColors.blue, size: 22),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(title, style: AppTypography.titleLarge),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        description,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.inkSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.line),
+          for (var index = 0; index < children.length; index++) ...[
+            children[index],
+            if (index != children.length - 1)
+              const Divider(
+                height: 1,
+                indent: 62,
+                endIndent: AppSpacing.lg,
+                color: AppColors.line,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A server-confirmed operational signal. It intentionally accepts a plain
+/// value rather than deriving a total from client state, so a loading/error
+/// profile can never be rendered as a misleading zero.
+class YorksRoleMetricCard extends StatelessWidget {
+  const YorksRoleMetricCard({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final int value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: '$title: $value. $description',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 126),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: Icon(icon, size: 19, color: AppColors.blue),
+                ),
+                const Spacer(),
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Text(
+                    '$value',
+                    style: AppTypography.headlineMedium.copyWith(
+                      color: AppColors.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(title, style: AppTypography.titleSmall),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              description,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.inkSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YorksProfileQuickAction {
+  const YorksProfileQuickAction({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final IconData icon;
+  final VoidCallback onPressed;
+}
+
+/// Responsive, keyboard-accessible navigation only. Every item has already
+/// been confirmed by P01 and still passes ordinary route/RPC guards after tap.
+class YorksQuickActionGrid extends StatelessWidget {
+  const YorksQuickActionGrid({
+    super.key,
+    required this.actions,
+    required this.compact,
+  });
+
+  final List<YorksProfileQuickAction> actions;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final twoColumns =
+            !compact && textScale < 1.6 && constraints.maxWidth >= 560;
+        final width = twoColumns
+            ? (constraints.maxWidth - AppSpacing.sm) / 2
+            : constraints.maxWidth;
+        return FocusTraversalGroup(
+          policy: OrderedTraversalPolicy(),
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final action in actions)
+                SizedBox(
+                  width: width,
+                  child: Semantics(
+                    button: true,
+                    label: action.title,
+                    value: action.description,
+                    child: Material(
+                      color: AppColors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                      child: InkWell(
+                        key: ValueKey('my-yorks-action-${action.id}'),
+                        onTap: action.onPressed,
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.radiusLg,
+                        ),
+                        focusColor: AppColors.blueContainer,
+                        hoverColor: AppColors.blueContainer,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minHeight: AppSpacing.minTapTarget,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.blueContainer,
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.radiusMd,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    action.icon,
+                                    color: AppColors.blue,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        action.title,
+                                        style: AppTypography.titleSmall,
+                                      ),
+                                      const SizedBox(height: AppSpacing.xxs),
+                                      Text(
+                                        action.description,
+                                        style: AppTypography.bodySmall.copyWith(
+                                          color: AppColors.inkSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                const Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 19,
+                                  color: AppColors.inkSecondary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A concise, read-only explanation of the currently effective server scope.
+class YorksAccessSummaryCard extends StatelessWidget {
+  const YorksAccessSummaryCard({
+    super.key,
+    required this.language,
+    required this.scope,
+    required this.verifiedAt,
+  });
+
+  final AppLanguage language;
+  final YorksV1MyProfileAccessScope scope;
+  final DateTime verifiedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    return YorksProfileSectionCard(
+      title: YorksV1ProfileStrings.accessAndScope.active(language),
+      description: YorksV1ProfileStrings.accessAndScopeDescription.active(
+        language,
+      ),
+      icon: Icons.shield_outlined,
+      children: [
+        YorksScopeList(
+          language: language,
+          scope: scope,
+          verifiedAt: verifiedAt,
+        ),
+      ],
+    );
+  }
+}
+
+class YorksScopeList extends StatelessWidget {
+  const YorksScopeList({
+    super.key,
+    required this.language,
+    required this.scope,
+    required this.verifiedAt,
+  });
+
+  final AppLanguage language;
+  final YorksV1MyProfileAccessScope scope;
+  final DateTime verifiedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final facts = <(IconData, String, int)>[
+      (
+        Icons.account_tree_outlined,
+        YorksV1ProfileStrings.technicalProjectScope.active(language),
+        scope.technicalProjectCount,
+      ),
+      (
+        Icons.people_outline_rounded,
+        YorksV1ProfileStrings.directMembershipScope.active(language),
+        scope.activeDirectMembershipCount,
+      ),
+      if (scope.accountsPortfolioAvailable)
+        (
+          Icons.account_balance_outlined,
+          YorksV1ProfileStrings.accountsProjectScope.active(language),
+          scope.accountsProjectCount,
+        ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < facts.length; index++) ...[
+            _ScopeFactRow(
+              icon: facts[index].$1,
+              label: facts[index].$2,
+              value: facts[index].$3,
+            ),
+            if (index != facts.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: Divider(height: 1, color: AppColors.line),
+              ),
+          ],
+          if (scope.effectiveSourceKinds.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              YorksV1ProfileStrings.accessSource.active(language),
+              style: AppTypography.labelMedium.copyWith(
+                color: AppColors.inkSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final source in scope.effectiveSourceKinds)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.blueContainer,
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                    ),
+                    child: Text(
+                      YorksV1ProfileStrings.sourceKind(source, language),
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.blue,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_outlined,
+                color: AppColors.success,
+                size: 18,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      YorksV1ProfileStrings.serverConfirmed.active(language),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.inkSecondary,
+                      ),
+                    ),
+                    Text(
+                      '${YorksV1ProfileStrings.lastVerified.active(language)}: '
+                      '${MaterialLocalizations.of(context).formatShortDate(verifiedAt.toLocal())} '
+                      '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(verifiedAt.toLocal()))}',
+                      style: AppTypography.labelSmall.copyWith(
+                        color: AppColors.inkSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class YorksWorkIdentityCard extends StatelessWidget {
+  const YorksWorkIdentityCard({
+    super.key,
+    required this.language,
+    required this.worker,
+  });
+
+  final AppLanguage language;
+  final YorksV1MyProfileWorkerIdentity worker;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!worker.isLinked) {
+      return YorksProfileSectionCard(
+        title: YorksV1ProfileStrings.workIdentity.active(language),
+        description: YorksV1ProfileStrings.workIdentityDescription.active(
+          language,
+        ),
+        icon: Icons.badge_outlined,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: _IdentityNotice(
+              icon: Icons.link_off_rounded,
+              title: YorksV1ProfileStrings.workerNotLinked.active(language),
+              description: YorksV1ProfileStrings.workerNotLinkedDescription
+                  .active(language),
+            ),
+          ),
+        ],
+      );
+    }
+    return YorksProfileSectionCard(
+      title: YorksV1ProfileStrings.workIdentity.active(language),
+      description: YorksV1ProfileStrings.workIdentityDescription.active(
+        language,
+      ),
+      icon: Icons.badge_outlined,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _IdentityNotice(
+                icon: Icons.link_rounded,
+                title: YorksV1ProfileStrings.workerLinked.active(language),
+                description: YorksV1ProfileStrings.workerLinkedDescription
+                    .active(language),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _ProfileFactRow(
+                label: YorksV1ProfileStrings.workRecordName.active(language),
+                value: worker.displayName!,
+              ),
+              _ProfileFactRow(
+                label: YorksV1ProfileStrings.workerNumber.active(language),
+                value: worker.workerNumber!,
+                forceLtr: true,
+              ),
+              _ProfileFactRow(
+                label: YorksV1ProfileStrings.designation.active(language),
+                value: worker.designation!,
+              ),
+              if (worker.department != null)
+                _ProfileFactRow(
+                  label: YorksV1ProfileStrings.department.active(language),
+                  value: worker.department!,
+                ),
+              _ProfileFactRow(
+                label: YorksV1ProfileStrings.workCategory.active(language),
+                value: YorksV1ProfileStrings.workerType(
+                  worker.workerType!,
+                  language,
+                ),
+              ),
+              _ProfileFactRow(
+                label: YorksV1ProfileStrings.workStatus.active(language),
+                value: YorksV1ProfileStrings.workerStatus(
+                  worker.currentStatus!,
+                  language,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScopeFactRow extends StatelessWidget {
+  const _ScopeFactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.inkSecondary, size: 20),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: Text(label, style: AppTypography.bodyMedium)),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text(
+            '$value',
+            style: AppTypography.titleSmall.copyWith(color: AppColors.ink),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IdentityNotice extends StatelessWidget {
+  const _IdentityNotice({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppColors.blue, size: 21),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.titleSmall),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  description,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.inkSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileFactRow extends StatelessWidget {
+  const _ProfileFactRow({
+    required this.label,
+    required this.value,
+    this.forceLtr = false,
+  });
+
+  final String label;
+  final String value;
+  final bool forceLtr;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.inkSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Flexible(
+            child: Directionality(
+              textDirection: forceLtr
+                  ? TextDirection.ltr
+                  : Directionality.of(context),
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class YorksPreferenceRow extends StatelessWidget {
+  const YorksPreferenceRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.description,
+    this.onPressed,
+    this.value,
+    this.trailing,
+    this.destructive = false,
+    this.toggled,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback? onPressed;
+  final String? value;
+  final Widget? trailing;
+  final bool destructive;
+  final bool? toggled;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? AppColors.error : AppColors.inkSecondary;
+    final semanticValue = [
+      if (value?.isNotEmpty == true) value!,
+      description,
+    ].join('. ');
+    return Semantics(
+      button: onPressed != null,
+      enabled: onPressed != null,
+      toggled: toggled,
+      label: title,
+      value: semanticValue,
+      child: ExcludeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            focusColor: AppColors.blueContainer,
+            hoverColor: AppColors.surfaceContainerLow,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: AppSpacing.minTapTarget,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(icon, color: color, size: 22),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: AppTypography.titleSmall.copyWith(
+                              color: destructive ? AppColors.error : null,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            description,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.inkSecondary,
+                            ),
+                          ),
+                          if (value?.isNotEmpty == true) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              value!,
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: destructive
+                                    ? AppColors.error
+                                    : AppColors.blue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    trailing == null
+                        ? Icon(
+                            Directionality.of(context) == TextDirection.rtl
+                                ? Icons.chevron_left_rounded
+                                : Icons.chevron_right_rounded,
+                            color: destructive
+                                ? AppColors.error
+                                : AppColors.muted,
+                          )
+                        : trailing!,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IdentityFact extends StatelessWidget {
+  const _IdentityFact({
+    required this.label,
+    required this.value,
+    this.forceLtr = false,
+  });
+
+  final String label;
+  final String value;
+  final bool forceLtr;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 150),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: Colors.white.withValues(alpha: .12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(
+              color: const Color(0xFFBFD7F4),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Directionality(
+            textDirection: forceLtr
+                ? TextDirection.ltr
+                : Directionality.of(context),
+            child: Text(
+              value,
+              style: AppTypography.bodyMedium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _initials(String value) {
+  final parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return 'Y';
+  if (parts.length == 1) {
+    final word = parts.single;
+    return String.fromCharCodes(word.runes.take(2)).toUpperCase();
+  }
+  return String.fromCharCodes([
+    parts.first.runes.first,
+    parts.last.runes.first,
+  ]).toUpperCase();
+}
