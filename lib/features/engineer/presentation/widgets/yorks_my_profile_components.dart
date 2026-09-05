@@ -62,43 +62,86 @@ class YorksProfileSectionNavigation extends StatelessWidget {
     return Semantics(
       container: true,
       label: YorksV1ProfileStrings.sectionNavigation.active(language),
-      child: FocusTraversalGroup(
-        policy: OrderedTraversalPolicy(),
-        child: Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (var index = 0; index < sections.length; index++)
-              Semantics(
-                selected: selected == sections[index].section,
-                button: true,
-                child: ExcludeSemantics(
-                  child: SizedBox(
-                    height: AppSpacing.minTapTarget,
-                    child: selected == sections[index].section
-                        ? FilledButton.tonalIcon(
-                            key: ValueKey(
-                              'my-yorks-section-${sections[index].section.name}',
-                            ),
-                            onPressed: () =>
-                                onSelected(sections[index].section),
-                            icon: Icon(sections[index].icon, size: 18),
-                            label: Text(sections[index].label),
-                          )
-                        : OutlinedButton.icon(
-                            key: ValueKey(
-                              'my-yorks-section-${sections[index].section.name}',
-                            ),
-                            onPressed: () =>
-                                onSelected(sections[index].section),
-                            icon: Icon(sections[index].icon, size: 18),
-                            label: Text(sections[index].label),
-                          ),
-                  ),
-                ),
-              ),
-          ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          border: Border.all(color: AppColors.line),
         ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: FocusTraversalGroup(
+            policy: OrderedTraversalPolicy(),
+            child: Row(
+              children: [
+                for (final definition in sections)
+                  _ProfileSectionTab(
+                    definition: definition,
+                    selected: selected == definition.section,
+                    onPressed: () => onSelected(definition.section),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSectionTab extends StatelessWidget {
+  const _ProfileSectionTab({
+    required this.definition,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final YorksProfileSectionDefinition definition;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(132, 52)),
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      ),
+      shape: const WidgetStatePropertyAll(RoundedRectangleBorder()),
+      foregroundColor: WidgetStatePropertyAll(
+        selected ? AppColors.blue : AppColors.inkSecondary,
+      ),
+      backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+      overlayColor: const WidgetStatePropertyAll(AppColors.blueContainer),
+      side: const WidgetStatePropertyAll(BorderSide(color: Colors.transparent)),
+    );
+    final key = ValueKey('my-yorks-section-${definition.section.name}');
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Container(
+        decoration: BoxDecoration(
+          border: selected
+              ? const Border(
+                  bottom: BorderSide(color: AppColors.blue, width: 3),
+                )
+              : null,
+        ),
+        child: selected
+            ? FilledButton.tonalIcon(
+                key: key,
+                onPressed: onPressed,
+                style: style,
+                icon: Icon(definition.icon, size: 20),
+                label: Text(definition.label),
+              )
+            : TextButton.icon(
+                key: key,
+                onPressed: onPressed,
+                style: style,
+                icon: Icon(definition.icon, size: 20),
+                label: Text(definition.label),
+              ),
       ),
     );
   }
@@ -158,34 +201,35 @@ class YorksIdentityHero extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = !compact && constraints.maxWidth >= 560;
+            final title = verified
+                ? safeName
+                : state == YorksAccountEvidenceState.loading
+                ? YorksV1ProfileStrings.verifyingAccount.active(language)
+                : YorksV1ProfileStrings.accountUnavailable.active(language);
+            final identity = Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 ExcludeSemantics(
                   child: Container(
-                    width: compact ? 54 : 66,
-                    height: compact ? 54 : 66,
+                    width: compact ? 64 : 72,
+                    height: compact ? 64 : 72,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: .13),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: .24),
+                        color: Colors.white.withValues(alpha: .42),
                       ),
                     ),
                     child: Text(
                       verified ? _initials(safeName) : 'Y',
-                      style:
-                          (compact
-                                  ? AppTypography.titleLarge
-                                  : AppTypography.headlineMedium)
-                              .copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
+                      style: AppTypography.headlineMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
@@ -194,37 +238,22 @@ class YorksIdentityHero extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        YorksV1ProfileStrings.account.active(language),
-                        style: AppTypography.eyebrow.copyWith(
-                          color: const Color(0xFFBFD7F4),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
                       Semantics(
                         header: true,
                         child: Text(
-                          verified
-                              ? safeName
-                              : state == YorksAccountEvidenceState.loading
-                              ? YorksV1ProfileStrings.verifyingAccount.active(
-                                  language,
-                                )
-                              : YorksV1ProfileStrings.accountUnavailable.active(
-                                  language,
-                                ),
-                          style:
-                              (compact
-                                      ? AppTypography.headlineSmall
-                                      : AppTypography.headlineMedium)
-                                  .copyWith(color: Colors.white),
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.headlineMedium.copyWith(
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                       if (roleLabel != null && verified) ...[
-                        const SizedBox(height: AppSpacing.xs),
+                        const SizedBox(height: AppSpacing.xxs),
                         Text(
                           roleLabel,
-                          style: AppTypography.bodyMedium.copyWith(
+                          style: AppTypography.bodyLarge.copyWith(
                             color: const Color(0xFFD7E7F7),
                             fontWeight: FontWeight.w600,
                           ),
@@ -234,42 +263,140 @@ class YorksIdentityHero extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            YorksAccountStateBanner(
-              language: language,
-              state: state,
-              onRetry: onRetry,
-            ),
-            if (verified) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  if (roleLabel != null)
-                    _IdentityFact(
-                      label: YorksV1ProfileStrings.exactAccountRole.active(
-                        language,
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (wide && verified && email?.trim().isNotEmpty == true)
+                  Row(
+                    children: [
+                      Expanded(child: identity),
+                      const SizedBox(width: AppSpacing.xxl),
+                      Container(
+                        width: 1,
+                        height: 56,
+                        color: Colors.white.withValues(alpha: .16),
                       ),
-                      value: roleLabel,
-                    ),
-                  if (email?.trim().isNotEmpty == true)
-                    _IdentityFact(
-                      label: YorksV1ProfileStrings.signedInEmail.active(
-                        language,
+                      const SizedBox(width: AppSpacing.xxl),
+                      SizedBox(
+                        width: 240,
+                        child: _IdentityEmail(
+                          language: language,
+                          email: email!.trim(),
+                        ),
                       ),
-                      value: email!.trim(),
-                      forceLtr: true,
-                    ),
+                    ],
+                  )
+                else ...[
+                  identity,
+                  if (verified && email?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    _IdentityEmail(language: language, email: email!.trim()),
+                  ],
                 ],
-              ),
-            ],
-          ],
+                const SizedBox(height: AppSpacing.lg),
+                if (verified)
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      _IdentityStatusPill(
+                        icon: Icons.circle,
+                        label: YorksV1ProfileStrings.active.active(language),
+                        foreground: const Color(0xFF65E6B5),
+                      ),
+                      _IdentityStatusPill(
+                        icon: Icons.verified_user_outlined,
+                        label: YorksV1ProfileStrings.verifiedAccount.active(
+                          language,
+                        ),
+                        foreground: Colors.white,
+                      ),
+                    ],
+                  )
+                else
+                  YorksAccountStateBanner(
+                    language: language,
+                    state: state,
+                    onRetry: onRetry,
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
+}
+
+class _IdentityEmail extends StatelessWidget {
+  const _IdentityEmail({required this.language, required this.email});
+
+  final AppLanguage language;
+  final String email;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      const Icon(Icons.mail_outline_rounded, color: Colors.white, size: 22),
+      const SizedBox(width: AppSpacing.sm),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              YorksV1ProfileStrings.signedInEmail.active(language),
+              style: AppTypography.labelSmall.copyWith(
+                color: const Color(0xFFBFD7F4),
+              ),
+            ),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                email,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMedium.copyWith(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _IdentityStatusPill extends StatelessWidget {
+  const _IdentityStatusPill({
+    required this.icon,
+    required this.label,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 36),
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .10),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: icon == Icons.circle ? 12 : 18, color: foreground),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          label,
+          style: AppTypography.labelMedium.copyWith(color: foreground),
+        ),
+      ],
+    ),
+  );
 }
 
 class YorksAccountStateBanner extends StatelessWidget {
@@ -397,6 +524,7 @@ class YorksProfileSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showDescription = MediaQuery.sizeOf(context).width > 720;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
@@ -415,19 +543,24 @@ class YorksProfileSectionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 36,
+                  height: 36,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.blueContainer,
                     borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                   ),
-                  child: Icon(icon, color: AppColors.blue, size: 22),
+                  child: Icon(icon, color: AppColors.blue, size: 19),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -436,15 +569,17 @@ class YorksProfileSectionCard extends StatelessWidget {
                     children: [
                       Semantics(
                         header: true,
-                        child: Text(title, style: AppTypography.titleLarge),
+                        child: Text(title, style: AppTypography.titleMedium),
                       ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        description,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.inkSecondary,
+                      if (showDescription) ...[
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          description,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.inkSecondary,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -491,8 +626,8 @@ class YorksRoleMetricCard extends StatelessWidget {
       container: true,
       label: '$title: $value. $description',
       child: Container(
-        constraints: const BoxConstraints(minHeight: 126),
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        constraints: const BoxConstraints(minHeight: 108),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: AppColors.surfaceContainerLow,
           borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
@@ -525,7 +660,7 @@ class YorksRoleMetricCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             Text(title, style: AppTypography.titleSmall),
             const SizedBox(height: AppSpacing.xxs),
             Text(
@@ -574,11 +709,16 @@ class YorksQuickActionGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScale = MediaQuery.textScalerOf(context).scale(1);
-        final twoColumns =
-            !compact && textScale < 1.6 && constraints.maxWidth >= 560;
-        final width = twoColumns
-            ? (constraints.maxWidth - AppSpacing.sm) / 2
-            : constraints.maxWidth;
+        final columns = compact || textScale >= 1.6
+            ? 1
+            : constraints.maxWidth >= 720
+            ? 3
+            : constraints.maxWidth >= 480
+            ? 2
+            : 1;
+        final width = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - AppSpacing.sm * (columns - 1)) / columns;
         return FocusTraversalGroup(
           policy: OrderedTraversalPolicy(),
           child: Wrap(
@@ -1110,90 +1250,45 @@ class YorksPreferenceRow extends StatelessWidget {
                               color: AppColors.inkSecondary,
                             ),
                           ),
-                          if (value?.isNotEmpty == true) ...[
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              value!,
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: destructive
-                                    ? AppColors.error
-                                    : AppColors.blue,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    trailing == null
-                        ? Icon(
-                            Directionality.of(context) == TextDirection.rtl
-                                ? Icons.chevron_left_rounded
-                                : Icons.chevron_right_rounded,
+                    if (value?.isNotEmpty == true)
+                      Flexible(
+                        child: Text(
+                          value!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: AppTypography.bodyMedium.copyWith(
                             color: destructive
                                 ? AppColors.error
-                                : AppColors.muted,
-                          )
-                        : trailing!,
+                                : AppColors.blue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    if (value?.isNotEmpty == true)
+                      const SizedBox(width: AppSpacing.xs),
+                    trailing ??
+                        Icon(
+                          onPressed == null
+                              ? Icons.lock_outline_rounded
+                              : Directionality.of(context) == TextDirection.rtl
+                              ? Icons.chevron_left_rounded
+                              : Icons.chevron_right_rounded,
+                          size: onPressed == null ? 18 : 24,
+                          color: destructive
+                              ? AppColors.error
+                              : AppColors.muted,
+                        ),
                   ],
                 ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _IdentityFact extends StatelessWidget {
-  const _IdentityFact({
-    required this.label,
-    required this.value,
-    this.forceLtr = false,
-  });
-
-  final String label;
-  final String value;
-  final bool forceLtr;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 150),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(color: Colors.white.withValues(alpha: .12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTypography.labelSmall.copyWith(
-              color: const Color(0xFFBFD7F4),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Directionality(
-            textDirection: forceLtr
-                ? TextDirection.ltr
-                : Directionality.of(context),
-            child: Text(
-              value,
-              style: AppTypography.bodyMedium.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

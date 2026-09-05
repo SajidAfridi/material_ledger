@@ -72,11 +72,6 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
           final layout = yorksMyProfileLayoutFor(constraints.maxWidth);
           final textScale = MediaQuery.textScalerOf(context).scale(1);
           final compact = layout == YorksMyProfileLayout.compact;
-          final useTwoPanes =
-              textScale < 1.8 &&
-              (layout == YorksMyProfileLayout.expanded ||
-                  (layout == YorksMyProfileLayout.medium &&
-                      size.width > size.height));
           final horizontalPadding = switch (layout) {
             YorksMyProfileLayout.compact => AppSpacing.mobileScreenHorizontal,
             YorksMyProfileLayout.medium => AppSpacing.xxl,
@@ -85,13 +80,8 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
           final sections = <YorksProfileSectionDefinition>[
             YorksProfileSectionDefinition(
               section: YorksMyProfileSection.account,
-              label: YorksV1ProfileStrings.account.active(language),
-              icon: Icons.badge_outlined,
-            ),
-            YorksProfileSectionDefinition(
-              section: YorksMyProfileSection.today,
-              label: YorksV1ProfileStrings.today.active(language),
-              icon: Icons.today_outlined,
+              label: AppStrings.overview.active(language),
+              icon: Icons.home_outlined,
             ),
             YorksProfileSectionDefinition(
               section: YorksMyProfileSection.accessAndScope,
@@ -99,26 +89,18 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
               icon: Icons.shield_outlined,
             ),
             YorksProfileSectionDefinition(
-              section: YorksMyProfileSection.workIdentity,
-              label: YorksV1ProfileStrings.workIdentity.active(language),
-              icon: Icons.badge_outlined,
-            ),
-            YorksProfileSectionDefinition(
               section: YorksMyProfileSection.preferences,
               label: YorksV1ProfileStrings.preferences.active(language),
               icon: Icons.tune_rounded,
-            ),
-            YorksProfileSectionDefinition(
-              section: YorksMyProfileSection.helpAndSecurity,
-              label: YorksV1ProfileStrings.helpAndSecurity.active(language),
-              icon: Icons.shield_outlined,
             ),
           ];
           final accountSection = _AccountSection(
             key: _sectionKeys[YorksMyProfileSection.account],
             language: language,
             profileState: profileState,
-            compact: compact || (useTwoPanes && size.height <= 500),
+            compact:
+                compact ||
+                (layout == YorksMyProfileLayout.medium && size.height <= 500),
             onRetry: () => unawaited(_refreshProfile()),
           );
           final todaySection = _TodayAndActionsSection(
@@ -165,6 +147,17 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
             onSignOut: () => showYorksSignOut(context, ref),
           );
 
+          final sectionNavigation = YorksProfileSectionNavigation(
+            language: language,
+            sections: sections,
+            selected: _selectedSection,
+            onSelected: _selectSection,
+          );
+          final confirmedBanner = _ServerConfirmedBanner(
+            language: language,
+            confirmed: profileState.hasValue && profileWorkspaceState.hasValue,
+            onRefresh: () => unawaited(_refreshProfile()),
+          );
           final content = FocusTraversalGroup(
             policy: OrderedTraversalPolicy(),
             child: CustomScrollView(
@@ -187,34 +180,12 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (!compact)
-                              _PageHeading(language: language)
-                            else
-                              Text(
-                                YorksV1ProfileStrings.introduction.active(
-                                  language,
-                                ),
-                                style: AppTypography.bodyMedium.copyWith(
-                                  color: AppColors.inkSecondary,
-                                ),
-                              ),
-                            const SizedBox(height: AppSpacing.lg),
-                            YorksProfileSectionNavigation(
-                              language: language,
-                              sections: sections,
-                              selected: _selectedSection,
-                              onSelected: _selectSection,
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
-                            if (useTwoPanes)
+                            if (layout == YorksMyProfileLayout.expanded)
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(
-                                    width:
-                                        layout == YorksMyProfileLayout.expanded
-                                        ? 360
-                                        : 310,
+                                    width: 336,
                                     child: Column(
                                       children: [
                                         accountSection,
@@ -228,27 +199,82 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
                                   const SizedBox(width: AppSpacing.xl),
                                   Expanded(
                                     child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
+                                        _PageHeading(language: language),
+                                        const SizedBox(height: AppSpacing.xl),
                                         todaySection,
+                                        const SizedBox(height: AppSpacing.md),
+                                        confirmedBanner,
                                         const SizedBox(height: AppSpacing.xl),
-                                        preferencesSection,
-                                        const SizedBox(height: AppSpacing.xl),
-                                        helpAndSecuritySection,
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(child: preferencesSection),
+                                            const SizedBox(
+                                              width: AppSpacing.xl,
+                                            ),
+                                            Expanded(
+                                              child: helpAndSecuritySection,
+                                            ),
+                                          ],
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ],
                               )
-                            else
+                            else if (compact)
                               Column(
                                 children: [
                                   accountSection,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  sectionNavigation,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  todaySection,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  confirmedBanner,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  accessSection,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  workIdentitySection,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  preferencesSection,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  helpAndSecuritySection,
+                                ],
+                              )
+                            else
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _PageHeading(language: language),
+                                  const SizedBox(height: AppSpacing.lg),
+                                  sectionNavigation,
+                                  const SizedBox(height: AppSpacing.xl),
+                                  accountSection,
                                   const SizedBox(height: AppSpacing.xl),
                                   todaySection,
+                                  const SizedBox(height: AppSpacing.md),
+                                  confirmedBanner,
                                   const SizedBox(height: AppSpacing.xl),
-                                  accessSection,
-                                  const SizedBox(height: AppSpacing.xl),
-                                  workIdentitySection,
+                                  if (textScale < 1.8)
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(child: accessSection),
+                                        const SizedBox(width: AppSpacing.xl),
+                                        Expanded(child: workIdentitySection),
+                                      ],
+                                    )
+                                  else ...[
+                                    accessSection,
+                                    const SizedBox(height: AppSpacing.xl),
+                                    workIdentitySection,
+                                  ],
                                   const SizedBox(height: AppSpacing.xl),
                                   preferencesSection,
                                   const SizedBox(height: AppSpacing.xl),
@@ -388,6 +414,77 @@ class _PageHeading extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ServerConfirmedBanner extends StatelessWidget {
+  const _ServerConfirmedBanner({
+    required this.language,
+    required this.confirmed,
+    required this.onRefresh,
+  });
+
+  final AppLanguage language;
+  final bool confirmed;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!confirmed) return const SizedBox.shrink();
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Container(
+        key: const ValueKey('my-yorks-server-confirmed-banner'),
+        constraints: const BoxConstraints(minHeight: 58),
+        padding: const EdgeInsetsDirectional.fromSTEB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.sm,
+          AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.successContainer,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+          border: Border.all(color: AppColors.success.withValues(alpha: .24)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.verified_rounded, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    YorksV1ProfileStrings.serverConfirmed.active(language),
+                    style: AppTypography.labelLarge.copyWith(
+                      color: AppColors.success,
+                    ),
+                  ),
+                  Text(
+                    YorksV1ProfileStrings.accountScopeRefreshDescription.active(
+                      language,
+                    ),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.inkSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onRefresh,
+              tooltip: YorksV1ProfileStrings.accountScopeRefresh.active(
+                language,
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              color: AppColors.success,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
