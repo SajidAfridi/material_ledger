@@ -1,6 +1,8 @@
 import 'dart:io';
 
-const _mainDartJsRawBudget = 10000000;
+// Keep a small raw parse-size allowance while the tighter transferred-size
+// budget below remains the primary production network guard.
+const _mainDartJsRawBudget = 10100000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 

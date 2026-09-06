@@ -782,7 +782,7 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'बदलाव सहेजकर इंजीनियरिंग अनुमोदन के लिए भेज दिए गए हैं।',
   );
   static const discussion = TranslatableString(
-    en: 'Request Discussion',
+    en: 'Request discussion',
     ar: 'مناقشة الطلب',
     ur: 'درخواست پر گفتگو',
     hi: 'अनुरोध चर्चा',
@@ -794,10 +794,22 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'टिप्पणी जोड़ें',
   );
   static const discussionDescription = TranslatableString(
-    en: 'Comments stay with this request through every stage. Mention an authorized teammate to notify them.',
-    ar: 'تبقى التعليقات مع هذا الطلب في جميع المراحل. اذكر زميلاً مخولاً لإشعاره.',
-    ur: 'تبصرے ہر مرحلے میں اس درخواست کے ساتھ رہتے ہیں۔ اطلاع کے لیے مجاز ساتھی کا ذکر کریں۔',
-    hi: 'टिप्पणियाँ हर चरण में इस अनुरोध के साथ रहती हैं। सूचना के लिए अधिकृत साथी का उल्लेख करें।',
+    en: 'Keep decisions, questions and evidence with this request.',
+    ar: 'احتفظ بالقرارات والأسئلة والأدلة مع هذا الطلب.',
+    ur: 'فیصلے، سوالات اور ثبوت اس درخواست کے ساتھ رکھیں۔',
+    hi: 'निर्णय, प्रश्न और प्रमाण इस अनुरोध के साथ रखें।',
+  );
+  static const startTeamConversation = TranslatableString(
+    en: 'Start team conversation',
+    ar: 'بدء محادثة الفريق',
+    ur: 'ٹیم گفتگو شروع کریں',
+    hi: 'टीम बातचीत शुरू करें',
+  );
+  static const discussionVisibility = TranslatableString(
+    en: 'Everyone with access to this request can see this discussion.',
+    ar: 'يمكن لكل من لديه صلاحية الوصول إلى هذا الطلب رؤية هذه المناقشة.',
+    ur: 'اس درخواست تک رسائی رکھنے والا ہر شخص یہ گفتگو دیکھ سکتا ہے۔',
+    hi: 'इस अनुरोध की पहुँच रखने वाला हर व्यक्ति यह चर्चा देख सकता है।',
   );
   static const writeComment = TranslatableString(
     en: 'Write a comment',
@@ -806,7 +818,7 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'टिप्पणी लिखें',
   );
   static const commentComposerHint = TranslatableString(
-    en: 'Write a comment and mention users…',
+    en: 'Write a comment or type @ to mention someone…',
     ar: 'اكتب تعليقًا واذكر المستخدمين باستخدام @',
     ur: '@ کے ساتھ تبصرہ لکھیں اور صارفین کا ذکر کریں',
     hi: 'टिप्पणी लिखें और @ से उपयोगकर्ताओं का उल्लेख करें',
@@ -834,6 +846,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'نشر التعليق',
     ur: 'تبصرہ پوسٹ کریں',
     hi: 'टिप्पणी पोस्ट करें',
+  );
+  static const commentNotPosted = TranslatableString(
+    en: 'Comment not posted. Your text is kept here. Please try again.',
+    ar: 'لم يُنشر التعليق. النص محفوظ هنا. يرجى المحاولة مرة أخرى.',
+    ur: 'تبصرہ پوسٹ نہیں ہوا۔ آپ کا متن یہاں محفوظ ہے۔ دوبارہ کوشش کریں۔',
+    hi: 'टिप्पणी पोस्ट नहीं हुई। आपका टेक्स्ट यहीं है। फिर से कोशिश करें।',
   );
   static const noComments = TranslatableString(
     en: 'No comments yet',

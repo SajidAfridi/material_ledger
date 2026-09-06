@@ -19,9 +19,11 @@ import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq_workbook.dart';
 import 'package:material_ledger/shared/models/yorks_v1_configuration.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_boq_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_repository_provider.dart';
@@ -36,6 +38,18 @@ import 'support/yorks_v1_permission_test_support.dart';
 const _draftId = 'mobile-mr-draft';
 const _projectId = 'mobile-mr-project';
 const _alternateProjectId = 'mobile-mr-project-nexus';
+const _discussionFeatures = YorksV1FeatureFlags(
+  foundation: true,
+  projects: true,
+  boq: true,
+  excel: true,
+  requests: true,
+  arrangement: true,
+  logistics: true,
+  returnsDocuments: true,
+  documents: true,
+  teamChat: true,
+);
 const _draftProjects = [
   YorksV1MaterialRequestProjectOption(
     id: _projectId,
@@ -752,6 +766,7 @@ void main() {
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
             ),
+            yorksV1FeatureFlagsProvider.overrideWithValue(_discussionFeatures),
             yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
               repository,
             ),
@@ -780,8 +795,8 @@ void main() {
       await tester.ensureVisible(composer);
       await tester.pumpAndSettle();
 
-      expect(find.text('Request Discussion'), findsOneWidget);
-      expect(find.text('Add Comment'), findsOneWidget);
+      expect(find.text('Request discussion'), findsOneWidget);
+      expect(find.text('Add Comment'), findsNothing);
       expect(find.text('No comments yet'), findsOneWidget);
       expect(
         find.text('Start the discussion by adding a comment.'),
@@ -793,18 +808,23 @@ void main() {
               find.byKey(const ValueKey('material-request-attachment-action')),
             )
             .onPressed,
-        isNull,
+        isNotNull,
       );
       await expectLater(
         find.byKey(const ValueKey('material-request-discussion-card')),
         matchesGoldenFile('goldens/r35/mr_discussion_empty_desktop.png'),
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey('material-request-add-comment')),
-      );
+      await tester.tap(composer);
       await tester.pump();
       expect(tester.widget<TextField>(composer).focusNode!.hasFocus, isTrue);
+      const pastedComment = 'Copied from site notes\nPlease review مرحبا 👷';
+      await tester.enterText(composer, pastedComment);
+      expect(
+        tester.widget<TextField>(composer).controller!.text,
+        pastedComment,
+      );
+      await tester.enterText(composer, '');
       await tester.tap(
         find.byKey(const ValueKey('material-request-mention-action')),
       );
@@ -823,18 +843,32 @@ void main() {
       expect(tester.widget<TextField>(composer).controller!.text, '@aliraza ');
 
       await tester.enterText(composer, '@aliraza please review');
-      await tester.tap(find.byTooltip('Post comment'));
+      repository.commentFailure = true;
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('material-request-send-comment')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-send-comment')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(composer).controller!.text,
+        '@aliraza please review',
+      );
+      expect(find.textContaining('Comment not posted'), findsOneWidget);
+      repository.commentFailure = false;
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-send-comment')),
+      );
       await tester.pumpAndSettle();
 
-      expect(repository.addCommentInputs, hasLength(1));
-      expect(repository.addCommentInputs.single.mentionedAuthUserIds, const [
+      expect(repository.addCommentInputs, hasLength(2));
+      expect(repository.addCommentInputs.last.mentionedAuthUserIds, const [
         'ali-user-id',
       ]);
-      expect(repository.addCommentInputs.single.parentCommentId, isNull);
-      expect(
-        repository.addCommentInputs.single.contextType,
-        'material_request',
-      );
+      expect(repository.addCommentInputs.last.parentCommentId, isNull);
+      expect(repository.addCommentInputs.last.contextType, 'material_request');
+      await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
   );
@@ -856,6 +890,7 @@ void main() {
           yorksV1CurrentRoleProvider.overrideWithValue(
             YorksV1Role.projectEngineer,
           ),
+          yorksV1FeatureFlagsProvider.overrideWithValue(_discussionFeatures),
           yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
             repository,
           ),
@@ -891,7 +926,13 @@ void main() {
       YorksV1MaterialRequestStrings.commentComposerHint.primary,
     );
     await tester.enterText(composer, 'Confirmed against the selected item.');
-    await tester.tap(find.byTooltip('Post comment'));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('material-request-send-comment')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-send-comment')),
+    );
     await tester.pumpAndSettle();
 
     expect(repository.addCommentInputs, hasLength(1));
@@ -915,6 +956,7 @@ void main() {
           yorksV1CurrentRoleProvider.overrideWithValue(
             YorksV1Role.projectEngineer,
           ),
+          yorksV1FeatureFlagsProvider.overrideWithValue(_discussionFeatures),
           yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
             repository,
           ),
@@ -950,10 +992,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Request Discussion'), findsOneWidget);
+    expect(find.text('Request discussion'), findsOneWidget);
     expect(find.text('Add Comment'), findsNothing);
     expect(find.text('No comments yet'), findsOneWidget);
     expect(composer, findsOneWidget);
+    final textField = find.byKey(
+      const ValueKey('material-request-comment-text'),
+    );
+    final post = find.byKey(const ValueKey('material-request-send-comment'));
+    expect(tester.widget<TextField>(textField).minLines, 3);
+    expect(tester.widget<TextField>(textField).maxLines, 8);
+    expect(tester.widget<FilledButton>(post).onPressed, isNotNull);
+    await tester.enterText(textField, 'Short comment');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(post).onPressed, isNotNull);
+    await tester.enterText(textField, '');
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byKey(const ValueKey('material-request-discussion-card')),
@@ -1027,6 +1081,7 @@ void main() {
             yorksV1CurrentRoleProvider.overrideWithValue(
               YorksV1Role.projectEngineer,
             ),
+            yorksV1FeatureFlagsProvider.overrideWithValue(_discussionFeatures),
             yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
               repository,
             ),
@@ -1082,6 +1137,7 @@ void main() {
           yorksV1CurrentRoleProvider.overrideWithValue(
             YorksV1Role.projectEngineer,
           ),
+          yorksV1FeatureFlagsProvider.overrideWithValue(_discussionFeatures),
           yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
             repository,
           ),
@@ -1934,7 +1990,7 @@ void main() {
       expect(find.text('Arrange Items'), findsNothing);
       expect(find.text('Current owner'), findsOneWidget);
       expect(find.text('Simple'), findsOneWidget);
-      expect(find.text('Request Discussion'), findsNothing);
+      expect(find.text('Request discussion'), findsNothing);
       expect(find.textContaining('Unit Cost'), findsNothing);
       expect(tester.takeException(), isNull);
     },
@@ -2665,6 +2721,7 @@ class _MaterialRequestRepositoryFixture
   final YorksV1MaterialRequest? serverRequest;
   int saveAndSubmitCount = 0;
   final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
+  bool commentFailure = false;
   List<YorksV1MaterialRequestMention> mentionCandidates = const [];
   List<YorksV1MaterialRequestInventorySuggestion> inventorySuggestions =
       const [];
@@ -2676,6 +2733,9 @@ class _MaterialRequestRepositoryFixture
     YorksV1AddMaterialRequestCommentInput input,
   ) async {
     addCommentInputs.add(input);
+    if (commentFailure) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
     return const [];
   }
 
