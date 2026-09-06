@@ -207,6 +207,16 @@ export function safePushCopy(eventCode: string): PushCopy {
 }
 
 export function routeFor(claim: PushClaim): string {
+  const requestId = claim.requestId;
+  if (
+    claim.eventCode === "material_request_mentioned" &&
+    typeof requestId === "string" &&
+    /^[0-9a-f-]{36}$/i.test(requestId) &&
+    claim.entityType === "chat_message" &&
+    /^[0-9a-f-]{36}$/i.test(claim.entityId)
+  ) {
+    return `/yorks/material-requests/${requestId}?comment=${claim.entityId}`;
+  }
   const chatId = claim.chatConversationId;
   if (typeof chatId === "string" && /^[0-9a-f-]{36}$/i.test(chatId)) {
     return `/yorks/team-chat/${chatId}`;
@@ -217,7 +227,7 @@ export function routeFor(claim: PushClaim): string {
   ) {
     return `/yorks/returns/${claim.entityId}`;
   }
-  const id = claim.requestId;
+  const id = requestId;
   if (typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)) {
     return `/yorks/material-requests/${id}`;
   }

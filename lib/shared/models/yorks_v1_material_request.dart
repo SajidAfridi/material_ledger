@@ -1,5 +1,6 @@
 import 'yorks_v1_domain_error.dart';
 import 'yorks_v1_item_description.dart';
+import 'yorks_v1_team_chat.dart';
 
 const Object _keep = Object();
 
@@ -116,7 +117,14 @@ class YorksV1MaterialRequestComment {
     required this.authorDisplayName,
     required this.createdAt,
     required List<YorksV1MaterialRequestMention> mentions,
-  }) : mentions = List.unmodifiable(mentions);
+    List<YorksV1ChatAttachment> attachments = const [],
+    this.conversationId,
+    this.parentCommentId,
+    this.replyPreview,
+    this.contextType,
+    this.contextEntityId,
+  }) : mentions = List.unmodifiable(mentions),
+       attachments = List.unmodifiable(attachments);
 
   final String id;
   final String requestId;
@@ -127,6 +135,12 @@ class YorksV1MaterialRequestComment {
   final String authorDisplayName;
   final DateTime createdAt;
   final List<YorksV1MaterialRequestMention> mentions;
+  final List<YorksV1ChatAttachment> attachments;
+  final String? conversationId;
+  final String? parentCommentId;
+  final YorksV1ChatReplyPreview? replyPreview;
+  final String? contextType;
+  final String? contextEntityId;
 
   factory YorksV1MaterialRequestComment.fromRpcJson(
     Map<String, dynamic> json,
@@ -142,6 +156,22 @@ class YorksV1MaterialRequestComment {
     mentions: _maps(
       json['mentions'],
     ).map(YorksV1MaterialRequestMention.fromRpcJson).toList(growable: false),
+    attachments: _maps(
+      json['attachments'],
+    ).map(YorksV1ChatAttachment.fromRpcJson).toList(growable: false),
+    conversationId: _trimToNull(json['conversation_id']),
+    parentCommentId: _trimToNull(json['parent_comment_id']),
+    replyPreview: json['reply_preview'] is Map
+        ? YorksV1ChatReplyPreview.fromRpcJson(
+            Map<String, dynamic>.from(json['reply_preview'] as Map),
+          )
+        : null,
+    contextType: json['context'] is Map
+        ? _trimToNull((json['context'] as Map)['type'])
+        : null,
+    contextEntityId: json['context'] is Map
+        ? _trimToNull((json['context'] as Map)['entity_id'])
+        : null,
   );
 }
 
@@ -1771,12 +1801,20 @@ class YorksV1AddMaterialRequestCommentInput {
     required this.body,
     required this.idempotencyKey,
     this.mentionedAuthUserIds = const [],
+    this.attachmentIds = const [],
+    this.parentCommentId,
+    this.contextType,
+    this.contextEntityId,
   });
 
   final String requestId;
   final String body;
   final String idempotencyKey;
   final List<String> mentionedAuthUserIds;
+  final List<String> attachmentIds;
+  final String? parentCommentId;
+  final String? contextType;
+  final String? contextEntityId;
 
   Map<String, dynamic> toRpcPayload() => {
     'request_id': requestId.trim(),
@@ -1784,6 +1822,12 @@ class YorksV1AddMaterialRequestCommentInput {
     'mentioned_auth_user_ids': [
       for (final id in mentionedAuthUserIds) id.trim(),
     ],
+    'attachment_ids': [for (final id in attachmentIds) id.trim()],
+    if (_trimToNull(parentCommentId) != null)
+      'parent_comment_id': parentCommentId!.trim(),
+    if (_trimToNull(contextType) != null) 'context_type': contextType!.trim(),
+    if (_trimToNull(contextEntityId) != null)
+      'context_entity_id': contextEntityId!.trim(),
   };
 }
 

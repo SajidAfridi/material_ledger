@@ -104,6 +104,12 @@ abstract interface class YorksV1MaterialRequestPhase2Repository {
     int limit = 20,
   });
 
+  Future<List<YorksV1MaterialRequestComment>> getCommentWindow({
+    required String requestId,
+    required String commentId,
+    int radius = 10,
+  });
+
   Future<YorksV1MaterialRequestWorkAssignment> getWorkAssignment(
     String requestId,
   );
@@ -462,6 +468,30 @@ class YorksV1SupabaseMaterialRequestRepository
     return YorksV1MaterialRequestCommentPage.fromRpcJson(
       Map<String, dynamic>.from(response),
     );
+  }
+
+  @override
+  Future<List<YorksV1MaterialRequestComment>> getCommentWindow({
+    required String requestId,
+    required String commentId,
+    int radius = 10,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_get_material_request_comment_window',
+      parameters: {
+        'p_request_id': requestId,
+        'p_comment_id': commentId,
+        'p_radius': radius,
+      },
+    );
+    if (response is! Map || response['items'] is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return _list(
+      response['items'],
+    ).map(YorksV1MaterialRequestComment.fromRpcJson).toList(growable: false);
   }
 
   @override

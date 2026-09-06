@@ -54,6 +54,27 @@ void main() {
     expect(notification.title, 'New material request');
   });
 
+  test('request comment mention opens and identifies the exact comment', () {
+    const commentId = '26000000-0000-4000-8000-000000000001';
+    final record = YorksV1NotificationRecord.fromRpcJson({
+      'notification_id': '21000000-0000-4000-8000-000000000004',
+      'event_code': 'material_request_mentioned',
+      'entity_type': 'chat_message',
+      'entity_id': commentId,
+      'request_id': requestId,
+      'project_id': '23000000-0000-4000-8000-000000000001',
+      'chat_conversation_id': '27000000-0000-4000-8000-000000000001',
+      'created_at': '2026-08-09T12:00:00Z',
+      'seen_at': null,
+    });
+
+    expect(record.isChatTransport, isFalse);
+    expect(
+      record.toAppNotification(AppLanguage.english).route,
+      '/yorks/material-requests/$requestId?comment=$commentId',
+    );
+  });
+
   test('seen_at is the only authoritative read-state source', () {
     final notification = record(
       seenAt: DateTime.utc(2026, 8, 9, 12, 5),

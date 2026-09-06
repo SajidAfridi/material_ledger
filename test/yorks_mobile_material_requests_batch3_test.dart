@@ -830,9 +830,79 @@ void main() {
       expect(repository.addCommentInputs.single.mentionedAuthUserIds, const [
         'ali-user-id',
       ]);
+      expect(repository.addCommentInputs.single.parentCommentId, isNull);
+      expect(
+        repository.addCommentInputs.single.contextType,
+        'material_request',
+      );
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('request discussion submits a one-level line-scoped reply', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    final repository = _MaterialRequestRepositoryFixture();
+    final request = _requestVariant(
+      id: 'discussion-reply-request',
+      comments: _discussionComments(
+        'discussion-reply-request',
+      ).take(1).toList(),
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final reply = find.byKey(
+      const ValueKey('reply-to-material-request-comment-comment-0'),
+    );
+    await tester.ensureVisible(reply);
+    await tester.tap(reply);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-comment-context')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('About item 1: Flexible duct').last);
+    await tester.pumpAndSettle();
+
+    final composer = find.widgetWithText(
+      TextField,
+      YorksV1MaterialRequestStrings.commentComposerHint.primary,
+    );
+    await tester.enterText(composer, 'Confirmed against the selected item.');
+    await tester.tap(find.byTooltip('Post comment'));
+    await tester.pumpAndSettle();
+
+    expect(repository.addCommentInputs, hasLength(1));
+    expect(repository.addCommentInputs.single.parentCommentId, 'comment-0');
+    expect(repository.addCommentInputs.single.contextType, 'request_line');
+    expect(
+      repository.addCommentInputs.single.contextEntityId,
+      'submitted-line',
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('request discussion matches the compact mobile reference', (
     tester,
@@ -881,7 +951,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Request Discussion'), findsOneWidget);
-    expect(find.text('Add Comment'), findsOneWidget);
+    expect(find.text('Add Comment'), findsNothing);
     expect(find.text('No comments yet'), findsOneWidget);
     expect(composer, findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -942,67 +1012,62 @@ void main() {
     );
   });
 
-  testWidgets('request discussion caps its history and scrolls independently', (
-    tester,
-  ) async {
-    await _setViewport(tester, const Size(1366, 768));
-    final repository = _MaterialRequestRepositoryFixture();
-    final request = _requestVariant(
-      id: 'discussion-scroll-request',
-      comments: _discussionComments('discussion-scroll-request'),
-    );
-    await tester.pumpWidget(
-      _scope(
-        overrides: [
-          yorksV1CurrentRoleProvider.overrideWithValue(
-            YorksV1Role.projectEngineer,
-          ),
-          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
-            repository,
-          ),
-          yorksV1MaterialRequestDetailProvider(
-            request.id,
-          ).overrideWith((ref) async => request),
-          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
-            (ref) async =>
-                YorksV1MaterialRequestDocumentModel.fromRequest(request),
-          ),
-        ],
-        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
-      ),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'request discussion uses the page scroll and keeps history visible',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      final repository = _MaterialRequestRepositoryFixture();
+      final request = _requestVariant(
+        id: 'discussion-scroll-request',
+        comments: _discussionComments('discussion-scroll-request'),
+      );
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              request.id,
+            ).overrideWith((ref) async => request),
+            yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+              (ref) async =>
+                  YorksV1MaterialRequestDocumentModel.fromRequest(request),
+            ),
+          ],
+          child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    final region = find.byKey(
-      const ValueKey('material-request-discussion-scroll'),
-    );
-    final scrollable = find.descendant(
-      of: region,
-      matching: find.byType(Scrollable),
-    );
-    expect(region, findsOneWidget);
-    expect(tester.getSize(region).height, lessThanOrEqualTo(420));
-    expect(scrollable, findsOneWidget);
-    final position = tester.state<ScrollableState>(scrollable).position;
-    expect(position.maxScrollExtent, greaterThan(0));
+      final region = find.byKey(
+        const ValueKey('material-request-discussion-card'),
+      );
+      expect(region, findsOneWidget);
+      expect(
+        find.descendant(of: region, matching: find.byType(ListView)),
+        findsNothing,
+      );
+      expect(find.text('Discussion comment 1'), findsOneWidget);
+      expect(find.text('Discussion comment 9'), findsOneWidget);
+      await tester.ensureVisible(region);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('material-request-comment-composer')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey('material-request-discussion-card')),
+        matchesGoldenFile('goldens/r35/mr_discussion_scroll_desktop.png'),
+      );
+    },
+  );
 
-    await tester.ensureVisible(region);
-    await tester.pumpAndSettle();
-    await tester.drag(scrollable, const Offset(0, -240));
-    await tester.pumpAndSettle();
-    expect(position.pixels, greaterThan(0));
-    expect(
-      find.byKey(const ValueKey('material-request-comment-composer')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-    await expectLater(
-      find.byKey(const ValueKey('material-request-discussion-card')),
-      matchesGoldenFile('goldens/r35/mr_discussion_scroll_desktop.png'),
-    );
-  });
-
-  testWidgets('mobile request discussion stays bounded at 360px', (
+  testWidgets('mobile request discussion uses one continuous page at 360px', (
     tester,
   ) async {
     await _setViewport(tester, const Size(360, 800));
@@ -1035,29 +1100,26 @@ void main() {
     await _showFullMaterialRequestDetails(tester);
 
     final region = find.byKey(
-      const ValueKey('material-request-discussion-scroll'),
+      const ValueKey('material-request-discussion-card'),
     );
     await tester.scrollUntilVisible(
       region,
       420,
-      scrollable: find.descendant(
-        of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.pumpAndSettle();
 
-    final scrollable = find.descendant(
-      of: region,
-      matching: find.byType(Scrollable),
+    expect(
+      find.descendant(of: region, matching: find.byType(ListView)),
+      findsNothing,
     );
-    expect(tester.getSize(region).height, lessThanOrEqualTo(300));
-    expect(scrollable, findsOneWidget);
-    final position = tester.state<ScrollableState>(scrollable).position;
-    expect(position.maxScrollExtent, greaterThan(0));
-    await tester.drag(scrollable, const Offset(0, -180));
-    await tester.pumpAndSettle();
-    expect(position.pixels, greaterThan(0));
+    expect(find.text('Discussion comment 1'), findsOneWidget);
+    expect(find.text('Discussion comment 9'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('material-request-comment-composer')),
       findsOneWidget,

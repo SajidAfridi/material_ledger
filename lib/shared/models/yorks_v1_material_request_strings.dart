@@ -853,6 +853,48 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'تبصرے کے منسلکات دستیاب نہیں ہیں۔',
     hi: 'टिप्पणी अटैचमेंट उपलब्ध नहीं हैं।',
   );
+  static const wholeRequest = TranslatableString(
+    en: 'Whole request',
+    ar: 'الطلب بالكامل',
+    ur: 'مکمل درخواست',
+    hi: 'पूरा अनुरोध',
+  );
+  static const aboutItem = TranslatableString(
+    en: 'About item',
+    ar: 'حول البند',
+    ur: 'آئٹم کے بارے میں',
+    hi: 'आइटम के बारे में',
+  );
+  static const reply = TranslatableString(
+    en: 'Reply',
+    ar: 'رد',
+    ur: 'جواب دیں',
+    hi: 'जवाब दें',
+  );
+  static const replyingTo = TranslatableString(
+    en: 'Replying to',
+    ar: 'الرد على',
+    ur: 'جواب برائے',
+    hi: 'जवाब दे रहे हैं',
+  );
+  static const attachFiles = TranslatableString(
+    en: 'Attach files',
+    ar: 'إرفاق ملفات',
+    ur: 'فائلیں منسلک کریں',
+    hi: 'फ़ाइलें संलग्न करें',
+  );
+  static const attachmentReady = TranslatableString(
+    en: 'Ready to send',
+    ar: 'جاهز للإرسال',
+    ur: 'بھیجنے کے لیے تیار',
+    hi: 'भेजने के लिए तैयार',
+  );
+  static const preparingAttachments = TranslatableString(
+    en: 'Securing attachments…',
+    ar: 'جارٍ تأمين المرفقات…',
+    ur: 'منسلکات محفوظ کیے جا رہے ہیں…',
+    hi: 'अटैचमेंट सुरक्षित किए जा रहे हैं…',
+  );
   static const searchInventory = TranslatableString(
     en: 'Search BOQ and inventory',
     ar: 'البحث في جدول الكميات والمخزون',

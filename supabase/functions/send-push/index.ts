@@ -183,8 +183,7 @@ Deno.serve(async (request) => {
     const sendUrl =
       `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`;
     const copy = safePushCopy(claim.eventCode);
-    const surface = isTeamChatEvent(claim.eventCode) ||
-        typeof claim.chatConversationId === "string"
+    const surface = isTeamChatEvent(claim.eventCode)
       ? "team_chat"
       : "workflow";
     const route = routeFor(claim);

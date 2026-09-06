@@ -2483,9 +2483,11 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
   const YorksV1MaterialRequestDetailScreen({
     super.key,
     required this.requestId,
+    this.commentId,
   });
 
   final String requestId;
+  final String? commentId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2537,6 +2539,7 @@ class YorksV1MaterialRequestDetailScreen extends ConsumerWidget {
             request: value,
             language: language,
             showPageHeader: !compactRoute,
+            commentId: commentId,
             onRefresh: () =>
                 ref.invalidate(yorksV1MaterialRequestDetailProvider(requestId)),
           ),
@@ -9412,12 +9415,14 @@ class _RequestDetailBody extends ConsumerWidget {
     required this.language,
     required this.showPageHeader,
     required this.onRefresh,
+    this.commentId,
   });
 
   final YorksV1MaterialRequest request;
   final AppLanguage language;
   final bool showPageHeader;
   final VoidCallback onRefresh;
+  final String? commentId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -9669,6 +9674,7 @@ class _RequestDetailBody extends ConsumerWidget {
       return _MobileMaterialRequestLifecycle(
         request: request,
         language: language,
+        commentId: commentId,
         primaryAction: primaryAction,
         onPrimaryAction: onPrimaryAction,
         onRefresh: onRefresh,
@@ -9861,11 +9867,6 @@ class _RequestDetailBody extends ConsumerWidget {
                                   request: request,
                                   language: language,
                                 ),
-                                const SizedBox(height: AppSpacing.lg),
-                                _MaterialRequestDiscussion(
-                                  request: request,
-                                  compact: true,
-                                ),
                               ],
                             ),
                           ),
@@ -9935,13 +9936,13 @@ class _RequestDetailBody extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _MaterialRequestDiscussion(
-                            request: request,
-                            compact: true,
-                          ),
                         ],
                       ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    _MaterialRequestDiscussion(
+                      request: request,
+                      highlightCommentId: commentId,
+                    ),
                   ],
                 ),
               ),
@@ -10370,6 +10371,7 @@ class _MobileMaterialRequestLifecycle extends StatefulWidget {
   const _MobileMaterialRequestLifecycle({
     required this.request,
     required this.language,
+    this.commentId,
     required this.primaryAction,
     required this.onPrimaryAction,
     required this.onRefresh,
@@ -10389,6 +10391,7 @@ class _MobileMaterialRequestLifecycle extends StatefulWidget {
 
   final YorksV1MaterialRequest request;
   final AppLanguage language;
+  final String? commentId;
   final YorksV1MaterialRequestDetailPrimaryAction? primaryAction;
   final VoidCallback? onPrimaryAction;
   final VoidCallback onRefresh;
@@ -10416,6 +10419,7 @@ class _MobileMaterialRequestLifecycleState
 
   YorksV1MaterialRequest get request => widget.request;
   AppLanguage get language => widget.language;
+  String? get commentId => widget.commentId;
   YorksV1MaterialRequestDetailPrimaryAction? get primaryAction =>
       widget.primaryAction;
   VoidCallback? get onPrimaryAction => widget.onPrimaryAction;
@@ -10681,6 +10685,7 @@ class _MobileMaterialRequestLifecycleState
                       _MaterialRequestDiscussion(
                         request: request,
                         compact: true,
+                        highlightCommentId: commentId,
                       ),
                       const SizedBox(height: 14),
                       YorksMobileSectionHeader(
@@ -11775,10 +11780,12 @@ class _MaterialRequestDiscussion extends ConsumerStatefulWidget {
   const _MaterialRequestDiscussion({
     required this.request,
     this.compact = false,
+    this.highlightCommentId,
   });
 
   final YorksV1MaterialRequest request;
   final bool compact;
+  final String? highlightCommentId;
 
   @override
   ConsumerState<_MaterialRequestDiscussion> createState() =>
@@ -11789,11 +11796,16 @@ class _MaterialRequestDiscussionState
     extends ConsumerState<_MaterialRequestDiscussion> {
   final _commentController = TextEditingController();
   final _commentFocusNode = FocusNode();
-  final _discussionScrollController = ScrollController();
   final Set<String> _mentions = {};
+  final List<YorksV1PendingChatAttachment> _pendingAttachments = [];
   String? _mentionQuery;
   int? _mentionStart;
+  String? _conversationId;
+  String? _contextLineId;
+  YorksV1MaterialRequestComment? _replyingTo;
+  String? _highlightedCommentId;
   bool _posting = false;
+  bool _uploading = false;
   late List<YorksV1MaterialRequestComment> _comments;
   late bool _hasEarlierComments;
   bool _loadingEarlierComments = false;
@@ -11803,7 +11815,9 @@ class _MaterialRequestDiscussionState
     super.initState();
     _comments = List.of(widget.request.comments);
     _hasEarlierComments = _comments.length >= 20;
+    _conversationId = _comments.firstOrNull?.conversationId;
     _commentController.addListener(_updateMentionQuery);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealAnchor());
   }
 
   @override
@@ -11819,6 +11833,10 @@ class _MaterialRequestDiscussionState
             return byTime != 0 ? byTime : a.id.compareTo(b.id);
           });
       _comments = merged;
+      _conversationId ??= _comments.firstOrNull?.conversationId;
+    }
+    if (oldWidget.highlightCommentId != widget.highlightCommentId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revealAnchor());
     }
   }
 
@@ -11827,7 +11845,6 @@ class _MaterialRequestDiscussionState
     _commentController.removeListener(_updateMentionQuery);
     _commentController.dispose();
     _commentFocusNode.dispose();
-    _discussionScrollController.dispose();
     super.dispose();
   }
 
@@ -11879,94 +11896,62 @@ class _MaterialRequestDiscussionState
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                YorksV1MaterialRequestStrings.discussion.primary,
+                YorksV1MaterialRequestStrings.discussion.active(language),
                 style: AppTypography.titleMedium.copyWith(
                   color: AppColors.ink,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
-            if (teamChatEnabled)
-              IconButton(
-                key: const ValueKey('material-request-open-team-chat'),
-                tooltip: YorksV1TeamChatStrings.openChat.active(language),
-                onPressed: _posting ? null : _openChat,
-                icon: const Icon(Icons.open_in_new_rounded, size: 20),
-                color: AppColors.blue,
-                style: IconButton.styleFrom(
-                  minimumSize: const Size.square(AppSpacing.minTapTarget),
+            if (MediaQuery.sizeOf(context).width >= 600)
+              TextButton(
+                key: const ValueKey('material-request-add-comment'),
+                onPressed: _posting ? null : _focusComposer,
+                child: Text(
+                  YorksV1MaterialRequestStrings.addComment.active(language),
                 ),
               ),
-            TextButton(
-              key: const ValueKey('material-request-add-comment'),
-              onPressed: _posting ? null : _focusComposer,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.blue,
-                minimumSize: const Size(0, AppSpacing.minTapTarget),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                textStyle: AppTypography.labelMedium.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              child: Text(YorksV1MaterialRequestStrings.addComment.primary),
-            ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
         if (_comments.isEmpty)
           const _MaterialRequestDiscussionEmptyState()
-        else
-          ConstrainedBox(
-            key: const ValueKey('material-request-discussion-scroll'),
-            constraints: BoxConstraints(maxHeight: widget.compact ? 300 : 420),
-            child: Scrollbar(
-              controller: _discussionScrollController,
-              thumbVisibility: _comments.length > 3,
-              interactive: true,
-              child: ListView.separated(
-                controller: _discussionScrollController,
-                primary: false,
-                shrinkWrap: true,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsetsDirectional.only(end: AppSpacing.xs),
-                itemCount: _comments.length + (_hasEarlierComments ? 1 : 0),
-                separatorBuilder: (_, _) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  if (_hasEarlierComments && index == 0) {
-                    return Center(
-                      child: TextButton.icon(
-                        key: const ValueKey(
-                          'material-request-load-earlier-comments',
-                        ),
-                        onPressed: _loadingEarlierComments
-                            ? null
-                            : _loadEarlierComments,
-                        icon: _loadingEarlierComments
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.history_rounded, size: 18),
-                        label: Text(
-                          YorksV1MaterialRequestStrings.loadEarlierComments
-                              .active(language),
-                        ),
-                      ),
-                    );
-                  }
-                  final commentIndex = index - (_hasEarlierComments ? 1 : 0);
-                  return _MaterialRequestCommentCard(
-                    comment: _comments[commentIndex],
-                    language: language,
-                  );
-                },
+        else ...[
+          if (_hasEarlierComments)
+            Center(
+              child: TextButton.icon(
+                key: const ValueKey('material-request-load-earlier-comments'),
+                onPressed: _loadingEarlierComments
+                    ? null
+                    : _loadEarlierComments,
+                icon: _loadingEarlierComments
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.history_rounded, size: 18),
+                label: Text(
+                  YorksV1MaterialRequestStrings.loadEarlierComments.active(
+                    language,
+                  ),
+                ),
               ),
             ),
-          ),
+          for (var index = 0; index < _comments.length; index++) ...[
+            if (index > 0) const SizedBox(height: AppSpacing.sm),
+            _MaterialRequestCommentCard(
+              key: GlobalObjectKey(
+                'material-request-comment-${_comments[index].id}',
+              ),
+              comment: _comments[index],
+              language: language,
+              request: widget.request,
+              highlighted: _comments[index].id == _highlightedCommentId,
+              onReply: () => setState(() => _replyingTo = _comments[index]),
+              onOpenAttachment: _openAttachment,
+            ),
+          ],
+        ],
         if (_comments.isNotEmpty) const SizedBox(height: AppSpacing.sm),
         candidates.when(
           loading: () => _mentionQuery == null
@@ -11979,6 +11964,111 @@ class _MaterialRequestDiscussionState
             onSelected: _insertMention,
           ),
         ),
+        if (_replyingTo != null) ...[
+          Container(
+            key: const ValueKey('material-request-reply-preview'),
+            margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.blueContainer,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.reply_rounded, color: AppColors.blue),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    '${YorksV1MaterialRequestStrings.replyingTo.active(language)} ${_replyingTo!.authorDisplayName}: ${_replyingTo!.body}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall,
+                  ),
+                ),
+                IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: _posting
+                      ? null
+                      : () => setState(() => _replyingTo = null),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+              ],
+            ),
+          ),
+        ],
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              key: const ValueKey('material-request-comment-context'),
+              value: _contextLineId ?? '',
+              icon: const Icon(Icons.expand_more_rounded, size: 18),
+              style: AppTypography.labelMedium.copyWith(color: AppColors.ink),
+              items: [
+                DropdownMenuItem(
+                  value: '',
+                  child: Text(
+                    YorksV1MaterialRequestStrings.wholeRequest.active(language),
+                  ),
+                ),
+                for (final line in widget.request.lines)
+                  DropdownMenuItem(
+                    value: line.id,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: Text(
+                        '${YorksV1MaterialRequestStrings.aboutItem.active(language)} ${line.displayOrder}: ${line.description}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              ],
+              onChanged: _posting
+                  ? null
+                  : (value) => setState(
+                      () => _contextLineId = value?.isEmpty == true
+                          ? null
+                          : value,
+                    ),
+            ),
+          ),
+        ),
+        if (_pendingAttachments.isNotEmpty || _uploading) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final attachment in _pendingAttachments)
+                InputChip(
+                  key: ValueKey('pending-comment-attachment-${attachment.id}'),
+                  avatar: const Icon(Icons.attach_file_rounded, size: 17),
+                  label: Text(
+                    attachment.fileName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onDeleted: _posting
+                      ? null
+                      : () => setState(
+                          () => _pendingAttachments.remove(attachment),
+                        ),
+                ),
+              if (_uploading)
+                Chip(
+                  avatar: const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  label: Text(
+                    YorksV1MaterialRequestStrings.preparingAttachments.active(
+                      language,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xs),
         Container(
           key: const ValueKey('material-request-comment-composer'),
           constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
@@ -12035,11 +12125,13 @@ class _MaterialRequestDiscussionState
               IconButton(
                 key: const ValueKey('material-request-attachment-action'),
                 tooltip: teamChatEnabled
-                    ? YorksV1TeamChatStrings.openChat.active(language)
+                    ? YorksV1MaterialRequestStrings.attachFiles.active(language)
                     : YorksV1MaterialRequestStrings
                           .commentAttachmentsUnavailable
-                          .primary,
-                onPressed: teamChatEnabled && !_posting ? _openChat : null,
+                          .active(language),
+                onPressed: teamChatEnabled && !_posting && !_uploading
+                    ? _attachFiles
+                    : null,
                 icon: const Icon(Icons.attach_file_rounded, size: 20),
                 disabledColor: AppColors.mutedLight,
                 style: IconButton.styleFrom(
@@ -12049,7 +12141,7 @@ class _MaterialRequestDiscussionState
               IconButton.filled(
                 key: const ValueKey('material-request-send-comment'),
                 tooltip: YorksV1MaterialRequestStrings.postComment.primary,
-                onPressed: _posting ? null : _post,
+                onPressed: _posting || _uploading ? null : _post,
                 icon: _posting
                     ? const SizedBox(
                         width: 18,
@@ -12070,13 +12162,6 @@ class _MaterialRequestDiscussionState
             ],
           ),
         ),
-        if (_mentions.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '${_mentions.length} ${YorksV1MaterialRequestStrings.mentionTeammates.primary.toLowerCase()}',
-            style: AppTypography.labelSmall.copyWith(color: AppColors.blue),
-          ),
-        ],
       ],
     );
     return RepaintBoundary(
@@ -12088,6 +12173,59 @@ class _MaterialRequestDiscussionState
   }
 
   void _focusComposer() => _commentFocusNode.requestFocus();
+
+  Future<void> _revealAnchor() async {
+    final anchor = widget.highlightCommentId?.trim();
+    if (!mounted || anchor == null || anchor.isEmpty) return;
+    if (!_comments.any((comment) => comment.id == anchor)) {
+      final repository = ref.read(yorksV1MaterialRequestRepositoryProvider);
+      if (repository is YorksV1MaterialRequestPhase2Repository) {
+        try {
+          final phase2Repository =
+              repository as YorksV1MaterialRequestPhase2Repository;
+          final window = await phase2Repository.getCommentWindow(
+            requestId: widget.request.id,
+            commentId: anchor,
+          );
+          if (!mounted) return;
+          setState(() {
+            final merged =
+                <String, YorksV1MaterialRequestComment>{
+                  for (final comment in _comments) comment.id: comment,
+                  for (final comment in window) comment.id: comment,
+                }.values.toList(growable: false)..sort((a, b) {
+                  final byTime = a.createdAt.compareTo(b.createdAt);
+                  return byTime != 0 ? byTime : a.id.compareTo(b.id);
+                });
+            _comments = merged;
+          });
+        } catch (_) {
+          return;
+        }
+      }
+    }
+    if (!mounted || !_comments.any((comment) => comment.id == anchor)) return;
+    setState(() => _highlightedCommentId = anchor);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final target = GlobalObjectKey<State<StatefulWidget>>(
+      'material-request-comment-$anchor',
+    ).currentContext;
+    if (target != null && target.mounted) {
+      await Scrollable.ensureVisible(
+        target,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: 0.18,
+      );
+    }
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (mounted && _highlightedCommentId == anchor) {
+      setState(() => _highlightedCommentId = null);
+    }
+  }
 
   Future<void> _loadEarlierComments() async {
     if (_comments.isEmpty || _loadingEarlierComments) return;
@@ -12180,11 +12318,22 @@ class _MaterialRequestDiscussionState
               requestId: widget.request.id,
               body: body,
               mentionedAuthUserIds: _mentions.toList(growable: false),
+              attachmentIds: _pendingAttachments
+                  .map((attachment) => attachment.id)
+                  .toList(growable: false),
+              parentCommentId: _replyingTo?.id,
+              contextType: _contextLineId == null
+                  ? 'material_request'
+                  : 'request_line',
+              contextEntityId: _contextLineId ?? widget.request.id,
               idempotencyKey: const Uuid().v4(),
             ),
           );
       _commentController.clear();
       _mentions.clear();
+      _pendingAttachments.clear();
+      _replyingTo = null;
+      _contextLineId = null;
       ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
     } on YorksV1DomainException catch (error) {
       if (mounted) {
@@ -12198,58 +12347,243 @@ class _MaterialRequestDiscussionState
     }
   }
 
-  Future<void> _openChat() async {
-    final conversation = await ref
-        .read(yorksV1TeamChatProvider.notifier)
-        .createConversation(
-          YorksV1ChatCreateInput(
-            kind: YorksV1ChatKind.materialRequest,
-            idempotencyKey: const Uuid().v4(),
-            materialRequestId: widget.request.id,
-          ),
+  Future<void> _attachFiles() async {
+    try {
+      final files = await ref
+          .read(yorksV1ChatFileServiceProvider)
+          .selectFiles();
+      if (files.isEmpty || !mounted) return;
+      if (_pendingAttachments.length + files.length > 10) {
+        throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+      }
+      setState(() => _uploading = true);
+      var conversationId = _conversationId;
+      if (conversationId == null) {
+        final conversation = await ref
+            .read(yorksV1TeamChatProvider.notifier)
+            .createConversation(
+              YorksV1ChatCreateInput(
+                kind: YorksV1ChatKind.materialRequest,
+                idempotencyKey: const Uuid().v4(),
+                materialRequestId: widget.request.id,
+              ),
+            );
+        conversationId = conversation?.id;
+      }
+      if (conversationId == null) {
+        throw const YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
         );
-    if (!mounted || conversation == null) return;
-    context.go(RoutePaths.yorksV1TeamChatPath(conversation.id));
+      }
+      final uploaded = await ref
+          .read(yorksV1TeamChatProvider.notifier)
+          .uploadFiles(conversationId, files);
+      if (!mounted) return;
+      setState(() {
+        _conversationId = conversationId;
+        _pendingAttachments.addAll(uploaded);
+        _uploading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      YorksAppToast.show(
+        context,
+        title: YorksV1TeamChatStrings.attachmentFailed.active(
+          ref.read(languageProvider),
+        ),
+        tone: YorksAppToastTone.error,
+      );
+    }
+  }
+
+  Future<void> _openAttachment(YorksV1ChatAttachment attachment) async {
+    try {
+      final file = await ref
+          .read(yorksV1TeamChatProvider.notifier)
+          .downloadAttachment(attachment.id);
+      if (!mounted) return;
+      await ref
+          .read(yorksV1ChatFileServiceProvider)
+          .saveFile(
+            bytes: file.bytes,
+            fileName: file.fileName,
+            mimeType: file.mimeType,
+          );
+    } catch (_) {
+      if (!mounted) return;
+      YorksAppToast.show(
+        context,
+        title: YorksV1TeamChatStrings.attachmentFailed.active(
+          ref.read(languageProvider),
+        ),
+        tone: YorksAppToastTone.error,
+      );
+    }
   }
 }
 
 class _MaterialRequestCommentCard extends StatelessWidget {
   const _MaterialRequestCommentCard({
+    super.key,
     required this.comment,
     required this.language,
+    required this.request,
+    required this.highlighted,
+    required this.onReply,
+    required this.onOpenAttachment,
   });
 
   final YorksV1MaterialRequestComment comment;
   final AppLanguage language;
+  final YorksV1MaterialRequest request;
+  final bool highlighted;
+  final VoidCallback onReply;
+  final ValueChanged<YorksV1ChatAttachment> onOpenAttachment;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(AppSpacing.sm),
-    decoration: BoxDecoration(
-      color: AppColors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '${comment.authorDisplayName} · ${_displayWorkflowRole(comment.authorExactRole, language)}',
-          style: AppTypography.labelMedium.copyWith(
-            fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) {
+    final contextLabel = _contextLabel();
+    return AnimatedContainer(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: highlighted
+            ? AppColors.blueContainer
+            : AppColors.surfaceContainerLow,
+        border: Border.all(
+          color: highlighted ? AppColors.blue : AppColors.line,
+          width: highlighted ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.blueContainerStrong,
+                child: Text(
+                  comment.authorDisplayName.characters.first.toUpperCase(),
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.blue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.authorDisplayName,
+                      style: AppTypography.labelMedium.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      '${_displayWorkflowRole(comment.authorExactRole, language)} · ${MaterialLocalizations.of(context).formatMediumDate(comment.createdAt.toLocal())} · ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(comment.createdAt.toLocal()))}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (contextLabel != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xxs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+                  ),
+                  child: Text(
+                    contextLabel,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.inkSecondary,
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(comment.body, style: AppTypography.bodyMedium),
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          MaterialLocalizations.of(
-            context,
-          ).formatMediumDate(comment.createdAt.toLocal()),
-          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-        ),
-      ],
-    ),
-  );
+          if (comment.replyPreview != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerLowest,
+                border: BorderDirectional(
+                  start: BorderSide(color: AppColors.blue, width: 3),
+                ),
+              ),
+              child: Text(
+                '${comment.replyPreview!.senderDisplayName}: ${comment.replyPreview!.body}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Text(comment.body, style: AppTypography.bodyMedium),
+          if (comment.attachments.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final attachment in comment.attachments)
+                  ActionChip(
+                    avatar: Icon(
+                      attachment.mimeType.startsWith('image/')
+                          ? Icons.image_outlined
+                          : Icons.description_outlined,
+                      size: 18,
+                    ),
+                    label: Text(attachment.fileName),
+                    onPressed: () => onOpenAttachment(attachment),
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.xs),
+          TextButton.icon(
+            key: ValueKey('reply-to-material-request-comment-${comment.id}'),
+            onPressed: onReply,
+            icon: const Icon(Icons.reply_rounded, size: 17),
+            label: Text(YorksV1MaterialRequestStrings.reply.active(language)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String? _contextLabel() {
+    if (comment.contextType == null ||
+        comment.contextType == 'material_request') {
+      return null;
+    }
+    if (comment.contextType == 'request_line') {
+      final line = request.lines
+          .where((line) => line.id == comment.contextEntityId)
+          .firstOrNull;
+      if (line != null) {
+        return '${YorksV1MaterialRequestStrings.aboutItem.active(language)} ${line.displayOrder}';
+      }
+    }
+    return null;
+  }
 }
 
 class _MaterialRequestDiscussionEmptyState extends StatelessWidget {
@@ -12261,30 +12595,7 @@ class _MaterialRequestDiscussionEmptyState extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
     child: Column(
       children: [
-        SizedBox(
-          width: 78,
-          height: 58,
-          child: Stack(
-            children: [
-              Positioned(
-                left: 4,
-                top: 0,
-                child: _DiscussionBubble(
-                  color: AppColors.lineStrong,
-                  icon: Icons.notes_rounded,
-                ),
-              ),
-              Positioned(
-                right: 2,
-                bottom: 0,
-                child: _DiscussionBubble(
-                  color: AppColors.mutedLight,
-                  icon: Icons.more_horiz_rounded,
-                ),
-              ),
-            ],
-          ),
-        ),
+        const Icon(Icons.forum_outlined, size: 44, color: AppColors.mutedLight),
         const SizedBox(height: AppSpacing.sm),
         Text(
           YorksV1MaterialRequestStrings.noComments.primary,
@@ -12302,27 +12613,6 @@ class _MaterialRequestDiscussionEmptyState extends StatelessWidget {
         ),
       ],
     ),
-  );
-}
-
-class _DiscussionBubble extends StatelessWidget {
-  const _DiscussionBubble({required this.color, required this.icon});
-
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 48,
-    height: 38,
-    decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      boxShadow: const [
-        BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: Offset(0, 3)),
-      ],
-    ),
-    child: Icon(icon, size: 23, color: AppColors.surfaceContainerLowest),
   );
 }
 

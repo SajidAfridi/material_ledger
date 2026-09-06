@@ -97,6 +97,21 @@ Deno.test("Team Chat alerts use trusted copy and the exact conversation route", 
   );
 });
 
+Deno.test("Material Request mentions override the transport conversation route", () => {
+  const requestId = "14000000-0000-4000-8000-000000000001";
+  const commentId = "17000000-0000-4000-8000-000000000001";
+  assertEquals(
+    routeFor({
+      ...claim(requestId),
+      eventCode: "material_request_mentioned",
+      entityType: "chat_message",
+      entityId: commentId,
+      chatConversationId: "16000000-0000-4000-8000-000000000001",
+    }),
+    `/yorks/material-requests/${requestId}?comment=${commentId}`,
+  );
+});
+
 Deno.test("approval-first and return events have specific safe copy", () => {
   assertEquals(
     safePushCopy("material_request_approval_required").title,

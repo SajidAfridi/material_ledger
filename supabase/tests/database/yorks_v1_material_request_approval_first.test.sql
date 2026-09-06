@@ -3,21 +3,26 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(46);
+select plan(54);
 
 select ok(
   (select relrowsecurity from pg_class
     where oid = 'public.v1_material_request_comments'::regclass)
   and (select relrowsecurity from pg_class
     where oid = 'public.v1_material_request_decisions'::regclass)
+  and (select relrowsecurity from pg_class
+    where oid = 'public.v1_material_request_comment_contexts'::regclass)
   and not has_table_privilege(
     'authenticated', 'public.v1_material_request_comments', 'insert'
+  )
+  and not has_table_privilege(
+    'authenticated', 'public.v1_material_request_comment_contexts', 'select'
   )
   and has_function_privilege(
     'authenticated',
     'public.v1_decide_material_request(jsonb,uuid)', 'execute'
   ),
-  'Approval decisions and comments are RLS protected and command-only'
+  'Approval decisions, comments and contexts are RLS protected and command-only'
 );
 
 set local role authenticated;
@@ -209,7 +214,7 @@ select is(
 );
 select is(
   (select count(*) from public.v1_notifications
-   where event_code = 'team_chat_mention'
+   where event_code = 'material_request_mentioned'
      and entity_type = 'chat_message'
      and entity_id in (
        select message.id
@@ -220,7 +225,122 @@ select is(
          'af100000-0000-4000-8000-000000000001'::uuid
      )),
   1::bigint,
-  'A validated contextual mention creates one hidden Team Chat push transport'
+  'A validated contextual mention creates one request notification anchor'
+);
+
+select is(
+  (select count(*) from public.v1_material_request_comment_contexts context
+   where context.request_id = 'af100000-0000-4000-8000-000000000001'::uuid
+     and context.context_type = 'material_request'
+     and context.context_entity_id = context.request_id),
+  1::bigint,
+  'A new request comment receives an explicit whole-request context'
+);
+
+create temporary table v1_af_comment_anchor as
+select comment_record.id
+from public.v1_material_request_comments comment_record
+where comment_record.request_id =
+  'af100000-0000-4000-8000-000000000001'::uuid
+order by comment_record.created_at, comment_record.id limit 1;
+grant select on table v1_af_comment_anchor to authenticated;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_add_material_request_comment(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000001',
+      'body', 'The first line context is confirmed.',
+      'parent_comment_id', (select id from v1_af_comment_anchor),
+      'context_type', 'request_line',
+      'context_entity_id', 'af110000-0000-4000-8000-000000000001',
+      'attachment_ids', '[]'::jsonb,
+      'mentioned_auth_user_ids', '[]'::jsonb
+    ), 'af200000-0000-4000-8000-000000000002'::uuid
+  )$$,
+  'An authorized participant can post a line-scoped reply'
+);
+
+select ok(
+  (select
+    reply ->> 'parent_comment_id' = (select id::text from v1_af_comment_anchor)
+      and reply -> 'reply_preview' ->> 'body' =
+        'Admin support may review this private draft.'
+      and reply -> 'context' ->> 'type' = 'request_line'
+      and reply -> 'context' ->> 'entity_id' =
+        'af110000-0000-4000-8000-000000000001'
+   from jsonb_array_elements(public.v1_list_material_request_comments(
+     'af100000-0000-4000-8000-000000000001'
+   ) -> 'items') reply
+   where reply ->> 'body' = 'The first line context is confirmed.'),
+  'The request projection preserves reply and line context'
+);
+
+select is(
+  public.v1_add_material_request_comment(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000001',
+      'body', 'The first line context is confirmed.',
+      'parent_comment_id', (select id from v1_af_comment_anchor),
+      'context_type', 'request_line',
+      'context_entity_id', 'af110000-0000-4000-8000-000000000001',
+      'attachment_ids', '[]'::jsonb,
+      'mentioned_auth_user_ids', '[]'::jsonb
+    ), 'af200000-0000-4000-8000-000000000002'::uuid
+  ) ->> 'comment_id',
+  (select comment_record.id::text
+   from public.v1_material_request_comments comment_record
+   where comment_record.request_id =
+     'af100000-0000-4000-8000-000000000001'::uuid
+     and comment_record.body = 'The first line context is confirmed.'),
+  'A reply retry returns the first committed comment'
+);
+
+select is(
+  (select count(*) from public.v1_material_request_comments comment_record
+   where comment_record.request_id =
+     'af100000-0000-4000-8000-000000000001'::uuid
+     and comment_record.body = 'The first line context is confirmed.'),
+  1::bigint,
+  'A reply retry cannot duplicate the comment'
+);
+
+select is(
+  public.v1_get_material_request_comment_window(
+    'af100000-0000-4000-8000-000000000001'::uuid,
+    (select id from v1_af_comment_anchor), 10
+  ) ->> 'anchor_id',
+  (select id::text from v1_af_comment_anchor),
+  'Exact-comment lookup returns the requested notification anchor'
+);
+
+set local role postgres;
+select is(
+  public.v1_resolve_notification_request_id(
+    'chat_message', (select id from v1_af_comment_anchor)
+  ),
+  'af100000-0000-4000-8000-000000000001'::uuid,
+  'A request discussion message resolves to its Material Request route'
+);
+
+set local role authenticated;
+select throws_ok(
+  $$select public.v1_add_material_request_comment(
+    jsonb_build_object(
+      'request_id', 'af100000-0000-4000-8000-000000000001',
+      'body', 'Invalid cross-record context',
+      'context_type', 'request_line',
+      'context_entity_id', gen_random_uuid(),
+      'mentioned_auth_user_ids', '[]'::jsonb
+    ), 'af200000-0000-4000-8000-000000000003'::uuid
+  )$$,
+  '22023', 'V1_MATERIAL_REQUEST_COMMENT_INVALID',
+  'A participant cannot attach an unrelated record context'
 );
 
 set local role authenticated;

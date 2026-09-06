@@ -272,8 +272,15 @@ abstract final class RoutePaths {
     ).toString();
   }
 
-  static String yorksV1MaterialRequestPath(String requestId) =>
-      '/yorks/material-requests/$requestId';
+  static String yorksV1MaterialRequestPath(
+    String requestId, {
+    String? commentId,
+  }) => Uri(
+    path: '/yorks/material-requests/$requestId',
+    queryParameters: commentId == null || commentId.trim().isEmpty
+        ? null
+        : {'comment': commentId.trim()},
+  ).toString();
   static String yorksV1TeamChatPath([String? conversationId]) {
     final id = conversationId?.trim() ?? '';
     return id.isEmpty ? yorksV1TeamChat : '/yorks/team-chat/$id';
@@ -1725,6 +1732,7 @@ GoRouter createAppRouter({
           state.pageKey,
           YorksV1MaterialRequestDetailScreen(
             requestId: state.pathParameters['requestId'] ?? '',
+            commentId: state.uri.queryParameters['comment'],
           ),
         ),
       ),

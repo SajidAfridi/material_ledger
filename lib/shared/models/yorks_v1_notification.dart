@@ -11,9 +11,10 @@ bool yorksV1IsChatTransportEvent({
   required String eventCode,
   String entityType = '',
 }) =>
-    yorksV1ChatTransportEventCodes.contains(eventCode) ||
-    entityType == 'chat_message' ||
-    entityType == 'chat_conversation';
+    eventCode != 'material_request_mentioned' &&
+    (yorksV1ChatTransportEventCodes.contains(eventCode) ||
+        entityType == 'chat_message' ||
+        entityType == 'chat_conversation');
 
 class YorksV1NotificationRecord {
   const YorksV1NotificationRecord({
@@ -79,6 +80,10 @@ class YorksV1NotificationRecord {
     final resolvedProjectId = projectId?.trim() ?? '';
     final resolvedChatConversationId = chatConversationId?.trim() ?? '';
     final isMaterialReturn = entityType == 'material_return';
+    final isMaterialRequestCommentMention =
+        eventCode == 'material_request_mentioned' &&
+        entityType == 'chat_message' &&
+        resolvedRequestId.isNotEmpty;
     return AppNotification(
       id: id,
       type: copy.type,
@@ -92,7 +97,12 @@ class YorksV1NotificationRecord {
           : resolvedRequestId.isNotEmpty
           ? resolvedRequestId
           : entityId,
-      route: resolvedChatConversationId.isNotEmpty
+      route: isMaterialRequestCommentMention
+          ? RoutePaths.yorksV1MaterialRequestPath(
+              resolvedRequestId,
+              commentId: entityId,
+            )
+          : resolvedChatConversationId.isNotEmpty
           ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
           : isMaterialReturn
           ? RoutePaths.yorksV1MaterialReturnPath(entityId)

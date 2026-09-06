@@ -1803,6 +1803,22 @@ void main() {
             'author_exact_role': 'project_manager',
             'author_display_name': 'Project Manager',
             'created_at': '2026-08-13T02:00:00Z',
+            'conversation_id': 'conversation-1',
+            'parent_comment_id': 'comment-root',
+            'reply_preview': {
+              'id': 'comment-root',
+              'sender_display_name': 'Site Engineer',
+              'body': 'Please confirm the model.',
+            },
+            'context': {'type': 'request_line', 'entity_id': 'line-1'},
+            'attachments': [
+              {
+                'id': 'attachment-1',
+                'file_name': 'drawing.pdf',
+                'mime_type': 'application/pdf',
+                'byte_size': 2048,
+              },
+            ],
             'mentions': [
               {
                 'auth_user_id': 'mentioned-1',
@@ -1827,6 +1843,14 @@ void main() {
       );
       expect(request.comments.single.authorExactRole, 'project_manager');
       expect(request.comments.single.mentions.single.authUserId, 'mentioned-1');
+      expect(request.comments.single.conversationId, 'conversation-1');
+      expect(request.comments.single.parentCommentId, 'comment-root');
+      expect(request.comments.single.replyPreview?.body, contains('model'));
+      expect(request.comments.single.contextType, 'request_line');
+      expect(
+        request.comments.single.attachments.single.fileName,
+        'drawing.pdf',
+      );
     },
   );
 
@@ -2510,6 +2534,13 @@ class _Phase2FakeRequestRepository extends _FakeRequestRepository
     int limit = 20,
   }) async =>
       YorksV1MaterialRequestCommentPage(items: const [], hasMore: false);
+
+  @override
+  Future<List<YorksV1MaterialRequestComment>> getCommentWindow({
+    required String requestId,
+    required String commentId,
+    int radius = 10,
+  }) async => const [];
 
   @override
   Future<List<YorksV1PrivateMaterialRequestDraftRecord>> listPrivateDrafts({
