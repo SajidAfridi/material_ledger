@@ -107,12 +107,14 @@ class SecondaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.icon,
+    this.leading,
     this.isExpanded = true,
-  });
+  }) : assert(icon == null || leading == null);
 
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
+  final Widget? leading;
   final bool isExpanded;
 
   @override
@@ -133,8 +135,8 @@ class SecondaryButton extends StatelessWidget {
         mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 20),
+          if (leading != null || icon != null) ...[
+            leading ?? Icon(icon, size: 20),
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(

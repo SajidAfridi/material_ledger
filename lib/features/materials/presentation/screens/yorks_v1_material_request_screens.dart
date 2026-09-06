@@ -6539,6 +6539,7 @@ class _R35RequestAction extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.icon,
+    this.leading,
     this.primary = false,
     this.loading = false,
     this.tooltip,
@@ -6546,6 +6547,7 @@ class _R35RequestAction extends StatelessWidget {
 
   final String label;
   final IconData? icon;
+  final Widget? leading;
   final VoidCallback? onPressed;
   final bool primary;
   final bool loading;
@@ -6567,7 +6569,8 @@ class _R35RequestAction extends StatelessWidget {
                         color: Colors.white,
                       ),
                     )
-                  : Icon(icon ?? Icons.arrow_forward_rounded, size: 19),
+                  : leading ??
+                        Icon(icon ?? Icons.arrow_forward_rounded, size: 19),
               label: Text(label),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.blue,
@@ -6578,9 +6581,11 @@ class _R35RequestAction extends StatelessWidget {
             )
           : OutlinedButton.icon(
               onPressed: onPressed,
-              icon: icon == null
-                  ? const SizedBox.shrink()
-                  : Icon(icon, size: 18),
+              icon:
+                  leading ??
+                  (icon == null
+                      ? const SizedBox.shrink()
+                      : Icon(icon, size: 18)),
               label: Text(label),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.inkSecondary,
@@ -6637,13 +6642,23 @@ class _R35MaterialActionBar extends StatelessWidget {
       if (excelEnabled)
         _R35RequestAction(
           label: YorksV1MaterialRequestStrings.importExcel.primary,
-          icon: YorksDataTransferIcons.importData,
+          leading: YorksFileTypeIcon(
+            fileName: 'import.xlsx',
+            size: 24,
+            badgeIcon: YorksDataTransferIcons.importData,
+            enabled: canEdit,
+          ),
           onPressed: canEdit ? onImport : null,
         ),
       if (excelEnabled)
         _R35RequestAction(
           label: YorksV1MaterialRequestStrings.exportExcel.primary,
-          icon: YorksDataTransferIcons.exportData,
+          leading: YorksFileTypeIcon(
+            fileName: 'export.xlsx',
+            size: 24,
+            badgeIcon: YorksDataTransferIcons.exportData,
+            enabled: canEdit,
+          ),
           onPressed: canEdit ? onExport : null,
         ),
     ],
@@ -10775,9 +10790,9 @@ class _MobileMaterialRequestLifecycleState
                           if (onPdf != null)
                             OutlinedButton.icon(
                               onPressed: onPdf,
-                              icon: const Icon(
-                                Icons.picture_as_pdf_outlined,
-                                size: 18,
+                              icon: const YorksFileTypeIcon(
+                                fileName: 'material-request.pdf',
+                                size: 24,
                               ),
                               label: Text(
                                 YorksV1LogisticsStrings.downloadPdf.primary,
@@ -12153,21 +12168,18 @@ class _MaterialRequestDiscussionState
                   runSpacing: AppSpacing.xs,
                   children: [
                     for (final attachment in _pendingAttachments)
-                      InputChip(
+                      _MaterialRequestAttachmentTile(
                         key: ValueKey(
                           'pending-comment-attachment-${attachment.id}',
                         ),
-                        avatar: const Icon(Icons.attach_file_rounded, size: 17),
-                        label: Text(
-                          attachment.fileName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onDeleted: _posting
+                        fileName: attachment.fileName,
+                        mimeType: attachment.mimeType,
+                        byteSize: attachment.byteSize,
+                        onRemove: _posting
                             ? null
                             : () => setState(
                                 () => _pendingAttachments.remove(attachment),
                               ),
-                        visualDensity: VisualDensity.compact,
                       ),
                     if (_uploading)
                       Chip(
@@ -12773,16 +12785,11 @@ class _MaterialRequestCommentCard extends StatelessWidget {
                             visualDensity: VisualDensity.compact,
                           ),
                         for (final attachment in comment.attachments)
-                          ActionChip(
-                            avatar: Icon(
-                              attachment.mimeType.startsWith('image/')
-                                  ? Icons.image_outlined
-                                  : Icons.description_outlined,
-                              size: 16,
-                            ),
-                            label: Text(attachment.fileName),
+                          _MaterialRequestAttachmentTile(
+                            fileName: attachment.fileName,
+                            mimeType: attachment.mimeType,
+                            byteSize: attachment.byteSize,
                             onPressed: () => onOpenAttachment(attachment),
-                            visualDensity: VisualDensity.compact,
                           ),
                       ],
                     ),
@@ -12810,6 +12817,101 @@ class _MaterialRequestCommentCard extends StatelessWidget {
     }
     return null;
   }
+}
+
+class _MaterialRequestAttachmentTile extends StatelessWidget {
+  const _MaterialRequestAttachmentTile({
+    super.key,
+    required this.fileName,
+    required this.mimeType,
+    required this.byteSize,
+    this.onPressed,
+    this.onRemove,
+  });
+
+  final String fileName;
+  final String mimeType;
+  final int byteSize;
+  final VoidCallback? onPressed;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Container(
+      constraints: const BoxConstraints(minWidth: 168, maxWidth: 300),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        AppSpacing.xs,
+        AppSpacing.xs,
+        AppSpacing.xxs,
+        AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          YorksFileTypeIcon(fileName: fileName, mimeType: mimeType, size: 30),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.inkSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _formatAttachmentSize(byteSize),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onPressed != null) ...[
+            const SizedBox(width: AppSpacing.xs),
+            const Icon(Icons.download_rounded, size: 18, color: AppColors.blue),
+          ],
+          if (onRemove != null)
+            IconButton(
+              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+              onPressed: onRemove,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close_rounded, size: 18),
+            ),
+        ],
+      ),
+    );
+    if (onPressed == null) return content;
+    return Semantics(
+      button: true,
+      label: fileName,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        child: content,
+      ),
+    );
+  }
+}
+
+String _formatAttachmentSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kilobytes = bytes / 1024;
+  if (kilobytes < 1024) return '${kilobytes.toStringAsFixed(1)} KB';
+  return '${(kilobytes / 1024).toStringAsFixed(1)} MB';
 }
 
 class _MaterialRequestDiscussionEmptyState extends StatelessWidget {
@@ -13010,10 +13112,11 @@ class _RequestRecordHeader extends StatelessWidget {
           ],
         ),
       );
-      final actions = Wrap(
+      final workflowActions = Wrap(
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
         alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           if (primaryAction != null)
             _RequestPrimaryActionButton(
@@ -13021,15 +13124,30 @@ class _RequestRecordHeader extends StatelessWidget {
               onPressed: onPrimaryAction,
             ),
           ?approvalActions,
+        ],
+      );
+      final supportingActions = Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
           _RecordActionButton(
             label: YorksV1MaterialRequestStrings.exportExcel.primary,
-            icon: YorksDataTransferIcons.exportData,
+            leading: const YorksFileTypeIcon(
+              fileName: 'material-request.xlsx',
+              size: 24,
+              badgeIcon: YorksDataTransferIcons.exportData,
+            ),
             onPressed: onExport,
           ),
           if (onPdf != null)
             _RecordActionButton(
               label: YorksV1MaterialRequestStrings.pdf.primary,
-              icon: Icons.picture_as_pdf_outlined,
+              leading: const YorksFileTypeIcon(
+                fileName: 'material-request.pdf',
+                size: 24,
+              ),
               onPressed: onPdf!,
             ),
           if (onPrint != null)
@@ -13047,17 +13165,60 @@ class _RequestRecordHeader extends StatelessWidget {
             onPressed: onRequestInformation,
           ),
           if (showCancel)
-            _RecordActionButton(
-              label: YorksV1MaterialRequestStrings.cancelRequest.primary,
-              icon: Icons.close_rounded,
-              destructive: true,
-              onPressed: onCancel,
+            PopupMenuButton<String>(
+              key: const ValueKey('material-request-more-actions'),
+              tooltip: YorksV1MaterialRequestStrings.moreActions.active(
+                language,
+              ),
+              onSelected: (_) => onCancel?.call(),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: 'cancel',
+                  enabled: onCancel != null,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.close_rounded,
+                        size: 19,
+                        color: AppColors.error,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        YorksV1MaterialRequestStrings.cancelRequest.active(
+                          language,
+                        ),
+                        style: const TextStyle(color: AppColors.error),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              icon: const Icon(Icons.more_horiz_rounded),
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(AppSpacing.minTapTarget),
+                side: const BorderSide(color: AppColors.line),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                ),
+              ),
             ),
           IconButton(
             tooltip: YorksV1MaterialRequestStrings.refresh.primary,
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
+        ],
+      );
+      final actions = Column(
+        crossAxisAlignment: compact
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.end,
+        children: [
+          if (primaryAction != null || approvalActions != null) ...[
+            workflowActions,
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          supportingActions,
         ],
       );
       return compact
@@ -13091,17 +13252,17 @@ class _RecordActionButton extends StatelessWidget {
   const _RecordActionButton({
     super.key,
     required this.label,
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.onPressed,
     this.primary = false,
-    this.destructive = false,
-  });
+  }) : assert(icon != null || leading != null);
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? leading;
   final VoidCallback? onPressed;
   final bool primary;
-  final bool destructive;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -13109,18 +13270,12 @@ class _RecordActionButton extends StatelessWidget {
     child: primary
         ? FilledButton.icon(
             onPressed: onPressed,
-            icon: Icon(icon, size: 19),
+            icon: leading ?? Icon(icon!, size: 19),
             label: Text(label),
           )
         : OutlinedButton.icon(
             onPressed: onPressed,
-            style: destructive
-                ? OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: const BorderSide(color: AppColors.errorContainer),
-                  )
-                : null,
-            icon: Icon(icon, size: 19),
+            icon: leading ?? Icon(icon!, size: 19),
             label: Text(label),
           ),
   );

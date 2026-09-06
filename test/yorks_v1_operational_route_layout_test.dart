@@ -403,6 +403,12 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('YRA123-MR101'), findsWidgets);
         expect(find.text('YRA-123'), findsWidgets);
+        if (size.width > 720) {
+          expect(
+            find.byKey(const ValueKey('material-request-information-panel')),
+            findsOneWidget,
+          );
+        }
         await tester.tap(find.byIcon(Icons.close_rounded).last);
         await tester.pumpAndSettle();
         // A fully received record is closed before optional document work; the

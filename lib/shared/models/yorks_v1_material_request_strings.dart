@@ -1021,6 +1021,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'یہ معلومات پروکیورمنٹ کو دکھائی جاتی ہیں اور مواد کی درخواست پر پرنٹ ہوتی ہیں۔',
     hi: 'यह जानकारी खरीद विभाग को दिखाई जाती है और सामग्री अनुरोध पर मुद्रित होती है।',
   );
+  static const moreActions = TranslatableString(
+    en: 'More actions',
+    ar: 'إجراءات إضافية',
+    ur: 'مزید کارروائیاں',
+    hi: 'और कार्रवाइयाँ',
+  );
   static const detailsStep = TranslatableString(
     en: 'Details',
     ar: 'التفاصيل',

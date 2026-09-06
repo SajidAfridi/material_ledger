@@ -82,18 +82,39 @@ Future<void> showYorksV1RequestInformation(
       builder: (_) => FractionallySizedBox(heightFactor: .86, child: content),
     );
   }
-  return showDialog<void>(
+  final slideFrom = language.isRtl ? const Offset(-1, 0) : const Offset(1, 0);
+  return showGeneralDialog<void>(
     context: context,
-    builder: (_) => Dialog(
-      backgroundColor: AppColors.surfaceContainerLowest,
-      insetPadding: const EdgeInsets.all(AppSpacing.xl),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: AppColors.scrim.withValues(alpha: .28),
+    transitionDuration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180),
+    pageBuilder: (_, _, _) => Directionality(
+      textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
+      child: SafeArea(
+        child: Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: Material(
+            color: AppColors.surfaceContainerLowest,
+            elevation: 12,
+            child: SizedBox(
+              key: const ValueKey('material-request-information-panel'),
+              width: 440,
+              height: double.infinity,
+              child: content,
+            ),
+          ),
+        ),
       ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
-        child: content,
-      ),
+    ),
+    transitionBuilder: (_, animation, _, child) => SlideTransition(
+      position: Tween<Offset>(
+        begin: slideFrom,
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+      child: child,
     ),
   );
 }

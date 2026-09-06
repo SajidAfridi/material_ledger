@@ -1216,7 +1216,12 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
                     width: 120,
                     child: SecondaryButton(
                       label: YorksV1LogisticsStrings.exportExcel.primary,
-                      icon: YorksDataTransferIcons.exportData,
+                      leading: const YorksFileTypeIcon(
+                        fileName: 'delivery-order.xlsx',
+                        size: 24,
+                        badgeIcon: YorksDataTransferIcons.exportData,
+                        enabled: true,
+                      ),
                       onPressed: () => _export(order, current),
                     ),
                   ),
@@ -1232,7 +1237,12 @@ class _DeliveryOrderCardState extends ConsumerState<_DeliveryOrderCard> {
                     width: 165,
                     child: SecondaryButton(
                       label: YorksV1LogisticsStrings.downloadPdf.primary,
-                      icon: Icons.download_outlined,
+                      leading: const YorksFileTypeIcon(
+                        fileName: 'delivery-order.pdf',
+                        size: 24,
+                        badgeIcon: YorksDataTransferIcons.exportData,
+                        enabled: true,
+                      ),
                       onPressed: () => _downloadPdf(order, current),
                     ),
                   ),
@@ -2316,7 +2326,12 @@ class _MaterialReturnCardState extends ConsumerState<_MaterialReturnCard> {
                 width: 120,
                 child: SecondaryButton(
                   label: YorksV1LogisticsStrings.exportExcel.primary,
-                  icon: YorksDataTransferIcons.exportData,
+                  leading: YorksFileTypeIcon(
+                    fileName: 'material-return.xlsx',
+                    size: 24,
+                    badgeIcon: YorksDataTransferIcons.exportData,
+                    enabled: !_working,
+                  ),
                   onPressed: _working ? null : _export,
                 ),
               ),
