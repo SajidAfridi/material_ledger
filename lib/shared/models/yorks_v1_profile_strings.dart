@@ -212,6 +212,30 @@ abstract final class YorksV1ProfileStrings {
     ur: 'یورکس ورژن، رازداری اور پروڈکٹ کی معلومات۔',
     hi: 'यॉर्क्स संस्करण, गोपनीयता और उत्पाद जानकारी।',
   );
+  static const contactSupport = TranslatableString(
+    en: 'Contact support',
+    ar: 'التواصل مع الدعم',
+    ur: 'سپورٹ سے رابطہ کریں',
+    hi: 'सहायता से संपर्क करें',
+  );
+  static const contactSupportDescription = TranslatableString(
+    en: 'Open the company support conversation in WhatsApp.',
+    ar: 'افتح محادثة دعم الشركة في واتساب.',
+    ur: 'کمپنی سپورٹ کی گفتگو واٹس ایپ میں کھولیں۔',
+    hi: 'कंपनी सहायता बातचीत WhatsApp में खोलें।',
+  );
+  static const supportMessage = TranslatableString(
+    en: 'Hello, I need help with the Yorks app.',
+    ar: 'مرحباً، أحتاج إلى مساعدة في تطبيق يوركس.',
+    ur: 'السلام علیکم، مجھے یورکس ایپ کے بارے میں مدد چاہیے۔',
+    hi: 'नमस्ते, मुझे यॉर्क्स ऐप में सहायता चाहिए।',
+  );
+  static const supportCopied = TranslatableString(
+    en: 'Support number copied',
+    ar: 'تم نسخ رقم الدعم',
+    ur: 'سپورٹ نمبر کاپی ہو گیا',
+    hi: 'सहायता नंबर कॉपी हो गया',
+  );
   static const signOutDescription = TranslatableString(
     en: 'End this Yorks session on this device.',
     ar: 'أنهِ جلسة يوركس هذه على هذا الجهاز.',

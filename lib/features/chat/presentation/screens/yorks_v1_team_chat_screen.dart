@@ -32,16 +32,25 @@ class YorksV1TeamChatScreen extends ConsumerStatefulWidget {
 }
 
 class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
+  static const _detailsPanelPreferenceKey =
+      'yorks_v1_team_chat_details_panel_visible';
+
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   YorksV1ChatFilter _filter = YorksV1ChatFilter.all;
   String? _openedInitialId;
   String? _focusMessageId;
   Timer? _searchDebounce;
+  late bool _detailsPanelVisible;
 
   @override
   void initState() {
     super.initState();
+    _detailsPanelVisible =
+        ref
+            .read(sharedPreferencesProvider)
+            .getBool(_detailsPanelPreferenceKey) ??
+        true;
     _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openInitial());
   }
@@ -118,7 +127,8 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
     final state = ref.watch(yorksV1TeamChatProvider);
     final size = MediaQuery.sizeOf(context);
     final mobile = size.width <= AppSpacing.compactBreakpoint;
-    final showInfo = size.width >= 1250;
+    final canDockInfo = size.width >= 1250;
+    final showInfo = canDockInfo && _detailsPanelVisible;
     final selected = state.selectedConversationId != null;
 
     if (state.error != null &&
@@ -201,24 +211,41 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
                             showInfoPanel: showInfo,
                             focusMessageId: _focusMessageId,
                             onFocusHandled: _clearFocusedMessage,
-                            onInfo: () => _showInfo(context, state, language),
+                            onInfo: canDockInfo
+                                ? _toggleDetailsPanel
+                                : () => _showInfo(context, state, language),
                           )
                         : _ConversationEmptyState(
                             language: language,
                             onCreate: () => _showCreateConversation(language),
                           ),
                   ),
-                  if (showInfo && selected) ...[
-                    const VerticalDivider(width: 1, thickness: 1),
-                    SizedBox(
-                      width: 316,
-                      child: _ConversationInfoPanel(
-                        language: language,
-                        state: state,
-                        onSelectPinnedMessage: _focusMessage,
+                  if (canDockInfo && selected)
+                    ClipRect(
+                      child: AnimatedSize(
+                        alignment: AlignmentDirectional.centerEnd,
+                        duration: MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                        curve: Curves.easeOutCubic,
+                        child: showInfo
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const VerticalDivider(width: 1, thickness: 1),
+                                  SizedBox(
+                                    width: 316,
+                                    child: _ConversationInfoPanel(
+                                      language: language,
+                                      state: state,
+                                      onSelectPinnedMessage: _focusMessage,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ),
-                  ],
                 ],
               ),
       ),
@@ -258,6 +285,15 @@ class _YorksV1TeamChatScreenState extends ConsumerState<YorksV1TeamChatScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _toggleDetailsPanel() {
+    setState(() => _detailsPanelVisible = !_detailsPanelVisible);
+    unawaited(
+      ref
+          .read(sharedPreferencesProvider)
+          .setBool(_detailsPanelPreferenceKey, _detailsPanelVisible),
     );
   }
 
@@ -987,14 +1023,18 @@ class _ConversationPaneState extends ConsumerState<_ConversationPane> {
                   icon: Icons.search_rounded,
                   onPressed: () => _showMessageSearch(thread),
                 ),
-                if (!widget.showInfoPanel)
-                  _ChatIconButton(
-                    tooltip: YorksV1TeamChatStrings.conversationInfo.active(
-                      widget.language,
-                    ),
-                    icon: Icons.info_outline_rounded,
-                    onPressed: widget.onInfo,
-                  ),
+                _ChatIconButton(
+                  key: const ValueKey('chat-details-panel-toggle'),
+                  tooltip:
+                      (widget.showInfoPanel
+                              ? YorksV1TeamChatStrings.hideConversationDetails
+                              : YorksV1TeamChatStrings.showConversationDetails)
+                          .active(widget.language),
+                  icon: widget.showInfoPanel
+                      ? Icons.last_page_rounded
+                      : Icons.info_outline_rounded,
+                  onPressed: widget.onInfo,
+                ),
               ],
             ),
           ),
@@ -3840,6 +3880,7 @@ class _ComposerContextStrip extends StatelessWidget {
 
 class _ChatIconButton extends StatelessWidget {
   const _ChatIconButton({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.onPressed,

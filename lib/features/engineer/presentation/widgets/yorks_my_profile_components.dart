@@ -1185,6 +1185,7 @@ class YorksPreferenceRow extends StatelessWidget {
     required this.description,
     this.onPressed,
     this.value,
+    this.valueTextDirection,
     this.trailing,
     this.destructive = false,
     this.toggled,
@@ -1195,6 +1196,7 @@ class YorksPreferenceRow extends StatelessWidget {
   final String description;
   final VoidCallback? onPressed;
   final String? value;
+  final TextDirection? valueTextDirection;
   final Widget? trailing;
   final bool destructive;
   final bool? toggled;
@@ -1258,6 +1260,7 @@ class YorksPreferenceRow extends StatelessWidget {
                       Flexible(
                         child: Text(
                           value!,
+                          textDirection: valueTextDirection,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.end,

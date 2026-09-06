@@ -69,6 +69,7 @@ class _YorksV1WorkspaceSearchDialogState
   List<YorksV1WorkspaceSearchResult> _results = const [];
   String _query = '';
   String? _error;
+  bool _partial = false;
   int _selectedIndex = 0;
   int _requestVersion = 0;
   bool _loading = false;
@@ -76,10 +77,6 @@ class _YorksV1WorkspaceSearchDialogState
   @override
   void initState() {
     super.initState();
-    // A palette opening is a deliberate refresh point. This keeps newly
-    // created projects, requests and documents discoverable without retaining
-    // stale results across separate palette sessions.
-    ref.read(yorksV1WorkspaceSearchRepositoryProvider).invalidate();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _queryFocus.requestFocus();
     });
@@ -134,6 +131,7 @@ class _YorksV1WorkspaceSearchDialogState
                   selectedIndex: _selectedIndex,
                   loading: _loading,
                   error: _error,
+                  partial: _partial,
                   language: widget.language,
                   onSelect: _open,
                   onHover: (index) => setState(() => _selectedIndex = index),
@@ -155,16 +153,19 @@ class _YorksV1WorkspaceSearchDialogState
           title: target.label.active(widget.language),
           subtitle: YorksV1ShellStrings.searchModule.active(widget.language),
           route: target.path,
-          searchableText: target.label.active(widget.language),
+          searchableText:
+              '${target.label.active(widget.language)} ${_moduleAliases(target.path)}',
         ),
     ];
     if (_query.trim().isEmpty) return moduleResults;
-    final query = _query.trim().toLowerCase();
+    final query = normalizeYorksWorkspaceSearchText(_query);
     final terms = query.split(RegExp(r'\s+')).where((term) => term.isNotEmpty);
     final modules = moduleResults
         .where(
           (item) => terms.every(
-            (term) => item.searchableText.toLowerCase().contains(term),
+            (term) => normalizeYorksWorkspaceSearchText(
+              item.searchableText,
+            ).contains(term),
           ),
         )
         .toList(growable: false);
@@ -202,30 +203,34 @@ class _YorksV1WorkspaceSearchDialogState
 
   void _onQueryChanged(String value) {
     _debounce?.cancel();
+    final version = ++_requestVersion;
     setState(() {
       _query = value;
       _selectedIndex = 0;
       _error = null;
+      _partial = false;
       _results = const [];
       _loading = value.trim().isNotEmpty;
     });
     if (value.trim().isEmpty) return;
-    final version = ++_requestVersion;
     _debounce = Timer(const Duration(milliseconds: 220), () async {
       try {
-        final results = await ref.read(
+        final response = await ref.read(
           yorksV1WorkspaceSearchResultsProvider(value.trim()).future,
         );
         if (!mounted || version != _requestVersion) return;
         setState(() {
-          _results = results;
+          _results = response.results;
+          _partial = response.isPartial;
           _loading = false;
         });
       } catch (_) {
         if (!mounted || version != _requestVersion) return;
         setState(() {
           _loading = false;
-          _error = YorksV1ShellStrings.searchNoResults.primary;
+          _error = YorksV1ShellStrings.searchUnavailable.active(
+            widget.language,
+          );
         });
       }
     });
@@ -240,6 +245,22 @@ class _YorksV1WorkspaceSearchDialogState
     final router = GoRouter.of(context);
     Navigator.of(context).pop();
     router.go(result.route);
+  }
+
+  String _moduleAliases(String path) {
+    if (path.contains('material-requests')) return 'mr request requisition';
+    if (path.contains('inventory')) return 'stock warehouse materials';
+    if (path.contains('returns')) return 'return material';
+    if (path.contains('dispatch')) return 'delivery logistics';
+    if (path.contains('projects')) return 'job contract site';
+    if (path.contains('accounts')) return 'finance commercial money';
+    if (path.contains('workforce')) return 'attendance timesheet workers';
+    if (path.contains('rentals')) return 'rental property tenant';
+    if (path.contains('users')) return 'people permissions access';
+    if (path.contains('configuration')) return 'settings controls';
+    if (path.contains('analytics')) return 'reports charts insights';
+    if (path.contains('chat')) return 'messages conversation';
+    return '';
   }
 }
 
@@ -294,7 +315,7 @@ class _SearchHeader extends StatelessWidget {
           ),
         ),
         IconButton(
-          tooltip: YorksV1ShellStrings.searchWorkspace.primary,
+          tooltip: YorksV1ShellStrings.searchWorkspace.active(language),
           onPressed: onClose,
           icon: const Icon(Icons.close_rounded),
         ),
@@ -310,6 +331,7 @@ class _SearchBody extends StatelessWidget {
     required this.selectedIndex,
     required this.loading,
     required this.error,
+    required this.partial,
     required this.language,
     required this.onSelect,
     required this.onHover,
@@ -320,6 +342,7 @@ class _SearchBody extends StatelessWidget {
   final int selectedIndex;
   final bool loading;
   final String? error;
+  final bool partial;
   final AppLanguage language;
   final ValueChanged<YorksV1WorkspaceSearchResult> onSelect;
   final ValueChanged<int> onHover;
@@ -353,10 +376,16 @@ class _SearchBody extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.search_off_rounded, size: 40),
+              Icon(
+                partial ? Icons.cloud_off_outlined : Icons.search_off_rounded,
+                size: 40,
+              ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                error ?? YorksV1ShellStrings.searchNoResults.active(language),
+                error ??
+                    (partial
+                        ? YorksV1ShellStrings.searchPartial.active(language)
+                        : YorksV1ShellStrings.searchNoResults.active(language)),
                 style: AppTypography.titleMedium.copyWith(
                   color: AppColors.ink,
                   fontWeight: FontWeight.w700,
@@ -371,6 +400,36 @@ class _SearchBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (partial)
+          Semantics(
+            liveRegion: true,
+            child: Container(
+              width: double.infinity,
+              color: AppColors.warningContainer,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      YorksV1ShellStrings.searchPartial.active(language),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.lg,
@@ -467,9 +526,7 @@ class _SearchBody extends StatelessWidget {
                           Icon(
                             Icons.arrow_outward_rounded,
                             size: 18,
-                            color: selected
-                                ? AppColors.blue
-                                : AppColors.muted,
+                            color: selected ? AppColors.blue : AppColors.muted,
                           ),
                         ],
                       ),

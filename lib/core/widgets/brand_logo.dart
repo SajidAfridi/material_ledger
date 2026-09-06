@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/constants.dart';
 
-/// The approved golden Yorks AC. & Ref. seal, presented as a clean white
+/// The approved black Yorks AC. & Ref. seal, presented as a clean white
 /// circular badge so it reads on dark/blue splash and login panels as well as
 /// the near-white navigation rail. Falls back to a brand mark if the asset
 /// ever fails to load.

@@ -8,9 +8,14 @@ import 'yorks_v1_identity_provider.dart';
 import 'yorks_v1_logistics_repository_provider.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 import 'yorks_v1_project_portfolio_provider.dart';
+import 'session_provider.dart' show authSessionRevisionProvider;
+import 'yorks_v1_permission_provider.dart';
 
 final yorksV1WorkspaceSearchRepositoryProvider =
     Provider<YorksV1WorkspaceSearchRepository>((ref) {
+      ref.watch(yorksV1AuthUserIdProvider);
+      ref.watch(authSessionRevisionProvider);
+      yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       return YorksV1WorkspaceSearchRepository(
         projects: ref.watch(yorksV1ProjectPortfolioRepositoryProvider),
         materialRequests: ref.watch(yorksV1MaterialRequestRepositoryProvider),
@@ -21,7 +26,7 @@ final yorksV1WorkspaceSearchRepositoryProvider =
     });
 
 final yorksV1WorkspaceSearchResultsProvider = FutureProvider.autoDispose
-    .family<List<YorksV1WorkspaceSearchResult>, String>((ref, query) {
+    .family<YorksV1WorkspaceSearchResponse, String>((ref, query) {
       final role = ref.watch(yorksV1CurrentRoleProvider);
       return ref
           .watch(yorksV1WorkspaceSearchRepositoryProvider)

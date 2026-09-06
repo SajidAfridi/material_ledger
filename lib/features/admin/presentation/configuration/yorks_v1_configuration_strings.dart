@@ -94,6 +94,8 @@ abstract final class YorksV1ConfigurationStrings {
         'the trusted Procurement arrangement command',
     'enforcement.notification_push_outbox':
         'the notification push outbox trigger',
+    'enforcement.profile_support_contact':
+        'the published My Yorks support action',
     'enforcement.controlled_document_identity':
         'the Yorks legal and controlled-document identity contract',
     'enforcement.aed_commercial_boundary':
@@ -217,6 +219,7 @@ abstract final class YorksV1ConfigurationStrings {
     'short_application_name': 'Short Application Name',
     'arabic_company_name': 'Arabic Company Name',
     'workspace_name': 'Workspace Name',
+    'support_whatsapp': 'Support WhatsApp (E.164)',
     'country': 'Country',
     'timezone': 'Timezone',
     'date_format': 'Date Format',
@@ -752,6 +755,9 @@ abstract final class YorksV1ConfigurationStrings {
       'external_source_readiness_required_body':
           'عند التفعيل، يجب أن تؤكد المشتريات أن كل كمية خارجية متاحة أو ملتزم بتوفيرها قبل الحفظ. يبقى اسم المورد اختيارياً.',
       'organisation_identity': 'هوية المؤسسة',
+      'support_whatsapp': 'رقم واتساب للدعم (E.164)',
+      'enforcement.profile_support_contact':
+          'إجراء الدعم المنشور في يوركس الخاص بي',
       'regional_language': 'الإعدادات الإقليمية واللغة',
       'master_categories': 'فئات المواد',
       'master_units': 'الوحدات المعتمدة',
@@ -794,6 +800,9 @@ abstract final class YorksV1ConfigurationStrings {
           'بیرونی ذریعہ کی تیاری کی تصدیق لازمی کریں',
       'external_source_readiness_required_body':
           'فعال ہونے پر پروکیورمنٹ کو محفوظ کرنے سے پہلے ہر بیرونی مقدار کی دستیابی یا پکی وابستگی کی تصدیق کرنا ہوگی۔ سپلائر کا نام اختیاری رہے گا۔',
+      'support_whatsapp': 'سپورٹ واٹس ایپ (E.164)',
+      'enforcement.profile_support_contact':
+          'میرا یورکس میں شائع شدہ سپورٹ کارروائی',
     },
     'hi': {
       'title': 'कॉन्फ़िगरेशन केंद्र',
@@ -821,6 +830,9 @@ abstract final class YorksV1ConfigurationStrings {
           'बाहरी स्रोत की तैयारी की पुष्टि आवश्यक करें',
       'external_source_readiness_required_body':
           'सक्षम होने पर खरीद विभाग को सहेजने से पहले प्रत्येक बाहरी मात्रा की उपलब्धता या पक्की प्रतिबद्धता की पुष्टि करनी होगी। आपूर्तिकर्ता का नाम वैकल्पिक रहेगा।',
+      'support_whatsapp': 'सहायता WhatsApp (E.164)',
+      'enforcement.profile_support_contact':
+          'मेरा यॉर्क्स में प्रकाशित सहायता कार्रवाई',
     },
   };
 }

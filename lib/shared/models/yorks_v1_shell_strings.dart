@@ -413,6 +413,18 @@ abstract final class YorksV1ShellStrings {
     ur: 'کوئی مماثل ریکارڈ نہیں ملا',
     hi: 'कोई मेल खाने वाला रिकॉर्ड नहीं मिला',
   );
+  static const searchUnavailable = TranslatableString(
+    en: 'Search is temporarily unavailable. Try again.',
+    ar: 'البحث غير متاح مؤقتاً. حاول مرة أخرى.',
+    ur: 'تلاش عارضی طور پر دستیاب نہیں۔ دوبارہ کوشش کریں۔',
+    hi: 'खोज अभी उपलब्ध नहीं है। फिर प्रयास करें।',
+  );
+  static const searchPartial = TranslatableString(
+    en: 'Some authorised records could not be checked. Available matches are shown.',
+    ar: 'تعذر التحقق من بعض السجلات المصرح بها. تظهر النتائج المتاحة.',
+    ur: 'کچھ مجاز ریکارڈز چیک نہیں ہو سکے۔ دستیاب نتائج دکھائے گئے ہیں۔',
+    hi: 'कुछ अधिकृत रिकॉर्ड जांचे नहीं जा सके। उपलब्ध परिणाम दिखाए गए हैं।',
+  );
   static const searchLoading = TranslatableString(
     en: 'Searching your authorised workspace…',
     ar: 'جارٍ البحث في مساحة العمل المصرح بها…',

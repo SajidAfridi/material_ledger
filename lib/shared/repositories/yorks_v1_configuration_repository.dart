@@ -316,6 +316,7 @@ class YorksV1SupabaseConfigurationRepository
       'push_enabled',
     ];
     final defaultTiming = response['default_timing'];
+    final supportWhatsApp = response['support_whatsapp'];
     return response['schema_version'] is String &&
         (response['schema_version'] as String).trim().isNotEmpty &&
         response['published_version'] is num &&
@@ -324,6 +325,9 @@ class YorksV1SupabaseConfigurationRepository
         DateTime.tryParse(response['published_at']?.toString() ?? '') != null &&
         defaultTiming is String &&
         const {'urgent', 'normal', 'scheduled'}.contains(defaultTiming) &&
+        (supportWhatsApp == null ||
+            (supportWhatsApp is String &&
+                RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(supportWhatsApp))) &&
         booleanKeys.every((key) => response[key] is bool);
   }
 

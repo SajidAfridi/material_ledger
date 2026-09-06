@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/router.dart';
 import '../../../../app/yorks_navigation_history.dart';
@@ -17,6 +19,7 @@ import '../../../../shared/models/yorks_v1_my_profile_workspace.dart';
 import '../../../../shared/models/yorks_v1_profile_strings.dart';
 import '../../../../shared/models/yorks_v1_workspace_status.dart';
 import '../../../../shared/providers/language_provider.dart';
+import '../../../../shared/providers/yorks_v1_configuration_provider.dart';
 import '../../../../shared/providers/yorks_v1_feature_flags_provider.dart';
 import '../../../../shared/providers/yorks_v1_my_profile_provider.dart';
 import '../../../../shared/providers/yorks_v1_my_profile_workspace_provider.dart';
@@ -61,6 +64,7 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
     final profileWorkspaceState = ref.watch(yorksV1MyProfileWorkspaceProvider);
     final featureFlags = ref.watch(yorksV1FeatureFlagsProvider);
     final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
+    final runtimeConfiguration = ref.watch(yorksV1RuntimeConfigurationProvider);
     final version = ref.watch(appVersionProvider).label;
     final direction = language.isRtl ? TextDirection.rtl : TextDirection.ltr;
 
@@ -144,6 +148,12 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
             onWorkspaceSync: () => _showSyncSheet(language),
             onRefreshAccess: () => unawaited(_refreshProfile()),
             onAbout: () => context.push(RoutePaths.about),
+            supportNumber:
+                runtimeConfiguration.valueOrNull?.supportWhatsApp ??
+                '+923159353145',
+            onSupport: (number) => unawaited(
+              _contactSupport(language: language, supportNumber: number),
+            ),
             onSignOut: () => showYorksSignOut(context, ref),
           );
 
@@ -380,6 +390,33 @@ class _EngineerProfileScreenState extends ConsumerState<EngineerProfileScreen> {
         textDirection: language.isRtl ? TextDirection.rtl : TextDirection.ltr,
         child: _WorkspaceSyncSheet(language: language),
       ),
+    );
+  }
+
+  Future<void> _contactSupport({
+    required AppLanguage language,
+    required String supportNumber,
+  }) async {
+    final digits = supportNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.https('wa.me', '/$digits', {
+      'text': YorksV1ProfileStrings.supportMessage.active(language),
+    });
+    try {
+      if (digits.isNotEmpty &&
+          await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } catch (_) {
+      // The copy fallback below keeps the support route usable when a device
+      // has no WhatsApp handler or blocks external navigation.
+    }
+    await Clipboard.setData(ClipboardData(text: supportNumber));
+    if (!mounted) return;
+    YorksAppToast.show(
+      context,
+      title: YorksV1ProfileStrings.supportCopied.active(language),
+      message: supportNumber,
+      icon: Icons.content_copy_rounded,
     );
   }
 }
@@ -1022,6 +1059,8 @@ class _HelpAndSecuritySection extends StatelessWidget {
     required this.onWorkspaceSync,
     required this.onRefreshAccess,
     required this.onAbout,
+    required this.supportNumber,
+    required this.onSupport,
     required this.onSignOut,
   });
 
@@ -1031,6 +1070,8 @@ class _HelpAndSecuritySection extends StatelessWidget {
   final VoidCallback onWorkspaceSync;
   final VoidCallback onRefreshAccess;
   final VoidCallback onAbout;
+  final String supportNumber;
+  final ValueChanged<String> onSupport;
   final VoidCallback onSignOut;
 
   @override
@@ -1071,6 +1112,16 @@ class _HelpAndSecuritySection extends StatelessWidget {
                 language,
               ),
               onPressed: onAbout,
+            ),
+            YorksPreferenceRow(
+              key: const ValueKey('my-yorks-contact-support'),
+              icon: Icons.support_agent_rounded,
+              title: YorksV1ProfileStrings.contactSupport.active(language),
+              description: YorksV1ProfileStrings.contactSupportDescription
+                  .active(language),
+              value: supportNumber,
+              valueTextDirection: TextDirection.ltr,
+              onPressed: () => onSupport(supportNumber),
             ),
             YorksPreferenceRow(
               icon: Icons.logout_rounded,

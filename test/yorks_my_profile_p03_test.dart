@@ -262,6 +262,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('🇦🇪 AED'), findsOneWidget);
+    expect(find.text('Contact support'), findsOneWidget);
+    expect(find.text('+923159353145'), findsOneWidget);
     final currency = tester.getSemantics(find.bySemanticsLabel('Currency'));
     expect(currency.flagsCollection.isButton, isFalse);
     expect(currency.flagsCollection.isEnabled, Tristate.isFalse);

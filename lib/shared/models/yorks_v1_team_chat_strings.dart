@@ -85,6 +85,18 @@ abstract final class YorksV1TeamChatStrings {
     ur: 'اس گفتگو میں تلاش کریں',
     hi: 'इस बातचीत में खोजें',
   );
+  static const showConversationDetails = TranslatableString(
+    en: 'Show conversation details',
+    ar: 'إظهار تفاصيل المحادثة',
+    ur: 'گفتگو کی تفصیلات دکھائیں',
+    hi: 'बातचीत का विवरण दिखाएँ',
+  );
+  static const hideConversationDetails = TranslatableString(
+    en: 'Hide conversation details',
+    ar: 'إخفاء تفاصيل المحادثة',
+    ur: 'گفتگو کی تفصیلات چھپائیں',
+    hi: 'बातचीत का विवरण छिपाएँ',
+  );
   static const searchRecentMessages = TranslatableString(
     en: 'Search recent messages',
     ar: 'ابحث في الرسائل الأخيرة',

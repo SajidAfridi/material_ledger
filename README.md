@@ -3,7 +3,7 @@
 > Precision-engineered inventory management for the modern construction site.
 
 <p align="center">
-  <img src="assets/logo.png" width="120" alt="Yorks logo" />
+  <img src="assets/logo.png" width="120" alt="Yorks black logo" />
 </p>
 
 ---

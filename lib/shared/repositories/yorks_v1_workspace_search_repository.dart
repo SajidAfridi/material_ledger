@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../models/yorks_v1_boq.dart';
+import '../models/yorks_v1_document.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_project_portfolio.dart';
@@ -21,64 +22,95 @@ class YorksV1WorkspaceSearchRepository {
     required YorksV1BoqRepository boq,
     required YorksV1DocumentsRepository documents,
     required YorksV1LogisticsRepository logistics,
+    Duration cacheTtl = const Duration(minutes: 2),
   }) : _projects = projects,
        _materialRequests = materialRequests,
        _boq = boq,
        _documents = documents,
-       _logistics = logistics;
+       _logistics = logistics,
+       _cacheTtl = cacheTtl;
 
   final YorksV1ProjectPortfolioRepository _projects;
   final YorksV1MaterialRequestRepository _materialRequests;
   final YorksV1BoqRepository _boq;
   final YorksV1DocumentsRepository _documents;
   final YorksV1LogisticsRepository _logistics;
+  final Duration _cacheTtl;
 
-  Future<List<YorksV1WorkspaceSearchResult>>? _indexFuture;
+  Future<_SearchIndexSnapshot>? _indexFuture;
   YorksV1Role? _indexedRole;
+  DateTime? _indexStartedAt;
 
-  Future<List<YorksV1WorkspaceSearchResult>> search(
+  Future<YorksV1WorkspaceSearchResponse> search(
     String query, {
     required YorksV1Role? role,
   }) async {
     final terms = _tokens(query);
-    if (terms.isEmpty) return const [];
-    final index = await _indexFor(role);
+    if (terms.isEmpty) {
+      return const YorksV1WorkspaceSearchResponse(results: []);
+    }
+    final snapshot = await _indexFor(role);
     final results = <YorksV1WorkspaceSearchResult>[];
-    for (final result in index) {
-      final haystack = result.searchableText.toLowerCase();
-      if (!terms.every(haystack.contains)) continue;
+    for (final result in snapshot.results) {
+      final haystack = normalizeYorksWorkspaceSearchText(result.searchableText);
+      if (!terms.every(
+        (term) => yorksWorkspaceSearchTermMatches(haystack, term),
+      )) {
+        continue;
+      }
       results.add(result.withScore(_score(result, terms)));
     }
     results.sort((a, b) {
       final score = b.score.compareTo(a.score);
       return score == 0 ? a.title.compareTo(b.title) : score;
     });
-    return results.take(80).toList(growable: false);
+    return YorksV1WorkspaceSearchResponse(
+      results: results.take(60).toList(growable: false),
+      isPartial: snapshot.isPartial,
+    );
   }
 
   void invalidate() {
     _indexFuture = null;
     _indexedRole = null;
+    _indexStartedAt = null;
   }
 
-  Future<List<YorksV1WorkspaceSearchResult>> _indexFor(YorksV1Role? role) {
-    if (_indexFuture != null && _indexedRole == role) return _indexFuture!;
+  Future<_SearchIndexSnapshot> _indexFor(YorksV1Role? role) {
+    final startedAt = _indexStartedAt;
+    final fresh =
+        startedAt != null && DateTime.now().difference(startedAt) < _cacheTtl;
+    if (_indexFuture != null && _indexedRole == role && fresh) {
+      return _indexFuture!;
+    }
     _indexedRole = role;
+    _indexStartedAt = DateTime.now();
     return _indexFuture = _buildIndex(role);
   }
 
-  Future<List<YorksV1WorkspaceSearchResult>> _buildIndex(
-    YorksV1Role? role,
-  ) async {
-    final portfolio = await _safe(() => _projects.listPortfolio(), const []);
-    final requests = await _safe(
-      () => _materialRequests.listRequests(),
-      const [],
+  Future<_SearchIndexSnapshot> _buildIndex(YorksV1Role? role) async {
+    final portfolioFuture = _capture(
+      () => _projects.listPortfolio(),
+      const <YorksV1ProjectPortfolioItem>[],
     );
-    final inventory =
-        role == YorksV1Role.procurement || role == YorksV1Role.admin
-        ? await _safe(() => _logistics.getInventory(), null)
-        : null;
+    final requestsFuture = _capture(
+      () => _materialRequests.listRequests(),
+      const <YorksV1MaterialRequest>[],
+    );
+    final portfolioLoad = await portfolioFuture;
+    final requestLoad = await requestsFuture;
+    final portfolio = portfolioLoad.value;
+    final requests = requestLoad.value;
+    var partial = portfolioLoad.failed || requestLoad.failed;
+    YorksV1InventoryWorkspace? inventory;
+    if (role == YorksV1Role.procurement || role == YorksV1Role.admin) {
+      final inventoryLoad = await _capture<YorksV1InventoryWorkspace?>(
+        () => _logistics.getInventory(),
+        null,
+      );
+      inventory = inventoryLoad.value;
+      partial = partial || inventoryLoad.failed;
+    }
 
     final results = <YorksV1WorkspaceSearchResult>[
       for (final item in portfolio) _projectResult(item),
@@ -93,30 +125,40 @@ class YorksV1WorkspaceSearchRepository {
 
     final projectData = await Future.wait([
       for (final item in portfolio)
-        _projectSearchData(item).catchError((_) => const _ProjectSearchData()),
+        _projectSearchData(
+          item,
+        ).catchError((_) => const _ProjectSearchData(isPartial: true)),
     ]);
     for (final data in projectData) {
+      partial = partial || data.isPartial;
       results
         ..addAll(data.groups)
         ..addAll(data.items)
         ..addAll(data.documents);
     }
-    return results;
+    return _SearchIndexSnapshot(results: results, isPartial: partial);
   }
 
   Future<_ProjectSearchData> _projectSearchData(
     YorksV1ProjectPortfolioItem item,
   ) async {
-    final groups = await _safe(
+    final groupsLoad = await _capture(
       () => _boq.listGroupsForScope(item.project.id),
-      const [],
+      const <YorksV1BoqGroup>[],
     );
+    final groups = groupsLoad.value;
+    var partial = groupsLoad.failed;
     final groupResults = <YorksV1WorkspaceSearchResult>[];
     final itemResults = <YorksV1WorkspaceSearchResult>[];
     for (final group in groups) {
       groupResults.add(_groupResult(item, group));
       if (group.rowCount == 0) continue;
-      final worksheet = await _safe(() => _boq.getWorksheet(group.id), null);
+      final worksheetLoad = await _capture<YorksV1BoqWorksheet?>(
+        () => _boq.getWorksheet(group.id),
+        null,
+      );
+      partial = partial || worksheetLoad.failed;
+      final worksheet = worksheetLoad.value;
       if (worksheet == null) continue;
       for (final row in worksheet.rows) {
         final values = _operationalRowValues(worksheet, row);
@@ -138,7 +180,7 @@ class YorksV1WorkspaceSearchRepository {
             searchableText: [
               title,
               group.effectiveTitle,
-              'boq item',
+              'boq bill quantity item row',
               item.project.reference,
               item.project.name,
               ...values.values,
@@ -148,10 +190,12 @@ class YorksV1WorkspaceSearchRepository {
       }
     }
 
-    final documents = await _safe(
+    final documentsLoad = await _capture<YorksV1DocumentWorkspace?>(
       () => _documents.getWorkspace(item.project.id),
       null,
     );
+    partial = partial || documentsLoad.failed;
+    final documents = documentsLoad.value;
     final documentResults = <YorksV1WorkspaceSearchResult>[];
     if (documents != null) {
       for (final document in documents.documents) {
@@ -188,6 +232,7 @@ class YorksV1WorkspaceSearchRepository {
       groups: groupResults,
       items: itemResults,
       documents: documentResults,
+      isPartial: partial,
     );
   }
 
@@ -210,6 +255,7 @@ class YorksV1WorkspaceSearchRepository {
         project.siteLocation,
         project.city,
         project.notes,
+        'project job contract site',
       ].whereType<String>().join(' '),
     );
   }
@@ -230,7 +276,7 @@ class YorksV1WorkspaceSearchRepository {
       group.worksheetTitle,
       group.scopeName,
       group.scopeCode,
-      'boq group',
+      'boq bill quantity group folder',
       item.project.reference,
       item.project.name,
     ].join(' '),
@@ -255,7 +301,7 @@ class YorksV1WorkspaceSearchRepository {
       request.state.name,
       request.requesterDisplayName,
       request.deliveryNote,
-      'material request',
+      'material request mr requisition',
       for (final line in request.lines) ...[
         line.description,
         line.brandOrigin,
@@ -283,7 +329,7 @@ class YorksV1WorkspaceSearchRepository {
         title,
         line.brandOrigin,
         line.unit,
-        'material item',
+        'material item mr request',
         request.requestNumber,
         request.title,
         request.projectReference,
@@ -305,7 +351,7 @@ class YorksV1WorkspaceSearchRepository {
       item.description,
       item.brandOrigin,
       item.unit,
-      'material item inventory',
+      'material item inventory stock warehouse',
     ].whereType<String>().join(' '),
   );
 
@@ -330,8 +376,14 @@ class YorksV1WorkspaceSearchRepository {
   }
 
   int _score(YorksV1WorkspaceSearchResult result, List<String> terms) {
-    final title = result.title.toLowerCase();
+    final title = normalizeYorksWorkspaceSearchText(result.title);
+    final phrase = terms.join(' ');
     var score = 0;
+    if (title == phrase) {
+      score += 1400;
+    } else if (title.startsWith(phrase)) {
+      score += 900;
+    }
     for (final term in terms) {
       if (title == term) {
         score += 1000;
@@ -355,9 +407,7 @@ class YorksV1WorkspaceSearchRepository {
     return score;
   }
 
-  List<String> _tokens(String query) => query
-      .trim()
-      .toLowerCase()
+  List<String> _tokens(String query) => normalizeYorksWorkspaceSearchText(query)
       .split(RegExp(r'\s+'))
       .where((token) => token.isNotEmpty)
       .toList(growable: false);
@@ -375,11 +425,14 @@ class YorksV1WorkspaceSearchRepository {
   String _scopeLabel(YorksV1BoqGroup group) =>
       group.scopeName ?? group.scopeCode ?? group.effectiveTitle;
 
-  Future<T> _safe<T>(Future<T> Function() task, T fallback) async {
+  Future<_Captured<T>> _capture<T>(
+    Future<T> Function() task,
+    T fallback,
+  ) async {
     try {
-      return await task();
+      return _Captured(value: await task());
     } catch (_) {
-      return fallback;
+      return _Captured(value: fallback, failed: true);
     }
   }
 }
@@ -389,9 +442,25 @@ class _ProjectSearchData {
     this.groups = const [],
     this.items = const [],
     this.documents = const [],
+    this.isPartial = false,
   });
 
   final List<YorksV1WorkspaceSearchResult> groups;
   final List<YorksV1WorkspaceSearchResult> items;
   final List<YorksV1WorkspaceSearchResult> documents;
+  final bool isPartial;
+}
+
+class _SearchIndexSnapshot {
+  const _SearchIndexSnapshot({required this.results, required this.isPartial});
+
+  final List<YorksV1WorkspaceSearchResult> results;
+  final bool isPartial;
+}
+
+class _Captured<T> {
+  const _Captured({required this.value, this.failed = false});
+
+  final T value;
+  final bool failed;
 }

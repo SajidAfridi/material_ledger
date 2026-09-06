@@ -371,6 +371,8 @@ class YorksV1ConfigurationPublicationDetail {
 }
 
 class YorksV1RuntimeConfiguration {
+  static const defaultSupportWhatsApp = '+923159353145';
+
   const YorksV1RuntimeConfiguration({
     required this.schemaVersion,
     required this.publishedVersion,
@@ -381,6 +383,7 @@ class YorksV1RuntimeConfiguration {
     required this.allowAuthorizedCreatorSelfApproval,
     required this.requireExternalSourceReadiness,
     required this.pushEnabled,
+    this.supportWhatsApp = defaultSupportWhatsApp,
   });
 
   final String schemaVersion;
@@ -392,6 +395,7 @@ class YorksV1RuntimeConfiguration {
   final bool allowAuthorizedCreatorSelfApproval;
   final bool requireExternalSourceReadiness;
   final bool pushEnabled;
+  final String supportWhatsApp;
 
   factory YorksV1RuntimeConfiguration.fromJson(Map<String, dynamic> json) {
     return YorksV1RuntimeConfiguration(
@@ -408,6 +412,8 @@ class YorksV1RuntimeConfiguration {
       requireExternalSourceReadiness:
           json['require_external_source_readiness'] == true,
       pushEnabled: json['push_enabled'] == true,
+      supportWhatsApp:
+          _nullableString(json['support_whatsapp']) ?? defaultSupportWhatsApp,
     );
   }
 }

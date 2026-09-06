@@ -216,6 +216,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('desktop details panel toggles and remembers the preference', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    await _pumpChat(tester, preferences, selected: true);
+
+    expect(find.text('Participants'), findsOneWidget);
+    await tester.tap(find.byTooltip('Hide conversation details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Participants'), findsNothing);
+    expect(find.byTooltip('Show conversation details'), findsOneWidget);
+    expect(
+      preferences.getBool('yorks_v1_team_chat_details_panel_visible'),
+      isFalse,
+    );
+
+    await _pumpChat(tester, preferences, selected: true);
+    expect(find.text('Participants'), findsNothing);
+    expect(find.byTooltip('Show conversation details'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('conversation search finds and reveals a recent message', (
     tester,
   ) async {
