@@ -56,8 +56,8 @@ pass. Final checks:
   `ee97fd779270a2efc60a6f7aef20fa1403095766a738f9d1858cfc37a84f22da`.
 
 CI Android uses the explicit ephemeral signing lane and is not a production
-signed distribution artifact. Device/browser acceptance and deployment remain
-the next release step. Existing prior web deployment output was preserved in
+signed distribution artifact. Physical-device native acceptance remains outside
+this web release. Existing prior web deployment output was preserved in
 `/tmp/yorks-prior-web.tVDi4w/web` before the clean CI web build.
 
 ## Staging deployment
@@ -75,6 +75,32 @@ the next release step. Existing prior web deployment output was preserved in
 - Staging main JavaScript SHA-256:
   `58d9fca62b643aa91f090d0871bd882323132a66f9bfd7e823509d3b509cc71e`.
 - Artifact preserved at `/tmp/yorks-find-staging.bRUIUb`.
-- Production alias was not promoted. Interactive acceptance is pending user
-  testing. To roll back this preview, return to the prior preview URL; preserve
-  the additive setting and publish a corrected number if needed.
+- At this staging checkpoint, the production alias had not yet been promoted.
+  To roll back this preview, return to the prior preview URL; preserve the
+  additive setting and publish a corrected number if needed.
+
+## Production deployment
+
+- Source commit: `804fd98` (`feat: improve Yorks find and support experience`),
+  pushed to GitHub `main` before deployment.
+- Verified candidate:
+  https://yorks-r35-p0h6dy46x-sajid-alis-projects-0ec775a2.vercel.app
+  (`dpl_ApDnPYHCARf1oTPJjAejj6kYDKZB`).
+- Promoted production deployment: `dpl_5Luw3yWCkzNNzqiT6PMyiTH271Mb` at
+  https://yorks-r35.vercel.app.
+- Production backend: `czykuksmlwswjsgotrpo`. Applied only migration
+  `20260906114750`; the post-apply dry-run reported no pending migrations and
+  the published support contact was verified operational.
+- Root, About, Profile, notification preferences, Analytics, Workforce,
+  Rentals, Material Requests and Team Chat routes matched the isolated
+  artifact. Bootstrap, main/deferred JavaScript, both PWA workers and manifest
+  hashes also matched after promotion.
+- Production `main.dart.js` SHA-256:
+  `46815a67760040419864811fe8c4fbddfef24e3e765fa35bb1f91816e679f448`.
+- Production document/shared-logo SHA-256:
+  `4eb293305c60f58c3f4ab5abc7b00c060773c047e7167a1359b106ec2d8275b3`;
+  the favicon, installed-web icon and web emblem also matched the isolated
+  artifact byte-for-byte.
+- Rollback target: prior production deployment
+  `dpl_CzHbqm75dxJn2yrBkMfxApgF7cJe`; its recorded `main.dart.js` SHA-256 was
+  `df6796ec77d6b0734b7ad369b9209ff8c043f97339878f51ad9504e39e4021fc`.
