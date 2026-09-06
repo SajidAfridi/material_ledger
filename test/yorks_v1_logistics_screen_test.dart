@@ -5,12 +5,14 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_logistics_repository_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_logistics_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_logistics_document_service.dart';
@@ -40,6 +42,41 @@ void main() {
     expect(find.text('VAV Damper'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'request information is available in dispatch and returns workspaces',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      await tester.binding.setSurfaceSize(const Size(1024, 768));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      for (final child in <Widget>[
+        const YorksV1LogisticsScreen(requestId: 'request-1'),
+        const YorksV1ReturnsDocumentsScreen(requestId: 'request-1'),
+      ]) {
+        await tester.pumpWidget(
+          _testApp(
+            preferences: preferences,
+            request: _informationRequest,
+            child: child,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final action = find.byKey(
+          const ValueKey('material-request-information-action'),
+        );
+        expect(action, findsOneWidget);
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(find.text('Y-001-MR001'), findsWidgets);
+        expect(find.text('Yorks Project'), findsWidgets);
+        await tester.tap(find.byIcon(Icons.close_rounded).last);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   testWidgets(
     'dispatch history uses a spreadsheet table on desktop and cards on phone',
@@ -393,6 +430,7 @@ Widget _testApp({
   required Widget child,
   YorksV1LogisticsRepository? repository,
   YorksV1Role exactRole = YorksV1Role.procurement,
+  YorksV1MaterialRequest? request,
 }) => ProviderScope(
   overrides: [
     yorksV1CurrentRoleProvider.overrideWithValue(exactRole),
@@ -408,8 +446,31 @@ Widget _testApp({
     yorksV1LogisticsRepositoryProvider.overrideWithValue(
       repository ?? _FakeLogisticsRepository(),
     ),
+    if (request != null)
+      yorksV1MaterialRequestDetailProvider(
+        request.id,
+      ).overrideWith((ref) async => request),
   ],
   child: MaterialApp(home: child),
+);
+
+final _informationRequest = YorksV1MaterialRequest(
+  id: 'request-1',
+  projectId: 'project-1',
+  projectReference: 'Y-001',
+  projectName: 'Yorks Project',
+  scopeId: 'scope-building-a',
+  scopeName: 'Building A',
+  state: YorksV1MaterialRequestState.approved,
+  recordVersion: 1,
+  createdAt: DateTime.utc(2026, 8, 10),
+  updatedAt: DateTime.utc(2026, 8, 10),
+  timing: YorksV1MaterialRequestTiming.normal,
+  requestNumber: 'Y-001-MR001',
+  requesterDisplayName: 'Project Engineer',
+  requesterProjectRole: 'project_engineer',
+  currentActionOwnerRole: 'procurement',
+  lines: const [],
 );
 
 class _DispatchDeliveryOrderRefreshHarness extends ConsumerWidget {

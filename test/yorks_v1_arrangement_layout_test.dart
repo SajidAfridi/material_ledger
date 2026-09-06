@@ -82,6 +82,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Arrange Material Request'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('material-request-information-action')),
+        findsOneWidget,
+      );
       expect(find.text('Start arrangement'), findsNothing);
       expect(find.text('REQUESTED ITEM'), findsOneWidget);
       expect(

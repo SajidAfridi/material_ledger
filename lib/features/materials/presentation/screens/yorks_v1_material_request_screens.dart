@@ -63,6 +63,7 @@ import 'yorks_v1_logistics_screen.dart';
 import 'yorks_v1_material_request_centre.dart';
 import 'yorks_v1_returns_documents_screen.dart';
 import '../yorks_v1_feature_action_access.dart';
+import '../widgets/yorks_v1_request_information.dart';
 
 final yorksV1MaterialRequestInspectorExpandedProvider =
     StateProvider.autoDispose<bool>((ref) => false);
@@ -9743,6 +9744,7 @@ class _RequestDetailBody extends ConsumerWidget {
                 ),
                 child: _RequestRecordHeader(
                   request: request,
+                  language: language,
                   onRefresh: onRefresh,
                   primaryAction: primaryAction,
                   onPrimaryAction: onPrimaryAction,
@@ -9770,6 +9772,11 @@ class _RequestDetailBody extends ConsumerWidget {
                       : () => documentService.printDocumentPdf(
                           documentModel.valueOrNull!,
                         ),
+                  onRequestInformation: () => showYorksV1RequestInformation(
+                    context,
+                    request: request,
+                    language: language,
+                  ),
                   approvalActions: approvalActions,
                   showCancel: cancelAccess.isVisible,
                   onCancel: cancelAccess.canWrite
@@ -10555,6 +10562,14 @@ class _MobileMaterialRequestLifecycleState
                             last: true,
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: YorksV1RequestInformationButton(
+                        request: request,
+                        language: language,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -12848,24 +12863,28 @@ class _MentionSuggestions extends StatelessWidget {
 class _RequestRecordHeader extends StatelessWidget {
   const _RequestRecordHeader({
     required this.request,
+    required this.language,
     required this.onRefresh,
     required this.primaryAction,
     required this.onPrimaryAction,
     required this.onExport,
     required this.onPdf,
     required this.onPrint,
+    required this.onRequestInformation,
     required this.approvalActions,
     required this.showCancel,
     required this.onCancel,
   });
 
   final YorksV1MaterialRequest request;
+  final AppLanguage language;
   final VoidCallback onRefresh;
   final YorksV1MaterialRequestDetailPrimaryAction? primaryAction;
   final VoidCallback? onPrimaryAction;
   final VoidCallback onExport;
   final VoidCallback? onPdf;
   final VoidCallback? onPrint;
+  final VoidCallback onRequestInformation;
   final Widget? approvalActions;
   final bool showCancel;
   final VoidCallback? onCancel;
@@ -12952,6 +12971,14 @@ class _RequestRecordHeader extends StatelessWidget {
               icon: Icons.print_outlined,
               onPressed: onPrint!,
             ),
+          _RecordActionButton(
+            key: const ValueKey('material-request-information-action'),
+            label: YorksV1MaterialRequestStrings.requestInformation.active(
+              language,
+            ),
+            icon: Icons.info_outline_rounded,
+            onPressed: onRequestInformation,
+          ),
           if (showCancel)
             _RecordActionButton(
               label: YorksV1MaterialRequestStrings.cancelRequest.primary,
@@ -12978,9 +13005,15 @@ class _RequestRecordHeader extends StatelessWidget {
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: heading),
+                Flexible(flex: 3, child: heading),
                 const SizedBox(width: AppSpacing.lg),
-                actions,
+                Flexible(
+                  flex: 5,
+                  child: Align(
+                    alignment: AlignmentDirectional.topEnd,
+                    child: actions,
+                  ),
+                ),
               ],
             );
     },
@@ -12989,6 +13022,7 @@ class _RequestRecordHeader extends StatelessWidget {
 
 class _RecordActionButton extends StatelessWidget {
   const _RecordActionButton({
+    super.key,
     required this.label,
     required this.icon,
     required this.onPressed,

@@ -393,6 +393,18 @@ void main() {
           findsOneWidget,
           reason: 'viewport $size',
         );
+        final requestInformation = find.byKey(
+          const ValueKey('material-request-information-action'),
+        );
+        expect(requestInformation, findsOneWidget, reason: 'viewport $size');
+        await tester.ensureVisible(requestInformation);
+        await tester.pumpAndSettle();
+        await tester.tap(requestInformation);
+        await tester.pumpAndSettle();
+        expect(find.text('YRA123-MR101'), findsWidgets);
+        expect(find.text('YRA-123'), findsWidgets);
+        await tester.tap(find.byIcon(Icons.close_rounded).last);
+        await tester.pumpAndSettle();
         // A fully received record is closed before optional document work; the
         // router may retain an offstage copy across the viewport loop.
         expect(find.text('Close request'), findsAtLeastNWidgets(1));

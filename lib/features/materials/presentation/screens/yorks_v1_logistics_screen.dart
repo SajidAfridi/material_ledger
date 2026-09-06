@@ -27,6 +27,7 @@ import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
 import '../../../../shared/services/yorks_v1_material_request_document_service.dart';
 import '../yorks_v1_feature_action_access.dart';
+import '../widgets/yorks_v1_request_information.dart';
 
 /// Role-aware request logistics. Server-derived action flags distinguish the
 /// Procurement dispatch form from Project/Site Engineer receipt review.
@@ -55,6 +56,9 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(languageProvider);
     final workspace = ref.watch(yorksV1LogisticsWorkspaceProvider(requestId));
+    final requestDetail = ref.watch(
+      yorksV1MaterialRequestDetailProvider(requestId),
+    );
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final mobile = YorksMobileUi.isActive(context);
     final compactRoute =
@@ -84,22 +88,34 @@ class YorksV1LogisticsScreen extends ConsumerWidget {
           ),
           projectId: value.projectId,
         );
+        final focusedBody = _FocusedLogisticsBody(
+          workspace: value,
+          language: language,
+          onChanged: () => _refresh(ref),
+          showPageHeader: !compactRoute && !mobile,
+          showDispatch: dispatchAccess.isVisible,
+          canDispatch: dispatchAccess.canWrite,
+          showReceiptReview: receiptAccess.isVisible,
+          canConfirmReceipt: receiptAccess.canWrite,
+          focusReceiptReview: focusReceiptReview,
+          focusedDispatchId: focusedDispatchId,
+          initialDispatchDate: initialDispatchDate,
+        );
+        final requestValue = requestDetail.valueOrNull;
         return YorksV1ProjectReadBoundary(
           allowed: canReadRequest,
           language: language,
-          child: _FocusedLogisticsBody(
-            workspace: value,
-            language: language,
-            onChanged: () => _refresh(ref),
-            showPageHeader: !compactRoute && !mobile,
-            showDispatch: dispatchAccess.isVisible,
-            canDispatch: dispatchAccess.canWrite,
-            showReceiptReview: receiptAccess.isVisible,
-            canConfirmReceipt: receiptAccess.canWrite,
-            focusReceiptReview: focusReceiptReview,
-            focusedDispatchId: focusedDispatchId,
-            initialDispatchDate: initialDispatchDate,
-          ),
+          child: requestValue == null
+              ? focusedBody
+              : Column(
+                  children: [
+                    YorksV1RequestInformationToolbar(
+                      request: requestValue,
+                      language: language,
+                    ),
+                    Expanded(child: focusedBody),
+                  ],
+                ),
         );
       },
     );

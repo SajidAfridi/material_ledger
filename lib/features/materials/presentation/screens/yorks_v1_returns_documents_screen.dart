@@ -25,6 +25,7 @@ import '../../../../shared/providers/yorks_v1_material_workflow_command_provider
 import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../../../../shared/services/yorks_v1_logistics_document_service.dart';
 import '../yorks_v1_feature_action_access.dart';
+import '../widgets/yorks_v1_request_information.dart';
 
 /// Batch 8's request-level Delivery Order and Material Return workspace.
 /// Server-provided capabilities control every committed action; the client only
@@ -49,6 +50,9 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
     final language = ref.watch(languageProvider);
     final workspace = ref.watch(
       yorksV1ReturnsDocumentsWorkspaceProvider(requestId),
+    );
+    final requestDetail = ref.watch(
+      yorksV1MaterialRequestDetailProvider(requestId),
     );
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final mobile = YorksMobileUi.isActive(context);
@@ -79,18 +83,30 @@ class YorksV1ReturnsDocumentsScreen extends ConsumerWidget {
           ),
           projectId: value.projectId,
         );
+        final returnsBody = _ReturnsDocumentsBody(
+          workspace: value,
+          onChanged: () => _refresh(ref),
+          showPageHeader: !compactRoute && !mobile,
+          showGenerateDeliveryOrder: deliveryOrderAccess.isVisible,
+          canGenerateDeliveryOrder: deliveryOrderAccess.canWrite,
+          focusDeliveryOrder: focusDeliveryOrder,
+          focusedDispatchId: focusedDispatchId,
+        );
+        final requestValue = requestDetail.valueOrNull;
         return YorksV1ProjectReadBoundary(
           allowed: canReadRequest,
           language: language,
-          child: _ReturnsDocumentsBody(
-            workspace: value,
-            onChanged: () => _refresh(ref),
-            showPageHeader: !compactRoute && !mobile,
-            showGenerateDeliveryOrder: deliveryOrderAccess.isVisible,
-            canGenerateDeliveryOrder: deliveryOrderAccess.canWrite,
-            focusDeliveryOrder: focusDeliveryOrder,
-            focusedDispatchId: focusedDispatchId,
-          ),
+          child: requestValue == null
+              ? returnsBody
+              : Column(
+                  children: [
+                    YorksV1RequestInformationToolbar(
+                      request: requestValue,
+                      language: language,
+                    ),
+                    Expanded(child: returnsBody),
+                  ],
+                ),
         );
       },
     );

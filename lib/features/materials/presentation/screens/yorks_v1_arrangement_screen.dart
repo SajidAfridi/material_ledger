@@ -27,6 +27,7 @@ import '../../../../shared/providers/yorks_v1_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_material_workflow_command_provider.dart';
 import '../../../../shared/providers/yorks_v1_permission_provider.dart';
 import '../yorks_v1_feature_action_access.dart';
+import '../widgets/yorks_v1_request_information.dart';
 
 /// One responsive view for Procurement arrangement and immutable history.
 /// Server-derived action flags decide whether the current viewer can edit;
@@ -123,7 +124,15 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
         return YorksV1ProjectReadBoundary(
           allowed: canReadRequest,
           language: language,
-          child: content,
+          child: Column(
+            children: [
+              YorksV1RequestInformationToolbar(
+                request: requestValue,
+                language: language,
+              ),
+              Expanded(child: content),
+            ],
+          ),
         );
       },
     );

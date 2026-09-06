@@ -385,16 +385,6 @@ class YorksV1MaterialRequestDocumentService {
                   ? '—'
                   : model.projectEngineerNames.join(', '),
             ),
-            _metaRow(
-              YorksV1MaterialRequestStrings.state.primary,
-              yorksV1MaterialRequestStateCopy(request.state).primary,
-              YorksV1MaterialRequestStrings.currentOwner.primary,
-              request.currentActionOwnerRole == null
-                  ? '—'
-                  : YorksV1ProjectStrings.roleLabel(
-                      request.currentActionOwnerRole!,
-                    ).primary,
-            ),
           ],
         ),
         pw.SizedBox(height: 3 * _mm),
@@ -676,21 +666,18 @@ class YorksV1MaterialRequestDocumentService {
                   arrangement?.displayName ?? '',
                   _actorRoleLabel(arrangement),
                   arrangement?.actedAt,
-                  reference: arrangement?.reference,
                 ),
                 _approvalCell(
                   YorksV1MaterialRequestStrings.approvedBy.primary,
                   approval?.displayName ?? '',
                   _actorRoleLabel(approval),
                   approval?.actedAt,
-                  reference: approval?.reference,
                 ),
                 _approvalCell(
                   YorksV1MaterialRequestStrings.orderedDispatched.primary,
                   dispatch?.displayName ?? '',
                   _actorRoleLabel(dispatch),
                   dispatch?.actedAt,
-                  reference: dispatch?.reference,
                 ),
               ],
             ),
@@ -721,9 +708,8 @@ class YorksV1MaterialRequestDocumentService {
     String title,
     String name,
     String detail,
-    DateTime? date, {
-    String? reference,
-  }) => pw.Container(
+    DateTime? date,
+  ) => pw.Container(
     height: 35 * _mm,
     padding: pw.EdgeInsets.all(2.5 * _mm),
     child: pw.Column(
@@ -737,10 +723,6 @@ class YorksV1MaterialRequestDocumentService {
         _approvalText('Name', name),
         pw.SizedBox(height: 2.4 * _mm),
         _approvalText('Role', detail),
-        if (reference != null && reference.trim().isNotEmpty) ...[
-          pw.SizedBox(height: 1.4 * _mm),
-          _approvalText('Reference', reference),
-        ],
         pw.SizedBox(height: 2.4 * _mm),
         _approvalText(
           'Date',

@@ -2026,16 +2026,16 @@ abstract final class YorksV1MaterialRequestStrings {
     hi: 'निर्माण से पूर्णता तक एक स्पष्ट जीवनचक्र।',
   );
   static const showRequestContext = TranslatableString(
-    en: 'Show request context',
-    ar: 'إظهار سياق الطلب',
-    ur: 'درخواست کا سیاق دکھائیں',
-    hi: 'अनुरोध संदर्भ दिखाएं',
+    en: 'Request Information',
+    ar: 'معلومات الطلب',
+    ur: 'درخواست کی معلومات',
+    hi: 'अनुरोध जानकारी',
   );
   static const hideRequestContext = TranslatableString(
-    en: 'Hide request context',
-    ar: 'إخفاء سياق الطلب',
-    ur: 'درخواست کا سیاق چھپائیں',
-    hi: 'अनुरोध संदर्भ छिपाएं',
+    en: 'Request Information',
+    ar: 'معلومات الطلب',
+    ur: 'درخواست کی معلومات',
+    hi: 'अनुरोध जानकारी',
   );
   static const request = TranslatableString(
     en: 'Request',
