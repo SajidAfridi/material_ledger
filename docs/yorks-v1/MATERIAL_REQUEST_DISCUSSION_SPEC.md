@@ -130,21 +130,17 @@ document workflow and must not be copied into this participant-wide discussion.
 - Each attachment chip shows filename and size with an authorized Download
   action. File preview remains a later enhancement; it is not simulated.
 
-### 3.7 Request and line context
+### 3.7 Common request discussion and retained context
 
-The composer may optionally attach the comment to:
+The composer always posts to one common Material Request discussion. It does
+not show a scope or **Regarding** selector and does not split the conversation
+by line or lifecycle stage.
 
-- the complete request;
-- one retained request line;
-- the current arrangement revision;
-- a dispatch or Delivery Order snapshot;
-- a receipt review; or
-- a material return.
-
-The user chooses context from a short **Regarding** control or arrives with it
-preselected from the relevant lifecycle action. The server verifies that the
-context belongs to the same request. The visible context chip opens that
-retained record without changing the discussion.
+Historical comments may retain a server-verified reference to a request line,
+arrangement revision, dispatch or Delivery Order snapshot, receipt review or
+material return. Render that retained reference as a compact chip inside the
+comment; never discard or reinterpret it. New comments and replies use the
+Material Request itself as their canonical context.
 
 ## 4. Visual handoff
 
@@ -222,6 +218,28 @@ is introduced.
 | Unauthorized | Show no comment body, count, attachment metadata or mention candidate. |
 | Closed request | Allow authorized comments with a clear “Request closed” context; comments do not reopen it. |
 | Archived request | Read-only retained discussion through the authorized history route. |
+
+### 5.1 Visual state contract
+
+All states use the same single card and keep the page's reading order. State
+changes must not insert a second form, a separate scope list or a nested scroll.
+
+| State | Visual treatment |
+|---|---|
+| Empty | Quiet centered empty message followed immediately by the compact composer. |
+| Populated | Flat chronological rows with dividers; no chat bubbles. Author and role lead, while timestamp and Reply are secondary. |
+| Composing | One-line composer expands up to six lines. Mention and Attach remain left; the primary Post action remains right. |
+| Mentioning | A bounded, keyboard-operable suggestion surface attaches directly above the composer without covering comment history. |
+| Replying | A compact one-line quoted strip appears inside the composer with an accessible cancel action. |
+| Attachment ready | Compact removable file chips appear inside the composer between text and actions. |
+| Uploading | The attachment row shows bounded progress and disables Attach/Post without clearing text. |
+| Posting | The Post label becomes a progress indicator; all draft content remains visible and duplicate submission is disabled. |
+| Success | The confirmed server comment joins the timeline, the composer clears, and an accessible success announcement is emitted. |
+| Recoverable error | The composer and complete draft remain in place; one concise error message appears without replacing the discussion. |
+
+Desktop, tablet and 360-pixel mobile golden evidence must cover empty,
+populated, mentioning, replying and recoverable-error states. Behavioral tests
+must additionally cover attachment-ready, uploading, posting and success.
 
 ## 6. Exact-comment notification navigation
 

@@ -793,6 +793,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'تبصرہ شامل کریں',
     hi: 'टिप्पणी जोड़ें',
   );
+  static const commentSingular = TranslatableString(
+    en: 'Comment',
+    ar: 'تعليق',
+    ur: 'تبصرہ',
+    hi: 'टिप्पणी',
+  );
   static const discussionDescription = TranslatableString(
     en: 'Keep decisions, questions and evidence with this request.',
     ar: 'احتفظ بالقرارات والأسئلة والأدلة مع هذا الطلب.',
@@ -846,6 +852,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'نشر التعليق',
     ur: 'تبصرہ پوسٹ کریں',
     hi: 'टिप्पणी पोस्ट करें',
+  );
+  static const commentPosted = TranslatableString(
+    en: 'Comment posted',
+    ar: 'تم نشر التعليق',
+    ur: 'تبصرہ پوسٹ ہو گیا',
+    hi: 'टिप्पणी पोस्ट हो गई',
   );
   static const commentNotPosted = TranslatableString(
     en: 'Comment not posted. Your text is kept here. Please try again.',

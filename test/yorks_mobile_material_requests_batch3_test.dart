@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
+import 'package:material_ledger/shared/models/yorks_v1_team_chat.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq_workbook.dart';
 import 'package:material_ledger/shared/models/yorks_v1_configuration.dart';
@@ -28,9 +30,12 @@ import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_team_chat_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_presentation_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_boq_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_team_chat_repository.dart';
+import 'package:material_ledger/shared/services/yorks_v1_chat_file_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/yorks_v1_permission_test_support.dart';
@@ -834,7 +839,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('@aliraza'), findsOneWidget);
-      expect(
+      await expectLater(
         find.byKey(const ValueKey('material-request-discussion-card')),
         matchesGoldenFile('goldens/r35/mr_discussion_mentions_desktop.png'),
       );
@@ -856,6 +861,14 @@ void main() {
         '@aliraza please review',
       );
       expect(find.textContaining('Comment not posted'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('material-request-comment-error')),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byKey(const ValueKey('material-request-discussion-card')),
+        matchesGoldenFile('goldens/r35/mr_discussion_error_desktop.png'),
+      );
       repository.commentFailure = false;
       await tester.tap(
         find.byKey(const ValueKey('material-request-send-comment')),
@@ -868,12 +881,16 @@ void main() {
       ]);
       expect(repository.addCommentInputs.last.parentCommentId, isNull);
       expect(repository.addCommentInputs.last.contextType, 'material_request');
+      expect(
+        find.byKey(const ValueKey('material-request-comment-success')),
+        findsOneWidget,
+      );
       await tester.pump(const Duration(seconds: 6));
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('request discussion submits a one-level line-scoped reply', (
+  testWidgets('request discussion submits a one-level request-wide reply', (
     tester,
   ) async {
     await _setViewport(tester, const Size(1366, 768));
@@ -914,12 +931,15 @@ void main() {
     await tester.tap(reply);
     await tester.pumpAndSettle();
 
-    await tester.tap(
+    expect(find.text('1 comment'), findsOneWidget);
+    expect(
       find.byKey(const ValueKey('material-request-comment-context')),
+      findsNothing,
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('About item 1: Flexible duct').last);
-    await tester.pumpAndSettle();
+    await expectLater(
+      find.byKey(const ValueKey('material-request-discussion-card')),
+      matchesGoldenFile('goldens/r35/mr_discussion_reply_desktop.png'),
+    );
 
     final composer = find.widgetWithText(
       TextField,
@@ -937,11 +957,8 @@ void main() {
 
     expect(repository.addCommentInputs, hasLength(1));
     expect(repository.addCommentInputs.single.parentCommentId, 'comment-0');
-    expect(repository.addCommentInputs.single.contextType, 'request_line');
-    expect(
-      repository.addCommentInputs.single.contextEntityId,
-      'submitted-line',
-    );
+    expect(repository.addCommentInputs.single.contextType, 'material_request');
+    expect(repository.addCommentInputs.single.contextEntityId, request.id);
     expect(tester.takeException(), isNull);
   });
 
@@ -1000,20 +1017,147 @@ void main() {
       const ValueKey('material-request-comment-text'),
     );
     final post = find.byKey(const ValueKey('material-request-send-comment'));
-    expect(tester.widget<TextField>(textField).minLines, 3);
-    expect(tester.widget<TextField>(textField).maxLines, 8);
-    expect(tester.widget<FilledButton>(post).onPressed, isNotNull);
+    expect(tester.widget<TextField>(textField).minLines, 1);
+    expect(tester.widget<TextField>(textField).maxLines, 6);
+    expect(tester.widget<FilledButton>(post).onPressed, isNull);
     await tester.enterText(textField, 'Short comment');
     await tester.pump();
     expect(tester.widget<FilledButton>(post).onPressed, isNotNull);
     await tester.enterText(textField, '');
     await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(post).onPressed, isNull);
     expect(tester.takeException(), isNull);
     await expectLater(
       find.byKey(const ValueKey('material-request-discussion-card')),
       matchesGoldenFile('goldens/r35/mr_discussion_empty_mobile_360.png'),
     );
   });
+
+  testWidgets(
+    'request discussion keeps attachment, upload and posting states inside the composer',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      final repository = _MaterialRequestRepositoryFixture();
+      final chatRepository = _DiscussionTeamChatRepository();
+      final chatController = YorksV1TeamChatController(
+        repository: chatRepository,
+        client: null,
+        authUserId: 'discussion-user',
+        enabled: true,
+      );
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1FeatureFlagsProvider.overrideWithValue(_discussionFeatures),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1ChatFileServiceProvider.overrideWithValue(
+              _DiscussionChatFileService(),
+            ),
+            yorksV1TeamChatProvider.overrideWith((ref) => chatController),
+            yorksV1MaterialRequestDetailProvider(
+              _submittedRequest.id,
+            ).overrideWith((ref) async => _submittedRequest),
+            yorksV1MaterialRequestDocumentProvider(
+              _submittedRequest.id,
+            ).overrideWith(
+              (ref) async => YorksV1MaterialRequestDocumentModel.fromRequest(
+                _submittedRequest,
+              ),
+            ),
+          ],
+          child: const YorksV1MaterialRequestDetailScreen(
+            requestId: _submittedRequestId,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final region = find.byKey(
+        const ValueKey('material-request-discussion-card'),
+      );
+      final attachmentAction = find.byKey(
+        const ValueKey('material-request-attachment-action'),
+      );
+      await tester.ensureVisible(attachmentAction);
+      await tester.tap(attachmentAction);
+      await tester.pump();
+
+      expect(find.text('Securing attachments…'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('material-request-send-comment')),
+            )
+            .onPressed,
+        isNull,
+      );
+      await expectLater(
+        region,
+        matchesGoldenFile('goldens/r35/mr_discussion_uploading_desktop.png'),
+      );
+
+      chatRepository.uploadCompleter.complete(
+        YorksV1PendingChatAttachment(
+          id: 'pending-evidence',
+          bucketId: 'chat-attachments',
+          objectPath: 'discussion/evidence.pdf',
+          fileName: 'site-evidence.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 3,
+          sha256: 'fixture-sha',
+          bytes: Uint8List.fromList(const [1, 2, 3]),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('site-evidence.pdf'), findsOneWidget);
+      await expectLater(
+        region,
+        matchesGoldenFile(
+          'goldens/r35/mr_discussion_attachment_ready_desktop.png',
+        ),
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('material-request-comment-text')),
+        'Attached for review.',
+      );
+      await tester.pump();
+      repository.commentCompleter = Completer();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('material-request-send-comment')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-send-comment')),
+      );
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await expectLater(
+        region,
+        matchesGoldenFile('goldens/r35/mr_discussion_posting_desktop.png'),
+      );
+
+      repository.commentCompleter!.complete(const []);
+      await tester.pumpAndSettle();
+      expect(repository.addCommentInputs.single.attachmentIds, const [
+        'pending-evidence',
+      ]);
+      expect(
+        find.byKey(const ValueKey('material-request-comment-success')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('mobile request approval stays reachable in the safe-area bar', (
     tester,
@@ -2722,6 +2866,7 @@ class _MaterialRequestRepositoryFixture
   int saveAndSubmitCount = 0;
   final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
   bool commentFailure = false;
+  Completer<List<YorksV1MaterialRequestComment>>? commentCompleter;
   List<YorksV1MaterialRequestMention> mentionCandidates = const [];
   List<YorksV1MaterialRequestInventorySuggestion> inventorySuggestions =
       const [];
@@ -2736,6 +2881,7 @@ class _MaterialRequestRepositoryFixture
     if (commentFailure) {
       throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
     }
+    if (commentCompleter != null) return commentCompleter!.future;
     return const [];
   }
 
@@ -2827,6 +2973,77 @@ class _MaterialRequestRepositoryFixture
   Future<YorksV1MaterialRequest> submit(
     YorksV1SubmitMaterialRequestInput input,
   ) async => _submittedRequest;
+}
+
+class _DiscussionChatFileService implements YorksV1ChatFileService {
+  @override
+  Future<List<YorksV1SelectedChatFile>> selectFiles() async => [
+    YorksV1SelectedChatFile.checked(
+      fileName: 'site-evidence.pdf',
+      bytes: Uint8List.fromList(const [1, 2, 3]),
+    ),
+  ];
+
+  @override
+  Future<bool> saveFile({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) async => true;
+}
+
+class _DiscussionTeamChatRepository extends Fake
+    implements YorksV1TeamChatRepository {
+  final uploadCompleter = Completer<YorksV1PendingChatAttachment>();
+
+  static final conversation = YorksV1ChatConversation(
+    id: 'discussion-conversation',
+    kind: YorksV1ChatKind.materialRequest,
+    title: 'Request discussion',
+    description: 'Material Request discussion',
+    materialRequestId: _submittedRequestId,
+    createdAt: DateTime.utc(2026, 8, 14, 9),
+    updatedAt: DateTime.utc(2026, 8, 14, 9),
+    isPinned: false,
+    isMuted: false,
+    isArchived: false,
+    unreadCount: 0,
+    participantCount: 2,
+    needsDeliveryAcknowledgement: false,
+  );
+
+  @override
+  Future<YorksV1ChatConversation> createConversation(
+    YorksV1ChatCreateInput input,
+  ) async => conversation;
+
+  @override
+  Future<YorksV1ChatThread> getConversation(
+    String conversationId, {
+    DateTime? before,
+    int limit = 50,
+  }) async => YorksV1ChatThread(
+    conversation: conversation,
+    participants: const [],
+    messages: const [],
+  );
+
+  @override
+  Future<List<YorksV1ChatConversation>> listConversations() async => [
+    conversation,
+  ];
+
+  @override
+  Future<void> markDelivered(Iterable<String> conversationIds) async {}
+
+  @override
+  Future<void> markRead(String conversationId) async {}
+
+  @override
+  Future<YorksV1PendingChatAttachment> uploadAttachment({
+    required String conversationId,
+    required YorksV1SelectedChatFile file,
+  }) => uploadCompleter.future;
 }
 
 class _BoqRepositoryFixture implements YorksV1BoqRepository {
