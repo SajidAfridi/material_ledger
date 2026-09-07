@@ -304,10 +304,28 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'वस्तु विवरण सहेजें',
   );
   static const clarificationSaved = TranslatableString(
-    en: 'Item details updated',
-    ar: 'تم تحديث تفاصيل البند',
-    ur: 'آئٹم کی تفصیل اپ ڈیٹ ہو گئی',
-    hi: 'वस्तु विवरण अपडेट हुआ',
+    en: 'Sent for Engineering approval',
+    ar: 'تم الإرسال لموافقة الهندسة',
+    ur: 'انجینئرنگ کی منظوری کے لیے بھیج دیا گیا',
+    hi: 'इंजीनियरिंग स्वीकृति के लिए भेजा गया',
+  );
+  static const clarificationSavedMessage = TranslatableString(
+    en: 'The corrected item details are saved. Arrangement will unlock after the Project Engineer approves them.',
+    ar: 'تم حفظ تفاصيل البند المصححة. سيُفتح الترتيب بعد موافقة مهندس المشروع عليها.',
+    ur: 'درست شدہ آئٹم کی تفصیل محفوظ ہے۔ پروجیکٹ انجینئر کی منظوری کے بعد انتظام دوبارہ کھلے گا۔',
+    hi: 'सुधारा गया वस्तु विवरण सहेजा गया है। प्रोजेक्ट इंजीनियर की स्वीकृति के बाद व्यवस्था फिर खुलेगी।',
+  );
+  static const clarificationReviewTitle = TranslatableString(
+    en: 'Engineering approval required',
+    ar: 'موافقة الهندسة مطلوبة',
+    ur: 'انجینئرنگ کی منظوری درکار ہے',
+    hi: 'इंजीनियरिंग स्वीकृति आवश्यक है',
+  );
+  static const clarificationReviewMessage = TranslatableString(
+    en: 'Procurement corrected the item name or model. Arrangement details are read-only until the Project Engineer approves the latest correction.',
+    ar: 'صححت المشتريات اسم البند أو الطراز. تظل تفاصيل الترتيب للقراءة فقط حتى يوافق مهندس المشروع على أحدث تصحيح.',
+    ur: 'پروکیورمنٹ نے آئٹم کا نام یا ماڈل درست کیا ہے۔ تازہ ترین تصحیح پر پروجیکٹ انجینئر کی منظوری تک انتظام کی تفصیل صرف پڑھی جا سکتی ہے۔',
+    hi: 'प्रोक्योरमेंट ने वस्तु का नाम या मॉडल सुधारा है। नवीनतम सुधार को प्रोजेक्ट इंजीनियर की स्वीकृति मिलने तक व्यवस्था विवरण केवल पढ़ने योग्य हैं।',
   );
   static const clarificationLocked = TranslatableString(
     en: 'Item details are locked after the arrangement is saved.',

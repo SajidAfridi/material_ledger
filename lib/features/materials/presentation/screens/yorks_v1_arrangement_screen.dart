@@ -101,7 +101,7 @@ class YorksV1ArrangementScreen extends ConsumerWidget {
         final arrangeAccess = yorksV1FeatureActionAccess(
           permissionState,
           YorksV1CapabilityKeys.procurementArrange,
-          legacyAllowed: value.canBegin || value.canSave,
+          legacyAllowed: value.canBegin || value.canSave || value.canClarify,
           projectId: requestValue.projectId,
         );
         final content = mobile
@@ -335,8 +335,12 @@ class _MobileArrangementWorkspaceBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final working = workspace.workingArrangement;
-    if (working != null && workspace.canSave && showArrange) {
-      final inventory = ref.watch(yorksV1ArrangementInventoryProvider);
+    if (working != null &&
+        (workspace.canSave || workspace.canClarify) &&
+        showArrange) {
+      final inventory = workspace.canSave
+          ? ref.watch(yorksV1ArrangementInventoryProvider)
+          : const AsyncData<List<YorksV1InventoryItem>>([]);
       return inventory.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _ArrangementError(
@@ -350,7 +354,8 @@ class _MobileArrangementWorkspaceBody extends ConsumerWidget {
           inventoryItems: items,
           language: language,
           mobileFlow: true,
-          enabled: canArrange,
+          enabled: canArrange && workspace.canSave,
+          canClarify: canArrange && (workspace.canClarify || workspace.canSave),
           onCompleted: onCompleted,
         ),
       );
@@ -480,7 +485,9 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                     language: language,
                     enabled: canArrange,
                   ),
-                if (working != null && workspace.canSave && showArrange) ...[
+                if (working != null &&
+                    (workspace.canSave || workspace.canClarify) &&
+                    showArrange) ...[
                   _ArrangementEditorSurface(
                     directEditor: directEditor,
                     child: inventory.when(
@@ -499,7 +506,10 @@ class _ArrangementWorkspaceBody extends ConsumerWidget {
                         arrangement: working,
                         inventoryItems: items,
                         language: language,
-                        enabled: canArrange,
+                        enabled: canArrange && workspace.canSave,
+                        canClarify:
+                            canArrange &&
+                            (workspace.canClarify || workspace.canSave),
                         onCompleted: onCompleted,
                         onClose: onClose,
                       ),
@@ -634,6 +644,55 @@ class _ArrangementEditorSurface extends StatelessWidget {
   }
 }
 
+class _ClarificationReviewBanner extends StatelessWidget {
+  const _ClarificationReviewBanner({required this.language});
+
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('procurement-clarification-review-required'),
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.warningContainer,
+      border: Border.all(color: AppColors.warning.withValues(alpha: .32)),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.approval_outlined, color: AppColors.warning),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                YorksV1ArrangementStrings.clarificationReviewTitle.active(
+                  language,
+                ),
+                style: AppTypography.titleSmall.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                YorksV1ArrangementStrings.clarificationReviewMessage.active(
+                  language,
+                ),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.inkSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _BeginArrangementAction extends ConsumerStatefulWidget {
   const _BeginArrangementAction({
     required this.workspace,
@@ -711,6 +770,7 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
     required this.inventoryItems,
     required this.language,
     required this.enabled,
+    required this.canClarify,
     this.mobileFlow = false,
     this.onCompleted,
     this.onClose,
@@ -722,6 +782,7 @@ class _ArrangementEditor extends ConsumerStatefulWidget {
   final List<YorksV1InventoryItem> inventoryItems;
   final AppLanguage language;
   final bool enabled;
+  final bool canClarify;
   final bool mobileFlow;
   final VoidCallback? onCompleted;
   final VoidCallback? onClose;
@@ -735,6 +796,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   late int _requestRecordVersion;
   late Map<String, _EditableArrangementLine> _lines;
   late List<YorksV1InventoryItem> _inventoryItems;
+  late bool _canSave;
+  late bool _canClarify;
+  late bool _clarificationReviewRequired;
   final Map<String, TextEditingController> _arrangedQuantities = {};
   final Map<String, TextEditingController> _unitCosts = {};
   final Map<String, TextEditingController> _suppliers = {};
@@ -755,6 +819,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         line.id: _EditableArrangementLine.fromLine(line, widget.inventoryItems),
     };
     _inventoryItems = _inventoryItemsForRequest(widget.inventoryItems);
+    _canSave = widget.enabled;
+    _canClarify = widget.canClarify;
+    _clarificationReviewRequired = widget.workspace.clarificationReviewRequired;
     _initializeLineKeys();
     _initializeLineControllers();
     _procurementNote = TextEditingController(
@@ -766,6 +833,10 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   @override
   void didUpdateWidget(covariant _ArrangementEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _canSave = widget.enabled;
+    _canClarify = widget.canClarify;
+    _clarificationReviewRequired = widget.workspace.clarificationReviewRequired;
+    _requestRecordVersion = widget.workspace.requestRecordVersion;
     if (oldWidget.arrangement.id != widget.arrangement.id) {
       _arrangement = widget.arrangement;
       _requestRecordVersion = widget.workspace.requestRecordVersion;
@@ -812,7 +883,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           validationIssues: _validationIssues,
           procurementNote: _procurementNote,
           busy: _busy,
-          enabled: widget.enabled,
+          enabled: _canSave,
+          canClarify: _canClarify,
+          clarificationReviewRequired: _clarificationReviewRequired,
           onChanged: _replace,
           onCreateInventoryItem: _createInventoryItem,
           onEditItem: _editItem,
@@ -825,6 +898,10 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_clarificationReviewRequired) ...[
+            _ClarificationReviewBanner(language: widget.language),
+            const SizedBox(height: AppSpacing.md),
+          ],
           _ArrangementOverview(lines: _lines.values.toList(growable: false)),
           const SizedBox(height: AppSpacing.md),
           const _ArrangementQuantityGuidance(),
@@ -849,7 +926,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                     suppliers: _suppliers,
                     reasons: _reasons,
                     inventoryItems: _inventoryItems,
-                    enabled: widget.enabled && !_busy,
+                    enabled: _canSave && !_busy,
+                    canClarify: _canClarify && !_busy,
                     onChanged: _replace,
                     onCreateInventoryItem: _createInventoryItem,
                     onEditItem: _editItem,
@@ -871,7 +949,8 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                           supplier: _suppliers[line.id]!,
                           reason: _reasons[line.id]!,
                           inventoryItems: _inventoryItems,
-                          enabled: widget.enabled && !_busy,
+                          enabled: _canSave && !_busy,
+                          canClarify: _canClarify && !_busy,
                           onChanged: _replace,
                           onCreateInventoryItem: _createInventoryItem,
                           onEditItem: _editItem,
@@ -897,7 +976,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
           const SizedBox(height: AppSpacing.xs),
           TextFormField(
             controller: _procurementNote,
-            enabled: widget.enabled && !_busy,
+            enabled: _canSave && !_busy,
             minLines: 2,
             maxLines: 4,
             decoration: InputDecoration(
@@ -923,7 +1002,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
                   icon: Icons.send_rounded,
                   isExpanded: false,
                   isLoading: _busy,
-                  onPressed: _busy || !widget.enabled ? null : _save,
+                  onPressed: _busy || !_canSave ? null : _save,
                 ),
               ],
             ),
@@ -934,7 +1013,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   }
 
   void _replace(_EditableArrangementLine value) {
-    if (!widget.enabled) return;
+    if (!_canSave) return;
     final previous = _lines[value.arrangementLineId];
     if (value.decision == YorksV1ArrangementDecision.unavailable &&
         previous?.decision != YorksV1ArrangementDecision.unavailable) {
@@ -951,7 +1030,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
     YorksV1ArrangementLine line,
     _EditableArrangementLine draft,
   ) async {
-    if (_busy || !widget.enabled) return;
+    if (_busy || !_canSave) return;
     YorksV1InventoryWorkspace inventory;
     try {
       inventory = await ref
@@ -1020,7 +1099,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   }
 
   Future<void> _editItem(YorksV1ArrangementLine line) async {
-    if (_busy || !widget.enabled || _arrangement.savedAt != null) return;
+    if (_busy || !_canClarify || _arrangement.savedAt != null) return;
     await _showProcurementItemEditor(
       context: context,
       request: widget.request,
@@ -1059,6 +1138,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
       setState(() {
         _arrangement = updated;
         _requestRecordVersion = workspace.requestRecordVersion;
+        _canSave = workspace.canSave;
+        _canClarify = workspace.canClarify;
+        _clarificationReviewRequired = workspace.clarificationReviewRequired;
       });
       ref.invalidate(
         yorksV1ArrangementWorkspaceProvider(widget.workspace.requestId),
@@ -1072,7 +1154,9 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
         title: YorksV1ArrangementStrings.clarificationSaved.active(
           widget.language,
         ),
-        message: result.description,
+        message: YorksV1ArrangementStrings.clarificationSavedMessage.active(
+          widget.language,
+        ),
         tone: YorksAppToastTone.success,
       );
       return null;
@@ -1090,7 +1174,7 @@ class _ArrangementEditorState extends ConsumerState<_ArrangementEditor> {
   }
 
   Future<void> _save() async {
-    if (!widget.enabled) return;
+    if (!_canSave) return;
     final canManageCommercials = ref.read(canManageCommercialsProvider);
     final inputs = [
       for (final line in _lines.values)
@@ -1976,6 +2060,8 @@ class _MobileArrangementFlow extends StatefulWidget {
     required this.procurementNote,
     required this.busy,
     required this.enabled,
+    required this.canClarify,
+    required this.clarificationReviewRequired,
     required this.onChanged,
     required this.onCreateInventoryItem,
     required this.onEditItem,
@@ -1996,6 +2082,8 @@ class _MobileArrangementFlow extends StatefulWidget {
   final TextEditingController procurementNote;
   final bool busy;
   final bool enabled;
+  final bool canClarify;
+  final bool clarificationReviewRequired;
   final ValueChanged<_EditableArrangementLine> onChanged;
   final Future<void> Function(
     YorksV1ArrangementLine line,
@@ -2042,6 +2130,10 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (widget.clarificationReviewRequired) ...[
+                  _ClarificationReviewBanner(language: widget.language),
+                  const SizedBox(height: 14),
+                ],
                 _MobileArrangementCounts(counts: counts),
                 if (widget.validationIssues.isNotEmpty) ...[
                   const SizedBox(height: 10),
@@ -2128,7 +2220,7 @@ class _MobileArrangementFlowState extends State<_MobileArrangementFlow> {
                   alignment: AlignmentDirectional.centerStart,
                   child: OutlinedButton.icon(
                     key: const ValueKey('mobile-clarify-item-action'),
-                    onPressed: widget.enabled && !widget.busy
+                    onPressed: widget.canClarify && !widget.busy
                         ? () => widget.onEditItem(line)
                         : null,
                     icon: const Icon(Icons.manage_search_rounded),
@@ -3216,6 +3308,7 @@ class _DesktopArrangementEditor extends StatelessWidget {
     required this.reasons,
     required this.inventoryItems,
     required this.enabled,
+    required this.canClarify,
     required this.onChanged,
     required this.onCreateInventoryItem,
     required this.onEditItem,
@@ -3234,6 +3327,7 @@ class _DesktopArrangementEditor extends StatelessWidget {
   final Map<String, TextEditingController> reasons;
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
+  final bool canClarify;
   final ValueChanged<_EditableArrangementLine> onChanged;
   final Future<void> Function(
     YorksV1ArrangementLine line,
@@ -3276,6 +3370,7 @@ class _DesktopArrangementEditor extends StatelessWidget {
                     reason: reasons[line.id]!,
                     inventoryItems: inventoryItems,
                     enabled: enabled,
+                    canClarify: canClarify,
                     onChanged: onChanged,
                     onCreateInventoryItem: onCreateInventoryItem,
                     onEditItem: onEditItem,
@@ -3636,6 +3731,7 @@ class _ArrangementTableRow extends StatelessWidget {
     required this.reason,
     required this.inventoryItems,
     required this.enabled,
+    required this.canClarify,
     required this.onChanged,
     required this.onCreateInventoryItem,
     required this.onEditItem,
@@ -3653,6 +3749,7 @@ class _ArrangementTableRow extends StatelessWidget {
   final TextEditingController reason;
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
+  final bool canClarify;
   final ValueChanged<_EditableArrangementLine> onChanged;
   final Future<void> Function(
     YorksV1ArrangementLine line,
@@ -3692,7 +3789,7 @@ class _ArrangementTableRow extends StatelessWidget {
                 child: _ArrangementRequestedItem(
                   line: line,
                   language: language,
-                  enabled: enabled,
+                  enabled: canClarify,
                   onEdit: () => onEditItem(line),
                 ),
               ),
@@ -3951,6 +4048,7 @@ class _MobileArrangementEditor extends StatelessWidget {
     required this.reason,
     required this.inventoryItems,
     required this.enabled,
+    required this.canClarify,
     required this.onChanged,
     required this.onCreateInventoryItem,
     required this.onEditItem,
@@ -3968,6 +4066,7 @@ class _MobileArrangementEditor extends StatelessWidget {
   final TextEditingController reason;
   final List<YorksV1InventoryItem> inventoryItems;
   final bool enabled;
+  final bool canClarify;
   final ValueChanged<_EditableArrangementLine> onChanged;
   final Future<void> Function(
     YorksV1ArrangementLine line,
@@ -3996,7 +4095,7 @@ class _MobileArrangementEditor extends StatelessWidget {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: TextButton.icon(
-            onPressed: enabled ? () => onEditItem(line) : null,
+            onPressed: canClarify ? () => onEditItem(line) : null,
             icon: const Icon(Icons.manage_search_rounded, size: 18),
             label: Text(YorksV1ArrangementStrings.clarifyItem.active(language)),
           ),
