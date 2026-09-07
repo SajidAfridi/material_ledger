@@ -1639,6 +1639,14 @@ The following product-owner decisions are frozen on 7 September 2026:
   immutable requested evidence;
 - Procurement may correct the effective item name and assign or correct the
   model number only while the current arrangement is working and unsaved;
+- every saved Procurement correction returns the request to Project Engineer
+  approval. Procurement may continue correcting item identity during that
+  review, but arrangement quantities, sources, costs and save remain locked;
+- Engineering approval applies to one exact clarification revision. A later
+  correction invalidates that approval and creates a new review checkpoint;
+- approval resumes the same preserved working arrangement for Procurement.
+  Returning the correction sends it back to Procurement for revision without
+  creating a second request or arrangement;
 - clarification closes when arrangement save commits, including an
   all-unavailable saved arrangement. It cannot reopen during dispatch, receipt,
   return or document generation;

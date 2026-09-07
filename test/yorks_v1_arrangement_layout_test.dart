@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ledger/core/widgets/widgets.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_arrangement_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
@@ -260,6 +261,143 @@ void main() {
     );
     expect(repository.clarificationInputs, hasLength(1));
   });
+
+  testWidgets(
+    'pending Procurement clarification locks arrangement and stays correctable',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(
+              _ArrangementRepository(),
+            ),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => _pendingClarificationWorkspace),
+          ],
+          child: const MaterialApp(
+            home: YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('procurement-clarification-review-required')),
+        findsOneWidget,
+      );
+      expect(find.text('Engineering approval required'), findsOneWidget);
+      final saveLabel = find.text('Save arrangement');
+      expect(saveLabel, findsOneWidget);
+      expect(
+        tester
+            .widget<InkWell>(
+              find.ancestor(of: saveLabel, matching: find.byType(InkWell)),
+            )
+            .onTap,
+        isNull,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/arrange_clarification_review_desktop_1366x900.png',
+        ),
+      );
+
+      await tester.tap(find.text('Clarify item'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('procurement-item-description')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'pending Procurement clarification remains clear and usable at 360px',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(
+              _ArrangementRepository(),
+            ),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => _pendingClarificationWorkspace),
+          ],
+          child: const MaterialApp(
+            home: YorksV1ArrangementScreen(requestId: 'request-1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('procurement-clarification-review-required')),
+        findsOneWidget,
+      );
+      final reviewAction = tester.widget<PrimaryButton>(
+        find.byKey(const ValueKey('mobile-arrangement-review-action')),
+      );
+      expect(reviewAction.onPressed, isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/arrange_clarification_review_mobile_360x800.png',
+        ),
+      );
+
+      await tester.tap(find.text('Motorized smoke damper'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-clarify-item-action')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('procurement-item-description')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'embedded arrangement opens the direct editor and closes after a saved hand-off',
@@ -1102,6 +1240,7 @@ final _workingWorkspace = YorksV1ArrangementWorkspace(
   requestRecordVersion: 2,
   canBegin: false,
   canSave: true,
+  canClarify: true,
   canDecide: false,
   arrangements: [
     YorksV1ProcurementArrangement(
@@ -1143,6 +1282,7 @@ final _externalSupplierWorkspace = YorksV1ArrangementWorkspace(
   requestRecordVersion: 2,
   canBegin: false,
   canSave: true,
+  canClarify: true,
   canDecide: false,
   arrangements: [
     YorksV1ProcurementArrangement(
@@ -1170,6 +1310,21 @@ final _externalSupplierWorkspace = YorksV1ArrangementWorkspace(
   ],
 );
 
+final _pendingClarificationWorkspace = YorksV1ArrangementWorkspace(
+  requestId: 'request-1',
+  requestNumber: 'YRAASDF12-MR101',
+  requestState: 'awaiting_request_approval',
+  requestRecordVersion: 3,
+  canBegin: false,
+  canSave: false,
+  canClarify: true,
+  canDecide: false,
+  clarificationReviewRequired: true,
+  procurementClarificationRevision: 1,
+  approvedProcurementClarificationRevision: 0,
+  arrangements: _workingWorkspace.arrangements,
+);
+
 final _replacementWorkspace = YorksV1ArrangementWorkspace(
   requestId: 'request-1',
   requestNumber: 'YRAASDF12-MR103',
@@ -1177,6 +1332,7 @@ final _replacementWorkspace = YorksV1ArrangementWorkspace(
   requestRecordVersion: 4,
   canBegin: false,
   canSave: true,
+  canClarify: true,
   canDecide: false,
   arrangements: [
     YorksV1ProcurementArrangement(

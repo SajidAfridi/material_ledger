@@ -14,6 +14,10 @@ void main() {
     final workspace = YorksV1ArrangementWorkspace.fromRpcJson(_workspaceJson());
 
     expect(workspace.canDecide, true);
+    expect(workspace.clarificationReviewRequired, true);
+    expect(workspace.canClarify, true);
+    expect(workspace.procurementClarificationRevision, 2);
+    expect(workspace.approvedProcurementClarificationRevision, 1);
     expect(workspace.currentArrangement?.lines.single.requestedQuantity, '4');
     expect(workspace.currentArrangement?.lines.single.arrangedQuantity, '2');
     expect(workspace.currentArrangement?.lines.single.reservedQuantity, '2');
@@ -287,6 +291,10 @@ Map<String, dynamic> _workspaceJson() => {
   'can_begin': false,
   'can_save': false,
   'can_decide': true,
+  'clarification_review_required': true,
+  'can_clarify': true,
+  'procurement_clarification_revision': 2,
+  'approved_procurement_clarification_revision': 1,
   'arrangements': [
     {
       'id': 'arrangement-1',

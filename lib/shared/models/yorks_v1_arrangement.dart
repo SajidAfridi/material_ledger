@@ -317,6 +317,10 @@ class YorksV1ArrangementWorkspace {
     required this.canDecide,
     required List<YorksV1ProcurementArrangement> arrangements,
     this.externalSourceReadinessRequired = false,
+    this.clarificationReviewRequired = false,
+    this.canClarify = false,
+    this.procurementClarificationRevision = 0,
+    this.approvedProcurementClarificationRevision = 0,
     this.requestNumber,
   }) : arrangements = List.unmodifiable(arrangements);
 
@@ -328,6 +332,10 @@ class YorksV1ArrangementWorkspace {
   final bool canSave;
   final bool canDecide;
   final bool externalSourceReadinessRequired;
+  final bool clarificationReviewRequired;
+  final bool canClarify;
+  final int procurementClarificationRevision;
+  final int approvedProcurementClarificationRevision;
   final List<YorksV1ProcurementArrangement> arrangements;
 
   YorksV1ProcurementArrangement? get workingArrangement {
@@ -363,6 +371,15 @@ class YorksV1ArrangementWorkspace {
       canDecide: json['can_decide'] == true,
       externalSourceReadinessRequired:
           json['external_source_readiness_required'] == true,
+      clarificationReviewRequired:
+          json['clarification_review_required'] == true,
+      canClarify: json['can_clarify'] == true,
+      procurementClarificationRevision: _nonNegativeInt(
+        json['procurement_clarification_revision'],
+      ),
+      approvedProcurementClarificationRevision: _nonNegativeInt(
+        json['approved_procurement_clarification_revision'],
+      ),
       arrangements: [
         for (final arrangement in rawArrangements)
           if (arrangement is Map)

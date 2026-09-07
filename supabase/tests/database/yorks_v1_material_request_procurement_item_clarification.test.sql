@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(18);
+select plan(28);
 
 select ok(
   has_function_privilege(
@@ -104,17 +104,28 @@ select lives_ok(
 );
 
 set local role postgres;
-update public.v1_material_requests
-set state = 'submitted', current_action_owner_role = 'procurement',
-    current_action_code = 'arrangement_required'
-where id = '90710000-0000-4000-8000-000000000001'::uuid;
-
 select is(
   (select requested_item_description
    from public.v1_material_request_lines
    where id = '90720000-0000-4000-8000-000000000001'::uuid),
   'Exhaust fan',
   'the submitted request has an immutable original-description snapshot'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_decide_material_request(
+    jsonb_build_object(
+      'request_id', '90710000-0000-4000-8000-000000000001',
+      'expected_version', 2, 'decision', 'approved', 'reason', null
+    ), '90730000-0000-4000-8000-000000000008'::uuid
+  )$$,
+  'Project Engineer approves the original request for Procurement'
 );
 
 set local role authenticated;
@@ -128,7 +139,7 @@ select lives_ok(
   $$select public.v1_begin_arrangement(
     jsonb_build_object(
       'request_id', '90710000-0000-4000-8000-000000000001',
-      'expected_version', 2
+      'expected_version', 3
     ), '90730000-0000-4000-8000-000000000002'::uuid
   )$$,
   'Procurement begins the arrangement before clarifying the item'
@@ -156,7 +167,7 @@ select throws_ok(
     jsonb_build_object(
       'request_id', '90710000-0000-4000-8000-000000000001',
       'request_line_id', '90720000-0000-4000-8000-000000000001',
-      'expected_request_version', 3,
+      'expected_request_version', 4,
       'item_description', 'Unauthorized edit',
       'model_reference', 'BAD-1'
     ), '90730000-0000-4000-8000-000000000003'::uuid
@@ -190,7 +201,7 @@ select lives_ok(
     jsonb_build_object(
       'request_id', '90710000-0000-4000-8000-000000000001',
       'request_line_id', '90720000-0000-4000-8000-000000000001',
-      'expected_request_version', 3,
+      'expected_request_version', 4,
       'item_description', 'Exhaust fan EF-300',
       'model_reference', 'EF-300'
     ), '90730000-0000-4000-8000-000000000005'::uuid
@@ -222,7 +233,7 @@ select lives_ok(
     jsonb_build_object(
       'request_id', '90710000-0000-4000-8000-000000000001',
       'request_line_id', '90720000-0000-4000-8000-000000000001',
-      'expected_request_version', 3,
+      'expected_request_version', 4,
       'item_description', 'Exhaust fan EF-300',
       'model_reference', 'EF-300'
     ), '90730000-0000-4000-8000-000000000005'::uuid
@@ -237,6 +248,16 @@ select is(
      and entity_id = '90720000-0000-4000-8000-000000000001'::uuid),
   1,
   'an identical retry creates no duplicate audit event'
+);
+
+select ok(
+  (select state = 'awaiting_request_approval'
+      and current_action_owner_role = 'project_engineer'
+      and procurement_clarification_revision = 1
+      and approved_procurement_clarification_revision = 0
+   from public.v1_material_requests
+   where id = '90710000-0000-4000-8000-000000000001'::uuid),
+  'clarification atomically transfers the request to Engineering review'
 );
 
 set local role authenticated;
@@ -259,13 +280,17 @@ select throws_ok(
   'one command key cannot be reused for a different correction'
 );
 
-select lives_ok(
+select throws_ok(
   $$select public.v1_save_arrangement(
     jsonb_build_object(
       'request_id', '90710000-0000-4000-8000-000000000001',
       'arrangement_id', (select arrangement_id
         from v1_clarification_arrangement),
-      'expected_request_version', 4,
+      'expected_request_version', (
+        public.v1_arrangement_projection(
+          '90710000-0000-4000-8000-000000000001'::uuid
+        ) ->> 'request_record_version'
+      )::integer,
       'expected_arrangement_version', 1,
       'procurement_note', null,
       'lines', jsonb_build_array(jsonb_build_object(
@@ -279,7 +304,134 @@ select lives_ok(
       ))
     ), '90730000-0000-4000-8000-000000000006'::uuid
   )$$,
-  'Procurement saves the arrangement after clarification'
+  '42501', 'V1_MATERIAL_REQUEST_APPROVAL_REQUIRED',
+  'Procurement cannot save arrangement before Engineering reapproval'
+);
+
+select ok(
+  (select (projection ->> 'clarification_review_required')::boolean
+      and (projection ->> 'can_clarify')::boolean
+      and not (projection ->> 'can_save')::boolean
+   from (select public.v1_arrangement_projection(
+     '90710000-0000-4000-8000-000000000001'::uuid
+   ) as projection) result),
+  'pending workspace permits identity correction but locks arrangement save'
+);
+
+select throws_ok(
+  $$select public.v1_decide_material_request(
+    jsonb_build_object(
+      'request_id', '90710000-0000-4000-8000-000000000001',
+      'expected_version', 5, 'decision', 'approved', 'reason', null
+    ), '90730000-0000-4000-8000-000000000009'::uuid
+  )$$,
+  '42501', 'V1_MATERIAL_REQUEST_DECISION_DENIED',
+  'Procurement cannot approve its own clarification'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_decide_material_request(
+    jsonb_build_object(
+      'request_id', '90710000-0000-4000-8000-000000000001',
+      'expected_version', 5, 'decision', 'approved', 'reason', null
+    ), '90730000-0000-4000-8000-000000000010'::uuid
+  )$$,
+  'Project Engineer approves the exact Procurement clarification revision'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+select ok(
+  (select not (projection ->> 'clarification_review_required')::boolean
+      and (projection ->> 'can_save')::boolean
+      and (projection ->> 'procurement_clarification_revision')::integer = 1
+      and (projection ->>
+        'approved_procurement_clarification_revision')::integer = 1
+   from (select public.v1_arrangement_projection(
+     '90710000-0000-4000-8000-000000000001'::uuid
+   ) as projection) result),
+  'approval unlocks the preserved working arrangement for Procurement'
+);
+
+select lives_ok(
+  $$select public.v1_update_material_request_procurement_item(
+    jsonb_build_object(
+      'request_id', '90710000-0000-4000-8000-000000000001',
+      'request_line_id', '90720000-0000-4000-8000-000000000001',
+      'expected_request_version', 6,
+      'item_description', 'Exhaust fan EF-300 final',
+      'model_reference', 'EF-300R'
+    ), '90730000-0000-4000-8000-000000000012'::uuid
+  )$$,
+  'a later Procurement correction creates a new Engineering checkpoint'
+);
+
+select ok(
+  (select (projection ->> 'clarification_review_required')::boolean
+      and not (projection ->> 'can_save')::boolean
+      and (projection ->> 'procurement_clarification_revision')::integer = 2
+      and (projection ->>
+        'approved_procurement_clarification_revision')::integer = 1
+   from (select public.v1_arrangement_projection(
+     '90710000-0000-4000-8000-000000000001'::uuid
+   ) as projection) result),
+  'the earlier approval cannot authorize a later correction'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_decide_material_request(
+    jsonb_build_object(
+      'request_id', '90710000-0000-4000-8000-000000000001',
+      'expected_version', 7, 'decision', 'approved', 'reason', null
+    ), '90730000-0000-4000-8000-000000000013'::uuid
+  )$$,
+  'Project Engineer approves the newer clarification revision independently'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"role":"procurement","app_user_id":"usr-local-procurement"}}',
+  true
+);
+
+select lives_ok(
+  $$select public.v1_save_arrangement(
+    jsonb_build_object(
+      'request_id', '90710000-0000-4000-8000-000000000001',
+      'arrangement_id', (select arrangement_id
+        from v1_clarification_arrangement),
+      'expected_request_version', 8,
+      'expected_arrangement_version', 1,
+      'procurement_note', null,
+      'lines', jsonb_build_array(jsonb_build_object(
+        'arrangement_line_id', (select arrangement_line_id
+          from v1_clarification_arrangement),
+        'source_kind', 'external_supplier', 'external_supplier', null,
+        'inventory_item_id', null, 'decision', 'full', 'arranged_qty', '3',
+        'reason', null, 'unit_cost', null,
+        'external_source_ready', false,
+        'external_expected_date', null, 'external_reference', null
+      ))
+    ), '90730000-0000-4000-8000-000000000011'::uuid
+  )$$,
+  'Procurement saves arrangement only after Engineering reapproval'
 );
 
 select throws_ok(
@@ -287,7 +439,11 @@ select throws_ok(
     jsonb_build_object(
       'request_id', '90710000-0000-4000-8000-000000000001',
       'request_line_id', '90720000-0000-4000-8000-000000000001',
-      'expected_request_version', 5,
+      'expected_request_version', (
+        public.v1_arrangement_projection(
+          '90710000-0000-4000-8000-000000000001'::uuid
+        ) ->> 'request_record_version'
+      )::integer,
       'item_description', 'Too late',
       'model_reference', 'LATE-1'
     ), '90730000-0000-4000-8000-000000000007'::uuid
