@@ -137,6 +137,13 @@ after the protected server command returns:
 - material return: identifies the return, resulting state and line count.
 
 In Procurement arrangement, the register action is **Review arrangement**.
+Before saving, Procurement can use **Clarify item** to correct the effective
+item name or add the model number. Search checks the selected-scope BOQ, the
+wider project BOQ and inventory in that order; Procurement may keep a valid
+custom description. The screen always retains the original Engineering wording
+as history. This action disappears when **Save arrangement** succeeds and does
+not change quantity, unit, brand, source, cost or the Engineering snapshot.
+
 The actual **Save arrangement** command appears only after every line has an
 explicit Full, Partial or Cannot Provide Now decision and its required source
 or reason. This keeps navigation separate from the protected commit.

@@ -211,6 +211,7 @@ RPC/projection rows here before consumer cutover.
 | `v1_update_material_request_for_approval` | Creator or assigned/global Project Engineer/Admin | MR/version/line set; no arrangement permitted | yes | replace Engineering snapshot, retain number/submission attribution, audit/notification |
 | `v1_decide_material_request` | Assigned/global Project Engineer/Admin | MR/current Engineering version | yes | immutable approval/return decision, state/owner, exact role, audit/notification |
 | `v1_begin_arrangement` | Procurement/Admin | approved MR/version | yes | current arrangement work version, `arranging`, audit |
+| `v1_update_material_request_procurement_item` | Procurement/Admin with effective arrange capability | MR/version/current unsaved working arrangement/request line | yes | effective description/model, immutable requested snapshot, clarifier metadata and audit |
 | `v1_save_arrangement` | Procurement/Admin | MR, arrangement, inventory, reservations | yes | versioned lines, replacement reservations, approved snapshots/state, audit/notification |
 | `v1_material_request_phase3_policy_projection` | Authorized request reader | current request access plus published configuration | no | role-safe published self-approval/readiness values and replacement eligibility/link only |
 | `v1_create_replacement_material_request` | Authorized Engineering MR creator/Admin | cancelled source/version, latest all-unavailable arrangement, no dispatch, one-source uniqueness | yes | one private linked Draft, cloned line provenance and audit; source remains cancelled |

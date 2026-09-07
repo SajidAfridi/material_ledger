@@ -703,6 +703,11 @@ class _ArrangementRepository implements YorksV1ArrangementRepository {
   Future<YorksV1ArrangementWorkspace> save(
     YorksV1SaveArrangementInput input,
   ) async => workspace;
+
+  @override
+  Future<YorksV1ArrangementWorkspace> updateProcurementItem(
+    YorksV1UpdateProcurementMaterialItemInput input,
+  ) async => workspace;
 }
 
 class _OperationsRepository implements YorksV1LogisticsRepository {

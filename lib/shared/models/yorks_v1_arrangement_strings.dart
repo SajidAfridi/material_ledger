@@ -225,6 +225,102 @@ abstract final class YorksV1ArrangementStrings {
     ur: 'درخواست کردہ آئٹم',
     hi: 'अनुरोधित आइटम',
   );
+  static const clarifyItem = TranslatableString(
+    en: 'Clarify item',
+    ar: 'توضيح البند',
+    ur: 'آئٹم کی وضاحت کریں',
+    hi: 'वस्तु स्पष्ट करें',
+  );
+  static const clarifyItemDescription = TranslatableString(
+    en: 'Confirm the item name and model before saving the arrangement.',
+    ar: 'أكد اسم البند والطراز قبل حفظ الترتيب.',
+    ur: 'انتظام محفوظ کرنے سے پہلے آئٹم کا نام اور ماڈل پکا کریں۔',
+    hi: 'व्यवस्था सहेजने से पहले वस्तु का नाम और मॉडल पक्का करें।',
+  );
+  static const effectiveItem = TranslatableString(
+    en: 'Procurement item',
+    ar: 'بند المشتريات',
+    ur: 'پروکیورمنٹ آئٹم',
+    hi: 'खरीद वस्तु',
+  );
+  static const itemName = TranslatableString(
+    en: 'Item name',
+    ar: 'اسم البند',
+    ur: 'آئٹم کا نام',
+    hi: 'वस्तु का नाम',
+  );
+  static const modelReference = TranslatableString(
+    en: 'Model number',
+    ar: 'رقم الطراز',
+    ur: 'ماڈل نمبر',
+    hi: 'मॉडल नंबर',
+  );
+  static const modelReferenceOptional = TranslatableString(
+    en: 'Model number optional',
+    ar: 'رقم الطراز اختياري',
+    ur: 'ماڈل نمبر اختیاری',
+    hi: 'मॉडल नंबर वैकल्पिक',
+  );
+  static const searchKnownItems = TranslatableString(
+    en: 'Search project BOQ and inventory',
+    ar: 'البحث في جدول كميات المشروع والمخزون',
+    ur: 'پروجیکٹ BOQ اور انوینٹری تلاش کریں',
+    hi: 'प्रोजेक्ट BOQ और इन्वेंटरी खोजें',
+  );
+  static const searchKnownItemsHint = TranslatableString(
+    en: 'Type an item name, model, brand or code',
+    ar: 'اكتب اسم البند أو الطراز أو العلامة أو الرمز',
+    ur: 'آئٹم کا نام، ماڈل، برانڈ یا کوڈ لکھیں',
+    hi: 'वस्तु का नाम, मॉडल, ब्रांड या कोड लिखें',
+  );
+  static const keepEnteredItem = TranslatableString(
+    en: 'Keep entered details',
+    ar: 'الاحتفاظ بالتفاصيل المدخلة',
+    ur: 'درج تفصیل برقرار رکھیں',
+    hi: 'दर्ज विवरण रखें',
+  );
+  static const noMatchingItems = TranslatableString(
+    en: 'No matching BOQ or inventory item. You can keep the entered details.',
+    ar: 'لا يوجد بند مطابق في جدول الكميات أو المخزون. يمكنك الاحتفاظ بالتفاصيل المدخلة.',
+    ur: 'BOQ یا انوینٹری میں کوئی مماثل آئٹم نہیں۔ آپ درج تفصیل برقرار رکھ سکتے ہیں۔',
+    hi: 'BOQ या इन्वेंटरी में कोई मेल नहीं मिला। आप दर्ज विवरण रख सकते हैं।',
+  );
+  static const originallyRequested = TranslatableString(
+    en: 'Originally requested',
+    ar: 'الطلب الأصلي',
+    ur: 'اصل درخواست',
+    hi: 'मूल अनुरोध',
+  );
+  static const clarificationEvidenceHelp = TranslatableString(
+    en: 'The original request stays in history. This clarification is used for arrangement and delivery records.',
+    ar: 'يبقى الطلب الأصلي في السجل. ويُستخدم هذا التوضيح في الترتيب وسجلات التسليم.',
+    ur: 'اصل درخواست تاریخ میں محفوظ رہتی ہے۔ یہ وضاحت انتظام اور ڈیلیوری ریکارڈ میں استعمال ہوگی۔',
+    hi: 'मूल अनुरोध इतिहास में रहता है। यह स्पष्टीकरण व्यवस्था और डिलीवरी रिकॉर्ड में उपयोग होगा।',
+  );
+  static const saveClarification = TranslatableString(
+    en: 'Save item details',
+    ar: 'حفظ تفاصيل البند',
+    ur: 'آئٹم کی تفصیل محفوظ کریں',
+    hi: 'वस्तु विवरण सहेजें',
+  );
+  static const clarificationSaved = TranslatableString(
+    en: 'Item details updated',
+    ar: 'تم تحديث تفاصيل البند',
+    ur: 'آئٹم کی تفصیل اپ ڈیٹ ہو گئی',
+    hi: 'वस्तु विवरण अपडेट हुआ',
+  );
+  static const clarificationLocked = TranslatableString(
+    en: 'Item details are locked after the arrangement is saved.',
+    ar: 'تُقفل تفاصيل البند بعد حفظ الترتيب.',
+    ur: 'انتظام محفوظ ہونے کے بعد آئٹم کی تفصیل مقفل ہے۔',
+    hi: 'व्यवस्था सहेजने के बाद वस्तु विवरण लॉक हो जाता है।',
+  );
+  static const clarificationFailed = TranslatableString(
+    en: 'Item details could not be updated. Refresh and review the current arrangement.',
+    ar: 'تعذر تحديث تفاصيل البند. حدّث الصفحة وراجع الترتيب الحالي.',
+    ur: 'آئٹم کی تفصیل اپ ڈیٹ نہیں ہو سکی۔ ریفریش کرکے موجودہ انتظام دیکھیں۔',
+    hi: 'वस्तु विवरण अपडेट नहीं हुआ। रीफ़्रेश करके वर्तमान व्यवस्था देखें।',
+  );
   static const boqCorrelation = TranslatableString(
     en: 'Linked to BOQ',
     ar: 'مرتبط بجدول الكميات',

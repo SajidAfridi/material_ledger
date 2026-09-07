@@ -17,6 +17,10 @@ abstract interface class YorksV1ArrangementRepository {
 
   Future<YorksV1ArrangementWorkspace> begin(YorksV1BeginArrangementInput input);
 
+  Future<YorksV1ArrangementWorkspace> updateProcurementItem(
+    YorksV1UpdateProcurementMaterialItemInput input,
+  );
+
   Future<YorksV1ArrangementWorkspace> save(YorksV1SaveArrangementInput input);
 
   Future<YorksV1ArrangementWorkspace> decide(
@@ -74,6 +78,20 @@ class YorksV1SupabaseArrangementRepository
   ) async {
     final response = await _invoke(
       functionName: 'v1_begin_arrangement',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': input.idempotencyKey,
+      },
+    );
+    return _workspace(response);
+  }
+
+  @override
+  Future<YorksV1ArrangementWorkspace> updateProcurementItem(
+    YorksV1UpdateProcurementMaterialItemInput input,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_update_material_request_procurement_item',
       parameters: {
         'p_payload': input.toRpcPayload(),
         'p_idempotency_key': input.idempotencyKey,

@@ -22,6 +22,246 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
+    'procurement can clarify an item in the unsaved arrangement editor',
+    (tester) async {
+      tester.view.physicalSize = const Size(1366, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _ArrangementRepository();
+      final preferences = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+              (ref) => YorksV1TestPermissionController(
+                yorksV1TrustedFeaturePermissionState(),
+              ),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _request),
+            yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+            yorksV1ArrangementWorkspaceProvider(
+              'request-1',
+            ).overrideWith((ref) async => _workingWorkspace),
+            yorksV1ArrangementInventoryProvider.overrideWith(
+              (ref) async => _inventoryItems,
+            ),
+            yorksV1MaterialRequestInventorySearchProvider(
+              const YorksV1MaterialRequestInventorySearchKey(
+                projectId: 'project-1',
+                scopeId: 'scope-1',
+                query: 'damper',
+              ),
+            ).overrideWith(
+              (ref) async => const [
+                YorksV1MaterialRequestInventorySuggestion(
+                  id: 'known-damper',
+                  description: 'Known fire damper',
+                  model: 'KFD-500',
+                  unit: 'Nos',
+                ),
+              ],
+            ),
+          ],
+          child: const MaterialApp(
+            home: YorksV1ArrangementScreen(
+              requestId: 'request-1',
+              embedded: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Clarify item'));
+      await tester.pumpAndSettle();
+      expect(find.text('Originally requested'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('procurement-item-description')),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/arrange_clarify_item_desktop_1366x900.png',
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement-item-search')),
+        'damper',
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Known fire damper'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Known fire damper'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('procurement-item-description')),
+            )
+            .controller
+            ?.text,
+        'Known fire damper',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const ValueKey('procurement-item-model')),
+            )
+            .controller
+            ?.text,
+        'KFD-500',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement-item-description')),
+        'Motorized smoke damper MSD-600',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('procurement-item-model')),
+        'MSD-600',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('save-procurement-item-clarification')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.clarificationInputs, hasLength(1));
+      expect(
+        repository.clarificationInputs.single.itemDescription,
+        'Motorized smoke damper MSD-600',
+      );
+      expect(repository.clarificationInputs.single.modelReference, 'MSD-600');
+      await tester.pump(const Duration(seconds: 6));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('clarification uses a focused mobile sheet at 360px', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(),
+            ),
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _request),
+          yorksV1ArrangementRepositoryProvider.overrideWithValue(
+            _ArrangementRepository(),
+          ),
+          yorksV1ArrangementWorkspaceProvider(
+            'request-1',
+          ).overrideWith((ref) async => _workingWorkspace),
+          yorksV1ArrangementInventoryProvider.overrideWith(
+            (ref) async => _inventoryItems,
+          ),
+        ],
+        child: const MaterialApp(
+          home: YorksV1ArrangementScreen(
+            requestId: 'request-1',
+            embedded: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Clarify item'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('procurement-item-description')),
+      findsOneWidget,
+    );
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/arrange_clarify_item_mobile_360x800.png'),
+    );
+  });
+
+  testWidgets('failed clarification keeps the entered details for retry', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final repository = _ArrangementRepository()..failNextClarification = true;
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+            (ref) => YorksV1TestPermissionController(
+              yorksV1TrustedFeaturePermissionState(),
+            ),
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            'request-1',
+          ).overrideWith((ref) async => _request),
+          yorksV1ArrangementRepositoryProvider.overrideWithValue(repository),
+          yorksV1ArrangementWorkspaceProvider(
+            'request-1',
+          ).overrideWith((ref) async => _workingWorkspace),
+          yorksV1ArrangementInventoryProvider.overrideWith(
+            (ref) async => _inventoryItems,
+          ),
+        ],
+        child: const MaterialApp(
+          home: YorksV1ArrangementScreen(
+            requestId: 'request-1',
+            embedded: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Clarify item'));
+    await tester.pumpAndSettle();
+    final description = find.byKey(
+      const ValueKey('procurement-item-description'),
+    );
+    await tester.enterText(description, 'Retry-safe damper');
+    await tester.tap(
+      find.byKey(const ValueKey('save-procurement-item-clarification')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(description, findsOneWidget);
+    expect(find.text('Retry-safe damper'), findsOneWidget);
+    expect(
+      find.textContaining('Item details could not be updated'),
+      findsOneWidget,
+    );
+    expect(repository.clarificationInputs, hasLength(1));
+  });
+
+  testWidgets(
     'embedded arrangement opens the direct editor and closes after a saved hand-off',
     (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
@@ -992,6 +1232,9 @@ final _replacementWorkspace = YorksV1ArrangementWorkspace(
 
 class _ArrangementRepository implements YorksV1ArrangementRepository {
   final List<YorksV1SaveArrangementInput> saveInputs = [];
+  final List<YorksV1UpdateProcurementMaterialItemInput> clarificationInputs =
+      [];
+  bool failNextClarification = false;
 
   @override
   Future<YorksV1ArrangementWorkspace> begin(
@@ -1026,6 +1269,18 @@ class _ArrangementRepository implements YorksV1ArrangementRepository {
     YorksV1SaveArrangementInput input,
   ) async {
     saveInputs.add(input);
+    return _workingWorkspace;
+  }
+
+  @override
+  Future<YorksV1ArrangementWorkspace> updateProcurementItem(
+    YorksV1UpdateProcurementMaterialItemInput input,
+  ) async {
+    clarificationInputs.add(input);
+    if (failNextClarification) {
+      failNextClarification = false;
+      throw StateError('simulated clarification failure');
+    }
     return _workingWorkspace;
   }
 }

@@ -98,6 +98,24 @@ class YorksV1MaterialWorkflowCommandController {
     ),
   );
 
+  Future<YorksV1ArrangementWorkspace> updateProcurementMaterialItem(
+    YorksV1UpdateProcurementMaterialItemInput input,
+  ) => _run(
+    operation: 'update_procurement_material_item',
+    entityId: input.requestLineId,
+    payload: input.toRpcPayload(),
+    invoke: (key) => _arrangements.updateProcurementItem(
+      YorksV1UpdateProcurementMaterialItemInput(
+        requestId: input.requestId,
+        requestLineId: input.requestLineId,
+        expectedRequestVersion: input.expectedRequestVersion,
+        itemDescription: input.itemDescription,
+        modelReference: input.modelReference,
+        idempotencyKey: key,
+      ),
+    ),
+  );
+
   Future<YorksV1MaterialRequest> createReplacementMaterialRequest(
     YorksV1CreateReplacementMaterialRequestInput input,
   ) {

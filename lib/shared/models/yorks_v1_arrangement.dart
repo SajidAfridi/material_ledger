@@ -111,6 +111,12 @@ class YorksV1ArrangementLine {
     required this.unit,
     required this.source,
     this.brandOrigin,
+    this.requestedDescription,
+    this.modelReference,
+    this.requestedModelReference,
+    this.procurementClarificationVersion = 0,
+    this.procurementClarifiedAt,
+    this.procurementClarifiedByDisplayName,
     this.externalSupplier,
     this.externalSourceReady = false,
     this.externalExpectedDate,
@@ -136,6 +142,12 @@ class YorksV1ArrangementLine {
   final int displayOrder;
   final String description;
   final String? brandOrigin;
+  final String? requestedDescription;
+  final String? modelReference;
+  final String? requestedModelReference;
+  final int procurementClarificationVersion;
+  final DateTime? procurementClarifiedAt;
+  final String? procurementClarifiedByDisplayName;
   final String requestedQuantity;
   final String unit;
   final YorksV1ArrangementSource source;
@@ -168,6 +180,12 @@ class YorksV1ArrangementLine {
   bool get isBoqCorrelated =>
       requestSourceKind == 'boq' && sourceBoqRowId != null;
 
+  bool get wasProcurementClarified =>
+      procurementClarificationVersion > 0 ||
+      description.trim() != (requestedDescription ?? description).trim() ||
+      (modelReference ?? '').trim() !=
+          (requestedModelReference ?? modelReference ?? '').trim();
+
   factory YorksV1ArrangementLine.fromRpcJson(Map<String, dynamic> json) {
     return YorksV1ArrangementLine(
       id: _requiredString(json, 'id'),
@@ -175,6 +193,16 @@ class YorksV1ArrangementLine {
       displayOrder: _positiveInt(json['display_order']),
       description: _requiredString(json, 'item_description'),
       brandOrigin: _trimToNull(json['brand_origin']),
+      requestedDescription: _trimToNull(json['requested_item_description']),
+      modelReference: _trimToNull(json['model_reference']),
+      requestedModelReference: _trimToNull(json['requested_model_reference']),
+      procurementClarificationVersion: _nonNegativeInt(
+        json['procurement_clarification_version'],
+      ),
+      procurementClarifiedAt: _nullableDate(json['procurement_clarified_at']),
+      procurementClarifiedByDisplayName: _trimToNull(
+        json['procurement_clarified_by_display_name'],
+      ),
       requestedQuantity: _string(json['requested_qty']),
       unit: _requiredString(json, 'unit'),
       source: YorksV1ArrangementSource.fromWireValue(json['source_kind']),
@@ -405,6 +433,32 @@ class YorksV1BeginArrangementInput {
   };
 }
 
+class YorksV1UpdateProcurementMaterialItemInput {
+  const YorksV1UpdateProcurementMaterialItemInput({
+    required this.requestId,
+    required this.requestLineId,
+    required this.expectedRequestVersion,
+    required this.itemDescription,
+    required this.idempotencyKey,
+    this.modelReference,
+  });
+
+  final String requestId;
+  final String requestLineId;
+  final int expectedRequestVersion;
+  final String itemDescription;
+  final String? modelReference;
+  final String idempotencyKey;
+
+  Map<String, Object?> toRpcPayload() => {
+    'request_id': requestId,
+    'request_line_id': requestLineId,
+    'expected_request_version': expectedRequestVersion,
+    'item_description': itemDescription.trim(),
+    'model_reference': _trimToNull(modelReference),
+  };
+}
+
 class YorksV1SaveArrangementInput {
   YorksV1SaveArrangementInput({
     required this.requestId,
@@ -467,6 +521,13 @@ String _string(Object? value) => switch (value) {
   String text => text,
   num number => number.toString(),
   _ => '',
+};
+
+int _nonNegativeInt(Object? value) => switch (value) {
+  int number when number >= 0 => number,
+  num number when number >= 0 => number.toInt(),
+  String text => int.tryParse(text) ?? 0,
+  _ => 0,
 };
 
 String? _trimToNull(Object? value) {

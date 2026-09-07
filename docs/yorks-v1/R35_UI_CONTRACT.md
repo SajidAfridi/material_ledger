@@ -353,6 +353,14 @@ arrangement makes its positive lines dispatch-ready; there is no second
 approval prompt for new requests. Existing legacy post-arrangement approvals
 retain their recorded review UI until resolved.
 
+While that arrangement is still working and unsaved, Procurement may open
+**Clarify item** for a requested line. The editor uses the same ranked
+selected-scope BOQ, project BOQ and inventory search used during creation,
+allows a valid custom description, and changes only the effective item name and
+model. Original Engineering values remain visibly read-only. The action is
+removed after arrangement save; read-only history may show both original and
+clarified identity.
+
 Validation is shown at the affected line and in one compact summary whose row
 actions move focus to the exact problem; save does not fail with only a generic
 snackbar. If every line is Cannot Provide Now, the workspace remains editable

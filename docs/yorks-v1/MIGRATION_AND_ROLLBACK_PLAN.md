@@ -106,6 +106,12 @@ Legacy role handling:
   self-approval and external-source readiness, adds nullable readiness evidence
   to arrangement lines, and adds request/line replacement provenance. Existing
   requests and arrangements retain their values and state.
+- Procurement item clarification backfills immutable requested
+  description/technical snapshots without changing effective values. It adds
+  nullable clarifier evidence, a non-negative version, a snapshot-protection
+  trigger, role-safe projection keys and one trusted idempotent command.
+  Rollback is forward-only after use: revoke the command and hide the action,
+  but retain snapshot columns and audit history.
 - Replacement recovery is forward-only evidence: rollback hides/revokes the
   new command and republishes the adoption defaults. Never drop provenance or
   readiness columns after production evidence exists, and never reopen or

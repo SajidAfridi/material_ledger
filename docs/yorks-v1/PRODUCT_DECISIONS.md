@@ -1630,3 +1630,21 @@ profile hardening on 5 September 2026:
   acknowledgement metadata is never stored as a destination; and
 - this is an additive, staging-first correction. It does not widen any
   capability, mutate business records or authorize a production release.
+
+## 26. Procurement item clarification before arrangement save
+
+The following product-owner decisions are frozen on 7 September 2026:
+
+- Engineering's submitted description and technical attributes remain
+  immutable requested evidence;
+- Procurement may correct the effective item name and assign or correct the
+  model number only while the current arrangement is working and unsaved;
+- clarification closes when arrangement save commits, including an
+  all-unavailable saved arrangement. It cannot reopen during dispatch, receipt,
+  return or document generation;
+- creation and clarification use the same protected ranked BOQ/inventory
+  search, while preserving the option to enter a legitimate custom item;
+- the command cannot change quantity, unit, brand, BOQ provenance, commercial
+  values or arrangement decisions; and
+- authorization, optimistic versioning, idempotency, request-root locking and
+  append-only audit are server enforced. UI visibility is not authority.

@@ -85,6 +85,81 @@ void main() {
   });
 
   test(
+    'procurement clarification payload is trimmed and keeps model optional',
+    () {
+      const input = YorksV1UpdateProcurementMaterialItemInput(
+        requestId: 'request-1',
+        requestLineId: 'request-line-1',
+        expectedRequestVersion: 4,
+        itemDescription: '  Motorized smoke damper  ',
+        modelReference: '  MSD-600  ',
+        idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      );
+
+      expect(input.toRpcPayload(), {
+        'request_id': 'request-1',
+        'request_line_id': 'request-line-1',
+        'expected_request_version': 4,
+        'item_description': 'Motorized smoke damper',
+        'model_reference': 'MSD-600',
+      });
+    },
+  );
+
+  test('arrangement projection retains requested and clarified identity', () {
+    final json = _workspaceJson();
+    final line =
+        ((json['arrangements'] as List).single as Map<String, dynamic>)['lines']
+            as List;
+    (line.single as Map<String, dynamic>).addAll({
+      'item_description': 'Motorized smoke damper',
+      'model_reference': 'MSD-600',
+      'requested_item_description': 'Smoke damper',
+      'requested_model_reference': null,
+      'procurement_clarification_version': 1,
+      'procurement_clarified_at': '2026-09-07T08:00:00Z',
+      'procurement_clarified_by_display_name': 'Procurement User',
+    });
+
+    final projected = YorksV1ArrangementWorkspace.fromRpcJson(
+      json,
+    ).currentArrangement!.lines.single;
+    expect(projected.wasProcurementClarified, isTrue);
+    expect(projected.requestedDescription, 'Smoke damper');
+    expect(projected.modelReference, 'MSD-600');
+    expect(projected.procurementClarificationVersion, 1);
+  });
+
+  test('repository sends clarification only through the trusted RPC', () async {
+    final client = _RecordingRpcClient();
+    final repository = YorksV1SupabaseArrangementRepository(
+      featureFlags: const YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+      ),
+      connectivity: DefaultConnectivity(),
+      rpcClient: client,
+    );
+
+    await repository.updateProcurementItem(
+      const YorksV1UpdateProcurementMaterialItemInput(
+        requestId: 'request-1',
+        requestLineId: 'request-line-1',
+        expectedRequestVersion: 4,
+        itemDescription: 'Smoke damper MSD-600',
+        modelReference: 'MSD-600',
+        idempotencyKey: '11111111-1111-4111-8111-111111111111',
+      ),
+    );
+
+    expect(client.calls, ['v1_update_material_request_procurement_item']);
+  });
+
+  test(
     'the arrangement repository fails closed before any RPC when disabled',
     () async {
       final client = _RecordingRpcClient();
