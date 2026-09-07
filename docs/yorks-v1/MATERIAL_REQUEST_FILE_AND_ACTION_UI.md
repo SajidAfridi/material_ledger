@@ -17,6 +17,10 @@ badge to the underlying file marker. Unsupported formats use the neutral file
 marker and are never presented as previewable merely because they have an
 icon.
 
+Primary file glyphs are Yorks-owned vector drawings rather than indirect font
+icons. They therefore remain visible when Flutter optimizes icon fonts in web
+and Android release builds.
+
 Material Request discussion attachments show the marker, filename and byte
 size. Ready uploads include a remove action before posting. Posted attachments
 include a download cue and keep the existing protected download command.
@@ -59,3 +63,5 @@ close only the information surface.
 - Drafts, quantities, comments and pending attachments survive opening and
   closing Request Information.
 - Existing capability, RLS, document and audit boundaries remain unchanged.
+- Optimized release builds show every primary file glyph; a coloured container
+  without its glyph is a failed release state.

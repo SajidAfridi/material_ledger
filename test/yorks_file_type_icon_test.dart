@@ -24,13 +24,17 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.picture_as_pdf_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.table_view_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.article_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.image_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.architecture_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.folder_zip_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.insert_drive_file_rounded), findsOneWidget);
+    for (final kind in [
+      'pdf',
+      'spreadsheet',
+      'document',
+      'image',
+      'drawing',
+      'archive',
+      'file',
+    ]) {
+      expect(find.byKey(ValueKey('yorks-file-icon-$kind')), findsOneWidget);
+    }
   });
 
   testWidgets('Yorks transfer badge remains a supporting visual cue', (
@@ -47,7 +51,10 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.table_view_rounded), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('yorks-file-icon-spreadsheet')),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.file_download_rounded), findsOneWidget);
   });
 }
