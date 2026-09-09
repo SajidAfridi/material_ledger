@@ -15,7 +15,7 @@ const _posthogProjectToken = String.fromEnvironment('POSTHOG_PROJECT_TOKEN');
 const _legacyPosthogApiKey = String.fromEnvironment('POSTHOG_API_KEY');
 const _posthogHost = String.fromEnvironment(
   'POSTHOG_HOST',
-  defaultValue: 'https://eu.i.posthog.com',
+  defaultValue: 'https://us.i.posthog.com',
 );
 const _posthogEnvironment = String.fromEnvironment(
   'POSTHOG_ENV',
