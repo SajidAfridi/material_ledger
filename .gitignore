@@ -57,8 +57,8 @@ app.*.map.json
 /.r35.env
 /.r35.*.env
 
-# Generated browser bridge for PostHog Flutter Web. tool/r35.sh recreates this
-# from the operator environment before browser run/build commands.
+# Legacy PostHog browser-bridge output may contain an environment token. The
+# current launcher no longer generates it, but never allow an old copy into Git.
 /web/posthog_config.js
 
 # Supabase CLI runtime data is machine-local. The tracked config, migrations,

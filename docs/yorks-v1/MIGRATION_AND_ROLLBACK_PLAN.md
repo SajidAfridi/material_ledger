@@ -578,8 +578,13 @@ acknowledgement, pin, upload-intent and attachment relations; a private
 `yorks-chat-attachments` bucket; trusted member-scoped RPCs; Realtime refresh
 publication; and Team Chat notification projections. Existing Project and
 Material Request discussion history is retained. The compatibility comment
-RPC now writes the one canonical MR Team Chat stream while preserving the
+RPC writes a canonical record-bound backing stream while preserving the
 existing immutable comment identifiers/read projection for older clients.
+Migration `20260909043535_separate_material_request_discussion_from_team_chat.sql`
+hides that backing stream from Team Chat lists and search until a user
+explicitly selects **Start team conversation**. Promotion reuses the retained
+thread, so no messages, mentions, attachments or audit facts are copied or
+discarded.
 Workflow audit facts create best-effort system messages and are guarded so a
 chat projection failure can never abort the source workflow command.
 
@@ -592,6 +597,11 @@ until the authenticated caller obtains a short-lived actor-scoped intent, the
 `finalize-chat-attachment` Edge Function verifies object byte count, content
 type and SHA-256 with service authority, and the send RPC atomically binds the
 verified object to an append-only message.
+
+Rollback of the discussion separation sets
+`is_listed_in_team_chat = true` for retained Material Request conversations and
+restores the prior list/search functions. Do not drop the marker, trigger or
+retained backing threads while a prior client may still use them.
 
 Rollback revokes the Team Chat RPC grants, disables `YORKS_R38_TEAM_CHAT` in a
 replacement complete build and redeploys the prior client/functions. Retain

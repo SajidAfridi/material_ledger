@@ -7,13 +7,14 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: ./tool/r35.sh <run|build-web|build-apk|build-macos> [additional Flutter arguments]
+Usage: ./tool/r35.sh <run|build-web|build-apk|build-ios|build-macos> [additional Flutter arguments]
 
 Examples:
   cp tool/r35.env.example .r35.env
   # Edit .r35.env once with the explicit local/staging/production backend.
   ./tool/r35.sh run
   ./tool/r35.sh build-web
+  ./tool/r35.sh build-ios --no-codesign
   ./tool/r35.sh build-macos
   R35_CONFIG_FILE=.r35.staging.env ./tool/r35.sh build-web
 USAGE
@@ -79,8 +80,11 @@ fi
 if [[ "$r35_environment" == "ci" && -z "$operator_analytics_flag" ]]; then
   analytics_flag=false
 fi
-if [[ "$r35_environment" == "ci" && -z "$operator_posthog_enabled" ]]; then
+if [[ "$r35_environment" == "ci" ]]; then
   posthog_enabled=false
+  posthog_project_token=""
+  posthog_environment=ci
+  posthog_debug=false
 fi
 
 if [[ -z "$r35_environment" ]]; then
@@ -134,6 +138,26 @@ case "$posthog_debug" in
     exit 64
     ;;
 esac
+case "$posthog_environment" in
+  local|development|staging|production|ci) ;;
+  *)
+    echo "POSTHOG_ENV must be local, development, staging, production, or ci." >&2
+    exit 64
+    ;;
+esac
+if [[ "$r35_environment" == "local" ]]; then
+  if [[ "$posthog_environment" != "local" && "$posthog_environment" != "development" ]]; then
+    echo "POSTHOG_ENV must match the local R35 environment." >&2
+    exit 64
+  fi
+elif [[ "$posthog_environment" != "$r35_environment" ]]; then
+  echo "POSTHOG_ENV must match R35_ENVIRONMENT." >&2
+  exit 64
+fi
+if [[ "$posthog_debug" == "true" && "$r35_environment" != "local" ]]; then
+  echo "POSTHOG_DEBUG may be enabled only for local development." >&2
+  exit 64
+fi
 if [[ "$posthog_enabled" == "true" && -z "$posthog_project_token" ]]; then
   echo "POSTHOG_PROJECT_TOKEN is required when POSTHOG_ENABLED=true." >&2
   exit 64
@@ -147,6 +171,9 @@ if [[ "$posthog_enabled" == "true" ]]; then
     echo "POSTHOG_HOST must be a simple HTTPS origin." >&2
     exit 64
   fi
+else
+  # Do not embed an unused environment token in a disabled artifact.
+  posthog_project_token=""
 fi
 if [[ "$r35_environment" == "production"
    && ("$command" == "run" || "$command" == "build-web")
@@ -173,40 +200,15 @@ r35_defines=(
   "--dart-define=YORKS_V1_ACCOUNTS=${accounts_flag}"
   "--dart-define=YORKS_V1_WORKFORCE=${workforce_flag}"
   "--dart-define=YORKS_V1_ANALYTICS=${analytics_flag}"
-  '--dart-define=YORKS_R38_TEAM_CHAT=true'
-  '--dart-define=YORKS_R38_9_INVENTORY_SUPPLIERS=true'
-  '--dart-define=use_arabic=true'
   "--dart-define=POSTHOG_ENABLED=${posthog_enabled}"
+  "--dart-define=POSTHOG_PROJECT_TOKEN=${posthog_project_token}"
   "--dart-define=POSTHOG_HOST=${posthog_host}"
   "--dart-define=POSTHOG_ENV=${posthog_environment}"
   "--dart-define=POSTHOG_DEBUG=${posthog_debug}"
+  '--dart-define=YORKS_R38_TEAM_CHAT=true'
+  '--dart-define=YORKS_R38_9_INVENTORY_SUPPLIERS=true'
+  '--dart-define=use_arabic=true'
 )
-
-if [[ -n "$posthog_project_token" ]]; then
-  r35_defines+=("--dart-define=POSTHOG_PROJECT_TOKEN=${posthog_project_token}")
-fi
-
-# Flutter Web's PostHog adapter requires posthog-js to be initialized in the
-# browser before Dart capture calls can work. Generate a machine-local config
-# consumed by web/flutter_bootstrap.js. The file is gitignored and contains no
-# data when telemetry is disabled.
-if [[ "$command" == "run" || "$command" == "build-web" ]]; then
-  posthog_web_config='web/posthog_config.js'
-  if [[ "$posthog_enabled" == "true" ]]; then
-    cat > "$posthog_web_config" <<EOF
-window.__YORKS_POSTHOG__ = Object.freeze({
-  enabled: true,
-  projectToken: "${posthog_project_token}",
-  host: "${posthog_host}",
-  debug: ${posthog_debug},
-});
-EOF
-  else
-    cat > "$posthog_web_config" <<'EOF'
-window.__YORKS_POSTHOG__ = Object.freeze({ enabled: false });
-EOF
-  fi
-fi
 
 # This rollout state is safe to print and provides release evidence without
 # exposing backend configuration, telemetry tokens or public-notification credentials.
@@ -240,6 +242,9 @@ case "$command" in
     ;;
   build-apk)
     exec flutter build apk --release "${r35_defines[@]}" "$@"
+    ;;
+  build-ios)
+    exec flutter build ios --release "${r35_defines[@]}" "$@"
     ;;
   build-macos)
     exec flutter build macos --release "${r35_defines[@]}" "$@"

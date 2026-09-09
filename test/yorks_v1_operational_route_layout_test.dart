@@ -253,6 +253,7 @@ void main() {
       });
 
       for (final size in [
+        const Size(1512, 772),
         const Size(1366, 768),
         const Size(1024, 768),
         const Size(360, 800),
@@ -388,11 +389,32 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 250));
 
+        if (size.width > 720) {
+          expect(
+            find.byKey(const ValueKey('material-request-decision-banner')),
+            findsOneWidget,
+            reason: 'viewport $size',
+          );
+        }
         expect(
-          find.text('Request Status'),
+          find.text('${request.projectName} · ${request.scopeName}'),
           findsOneWidget,
           reason: 'viewport $size',
         );
+        if (size.width == 1366) {
+          final headingRect = tester.getRect(
+            find.byKey(const ValueKey('material-request-record-heading')),
+          );
+          final workflowRect = tester.getRect(
+            find.byKey(const ValueKey('material-request-workflow-actions')),
+          );
+          expect(workflowRect.left, greaterThan(headingRect.left));
+          expect(workflowRect.right, greaterThan(headingRect.right));
+          expect(
+            (workflowRect.top - headingRect.top).abs(),
+            lessThanOrEqualTo(2),
+          );
+        }
         final requestInformation = find.byKey(
           const ValueKey('material-request-information-action'),
         );
@@ -401,13 +423,28 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(requestInformation);
         await tester.pumpAndSettle();
-        expect(find.text('YRA123-MR101'), findsWidgets);
+        expect(find.textContaining('Masaud Khan'), findsAtLeastNWidgets(1));
         expect(find.text('YRA-123'), findsWidgets);
         if (size.width > 720) {
           expect(
             find.byKey(const ValueKey('material-request-information-panel')),
             findsOneWidget,
           );
+        }
+        if (size.width == 1512) {
+          final panelRect = tester.getRect(
+            find.byKey(const ValueKey('material-request-information-panel')),
+          );
+          final itemsTableRect = tester.getRect(
+            find.byKey(const ValueKey('material-request-items-table')),
+          );
+          final quantityTableRect = tester.getRect(
+            find.byKey(
+              const ValueKey('material-request-quantity-history-table'),
+            ),
+          );
+          expect(itemsTableRect.right, lessThan(panelRect.left));
+          expect(quantityTableRect.right, lessThan(panelRect.left));
         }
         await tester.tap(find.byIcon(Icons.close_rounded).last);
         await tester.pumpAndSettle();

@@ -187,19 +187,12 @@ void registerFirebaseBackgroundHandler() {
   FirebaseMessaging.onBackgroundMessage(firebaseBackgroundMessageHandler);
 }
 
-void _debugMessage(String phase, RemoteMessage message) {
-  // FCM registration tokens and payloads are device/user data. Keep the
-  // requested diagnostic output strictly to development consoles; production
+void _debugMessage(String phase, RemoteMessage _) {
+  // FCM registration tokens, identifiers, notification text, and data payloads
+  // are device/user data. Development logs record delivery only; production
   // observability receives only failures through the scrubbed reporter below.
   if (!kDebugMode) return;
-  debugPrint(
-    '[fcm][$phase] id=${message.messageId ?? '-'} '
-    'notification=${message.notification} data=${message.data}',
-  );
-}
-
-void _debugToken(String token) {
-  if (kDebugMode) debugPrint('[fcm] device token: $token');
+  debugPrint('[fcm][$phase] message received');
 }
 
 void _debugFailure(String phase, Object error, StackTrace stackTrace) {
@@ -239,7 +232,6 @@ class FcmPushService implements PushService {
     if (!_ready || !_status.isAllowed) return null;
     try {
       final token = await _getToken();
-      if (token != null) _debugToken(token);
       // [initialize] can run before authentication exists. Repeat this
       // owner-bound registration after a later sign-in instead of leaving a
       // token unassociated with that user.
@@ -372,7 +364,6 @@ class FcmPushService implements PushService {
     }
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) {
-      _debugToken(token);
       unawaited(
         _registerToken(token).then((registered) {
           _setStatus(

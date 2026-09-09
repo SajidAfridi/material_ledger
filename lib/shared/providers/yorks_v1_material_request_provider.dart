@@ -12,6 +12,7 @@ import '../models/yorks_v1_material_request_document.dart';
 import '../models/yorks_v1_role.dart';
 import '../repositories/storage.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
+import '../services/analytics_service.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 import 'yorks_v1_permission_provider.dart';
 import 'language_provider.dart';
@@ -65,6 +66,7 @@ final yorksV1MaterialRequestDraftControllerProvider = StateNotifierProvider
         store: store,
         repository: ref.watch(yorksV1MaterialRequestRepositoryProvider),
         uuidFactory: uuid.v4,
+        analytics: ref.watch(analyticsServiceProvider),
         onLocalDraftsChanged: () {
           final revision = ref.read(
             yorksV1MaterialRequestLocalDraftRevisionProvider(

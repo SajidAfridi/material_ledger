@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/yorks_v1_boq.dart';
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_item_description.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../repositories/collection_store.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
+import '../services/analytics_service.dart';
 
 enum YorksV1MaterialRequestDraftSyncStatus {
   local,
@@ -47,6 +49,7 @@ class YorksV1MaterialRequestDraftController
     required YorksV1MaterialRequestRepository repository,
     String Function()? uuidFactory,
     VoidCallback? onLocalDraftsChanged,
+    AnalyticsService analytics = const NoopAnalyticsService(),
     Duration privateSyncDebounce = const Duration(milliseconds: 1200),
   }) : _ownerAuthUserId = ownerAuthUserId,
        _draftId = draftId,
@@ -54,6 +57,7 @@ class YorksV1MaterialRequestDraftController
        _repository = repository,
        _uuidFactory = uuidFactory ?? const Uuid().v4,
        _onLocalDraftsChanged = onLocalDraftsChanged,
+       _analytics = analytics,
        _privateSyncDebounceDuration = privateSyncDebounce,
        super(
          YorksV1MaterialRequestDraftState(
@@ -74,6 +78,7 @@ class YorksV1MaterialRequestDraftController
   final YorksV1MaterialRequestRepository _repository;
   final String Function() _uuidFactory;
   final VoidCallback? _onLocalDraftsChanged;
+  final AnalyticsService _analytics;
   final Duration _privateSyncDebounceDuration;
   Future<void> _persistQueue = Future<void>.value();
   bool _connectedCommandInFlight = false;
@@ -373,6 +378,7 @@ class YorksV1MaterialRequestDraftController
         ),
       );
     await _replace(draft.copyWith(lines: _reindexLines(lines)));
+    _captureItemChange('add_custom');
   }
 
   Future<void> addBlankLine() => addCustomLine();
@@ -405,6 +411,7 @@ class YorksV1MaterialRequestDraftController
         ),
       );
     await _replace(draft.copyWith(lines: _reindexLines(lines)));
+    _captureItemChange('add_similar');
   }
 
   Future<void> addBoqRows({
@@ -510,6 +517,7 @@ class YorksV1MaterialRequestDraftController
     }
     if (additions.isEmpty) return;
     await _replace(draft.copyWith(lines: [...draft.lines, ...additions]));
+    _captureItemChange('add_boq', count: additions.length);
   }
 
   Future<void> addExcelLines(
@@ -544,6 +552,7 @@ class YorksV1MaterialRequestDraftController
     ];
     if (additions.isEmpty) return;
     await _replace(draft.copyWith(lines: [...draft.lines, ...additions]));
+    _captureItemChange('add_excel', count: additions.length);
   }
 
   Future<void> updateLine(
@@ -567,6 +576,17 @@ class YorksV1MaterialRequestDraftController
         .where((line) => line.id != lineId)
         .toList(growable: false);
     await _replace(state.draft.copyWith(lines: _reindexLines(remaining)));
+    _captureItemChange('remove');
+  }
+
+  void _captureItemChange(String action, {int count = 1}) {
+    _analytics.capture(
+      AnalyticsEvent.materialRequestItemChanged,
+      properties: {
+        AnalyticsProperty.actionType: action,
+        AnalyticsProperty.itemCount: count,
+      },
+    );
   }
 
   List<YorksV1MaterialRequestLine> _reindexLines(
@@ -607,16 +627,52 @@ class YorksV1MaterialRequestDraftController
         draft: draft,
         status: YorksV1MaterialRequestDraftSyncStatus.local,
       );
+      _analytics.capture(
+        AnalyticsEvent.materialRequestDraftSaved,
+        properties: {
+          AnalyticsProperty.source: 'local_recovery',
+          AnalyticsProperty.itemCount: draft.lines.length,
+        },
+      );
       return null;
     }
     return saveConnected();
   }
 
   Future<YorksV1MaterialRequest?> saveConnected() async {
+    _analytics.recordActionAttempt(
+      action: 'save_material_request_draft',
+      screen: AnalyticsScreen.materialRequestDraft,
+      operationWasLoading: _connectedCommandInFlight,
+    );
     if (_connectedCommandInFlight) return null;
     _connectedCommandInFlight = true;
+    final operation = _analytics.beginOperation(
+      'material_request_save_draft',
+      properties: {
+        AnalyticsProperty.workflow: 'material_request',
+        AnalyticsProperty.itemCount: state.draft.lines.length,
+      },
+    );
     try {
-      return await _saveConnected();
+      final result = await _saveConnected();
+      if (result == null) {
+        operation.fail(
+          YorksV1DomainException(
+            state.errorCode ?? YorksV1DomainErrorCode.backendUnavailable,
+          ),
+        );
+      } else {
+        operation.complete();
+        _analytics.capture(
+          AnalyticsEvent.materialRequestDraftSaved,
+          properties: {
+            AnalyticsProperty.source: 'server',
+            AnalyticsProperty.itemCount: state.draft.lines.length,
+          },
+        );
+      }
+      return result;
     } finally {
       _connectedCommandInFlight = false;
     }
@@ -625,6 +681,12 @@ class YorksV1MaterialRequestDraftController
   Future<YorksV1MaterialRequest?> _saveConnected() async {
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
+      _analytics.capture(
+        AnalyticsEvent.materialRequestValidationFailed,
+        properties: const {
+          AnalyticsProperty.errorCategory: AnalyticsErrorCategory.invalidInput,
+        },
+      );
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
         status: YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -679,10 +741,55 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<YorksV1MaterialRequest?> submit() async {
+    _analytics.recordActionAttempt(
+      action: 'submit_material_request',
+      screen: AnalyticsScreen.materialRequestDraft,
+      operationWasLoading: _connectedCommandInFlight,
+    );
     if (_connectedCommandInFlight) return null;
     _connectedCommandInFlight = true;
+    final source = _editingBeforeApproval ? 'edit_before_approval' : 'new';
+    _analytics.capture(
+      AnalyticsEvent.materialRequestSubmissionAttempted,
+      properties: {
+        AnalyticsProperty.source: source,
+        AnalyticsProperty.itemCount: state.draft.lines.length,
+        AnalyticsProperty.requestTiming: state.draft.timing,
+      },
+    );
+    final operation = _analytics.beginOperation(
+      'material_request_submit',
+      properties: {
+        AnalyticsProperty.workflow: 'material_request',
+        AnalyticsProperty.source: source,
+        AnalyticsProperty.itemCount: state.draft.lines.length,
+      },
+    );
     try {
-      return await _submitConnected();
+      final result = await _submitConnected();
+      if (result == null) {
+        final error = YorksV1DomainException(
+          state.errorCode ?? YorksV1DomainErrorCode.backendUnavailable,
+        );
+        operation.fail(error);
+        _analytics.capture(
+          AnalyticsEvent.materialRequestSubmissionFailed,
+          properties: {
+            AnalyticsProperty.source: source,
+            AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+          },
+        );
+      } else {
+        operation.complete();
+        _analytics.capture(
+          AnalyticsEvent.materialRequestSubmitted,
+          properties: {
+            AnalyticsProperty.source: source,
+            AnalyticsProperty.itemCount: state.draft.lines.length,
+          },
+        );
+      }
+      return result;
     } finally {
       _connectedCommandInFlight = false;
     }
@@ -713,6 +820,12 @@ class YorksV1MaterialRequestDraftController
     }
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
+      _analytics.capture(
+        AnalyticsEvent.materialRequestValidationFailed,
+        properties: const {
+          AnalyticsProperty.errorCategory: AnalyticsErrorCategory.invalidInput,
+        },
+      );
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
         status: YorksV1MaterialRequestDraftSyncStatus.failed,

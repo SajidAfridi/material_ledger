@@ -53,8 +53,8 @@ dependencies:
   # Crash & error monitoring — only active when a SENTRY_DSN is supplied at
   # build time (--dart-define); otherwise the app uses NoopObservability.
   sentry_flutter: ^9.0.0
-  # Product/UX analytics. The PostHog project token is never committed; release
-  # builds enable analytics only when POSTHOG_API_KEY is supplied via dart-define.
+  # Privacy-guarded product analytics. Runtime setup is manual and opt-in;
+  # native/web autocapture and session replay remain disabled.
   posthog_flutter: ^5.39.0
   # Backend (self-hosted Supabase / Postgres in a UAE region). Only active when
   # SUPABASE_URL + SUPABASE_ANON_KEY are supplied at build time (--dart-define);

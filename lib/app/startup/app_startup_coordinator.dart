@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/language_provider.dart';
 import '../../shared/providers/material_request_provider.dart';
-import '../../shared/providers/posthog_analytics_provider.dart';
 import '../../shared/providers/session_provider.dart';
 import '../../shared/providers/yorks_v1_notification_provider.dart';
 import '../../shared/sync/realtime_sync.dart';
@@ -24,9 +23,6 @@ import '../push_bridge.dart';
 final appStartupCoordinatorProvider = Provider<void>((ref) {
   // Session restoration is the only root concern that starts immediately.
   ref.watch(authSessionLifecycleProvider);
-  // Product analytics follows the authoritative identity projection. It is
-  // best-effort and never participates in authentication or authorization.
-  ref.watch(posthogAnalyticsIdentityProvider);
   final sessionId = ref.watch(authSessionProvider);
   final timers = <Timer>[];
   var disposed = false;

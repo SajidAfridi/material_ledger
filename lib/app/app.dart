@@ -16,6 +16,7 @@ import '../features/accounts/application/accounts_supplier_providers.dart';
 import '../features/company_overview/application/company_analytics_providers.dart';
 import '../features/workforce/application/workforce_providers.dart';
 import '../shared/providers/language_provider.dart';
+import '../shared/providers/analytics_identity_provider.dart';
 import '../shared/providers/role_permissions_provider.dart';
 import '../shared/providers/session_provider.dart';
 import '../shared/providers/yorks_v1_arrangement_provider.dart';
@@ -28,6 +29,8 @@ import '../shared/providers/yorks_v1_material_request_provider.dart';
 import '../shared/providers/yorks_v1_permission_provider.dart';
 import '../shared/providers/yorks_v1_project_portfolio_provider.dart';
 import '../shared/services/app_config_service.dart';
+import '../shared/services/analytics_route_mapper.dart';
+import '../shared/services/analytics_service.dart';
 import '../shared/widgets/notification_alert_host.dart';
 import '../shared/widgets/notification_attention_host.dart';
 import 'router.dart';
@@ -240,6 +243,9 @@ class MaterialLedgerApp extends ConsumerStatefulWidget {
 class _MaterialLedgerAppState extends ConsumerState<MaterialLedgerApp> {
   Timer? _notificationChromeTimer;
   bool _notificationChromeReady = false;
+  GoRouter? _analyticsRouter;
+  AnalyticsService? _analyticsService;
+  VoidCallback? _analyticsRouterListener;
 
   @override
   void initState() {
@@ -255,7 +261,32 @@ class _MaterialLedgerAppState extends ConsumerState<MaterialLedgerApp> {
   @override
   void dispose() {
     _notificationChromeTimer?.cancel();
+    final listener = _analyticsRouterListener;
+    if (listener != null) {
+      _analyticsRouter?.routeInformationProvider.removeListener(listener);
+    }
     super.dispose();
+  }
+
+  void _trackRouter(GoRouter router, AnalyticsService analytics) {
+    if (identical(_analyticsRouter, router) &&
+        identical(_analyticsService, analytics)) {
+      return;
+    }
+    final oldListener = _analyticsRouterListener;
+    if (oldListener != null) {
+      _analyticsRouter?.routeInformationProvider.removeListener(oldListener);
+    }
+    final tracker = AnalyticsRouteTracker(analytics);
+    void listener() {
+      tracker.track(router.routeInformationProvider.value.uri);
+    }
+
+    _analyticsRouter = router;
+    _analyticsService = analytics;
+    _analyticsRouterListener = listener;
+    router.routeInformationProvider.addListener(listener);
+    listener();
   }
 
   @override
@@ -263,8 +294,10 @@ class _MaterialLedgerAppState extends ConsumerState<MaterialLedgerApp> {
     // The coordinator starts auth immediately, then mounts independent global
     // services after the first route has had an uncontested render window.
     ref.watch(appStartupCoordinatorProvider);
+    ref.watch(analyticsIdentityLifecycleProvider);
     if (_notificationChromeReady) ref.watch(hardwareActionProvider);
     final router = ref.watch(appRouterProvider);
+    _trackRouter(router, ref.watch(analyticsServiceProvider));
     final language = ref.watch(languageProvider);
 
     return MaterialApp.router(

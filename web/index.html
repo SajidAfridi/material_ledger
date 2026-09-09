@@ -173,6 +173,103 @@
     </div>
   </div>
   <script>
+    // Manual PostHog web bootstrap. Dart calls this only when the build has an
+    // explicit valid POSTHOG_* configuration. No page view, DOM interaction,
+    // URL, user-visible text, replay frame, survey, or exception is captured.
+    window.yorksPostHogBootstrap = (projectToken, apiHost, debug) => {
+      if (!projectToken || !apiHost || window.posthog?.__loaded) return;
+
+      ((document, posthog) => {
+        if (posthog.__SV) return;
+        window.posthog = posthog;
+        posthog._i = [];
+        posthog.init = (token, config, name) => {
+          const method = (target, key) => {
+            const parts = key.split('.');
+            if (parts.length === 2) {
+              target = target[parts[0]];
+              key = parts[1];
+            }
+            target[key] = (...args) => target.push([key, ...args]);
+          };
+          const script = document.createElement('script');
+          script.type = 'text/javascript';
+          script.crossOrigin = 'anonymous';
+          script.async = true;
+          const assetHost = config.api_host.includes('.i.posthog.com')
+            ? config.api_host.replace('.i.posthog.com', '-assets.i.posthog.com')
+            : config.api_host;
+          script.src = assetHost + '/static/array.js';
+          const firstScript = document.getElementsByTagName('script')[0];
+          firstScript.parentNode.insertBefore(script, firstScript);
+          let instance = posthog;
+          if (name !== undefined) instance = posthog[name] = [];
+          else name = 'posthog';
+          instance.people = instance.people || [];
+          instance.toString = (stub) =>
+            `${name === 'posthog' ? 'posthog' : `posthog.${name}`}${stub ? '.people (stub)' : ' (stub)'}`;
+          instance.people.toString = () => `${instance.toString(true)}.people (stub)`;
+          [
+            'capture', 'identify', 'alias', 'reset', 'screen', 'group',
+            'setPersonProperties', 'people.set',
+            'people.set_once', 'getFeatureFlag', 'getFeatureFlagPayload',
+            'getFeatureFlagResult', 'isFeatureEnabled', 'reloadFeatureFlags',
+            'onFeatureFlags', 'register', 'unregister', '_overrideSDKInfo',
+            'set_config', 'debug', 'opt_in_capturing', 'opt_out_capturing',
+            'has_opted_in_capturing', 'has_opted_out_capturing',
+          ].forEach((key) => method(instance, key));
+          posthog._i.push([token, config, name]);
+        };
+        posthog.__SV = 1;
+      })(document, window.posthog || []);
+
+      const removeSensitiveContext = (properties) => {
+        if (!properties || typeof properties !== 'object') return properties;
+        [
+          '$current_url', '$pathname', '$host', '$referrer',
+          '$referring_domain', '$title', '$raw_user_agent',
+        ].forEach((key) => delete properties[key]);
+        return properties;
+      };
+      const sensitiveContextKeys = [
+        '$current_url', '$pathname', '$host', '$referrer',
+        '$referring_domain', '$title', '$raw_user_agent',
+      ];
+      window.posthog.init(projectToken, {
+        api_host: apiHost,
+        defaults: '2026-05-30',
+        autocapture: false,
+        capture_pageview: false,
+        capture_pageleave: false,
+        capture_dead_clicks: false,
+        capture_exceptions: false,
+        capture_heatmaps: false,
+        capture_performance: false,
+        disable_session_recording: true,
+        disable_surveys: true,
+        rageclick: false,
+        mask_all_text: true,
+        mask_all_element_attributes: true,
+        person_profiles: 'identified_only',
+        persistence: 'localStorage',
+        property_denylist: sensitiveContextKeys,
+        sanitize_properties: removeSensitiveContext,
+        before_send: (event) => {
+          if (event?.properties) removeSensitiveContext(event.properties);
+          return event;
+        },
+        loaded: (client) => { if (debug) client.debug(); },
+      });
+    };
+    window.yorksPostHogFeatureEnabled = (key) => Boolean(
+      window.posthog?.__loaded &&
+      window.posthog.isFeatureEnabled(key, {
+        send_event: false,
+        defaultValue: false,
+      })
+    );
+  </script>
+  <script>
     // Prevent browser-wide zoom only. The event still reaches Flutter, whose
     // focused workspace listener handles Ctrl/Command-wheel and shortcuts.
     (() => {

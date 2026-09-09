@@ -14,6 +14,7 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request_history.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_strings.dart';
 import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 import 'package:material_ledger/shared/models/yorks_v1_team_chat.dart';
@@ -28,12 +29,14 @@ import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider
 import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_material_request_history_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_repository_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_team_chat_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_workspace_presentation_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_boq_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_material_request_repository.dart';
+import 'package:material_ledger/shared/repositories/yorks_v1_material_request_history_repository.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_team_chat_repository.dart';
 import 'package:material_ledger/shared/services/yorks_v1_chat_file_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1002,10 +1005,12 @@ void main() {
     await tester.scrollUntilVisible(
       composer,
       420,
-      scrollable: find.descendant(
-        of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.pumpAndSettle();
 
@@ -1087,6 +1092,8 @@ void main() {
       await tester.tap(attachmentAction);
       await tester.pump();
 
+      expect(chatRepository.ensureDiscussionCalls, 1);
+      expect(chatRepository.createConversationCalls, 0);
       expect(find.text('Securing attachments…'), findsOneWidget);
       expect(
         tester
@@ -1208,6 +1215,352 @@ void main() {
         'goldens/r35/mr_request_approval_sticky_mobile_360.png',
       ),
     );
+  });
+
+  testWidgets(
+    'desktop approval workspace keeps decisions top-right and toggles the inspector',
+    (tester) async {
+      await _setViewport(tester, const Size(1512, 982));
+      final repository = _MaterialRequestRepositoryFixture();
+      final request = _requestVariant(
+        id: 'desktop-request-awaiting-approval',
+        state: YorksV1MaterialRequestState.awaitingRequestApproval,
+        canDecideRequest: true,
+        canEditBeforeApproval: true,
+      );
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
+              _WorkspaceHistoryRepository(),
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              request.id,
+            ).overrideWith((ref) async => request),
+            yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+              (ref) async =>
+                  YorksV1MaterialRequestDocumentModel.fromRequest(request),
+            ),
+          ],
+          child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Approve for Procurement'), findsOneWidget);
+      expect(find.text('Return for changes'), findsOneWidget);
+      expect(
+        find.text('${request.projectName} · ${request.scopeName}'),
+        findsOneWidget,
+      );
+      final headingRect = tester.getRect(
+        find.byKey(const ValueKey('material-request-record-heading')),
+      );
+      final workflowRect = tester.getRect(
+        find.byKey(const ValueKey('material-request-workflow-actions')),
+      );
+      expect(workflowRect.left, greaterThan(headingRect.left));
+      expect(workflowRect.right, greaterThan(headingRect.right));
+      expect((workflowRect.top - headingRect.top).abs(), lessThanOrEqualTo(2));
+      expect(
+        find.byKey(const ValueKey('material-request-quantity-history')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('material-request-operational-workflow')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('material-request-workspace-inspector')),
+        findsNothing,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_workspace_panel_closed_1512x982.png'),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-information-action')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(
+        find.byKey(const ValueKey('material-request-workspace-inspector')),
+        findsOneWidget,
+      );
+      expect(find.text('Request history'), findsOneWidget);
+      expect(find.text('Approve for Procurement'), findsOneWidget);
+      expect(find.text('Return for changes'), findsOneWidget);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_workspace_panel_open_1512x982.png'),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-inspector-close')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('material-request-workspace-inspector')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'future workflow stays compact and cannot contain the request discussion',
+    (tester) async {
+      await _setViewport(tester, const Size(1512, 982));
+      final repository = _MaterialRequestRepositoryFixture();
+      final request = _requestVariant(id: 'compact-operational-workflow');
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1FeatureFlagsProvider.overrideWithValue(
+              const YorksV1FeatureFlags(
+                foundation: true,
+                projects: true,
+                boq: true,
+                excel: true,
+                requests: true,
+              ),
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              request.id,
+            ).overrideWith((ref) async => request),
+            yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+              (ref) async =>
+                  YorksV1MaterialRequestDocumentModel.fromRequest(request),
+            ),
+          ],
+          child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final workflow = find.byKey(
+        const ValueKey('material-request-operational-workflow'),
+      );
+      final discussion = find.byKey(
+        const ValueKey('material-request-discussion-card'),
+      );
+      expect(workflow, findsOneWidget);
+      expect(discussion, findsOneWidget);
+      expect(find.text('Procurement arrangement'), findsNothing);
+      expect(find.descendant(of: workflow, matching: discussion), findsNothing);
+
+      await tester.ensureVisible(workflow);
+      await tester.tap(workflow);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Procurement arrangement'), findsOneWidget);
+      expect(find.text('Dispatch and receipt'), findsOneWidget);
+      expect(find.text('Delivery Orders and returns'), findsOneWidget);
+      expect(find.text('Not arranged yet'), findsOneWidget);
+      expect(find.text('No dispatch yet'), findsOneWidget);
+      expect(find.text('No returned material'), findsOneWidget);
+      expect(tester.getSize(workflow).height, lessThan(600));
+      expect(find.descendant(of: workflow, matching: discussion), findsNothing);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        workflow,
+        matchesGoldenFile(
+          'goldens/r35/mr_operational_workflow_compact_1512.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'desktop cancellation is direct, confirmed, reasoned, and server-connected',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      final repository = _MaterialRequestRepositoryFixture();
+      final request = _requestVariant(
+        id: 'desktop-request-cancellable',
+        state: YorksV1MaterialRequestState.approvedForArrangement,
+      );
+      await tester.pumpWidget(
+        _scope(
+          overrides: [
+            yorksV1CurrentRoleProvider.overrideWithValue(
+              YorksV1Role.projectEngineer,
+            ),
+            yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+            yorksV1MaterialRequestDetailProvider(
+              request.id,
+            ).overrideWith((ref) async => request),
+            yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+              (ref) async =>
+                  YorksV1MaterialRequestDocumentModel.fromRequest(request),
+            ),
+          ],
+          child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final action = find.byKey(
+        const ValueKey('material-request-cancel-action'),
+      );
+      expect(action, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('material-request-more-actions')),
+        findsNothing,
+      );
+      final outlined = tester.widget<OutlinedButton>(
+        find.descendant(of: action, matching: find.byType(OutlinedButton)),
+      );
+      expect(
+        outlined.style?.foregroundColor?.resolve(<WidgetState>{}),
+        AppColors.error,
+      );
+      expect(
+        outlined.style?.side?.resolve(<WidgetState>{})?.color,
+        AppColors.error,
+      );
+
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('material-request-cancel-dialog')),
+        findsOneWidget,
+      );
+      expect(find.text('Cancel this request?'), findsOneWidget);
+      expect(
+        find.textContaining('history will remain available for audit'),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_cancel_confirmation_1366x768.png'),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-cancel-keep')),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.cancelInputs, isEmpty);
+
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-cancel-confirm')),
+      );
+      await tester.pump();
+      expect(
+        find.text('Enter a cancellation reason for the audit trail.'),
+        findsOneWidget,
+      );
+      expect(repository.cancelInputs, isEmpty);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('material-request-cancel-reason')),
+        'Materials are no longer required on site.',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('material-request-cancel-confirm')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.cancelInputs, hasLength(1));
+      expect(
+        repository.cancelInputs.single.reason,
+        'Materials are no longer required on site.',
+      );
+      expect(
+        find.byKey(const ValueKey('material-request-cancel-dialog')),
+        findsNothing,
+      );
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('mobile cancellation confirmation remains touch-safe at 360px', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(360, 800));
+    final repository = _MaterialRequestRepositoryFixture();
+    final request = _requestVariant(
+      id: 'mobile-request-cancellable',
+      state: YorksV1MaterialRequestState.approvedForArrangement,
+    );
+    await tester.pumpWidget(
+      _scope(
+        overrides: [
+          yorksV1CurrentRoleProvider.overrideWithValue(
+            YorksV1Role.projectEngineer,
+          ),
+          yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          yorksV1MaterialRequestDetailProvider(
+            request.id,
+          ).overrideWith((ref) async => request),
+          yorksV1MaterialRequestDocumentProvider(request.id).overrideWith(
+            (ref) async =>
+                YorksV1MaterialRequestDocumentModel.fromRequest(request),
+          ),
+        ],
+        child: YorksV1MaterialRequestDetailScreen(requestId: request.id),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showFullMaterialRequestDetails(tester);
+
+    final action = find.byKey(
+      const ValueKey('mobile-material-request-cancel-action'),
+    );
+    await tester.scrollUntilVisible(
+      action,
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-mr-lifecycle')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(action, findsOneWidget);
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byKey(const ValueKey('material-request-cancel-dialog'));
+    expect(dialog, findsOneWidget);
+    final rect = tester.getRect(dialog);
+    expect(rect.left, greaterThanOrEqualTo(0));
+    expect(rect.right, lessThanOrEqualTo(360));
+    expect(rect.bottom, lessThanOrEqualTo(800));
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_cancel_confirmation_360x800.png'),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-cancel-keep')),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.cancelInputs, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -1359,6 +1712,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
+    final requestInformation = find.byKey(
+      const ValueKey('material-request-information-action'),
+    );
+    await tester.ensureVisible(requestInformation);
+    await tester.tap(requestInformation);
+    await tester.pumpAndSettle();
     final workflow = find.byKey(
       const ValueKey('material-request-workflow-strip'),
     );
@@ -1367,7 +1726,6 @@ void main() {
       find.descendant(of: workflow, matching: find.byIcon(Icons.check_rounded)),
       findsNWidgets(7),
     );
-    expect(find.text('Stage 7 of 7'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await expectLater(
       workflow,
@@ -2865,6 +3223,7 @@ class _MaterialRequestRepositoryFixture
   final YorksV1MaterialRequest? serverRequest;
   int saveAndSubmitCount = 0;
   final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
+  final List<YorksV1CancelMaterialRequestInput> cancelInputs = [];
   bool commentFailure = false;
   Completer<List<YorksV1MaterialRequestComment>>? commentCompleter;
   List<YorksV1MaterialRequestMention> mentionCandidates = const [];
@@ -2918,7 +3277,10 @@ class _MaterialRequestRepositoryFixture
   @override
   Future<YorksV1MaterialRequest> cancel(
     YorksV1CancelMaterialRequestInput input,
-  ) async => _submittedRequest;
+  ) async {
+    cancelInputs.add(input);
+    return _submittedRequest;
+  }
 
   @override
   Future<YorksV1MaterialRequest> close(
@@ -2975,6 +3337,38 @@ class _MaterialRequestRepositoryFixture
   ) async => _submittedRequest;
 }
 
+class _WorkspaceHistoryRepository
+    implements YorksV1MaterialRequestHistoryRepository {
+  @override
+  Future<YorksV1MaterialRequestHistoryPage> getHistory(
+    YorksV1MaterialRequestHistoryQuery query,
+  ) async => YorksV1MaterialRequestHistoryPage(
+    items: [
+      YorksV1MaterialRequestHistoryEvent(
+        id: 'workspace-submitted',
+        eventType: 'material_request_submitted',
+        entityType: 'material_request',
+        occurredAt: DateTime.utc(2026, 8, 9, 9, 15),
+        actorDisplayName: 'Omar Farooq',
+        actorExactRole: 'project_engineer',
+        reference: 'YRA-322-MR101',
+        facts: const {'state': 'awaiting_request_approval'},
+      ),
+      YorksV1MaterialRequestHistoryEvent(
+        id: 'workspace-created',
+        eventType: 'material_request_created',
+        entityType: 'material_request',
+        occurredAt: DateTime.utc(2026, 8, 9, 9),
+        actorDisplayName: 'Omar Farooq',
+        actorExactRole: 'project_engineer',
+        reference: 'YRA-322-MR101',
+        facts: const {'state': 'draft'},
+      ),
+    ],
+    hasMore: false,
+  );
+}
+
 class _DiscussionChatFileService implements YorksV1ChatFileService {
   @override
   Future<List<YorksV1SelectedChatFile>> selectFiles() async => [
@@ -2995,6 +3389,8 @@ class _DiscussionChatFileService implements YorksV1ChatFileService {
 class _DiscussionTeamChatRepository extends Fake
     implements YorksV1TeamChatRepository {
   final uploadCompleter = Completer<YorksV1PendingChatAttachment>();
+  int createConversationCalls = 0;
+  int ensureDiscussionCalls = 0;
 
   static final conversation = YorksV1ChatConversation(
     id: 'discussion-conversation',
@@ -3015,7 +3411,19 @@ class _DiscussionTeamChatRepository extends Fake
   @override
   Future<YorksV1ChatConversation> createConversation(
     YorksV1ChatCreateInput input,
-  ) async => conversation;
+  ) async {
+    createConversationCalls += 1;
+    return conversation;
+  }
+
+  @override
+  Future<YorksV1ChatConversation> ensureMaterialRequestDiscussion({
+    required String requestId,
+    required String idempotencyKey,
+  }) async {
+    ensureDiscussionCalls += 1;
+    return conversation;
+  }
 
   @override
   Future<YorksV1ChatThread> getConversation(

@@ -14,13 +14,16 @@ import 'app/app.dart';
 import 'core/constants/app_colors.dart';
 import 'core/widgets/brand_logo.dart';
 import 'shared/models/app_strings.dart';
+import 'shared/models/analytics_configuration.dart';
 import 'shared/models/backend_configuration.dart';
 import 'shared/models/backend_failure_copy.dart';
 import 'shared/models/yorks_v1_shell_strings.dart';
 import 'shared/models/yorks_v1_feature_flags.dart';
 import 'shared/providers/language_provider.dart';
 import 'shared/services/app_config_service.dart';
+import 'shared/services/analytics_service.dart';
 import 'shared/services/observability_service.dart';
+import 'shared/services/posthog_analytics_sink.dart';
 import 'shared/services/push_service.dart'
     show registerFirebaseBackgroundHandler;
 import 'shared/services/sentry_observability.dart';
@@ -49,6 +52,7 @@ const _envSupabaseKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 const _allowLocalDevelopment = bool.fromEnvironment('ALLOW_LOCAL_DEVELOPMENT');
 const _localDemoPassword = String.fromEnvironment('LOCAL_DEMO_PASSWORD');
 const _buildDiagnostic = bool.fromEnvironment('YORKS_BUILD_DIAGNOSTIC');
+const _postHogRequested = bool.fromEnvironment('POSTHOG_ENABLED');
 
 void main() {
   final observability = _StartupObservability();
@@ -251,10 +255,12 @@ Future<Widget> _initializeRuntime(ObservabilityService observability) async {
     version: _appVersion,
     build: int.tryParse(_appBuild) ?? 1,
   );
+  final analytics = _createAnalyticsService();
   final overrides = <Override>[
     sharedPreferencesProvider.overrideWithValue(prefs),
     appVersionProvider.overrideWithValue(versionInfo),
     observabilityProvider.overrideWithValue(observability),
+    analyticsServiceProvider.overrideWithValue(analytics),
   ];
 
   if (backend.usesSupabase) {
@@ -278,7 +284,54 @@ Future<Widget> _initializeRuntime(ObservabilityService observability) async {
   }
 
   _StartupTimeline.mark('application_dependencies_ready');
-  return ProviderScope(overrides: overrides, child: const MaterialLedgerApp());
+  return ProviderScope(
+    overrides: overrides,
+    child: _AnalyticsInitializationHost(
+      analytics: analytics,
+      child: const MaterialLedgerApp(),
+    ),
+  );
+}
+
+AnalyticsService _createAnalyticsService() {
+  if (!_postHogRequested) return const NoopAnalyticsService();
+  return GuardedAnalyticsService(
+    configuration: AnalyticsConfiguration.fromEnvironment(
+      appVersion: _appVersion,
+      appBuild: _appBuild,
+    ),
+    sink: const PostHogAnalyticsSink(),
+  );
+}
+
+/// Starts telemetry only after the operational shell has rendered. Setup and
+/// transport failures remain isolated from auth and every business command.
+class _AnalyticsInitializationHost extends StatefulWidget {
+  const _AnalyticsInitializationHost({
+    required this.analytics,
+    required this.child,
+  });
+
+  final AnalyticsService analytics;
+  final Widget child;
+
+  @override
+  State<_AnalyticsInitializationHost> createState() =>
+      _AnalyticsInitializationHostState();
+}
+
+class _AnalyticsInitializationHostState
+    extends State<_AnalyticsInitializationHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(widget.analytics.initialize()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _ApplicationReadyReporter extends StatefulWidget {

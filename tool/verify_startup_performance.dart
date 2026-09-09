@@ -1,8 +1,10 @@
 import 'dart:io';
 
 // Keep a small raw parse-size allowance while the tighter transferred-size
-// budget below remains the primary production network guard.
-const _mainDartJsRawBudget = 10100000;
+// budget below remains the primary production network guard. The 50 kB
+// allowance above the pre-PostHog ceiling covers the typed analytics runtime;
+// the unchanged gzip ceiling still prevents a transferred-size regression.
+const _mainDartJsRawBudget = 10150000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 

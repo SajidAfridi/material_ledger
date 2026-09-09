@@ -64,9 +64,16 @@ import 'yorks_v1_material_request_centre.dart';
 import 'yorks_v1_returns_documents_screen.dart';
 import '../yorks_v1_feature_action_access.dart';
 import '../widgets/yorks_v1_request_information.dart';
+import '../widgets/yorks_v1_material_request_history.dart';
 
 final yorksV1MaterialRequestInspectorExpandedProvider =
     StateProvider.autoDispose<bool>((ref) => false);
+
+/// Presentation-only state for the committed-request inspector. It never
+/// changes request data or workflow authority, and is isolated per request.
+final yorksV1MaterialRequestWorkspaceInspectorExpandedProvider = StateProvider
+    .autoDispose
+    .family<bool, String>((ref, requestId) => false);
 
 /// V1 material request overview. It reads only the server projection; drafts
 /// are returned only to their creator by the database contract.
@@ -5587,8 +5594,11 @@ List<TranslatableString> get _materialRequestCompactStageLabels => const [
   YorksV1MaterialRequestStrings.completedStage,
 ];
 
-String _materialRequestNextAction(YorksV1MaterialRequest value) {
-  return yorksV1MaterialRequestNextActionCopy(value).primary;
+String _materialRequestNextAction(
+  YorksV1MaterialRequest value,
+  AppLanguage language,
+) {
+  return yorksV1MaterialRequestNextActionCopy(value).active(language);
 }
 
 class _TabletMrDraftActions extends StatelessWidget {
@@ -6120,17 +6130,24 @@ class _IndustrialWorkflowStage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          maxLines: condensed ? 2 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.labelSmall.copyWith(
-            fontSize: condensed ? 7.8 : 9,
-            color: complete || active
-                ? AppColors.inkSecondary
-                : AppColors.muted,
-            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+        SizedBox(
+          height: condensed ? 22 : 26,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.topCenter,
+            child: Text(
+              condensed ? label.replaceFirst(' ', '\n') : label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              softWrap: false,
+              style: AppTypography.labelSmall.copyWith(
+                fontSize: condensed ? 7.8 : 9,
+                color: complete || active
+                    ? AppColors.inkSecondary
+                    : AppColors.muted,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ],
@@ -9644,19 +9661,21 @@ class _RequestDetailBody extends ConsumerWidget {
         onGenerateDeliveryOrder,
       _ => null,
     };
+    // The decision controls remain in the one top-right action group. Editing
+    // is deliberately a utility action below it, so an approving Engineer
+    // does not have to scroll through a long record to find the next command.
     final Widget? approvalActions =
-        (request.canDecideRequest || request.canEditBeforeApproval) &&
-            (editAccess.isVisible ||
-                approveAccess.isVisible ||
-                returnForChangesAccess.isVisible)
+        request.canDecideRequest &&
+            (approveAccess.isVisible || returnForChangesAccess.isVisible)
         ? _RequestApprovalActions(
             request: request,
-            showEdit: editAccess.isVisible,
+            showEdit: false,
             showApprove: approveAccess.isVisible,
             showReturnForChanges: returnForChangesAccess.isVisible,
-            canEdit: editAccess.canWrite,
+            canEdit: false,
             canApprove: approveAccess.canWrite,
             canReturnForChanges: returnForChangesAccess.canWrite,
+            showEditAction: false,
           )
         : featureFlags.legacyArrangementReview &&
               arrangementWorkspace?.canDecide == true &&
@@ -9666,6 +9685,46 @@ class _RequestDetailBody extends ConsumerWidget {
             arrangement: arrangementForApproval,
           )
         : null;
+    final Widget? editAction =
+        request.canEditBeforeApproval && editAccess.isVisible
+        ? _RecordActionButton(
+            label: YorksV1MaterialRequestStrings.editRequest.active(language),
+            icon: Icons.edit_outlined,
+            onPressed: editAccess.canWrite
+                ? () => context.push(
+                    RoutePaths.yorksV1MaterialRequestDraftPath(
+                      request.id,
+                      projectId: request.projectId,
+                    ),
+                  )
+                : null,
+          )
+        : null;
+    // Measure the effective record canvas, not just the browser width. This
+    // keeps a 14-inch office layout from squeezing the controlled item table
+    // when the persistent sidebar is open, while a collapsed sidebar can
+    // immediately use the recovered workspace for the inspector.
+    final sidebarExpanded = desktop
+        ? ref.watch(yorksV1WorkspaceSidebarExpandedProvider)
+        : false;
+    final pageHorizontalPadding = desktop
+        ? (AppSpacing.xxxl + AppSpacing.xs) * 2
+        : AppSpacing.lg * 2;
+    final effectiveCanvasWidth =
+        MediaQuery.sizeOf(context).width -
+        (sidebarExpanded
+            ? AppSpacing.sidebarWidth
+            : AppSpacing.sidebarCollapsedWidth) -
+        pageHorizontalPadding;
+    final canDockInspector =
+        desktop &&
+        effectiveCanvasWidth >=
+            800 + AppSpacing.inspectorWidth + AppSpacing.xxl;
+    final inspectorExpanded =
+        canDockInspector &&
+        ref.watch(
+          yorksV1MaterialRequestWorkspaceInspectorExpandedProvider(request.id),
+        );
     if (YorksMobileUi.isActive(context)) {
       final mobileInlineApprovalActions =
           request.canEditBeforeApproval && editAccess.isVisible
@@ -9787,11 +9846,24 @@ class _RequestDetailBody extends ConsumerWidget {
                       : () => documentService.printDocumentPdf(
                           documentModel.valueOrNull!,
                         ),
-                  onRequestInformation: () => showYorksV1RequestInformation(
-                    context,
-                    request: request,
-                    language: language,
-                  ),
+                  onRequestInformation: () {
+                    if (canDockInspector) {
+                      final controller = ref.read(
+                        yorksV1MaterialRequestWorkspaceInspectorExpandedProvider(
+                          request.id,
+                        ).notifier,
+                      );
+                      controller.state = !controller.state;
+                      return;
+                    }
+                    _showRequestWorkspaceInspector(
+                      context,
+                      request: request,
+                      language: language,
+                    );
+                  },
+                  requestInformationActive: inspectorExpanded,
+                  editAction: editAction,
                   approvalActions: approvalActions,
                   showCancel: cancelAccess.isVisible,
                   onCancel: cancelAccess.canWrite
@@ -9816,6 +9888,13 @@ class _RequestDetailBody extends ConsumerWidget {
                   children: [
                     if (replacementCard != null) ...[
                       replacementCard,
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                    if (desktop) ...[
+                      _RequestDecisionBanner(
+                        request: request,
+                        language: language,
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                     ],
                     if (desktop)
@@ -9870,44 +9949,32 @@ class _RequestDetailBody extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.lg),
-                          SizedBox(
-                            width: 372,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _RequestWorkflowCard(
-                                  request: request,
-                                  language: language,
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                _MaterialRequestPhase2CollaborationSection(
-                                  request: request,
-                                  language: language,
-                                ),
-                                _RequestDetailsRail(
-                                  request: request,
-                                  language: language,
-                                ),
-                              ],
+                          if (inspectorExpanded) ...[
+                            const SizedBox(width: AppSpacing.xxl),
+                            SizedBox(
+                              width: AppSpacing.inspectorWidth,
+                              child: _RequestWorkspaceInspector(
+                                request: request,
+                                language: language,
+                                onClose: () =>
+                                    ref
+                                            .read(
+                                              yorksV1MaterialRequestWorkspaceInspectorExpandedProvider(
+                                                request.id,
+                                              ).notifier,
+                                            )
+                                            .state =
+                                        false,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       )
                     else
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _RequestWorkflowCard(
-                            request: request,
-                            language: language,
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _MaterialRequestPhase2CollaborationSection(
-                            request: request,
-                            language: language,
-                          ),
-                          _RequestDetailsRail(
+                          _RequestDecisionBanner(
                             request: request,
                             language: language,
                           ),
@@ -10125,7 +10192,7 @@ class _RequestDetailBody extends ConsumerWidget {
     WidgetRef ref,
     YorksV1MaterialRequest request,
   ) async {
-    final reason = await _cancelReason(context);
+    final reason = await _cancelReason(context, ref.read(languageProvider));
     if (reason == null || reason.trim().isEmpty) return;
     try {
       await ref
@@ -10521,8 +10588,7 @@ class _MobileMaterialRequestLifecycleState
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${request.scopeName} · ${request.requesterDisplayName ?? YorksV1MaterialRequestStrings.requester.active(language)}'
-                      '${_mobileRequesterRole(request)}',
+                      '${request.projectName} · ${request.scopeName}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodySmall.copyWith(
@@ -10808,10 +10874,15 @@ class _MobileMaterialRequestLifecycleState
                             ),
                           if (showCancel)
                             OutlinedButton.icon(
+                              key: const ValueKey(
+                                'mobile-material-request-cancel-action',
+                              ),
                               onPressed: onCancel,
                               icon: const Icon(Icons.close_rounded, size: 18),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.error,
+                                backgroundColor: AppColors.surface,
+                                side: const BorderSide(color: AppColors.error),
                               ),
                               label: Text(
                                 YorksV1MaterialRequestStrings
@@ -10875,13 +10946,6 @@ class _MobileMaterialRequestLifecycleState
   String _mobileNextAction(YorksV1MaterialRequest value) {
     return yorksV1MaterialRequestNextActionCopy(value).active(language);
   }
-}
-
-String _mobileRequesterRole(YorksV1MaterialRequest request) {
-  final label = YorksV1MaterialRequestDocumentService.requesterRoleLabel(
-    request,
-  );
-  return label.isEmpty ? '' : ' · $label';
 }
 
 class _MobileMrLifecycleLineCard extends StatelessWidget {
@@ -12544,13 +12608,6 @@ class _MaterialRequestDiscussionState
   }
 
   Future<void> _startTeamConversation() async {
-    final conversationId = await _ensureConversation();
-    if (!mounted || conversationId == null) return;
-    context.go(RoutePaths.yorksV1TeamChatPath(conversationId));
-  }
-
-  Future<String?> _ensureConversation() async {
-    if (_conversationId != null) return _conversationId;
     final conversation = await ref
         .read(yorksV1TeamChatProvider.notifier)
         .createConversation(
@@ -12559,6 +12616,19 @@ class _MaterialRequestDiscussionState
             idempotencyKey: const Uuid().v4(),
             materialRequestId: widget.request.id,
           ),
+        );
+    if (!mounted || conversation == null) return;
+    _conversationId = conversation.id;
+    context.go(RoutePaths.yorksV1TeamChatPath(conversation.id));
+  }
+
+  Future<String?> _ensureConversation() async {
+    if (_conversationId != null) return _conversationId;
+    final conversation = await ref
+        .read(yorksV1TeamChatProvider.notifier)
+        .ensureMaterialRequestDiscussion(
+          requestId: widget.request.id,
+          idempotencyKey: const Uuid().v4(),
         );
     return _conversationId = conversation?.id;
   }
@@ -13040,6 +13110,8 @@ class _RequestRecordHeader extends StatelessWidget {
     required this.onPdf,
     required this.onPrint,
     required this.onRequestInformation,
+    required this.requestInformationActive,
+    this.editAction,
     required this.approvalActions,
     required this.showCancel,
     required this.onCancel,
@@ -13054,6 +13126,8 @@ class _RequestRecordHeader extends StatelessWidget {
   final VoidCallback? onPdf;
   final VoidCallback? onPrint;
   final VoidCallback onRequestInformation;
+  final bool requestInformationActive;
+  final Widget? editAction;
   final Widget? approvalActions;
   final bool showCancel;
   final VoidCallback? onCancel;
@@ -13061,11 +13135,14 @@ class _RequestRecordHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      // Approval and document actions can be wider than the record canvas
-      // after the persistent desktop sidebar is accounted for. Stack before
-      // those actions can squeeze the title to a one-character column.
-      final compact =
-          constraints.maxWidth < (approvalActions == null ? 900 : 1240);
+      final hasWorkflowActions =
+          primaryAction != null || approvalActions != null;
+      // Keep the decision group in the familiar top-right position whenever
+      // the record canvas can still leave a useful title column. Supporting
+      // utilities occupy their own row, so their combined width no longer
+      // forces a 14-inch office layout into the stacked action treatment.
+      final decisionsInline = hasWorkflowActions && constraints.maxWidth >= 760;
+      final utilitiesInline = constraints.maxWidth >= 900;
       final title =
           request.requestNumber ??
           YorksV1MaterialRequestStrings.materialRequest.primary;
@@ -13106,16 +13183,17 @@ class _RequestRecordHeader extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              '${request.scopeName} · ${request.requesterDisplayName ?? YorksV1MaterialRequestStrings.requester.primary}',
+              '${request.projectName} · ${request.scopeName}',
               style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
             ),
           ],
         ),
       );
       final workflowActions = Wrap(
+        key: const ValueKey('material-request-workflow-actions'),
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
-        alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+        alignment: decisionsInline ? WrapAlignment.end : WrapAlignment.start,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           if (primaryAction != null)
@@ -13126,124 +13204,114 @@ class _RequestRecordHeader extends StatelessWidget {
           ?approvalActions,
         ],
       );
+      final supportingActionItems = <Widget>[
+        ?editAction,
+        _RecordActionButton(
+          label: YorksV1MaterialRequestStrings.exportExcel.primary,
+          leading: const YorksFileTypeIcon(
+            fileName: 'material-request.xlsx',
+            size: 24,
+            badgeIcon: YorksDataTransferIcons.exportData,
+          ),
+          onPressed: onExport,
+        ),
+        if (onPdf != null)
+          _RecordActionButton(
+            label: YorksV1MaterialRequestStrings.pdf.primary,
+            leading: const YorksFileTypeIcon(
+              fileName: 'material-request.pdf',
+              size: 24,
+            ),
+            onPressed: onPdf!,
+          ),
+        if (onPrint != null)
+          _RecordActionButton(
+            label: YorksV1MaterialRequestStrings.print.primary,
+            icon: Icons.print_outlined,
+            onPressed: onPrint!,
+          ),
+        if (showCancel)
+          _RecordActionButton(
+            key: const ValueKey('material-request-cancel-action'),
+            label: YorksV1MaterialRequestStrings.cancelRequest.active(language),
+            icon: Icons.close_rounded,
+            onPressed: onCancel,
+            destructive: true,
+          ),
+        IconButton(
+          tooltip: YorksV1MaterialRequestStrings.refresh.primary,
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ];
+      final requestInformationAction = _RecordActionButton(
+        key: const ValueKey('material-request-information-action'),
+        label: YorksV1MaterialRequestStrings.requestInformation.active(
+          language,
+        ),
+        icon: Icons.view_sidebar_outlined,
+        onPressed: onRequestInformation,
+        selected: requestInformationActive,
+      );
       final supportingActions = Wrap(
+        key: const ValueKey('material-request-supporting-actions'),
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
-        alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+        alignment: WrapAlignment.start,
         crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          _RecordActionButton(
-            label: YorksV1MaterialRequestStrings.exportExcel.primary,
-            leading: const YorksFileTypeIcon(
-              fileName: 'material-request.xlsx',
-              size: 24,
-              badgeIcon: YorksDataTransferIcons.exportData,
-            ),
-            onPressed: onExport,
-          ),
-          if (onPdf != null)
-            _RecordActionButton(
-              label: YorksV1MaterialRequestStrings.pdf.primary,
-              leading: const YorksFileTypeIcon(
-                fileName: 'material-request.pdf',
-                size: 24,
-              ),
-              onPressed: onPdf!,
-            ),
-          if (onPrint != null)
-            _RecordActionButton(
-              label: YorksV1MaterialRequestStrings.print.primary,
-              icon: Icons.print_outlined,
-              onPressed: onPrint!,
-            ),
-          _RecordActionButton(
-            key: const ValueKey('material-request-information-action'),
-            label: YorksV1MaterialRequestStrings.requestInformation.active(
-              language,
-            ),
-            icon: Icons.info_outline_rounded,
-            onPressed: onRequestInformation,
-          ),
-          if (showCancel)
-            PopupMenuButton<String>(
-              key: const ValueKey('material-request-more-actions'),
-              tooltip: YorksV1MaterialRequestStrings.moreActions.active(
-                language,
-              ),
-              onSelected: (_) => onCancel?.call(),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'cancel',
-                  enabled: onCancel != null,
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.close_rounded,
-                        size: 19,
-                        color: AppColors.error,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        YorksV1MaterialRequestStrings.cancelRequest.active(
-                          language,
-                        ),
-                        style: const TextStyle(color: AppColors.error),
-                      ),
-                    ],
-                  ),
+        children: [...supportingActionItems, requestInformationAction],
+      );
+      final headingAndDecisions = decisionsInline
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: heading),
+                const SizedBox(width: AppSpacing.xl),
+                Align(
+                  alignment: AlignmentDirectional.topEnd,
+                  child: workflowActions,
                 ),
               ],
-              icon: const Icon(Icons.more_horiz_rounded),
-              style: IconButton.styleFrom(
-                minimumSize: const Size.square(AppSpacing.minTapTarget),
-                side: const BorderSide(color: AppColors.line),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                ),
-              ),
-            ),
-          IconButton(
-            tooltip: YorksV1MaterialRequestStrings.refresh.primary,
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      );
-      final actions = Column(
-        crossAxisAlignment: compact
-            ? CrossAxisAlignment.start
-            : CrossAxisAlignment.end,
-        children: [
-          if (primaryAction != null || approvalActions != null) ...[
-            workflowActions,
-            const SizedBox(height: AppSpacing.sm),
-          ],
-          supportingActions,
-        ],
-      );
-      return compact
-          ? Column(
+            )
+          : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 heading,
-                const SizedBox(height: AppSpacing.lg),
-                actions,
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Flexible(flex: 3, child: heading),
-                const SizedBox(width: AppSpacing.lg),
-                Flexible(
-                  flex: 5,
-                  child: Align(
-                    alignment: AlignmentDirectional.topEnd,
-                    child: actions,
+                if (hasWorkflowActions) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: workflowActions,
                   ),
-                ),
+                ],
               ],
             );
+      final utilityRow = utilitiesInline
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: supportingActionItems,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                requestInformationAction,
+              ],
+            )
+          : supportingActions;
+      return Column(
+        key: const ValueKey('material-request-record-header'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          headingAndDecisions,
+          const SizedBox(height: AppSpacing.lg),
+          utilityRow,
+        ],
+      );
     },
   );
 }
@@ -13256,6 +13324,8 @@ class _RecordActionButton extends StatelessWidget {
     this.leading,
     required this.onPressed,
     this.primary = false,
+    this.selected = false,
+    this.destructive = false,
   }) : assert(icon != null || leading != null);
 
   final String label;
@@ -13263,6 +13333,8 @@ class _RecordActionButton extends StatelessWidget {
   final Widget? leading;
   final VoidCallback? onPressed;
   final bool primary;
+  final bool selected;
+  final bool destructive;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -13277,6 +13349,20 @@ class _RecordActionButton extends StatelessWidget {
             onPressed: onPressed,
             icon: leading ?? Icon(icon!, size: 19),
             label: Text(label),
+            style: destructive
+                ? OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    backgroundColor: AppColors.surface,
+                    side: const BorderSide(color: AppColors.error),
+                  )
+                : selected
+                ? OutlinedButton.styleFrom(
+                    backgroundColor: AppColors.blueContainer,
+                    side: const BorderSide(
+                      color: AppColors.blueContainerStrong,
+                    ),
+                  )
+                : null,
           ),
   );
 }
@@ -13686,12 +13772,12 @@ class _RequestDecisionBanner extends StatelessWidget {
         ? AppColors.errorContainer
         : AppColors.blueContainer;
     final title = approved
-        ? YorksV1MaterialRequestStrings.approvedByEngineer.primary
+        ? YorksV1MaterialRequestStrings.approvedByEngineer.active(language)
         : returned
-        ? YorksV1MaterialRequestStrings.changesRequested.primary
-        : yorksV1MaterialRequestStateCopy(request.state).primary;
+        ? YorksV1MaterialRequestStrings.changesRequested.active(language)
+        : yorksV1MaterialRequestStateCopy(request.state).active(language);
     final meta = decision == null
-        ? _displayWorkflowRole(request.currentActionOwnerRole, language)
+        ? '${YorksV1MaterialRequestStrings.currentOwner.active(language)}: ${_displayWorkflowRole(request.currentActionOwnerRole, language)}'
         : [
             decision.decidedByDisplayName,
             _displayWorkflowRole(decision.decidedByExactRole, language),
@@ -13699,7 +13785,10 @@ class _RequestDecisionBanner extends StatelessWidget {
               context,
             ).formatMediumDate(decision.decidedAt.toLocal()),
           ].join(' · ');
+    final stage = _materialRequestStage(request.state);
+    final visibleStage = stage > 7 ? 7 : stage;
     return Container(
+      key: const ValueKey('material-request-decision-banner'),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
@@ -13784,14 +13873,24 @@ class _RequestDecisionBanner extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    YorksV1MaterialRequestStrings.nextAction.primary,
+                    YorksV1MaterialRequestStrings.stageOfSeven(
+                      visibleStage,
+                    ).active(language),
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.blue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    YorksV1MaterialRequestStrings.nextAction.active(language),
                     style: AppTypography.labelSmall.copyWith(
                       color: AppColors.muted,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                    _materialRequestNextAction(request),
+                    _materialRequestNextAction(request, language),
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.ink,
                       fontWeight: FontWeight.w800,
@@ -13817,87 +13916,94 @@ class _RequestedItemsSurface extends StatelessWidget {
     padding: EdgeInsets.zero,
     child: ClipRRect(
       borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 920),
-          child: Table(
-            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-            border: const TableBorder(
-              horizontalInside: BorderSide(color: AppColors.line),
-              verticalInside: BorderSide(color: AppColors.line),
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            key: const ValueKey('material-request-items-table'),
+            constraints: BoxConstraints(
+              minWidth: math.max(680, constraints.maxWidth),
             ),
-            columnWidths: const {
-              0: FixedColumnWidth(54),
-              1: FlexColumnWidth(2.5),
-              2: FlexColumnWidth(1.15),
-              3: FlexColumnWidth(1.25),
-              4: FlexColumnWidth(1.2),
-              5: FixedColumnWidth(105),
-              6: FixedColumnWidth(78),
-            },
-            children: [
-              TableRow(
-                decoration: const BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                ),
-                children: [
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.serialNumber.primary,
-                    header: true,
-                  ),
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.itemDescription.primary,
-                    header: true,
-                  ),
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.size.primary,
-                    header: true,
-                  ),
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.modelSerialNumber.primary,
-                    header: true,
-                  ),
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.brandOrigin.primary,
-                    header: true,
-                  ),
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.quantity.primary,
-                    header: true,
-                  ),
-                  _FormalCell(
-                    YorksV1MaterialRequestStrings.unit.primary,
-                    header: true,
-                  ),
-                ],
+            child: Table(
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              border: const TableBorder(
+                horizontalInside: BorderSide(color: AppColors.line),
+                verticalInside: BorderSide(color: AppColors.line),
               ),
-              for (var index = 0; index < request.lines.length; index++)
+              columnWidths: const {
+                0: FixedColumnWidth(46),
+                1: FlexColumnWidth(1.75),
+                2: FlexColumnWidth(1.05),
+                3: FlexColumnWidth(1.15),
+                4: FlexColumnWidth(1.1),
+                5: FixedColumnWidth(68),
+                6: FixedColumnWidth(58),
+              },
+              children: [
                 TableRow(
-                  decoration: BoxDecoration(
-                    color: index.isEven
-                        ? AppColors.surfaceContainerLowest
-                        : AppColors.surfaceContainerLow.withValues(alpha: .35),
+                  decoration: const BoxDecoration(
+                    color: AppColors.surfaceContainerLow,
                   ),
                   children: [
-                    _FormalCell('${index + 1}'),
-                    _FormalCell(request.lines[index].description),
-                    _FormalCell(request.lines[index].size ?? '—'),
                     _FormalCell(
-                      request.lines[index].model ??
-                          request.lines[index].equipmentTag ??
-                          request.lines[index].planningModelTag ??
-                          '—',
+                      YorksV1MaterialRequestStrings.serialNumber.primary,
+                      header: true,
                     ),
-                    _FormalCell(request.lines[index].brandOrigin ?? '—'),
                     _FormalCell(
-                      yorksV1DisplayQuantity(request.lines[index].quantity),
-                      alignEnd: true,
+                      YorksV1MaterialRequestStrings.itemDescription.primary,
+                      header: true,
                     ),
-                    _FormalCell(request.lines[index].unit),
+                    _FormalCell(
+                      YorksV1MaterialRequestStrings.size.primary,
+                      header: true,
+                    ),
+                    _FormalCell(
+                      YorksV1MaterialRequestStrings.modelSerialNumber.primary,
+                      header: true,
+                    ),
+                    _FormalCell(
+                      YorksV1MaterialRequestStrings.brandOrigin.primary,
+                      header: true,
+                    ),
+                    _FormalCell(
+                      YorksV1MaterialRequestStrings.quantity.primary,
+                      header: true,
+                    ),
+                    _FormalCell(
+                      YorksV1MaterialRequestStrings.unit.primary,
+                      header: true,
+                    ),
                   ],
                 ),
-            ],
+                for (var index = 0; index < request.lines.length; index++)
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: index.isEven
+                          ? AppColors.surfaceContainerLowest
+                          : AppColors.surfaceContainerLow.withValues(
+                              alpha: .35,
+                            ),
+                    ),
+                    children: [
+                      _FormalCell('${index + 1}'),
+                      _FormalCell(request.lines[index].description),
+                      _FormalCell(request.lines[index].size ?? '—'),
+                      _FormalCell(
+                        request.lines[index].model ??
+                            request.lines[index].equipmentTag ??
+                            request.lines[index].planningModelTag ??
+                            '—',
+                      ),
+                      _FormalCell(request.lines[index].brandOrigin ?? '—'),
+                      _FormalCell(
+                        yorksV1DisplayQuantity(request.lines[index].quantity),
+                        alignEnd: true,
+                      ),
+                      _FormalCell(request.lines[index].unit),
+                    ],
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -13915,122 +14021,152 @@ class _RequestLineLifecycleLedger extends StatelessWidget {
   final AsyncValue<YorksV1MaterialRequestDocumentModel> documentModel;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _R35RecordSectionHeading(
-        title: YorksV1MaterialRequestStrings.lineLedger.primary,
-        description:
-            YorksV1MaterialRequestStrings.lineLedgerDescription.primary,
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      documentModel.when(
-        loading: () => const _R35RecordSurface(
-          child: LinearProgressIndicator(minHeight: 2),
+  Widget build(BuildContext context) => _R35RecordSurface(
+    padding: EdgeInsets.zero,
+    child: Material(
+      type: MaterialType.transparency,
+      child: ExpansionTile(
+        key: const ValueKey('material-request-quantity-history'),
+        initiallyExpanded: _materialRequestStage(request.state) >= 3,
+        maintainState: true,
+        tilePadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.xs,
         ),
-        error: (_, _) => _R35RecordSurface(
-          child: Text(
-            YorksV1MaterialRequestStrings.controlledDocumentUnavailable.primary,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
         ),
-        data: (model) => _R35RecordSurface(
-          padding: EdgeInsets.zero,
-          child: Scrollbar(
-            scrollbarOrientation: ScrollbarOrientation.bottom,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 1280),
-                child: Table(
-                  border: TableBorder.all(color: AppColors.line),
-                  columnWidths: const {
-                    0: FlexColumnWidth(2.4),
-                    1: FixedColumnWidth(98),
-                    2: FixedColumnWidth(98),
-                    3: FixedColumnWidth(98),
-                    4: FixedColumnWidth(98),
-                    5: FixedColumnWidth(98),
-                    6: FixedColumnWidth(90),
-                    7: FixedColumnWidth(90),
-                    8: FixedColumnWidth(90),
-                    9: FixedColumnWidth(106),
-                  },
-                  children: [
-                    TableRow(
-                      decoration: const BoxDecoration(
-                        color: AppColors.surfaceContainerHigh,
+        leading: const Icon(Icons.bar_chart_outlined, color: AppColors.blue),
+        title: Text(
+          YorksV1MaterialRequestStrings.quantityHistory.primary,
+          style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          YorksV1MaterialRequestStrings.lineLedgerDescription.primary,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+        children: [
+          documentModel.when(
+            loading: () => const _R35RecordSurface(
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+            error: (_, _) => _R35RecordSurface(
+              child: Text(
+                YorksV1MaterialRequestStrings
+                    .controlledDocumentUnavailable
+                    .primary,
+                style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+              ),
+            ),
+            data: (model) => _R35RecordSurface(
+              padding: EdgeInsets.zero,
+              child: LayoutBuilder(
+                builder: (context, constraints) => Scrollbar(
+                  scrollbarOrientation: ScrollbarOrientation.bottom,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      key: const ValueKey(
+                        'material-request-quantity-history-table',
                       ),
-                      children: [
-                        _FormalCell(
-                          YorksV1MaterialRequestStrings.item.primary,
-                          header: true,
-                        ),
-                        _FormalCell(
-                          YorksV1ArrangementStrings.requested.primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          YorksV1ArrangementStrings.arranged.primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          YorksV1LogisticsStrings.reserved.primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          YorksV1MaterialRequestStrings
-                              .dispatchedQuantity
-                              .primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          YorksV1LogisticsStrings.goodReceived.primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          yorksV1ReceiptOutcomeCopy(
-                            YorksV1ReceiptOutcome.missing,
-                          ).primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          yorksV1ReceiptOutcomeCopy(
-                            YorksV1ReceiptOutcome.damaged,
-                          ).primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          YorksV1MaterialRequestStrings
-                              .returnedQuantity
-                              .primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                        _FormalCell(
-                          YorksV1LogisticsStrings.stillNeeded.primary,
-                          header: true,
-                          alignEnd: true,
-                        ),
-                      ],
+                      constraints: BoxConstraints(
+                        minWidth: math.max(680, constraints.maxWidth),
+                      ),
+                      child: Table(
+                        border: TableBorder.all(color: AppColors.line),
+                        columnWidths: const {
+                          0: FlexColumnWidth(),
+                          1: FixedColumnWidth(68),
+                          2: FixedColumnWidth(64),
+                          3: FixedColumnWidth(60),
+                          4: FixedColumnWidth(72),
+                          5: FixedColumnWidth(86),
+                          6: FixedColumnWidth(54),
+                          7: FixedColumnWidth(62),
+                          8: FixedColumnWidth(60),
+                          9: FixedColumnWidth(75),
+                        },
+                        children: [
+                          TableRow(
+                            decoration: const BoxDecoration(
+                              color: AppColors.surfaceContainerHigh,
+                            ),
+                            children: [
+                              _FormalCell(
+                                YorksV1MaterialRequestStrings.item.primary,
+                                header: true,
+                              ),
+                              _FormalCell(
+                                YorksV1ArrangementStrings.requested.primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                YorksV1ArrangementStrings.arranged.primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                YorksV1LogisticsStrings.reserved.primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                YorksV1MaterialRequestStrings
+                                    .dispatchedQuantity
+                                    .primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                YorksV1LogisticsStrings.goodReceived.primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                yorksV1ReceiptOutcomeCopy(
+                                  YorksV1ReceiptOutcome.missing,
+                                ).primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                yorksV1ReceiptOutcomeCopy(
+                                  YorksV1ReceiptOutcome.damaged,
+                                ).primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                YorksV1MaterialRequestStrings
+                                    .returnedQuantity
+                                    .primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                              _FormalCell(
+                                YorksV1LogisticsStrings.stillNeeded.primary,
+                                header: true,
+                                alignEnd: true,
+                              ),
+                            ],
+                          ),
+                          for (final line in request.lines)
+                            _lineRow(line, model.lineLifecycles[line.id]),
+                        ],
+                      ),
                     ),
-                    for (final line in request.lines)
-                      _lineRow(line, model.lineLifecycles[line.id]),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
-    ],
+    ),
   );
 
   TableRow _lineRow(
@@ -14108,8 +14244,6 @@ class _RequestRecordContent extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _RequestDecisionBanner(request: request, language: language),
-      const SizedBox(height: AppSpacing.lg),
       _R35RecordSectionHeading(
         title: YorksV1MaterialRequestStrings.materialItems.primary,
         description:
@@ -14163,57 +14297,229 @@ class _RequestRecordContent extends StatelessWidget {
           ),
         ),
       ),
-      const SizedBox(height: AppSpacing.xxl),
-      _R35RecordSectionHeading(
-        title: YorksV1ArrangementStrings.arrangement.primary,
-        description:
-            YorksV1MaterialRequestStrings.arrangementDescription.primary,
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      arrangement.when(
-        loading: () => const _R35RecordSurface(
-          child: Padding(
-            padding: EdgeInsets.all(AppSpacing.md),
-            child: LinearProgressIndicator(),
-          ),
-        ),
-        error: (_, _) => _PendingWorkflowSurface(
-          icon: Icons.inventory_2_outlined,
-          title: YorksV1MaterialRequestStrings.arrangementUnavailable.primary,
-          description: YorksV1MaterialRequestStrings
-              .arrangementUnavailableDescription
-              .primary,
-        ),
-        data: (workspace) =>
-            _ArrangementSummarySurface(request: request, workspace: workspace),
-      ),
-      const SizedBox(height: AppSpacing.xxl),
-      _R35RecordSectionHeading(
-        title: YorksV1LogisticsStrings.dispatchAndReceipt.primary,
-        description: YorksV1MaterialRequestStrings.dispatchDescription.primary,
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      _DispatchReceiptSummarySurface(
+      const SizedBox(height: AppSpacing.lg),
+      _ProcurementDeliveryReturnsDisclosure(
         request: request,
-        workspace: logisticsWorkspace,
+        language: language,
+        arrangement: arrangement,
+        logisticsWorkspace: logisticsWorkspace,
+        returnsDocumentsWorkspace: returnsDocumentsWorkspace,
         canOpenLogistics: canOpenLogistics,
-        onOpenLogistics: onOpenLogistics,
+        canOpenReturnsDocuments: canOpenReturnsDocuments,
         showReceiptReview: showReceiptReview,
         onReviewReceipt: onReviewReceipt,
-      ),
-      const SizedBox(height: AppSpacing.xxl),
-      _R35RecordSectionHeading(
-        title: YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
-        description: YorksV1MaterialRequestStrings.returnsDescription.primary,
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      _DeliveryOrderSummarySurface(
-        request: request,
-        workspace: returnsDocumentsWorkspace,
-        canOpenReturnsDocuments: canOpenReturnsDocuments,
         showGenerateDeliveryOrder: showGenerateDeliveryOrder,
         onGenerateDeliveryOrder: onGenerateDeliveryOrder,
+        onOpenLogistics: onOpenLogistics,
         onOpenReturns: onOpenReturns,
+      ),
+    ],
+  );
+}
+
+class _ProcurementDeliveryReturnsDisclosure extends StatelessWidget {
+  const _ProcurementDeliveryReturnsDisclosure({
+    required this.request,
+    required this.language,
+    required this.arrangement,
+    required this.logisticsWorkspace,
+    required this.returnsDocumentsWorkspace,
+    required this.canOpenLogistics,
+    required this.canOpenReturnsDocuments,
+    required this.showReceiptReview,
+    required this.onReviewReceipt,
+    required this.showGenerateDeliveryOrder,
+    required this.onGenerateDeliveryOrder,
+    required this.onOpenLogistics,
+    required this.onOpenReturns,
+  });
+
+  final YorksV1MaterialRequest request;
+  final AppLanguage language;
+  final AsyncValue<YorksV1ArrangementWorkspace?> arrangement;
+  final YorksV1LogisticsWorkspace? logisticsWorkspace;
+  final YorksV1ReturnsDocumentsWorkspace? returnsDocumentsWorkspace;
+  final bool canOpenLogistics;
+  final bool canOpenReturnsDocuments;
+  final bool showReceiptReview;
+  final ValueChanged<YorksV1MaterialDispatch>? onReviewReceipt;
+  final bool showGenerateDeliveryOrder;
+  final ValueChanged<YorksV1DeliveryOrderDispatch>? onGenerateDeliveryOrder;
+  final VoidCallback onOpenLogistics;
+  final VoidCallback onOpenReturns;
+
+  @override
+  Widget build(BuildContext context) {
+    final arrangementWorkspace = arrangement.valueOrNull;
+    final hasOperationalRecord =
+        arrangementWorkspace?.workingArrangement != null ||
+        arrangementWorkspace?.currentArrangement != null ||
+        (logisticsWorkspace?.dispatches.isNotEmpty ?? false) ||
+        (returnsDocumentsWorkspace?.deliveryOrderDispatches.isNotEmpty ??
+            false) ||
+        arrangement.hasError;
+    return _R35RecordSurface(
+      padding: EdgeInsets.zero,
+      child: Material(
+        type: MaterialType.transparency,
+        child: KeyedSubtree(
+          key: const ValueKey('material-request-operational-workflow'),
+          child: ExpansionTile(
+            // Recreate only this presentation tile when an asynchronously
+            // loaded operational record first arrives. This makes a real
+            // Delivery Order/receipt/action visible without keeping empty
+            // future phases open at Steps 2 and 3.
+            key: ValueKey(
+              'material-request-operational-workflow-${hasOperationalRecord ? 'records' : 'empty'}',
+            ),
+            initiallyExpanded: hasOperationalRecord,
+            maintainState: true,
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            leading: const Icon(
+              Icons.inventory_2_outlined,
+              color: AppColors.blue,
+            ),
+            title: Text(
+              YorksV1MaterialRequestStrings.procurementDeliveryReturns.active(
+                language,
+              ),
+              style: AppTypography.titleSmall.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              _materialRequestStage(request.state) < 3
+                  ? YorksV1MaterialRequestStrings.procurementStartsAfterApproval
+                        .active(language)
+                  : _materialRequestNextAction(request, language),
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+            children: [
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.md),
+              _OperationalWorkflowHeading(
+                icon: Icons.inventory_2_outlined,
+                title: YorksV1ArrangementStrings.arrangement.primary,
+                description: YorksV1MaterialRequestStrings
+                    .arrangementDescription
+                    .primary,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              arrangement.when(
+                loading: () => const _R35RecordSurface(
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.md),
+                    child: LinearProgressIndicator(),
+                  ),
+                ),
+                error: (_, _) => _PendingWorkflowSurface(
+                  icon: Icons.inventory_2_outlined,
+                  title: YorksV1MaterialRequestStrings
+                      .arrangementUnavailable
+                      .primary,
+                  description: YorksV1MaterialRequestStrings
+                      .arrangementUnavailableDescription
+                      .primary,
+                ),
+                data: (workspace) => _ArrangementSummarySurface(
+                  request: request,
+                  workspace: workspace,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _OperationalWorkflowHeading(
+                icon: Icons.local_shipping_outlined,
+                title: YorksV1LogisticsStrings.dispatchAndReceipt.primary,
+                description:
+                    YorksV1MaterialRequestStrings.dispatchDescription.primary,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _DispatchReceiptSummarySurface(
+                request: request,
+                workspace: logisticsWorkspace,
+                canOpenLogistics: canOpenLogistics,
+                onOpenLogistics: onOpenLogistics,
+                showReceiptReview: showReceiptReview,
+                onReviewReceipt: onReviewReceipt,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _OperationalWorkflowHeading(
+                icon: Icons.assignment_return_outlined,
+                title: YorksV1LogisticsStrings.deliveryOrdersAndReturns.primary,
+                description:
+                    YorksV1MaterialRequestStrings.returnsDescription.primary,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _DeliveryOrderSummarySurface(
+                request: request,
+                workspace: returnsDocumentsWorkspace,
+                canOpenReturnsDocuments: canOpenReturnsDocuments,
+                showGenerateDeliveryOrder: showGenerateDeliveryOrder,
+                onGenerateDeliveryOrder: onGenerateDeliveryOrder,
+                onOpenReturns: onOpenReturns,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Keeps each lifecycle phase visually aligned without turning future work
+/// into another oversized card. The surrounding disclosure owns expansion;
+/// these headings provide a familiar Windows-style reading order inside it.
+class _OperationalWorkflowHeading extends StatelessWidget {
+  const _OperationalWorkflowHeading({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppColors.blueContainer,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+        ),
+        child: Icon(icon, size: 19, color: AppColors.blue),
+      ),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: AppTypography.titleSmall.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              description,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+          ],
+        ),
       ),
     ],
   );
@@ -14527,7 +14833,11 @@ class _R35RecordSurface extends StatelessWidget {
 String _displayWorkflowRole(String? value, AppLanguage language) {
   final role = value?.trim();
   if (role == null || role.isEmpty) return '—';
-  return YorksV1ProjectStrings.roleLabel(role).active(language);
+  final normalized = role
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return YorksV1ProjectStrings.roleLabel(normalized).active(language);
 }
 
 class _RequestWorkflowCard extends StatelessWidget {
@@ -14667,14 +14977,19 @@ class _RequestWorkflowCard extends StatelessWidget {
 }
 
 class _RequestDetailsRail extends StatelessWidget {
-  const _RequestDetailsRail({required this.request, required this.language});
+  const _RequestDetailsRail({
+    required this.request,
+    required this.language,
+    this.surface = true,
+  });
 
   final YorksV1MaterialRequest request;
   final AppLanguage language;
+  final bool surface;
 
   @override
-  Widget build(BuildContext context) => _R35RecordSurface(
-    child: Column(
+  Widget build(BuildContext context) {
+    final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
@@ -14697,46 +15012,165 @@ class _RequestDetailsRail extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.requestNumber.primary,
-          value: request.requestNumber ?? '—',
+          label: YorksV1MaterialRequestStrings.requestedBy.active(language),
+          value:
+              '${request.requesterDisplayName ?? '—'} · ${_displayWorkflowRole(request.requesterExactRole ?? request.requesterProjectRole, language)}',
         ),
         _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.project.primary,
+          label: YorksV1MaterialRequestStrings.project.active(language),
           value: request.projectName,
         ),
         _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.projectReference.primary,
-          value: request.projectReference,
-        ),
-        _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.requestedBy.primary,
-          value: request.requesterDisplayName ?? '—',
-        ),
-        _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.requestingRole.primary,
-          value: _displayWorkflowRole(
-            request.requesterExactRole ?? request.requesterProjectRole,
-            language,
-          ),
-        ),
-        _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.scope.primary,
+          label: YorksV1MaterialRequestStrings.scopeLabel.active(language),
           value: request.scopeName,
         ),
         _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.requested.primary,
-          value:
-              '${request.lines.length} ${YorksV1MaterialRequestStrings.items.primary.toLowerCase()}',
+          label: YorksV1MaterialRequestStrings.requiredOnSite.active(language),
+          value: request.scheduledDate == null
+              ? YorksV1MaterialRequestStrings.notSpecified.active(language)
+              : MaterialLocalizations.of(
+                  context,
+                ).formatMediumDate(request.scheduledDate!.toLocal()),
         ),
-        _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.currentOwner.primary,
-          value: _displayWorkflowRole(request.currentActionOwnerRole, language),
+      ],
+    );
+    return surface ? _R35RecordSurface(child: content) : content;
+  }
+}
+
+Future<void> _showRequestWorkspaceInspector(
+  BuildContext context, {
+  required YorksV1MaterialRequest request,
+  required AppLanguage language,
+}) {
+  final media = MediaQuery.of(context);
+  final panelWidth = media.size.width * .92 < 430
+      ? media.size.width * .92
+      : 430.0;
+  final rtl = Directionality.of(context) == TextDirection.rtl;
+  return showGeneralDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: AppColors.scrim.withValues(alpha: .18),
+    transitionDuration: media.disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 180),
+    pageBuilder: (dialogContext, _, _) => SafeArea(
+      child: Align(
+        alignment: AlignmentDirectional.centerEnd,
+        child: Material(
+          key: const ValueKey('material-request-information-panel'),
+          color: Colors.transparent,
+          child: SizedBox(
+            width: panelWidth,
+            height: double.infinity,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              child: _RequestWorkspaceInspector(
+                request: request,
+                language: language,
+                onClose: () => Navigator.of(dialogContext).pop(),
+              ),
+            ),
+          ),
         ),
-        _RequestRailFact(
-          label: YorksV1MaterialRequestStrings.lastUpdated.primary,
-          value: MaterialLocalizations.of(
-            context,
-          ).formatMediumDate(request.updatedAt.toLocal()),
+      ),
+    ),
+    transitionBuilder: (dialogContext, animation, _, child) {
+      if (media.disableAnimations) return child;
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(rtl ? -0.08 : 0.08, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: FadeTransition(opacity: curved, child: child),
+      );
+    },
+  );
+}
+
+/// Details, request-scoped history and follow-up assignment live together in
+/// the optional inspector. The panel is presentation state only: opening or
+/// closing it cannot write, refresh or widen access to the request.
+class _RequestWorkspaceInspector extends StatelessWidget {
+  const _RequestWorkspaceInspector({
+    required this.request,
+    required this.language,
+    required this.onClose,
+  });
+
+  final YorksV1MaterialRequest request;
+  final AppLanguage language;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('material-request-workspace-inspector'),
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+      boxShadow: const [
+        BoxShadow(
+          color: AppColors.shadow,
+          blurRadius: 12,
+          offset: Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.view_sidebar_outlined, color: AppColors.blue),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                YorksV1MaterialRequestStrings.requestInformation.active(
+                  language,
+                ),
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('material-request-inspector-close'),
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              onPressed: onClose,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        const Divider(height: 1),
+        const SizedBox(height: AppSpacing.md),
+        _RequestDetailsRail(
+          request: request,
+          language: language,
+          surface: false,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        YorksV1MaterialRequestHistorySection(
+          requestId: request.id,
+          language: language,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _RequestWorkflowCard(request: request, language: language),
+        const SizedBox(height: AppSpacing.lg),
+        _MaterialRequestPhase2CollaborationSection(
+          request: request,
+          language: language,
+          compact: true,
         ),
       ],
     ),
@@ -14864,29 +15298,45 @@ class _FormalCell extends StatelessWidget {
   final bool alignEnd;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(AppSpacing.sm),
-    child: Column(
-      crossAxisAlignment: alignEnd
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
-          style: (header ? AppTypography.labelSmall : AppTypography.bodySmall)
-              .copyWith(fontWeight: header ? FontWeight.w800 : null),
-        ),
-        if (supporting != null && supporting!.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            supporting!,
-            style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
-          ),
+  Widget build(BuildContext context) {
+    final primary = Text(
+      value,
+      textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+      maxLines: header ? 1 : null,
+      softWrap: !header,
+      style: (header ? AppTypography.labelSmall : AppTypography.bodySmall)
+          .copyWith(fontWeight: header ? FontWeight.w800 : null),
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: header ? AppSpacing.xs : AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: alignEnd
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          if (header)
+            Align(
+              alignment: alignEnd
+                  ? AlignmentDirectional.centerEnd
+                  : AlignmentDirectional.centerStart,
+              child: FittedBox(fit: BoxFit.scaleDown, child: primary),
+            )
+          else
+            primary,
+          if (supporting != null && supporting!.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              supporting!,
+              style: AppTypography.labelSmall.copyWith(color: AppColors.muted),
+            ),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _ArrangementSummarySurface extends StatelessWidget {
@@ -15036,36 +15486,72 @@ class _PendingWorkflowSurface extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => _R35RecordSurface(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.xxxl,
-        horizontal: AppSpacing.lg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 40, color: AppColors.blueContainerStrong),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: AppTypography.titleMedium.copyWith(
-              fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpacing.md),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceContainerLow.withValues(alpha: .58),
+      border: Border.all(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        final summary = Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceContainerLowest,
+                border: Border.all(color: AppColors.blueContainerStrong),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              ),
+              child: Icon(icon, size: 19, color: AppColors.blueContainerStrong),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
-          ),
-          if (action != null) ...[
-            const SizedBox(height: AppSpacing.lg),
-            action!,
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    description,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-        ],
-      ),
+        );
+        if (compact && action != null) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              summary,
+              const SizedBox(height: AppSpacing.md),
+              action!,
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: summary),
+            if (action != null) ...[
+              const SizedBox(width: AppSpacing.md),
+              action!,
+            ],
+          ],
+        );
+      },
     ),
   );
 }
@@ -16624,34 +17110,195 @@ Future<void> _exportDraft(
   }
 }
 
-Future<String?> _cancelReason(BuildContext context) async {
-  final text = TextEditingController();
-  final result = await showDialog<String>(
-    context: context,
-    animationStyle: AnimationStyle.noAnimation,
-    builder: (context) => AlertDialog(
-      title: Text(YorksV1MaterialRequestStrings.cancelRequest.primary),
-      content: TextField(
-        controller: text,
-        maxLines: 3,
-        decoration: InputDecoration(
-          labelText: YorksV1MaterialRequestStrings.cancelReason.primary,
+Future<String?> _cancelReason(BuildContext context, AppLanguage language) =>
+    showDialog<String>(
+      context: context,
+      animationStyle: AnimationStyle.noAnimation,
+      builder: (context) => _CancelMaterialRequestDialog(language: language),
+    );
+
+class _CancelMaterialRequestDialog extends StatefulWidget {
+  const _CancelMaterialRequestDialog({required this.language});
+
+  final AppLanguage language;
+
+  @override
+  State<_CancelMaterialRequestDialog> createState() =>
+      _CancelMaterialRequestDialogState();
+}
+
+class _CancelMaterialRequestDialogState
+    extends State<_CancelMaterialRequestDialog> {
+  final _reason = TextEditingController();
+  bool _attempted = false;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    final reason = _reason.text.trim();
+    if (reason.isEmpty) {
+      setState(() => _attempted = true);
+      return;
+    }
+    Navigator.of(context).pop(reason);
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    key: const ValueKey('material-request-cancel-dialog'),
+    insetPadding: const EdgeInsets.all(AppSpacing.lg),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+      side: const BorderSide(color: AppColors.line),
+    ),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: AppSpacing.minTapTarget,
+                  height: AppSpacing.minTapTarget,
+                  decoration: BoxDecoration(
+                    color: AppColors.errorContainer,
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.cancel_outlined,
+                    color: AppColors.error,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        YorksV1MaterialRequestStrings.cancelRequestQuestion
+                            .active(widget.language),
+                        style: AppTypography.headlineSmall.copyWith(
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        YorksV1MaterialRequestStrings.cancelRequestConfirmation
+                            .active(widget.language),
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.errorContainer.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                border: Border.all(
+                  color: AppColors.error.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.history_rounded,
+                    color: AppColors.error,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      YorksV1MaterialRequestStrings.cancelRequestConsequence
+                          .active(widget.language),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.ink,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              key: const ValueKey('material-request-cancel-reason'),
+              controller: _reason,
+              minLines: 2,
+              maxLines: 3,
+              maxLength: 300,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _confirm(),
+              onChanged: (_) {
+                if (_attempted) setState(() {});
+              },
+              decoration: InputDecoration(
+                labelText: YorksV1MaterialRequestStrings.cancelReason.active(
+                  widget.language,
+                ),
+                hintText: YorksV1MaterialRequestStrings.cancelReasonHint.active(
+                  widget.language,
+                ),
+                errorText: _attempted && _reason.text.trim().isEmpty
+                    ? YorksV1MaterialRequestStrings.cancelReasonRequired.active(
+                        widget.language,
+                      )
+                    : null,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  key: const ValueKey('material-request-cancel-keep'),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    YorksV1MaterialRequestStrings.keepRequest.active(
+                      widget.language,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                FilledButton.icon(
+                  key: const ValueKey('material-request-cancel-confirm'),
+                  onPressed: _confirm,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    foregroundColor: AppColors.surface,
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: Text(
+                    YorksV1MaterialRequestStrings.cancelRequest.active(
+                      widget.language,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(YorksV1MaterialRequestStrings.cancel.primary),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(text.text),
-          child: Text(YorksV1MaterialRequestStrings.cancelRequest.primary),
-        ),
-      ],
     ),
   );
-  text.dispose();
-  return result;
 }
 
 Future<String?> _arrangementReturnReason(BuildContext context) async {

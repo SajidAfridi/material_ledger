@@ -1,8 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_domain_error.dart';
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_project.dart';
+import '../services/analytics_service.dart';
 import '../sync/connectivity_service.dart';
 
 /// Narrow RPC seam for the normalized Yorks V1 project domain.
@@ -67,21 +69,49 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
     YorksV1ProjectRpcClient? rpcClient,
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
-       _rpcClient = rpcClient;
+       _rpcClient = rpcClient,
+       _analytics = analytics;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1ProjectRpcClient? _rpcClient;
+  final AnalyticsService _analytics;
 
   @override
   Future<YorksV1ProjectCreationResult> createProject(
     YorksV1ProjectCreationInput input,
   ) async {
-    _throwIfInvalid(input.validate());
-    final rpc = _readyRpc();
+    final validationErrors = input.validate();
+    if (validationErrors.isNotEmpty) {
+      _analytics.capture(
+        AnalyticsEvent.projectCreationValidationFailed,
+        properties: {
+          AnalyticsProperty.errorCategory: AnalyticsErrorCategory.invalidInput,
+          AnalyticsProperty.resultCount: validationErrors.length,
+        },
+      );
+    }
+    _throwIfInvalid(validationErrors);
+    _analytics.capture(
+      AnalyticsEvent.projectCreationAttempted,
+      properties: {
+        AnalyticsProperty.buildingCount: input.buildings.length,
+        AnalyticsProperty.attachmentCount: input.attachments.length,
+      },
+    );
+    final operation = _analytics.beginOperation(
+      'project_create',
+      properties: {
+        AnalyticsProperty.workflow: 'project_creation',
+        AnalyticsProperty.buildingCount: input.buildings.length,
+        AnalyticsProperty.attachmentCount: input.attachments.length,
+      },
+    );
     try {
+      final rpc = _readyRpc();
       final response = await rpc.invoke(
         functionName: 'v1_create_project',
         parameters: {
@@ -89,17 +119,43 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
           'p_idempotency_key': input.idempotencyKey.trim(),
         },
       );
-      return YorksV1ProjectCreationResult.fromRpcJson(response);
-    } on YorksV1DomainException {
+      final result = YorksV1ProjectCreationResult.fromRpcJson(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.projectCreated,
+        properties: {
+          AnalyticsProperty.buildingCount: input.buildings.length,
+          AnalyticsProperty.attachmentCount: input.attachments.length,
+        },
+      );
+      return result;
+    } on YorksV1DomainException catch (error) {
+      operation.fail(error);
+      _captureProjectCreationFailure(error);
       rethrow;
     } on PostgrestException catch (error) {
-      throw _mapPostgrestException(error);
+      final mapped = _mapPostgrestException(error);
+      operation.fail(mapped);
+      _captureProjectCreationFailure(mapped);
+      throw mapped;
     } catch (error) {
-      throw YorksV1DomainException(
+      final mapped = YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
         cause: error,
       );
+      operation.fail(mapped);
+      _captureProjectCreationFailure(mapped);
+      throw mapped;
     }
+  }
+
+  void _captureProjectCreationFailure(Object error) {
+    _analytics.capture(
+      AnalyticsEvent.projectCreationFailed,
+      properties: {
+        AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+      },
+    );
   }
 
   @override
@@ -108,6 +164,11 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
   ) async {
     _throwIfInvalid(input.validate());
     final rpc = _readyRpc();
+    const action = 'member_assigned';
+    final operation = _analytics.beginOperation(
+      'project_access_change',
+      properties: const {AnalyticsProperty.actionType: action},
+    );
     try {
       final response = await rpc.invoke(
         functionName: 'v1_assign_project_member',
@@ -116,16 +177,35 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
           'p_idempotency_key': input.idempotencyKey.trim(),
         },
       );
-      return YorksV1ProjectMembershipResult.fromRpcJson(response);
-    } on YorksV1DomainException {
+      final result = YorksV1ProjectMembershipResult.fromRpcJson(response);
+      operation.complete();
+      _captureProjectAccessChange(action: action, success: true);
+      return result;
+    } on YorksV1DomainException catch (error) {
+      operation.fail(error);
+      _captureProjectAccessChange(action: action, success: false, error: error);
       rethrow;
     } on PostgrestException catch (error) {
-      throw _mapPostgrestException(error);
+      final mapped = _mapPostgrestException(error);
+      operation.fail(mapped);
+      _captureProjectAccessChange(
+        action: action,
+        success: false,
+        error: mapped,
+      );
+      throw mapped;
     } catch (error) {
-      throw YorksV1DomainException(
+      final mapped = YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
         cause: error,
       );
+      operation.fail(mapped);
+      _captureProjectAccessChange(
+        action: action,
+        success: false,
+        error: mapped,
+      );
+      throw mapped;
     }
   }
 
@@ -135,6 +215,11 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
   ) async {
     _throwIfInvalid(input.validate());
     final rpc = _readyRpc();
+    const action = 'member_revoked';
+    final operation = _analytics.beginOperation(
+      'project_access_change',
+      properties: const {AnalyticsProperty.actionType: action},
+    );
     try {
       final response = await rpc.invoke(
         functionName: 'v1_revoke_project_member',
@@ -143,16 +228,35 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
           'p_idempotency_key': input.idempotencyKey.trim(),
         },
       );
-      return YorksV1ProjectMembershipResult.fromRpcJson(response);
-    } on YorksV1DomainException {
+      final result = YorksV1ProjectMembershipResult.fromRpcJson(response);
+      operation.complete();
+      _captureProjectAccessChange(action: action, success: true);
+      return result;
+    } on YorksV1DomainException catch (error) {
+      operation.fail(error);
+      _captureProjectAccessChange(action: action, success: false, error: error);
       rethrow;
     } on PostgrestException catch (error) {
-      throw _mapPostgrestException(error);
+      final mapped = _mapPostgrestException(error);
+      operation.fail(mapped);
+      _captureProjectAccessChange(
+        action: action,
+        success: false,
+        error: mapped,
+      );
+      throw mapped;
     } catch (error) {
-      throw YorksV1DomainException(
+      final mapped = YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
         cause: error,
       );
+      operation.fail(mapped);
+      _captureProjectAccessChange(
+        action: action,
+        success: false,
+        error: mapped,
+      );
+      throw mapped;
     }
   }
 
@@ -191,8 +295,18 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
 
   @override
   Future<YorksV1Project> updateProject(YorksV1ProjectUpdateInput input) async {
-    _throwIfInvalid(input.validate());
+    final validationErrors = input.validate();
+    if (validationErrors.isNotEmpty) {
+      _captureProjectUpdateFailure(
+        const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput),
+      );
+    }
+    _throwIfInvalid(validationErrors);
     final rpc = _readyRpc();
+    final operation = _analytics.beginOperation(
+      'project_update',
+      properties: const {AnalyticsProperty.workflow: 'project'},
+    );
     try {
       final response = await rpc.invoke(
         functionName: 'v1_update_project',
@@ -201,17 +315,53 @@ class YorksV1SupabaseProjectRepository implements YorksV1ProjectRepository {
           'p_idempotency_key': input.idempotencyKey.trim(),
         },
       );
-      return YorksV1Project.fromRpcJson(_projectJson(response));
-    } on YorksV1DomainException {
+      final project = YorksV1Project.fromRpcJson(_projectJson(response));
+      operation.complete();
+      _analytics.capture(AnalyticsEvent.projectUpdated);
+      return project;
+    } on YorksV1DomainException catch (error) {
+      operation.fail(error);
+      _captureProjectUpdateFailure(error);
       rethrow;
     } on PostgrestException catch (error) {
-      throw _mapPostgrestException(error);
+      final mapped = _mapPostgrestException(error);
+      operation.fail(mapped);
+      _captureProjectUpdateFailure(mapped);
+      throw mapped;
     } catch (error) {
-      throw YorksV1DomainException(
+      final mapped = YorksV1DomainException(
         YorksV1DomainErrorCode.backendUnavailable,
         cause: error,
       );
+      operation.fail(mapped);
+      _captureProjectUpdateFailure(mapped);
+      throw mapped;
     }
+  }
+
+  void _captureProjectAccessChange({
+    required String action,
+    required bool success,
+    Object? error,
+  }) {
+    _analytics.capture(
+      AnalyticsEvent.projectAccessChanged,
+      properties: {
+        AnalyticsProperty.actionType: action,
+        AnalyticsProperty.success: success,
+        if (error != null)
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+      },
+    );
+  }
+
+  void _captureProjectUpdateFailure(Object error) {
+    _analytics.capture(
+      AnalyticsEvent.projectUpdateFailed,
+      properties: {
+        AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+      },
+    );
   }
 
   @override

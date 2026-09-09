@@ -30,6 +30,14 @@ abstract interface class YorksV1TeamChatRepository {
     YorksV1ChatCreateInput input,
   );
 
+  /// Opens the record-bound Material Request discussion without publishing it
+  /// in the Team Chat register. An explicit [createConversation] for the same
+  /// request promotes the retained thread into Team Chat.
+  Future<YorksV1ChatConversation> ensureMaterialRequestDiscussion({
+    required String requestId,
+    required String idempotencyKey,
+  });
+
   Future<YorksV1ChatConversation> updateGroup(
     YorksV1ChatGroupUpdateInput input,
   );
@@ -195,12 +203,47 @@ class YorksV1SupabaseTeamChatRepository implements YorksV1TeamChatRepository {
   Future<YorksV1ChatConversation> createConversation(
     YorksV1ChatCreateInput input,
   ) async {
+    if (input.kind == YorksV1ChatKind.materialRequest) {
+      final requestId = input.materialRequestId;
+      if (requestId == null || requestId.trim().isEmpty) {
+        throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+      }
+      final response = _map(
+        await _rpc(
+          'v1_start_material_request_team_conversation',
+          parameters: {
+            'p_request_id': requestId,
+            'p_idempotency_key': input.idempotencyKey,
+          },
+        ),
+      );
+      return YorksV1ChatConversation.fromRpcJson(
+        _map(response['conversation']),
+      );
+    }
     final response = _map(
       await _rpc(
         'v1_create_chat_conversation',
         parameters: {
           'p_payload': input.toRpcPayload(),
           'p_idempotency_key': input.idempotencyKey,
+        },
+      ),
+    );
+    return YorksV1ChatConversation.fromRpcJson(_map(response['conversation']));
+  }
+
+  @override
+  Future<YorksV1ChatConversation> ensureMaterialRequestDiscussion({
+    required String requestId,
+    required String idempotencyKey,
+  }) async {
+    final response = _map(
+      await _rpc(
+        'v1_ensure_material_request_discussion',
+        parameters: {
+          'p_request_id': requestId,
+          'p_idempotency_key': idempotencyKey,
         },
       ),
     );

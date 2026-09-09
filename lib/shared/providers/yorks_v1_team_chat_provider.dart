@@ -413,6 +413,23 @@ class YorksV1TeamChatController extends StateNotifier<YorksV1TeamChatState>
     }
   }
 
+  Future<YorksV1ChatConversation?> ensureMaterialRequestDiscussion({
+    required String requestId,
+    required String idempotencyKey,
+  }) async {
+    final repository = _repository;
+    if (repository == null) return null;
+    try {
+      return await repository.ensureMaterialRequestDiscussion(
+        requestId: requestId,
+        idempotencyKey: idempotencyKey,
+      );
+    } on YorksV1DomainException catch (error) {
+      state = state.copyWith(error: error.code);
+      return null;
+    }
+  }
+
   Future<bool> updateGroup(YorksV1ChatGroupUpdateInput input) async {
     final repository = _repository;
     if (repository == null) return false;

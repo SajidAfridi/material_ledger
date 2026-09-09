@@ -1,5 +1,4 @@
-# Yorks already targets modern iOS; keeping the platform explicit also satisfies
-# the PostHog Flutter SDK's native minimum-version requirements.
+# PostHog Flutter 5.x and the Yorks Xcode project both require iOS 15+.
 platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.

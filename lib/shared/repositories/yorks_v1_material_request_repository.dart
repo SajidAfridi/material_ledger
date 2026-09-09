@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_domain_error.dart';
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../models/yorks_v1_material_request_document.dart';
 import '../sync/connectivity_service.dart';
+import '../services/analytics_service.dart';
 
 /// Narrow RPC boundary for V1 requests. It prevents widgets and local draft
 /// storage from ever constructing a direct database mutation.
@@ -181,15 +183,18 @@ class YorksV1SupabaseMaterialRequestRepository
     required ConnectivityService connectivity,
     YorksV1MaterialRequestRpcClient? rpcClient,
     Duration rpcTimeout = const Duration(seconds: 20),
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
        _rpcClient = rpcClient,
-       _rpcTimeout = rpcTimeout;
+       _rpcTimeout = rpcTimeout,
+       _analytics = analytics;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
+  final AnalyticsService _analytics;
 
   @override
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects() async {
@@ -379,14 +384,44 @@ class YorksV1SupabaseMaterialRequestRepository
   Future<YorksV1MaterialRequest> decideRequest(
     YorksV1DecideMaterialRequestInput input,
   ) async {
-    final response = await _invoke(
-      functionName: 'v1_decide_material_request',
-      parameters: {
-        'p_payload': input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.actionType: input.decision.wireValue,
+    };
+    _analytics.capture(
+      AnalyticsEvent.materialRequestActionStarted,
+      properties: properties,
     );
-    return _single(response);
+    final operation = _analytics.beginOperation(
+      'material_request_decide',
+      properties: const {AnalyticsProperty.workflow: 'material_request'},
+    );
+    try {
+      final response = await _invoke(
+        functionName: 'v1_decide_material_request',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final request = _single(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.materialRequestActionCompleted,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return request;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.materialRequestActionCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -409,6 +444,7 @@ class YorksV1SupabaseMaterialRequestRepository
     required String query,
   }) async {
     if (query.trim().length < 2) return const [];
+    final stopwatch = Stopwatch()..start();
     final response = await _invoke(
       functionName: 'v1_search_material_request_candidates',
       parameters: {
@@ -418,9 +454,15 @@ class YorksV1SupabaseMaterialRequestRepository
         'p_limit': 18,
       },
     );
-    return _list(response)
+    final results = _list(response)
         .map(YorksV1MaterialRequestInventorySuggestion.fromRpcJson)
         .toList(growable: false);
+    _analytics.recordMaterialSearch(
+      queryLength: query.trim().length,
+      resultCount: results.length,
+      duration: stopwatch.elapsed,
+    );
+    return results;
   }
 
   @override

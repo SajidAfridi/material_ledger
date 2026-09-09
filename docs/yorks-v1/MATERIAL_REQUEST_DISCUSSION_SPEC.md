@@ -113,9 +113,11 @@ the root comment; deeper nesting is not supported.
 ### 3.6 Attachments
 
 The paperclip attaches operational evidence directly to the pending comment
-through the existing protected Team Chat attachment-intent and private Storage
-pipeline. Controlled commercial documents remain in the classified project
-document workflow and must not be copied into this participant-wide discussion.
+through the existing protected attachment-intent and private Storage pipeline.
+Its retained backing thread is record-only and must not appear in the Team Chat
+register or Team Chat search. Controlled commercial documents remain in the
+classified project document workflow and must not be copied into this
+participant-wide discussion.
 
 - Draft uploads are private to the current authenticated actor until the
   comment command succeeds.
@@ -246,7 +248,7 @@ must additionally cover attachment-ready, uploading, posting and success.
 A comment mention notification stores structured destination data:
 
 - event code `material_request_mentioned`;
-- canonical entity type `chat_message`;
+- canonical entity type `chat_message` for retained compatibility;
 - Material Request ID;
 - comment ID; and
 - optional project ID for authorized context.
@@ -303,6 +305,13 @@ The existing add-comment RPC should be extended or versioned to accept parent,
 context and finalized attachment IDs with one request hash and idempotency key.
 It must validate every relation, lock deterministically, and return the complete
 new role-safe comment.
+
+The retained chat-backed implementation is an internal compatibility detail.
+Automatic comments and attachment preparation keep its conversation hidden
+from Team Chat lists, unread totals and search. **Start team conversation** is
+the only action that promotes the retained thread into Team Chat. Promotion is
+reversible, retains the same messages and attachments, and later comments must
+never hide it again.
 
 ## 9. Accessibility and localization
 

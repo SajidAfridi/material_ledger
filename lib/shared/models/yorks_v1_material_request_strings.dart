@@ -7,6 +7,150 @@ import 'yorks_v1_project_strings.dart';
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const quantityHistory = TranslatableString(
+    en: 'Quantity history',
+    ar: 'سجل الكميات',
+    ur: 'مقدار کی تاریخ',
+    hi: 'मात्रा इतिहास',
+  );
+  static const procurementDeliveryReturns = TranslatableString(
+    en: 'Procurement, delivery & returns',
+    ar: 'المشتريات والتسليم والمرتجعات',
+    ur: 'پروکیورمنٹ، ترسیل اور واپسی',
+    hi: 'खरीद, डिलीवरी और वापसी',
+  );
+  static const procurementStartsAfterApproval = TranslatableString(
+    en: 'Procurement arrangement starts after Engineering approval.',
+    ar: 'يبدأ ترتيب المشتريات بعد موافقة الهندسة.',
+    ur: 'پروکیورمنٹ کا انتظام انجینئرنگ کی منظوری کے بعد شروع ہوتا ہے۔',
+    hi: 'खरीद व्यवस्था इंजीनियरिंग अनुमोदन के बाद शुरू होती है।',
+  );
+  static const requestHistory = TranslatableString(
+    en: 'Request history',
+    ar: 'سجل الطلب',
+    ur: 'درخواست کی تاریخ',
+    hi: 'अनुरोध इतिहास',
+  );
+  static const requestHistoryDescription = TranslatableString(
+    en: 'Who changed this request, what changed, and when.',
+    ar: 'من غيّر هذا الطلب، وما الذي تغيّر، ومتى.',
+    ur: 'اس درخواست میں کس نے، کیا اور کب تبدیلی کی۔',
+    hi: 'इस अनुरोध में किसने, क्या और कब बदला।',
+  );
+  static const viewFullAuditTrail = TranslatableString(
+    en: 'View full audit trail',
+    ar: 'عرض سجل التدقيق الكامل',
+    ur: 'مکمل آڈٹ ٹریل دیکھیں',
+    hi: 'पूरा ऑडिट ट्रेल देखें',
+  );
+  static const loadEarlierHistory = TranslatableString(
+    en: 'Load earlier history',
+    ar: 'تحميل السجل السابق',
+    ur: 'پرانا ریکارڈ لوڈ کریں',
+    hi: 'पुराना इतिहास लोड करें',
+  );
+  static const earlierHistoryUnavailable = TranslatableString(
+    en: 'Earlier history could not be loaded. Try again when the connection is available.',
+    ar: 'تعذر تحميل السجل السابق. حاول مرة أخرى عند توفر الاتصال.',
+    ur: 'پرانا ریکارڈ لوڈ نہیں ہو سکا۔ کنکشن دستیاب ہونے پر دوبارہ کوشش کریں۔',
+    hi: 'पुराना इतिहास लोड नहीं हो सका। कनेक्शन उपलब्ध होने पर फिर प्रयास करें।',
+  );
+  static const noRequestHistory = TranslatableString(
+    en: 'No recorded activity yet',
+    ar: 'لا يوجد نشاط مسجل بعد',
+    ur: 'ابھی کوئی سرگرمی ریکارڈ نہیں ہوئی',
+    hi: 'अभी तक कोई गतिविधि दर्ज नहीं हुई',
+  );
+  static const loadingRequestHistory = TranslatableString(
+    en: 'Loading request history…',
+    ar: 'جارٍ تحميل سجل الطلب…',
+    ur: 'درخواست کی تاریخ لوڈ ہو رہی ہے…',
+    hi: 'अनुरोध इतिहास लोड हो रहा है…',
+  );
+  static const requestHistoryUnavailable = TranslatableString(
+    en: 'Request history could not be loaded. The request is still available.',
+    ar: 'تعذر تحميل سجل الطلب. لا يزال الطلب متاحاً.',
+    ur: 'درخواست کی تاریخ لوڈ نہیں ہو سکی۔ درخواست اب بھی دستیاب ہے۔',
+    hi: 'अनुरोध इतिहास लोड नहीं हो सका। अनुरोध अभी भी उपलब्ध है।',
+  );
+  static const notRecorded = TranslatableString(
+    en: 'Not recorded',
+    ar: 'غير مسجل',
+    ur: 'ریکارڈ نہیں ہے',
+    hi: 'दर्ज नहीं है',
+  );
+  static const recordedActivity = TranslatableString(
+    en: 'Activity recorded',
+    ar: 'تم تسجيل النشاط',
+    ur: 'سرگرمی ریکارڈ کی گئی',
+    hi: 'गतिविधि दर्ज की गई',
+  );
+  static const historyRequestCreated = TranslatableString(
+    en: 'Request created',
+    ar: 'تم إنشاء الطلب',
+    ur: 'درخواست بنائی گئی',
+    hi: 'अनुरोध बनाया गया',
+  );
+  static const requestUpdated = TranslatableString(
+    en: 'Request updated',
+    ar: 'تم تحديث الطلب',
+    ur: 'درخواست اپ ڈیٹ کی گئی',
+    hi: 'अनुरोध अपडेट किया गया',
+  );
+  static const submittedForApproval = TranslatableString(
+    en: 'Submitted for approval',
+    ar: 'تم الإرسال للموافقة',
+    ur: 'منظوری کے لیے جمع کرایا گیا',
+    hi: 'अनुमोदन के लिए भेजा गया',
+  );
+  static const requestApproved = TranslatableString(
+    en: 'Request approved',
+    ar: 'تمت الموافقة على الطلب',
+    ur: 'درخواست منظور ہوئی',
+    hi: 'अनुरोध स्वीकृत हुआ',
+  );
+  static const returnedForChanges = TranslatableString(
+    en: 'Returned for changes',
+    ar: 'أعيد للتعديل',
+    ur: 'تبدیلیوں کے لیے واپس کیا گیا',
+    hi: 'बदलाव के लिए लौटाया गया',
+  );
+  static const procurementArrangementSaved = TranslatableString(
+    en: 'Procurement arrangement saved',
+    ar: 'تم حفظ ترتيب المشتريات',
+    ur: 'پروکیورمنٹ انتظام محفوظ ہوا',
+    hi: 'खरीद व्यवस्था सहेजी गई',
+  );
+  static const itemClarified = TranslatableString(
+    en: 'Item clarification sent for approval',
+    ar: 'تم إرسال توضيح البند للموافقة',
+    ur: 'آئٹم کی وضاحت منظوری کے لیے بھیجی گئی',
+    hi: 'आइटम स्पष्टीकरण अनुमोदन के लिए भेजा गया',
+  );
+  static const materialDispatched = TranslatableString(
+    en: 'Material dispatched',
+    ar: 'تم إرسال المواد',
+    ur: 'مواد ڈسپیچ ہوا',
+    hi: 'सामग्री भेजी गई',
+  );
+  static const receiptConfirmed = TranslatableString(
+    en: 'Receipt confirmed',
+    ar: 'تم تأكيد الاستلام',
+    ur: 'وصولی کی تصدیق ہوئی',
+    hi: 'प्राप्ति की पुष्टि हुई',
+  );
+  static const deliveryOrderGenerated = TranslatableString(
+    en: 'Delivery order generated',
+    ar: 'تم إنشاء أمر التسليم',
+    ur: 'ڈیلیوری آرڈر بنایا گیا',
+    hi: 'डिलीवरी ऑर्डर बनाया गया',
+  );
+  static const materialReturnRecorded = TranslatableString(
+    en: 'Material return recorded',
+    ar: 'تم تسجيل إرجاع المواد',
+    ur: 'مواد کی واپسی ریکارڈ ہوئی',
+    hi: 'सामग्री वापसी दर्ज की गई',
+  );
   static const tryAgain = TranslatableString(
     en: 'Try again',
     ar: 'حاول مرة أخرى',
@@ -1839,6 +1983,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'سائٹ پر درکار',
     hi: 'साइट पर आवश्यक',
   );
+  static const notSpecified = TranslatableString(
+    en: 'Not specified',
+    ar: 'غير محدد',
+    ur: 'درج نہیں',
+    hi: 'निर्दिष्ट नहीं',
+  );
   static const actionAge = TranslatableString(
     en: 'Action age',
     ar: 'عمر الإجراء',
@@ -1971,6 +2121,30 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'درخواست منسوخ کریں',
     hi: 'अनुरोध रद्द करें',
   );
+  static const cancelRequestQuestion = TranslatableString(
+    en: 'Cancel this request?',
+    ar: 'هل تريد إلغاء هذا الطلب؟',
+    ur: 'کیا یہ درخواست منسوخ کرنی ہے؟',
+    hi: 'क्या यह अनुरोध रद्द करना है?',
+  );
+  static const cancelRequestConfirmation = TranslatableString(
+    en: 'Are you sure you want to cancel this material request?',
+    ar: 'هل أنت متأكد من رغبتك في إلغاء طلب المواد هذا؟',
+    ur: 'کیا آپ واقعی اس مواد کی درخواست کو منسوخ کرنا چاہتے ہیں؟',
+    hi: 'क्या आप वाकई इस सामग्री अनुरोध को रद्द करना चाहते हैं?',
+  );
+  static const cancelRequestConsequence = TranslatableString(
+    en: 'The workflow will stop and eligible reservations will be released. The request and its history will remain available for audit.',
+    ar: 'سيتوقف سير العمل وسيتم تحرير الحجوزات المؤهلة. سيظل الطلب وسجله متاحين للتدقيق.',
+    ur: 'ورک فلو رک جائے گا اور اہل ریزرویشن جاری کر دی جائیں گی۔ درخواست اور اس کی تاریخ آڈٹ کے لیے دستیاب رہے گی۔',
+    hi: 'कार्यप्रवाह रुक जाएगा और योग्य आरक्षण जारी कर दिए जाएंगे। अनुरोध और उसका इतिहास ऑडिट के लिए उपलब्ध रहेगा।',
+  );
+  static const keepRequest = TranslatableString(
+    en: 'Keep request',
+    ar: 'الاحتفاظ بالطلب',
+    ur: 'درخواست برقرار رکھیں',
+    hi: 'अनुरोध रखें',
+  );
   static const cancelled = TranslatableString(
     en: 'Request cancelled',
     ar: 'تم إلغاء الطلب',
@@ -1982,6 +2156,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'سبب الإلغاء',
     ur: 'منسوخی کی وجہ',
     hi: 'रद्द करने का कारण',
+  );
+  static const cancelReasonHint = TranslatableString(
+    en: 'Briefly explain why this request is being cancelled',
+    ar: 'اشرح بإيجاز سبب إلغاء هذا الطلب',
+    ur: 'مختصراً بتائیں کہ یہ درخواست کیوں منسوخ کی جا رہی ہے',
+    hi: 'संक्षेप में बताएं कि यह अनुरोध क्यों रद्द किया जा रहा है',
+  );
+  static const cancelReasonRequired = TranslatableString(
+    en: 'Enter a cancellation reason for the audit trail.',
+    ar: 'أدخل سبب الإلغاء لسجل التدقيق.',
+    ur: 'آڈٹ ٹریل کے لیے منسوخی کی وجہ درج کریں۔',
+    hi: 'ऑडिट ट्रेल के लिए रद्द करने का कारण दर्ज करें।',
   );
   static const createReplacementRequest = TranslatableString(
     en: 'Create replacement request',

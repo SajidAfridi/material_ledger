@@ -5,6 +5,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_project_strings.dart';
+import 'yorks_v1_material_request_history.dart';
 
 class YorksV1RequestInformationButton extends StatelessWidget {
   const YorksV1RequestInformationButton({
@@ -119,7 +120,7 @@ Future<void> showYorksV1RequestInformation(
   );
 }
 
-class _RequestInformationContent extends StatelessWidget {
+class _RequestInformationContent extends StatefulWidget {
   const _RequestInformationContent({
     required this.request,
     required this.language,
@@ -129,7 +130,18 @@ class _RequestInformationContent extends StatelessWidget {
   final AppLanguage language;
 
   @override
+  State<_RequestInformationContent> createState() =>
+      _RequestInformationContentState();
+}
+
+class _RequestInformationContentState
+    extends State<_RequestInformationContent> {
+  bool _historyExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final request = widget.request;
+    final language = widget.language;
     final requestTitle = request.title?.trim();
     final requestedBy = request.requesterDisplayName?.trim();
     final role = request.requesterExactRole ?? request.requesterProjectRole;
@@ -254,6 +266,29 @@ class _RequestInformationContent extends StatelessWidget {
                     ).active(language),
                     last: true,
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  OutlinedButton.icon(
+                    key: const ValueKey('material-request-history-action'),
+                    onPressed: () =>
+                        setState(() => _historyExpanded = !_historyExpanded),
+                    icon: Icon(
+                      _historyExpanded
+                          ? Icons.expand_less_rounded
+                          : Icons.history_rounded,
+                    ),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.requestHistory.active(
+                        language,
+                      ),
+                    ),
+                  ),
+                  if (_historyExpanded) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    YorksV1MaterialRequestHistorySection(
+                      requestId: request.id,
+                      language: language,
+                    ),
+                  ],
                 ],
               ),
             ),

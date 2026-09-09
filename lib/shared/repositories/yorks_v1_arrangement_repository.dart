@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_arrangement.dart';
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../sync/connectivity_service.dart';
+import '../services/analytics_service.dart';
 import 'yorks_v1_material_request_repository.dart';
 
 /// Typed server boundary for the Batch 6 inventory/arrangement slice. Widgets
@@ -35,15 +37,18 @@ class YorksV1SupabaseArrangementRepository
     required ConnectivityService connectivity,
     YorksV1MaterialRequestRpcClient? rpcClient,
     Duration rpcTimeout = const Duration(seconds: 20),
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
        _rpcClient = rpcClient,
-       _rpcTimeout = rpcTimeout;
+       _rpcTimeout = rpcTimeout,
+       _analytics = analytics;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
+  final AnalyticsService _analytics;
 
   @override
   Future<YorksV1ArrangementWorkspace> getWorkspace(String requestId) async {
@@ -76,14 +81,26 @@ class YorksV1SupabaseArrangementRepository
   Future<YorksV1ArrangementWorkspace> begin(
     YorksV1BeginArrangementInput input,
   ) async {
-    final response = await _invoke(
-      functionName: 'v1_begin_arrangement',
-      parameters: {
-        'p_payload': input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final operation = _analytics.beginOperation(
+      'arrangement_begin',
+      properties: const {AnalyticsProperty.workflow: 'procurement'},
     );
-    return _workspace(response);
+    try {
+      final response = await _invoke(
+        functionName: 'v1_begin_arrangement',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final workspace = _workspace(response);
+      operation.complete();
+      _analytics.capture(AnalyticsEvent.arrangementStarted);
+      return workspace;
+    } catch (error) {
+      operation.fail(error);
+      rethrow;
+    }
   }
 
   @override
@@ -104,28 +121,88 @@ class YorksV1SupabaseArrangementRepository
   Future<YorksV1ArrangementWorkspace> save(
     YorksV1SaveArrangementInput input,
   ) async {
-    final response = await _invoke(
-      functionName: 'v1_save_arrangement',
-      parameters: {
-        'p_payload': input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.itemCount: input.lines.length,
+    };
+    _analytics.capture(
+      AnalyticsEvent.arrangementSaveAttempted,
+      properties: properties,
     );
-    return _workspace(response);
+    final operation = _analytics.beginOperation(
+      'arrangement_save',
+      properties: {...properties, AnalyticsProperty.workflow: 'procurement'},
+    );
+    try {
+      final response = await _invoke(
+        functionName: 'v1_save_arrangement',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final workspace = _workspace(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.arrangementSaveCompleted,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return workspace;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.arrangementSaveCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
   Future<YorksV1ArrangementWorkspace> decide(
     YorksV1DecideArrangementInput input,
   ) async {
-    final response = await _invoke(
-      functionName: 'v1_decide_arrangement',
-      parameters: {
-        'p_payload': input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.actionType: input.decision.wireValue,
+    };
+    _analytics.capture(
+      AnalyticsEvent.approvalActionStarted,
+      properties: properties,
     );
-    return _workspace(response);
+    final operation = _analytics.beginOperation(
+      'arrangement_decide',
+      properties: const {AnalyticsProperty.workflow: 'approval'},
+    );
+    try {
+      final response = await _invoke(
+        functionName: 'v1_decide_arrangement',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final workspace = _workspace(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.approvalActionCompleted,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return workspace;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.approvalActionCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   Future<Object?> _invoke({

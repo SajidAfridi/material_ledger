@@ -4,9 +4,11 @@ import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_document.dart';
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../sync/connectivity_service.dart';
+import '../services/analytics_service.dart';
 import 'yorks_v1_material_request_repository.dart';
 
 /// A narrow Storage/Edge/RPC boundary. Widgets never receive a Supabase client,
@@ -152,17 +154,20 @@ class YorksV1SupabaseDocumentsRepository
     YorksV1MaterialRequestRpcClient? rpcClient,
     YorksV1DocumentStorageClient? storageClient,
     YorksV1DocumentFinalizerClient? finalizerClient,
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
        _rpcClient = rpcClient,
        _storageClient = storageClient,
-       _finalizerClient = finalizerClient;
+       _finalizerClient = finalizerClient,
+       _analytics = analytics;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final YorksV1DocumentStorageClient? _storageClient;
   final YorksV1DocumentFinalizerClient? _finalizerClient;
+  final AnalyticsService _analytics;
 
   @override
   Future<YorksV1DocumentWorkspace> getWorkspace(String projectId) async {
@@ -273,6 +278,54 @@ class YorksV1SupabaseDocumentsRepository
     bool includeSupplierMetadata = false,
     bool includeAccountsMetadata = false,
   }) async {
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.objectType: input.entityType,
+      AnalyticsProperty.fileType: _fileType(input.mimeType),
+      AnalyticsProperty.fileSizeBucket: _fileSizeBucket(input.bytes.length),
+      AnalyticsProperty.attachmentCount: 1,
+    };
+    _analytics.capture(
+      AnalyticsEvent.documentUploadAttempted,
+      properties: properties,
+    );
+    final operation = _analytics.beginOperation(
+      'document_upload',
+      properties: properties,
+    );
+    try {
+      final result = await _uploadAuthorized(
+        input,
+        prepareFunction: prepareFunction,
+        reload: reload,
+        includeSupplierMetadata: includeSupplierMetadata,
+        includeAccountsMetadata: includeAccountsMetadata,
+      );
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.documentUploadSucceeded,
+        properties: properties,
+      );
+      return result;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.documentUploadFailed,
+        properties: {
+          ...properties,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
+  }
+
+  Future<T> _uploadAuthorized<T>(
+    YorksV1DocumentUploadInput input, {
+    required String prepareFunction,
+    required Future<T> Function() reload,
+    bool includeSupplierMetadata = false,
+    bool includeAccountsMetadata = false,
+  }) async {
     _requireReady();
     final rpc = _rpcClient!;
     final storage = _storageClient;
@@ -333,6 +386,26 @@ class YorksV1SupabaseDocumentsRepository
     }
     return reload();
   }
+
+  static String _fileType(String mimeType) {
+    final normalized = mimeType.trim().toLowerCase();
+    if (normalized == 'application/pdf') return 'pdf';
+    if (normalized.startsWith('image/')) return 'image';
+    if (normalized.contains('spreadsheet') || normalized.contains('excel')) {
+      return 'spreadsheet';
+    }
+    if (normalized.contains('word') || normalized.contains('document')) {
+      return 'document';
+    }
+    return 'other';
+  }
+
+  static String _fileSizeBucket(int bytes) => switch (bytes) {
+    < 100000 => 'under_100kb',
+    < 1000000 => '100kb_to_1mb',
+    < 10000000 => '1mb_to_10mb',
+    _ => 'over_10mb',
+  };
 
   @override
   Future<void> linkDocument(YorksV1DocumentLinkInput input) async {

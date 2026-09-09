@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/yorks_v1_domain_error.dart';
+import '../models/analytics_event.dart';
 import '../models/yorks_v1_feature_flags.dart';
 import '../models/yorks_v1_logistics.dart';
 import '../models/yorks_v1_material_return_workflow.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../sync/connectivity_service.dart';
+import '../services/analytics_service.dart';
 import 'yorks_v1_material_request_repository.dart';
 
 /// Typed Batch 7 server boundary. Widgets can neither access a Supabase client
@@ -148,23 +150,36 @@ class YorksV1SupabaseLogisticsRepository
     required ConnectivityService connectivity,
     YorksV1MaterialRequestRpcClient? rpcClient,
     Duration rpcTimeout = const Duration(seconds: 20),
+    AnalyticsService analytics = const NoopAnalyticsService(),
   }) : _featureFlags = featureFlags,
        _connectivity = connectivity,
        _rpcClient = rpcClient,
-       _rpcTimeout = rpcTimeout;
+       _rpcTimeout = rpcTimeout,
+       _analytics = analytics;
 
   final YorksV1FeatureFlags _featureFlags;
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
+  final AnalyticsService _analytics;
 
   @override
   Future<YorksV1InventoryWorkspace> getInventory({String? search}) async {
+    final stopwatch = Stopwatch()..start();
     final response = await _invoke(
       functionName: 'v1_inventory_workspace_projection',
       parameters: {'p_search': search?.trim().isEmpty ?? true ? null : search},
     );
-    return _inventoryWorkspace(response);
+    final workspace = _inventoryWorkspace(response);
+    final query = search?.trim() ?? '';
+    if (query.isNotEmpty) {
+      _analytics.recordMaterialSearch(
+        queryLength: query.length,
+        resultCount: workspace.items.length,
+        duration: stopwatch.elapsed,
+      );
+    }
+    return workspace;
   }
 
   @override
@@ -175,7 +190,13 @@ class YorksV1SupabaseLogisticsRepository
       functionName: 'v1_inventory_item_workspace_projection',
       parameters: {'p_inventory_item_id': inventoryItemId},
     );
-    return _inventoryItemDetail(response);
+    final detail = _inventoryItemDetail(response);
+    _analytics.recordMaterialSearchSelection();
+    _analytics.capture(
+      AnalyticsEvent.inventoryItemSelected,
+      properties: const {AnalyticsProperty.source: 'detail_opened'},
+    );
+    return detail;
   }
 
   @override
@@ -187,18 +208,53 @@ class YorksV1SupabaseLogisticsRepository
         : input.action != null
         ? 'v1_adjust_inventory_stock'
         : 'v1_adjust_inventory';
-    final response = await _invoke(
-      functionName: functionName,
-      parameters: {
-        'p_payload': input.createsItem
-            ? input.toCreateItemRpcPayload()
-            : input.action != null
-            ? input.toStockMovementRpcPayload()
-            : input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final action = input.createsItem
+        ? 'create_item'
+        : input.action != null
+        ? 'stock_movement'
+        : 'update_item';
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.inventoryAction: action,
+    };
+    _analytics.capture(
+      AnalyticsEvent.inventoryActionStarted,
+      properties: properties,
     );
-    return _inventoryItem(response);
+    final operation = _analytics.beginOperation(
+      'inventory_adjust',
+      properties: properties,
+    );
+    try {
+      final response = await _invoke(
+        functionName: functionName,
+        parameters: {
+          'p_payload': input.createsItem
+              ? input.toCreateItemRpcPayload()
+              : input.action != null
+              ? input.toStockMovementRpcPayload()
+              : input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final item = _inventoryItem(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.inventoryActionCompleted,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return item;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.inventoryActionCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -256,14 +312,49 @@ class YorksV1SupabaseLogisticsRepository
   Future<YorksV1InventoryImportResult> importInventory(
     YorksV1InventoryImportInput input,
   ) async {
-    final response = await _invoke(
-      functionName: 'v1_import_inventory',
-      parameters: {
-        'p_payload': input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.inventoryAction: 'import',
+      AnalyticsProperty.itemCount: input.rows.length,
+    };
+    _analytics.capture(
+      AnalyticsEvent.inventoryActionStarted,
+      properties: properties,
     );
-    return _inventoryImportResult(response);
+    final operation = _analytics.beginOperation(
+      'inventory_import',
+      properties: properties,
+    );
+    try {
+      final response = await _invoke(
+        functionName: 'v1_import_inventory',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final result = _inventoryImportResult(response);
+      operation.complete(resultCount: result.rowCount);
+      _analytics.capture(
+        AnalyticsEvent.inventoryImportCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: true,
+          AnalyticsProperty.resultCount: result.rowCount,
+        },
+      );
+      return result;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.inventoryImportCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -313,14 +404,44 @@ class YorksV1SupabaseLogisticsRepository
 
   @override
   Future<YorksV1LogisticsWorkspace> dispatch(YorksV1DispatchInput input) async {
-    final response = await _invoke(
-      functionName: 'v1_dispatch_materials',
-      parameters: {
-        'p_payload': input.toRpcPayload(),
-        'p_idempotency_key': input.idempotencyKey,
-      },
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.itemCount: input.lines.length,
+    };
+    _analytics.capture(
+      AnalyticsEvent.dispatchAttempted,
+      properties: properties,
     );
-    return _workspace(response);
+    final operation = _analytics.beginOperation(
+      'dispatch_materials',
+      properties: {...properties, AnalyticsProperty.workflow: 'procurement'},
+    );
+    try {
+      final response = await _invoke(
+        functionName: 'v1_dispatch_materials',
+        parameters: {
+          'p_payload': input.toRpcPayload(),
+          'p_idempotency_key': input.idempotencyKey,
+        },
+      );
+      final workspace = _workspace(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.dispatchCompleted,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return workspace;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.dispatchCompleted,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override

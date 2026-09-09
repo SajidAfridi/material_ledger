@@ -11,8 +11,8 @@ usage() {
 Usage: R35_STAGING_CONFIG_FILE=.r35.staging.env ./tool/r35-staging.sh <preflight|deploy|verify>
 
 preflight  Link only to the explicit staging target and show its migration state.
-deploy     Apply tracked migrations, deploy finalize-document-upload, then run verify.
-verify     Confirm the R35 header-hierarchy RPC and Edge Function are present.
+deploy     Apply tracked migrations, deploy document and chat attachment finalizers, then verify.
+verify     Confirm the R35 header hierarchy and deployed Edge Functions.
 USAGE
 }
 
@@ -92,6 +92,7 @@ case "$1" in
     # migration history.
     npx supabase db push --linked
     npx supabase functions deploy finalize-document-upload --project-ref "$staging_ref"
+    npx supabase functions deploy finalize-chat-attachment --project-ref "$staging_ref"
     verify_staging
     ;;
   verify)

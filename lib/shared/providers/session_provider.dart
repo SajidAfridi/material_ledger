@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/analytics_event.dart';
+import '../services/analytics_service.dart';
+
 import '../models/app_user.dart';
 import '../models/user_role.dart';
 import '../models/yorks_v1_role.dart';
@@ -150,6 +153,7 @@ class AuthController {
   SignInResult? _lastMaterializationResult;
   DateTime? _lastMaterializationAt;
   String? _lastRevisionIdentityKey;
+  bool _analyticsSessionAccountedFor = false;
 
   static const _materializationBurstWindow = Duration(seconds: 2);
 
@@ -157,12 +161,36 @@ class AuthController {
     required String email,
     required String password,
   }) async {
+    final analytics = _ref.read(analyticsServiceProvider);
+    analytics.capture(
+      AnalyticsEvent.authenticationAttempted,
+      properties: const {AnalyticsProperty.source: 'password'},
+    );
     final target = email.trim().toLowerCase();
     final client = _ref.read(supabaseClientProvider);
-    if (client != null) {
-      return _signInSupabase(client, target, password);
+    final result = client != null
+        ? await _signInSupabase(client, target, password)
+        : await _signInLocal(target, password);
+    final succeeded =
+        result == SignInResult.ok || result == SignInResult.mustChangePassword;
+    if (succeeded && client != null) {
+      final authUser = client.auth.currentUser;
+      final role = YorksV1Role.fromServerClaim(authUser?.appMetadata['role']);
+      if (authUser != null && role != null) {
+        analytics.identify(userId: authUser.id, role: role.claimValue);
+      }
+      _analyticsSessionAccountedFor = true;
     }
-    return _signInLocal(target, password);
+    analytics.capture(
+      succeeded
+          ? AnalyticsEvent.authenticationSucceeded
+          : AnalyticsEvent.authenticationFailed,
+      properties: {
+        AnalyticsProperty.source: client == null ? 'local_demo' : 'password',
+        AnalyticsProperty.outcome: result.name,
+      },
+    );
+    return result;
   }
 
   /// Production path: Supabase Auth is authoritative. There is deliberately no
@@ -231,6 +259,14 @@ class AuthController {
       if (result != SignInResult.ok &&
           result != SignInResult.mustChangePassword) {
         await _signOutSupabaseAndClear(client);
+      } else if (!_analyticsSessionAccountedFor) {
+        _analyticsSessionAccountedFor = true;
+        final role = YorksV1Role.fromServerClaim(authUser.appMetadata['role']);
+        if (role != null) {
+          final analytics = _ref.read(analyticsServiceProvider);
+          analytics.identify(userId: authUser.id, role: role.claimValue);
+          analytics.capture(AnalyticsEvent.sessionRestored);
+        }
       }
     } catch (_) {
       // A restored session that cannot be verified must not unlock local
@@ -442,6 +478,7 @@ class AuthController {
   }
 
   Future<void> signOut() async {
+    _ref.read(analyticsServiceProvider).capture(AnalyticsEvent.userSignedOut);
     final client = _ref.read(supabaseClientProvider);
     if (client != null) {
       try {
@@ -467,6 +504,8 @@ class AuthController {
     _lastMaterializationKey = null;
     _lastMaterializationResult = null;
     _lastMaterializationAt = null;
+    _analyticsSessionAccountedFor = false;
+    _ref.read(analyticsServiceProvider).reset();
     if (hadIdentity) _ref.read(authSessionRevisionProvider.notifier).bump();
   }
 

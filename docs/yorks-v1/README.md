@@ -73,6 +73,7 @@ explicit V7-to-V1 conflict resolution.
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE.md) | My Work, Exceptions, required-date/age indicators, trusted line ledger, operational metrics and the explicit SLA boundary |
 | [`MATERIAL_REQUEST_DISCUSSION_SPEC.md`](MATERIAL_REQUEST_DISCUSSION_SPEC.md) | Proposed full-width contextual Material Request discussion, replies, direct attachments, exact-comment notifications, responsive UX and staged release contract |
 | [`MATERIAL_REQUEST_FILE_AND_ACTION_UI.md`](MATERIAL_REQUEST_FILE_AND_ACTION_UI.md) | Shared file markers, grouped Material Request actions and consistent Request Information panel behavior |
+| [`MATERIAL_REQUEST_WORKSPACE_REDESIGN_PLAN.md`](MATERIAL_REQUEST_WORKSPACE_REDESIGN_PLAN.md) | Approved cleaner MR workspace reference, optional information/audit panel, functionality-preservation map, measured visual handoff and staged acceptance plan |
 | [`MATERIAL_REQUEST_PROCUREMENT_ITEM_CLARIFICATION.md`](MATERIAL_REQUEST_PROCUREMENT_ITEM_CLARIFICATION.md) | Procurement item-name/model clarification, shared smart search, immutable requested evidence, save lock and audit contract |
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE_EVIDENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE_EVIDENCE.md) | Local database, Flutter, visual and production-shaped build evidence for the action-intelligence release |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
