@@ -6,10 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/posthog_analytics.dart';
 import 'yorks_v1_identity_provider.dart';
 
-const _posthogApiKey = String.fromEnvironment('POSTHOG_API_KEY');
+// Match Yorks' existing environment contract. External product telemetry is an
+// explicit opt-in and remains a no-op unless POSTHOG_ENABLED=true and a project
+// token is supplied. POSTHOG_API_KEY is retained only as a temporary backwards-
+// compatible alias for builds created from the first analytics branch revision.
+const _posthogEnabled = bool.fromEnvironment('POSTHOG_ENABLED');
+const _posthogProjectToken = String.fromEnvironment('POSTHOG_PROJECT_TOKEN');
+const _legacyPosthogApiKey = String.fromEnvironment('POSTHOG_API_KEY');
 const _posthogHost = String.fromEnvironment(
   'POSTHOG_HOST',
-  defaultValue: 'https://us.i.posthog.com',
+  defaultValue: 'https://eu.i.posthog.com',
 );
 const _posthogEnvironment = String.fromEnvironment(
   'POSTHOG_ENV',
@@ -23,11 +29,18 @@ const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
 const _posthogDebug = bool.fromEnvironment('POSTHOG_DEBUG');
 
 /// Starts PostHog without putting analytics on Yorks' startup critical path.
-/// With no POSTHOG_API_KEY the entire layer remains a safe no-op.
+/// With telemetry disabled or no project token the entire layer is a safe no-op.
 final posthogAnalyticsBootstrapProvider = Provider<void>((ref) {
+  if (!_posthogEnabled) return;
+
+  final token = _posthogProjectToken.trim().isNotEmpty
+      ? _posthogProjectToken
+      : _legacyPosthogApiKey;
+  if (token.trim().isEmpty) return;
+
   unawaited(
     YorksAnalytics.instance.initialize(
-      apiKey: _posthogApiKey,
+      apiKey: token,
       host: _posthogHost,
       environment: _posthogEnvironment,
       appVersion: _appVersion,
@@ -41,6 +54,8 @@ final posthogAnalyticsBootstrapProvider = Provider<void>((ref) {
 /// lifecycle. Only the stable Auth UUID and role claim are shared.
 final posthogAnalyticsIdentityProvider = Provider<void>((ref) {
   ref.watch(posthogAnalyticsBootstrapProvider);
+  if (!_posthogEnabled) return;
+
   final userId = ref.watch(yorksV1AuthUserIdProvider);
   final role = ref.watch(yorksV1CurrentRoleProvider);
 
