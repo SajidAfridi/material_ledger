@@ -1,13 +1,46 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/posthog_analytics.dart';
 import 'yorks_v1_identity_provider.dart';
 
+const _posthogApiKey = String.fromEnvironment('POSTHOG_API_KEY');
+const _posthogHost = String.fromEnvironment(
+  'POSTHOG_HOST',
+  defaultValue: 'https://us.i.posthog.com',
+);
+const _posthogEnvironment = String.fromEnvironment(
+  'POSTHOG_ENV',
+  defaultValue: 'production',
+);
+const _appVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '1.0.0',
+);
+const _appBuild = String.fromEnvironment('APP_BUILD', defaultValue: '1');
+const _posthogDebug = bool.fromEnvironment('POSTHOG_DEBUG');
+
+/// Starts PostHog without putting analytics on Yorks' startup critical path.
+/// With no POSTHOG_API_KEY the entire layer remains a safe no-op.
+final posthogAnalyticsBootstrapProvider = Provider<void>((ref) {
+  unawaited(
+    YorksAnalytics.instance.initialize(
+      apiKey: _posthogApiKey,
+      host: _posthogHost,
+      environment: _posthogEnvironment,
+      appVersion: _appVersion,
+      appBuild: _appBuild,
+      debug: _posthogDebug && kDebugMode,
+    ),
+  );
+});
+
 /// Keeps PostHog identity aligned with the authoritative Yorks authentication
 /// lifecycle. Only the stable Auth UUID and role claim are shared.
 final posthogAnalyticsIdentityProvider = Provider<void>((ref) {
+  ref.watch(posthogAnalyticsBootstrapProvider);
   final userId = ref.watch(yorksV1AuthUserIdProvider);
   final role = ref.watch(yorksV1CurrentRoleProvider);
 
