@@ -6,27 +6,30 @@ PostHog is the Yorks product/UX analytics layer. It answers whether staff can co
 
 ## Configuration
 
-Analytics is disabled when `POSTHOG_API_KEY` is absent.
+External product telemetry is an explicit opt-in. Analytics remains disabled unless `POSTHOG_ENABLED=true` and a project token is supplied.
 
 Build-time values:
 
-- `POSTHOG_API_KEY` — project token supplied by deployment/CI, never committed to this repository.
-- `POSTHOG_HOST` — defaults to `https://us.i.posthog.com`.
+- `POSTHOG_ENABLED` — `true` to enable external PostHog product telemetry; defaults to disabled.
+- `POSTHOG_PROJECT_TOKEN` — PostHog project token supplied by the local/deployment environment. Do not place production values in committed example configuration.
+- `POSTHOG_HOST` — Yorks EU Cloud ingestion host; defaults to `https://eu.i.posthog.com`.
 - `POSTHOG_ENV` — use `development`, `staging`, or `production` consistently.
 - `POSTHOG_DEBUG` — enable only for local troubleshooting.
 - `APP_VERSION` and `APP_BUILD` — attached to every event.
 
-Example local invocation:
+The initial branch also accepts `POSTHOG_API_KEY` as a temporary backwards-compatible alias, but `POSTHOG_PROJECT_TOKEN` is the canonical Yorks name.
 
-```bash
-flutter run \
-  --dart-define=POSTHOG_API_KEY=<project-token> \
-  --dart-define=POSTHOG_HOST=https://us.i.posthog.com \
-  --dart-define=POSTHOG_ENV=development \
-  --dart-define=POSTHOG_DEBUG=true
+Example environment values:
+
+```dotenv
+POSTHOG_ENABLED=true
+POSTHOG_PROJECT_TOKEN=<project-token>
+POSTHOG_HOST=https://eu.i.posthog.com
+POSTHOG_ENV=production
+POSTHOG_DEBUG=false
 ```
 
-Use a non-production PostHog project/token for development and staging when available. Never use a production token in committed source.
+Use a non-production PostHog project/token for development and staging when available. Do not confuse the project token used by client SDKs with personal/private API keys that grant account or project-management access.
 
 ## Architecture
 
