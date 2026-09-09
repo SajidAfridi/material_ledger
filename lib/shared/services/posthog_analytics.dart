@@ -16,8 +16,10 @@ class YorksAnalytics {
   bool _enabled = false;
   bool _initialized = false;
   String? _identifiedUserId;
+  ({String userId, String role})? _pendingIdentity;
 
   bool get isEnabled => _enabled && _initialized;
+  bool get hasIdentifiedUser => _identifiedUserId != null;
 
   Future<void> initialize({
     required String apiKey,
@@ -28,7 +30,7 @@ class YorksAnalytics {
     bool debug = false,
   }) async {
     final key = apiKey.trim();
-    if (key.isEmpty) return;
+    if (key.isEmpty || _initialized) return;
 
     final config = PostHogConfig(key)
       ..host = host.trim().isEmpty ? 'https://us.i.posthog.com' : host.trim()
@@ -66,6 +68,11 @@ class YorksAnalytics {
       _enabled = true;
       _initialized = true;
       unawaited(capture('analytics initialized'));
+      final pending = _pendingIdentity;
+      _pendingIdentity = null;
+      if (pending != null) {
+        unawaited(identify(userId: pending.userId, role: pending.role));
+      }
     } catch (error, stack) {
       _enabled = false;
       _initialized = false;
@@ -80,23 +87,36 @@ class YorksAnalytics {
     required String userId,
     required String role,
   }) async {
-    if (!isEnabled) return;
     final normalizedId = userId.trim();
-    if (normalizedId.isEmpty || _identifiedUserId == normalizedId) return;
+    final normalizedRole = role.trim();
+    if (normalizedId.isEmpty) return;
+    if (!isEnabled) {
+      _pendingIdentity = (userId: normalizedId, role: normalizedRole);
+      return;
+    }
+    if (_identifiedUserId == normalizedId) return;
     try {
       await Posthog().identify(
         userId: normalizedId,
-        userProperties: <String, Object>{'role': role},
+        userProperties: <String, Object>{
+          if (normalizedRole.isNotEmpty) 'role': normalizedRole,
+        },
       );
       _identifiedUserId = normalizedId;
-      await capture('user identified', properties: {'role': role});
+      await capture(
+        'user identified',
+        properties: <String, Object?>{
+          if (normalizedRole.isNotEmpty) 'role': normalizedRole,
+        },
+      );
     } catch (error) {
       if (kDebugMode) debugPrint('[analytics] identify failed: $error');
     }
   }
 
   Future<void> reset() async {
-    if (!isEnabled) return;
+    _pendingIdentity = null;
+    if (!isEnabled || _identifiedUserId == null) return;
     try {
       await Posthog().reset();
       _identifiedUserId = null;
@@ -201,7 +221,8 @@ class YorksAnalytics {
 
   bool _isSensitiveKey(String key) {
     final normalized = key.toLowerCase();
-    const blockedTokens = <String>{
+    final words = normalized.split(RegExp(r'[^a-z0-9]+')).where((w) => w.isNotEmpty);
+    const blockedWords = <String>{
       'name',
       'email',
       'phone',
@@ -211,25 +232,23 @@ class YorksAnalytics {
       'comment',
       'note',
       'description',
-      'search_query',
-      'query_text',
       'filename',
-      'file_name',
       'supplier',
       'client',
       'consultant',
       'contractor',
-      'invoice_number',
+      'invoice',
       'bank',
       'salary',
       'amount',
       'price',
       'cost',
-      'access_token',
-      'refresh_token',
     };
-    return blockedTokens.any(
-      (token) => normalized == token || normalized.contains('${token}_'),
-    );
+    return words.any(blockedWords.contains) ||
+        normalized.contains('search_query') ||
+        normalized.contains('query_text') ||
+        normalized.contains('file_name') ||
+        normalized.contains('access_token') ||
+        normalized.contains('refresh_token');
   }
 }
