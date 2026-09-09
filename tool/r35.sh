@@ -63,7 +63,7 @@ workforce_flag="${operator_workforce_flag:-${YORKS_V1_WORKFORCE:-false}}"
 analytics_flag="${operator_analytics_flag:-${YORKS_V1_ANALYTICS:-false}}"
 posthog_enabled="${operator_posthog_enabled:-${POSTHOG_ENABLED:-false}}"
 posthog_project_token="${operator_posthog_project_token:-${POSTHOG_PROJECT_TOKEN:-}}"
-posthog_host="${operator_posthog_host:-${POSTHOG_HOST:-https://eu.i.posthog.com}}"
+posthog_host="${operator_posthog_host:-${POSTHOG_HOST:-https://us.i.posthog.com}}"
 posthog_environment="${operator_posthog_environment:-${POSTHOG_ENV:-${r35_environment:-production}}}"
 posthog_debug="${operator_posthog_debug:-${POSTHOG_DEBUG:-false}}"
 
@@ -138,6 +138,16 @@ if [[ "$posthog_enabled" == "true" && -z "$posthog_project_token" ]]; then
   echo "POSTHOG_PROJECT_TOKEN is required when POSTHOG_ENABLED=true." >&2
   exit 64
 fi
+if [[ "$posthog_enabled" == "true" ]]; then
+  if [[ ! "$posthog_project_token" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "POSTHOG_PROJECT_TOKEN contains unsupported characters." >&2
+    exit 64
+  fi
+  if [[ ! "$posthog_host" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]]; then
+    echo "POSTHOG_HOST must be a simple HTTPS origin." >&2
+    exit 64
+  fi
+fi
 if [[ "$r35_environment" == "production"
    && ("$command" == "run" || "$command" == "build-web")
    && -z "$firebase_web_vapid_key" ]]; then
@@ -174,6 +184,28 @@ r35_defines=(
 
 if [[ -n "$posthog_project_token" ]]; then
   r35_defines+=("--dart-define=POSTHOG_PROJECT_TOKEN=${posthog_project_token}")
+fi
+
+# Flutter Web's PostHog adapter requires posthog-js to be initialized in the
+# browser before Dart capture calls can work. Generate a machine-local config
+# consumed by web/flutter_bootstrap.js. The file is gitignored and contains no
+# data when telemetry is disabled.
+if [[ "$command" == "run" || "$command" == "build-web" ]]; then
+  posthog_web_config='web/posthog_config.js'
+  if [[ "$posthog_enabled" == "true" ]]; then
+    cat > "$posthog_web_config" <<EOF
+window.__YORKS_POSTHOG__ = Object.freeze({
+  enabled: true,
+  projectToken: "${posthog_project_token}",
+  host: "${posthog_host}",
+  debug: ${posthog_debug},
+});
+EOF
+  else
+    cat > "$posthog_web_config" <<'EOF'
+window.__YORKS_POSTHOG__ = Object.freeze({ enabled: false });
+EOF
+  fi
 fi
 
 # This rollout state is safe to print and provides release evidence without
