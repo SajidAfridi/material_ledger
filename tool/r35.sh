@@ -37,6 +37,11 @@ operator_firebase_web_vapid_key="${FIREBASE_WEB_VAPID_KEY:-}"
 operator_accounts_flag="${YORKS_V1_ACCOUNTS:-}"
 operator_workforce_flag="${YORKS_V1_WORKFORCE:-}"
 operator_analytics_flag="${YORKS_V1_ANALYTICS:-}"
+operator_posthog_enabled="${POSTHOG_ENABLED:-}"
+operator_posthog_project_token="${POSTHOG_PROJECT_TOKEN:-}"
+operator_posthog_host="${POSTHOG_HOST:-}"
+operator_posthog_environment="${POSTHOG_ENV:-}"
+operator_posthog_debug="${POSTHOG_DEBUG:-}"
 
 # Configuration is deliberately explicit. A missing file is acceptable only
 # when CI/operator environment variables already provide the complete pair.
@@ -56,6 +61,11 @@ firebase_web_vapid_key="${operator_firebase_web_vapid_key:-${FIREBASE_WEB_VAPID_
 accounts_flag="${operator_accounts_flag:-${YORKS_V1_ACCOUNTS:-false}}"
 workforce_flag="${operator_workforce_flag:-${YORKS_V1_WORKFORCE:-false}}"
 analytics_flag="${operator_analytics_flag:-${YORKS_V1_ANALYTICS:-false}}"
+posthog_enabled="${operator_posthog_enabled:-${POSTHOG_ENABLED:-false}}"
+posthog_project_token="${operator_posthog_project_token:-${POSTHOG_PROJECT_TOKEN:-}}"
+posthog_host="${operator_posthog_host:-${POSTHOG_HOST:-https://eu.i.posthog.com}}"
+posthog_environment="${operator_posthog_environment:-${POSTHOG_ENV:-${r35_environment:-production}}}"
+posthog_debug="${operator_posthog_debug:-${POSTHOG_DEBUG:-false}}"
 
 # A developer's ignored production file must not silently enable Accounts in a
 # CI build. An explicit process-level value still wins for a deliberate CI
@@ -68,6 +78,9 @@ if [[ "$r35_environment" == "ci" && -z "$operator_workforce_flag" ]]; then
 fi
 if [[ "$r35_environment" == "ci" && -z "$operator_analytics_flag" ]]; then
   analytics_flag=false
+fi
+if [[ "$r35_environment" == "ci" && -z "$operator_posthog_enabled" ]]; then
+  posthog_enabled=false
 fi
 
 if [[ -z "$r35_environment" ]]; then
@@ -107,6 +120,24 @@ case "$analytics_flag" in
     exit 64
     ;;
 esac
+case "$posthog_enabled" in
+  true|false) ;;
+  *)
+    echo "POSTHOG_ENABLED must be true or false." >&2
+    exit 64
+    ;;
+esac
+case "$posthog_debug" in
+  true|false) ;;
+  *)
+    echo "POSTHOG_DEBUG must be true or false." >&2
+    exit 64
+    ;;
+esac
+if [[ "$posthog_enabled" == "true" && -z "$posthog_project_token" ]]; then
+  echo "POSTHOG_PROJECT_TOKEN is required when POSTHOG_ENABLED=true." >&2
+  exit 64
+fi
 if [[ "$r35_environment" == "production"
    && ("$command" == "run" || "$command" == "build-web")
    && -z "$firebase_web_vapid_key" ]]; then
@@ -135,13 +166,22 @@ r35_defines=(
   '--dart-define=YORKS_R38_TEAM_CHAT=true'
   '--dart-define=YORKS_R38_9_INVENTORY_SUPPLIERS=true'
   '--dart-define=use_arabic=true'
+  "--dart-define=POSTHOG_ENABLED=${posthog_enabled}"
+  "--dart-define=POSTHOG_HOST=${posthog_host}"
+  "--dart-define=POSTHOG_ENV=${posthog_environment}"
+  "--dart-define=POSTHOG_DEBUG=${posthog_debug}"
 )
 
+if [[ -n "$posthog_project_token" ]]; then
+  r35_defines+=("--dart-define=POSTHOG_PROJECT_TOKEN=${posthog_project_token}")
+fi
+
 # This rollout state is safe to print and provides release evidence without
-# exposing backend configuration or public-notification credentials.
+# exposing backend configuration, telemetry tokens or public-notification credentials.
 echo "Yorks Accounts rollout: ${accounts_flag}" >&2
 echo "Yorks Workforce rollout: ${workforce_flag}" >&2
 echo "Yorks Analytics rollout: ${analytics_flag}" >&2
+echo "Yorks PostHog telemetry: ${posthog_enabled}" >&2
 
 # The VAPID public key is not a secret, but it is environment-specific. It is
 # mandatory for production browser commands and may be omitted by native or
