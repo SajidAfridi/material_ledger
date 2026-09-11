@@ -75,6 +75,8 @@ explicit V7-to-V1 conflict resolution.
 | [`MATERIAL_REQUEST_FILE_AND_ACTION_UI.md`](MATERIAL_REQUEST_FILE_AND_ACTION_UI.md) | Shared file markers, grouped Material Request actions and consistent Request Information panel behavior |
 | [`MATERIAL_REQUEST_WORKSPACE_REDESIGN_PLAN.md`](MATERIAL_REQUEST_WORKSPACE_REDESIGN_PLAN.md) | Approved cleaner MR workspace reference, optional information/audit panel, functionality-preservation map, measured visual handoff and staged acceptance plan |
 | [`MATERIAL_REQUEST_PROCUREMENT_ITEM_CLARIFICATION.md`](MATERIAL_REQUEST_PROCUREMENT_ITEM_CLARIFICATION.md) | Procurement item-name/model clarification, shared smart search, immutable requested evidence, save lock and audit contract |
+| [`ARRANGEMENT_WORKBENCH_SRS.md`](ARRANGEMENT_WORKBENCH_SRS.md) | Proposed non-regressing arrangement workbench: private progress, safe Back/resume, stock/clarification/uncertain-save handling and responsive UI |
+| [`ARRANGEMENT_WORKBENCH_IMPLEMENTATION_PLAN.md`](ARRANGEMENT_WORKBENCH_IMPLEMENTATION_PLAN.md) | Implementation slices, source/test map, edge-case acceptance matrix, staging and rollback gates; not a release approval |
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE_EVIDENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE_EVIDENCE.md) | Local database, Flutter, visual and production-shaped build evidence for the action-intelligence release |
 | [`R38_UI_CONTRACT.md`](R38_UI_CONTRACT.md) | Rendered R38 visual contract and approved production exceptions |
 | [`R38_4_RENTAL_PROPERTIES.md`](R38_4_RENTAL_PROPERTIES.md) | Admin-only rental property, lease, rent, cheque, import/export and controlled-document implementation |
