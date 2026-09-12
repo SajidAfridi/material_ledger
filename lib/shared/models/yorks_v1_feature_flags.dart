@@ -24,6 +24,7 @@ class YorksV1FeatureFlags {
     bool analytics = false,
     bool teamChat = false,
     bool inventorySuppliers = false,
+    bool companyMaterialRequests = false,
   }) : _foundation = foundation,
        _projects = projects,
        _boq = boq,
@@ -38,7 +39,8 @@ class YorksV1FeatureFlags {
        _workforce = workforce,
        _analytics = analytics,
        _teamChat = teamChat,
-       _inventorySuppliers = inventorySuppliers;
+       _inventorySuppliers = inventorySuppliers,
+       _companyMaterialRequests = companyMaterialRequests;
 
   const YorksV1FeatureFlags.fromEnvironment()
     : _foundation = const bool.fromEnvironment(
@@ -94,6 +96,10 @@ class YorksV1FeatureFlags {
       _inventorySuppliers = const bool.fromEnvironment(
         'YORKS_R38_9_INVENTORY_SUPPLIERS',
         defaultValue: false,
+      ),
+      _companyMaterialRequests = const bool.fromEnvironment(
+        'YORKS_V1_COMPANY_MATERIAL_REQUESTS',
+        defaultValue: false,
       );
 
   final bool _foundation;
@@ -111,6 +117,7 @@ class YorksV1FeatureFlags {
   final bool _analytics;
   final bool _teamChat;
   final bool _inventorySuppliers;
+  final bool _companyMaterialRequests;
 
   bool get foundation => _foundation;
   bool get projects => foundation && _projects;
@@ -149,6 +156,11 @@ class YorksV1FeatureFlags {
   /// dependency in the effective getter prevents a partially functional
   /// supplier workspace from reaching users.
   bool get inventorySuppliers => documents && _inventorySuppliers;
+
+  /// Company-use requests are a separately gated, additive lane. A project
+  /// request remains available even while the company routing matrix is being
+  /// configured and reviewed.
+  bool get companyMaterialRequests => requests && _companyMaterialRequests;
 
   /// The one supported Yorks V1 R35 operational chain. Release builds must
   /// fail closed if a caller explicitly disables any dependency in this chain.

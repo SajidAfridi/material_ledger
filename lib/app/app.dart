@@ -139,6 +139,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final yorksV1InventorySuppliersEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
       .inventorySuppliers;
+  final yorksV1CompanyMaterialRequestsEnabled = ref
+      .watch(yorksV1FeatureFlagsProvider)
+      .companyMaterialRequests;
   final yorksV1AccountsEnabled = ref
       .watch(yorksV1FeatureFlagsProvider)
       .accounts;
@@ -184,6 +187,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     yorksV1DocumentsEnabled: yorksV1DocumentsEnabled,
     yorksV1TeamChatEnabled: yorksV1TeamChatEnabled,
     yorksV1InventorySuppliersEnabled: yorksV1InventorySuppliersEnabled,
+    yorksV1CompanyMaterialRequestsEnabled:
+        yorksV1CompanyMaterialRequestsEnabled,
     yorksV1AccountsEnabled: yorksV1AccountsEnabled,
     yorksV1WorkforceEnabled: yorksV1WorkforceEnabled,
     yorksV1AnalyticsEnabled: yorksV1AnalyticsEnabled,

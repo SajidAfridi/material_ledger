@@ -24,6 +24,7 @@ void main() {
       expect(flags.workforce, false);
       expect(flags.analytics, false);
       expect(flags.inventorySuppliers, false);
+      expect(flags.companyMaterialRequests, false);
     });
 
     test('downstream settings fail closed when foundation is disabled', () {
@@ -52,6 +53,7 @@ void main() {
       expect(flags.workforce, false);
       expect(flags.analytics, false);
       expect(flags.inventorySuppliers, false);
+      expect(flags.companyMaterialRequests, false);
     });
 
     test('a missing intermediate dependency closes every later feature', () {
@@ -80,6 +82,7 @@ void main() {
       expect(flags.workforce, false);
       expect(flags.analytics, false);
       expect(flags.inventorySuppliers, false);
+      expect(flags.companyMaterialRequests, false);
     });
 
     test('the complete approved dependency chain can be enabled', () {
@@ -241,6 +244,27 @@ void main() {
       expect(complete.inventorySuppliers, true);
     });
 
+    test('Company Material Requests default off and require the request chain', () {
+      const withoutRequests = YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        companyMaterialRequests: true,
+      );
+      const enabled = YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        companyMaterialRequests: true,
+      );
+
+      expect(withoutRequests.companyMaterialRequests, false);
+      expect(enabled.companyMaterialRequests, true);
+    });
+
     test('production defaults enable the complete Yorks chain', () {
       final container = ProviderContainer(
         overrides: [
@@ -271,6 +295,7 @@ void main() {
       expect(flags.documents, true);
       expect(flags.accounts, false);
       expect(flags.workforce, false);
+      expect(flags.companyMaterialRequests, false);
       expect(flags.isCompleteR35, true);
     });
 

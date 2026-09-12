@@ -26,6 +26,7 @@ import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
+import '../../../../shared/models/yorks_v1_company_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
@@ -98,6 +99,9 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
       );
     }
     final language = ref.watch(languageProvider);
+    final companyRequestsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .companyMaterialRequests;
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final createAccess = yorksV1FeatureActionAccess(
@@ -178,6 +182,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
           requests: const [],
           language: language,
           canCreate: canCreate,
+          canCreateCompany: companyRequestsEnabled,
           fixedProjectId: projectId,
           summaryPageLoader: phase2Repository.listRequestSummaries,
           operationsDashboardLoader: operationsRepository == null
@@ -193,6 +198,9 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                     projectId: projectId,
                   ),
                 )
+              : null,
+          onCreateCompany: companyRequestsEnabled
+              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequestNew)
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () {},
@@ -224,6 +232,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
               .toList(growable: false),
           language: language,
           canCreate: canCreate,
+          canCreateCompany: companyRequestsEnabled,
           fixedProjectId: projectId,
           onCreate: createAccess.canWrite
               ? () => context.push(
@@ -232,6 +241,9 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                     projectId: projectId,
                   ),
                 )
+              : null,
+          onCreateCompany: companyRequestsEnabled
+              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequestNew)
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () => ref.invalidate(yorksV1MaterialRequestListProvider),
@@ -344,6 +356,9 @@ class _YorksMobileMaterialRequestsPageState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final companyRequestsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .companyMaterialRequests;
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final createAccess = yorksV1FeatureActionAccess(
@@ -453,6 +468,7 @@ class _YorksMobileMaterialRequestsPageState
                       : summary?.valueOrNull?.totalCount,
                   page: _page,
                   canCreate: canCreate,
+                  canCreateCompany: companyRequestsEnabled,
                   localDrafts: savedDrafts,
                   operationsDashboard: operations,
                   onRetryOperations: operations == null
@@ -484,6 +500,11 @@ class _YorksMobileMaterialRequestsPageState
                             const Uuid().v4(),
                             projectId: widget.projectId,
                           ),
+                        )
+                      : null,
+                  onCreateCompany: companyRequestsEnabled
+                      ? () => context.push(
+                          RoutePaths.yorksV1CompanyMaterialRequestNew,
                         )
                       : null,
                   onOpen: (request) =>
@@ -534,6 +555,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     this.totalCount,
     this.page = 0,
     required this.canCreate,
+    required this.canCreateCompany,
     required this.localDrafts,
     this.operationsDashboard,
     this.onRetryOperations,
@@ -545,6 +567,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     required this.onFiltersChanged,
     this.onPageChanged,
     required this.onCreate,
+    this.onCreateCompany,
     required this.onOpen,
     required this.onAction,
     required this.onResume,
@@ -557,6 +580,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final int? totalCount;
   final int page;
   final bool canCreate;
+  final bool canCreateCompany;
   final List<YorksV1MaterialRequestDraft> localDrafts;
   final AsyncValue<YorksV1MaterialRequestOperationsDashboard>?
   operationsDashboard;
@@ -569,6 +593,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final ValueChanged<_MobileMaterialRequestFilterSelection> onFiltersChanged;
   final ValueChanged<int>? onPageChanged;
   final VoidCallback? onCreate;
+  final VoidCallback? onCreateCompany;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
   final ValueChanged<YorksV1MaterialRequest> onAction;
   final ValueChanged<YorksV1MaterialRequestDraft> onResume;
@@ -636,6 +661,21 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 13),
                   ),
                 ),
+              if (canCreateCompany) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  height: AppSpacing.minTapTarget,
+                  child: OutlinedButton(
+                    key: const ValueKey('mobile-mr-new-company-request'),
+                    onPressed: onCreateCompany,
+                    child: Text(
+                      YorksV1CompanyMaterialRequestStrings.companyUse.active(
+                        language,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 14),
