@@ -33,6 +33,22 @@ abstract final class AnalyticsRouteMapper {
     if (path == '/materials') {
       return const AnalyticsRouteDestination(AnalyticsScreen.materials);
     }
+    if (path == '/requests' || path == '/admin/requests') {
+      return const AnalyticsRouteDestination(AnalyticsScreen.materialRequests);
+    }
+    if (s.length == 2 && s.first == 'request') {
+      return const AnalyticsRouteDestination(
+        AnalyticsScreen.materialRequestDetail,
+        entryEvent: AnalyticsEvent.materialRequestOpened,
+      );
+    }
+    if (path == '/admin/procurement' ||
+        (s.length == 3 && s[0] == 'admin' && s[1] == 'plan-review')) {
+      return const AnalyticsRouteDestination(
+        AnalyticsScreen.procurement,
+        entryEvent: AnalyticsEvent.procurementRequestOpened,
+      );
+    }
     if (path == '/browse') {
       return const AnalyticsRouteDestination(AnalyticsScreen.browse);
     }
@@ -107,7 +123,7 @@ abstract final class AnalyticsRouteMapper {
       }
       if (s.length >= 4 && s[3] == 'arrangement') {
         return const AnalyticsRouteDestination(
-          AnalyticsScreen.procurementArrangement,
+          AnalyticsScreen.procurement,
           entryEvent: AnalyticsEvent.procurementRequestOpened,
         );
       }

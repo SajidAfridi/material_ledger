@@ -145,7 +145,7 @@ enum AnalyticsScreen {
   materialRequests,
   materialRequestDraft,
   materialRequestDetail,
-  procurementArrangement,
+  procurement,
   logistics,
   returnsDocuments,
   inventory,

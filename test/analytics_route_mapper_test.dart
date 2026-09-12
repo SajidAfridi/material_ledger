@@ -12,7 +12,7 @@ void main() {
       '/yorks/projects/$projectId/documents?entity_id=sensitive':
           AnalyticsScreen.projectDocuments,
       '/yorks/material-requests/request-secret/arrangement':
-          AnalyticsScreen.procurementArrangement,
+          AnalyticsScreen.procurement,
       '/yorks/material-requests/request-secret/logistics?dispatch_id=private':
           AnalyticsScreen.logistics,
       '/yorks/inventory/suppliers/supplier-secret':
@@ -52,6 +52,40 @@ void main() {
           Uri.parse('/yorks/inventory'),
         ).entryEvent,
         AnalyticsEvent.inventoryOpened,
+      );
+    },
+  );
+
+  test(
+    'legacy Material Request and Procurement routes retain stable screens',
+    () {
+      final cases = <String, AnalyticsScreen>{
+        '/requests': AnalyticsScreen.materialRequests,
+        '/admin/requests': AnalyticsScreen.materialRequests,
+        '/request/opaque-request-id': AnalyticsScreen.materialRequestDetail,
+        '/admin/procurement': AnalyticsScreen.procurement,
+        '/admin/plan-review/opaque-project-id': AnalyticsScreen.procurement,
+      };
+
+      for (final entry in cases.entries) {
+        final destination = AnalyticsRouteMapper.destinationFor(
+          Uri.parse(entry.key),
+        );
+        expect(destination.screen, entry.value);
+        expect(destination.screen.wireName, isNot(contains('opaque')));
+      }
+
+      expect(
+        AnalyticsRouteMapper.destinationFor(
+          Uri.parse('/request/opaque-request-id'),
+        ).entryEvent,
+        AnalyticsEvent.materialRequestOpened,
+      );
+      expect(
+        AnalyticsRouteMapper.destinationFor(
+          Uri.parse('/admin/procurement'),
+        ).entryEvent,
+        AnalyticsEvent.procurementRequestOpened,
       );
     },
   );
