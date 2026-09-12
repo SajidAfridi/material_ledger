@@ -52,7 +52,8 @@ import '../features/materials/presentation/screens/yorks_v1_inventory_screen.dar
 import '../features/materials/presentation/screens/yorks_v1_inventory_supplier_screens.dart';
 import '../features/materials/presentation/screens/yorks_v1_logistics_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_material_request_screens.dart';
-import '../features/materials/presentation/screens/yorks_v1_company_material_request_screen.dart';
+import '../features/materials/presentation/screens/yorks_v1_company_material_request_screen.dart'
+    deferred as company_material_request;
 import '../features/materials/presentation/screens/yorks_v1_material_returns_screen.dart';
 import '../features/materials/presentation/screens/yorks_v1_returns_documents_screen.dart';
 import '../features/onboarding/presentation/screens/language_selection_screen.dart';
@@ -1568,7 +1569,7 @@ GoRouter createAppRouter({
           path: RoutePaths.yorksV1CompanyMaterialRequestNew,
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
-            const YorksV1CompanyMaterialRequestScreen(),
+            const _DeferredCompanyMaterialRequestScreen(),
           ),
         ),
       GoRoute(
@@ -2033,6 +2034,61 @@ class _DeferredEngineerProfileScreenState
         if (snapshot.connectionState == ConnectionState.done &&
             !snapshot.hasError) {
           return engineer_profile.EngineerProfileScreen();
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: MaterialLocalizations.of(
+                context,
+              ).refreshIndicatorSemanticLabel,
+              onPressed: _retry,
+            ),
+          );
+        }
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+  }
+}
+
+/// Loads the Company Request editor only after its feature-gated route is
+/// opened. The feature remains server-authorized; this keeps a disabled or
+/// unopened workflow out of the initial web download without changing its
+/// route or lifecycle behavior.
+class _DeferredCompanyMaterialRequestScreen extends StatefulWidget {
+  const _DeferredCompanyMaterialRequestScreen();
+
+  @override
+  State<_DeferredCompanyMaterialRequestScreen> createState() =>
+      _DeferredCompanyMaterialRequestScreenState();
+}
+
+class _DeferredCompanyMaterialRequestScreenState
+    extends State<_DeferredCompanyMaterialRequestScreen> {
+  static Future<void>? _sharedLoad;
+  late Future<void> _load;
+
+  @override
+  void initState() {
+    super.initState();
+    _load = _sharedLoad ??= company_material_request.loadLibrary();
+  }
+
+  void _retry() {
+    setState(() {
+      _load = _sharedLoad = company_material_request.loadLibrary();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _load,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            !snapshot.hasError) {
+          return company_material_request.YorksV1CompanyMaterialRequestScreen();
         }
         if (snapshot.hasError) {
           return Center(
