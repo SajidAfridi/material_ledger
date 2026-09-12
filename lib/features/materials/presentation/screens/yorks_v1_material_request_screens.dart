@@ -606,6 +606,27 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
         .where(_matches)
         .where(_matchesSearch)
         .toList(growable: false);
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          YorksV1MaterialRequestStrings.requests.active(language),
+          style: AppTypography.headlineMedium.copyWith(
+            fontSize: 25,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          YorksV1MaterialRequestStrings.mobileRequestsDescription.active(
+            language,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+      ],
+    );
     final activeFilterCount =
         (filter == _MobileMaterialRequestFilter.all ? 0 : 1) +
         ((registerView == YorksV1MaterialRequestRegisterView.myWork ||
@@ -619,50 +640,28 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 104),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      YorksV1MaterialRequestStrings.requests.active(language),
-                      style: AppTypography.headlineMedium.copyWith(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w800,
+          if (canCreateCompany) ...[
+            heading,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (canCreate)
+                  FilledButton.icon(
+                    key: const ValueKey('mobile-mr-new-request'),
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.add_rounded, size: 19),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.newRequestShort.active(
+                        language,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      YorksV1MaterialRequestStrings.mobileRequestsDescription
-                          .active(language),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (canCreate)
-                FilledButton.icon(
-                  key: const ValueKey('mobile-mr-new-request'),
-                  onPressed: onCreate,
-                  icon: const Icon(Icons.add_rounded, size: 19),
-                  label: Text(
-                    YorksV1MaterialRequestStrings.newRequestShort.active(
-                      language,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, AppSpacing.minTapTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
                     ),
                   ),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, AppSpacing.minTapTarget),
-                    padding: const EdgeInsets.symmetric(horizontal: 13),
-                  ),
-                ),
-              if (canCreateCompany) ...[
-                const SizedBox(width: 6),
                 SizedBox(
                   height: AppSpacing.minTapTarget,
                   child: OutlinedButton(
@@ -676,8 +675,29 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
                   ),
                 ),
               ],
-            ],
-          ),
+            ),
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: heading),
+                if (canCreate)
+                  FilledButton.icon(
+                    key: const ValueKey('mobile-mr-new-request'),
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.add_rounded, size: 19),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.newRequestShort.active(
+                        language,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, AppSpacing.minTapTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                    ),
+                  ),
+              ],
+            ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
