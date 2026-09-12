@@ -64,6 +64,10 @@ private draft, and atomically creates the company approval handoff. Retrying
 the same atomic command returns its original response without rewriting a
 submitted record or duplicating a reference, event or notification.
 
+Approval preflight is subject to the same effective requester, beneficiary and
+receiver checks. It cannot disclose a route for a person outside the selected
+policy combination; submission repeats all checks at commit time.
+
 ## Validation and rollback
 
 `supabase/tests/database/yorks_v1_company_material_requests_foundation.test.sql`

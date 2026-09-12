@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(23);
+select plan(24);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -136,6 +136,16 @@ select is(
   '10000000-0000-4000-8000-000000000001',
   'Preflight cannot select the requester, beneficiary or receiver as approver'
 );
+select throws_ok(
+  $$select public.v1_company_material_request_approval_preflight(
+    'c1000000-0000-4000-8000-000000000001',
+    'c1000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000002'
+  )$$,
+  '42501', 'V1_COMPANY_MATERIAL_REQUEST_PREFLIGHT_DENIED',
+  'Preflight cannot disclose a route for a beneficiary outside the effective policy'
+);
 select lives_ok(
   $$select public.v1_save_company_material_request_draft(
     (select saved_payload from cmr_payloads)
@@ -241,6 +251,8 @@ select is(
   (select response from cmr_submit_response),
   'An exact submit retry returns the first projection without another effect'
 );
+
+set local role postgres;
 select is(
   (select count(*) from public.v1_company_material_request_events
    where request_id = 'c1000000-0000-4000-8000-000000000010'
@@ -256,6 +268,12 @@ select is(
   'One approver notification is created for an idempotent command'
 );
 
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
 create temporary table cmr_atomic_response as
 select public.v1_save_and_submit_company_material_request(
   (select atomic_payload from cmr_payloads),
@@ -275,6 +293,8 @@ select is(
   (select response from cmr_atomic_response),
   'An exact atomic retry returns the saved response without re-saving a submitted request'
 );
+
+set local role postgres;
 select is(
   (select count(*) from public.v1_company_material_request_events
    where request_id = 'c1000000-0000-4000-8000-000000000020'
@@ -309,6 +329,8 @@ select throws_ok(
   '22023', 'V1_COMPANY_MATERIAL_REQUEST_APPROVAL_ROUTE_NOT_CONFIGURED',
   'A requester cannot self-approve through a conflicted company route'
 );
+
+set local role postgres;
 select is(
   (select count(*) from public.v1_company_material_requests
    where id = 'c1000000-0000-4000-8000-000000000030'),
