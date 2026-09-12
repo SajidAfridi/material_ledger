@@ -102,6 +102,13 @@ Legacy role handling:
 ### M3 — Material Requests
 
 - New submissions use normalized V1 tables only.
+- The creation-form Submit/Approve fast path is an additive trusted RPC only:
+  it adds no tables, columns or rewritten records. It runs the retained
+  save/submit/decision commands in one idempotent transaction and narrows the
+  decision predicate so an exact Site Engineer cannot inherit approval from a
+  legacy Project Engineer membership. Rollback is forward-only: revoke/hide
+  the wrapper, retain the canonical request, decision and audit history, and
+  never re-broaden Site Engineer approval.
 - Phase 3 additively seeds published configuration values for creator
   self-approval and external-source readiness, adds nullable readiness evidence
   to arrangement lines, and adds request/line replacement provenance. Existing

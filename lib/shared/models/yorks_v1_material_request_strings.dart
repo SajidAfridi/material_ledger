@@ -907,6 +907,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'پروکیورمنٹ کے لیے منظور کریں',
     hi: 'खरीद व्यवस्था के लिए स्वीकृत करें',
   );
+  static const approve = TranslatableString(
+    en: 'Approve',
+    ar: 'موافقة',
+    ur: 'منظور کریں',
+    hi: 'अनुमोदित करें',
+  );
   static const returnForChanges = TranslatableString(
     en: 'Return for changes',
     ar: 'إعادة للتعديل',
@@ -1334,6 +1340,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'تم إرسال طلبك للموافقة الهندسية.',
     ur: 'آپ کی درخواست انجینئرنگ منظوری کے لیے جمع ہو گئی ہے۔',
     hi: 'आपका अनुरोध इंजीनियरिंग अनुमोदन के लिए जमा हो गया है।',
+  );
+  static const approvedForProcurementConfirmed = TranslatableString(
+    en: 'Your request has been submitted and approved for Procurement.',
+    ar: 'تم إرسال طلبك واعتماده للمشتريات.',
+    ur: 'آپ کی درخواست جمع ہو کر پروکیورمنٹ کے لیے منظور ہو گئی ہے۔',
+    hi: 'आपका अनुरोध जमा कर दिया गया है और खरीद के लिए स्वीकृत हो गया है।',
   );
   static const viewRequest = TranslatableString(
     en: 'View request',
@@ -1796,6 +1808,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'إرسال للموافقة الهندسية',
     ur: 'انجینئرنگ منظوری کے لیے جمع کرائیں',
     hi: 'इंजीनियरिंग अनुमोदन के लिए जमा करें',
+  );
+  static const submit = TranslatableString(
+    en: 'Submit',
+    ar: 'إرسال',
+    ur: 'جمع کرائیں',
+    hi: 'जमा करें',
   );
   static const submitted = TranslatableString(
     en: 'Submitted',

@@ -270,8 +270,12 @@ New MR fields:
 The draft screen makes “Draft — visible only to you” explicit. Selecting BOQ
 content never submits and shows only folders in the chosen Common/building
 scope. Changing scope confirms removal of incompatible BOQ-derived rows while
-retaining custom/Excel rows. “Submit for Engineering Approval” is the
-unambiguous connected primary action with validation and connectivity state.
+retaining custom/Excel rows. **Submit** is the connected primary action with
+validation and connectivity state. A new Draft additionally shows **Approve**
+beside **Submit** only when the exact creator role, published self-approval
+policy and effective approval capability permit the atomic submit-and-approve
+command; an exact Site Engineer sees **Submit** only. The client preflight
+fails closed and the trusted command remains authoritative.
 Before approval, the creator and authorized Project Engineer can reopen the
 same consistent editor; status and version conflict remain visible.
 

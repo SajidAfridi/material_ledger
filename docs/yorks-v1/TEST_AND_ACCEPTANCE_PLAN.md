@@ -63,6 +63,7 @@ slices extend the same stable sequence without renumbering those originals.
 | AT-41 | Procurement clarifies item name/model through shared ranked search before arrangement save; requested evidence remains immutable, Engineering/direct writes fail, stale and competing saves are safe, retries are idempotent, and post-save editing is locked. | model/repository/widget/responsive visual/RPC/RLS/idempotency/pgTAP |
 | AT-41 | MR description suggestions remain anchored to the active field, use a readable grouped BOQ/inventory panel with descriptive metadata, fit the viewport at 1366px, tablet and mobile widths, and copy no commercial value or quantity. | repository/widget/golden/responsive visual |
 | AT-42 | Publishing or discarding Configuration changes clears staged settings/actions with production-safe primary-key predicates; a reviewed non-system category archive and controlled-unit creation publish atomically without weakening authority, history, audit, validation or idempotency. | migration/pgTAP/control-plane regression |
+| AT-43 | The new MR form always offers Submit; only a published-policy, effective-capability non-Site-Engineer creator may also use Approve. The combined command records one canonical submitted/approved history, is idempotent, and a denied Site Engineer path leaves no draft/submitted record. | widget/controller/RPC/pgTAP/idempotency |
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope

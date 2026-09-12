@@ -10,10 +10,12 @@ evidence of their original releases, not current workflow authority.
 
 1. **Engineering prepares the request.** A Project Engineer or Site Engineer
    selects the project and exact Common/building scope, adds BOQ or custom
-   items, saves a private Draft and explicitly submits it.
-2. **Engineering approves the need.** An authorized Project Engineer reviews
-   the submitted quantities and either approves them for Procurement or
-   returns them for changes with a reason.
+   items, saves a private Draft and explicitly submits it. An independently
+   authorized non-Site-Engineer creator may instead choose **Approve** on the
+   creation form, which safely submits and approves in one server command.
+2. **Engineering approves the need.** Requests submitted by a creator without
+   that authority are reviewed by an authorized Project Engineer, who either
+   approves them for Procurement or returns them for changes with a reason.
 3. **Procurement arranges every line.** Procurement records Full, Partial or
    Cannot Provide Now and chooses Warehouse or External Supplier. Saving a
    complete arrangement makes its positive quantities ready for controlled
@@ -45,9 +47,12 @@ The composer has three short steps: **Details**, **Items** and **Review**.
    item keeps description, quantity, controlled unit, Brand/Origin, Size and
    Planning Model/Tag visible together so no material detail is hidden behind
    an extra disclosure action.
-3. In Review, check the scope and each quantity, confirm the review statement,
-   then submit. Save draft remains separate from Submit. Procurement receives
-   nothing until the protected Submit command succeeds.
+3. In Review, check the scope and each quantity, then confirm the review
+   statement. Every authorized creator sees **Submit**. An independently
+   authorized non-Site-Engineer creator also sees **Approve**, which performs
+   submission and approval atomically; an exact Site Engineer sees **Submit**
+   only. Save draft remains separate. Procurement receives nothing until the
+   protected command succeeds.
 
 ## What the register tells you
 

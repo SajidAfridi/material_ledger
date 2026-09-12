@@ -349,6 +349,54 @@ void main() {
     );
 
     test(
+      'atomically submits and approves a new request through one repository command',
+      () async {
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final repository = _FakeRequestRepository();
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(controller.dispose);
+
+        await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
+        await controller.addCustomLine();
+        final line = controller.state.draft.lines.single;
+        await controller.updateLine(
+          line.id,
+          (current) => current.copyWith(
+            description: 'Motorized Smoke Damper',
+            brandOrigin: 'UAE',
+            quantity: '4',
+            unit: 'Nos',
+          ),
+        );
+
+        final approved = await controller.submitAndApprove();
+
+        expect(
+          approved?.state,
+          YorksV1MaterialRequestState.approvedForArrangement,
+        );
+        expect(repository.saveAndSubmitInputs, isEmpty);
+        expect(repository.saveSubmitAndApproveInputs, hasLength(1));
+        expect(
+          repository.saveSubmitAndApproveInputs.single.submissionIdempotencyKey,
+          isNotEmpty,
+        );
+        expect(store.readAll(), isEmpty);
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.submitted,
+        );
+      },
+    );
+
+    test(
       'recovers an ambiguous first save before submitting newer local rows',
       () async {
         final repository = _FakeRequestRepository()
@@ -2338,6 +2386,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   final List<YorksV1SaveMaterialRequestDraftInput> saveInputs = [];
   final List<YorksV1SubmitMaterialRequestInput> submitInputs = [];
   final List<YorksV1MaterialRequestDraft> saveAndSubmitInputs = [];
+  final List<YorksV1MaterialRequestDraft> saveSubmitAndApproveInputs = [];
   final List<YorksV1UpdateMaterialRequestForApprovalInput>
   updateForApprovalInputs = [];
   Object? saveFailure;
@@ -2451,6 +2500,22 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
     final failure = submitFailure;
     if (failure != null) throw failure;
     return _request(requestId: draft.id, version: 2, number: 'B5TEST-MR001');
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    saveSubmitAndApproveInputs.add(draft);
+    if (submitFailures.isNotEmpty) throw submitFailures.removeAt(0);
+    final failure = submitFailure;
+    if (failure != null) throw failure;
+    return _request(
+      requestId: draft.id,
+      version: 3,
+      number: 'B5TEST-MR001',
+      state: YorksV1MaterialRequestState.approvedForArrangement,
+    );
   }
 
   @override
@@ -2677,6 +2742,7 @@ YorksV1MaterialRequest _request({
   required String requestId,
   required int version,
   String? number,
+  YorksV1MaterialRequestState? state,
   List<Map<String, dynamic>> lines = const [],
 }) => YorksV1MaterialRequest.fromRpcJson({
   'id': requestId,
@@ -2685,7 +2751,7 @@ YorksV1MaterialRequest _request({
   'project_name': 'Test Project',
   'scope_id': _scopeId,
   'scope_name': 'Common',
-  'state': number == null ? 'draft' : 'submitted',
+  'state': state?.wireValue ?? (number == null ? 'draft' : 'submitted'),
   'record_version': version,
   'created_at': '2026-08-02T00:00:00Z',
   'updated_at': '2026-08-02T00:00:00Z',
