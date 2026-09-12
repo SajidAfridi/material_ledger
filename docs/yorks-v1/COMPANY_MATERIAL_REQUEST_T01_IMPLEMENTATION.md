@@ -48,6 +48,17 @@ is enabled. With no effective configuration the only server result is an empty
 draft-option list; with a missing or conflicted route, submission fails closed
 and retains the draft.
 
+### Dedicated staging demonstration policy
+
+`tool/seed-company-material-request-staging-demo.sh` is a repeatable,
+confirmation-gated operator fixture for the dedicated technical-persona staging
+project only. It publishes one visibly labelled **STAGING DEMO — Safety & PPE**
+category/unit combination, named requester/beneficiary/receiver grants and an
+independent Admin/Senior Mechanical Engineer approval route. It refuses
+production, any unknown target and any non-technical persona dataset. It is not
+a migration, it creates no Company Material Request, and it must never be used
+as a production authorization matrix.
+
 ## Data and authorization contract
 
 The additive migration
