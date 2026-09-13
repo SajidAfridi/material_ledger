@@ -8,6 +8,18 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'کمپنی مٹیریل کی درخواست',
     hi: 'कंपनी सामग्री अनुरोध',
   );
+  static const newRequest = TranslatableString(
+    en: 'New Company Material Request',
+    ar: 'طلب مواد شركة جديد',
+    ur: 'نئی کمپنی مٹیریل درخواست',
+    hi: 'नया कंपनी सामग्री अनुरोध',
+  );
+  static const materialRequests = TranslatableString(
+    en: 'Material Requests',
+    ar: 'طلبات المواد',
+    ur: 'مٹیریل درخواستیں',
+    hi: 'सामग्री अनुरोध',
+  );
   static const subtitle = TranslatableString(
     en: 'Company use only. This request does not belong to a project.',
     ar: 'لاستخدام الشركة فقط. لا ينتمي هذا الطلب إلى مشروع.',
@@ -19,6 +31,36 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ar: 'استخدام الشركة',
     ur: 'کمپنی استعمال',
     hi: 'कंपनी उपयोग',
+  );
+  static const privateDraft = TranslatableString(
+    en: 'Private draft',
+    ar: 'مسودة خاصة',
+    ur: 'نجی مسودہ',
+    hi: 'निजी ड्राफ्ट',
+  );
+  static const companyLaneTitle = TranslatableString(
+    en: 'A company request, not a project request',
+    ar: 'طلب للشركة وليس طلباً لمشروع',
+    ur: 'کمپنی کی درخواست، پراجیکٹ کی نہیں',
+    hi: 'कंपनी का अनुरोध, परियोजना का नहीं',
+  );
+  static const companyLaneMessage = TranslatableString(
+    en: 'Choose the responsible unit and people involved. Project, BOQ and building fields do not apply here.',
+    ar: 'اختر الوحدة المسؤولة والأشخاص المعنيين. لا تنطبق هنا حقول المشروع أو جدول الكميات أو المبنى.',
+    ur: 'ذمہ دار یونٹ اور متعلقہ افراد منتخب کریں۔ یہاں پراجیکٹ، BOQ اور عمارت کے فیلڈ لاگو نہیں ہوتے۔',
+    hi: 'जिम्मेदार इकाई और संबंधित लोगों को चुनें। यहाँ परियोजना, बीओक्यू और भवन फ़ील्ड लागू नहीं होते।',
+  );
+  static const detailsPrompt = TranslatableString(
+    en: 'Who and where is this for?',
+    ar: 'لمن وأين هذا الطلب؟',
+    ur: 'یہ کس کے لیے اور کہاں درکار ہے؟',
+    hi: 'यह किसके लिए और कहाँ चाहिए?',
+  );
+  static const detailsDescription = TranslatableString(
+    en: 'Set the company-use context, recipient and handover details.',
+    ar: 'حدد سياق استخدام الشركة والمستفيد وتفاصيل التسليم.',
+    ur: 'کمپنی استعمال کا سیاق، وصول کنندہ اور حوالگی کی تفصیل مقرر کریں۔',
+    hi: 'कंपनी उपयोग का संदर्भ, प्राप्तकर्ता और सौंपने का विवरण तय करें।',
   );
   static const categoryAndUnit = TranslatableString(
     en: 'Category and responsible unit',
@@ -86,6 +128,18 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'مٹیریل آئٹمز',
     hi: 'सामग्री आइटम',
   );
+  static const itemsDescription = TranslatableString(
+    en: 'Add each physical material and confirm its requested quantity.',
+    ar: 'أضف كل مادة فعلية وأكد الكمية المطلوبة.',
+    ur: 'ہر فزیکل مٹیریل شامل کریں اور مطلوبہ مقدار کی تصدیق کریں۔',
+    hi: 'हर भौतिक सामग्री जोड़ें और उसकी मांगी गई मात्रा की पुष्टि करें।',
+  );
+  static TranslatableString itemCount(int count) => TranslatableString(
+    en: '$count ${count == 1 ? 'item' : 'items'}',
+    ar: '$count بند',
+    ur: '$count آئٹمز',
+    hi: '$count आइटम',
+  );
   static const itemDescription = TranslatableString(
     en: 'Item description',
     ar: 'وصف البند',
@@ -123,10 +177,117 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'निजी ड्राफ्ट सहेजें',
   );
   static const submit = TranslatableString(
-    en: 'Submit for Company approval',
+    en: 'Submit for approval',
     ar: 'إرسال لموافقة الشركة',
     ur: 'کمپنی منظوری کے لیے جمع کریں',
     hi: 'कंपनी स्वीकृति के लिए जमा करें',
+  );
+  static const requestSummary = TranslatableString(
+    en: 'Request summary',
+    ar: 'ملخص الطلب',
+    ur: 'درخواست کا خلاصہ',
+    hi: 'अनुरोध सारांश',
+  );
+  static const requestType = TranslatableString(
+    en: 'Request type',
+    ar: 'نوع الطلب',
+    ur: 'درخواست کی قسم',
+    hi: 'अनुरोध प्रकार',
+  );
+  static const responsibleUnit = TranslatableString(
+    en: 'Responsible unit',
+    ar: 'الوحدة المسؤولة',
+    ur: 'ذمہ دار یونٹ',
+    hi: 'जिम्मेदार इकाई',
+  );
+  static const notSelected = TranslatableString(
+    en: 'Not selected',
+    ar: 'غير محدد',
+    ur: 'منتخب نہیں',
+    hi: 'चुना नहीं गया',
+  );
+  static const routeChecking = TranslatableString(
+    en: 'Checking approval route…',
+    ar: 'جارٍ التحقق من مسار الموافقة…',
+    ur: 'منظوری کا راستہ چیک کیا جا رہا ہے…',
+    hi: 'अनुमोदन मार्ग जाँचा जा रहा है…',
+  );
+  static const reviewTitle = TranslatableString(
+    en: 'Review and submit',
+    ar: 'مراجعة وإرسال',
+    ur: 'جائزہ لیں اور جمع کرائیں',
+    hi: 'समीक्षा करें और जमा करें',
+  );
+  static const reviewDescription = TranslatableString(
+    en: 'Confirm the recipient, handover details, materials and independent approver.',
+    ar: 'أكد المستفيد وتفاصيل التسليم والمواد والمعتمد المستقل.',
+    ur: 'وصول کنندہ، حوالگی کی تفصیل، مٹیریل اور آزاد منظور کنندہ کی تصدیق کریں۔',
+    hi: 'प्राप्तकर्ता, सौंपने का विवरण, सामग्री और स्वतंत्र अनुमोदक की पुष्टि करें।',
+  );
+  static const reviewConfirmation = TranslatableString(
+    en: 'I reviewed the company-use context, recipient and requested quantities.',
+    ar: 'راجعت سياق استخدام الشركة والمستفيد والكميات المطلوبة.',
+    ur: 'میں نے کمپنی استعمال کا سیاق، وصول کنندہ اور مطلوبہ مقداریں چیک کر لی ہیں۔',
+    hi: 'मैंने कंपनी उपयोग का संदर्भ, प्राप्तकर्ता और मांगी गई मात्राएँ जाँच ली हैं।',
+  );
+  static const approvalHandoffTitle = TranslatableString(
+    en: 'Independent approval',
+    ar: 'موافقة مستقلة',
+    ur: 'آزاد منظوری',
+    hi: 'स्वतंत्र अनुमोदन',
+  );
+  static TranslatableString approvalHandoff(String name) => TranslatableString(
+    en: 'Submitting sends this request to $name. You cannot approve your own request.',
+    ar: 'سيؤدي الإرسال إلى توجيه هذا الطلب إلى $name. لا يمكنك اعتماد طلبك بنفسك.',
+    ur: 'جمع کرانے پر یہ درخواست $name کو بھیجی جائے گی۔ آپ اپنی درخواست خود منظور نہیں کر سکتے۔',
+    hi: 'सबमिट करने पर यह अनुरोध $name को भेजा जाएगा। आप अपना अनुरोध स्वयं स्वीकृत नहीं कर सकते।',
+  );
+  static const submitConfirmTitle = TranslatableString(
+    en: 'Submit this company request?',
+    ar: 'إرسال طلب الشركة هذا؟',
+    ur: 'یہ کمپنی درخواست جمع کرائیں؟',
+    hi: 'यह कंपनी अनुरोध जमा करें?',
+  );
+  static TranslatableString submitConfirmMessage(
+    String name,
+  ) => TranslatableString(
+    en: 'The private draft will become visible to $name for approval. You can no longer edit it as a private draft.',
+    ar: 'ستصبح المسودة الخاصة مرئية لـ $name للموافقة. لن تتمكن من تعديلها كمسودة خاصة بعد ذلك.',
+    ur: 'نجی مسودہ منظوری کے لیے $name کو نظر آئے گا۔ اس کے بعد آپ اسے نجی مسودے کے طور پر ترمیم نہیں کر سکیں گے۔',
+    hi: 'निजी ड्राफ्ट अनुमोदन के लिए $name को दिखाई देगा। इसके बाद आप इसे निजी ड्राफ्ट के रूप में संपादित नहीं कर सकेंगे।',
+  );
+  static const submitConfirmedTitle = TranslatableString(
+    en: 'Company request submitted',
+    ar: 'تم إرسال طلب الشركة',
+    ur: 'کمپنی درخواست جمع ہو گئی',
+    hi: 'कंपनी अनुरोध जमा हो गया',
+  );
+  static TranslatableString submitConfirmedMessage(
+    String requestNumber,
+    String approverName,
+  ) => TranslatableString(
+    en: '$requestNumber is waiting for approval from $approverName.',
+    ar: '$requestNumber بانتظار موافقة $approverName.',
+    ur: '$requestNumber اب $approverName کی منظوری کا منتظر ہے۔',
+    hi: '$requestNumber अब $approverName की स्वीकृति की प्रतीक्षा में है।',
+  );
+  static const done = TranslatableString(
+    en: 'Done',
+    ar: 'تم',
+    ur: 'مکمل',
+    hi: 'पूर्ण',
+  );
+  static const retry = TranslatableString(
+    en: 'Try again',
+    ar: 'حاول مرة أخرى',
+    ur: 'دوبارہ کوشش کریں',
+    hi: 'फिर प्रयास करें',
+  );
+  static const unavailableTitle = TranslatableString(
+    en: 'Company request route unavailable',
+    ar: 'مسار طلب الشركة غير متاح',
+    ur: 'کمپنی درخواست کا راستہ دستیاب نہیں',
+    hi: 'कंपनी अनुरोध मार्ग उपलब्ध नहीं है',
   );
   static const draftSaved = TranslatableString(
     en: 'Private company draft saved.',
