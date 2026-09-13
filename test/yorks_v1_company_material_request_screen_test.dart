@@ -26,12 +26,38 @@ void main() {
     expect(find.text('Request summary'), findsOneWidget);
     expect(find.text('Private draft'), findsOneWidget);
     expect(find.text('Submit for approval'), findsOneWidget);
+    expect(find.text('0 items'), findsOneWidget);
+    expect(
+      find.text('Choose a category and responsible unit first'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey('company-material-request-save-draft')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('company-material-request-submit')),
+          )
+          .onPressed,
+      isNull,
+    );
 
     await _completeDetails(tester);
     expect(repository.preflightCalls, 1);
     expect(find.textContaining('Nadia Khalid'), findsWidgets);
     await _completeFirstLine(tester);
     expect(repository.preflightCalls, 1);
+
+    final save = tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('company-material-request-save-draft')),
+    );
+    expect(save.onPressed, isNotNull);
 
     final submit = tester.widget<FilledButton>(
       find.byKey(const ValueKey('company-material-request-submit')),

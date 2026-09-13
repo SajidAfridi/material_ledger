@@ -16,6 +16,25 @@ import '../../../../shared/providers/yorks_v1_company_material_request_provider.
 
 enum _CompanyRequestStep { details, items, review }
 
+bool _lineHasMaterial(YorksV1CompanyMaterialRequestLine line) =>
+    line.description.trim().isNotEmpty ||
+    line.quantity.trim().isNotEmpty ||
+    line.unit.trim().isNotEmpty ||
+    line.brandOrigin?.trim().isNotEmpty == true;
+
+int _materialCount(List<YorksV1CompanyMaterialRequestLine> lines) =>
+    lines.where(_lineHasMaterial).length;
+
+bool _requestDetailsReady(YorksV1CompanyMaterialRequestDraft draft) =>
+    draft.categoryId != null &&
+    draft.responsibleUnitId != null &&
+    draft.beneficiaryAuthUserId != null &&
+    draft.authorizedReceiverAuthUserId != null &&
+    draft.purpose?.trim().isNotEmpty == true &&
+    draft.deliveryCollectionPoint?.trim().isNotEmpty == true &&
+    (draft.timing != YorksV1MaterialRequestTiming.scheduled ||
+        draft.scheduledDate != null);
+
 /// Focused first-step composer for a non-project company need.
 ///
 /// The presentation follows the established Material Request language without
@@ -146,15 +165,7 @@ class _YorksV1CompanyMaterialRequestScreenState
   );
 
   bool get _detailsReady {
-    final draft = _current;
-    return draft.categoryId != null &&
-        draft.responsibleUnitId != null &&
-        draft.beneficiaryAuthUserId != null &&
-        draft.authorizedReceiverAuthUserId != null &&
-        draft.purpose?.trim().isNotEmpty == true &&
-        draft.deliveryCollectionPoint?.trim().isNotEmpty == true &&
-        (draft.timing != YorksV1MaterialRequestTiming.scheduled ||
-            draft.scheduledDate != null);
+    return _requestDetailsReady(_current);
   }
 
   bool get _itemsReady =>
@@ -534,7 +545,7 @@ class _YorksV1CompanyMaterialRequestScreenState
     if (_step == _CompanyRequestStep.items) {
       return YorksMobileStickyActions(
         summary: YorksV1CompanyMaterialRequestStrings.itemCount(
-          _draft.lines.length,
+          _materialCount(_draft.lines),
         ).active(language),
         children: [
           OutlinedButton(
@@ -560,7 +571,7 @@ class _YorksV1CompanyMaterialRequestScreenState
       children: [
         OutlinedButton(
           key: const ValueKey('company-material-request-save-draft'),
-          onPressed: _saving
+          onPressed: _saving || !_current.canSave
               ? null
               : () => _save(submit: false, language: language),
           child: Text(
@@ -587,272 +598,274 @@ class _YorksV1CompanyMaterialRequestScreenState
   ) => Scaffold(
     backgroundColor: AppColors.surface,
     body: SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.pageMaxWidth,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _DesktopHero(
-                  language: language,
-                  options: options,
-                  draft: _current,
-                  preflight: _preflight,
-                  saving: _saving,
-                  onCancel: _close,
-                  onSave: () => _save(submit: false, language: language),
-                  onSubmit: _preflight == null || !_current.canSave
-                      ? null
-                      : () => _confirmSubmit(language),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppSpacing.pageMaxWidth,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DesktopHero(language: language),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _DesktopSection(
-                            number: '1',
-                            title: YorksV1MaterialRequestStrings
-                                .requestInformation
-                                .active(language),
-                            description: YorksV1CompanyMaterialRequestStrings
-                                .detailsDescription
-                                .active(language),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          Expanded(
+                            child: Column(
                               children: [
-                                Expanded(
-                                  child: _ContextFields(
-                                    language: language,
-                                    options: options,
-                                    draft: _draft,
-                                    onChanged: _update,
+                                _DesktopSection(
+                                  number: '1',
+                                  title: YorksV1MaterialRequestStrings
+                                      .requestInformation
+                                      .active(language),
+                                  description:
+                                      YorksV1CompanyMaterialRequestStrings
+                                          .detailsDescription
+                                          .active(language),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _ContextFields(
+                                          language: language,
+                                          options: options,
+                                          draft: _draft,
+                                          onChanged: _update,
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppSpacing.lg),
+                                      Expanded(
+                                        child: _RequestDetailFields(
+                                          language: language,
+                                          purpose: _purpose,
+                                          collectionPoint: _point,
+                                          draft: _draft,
+                                          onChanged: _update,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: AppSpacing.lg),
-                                Expanded(
-                                  child: _RequestDetailFields(
+                                const SizedBox(height: AppSpacing.lg),
+                                _DesktopSection(
+                                  number: '2',
+                                  title: YorksV1CompanyMaterialRequestStrings
+                                      .materialItems
+                                      .active(language),
+                                  description:
+                                      YorksV1CompanyMaterialRequestStrings
+                                          .itemsDescription
+                                          .active(language),
+                                  child: _CompanyLineEditor(
                                     language: language,
-                                    purpose: _purpose,
-                                    collectionPoint: _point,
-                                    draft: _draft,
-                                    onChanged: _update,
+                                    lines: _draft.lines,
+                                    compact: false,
+                                    onChanged: (lines) =>
+                                        _update(_draft.copyWith(lines: lines)),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _DesktopSection(
-                            number: '2',
-                            title: YorksV1CompanyMaterialRequestStrings
-                                .materialItems
-                                .active(language),
-                            description: YorksV1CompanyMaterialRequestStrings
-                                .itemsDescription
-                                .active(language),
-                            child: _CompanyLineEditor(
-                              language: language,
-                              lines: _draft.lines,
-                              compact: false,
-                              onChanged: (lines) =>
-                                  _update(_draft.copyWith(lines: lines)),
+                          const SizedBox(width: AppSpacing.lg),
+                          SizedBox(
+                            width: 340,
+                            child: Column(
+                              children: [
+                                _CompanyRequestSummary(
+                                  language: language,
+                                  options: options,
+                                  draft: _current,
+                                  preflight: _preflight,
+                                  routeChecking: _routeChecking,
+                                  routeUnavailable: _routeUnavailable,
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                _ApprovalStatus(
+                                  language: language,
+                                  checking: _routeChecking,
+                                  routeUnavailable: _routeUnavailable,
+                                  preflight: _preflight,
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.lg),
-                    SizedBox(
-                      width: 340,
-                      child: Column(
-                        children: [
-                          _CompanyRequestSummary(
-                            language: language,
-                            options: options,
-                            draft: _current,
-                            preflight: _preflight,
-                            routeChecking: _routeChecking,
-                            routeUnavailable: _routeUnavailable,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _ApprovalStatus(
-                            language: language,
-                            checking: _routeChecking,
-                            routeUnavailable: _routeUnavailable,
-                            preflight: _preflight,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          _DesktopActionBar(
+            language: language,
+            saving: _saving,
+            canSave: _current.canSave,
+            canSubmit: _current.canSave && _preflight != null,
+            onCancel: _close,
+            onSave: () => _save(submit: false, language: language),
+            onSubmit: () => _confirmSubmit(language),
+          ),
+        ],
       ),
     ),
   );
 }
 
 class _DesktopHero extends StatelessWidget {
-  const _DesktopHero({
+  const _DesktopHero({required this.language});
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => _CompanyCard(
+    padding: const EdgeInsets.all(AppSpacing.lg),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          YorksV1CompanyMaterialRequestStrings.materialRequests
+              .active(language)
+              .toUpperCase(),
+          style: AppTypography.labelSmall.copyWith(
+            color: AppColors.blue,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.3,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                YorksV1CompanyMaterialRequestStrings.newRequest.active(
+                  language,
+                ),
+                style: AppTypography.headlineMedium.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Wrap(
+              spacing: AppSpacing.sm,
+              children: [
+                _StatusChip(
+                  icon: Icons.apartment_rounded,
+                  label: YorksV1CompanyMaterialRequestStrings.companyUse.active(
+                    language,
+                  ),
+                ),
+                _StatusChip(
+                  icon: Icons.lock_outline_rounded,
+                  label: YorksV1CompanyMaterialRequestStrings.privateDraft
+                      .active(language),
+                  neutral: true,
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          YorksV1CompanyMaterialRequestStrings.subtitle.active(language),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DesktopActionBar extends StatelessWidget {
+  const _DesktopActionBar({
     required this.language,
-    required this.options,
-    required this.draft,
-    required this.preflight,
     required this.saving,
+    required this.canSave,
+    required this.canSubmit,
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
   });
   final AppLanguage language;
-  final List<YorksV1CompanyMaterialRequestDraftOption> options;
-  final YorksV1CompanyMaterialRequestDraft draft;
-  final YorksV1CompanyMaterialRequestApprovalPreflight? preflight;
   final bool saving;
+  final bool canSave;
+  final bool canSubmit;
   final VoidCallback onCancel;
   final VoidCallback onSave;
-  final VoidCallback? onSubmit;
+  final VoidCallback onSubmit;
 
   @override
-  Widget build(BuildContext context) {
-    final selected = _selectedOption(options, draft);
-    return _CompanyCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  YorksV1CompanyMaterialRequestStrings.materialRequests
-                      .active(language)
-                      .toUpperCase(),
-                  style: AppTypography.labelSmall.copyWith(
-                    color: AppColors.blue,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.3,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      YorksV1CompanyMaterialRequestStrings.newRequest.active(
-                        language,
-                      ),
-                      style: AppTypography.headlineLarge.copyWith(
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    _StatusChip(
-                      icon: Icons.apartment_rounded,
-                      label: YorksV1CompanyMaterialRequestStrings.companyUse
-                          .active(language),
-                    ),
-                    _StatusChip(
-                      icon: Icons.lock_outline_rounded,
-                      label: YorksV1CompanyMaterialRequestStrings.privateDraft
-                          .active(language),
-                      neutral: true,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  YorksV1CompanyMaterialRequestStrings.subtitle.active(
-                    language,
-                  ),
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.muted,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Wrap(
-                  spacing: AppSpacing.xl,
-                  runSpacing: AppSpacing.sm,
-                  children: [
-                    _HeroFact(
-                      label: YorksV1CompanyMaterialRequestStrings
-                          .responsibleUnit
-                          .active(language),
-                      value:
-                          selected?.responsibleUnitName ??
-                          YorksV1CompanyMaterialRequestStrings.notSelected
-                              .active(language),
-                    ),
-                    _HeroFact(
-                      label: YorksV1CompanyMaterialRequestStrings.approver
-                          .active(language),
-                      value:
-                          preflight?.approver.displayName ??
-                          YorksV1CompanyMaterialRequestStrings.notSelected
-                              .active(language),
-                    ),
-                    _HeroFact(
-                      label: YorksV1CompanyMaterialRequestStrings.materialItems
-                          .active(language),
-                      value: YorksV1CompanyMaterialRequestStrings.itemCount(
-                        draft.lines.length,
-                      ).active(language),
-                    ),
-                  ],
-                ),
-              ],
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.lg,
+      vertical: AppSpacing.md,
+    ),
+    decoration: const BoxDecoration(
+      color: AppColors.surfaceContainerLowest,
+      border: Border(top: BorderSide(color: AppColors.line)),
+    ),
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppSpacing.pageMaxWidth),
+        child: Row(
+          children: [
+            Icon(
+              canSave ? Icons.check_circle_outline : Icons.info_outline,
+              color: canSave ? AppColors.success : AppColors.muted,
             ),
-          ),
-          const SizedBox(width: AppSpacing.xl),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              TextButton(
-                onPressed: saving ? null : onCancel,
-                child: Text(
-                  YorksV1MaterialRequestStrings.cancel.active(language),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                (canSave
+                        ? YorksV1CompanyMaterialRequestStrings.draftReady
+                        : YorksV1CompanyMaterialRequestStrings
+                              .completeBeforeSaving)
+                    .active(language),
+                style: AppTypography.bodySmall.copyWith(
+                  color: canSave ? AppColors.success : AppColors.muted,
                 ),
               ),
-              OutlinedButton.icon(
-                key: const ValueKey('company-material-request-save-draft'),
-                onPressed: saving ? null : onSave,
-                icon: const Icon(Icons.save_outlined),
-                label: Text(
-                  YorksV1CompanyMaterialRequestStrings.saveDraft.active(
-                    language,
-                  ),
+            ),
+            TextButton(
+              onPressed: saving ? null : onCancel,
+              child: Text(
+                YorksV1MaterialRequestStrings.cancel.active(language),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            OutlinedButton.icon(
+              key: const ValueKey('company-material-request-save-draft'),
+              onPressed: saving || !canSave ? null : onSave,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(
+                YorksV1CompanyMaterialRequestStrings.saveDraft.active(language),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            FilledButton.icon(
+              key: const ValueKey('company-material-request-submit'),
+              onPressed: saving || !canSubmit ? null : onSubmit,
+              icon: const Icon(Icons.send_rounded),
+              label: _SavingLabel(
+                saving: saving,
+                label: YorksV1CompanyMaterialRequestStrings.submit.active(
+                  language,
                 ),
               ),
-              FilledButton.icon(
-                key: const ValueKey('company-material-request-submit'),
-                onPressed: saving ? null : onSubmit,
-                icon: const Icon(Icons.send_rounded),
-                label: _SavingLabel(
-                  saving: saving,
-                  label: YorksV1CompanyMaterialRequestStrings.submit.active(
-                    language,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _DesktopSection extends StatelessWidget {
@@ -970,27 +983,37 @@ class _ContextFields extends StatelessWidget {
         ),
         if (selected != null) ...[
           const SizedBox(height: AppSpacing.md),
-          _PersonPicker(
-            fieldKey: const ValueKey('company-material-request-beneficiary'),
-            label: YorksV1CompanyMaterialRequestStrings.beneficiary.active(
+        ] else ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            YorksV1CompanyMaterialRequestStrings.chooseContextFirst.active(
               language,
             ),
-            value: draft.beneficiaryAuthUserId,
-            options: selected.beneficiaries,
-            onChanged: (value) =>
-                onChanged(draft.copyWith(beneficiaryAuthUserId: value)),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
           ),
-          const SizedBox(height: AppSpacing.md),
-          _PersonPicker(
-            fieldKey: const ValueKey('company-material-request-receiver'),
-            label: YorksV1CompanyMaterialRequestStrings.authorizedReceiver
-                .active(language),
-            value: draft.authorizedReceiverAuthUserId,
-            options: selected.receivers,
-            onChanged: (value) =>
-                onChanged(draft.copyWith(authorizedReceiverAuthUserId: value)),
-          ),
+          const SizedBox(height: AppSpacing.sm),
         ],
+        _PersonPicker(
+          fieldKey: const ValueKey('company-material-request-beneficiary'),
+          label: YorksV1CompanyMaterialRequestStrings.beneficiary.active(
+            language,
+          ),
+          value: draft.beneficiaryAuthUserId,
+          options: selected?.beneficiaries ?? const [],
+          onChanged: (value) =>
+              onChanged(draft.copyWith(beneficiaryAuthUserId: value)),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _PersonPicker(
+          fieldKey: const ValueKey('company-material-request-receiver'),
+          label: YorksV1CompanyMaterialRequestStrings.authorizedReceiver.active(
+            language,
+          ),
+          value: draft.authorizedReceiverAuthUserId,
+          options: selected?.receivers ?? const [],
+          onChanged: (value) =>
+              onChanged(draft.copyWith(authorizedReceiverAuthUserId: value)),
+        ),
       ],
     );
   }
@@ -1027,7 +1050,7 @@ class _PersonPicker extends StatelessWidget {
           child: Text(person.displayName, overflow: TextOverflow.ellipsis),
         ),
     ],
-    onChanged: onChanged,
+    onChanged: options.isEmpty ? null : onChanged,
   );
 }
 
@@ -1166,6 +1189,7 @@ class _CompanyLineEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final count = _materialCount(lines);
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1174,7 +1198,7 @@ class _CompanyLineEditor extends StatelessWidget {
             language,
           ),
           subtitle: YorksV1CompanyMaterialRequestStrings.itemCount(
-            lines.length,
+            count,
           ).active(language),
           action: TextButton.icon(
             key: const ValueKey('company-material-request-add-item'),
@@ -1186,6 +1210,10 @@ class _CompanyLineEditor extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
+        if (!compact) ...[
+          _DesktopLineHeaders(language: language),
+          const SizedBox(height: AppSpacing.xs),
+        ],
         for (var index = 0; index < lines.length; index++) ...[
           if (index > 0) const SizedBox(height: AppSpacing.sm),
           _CompanyLineFields(
@@ -1212,6 +1240,68 @@ class _CompanyLineEditor extends StatelessWidget {
   }
 }
 
+class _DesktopLineHeaders extends StatelessWidget {
+  const _DesktopLineHeaders({required this.language});
+  final AppLanguage language;
+
+  Widget _label(String value, {TextAlign? align}) => Text(
+    value.toUpperCase(),
+    textAlign: align,
+    style: AppTypography.labelSmall.copyWith(
+      color: AppColors.muted,
+      fontWeight: FontWeight.w800,
+      letterSpacing: .5,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 34,
+          child: _label(
+            YorksV1CompanyMaterialRequestStrings.rowNumber.active(language),
+            align: TextAlign.center,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          flex: 4,
+          child: _label(
+            YorksV1CompanyMaterialRequestStrings.itemDescription.active(
+              language,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          flex: 3,
+          child: _label(
+            YorksV1CompanyMaterialRequestStrings.brandOrigin.active(language),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          flex: 2,
+          child: _label(
+            YorksV1CompanyMaterialRequestStrings.quantity.active(language),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          flex: 2,
+          child: _label(
+            YorksV1CompanyMaterialRequestStrings.unit.active(language),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.minTapTarget),
+      ],
+    ),
+  );
+}
+
 class _CompanyLineFields extends StatelessWidget {
   const _CompanyLineFields({
     super.key,
@@ -1234,9 +1324,17 @@ class _CompanyLineFields extends StatelessWidget {
     initialValue: line.description,
     onChanged: (value) => onChanged(line.copyWith(description: value)),
     decoration: InputDecoration(
-      labelText: YorksV1CompanyMaterialRequestStrings.itemDescription.active(
-        language,
-      ),
+      labelText: compact
+          ? YorksV1CompanyMaterialRequestStrings.itemDescription.active(
+              language,
+            )
+          : null,
+      hintText: compact
+          ? null
+          : YorksV1CompanyMaterialRequestStrings.itemDescription.active(
+              language,
+            ),
+      isDense: !compact,
       border: const OutlineInputBorder(),
     ),
   );
@@ -1248,9 +1346,13 @@ class _CompanyLineFields extends StatelessWidget {
       line.copyWith(brandOrigin: value, clearBrandOrigin: value.trim().isEmpty),
     ),
     decoration: InputDecoration(
-      labelText: YorksV1CompanyMaterialRequestStrings.brandOrigin.active(
-        language,
-      ),
+      labelText: compact
+          ? YorksV1CompanyMaterialRequestStrings.brandOrigin.active(language)
+          : null,
+      hintText: compact
+          ? null
+          : YorksV1CompanyMaterialRequestStrings.brandOrigin.active(language),
+      isDense: !compact,
       border: const OutlineInputBorder(),
     ),
   );
@@ -1261,7 +1363,13 @@ class _CompanyLineFields extends StatelessWidget {
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
     onChanged: (value) => onChanged(line.copyWith(quantity: value)),
     decoration: InputDecoration(
-      labelText: YorksV1CompanyMaterialRequestStrings.quantity.active(language),
+      labelText: compact
+          ? YorksV1CompanyMaterialRequestStrings.quantity.active(language)
+          : null,
+      hintText: compact
+          ? null
+          : YorksV1CompanyMaterialRequestStrings.quantity.active(language),
+      isDense: !compact,
       border: const OutlineInputBorder(),
     ),
   );
@@ -1271,7 +1379,13 @@ class _CompanyLineFields extends StatelessWidget {
     initialValue: line.unit,
     onChanged: (value) => onChanged(line.copyWith(unit: value)),
     decoration: InputDecoration(
-      labelText: YorksV1CompanyMaterialRequestStrings.unit.active(language),
+      labelText: compact
+          ? YorksV1CompanyMaterialRequestStrings.unit.active(language)
+          : null,
+      hintText: compact
+          ? null
+          : YorksV1CompanyMaterialRequestStrings.unit.active(language),
+      isDense: !compact,
       border: const OutlineInputBorder(),
     ),
   );
@@ -1412,10 +1526,10 @@ class _CompanyRequestSummary extends StatelessWidget {
       selected?.receivers,
       draft.authorizedReceiverAuthUserId,
     );
-    final approver = routeChecking
-        ? YorksV1CompanyMaterialRequestStrings.routeChecking.active(language)
-        : preflight?.approver.displayName ??
-              YorksV1CompanyMaterialRequestStrings.notSelected.active(language);
+    final detailsReady = _requestDetailsReady(draft);
+    final materialsReady =
+        draft.lines.isNotEmpty && draft.lines.every((line) => line.isValid);
+    final materialCount = _materialCount(draft.lines);
     return _CompanyCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1435,77 +1549,101 @@ class _CompanyRequestSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.requestType.active(
-              language,
-            ),
-            value: YorksV1CompanyMaterialRequestStrings.companyUse.active(
+          _StatusChip(
+            icon: Icons.apartment_rounded,
+            label: YorksV1CompanyMaterialRequestStrings.companyUse.active(
               language,
             ),
           ),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.categoryAndUnit.active(
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            YorksV1CompanyMaterialRequestStrings.completeRequest.active(
               language,
             ),
-            value: selected == null
-                ? YorksV1CompanyMaterialRequestStrings.notSelected.active(
-                    language,
-                  )
-                : '${selected.categoryName} · ${selected.responsibleUnitName}',
+            style: AppTypography.titleSmall,
           ),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.beneficiary.active(
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            YorksV1CompanyMaterialRequestStrings.completeRequestMessage.active(
               language,
             ),
-            value:
-                beneficiary?.displayName ??
-                YorksV1CompanyMaterialRequestStrings.notSelected.active(
-                  language,
-                ),
+            style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
           ),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.authorizedReceiver
+          const SizedBox(height: AppSpacing.md),
+          _ReadinessRow(
+            label: YorksV1CompanyMaterialRequestStrings.recipientAndHandover
                 .active(language),
-            value:
-                receiver?.displayName ??
-                YorksV1CompanyMaterialRequestStrings.notSelected.active(
-                  language,
-                ),
+            ready: detailsReady,
+            language: language,
           ),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.purpose.active(
-              language,
-            ),
-            value: draft.purpose?.trim().isNotEmpty == true
-                ? draft.purpose!.trim()
-                : YorksV1CompanyMaterialRequestStrings.notSelected.active(
-                    language,
-                  ),
-          ),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.deliveryCollectionPoint
-                .active(language),
-            value: draft.deliveryCollectionPoint?.trim().isNotEmpty == true
-                ? draft.deliveryCollectionPoint!.trim()
-                : YorksV1CompanyMaterialRequestStrings.notSelected.active(
-                    language,
-                  ),
-          ),
-          _SummaryFact(
+          _ReadinessRow(
             label: YorksV1CompanyMaterialRequestStrings.materialItems.active(
               language,
             ),
-            value: YorksV1CompanyMaterialRequestStrings.itemCount(
-              draft.lines.length,
-            ).active(language),
+            ready: materialsReady,
+            language: language,
           ),
-          _SummaryFact(
-            label: YorksV1CompanyMaterialRequestStrings.approver.active(
+          _ReadinessRow(
+            label: YorksV1CompanyMaterialRequestStrings.approvalRoute.active(
               language,
             ),
-            value: approver,
-            last: true,
+            ready: preflight != null,
+            checking: routeChecking,
+            language: language,
           ),
+          if (selected != null || materialCount > 0 || preflight != null) ...[
+            const Divider(height: AppSpacing.xl),
+            if (selected != null)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings.categoryAndUnit
+                    .active(language),
+                value:
+                    '${selected.categoryName} · ${selected.responsibleUnitName}',
+              ),
+            if (beneficiary != null)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings.beneficiary.active(
+                  language,
+                ),
+                value: beneficiary.displayName,
+              ),
+            if (receiver != null)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings.authorizedReceiver
+                    .active(language),
+                value: receiver.displayName,
+              ),
+            if (draft.purpose?.trim().isNotEmpty == true)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings.purpose.active(
+                  language,
+                ),
+                value: draft.purpose!.trim(),
+              ),
+            if (draft.deliveryCollectionPoint?.trim().isNotEmpty == true)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings
+                    .deliveryCollectionPoint
+                    .active(language),
+                value: draft.deliveryCollectionPoint!.trim(),
+              ),
+            if (materialCount > 0)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings.materialItems
+                    .active(language),
+                value: YorksV1CompanyMaterialRequestStrings.itemCount(
+                  materialCount,
+                ).active(language),
+              ),
+            if (preflight != null)
+              _SummaryFact(
+                label: YorksV1CompanyMaterialRequestStrings.approver.active(
+                  language,
+                ),
+                value: preflight!.approver.displayName,
+                last: true,
+              ),
+          ],
           if (routeUnavailable) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -1519,6 +1657,51 @@ class _CompanyRequestSummary extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ReadinessRow extends StatelessWidget {
+  const _ReadinessRow({
+    required this.label,
+    required this.ready,
+    required this.language,
+    this.checking = false,
+  });
+  final String label;
+  final bool ready;
+  final bool checking;
+  final AppLanguage language;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+    child: Row(
+      children: [
+        if (checking)
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          Icon(
+            ready ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            size: 19,
+            color: ready ? AppColors.success : AppColors.muted,
+          ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: Text(label, style: AppTypography.bodySmall)),
+        Text(
+          (ready
+                  ? YorksV1CompanyMaterialRequestStrings.ready
+                  : YorksV1CompanyMaterialRequestStrings.required)
+              .active(language),
+          style: AppTypography.labelSmall.copyWith(
+            color: ready ? AppColors.success : AppColors.muted,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ReviewLines extends StatelessWidget {
@@ -1535,7 +1718,7 @@ class _ReviewLines extends StatelessWidget {
             language,
           ),
           subtitle: YorksV1CompanyMaterialRequestStrings.itemCount(
-            lines.length,
+            _materialCount(lines),
           ).active(language),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -1643,7 +1826,9 @@ class _ApprovalStatus extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              YorksV1CompanyMaterialRequestStrings.approver.active(language),
+              YorksV1CompanyMaterialRequestStrings.approvalGuidance.active(
+                language,
+              ),
               style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
             ),
           ),
@@ -1881,27 +2066,6 @@ class _StatusChip extends StatelessWidget {
         ),
       ],
     ),
-  );
-}
-
-class _HeroFact extends StatelessWidget {
-  const _HeroFact({required this.label, required this.value});
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label.toUpperCase(),
-        style: AppTypography.labelSmall.copyWith(
-          color: AppColors.muted,
-          letterSpacing: .6,
-        ),
-      ),
-      const SizedBox(height: 2),
-      Text(value, style: AppTypography.labelLarge),
-    ],
   );
 }
 

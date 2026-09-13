@@ -206,6 +206,78 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'منتخب نہیں',
     hi: 'चुना नहीं गया',
   );
+  static const chooseContextFirst = TranslatableString(
+    en: 'Choose a category and responsible unit first',
+    ar: 'اختر الفئة والوحدة المسؤولة أولاً',
+    ur: 'پہلے زمرہ اور ذمہ دار یونٹ منتخب کریں',
+    hi: 'पहले श्रेणी और जिम्मेदार इकाई चुनें',
+  );
+  static const completeRequest = TranslatableString(
+    en: 'Complete your request',
+    ar: 'أكمل طلبك',
+    ur: 'اپنی درخواست مکمل کریں',
+    hi: 'अपना अनुरोध पूरा करें',
+  );
+  static const completeRequestMessage = TranslatableString(
+    en: 'Save and submit unlock when the required details and materials are ready.',
+    ar: 'يتاح الحفظ والإرسال عند اكتمال التفاصيل والمواد المطلوبة.',
+    ur: 'مطلوبہ تفصیل اور مٹیریل مکمل ہونے پر محفوظ کرنے اور جمع کرانے کے اختیارات فعال ہوں گے۔',
+    hi: 'आवश्यक विवरण और सामग्री तैयार होने पर सेव और सबमिट उपलब्ध होंगे।',
+  );
+  static const recipientAndHandover = TranslatableString(
+    en: 'Recipient and handover',
+    ar: 'المستفيد والتسليم',
+    ur: 'وصول کنندہ اور حوالگی',
+    hi: 'प्राप्तकर्ता और सौंपना',
+  );
+  static const approvalRoute = TranslatableString(
+    en: 'Approval route',
+    ar: 'مسار الموافقة',
+    ur: 'منظوری کا راستہ',
+    hi: 'अनुमोदन मार्ग',
+  );
+  static const ready = TranslatableString(
+    en: 'Ready',
+    ar: 'جاهز',
+    ur: 'تیار',
+    hi: 'तैयार',
+  );
+  static const required = TranslatableString(
+    en: 'Required',
+    ar: 'مطلوب',
+    ur: 'مطلوب',
+    hi: 'आवश्यक',
+  );
+  static const noMaterialsYet = TranslatableString(
+    en: 'No materials added yet',
+    ar: 'لم تتم إضافة مواد بعد',
+    ur: 'ابھی کوئی مٹیریل شامل نہیں کیا گیا',
+    hi: 'अभी कोई सामग्री नहीं जोड़ी गई',
+  );
+  static const completeBeforeSaving = TranslatableString(
+    en: 'Complete the required fields and one material to save this private draft.',
+    ar: 'أكمل الحقول المطلوبة ومادة واحدة لحفظ هذه المسودة الخاصة.',
+    ur: 'نجی مسودہ محفوظ کرنے کے لیے مطلوبہ فیلڈز اور ایک مٹیریل مکمل کریں۔',
+    hi: 'इस निजी ड्राफ्ट को सेव करने के लिए आवश्यक फ़ील्ड और एक सामग्री पूरी करें।',
+  );
+  static const draftReady = TranslatableString(
+    en: 'Private draft is ready to save',
+    ar: 'المسودة الخاصة جاهزة للحفظ',
+    ur: 'نجی مسودہ محفوظ کرنے کے لیے تیار ہے',
+    hi: 'निजी ड्राफ्ट सेव करने के लिए तैयार है',
+  );
+  static const approvalGuidance = TranslatableString(
+    en: 'Complete the category, beneficiary and receiver to resolve the independent approver.',
+    ar: 'أكمل الفئة والمستفيد والمستلم لتحديد المعتمد المستقل.',
+    ur: 'آزاد منظور کنندہ طے کرنے کے لیے زمرہ، مستفید اور وصول کنندہ مکمل کریں۔',
+    hi: 'स्वतंत्र अनुमोदक तय करने के लिए श्रेणी, लाभार्थी और प्राप्तकर्ता पूरा करें।',
+  );
+  static const rowNumber = TranslatableString(
+    en: 'R No',
+    ar: 'رقم',
+    ur: 'نمبر',
+    hi: 'क्रम',
+  );
   static const routeChecking = TranslatableString(
     en: 'Checking approval route…',
     ar: 'جارٍ التحقق من مسار الموافقة…',
