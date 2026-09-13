@@ -266,6 +266,48 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'نجی مسودہ محفوظ کرنے کے لیے تیار ہے',
     hi: 'निजी ड्राफ्ट सेव करने के लिए तैयार है',
   );
+  static const allChangesSaved = TranslatableString(
+    en: 'All changes are saved in the private draft',
+    ar: 'تم حفظ جميع التغييرات في المسودة الخاصة',
+    ur: 'تمام تبدیلیاں نجی مسودے میں محفوظ ہیں',
+    hi: 'सभी बदलाव निजी ड्राफ्ट में सेव हैं',
+  );
+  static const leaveDraftTitle = TranslatableString(
+    en: 'Leave this company request?',
+    ar: 'مغادرة طلب الشركة هذا؟',
+    ur: 'اس کمپنی درخواست سے باہر جائیں؟',
+    hi: 'इस कंपनी अनुरोध से बाहर जाएँ?',
+  );
+  static const leaveDraftBody = TranslatableString(
+    en: 'You have changes that are not in the last saved private draft.',
+    ar: 'لديك تغييرات غير موجودة في آخر مسودة خاصة محفوظة.',
+    ur: 'آپ کی کچھ تبدیلیاں آخری محفوظ شدہ نجی مسودے میں نہیں ہیں۔',
+    hi: 'आपके कुछ बदलाव अंतिम सेव किए गए निजी ड्राफ्ट में नहीं हैं।',
+  );
+  static const incompleteLeaveDraftBody = TranslatableString(
+    en: 'Complete the required fields to save, or explicitly discard these changes.',
+    ar: 'أكمل الحقول المطلوبة للحفظ، أو تجاهل هذه التغييرات صراحةً.',
+    ur: 'محفوظ کرنے کے لیے مطلوبہ فیلڈز مکمل کریں، یا ان تبدیلیوں کو واضح طور پر رد کریں۔',
+    hi: 'सेव करने के लिए आवश्यक फ़ील्ड पूरे करें, या इन बदलावों को स्पष्ट रूप से छोड़ें।',
+  );
+  static const keepEditing = TranslatableString(
+    en: 'Keep editing',
+    ar: 'متابعة التعديل',
+    ur: 'ترمیم جاری رکھیں',
+    hi: 'संपादन जारी रखें',
+  );
+  static const saveAndLeave = TranslatableString(
+    en: 'Save draft & leave',
+    ar: 'حفظ المسودة والمغادرة',
+    ur: 'مسودہ محفوظ کریں اور جائیں',
+    hi: 'ड्राफ्ट सेव करके जाएँ',
+  );
+  static const discardAndLeave = TranslatableString(
+    en: 'Discard changes & leave',
+    ar: 'تجاهل التغييرات والمغادرة',
+    ur: 'تبدیلیاں رد کریں اور جائیں',
+    hi: 'बदलाव छोड़कर जाएँ',
+  );
   static const approvalGuidance = TranslatableString(
     en: 'Complete the category, beneficiary and receiver to resolve the independent approver.',
     ar: 'أكمل الفئة والمستفيد والمستلم لتحديد المعتمد المستقل.',

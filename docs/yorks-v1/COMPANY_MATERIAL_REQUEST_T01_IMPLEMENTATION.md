@@ -1,6 +1,6 @@
 # Company Material Requests T01 — protected create and submit
 
-Status: **implemented locally; release-gated**
+Status: **implementation complete; staging acceptance pending**
 
 This is the first approved vertical slice from the Company Material Requests
 [lifecycle review](COMPANY_MATERIAL_REQUEST_LIFECYCLE_REVIEW.md). It creates a
@@ -91,3 +91,26 @@ roll the unfinished slice back before it is enabled, keep the flag false and
 remove the unreferenced T01 objects only through a reviewed corrective
 migration. Once any production request exists, preserve its records and revoke
 the flag/authorization route instead of deleting history.
+
+## Completion evidence
+
+The approved T01 implementation boundary is complete in code:
+
+- both additive T01 migrations are present in the linked staging migration
+  ledger;
+- the feature-gated desktop and mobile entry points open the focused company
+  composer without changing the project Material Request flow;
+- the composer supports protected private-draft save and atomic submission,
+  shows only server-returned authorization choices, and guards unsaved changes
+  on Cancel, Back and browser/system Back;
+- repository contract tests verify fail-closed rollout/connectivity behavior,
+  the narrow option/preflight RPCs and the exact company-only submission
+  payload; and
+- desktop and 360 px visual tests cover the composer and protected-exit states.
+
+Staging acceptance is a separate release gate, not unfinished T01 scope. It
+requires an authenticated configured requester to create, save and submit a
+request, followed by confirmation that the independently resolved approver can
+see the resulting notification. The pgTAP suite remains the database authority;
+if the local Docker-backed Supabase harness is unavailable, record that test as
+unavailable rather than treating it as passed.

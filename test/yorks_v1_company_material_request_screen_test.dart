@@ -146,6 +146,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('unsaved company request requires an explicit exit decision', (
+    tester,
+  ) async {
+    final repository = _CompanyRequestRepository();
+    await _pumpComposer(
+      tester,
+      repository: repository,
+      size: const Size(1366, 900),
+    );
+
+    await _enterVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-purpose')),
+      'Unfinished company request',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-cancel')),
+    );
+
+    expect(find.text('Leave this company request?'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(
+              const ValueKey('company-material-request-save-and-leave'),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('company-material-request-keep-editing')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Unfinished company request'), findsOneWidget);
+
+    await _completeDetails(tester);
+    await _completeFirstLine(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-cancel')),
+    );
+    final saveAndLeave = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('company-material-request-save-and-leave')),
+    );
+    expect(saveAndLeave.onPressed, isNotNull);
+    await tester.tap(
+      find.byKey(const ValueKey('company-material-request-save-and-leave')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.saveCalls, 1);
+    expect(find.text('Private company draft saved.'), findsOneWidget);
+  });
+
   testWidgets('redesigned desktop and mobile states match visual evidence', (
     tester,
   ) async {
@@ -189,6 +245,57 @@ void main() {
         'goldens/company_requests/after_company_request_mobile_review.png',
       ),
     );
+  });
+
+  testWidgets('protected exit decision is usable on desktop and mobile', (
+    tester,
+  ) async {
+    await _pumpComposer(
+      tester,
+      repository: _CompanyRequestRepository(),
+      size: const Size(1366, 900),
+    );
+    await _enterVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-purpose')),
+      'Unfinished company request',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-cancel')),
+    );
+    await expectLater(
+      find.byType(AlertDialog),
+      matchesGoldenFile(
+        'goldens/company_requests/after_company_request_exit_desktop.png',
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('company-material-request-keep-editing')),
+    );
+    await tester.pumpAndSettle();
+
+    await _pumpComposer(
+      tester,
+      repository: _CompanyRequestRepository(),
+      size: const Size(360, 800),
+    );
+    await _enterVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-purpose')),
+      'Unfinished company request',
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-back')),
+    );
+    await expectLater(
+      find.byType(AlertDialog),
+      matchesGoldenFile(
+        'goldens/company_requests/after_company_request_exit_mobile.png',
+      ),
+    );
+    expect(tester.takeException(), isNull);
   });
 }
 
@@ -289,6 +396,7 @@ class _CompanyRequestRepository
     implements YorksV1CompanyMaterialRequestRepository {
   int preflightCalls = 0;
   int submitCalls = 0;
+  int saveCalls = 0;
 
   static const _person = YorksV1CompanyMaterialRequestPerson(
     authUserId: '10000000-0000-4000-8000-000000000002',
@@ -340,7 +448,10 @@ class _CompanyRequestRepository
   @override
   Future<YorksV1CompanyMaterialRequest> saveDraft(
     YorksV1CompanyMaterialRequestDraft draft,
-  ) async => _result(draft, state: 'draft');
+  ) async {
+    saveCalls++;
+    return _result(draft, state: 'draft');
+  }
 
   YorksV1CompanyMaterialRequest _result(
     YorksV1CompanyMaterialRequestDraft draft, {

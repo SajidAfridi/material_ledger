@@ -16,6 +16,8 @@ import '../../../../shared/providers/yorks_v1_company_material_request_provider.
 
 enum _CompanyRequestStep { details, items, review }
 
+enum _CompanyRequestExitChoice { save, discard }
+
 bool _lineHasMaterial(YorksV1CompanyMaterialRequestLine line) =>
     line.description.trim().isNotEmpty ||
     line.quantity.trim().isNotEmpty ||
@@ -58,6 +60,9 @@ class _YorksV1CompanyMaterialRequestScreenState
   bool _routeUnavailable = false;
   bool _reviewConfirmed = false;
   bool _saving = false;
+  bool _hasUnsavedChanges = false;
+  bool _allowPop = false;
+  bool _exitDecisionOpen = false;
 
   @override
   void initState() {
@@ -94,7 +99,12 @@ class _YorksV1CompanyMaterialRequestScreenState
   }
 
   void _onTextChanged() {
-    if (mounted) setState(() => _reviewConfirmed = false);
+    if (mounted) {
+      setState(() {
+        _reviewConfirmed = false;
+        _hasUnsavedChanges = true;
+      });
+    }
   }
 
   void _update(YorksV1CompanyMaterialRequestDraft next) {
@@ -107,6 +117,7 @@ class _YorksV1CompanyMaterialRequestScreenState
     setState(() {
       _draft = next;
       _reviewConfirmed = false;
+      _hasUnsavedChanges = true;
       if (authorizationChanged) {
         _preflight = null;
         _routeUnavailable = false;
@@ -176,21 +187,113 @@ class _YorksV1CompanyMaterialRequestScreenState
     setState(() => _step = step);
   }
 
-  void _close() {
-    if (context.canPop()) context.pop();
+  void _leave() {
+    if (!mounted) return;
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      } else {
+        GoRouter.maybeOf(context)?.go('/yorks/material-requests');
+      }
+    });
+  }
+
+  Future<void> _requestClose(AppLanguage language) async {
+    if (_saving || _exitDecisionOpen) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    if (!_hasUnsavedChanges) {
+      _leave();
+      return;
+    }
+    _exitDecisionOpen = true;
+    final canSave = _current.canSave;
+    final choice = await showDialog<_CompanyRequestExitChoice>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          YorksV1CompanyMaterialRequestStrings.leaveDraftTitle.active(language),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              YorksV1CompanyMaterialRequestStrings.leaveDraftBody.active(
+                language,
+              ),
+            ),
+            if (!canSave) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                YorksV1CompanyMaterialRequestStrings.incompleteLeaveDraftBody
+                    .active(language),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('company-material-request-keep-editing'),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(
+              YorksV1CompanyMaterialRequestStrings.keepEditing.active(language),
+            ),
+          ),
+          TextButton(
+            key: const ValueKey('company-material-request-discard-and-leave'),
+            onPressed: () =>
+                Navigator.pop(dialogContext, _CompanyRequestExitChoice.discard),
+            child: Text(
+              YorksV1CompanyMaterialRequestStrings.discardAndLeave.active(
+                language,
+              ),
+            ),
+          ),
+          FilledButton(
+            key: const ValueKey('company-material-request-save-and-leave'),
+            onPressed: canSave
+                ? () => Navigator.pop(
+                    dialogContext,
+                    _CompanyRequestExitChoice.save,
+                  )
+                : null,
+            child: Text(
+              YorksV1CompanyMaterialRequestStrings.saveAndLeave.active(
+                language,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    _exitDecisionOpen = false;
+    if (!mounted || choice == null) return;
+    if (choice == _CompanyRequestExitChoice.save) {
+      final saved = await _save(submit: false, language: language);
+      if (!saved || !mounted) return;
+    }
+    _leave();
   }
 
   void _show(String text) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-  Future<void> _save({
+  Future<bool> _save({
     required bool submit,
     required AppLanguage language,
   }) async {
     final draft = _current;
     if (!draft.canSave) {
       _show(YorksV1CompanyMaterialRequestStrings.validation.active(language));
-      return;
+      return false;
     }
     setState(() => _saving = true);
     try {
@@ -200,25 +303,29 @@ class _YorksV1CompanyMaterialRequestScreenState
       final result = submit
           ? await repository.saveAndSubmit(draft)
           : await repository.saveDraft(draft);
-      if (!mounted) return;
-      setState(
-        () => _draft = _draft.copyWith(recordVersion: result.recordVersion),
-      );
+      if (!mounted) return false;
+      setState(() {
+        _draft = _draft.copyWith(recordVersion: result.recordVersion);
+        _hasUnsavedChanges = false;
+      });
       if (submit) {
         setState(() => _saving = false);
         await _showSubmitted(result, language);
-        if (mounted) _close();
+        if (mounted) _leave();
       } else {
         _show(YorksV1CompanyMaterialRequestStrings.draftSaved.active(language));
       }
+      return true;
     } on YorksV1DomainException {
       if (mounted) {
         _show(YorksV1CompanyMaterialRequestStrings.failed.active(language));
       }
+      return false;
     } catch (_) {
       if (mounted) {
         _show(YorksV1CompanyMaterialRequestStrings.failed.active(language));
       }
+      return false;
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -306,7 +413,7 @@ class _YorksV1CompanyMaterialRequestScreenState
     final options = ref.watch(
       yorksV1CompanyMaterialRequestDraftOptionsProvider,
     );
-    return options.when(
+    final body = options.when(
       loading: () => const Scaffold(
         backgroundColor: AppColors.surface,
         body: Center(child: CircularProgressIndicator()),
@@ -326,6 +433,13 @@ class _YorksV1CompanyMaterialRequestScreenState
           : MediaQuery.sizeOf(context).width < AppSpacing.stackedBreakpoint
           ? _buildMobile(items, language)
           : _buildDesktop(items, language),
+    );
+    return PopScope(
+      canPop: _allowPop || !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (!didPop && !_allowPop) await _requestClose(language);
+      },
+      child: body,
     );
   }
 
@@ -350,10 +464,11 @@ class _YorksV1CompanyMaterialRequestScreenState
           YorksMobileAppBar(
             title: title,
             leading: YorksMobileIconButton(
+              key: const ValueKey('company-material-request-back'),
               icon: Icons.arrow_back_rounded,
               tooltip: YorksV1MaterialRequestStrings.back.active(language),
               onPressed: _step == _CompanyRequestStep.details
-                  ? _close
+                  ? () => _requestClose(language)
                   : () => _goTo(
                       _step == _CompanyRequestStep.review
                           ? _CompanyRequestStep.items
@@ -571,7 +686,7 @@ class _YorksV1CompanyMaterialRequestScreenState
       children: [
         OutlinedButton(
           key: const ValueKey('company-material-request-save-draft'),
-          onPressed: _saving || !_current.canSave
+          onPressed: _saving || !_current.canSave || !_hasUnsavedChanges
               ? null
               : () => _save(submit: false, language: language),
           child: Text(
@@ -710,7 +825,8 @@ class _YorksV1CompanyMaterialRequestScreenState
             saving: _saving,
             canSave: _current.canSave,
             canSubmit: _current.canSave && _preflight != null,
-            onCancel: _close,
+            hasUnsavedChanges: _hasUnsavedChanges,
+            onCancel: () => _requestClose(language),
             onSave: () => _save(submit: false, language: language),
             onSubmit: () => _confirmSubmit(language),
           ),
@@ -790,6 +906,7 @@ class _DesktopActionBar extends StatelessWidget {
     required this.saving,
     required this.canSave,
     required this.canSubmit,
+    required this.hasUnsavedChanges,
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
@@ -798,6 +915,7 @@ class _DesktopActionBar extends StatelessWidget {
   final bool saving;
   final bool canSave;
   final bool canSubmit;
+  final bool hasUnsavedChanges;
   final VoidCallback onCancel;
   final VoidCallback onSave;
   final VoidCallback onSubmit;
@@ -818,14 +936,21 @@ class _DesktopActionBar extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              canSave ? Icons.check_circle_outline : Icons.info_outline,
+              canSave
+                  ? hasUnsavedChanges
+                        ? Icons.check_circle_outline
+                        : Icons.cloud_done_outlined
+                  : Icons.info_outline,
               color: canSave ? AppColors.success : AppColors.muted,
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 (canSave
-                        ? YorksV1CompanyMaterialRequestStrings.draftReady
+                        ? hasUnsavedChanges
+                              ? YorksV1CompanyMaterialRequestStrings.draftReady
+                              : YorksV1CompanyMaterialRequestStrings
+                                    .allChangesSaved
                         : YorksV1CompanyMaterialRequestStrings
                               .completeBeforeSaving)
                     .active(language),
@@ -835,6 +960,7 @@ class _DesktopActionBar extends StatelessWidget {
               ),
             ),
             TextButton(
+              key: const ValueKey('company-material-request-cancel'),
               onPressed: saving ? null : onCancel,
               child: Text(
                 YorksV1MaterialRequestStrings.cancel.active(language),
@@ -843,7 +969,9 @@ class _DesktopActionBar extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             OutlinedButton.icon(
               key: const ValueKey('company-material-request-save-draft'),
-              onPressed: saving || !canSave ? null : onSave,
+              onPressed: saving || !canSave || !hasUnsavedChanges
+                  ? null
+                  : onSave,
               icon: const Icon(Icons.save_outlined),
               label: Text(
                 YorksV1CompanyMaterialRequestStrings.saveDraft.active(language),
