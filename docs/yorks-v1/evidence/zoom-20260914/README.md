@@ -1,7 +1,8 @@
 # Yorks workspace zoom evidence — 14 September 2026
 
-Status: **implemented and locally verified; physical-device/platform matrix
-remains outstanding.** No production release was performed.
+Status: **implemented, locally verified and deployed to dedicated staging;
+physical-device/platform matrix remains outstanding.** No production release
+was performed.
 
 ## Result
 
@@ -54,6 +55,25 @@ This proves browser magnification without a responsive-layout switch during
 pinch. The event witness also proved that Ctrl/Command zoom input was not
 default-prevented, did not reach Flutter's competing handler, and ordinary
 wheel input still reached Flutter.
+
+## Dedicated staging release
+
+- Source commit: `0ea4f689e2a175a520b66420f7e29070bd6b5ab7`.
+- Vercel deployment: `dpl_A6PJocysCWtxXLYtxvST9vwQ7fmh`.
+- Immutable preview:
+  `https://yorks-r35-i964xnknw-sajid-alis-projects-0ec775a2.vercel.app`.
+- The staging database preflight reported no pending migrations. No database or
+  Edge Function mutation was required for this UI-only slice.
+- The compiled bundle contains the dedicated staging project reference once,
+  and contains the production project reference and CI placeholders zero times.
+- Seventeen root, deep-route, PWA and JavaScript checks byte-matched the local
+  artifact. `main.dart.js` SHA-256 is
+  `d919ecca9f82f3f7150a83fea14ee2dce62090b9f856676127a21161ddcc7b2d`.
+- A fresh browser smoke check rendered the Flutter view with the scalable
+  viewport and `pinch-zoom` touch policy, with no overlay or reported browser
+  error.
+- Production remained on deployment `dpl_EFMtEEvZrhMcjttQbSFQZCXjzV6y`;
+  its alias response retained the pre-release ETag and byte length.
 
 The eight changed 1366px goldens differ only in the former control footprint:
 
