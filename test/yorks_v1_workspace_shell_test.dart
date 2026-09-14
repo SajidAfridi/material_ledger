@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import 'package:material_ledger/core/zoom/yorks_workspace_zoom.dart';
+import 'package:material_ledger/shared/models/yorks_v1_zoom_strings.dart';
+import 'package:material_ledger/shared/models/app_language.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +25,44 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  for (final width in [1366.0, 360.0]) {
+    testWidgets('native account menu controls current view at $width', (
+      tester,
+    ) async {
+      _setViewport(tester, Size(width, 800));
+      addTearDown(() => _resetViewport(tester));
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        _ShellTestApp(role: YorksV1Role.procurement, preferences: preferences),
+      );
+      await tester.pumpAndSettle();
+      final viewport = tester.element(find.byType(YorksWorkspaceZoomViewport));
+      final controller = YorksWorkspaceZoomScope.maybeOf(viewport)!;
+      if (width < 720) {
+        tester.state<ScaffoldState>(find.byType(Scaffold).first).openDrawer();
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const ValueKey('yorks-account-entry')));
+      await tester.pumpAndSettle();
+      final zoom = find.text(
+        YorksV1ZoomStrings.zoomIn.active(AppLanguage.english),
+      );
+      expect(zoom, findsOneWidget);
+      await tester.ensureVisible(zoom);
+      await tester.tap(zoom);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, greaterThan(1));
+      final reset = find.text(
+        YorksV1ZoomStrings.resetZoom.active(AppLanguage.english),
+      );
+      await tester.ensureVisible(reset);
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('R35 procurement workspace shell renders desktop navigation', (
     tester,

@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/controllers/yorks_v1_material_request_draft_controller.dart';
@@ -15476,15 +15477,17 @@ class _ControlledRequestPreview extends StatelessWidget {
           ? 620
           : 900,
       child: documentModel.when(
-        data: (model) => PdfPreview(
-          build: (_) => YorksV1MaterialRequestDocumentService()
-              .buildDocumentPdf(model, PdfPageFormat.a4),
-          allowPrinting: false,
-          allowSharing: false,
-          canChangeOrientation: false,
-          canChangePageFormat: false,
-          initialPageFormat: PdfPageFormat.a4,
-          useActions: false,
+        data: (model) => YorksWorkspaceZoomExclusion(
+          child: PdfPreview(
+            build: (_) => YorksV1MaterialRequestDocumentService()
+                .buildDocumentPdf(model, PdfPageFormat.a4),
+            allowPrinting: false,
+            allowSharing: false,
+            canChangeOrientation: false,
+            canChangePageFormat: false,
+            initialPageFormat: PdfPageFormat.a4,
+            useActions: false,
+          ),
         ),
         loading: () => const _ControlledDocumentAvailability(loading: true),
         error: (_, _) => const _ControlledDocumentAvailability(),

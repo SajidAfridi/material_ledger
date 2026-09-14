@@ -149,136 +149,78 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final canPopNatively = Navigator.maybeOf(context)?.canPop() ?? false;
     final canUseWorkspaceHistory = navigationHistory.canGoBack(currentLocation);
 
-    return PopScope(
-      // Root destinations in StatefulShellRoute have no Navigator page to pop.
-      // Intercept system/gesture Back there and consume the shared workspace
-      // history. Native nested routes keep their normal pop semantics.
-      canPop: canPopNatively || !canUseWorkspaceHistory,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !canUseWorkspaceHistory) return;
-        yorksNavigateBack(
-          context,
-          ref,
-          currentLocation,
-          fallback: current?.path ?? RoutePaths.engineerHome,
-        );
-      },
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-              openSearch,
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-              openSearch,
+    return YorksWorkspaceZoomHost(
+      key: ValueKey(user?.id),
+      routeKey: location,
+      child: PopScope(
+        // Root destinations in StatefulShellRoute have no Navigator page to pop.
+        // Intercept system/gesture Back there and consume the shared workspace
+        // history. Native nested routes keep their normal pop semantics.
+        canPop: canPopNatively || !canUseWorkspaceHistory,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || !canUseWorkspaceHistory) return;
+          yorksNavigateBack(
+            context,
+            ref,
+            currentLocation,
+            fallback: current?.path ?? RoutePaths.engineerHome,
+          );
         },
-        child: Scaffold(
-          backgroundColor: AppColors.surface,
-          drawer: desktop
-              ? null
-              : Drawer(
-                  width: 246,
-                  shape: const RoundedRectangleBorder(),
-                  child: _YorksDesktopSidebar(
-                    destinations: destinations,
-                    activePath: current?.path,
-                    language: language,
-                    role: role,
-                    userName: user?.fullName,
-                    expanded: true,
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+                openSearch,
+            const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                openSearch,
+          },
+          child: Scaffold(
+            backgroundColor: AppColors.surface,
+            drawer: desktop
+                ? null
+                : Drawer(
+                    width: 246,
+                    shape: const RoundedRectangleBorder(),
+                    child: _YorksDesktopSidebar(
+                      destinations: destinations,
+                      activePath: current?.path,
+                      language: language,
+                      role: role,
+                      userName: user?.fullName,
+                      expanded: true,
+                    ),
                   ),
-                ),
-          body: Builder(
-            builder: (scaffoldContext) {
-              if (!desktop) {
-                final unread = ref.watch(unreadNotificationCountProvider);
-                return ColoredBox(
-                  color: AppColors.mobileSurface,
-                  child: Column(
-                    children: [
-                      if (!(YorksMobileUi.isActive(context) &&
-                          featureOwnsMobileTopBar))
-                        _YorksWorkspaceMobileTopBar(
-                          breadcrumbs: breadcrumbs,
-                          language: language,
-                          location: location,
-                          showBack: yorksCanNavigateBack(
-                            context,
-                            ref,
-                            currentLocation,
-                          ),
-                          unreadNotifications: unread,
-                          teamChatEnabled: teamChatEnabled,
-                          unreadChat: chatUnread,
-                          onMenu: () =>
-                              context.go(RoutePaths.yorksV1MobileMore),
-                          onBack: () => yorksNavigateBack(
-                            context,
-                            ref,
-                            currentLocation,
-                            fallback: current?.path ?? RoutePaths.engineerHome,
-                          ),
-                        ),
-                      Expanded(
-                        child: YorksWorkspaceZoomViewport(
-                          routeKey: location,
-                          language: language,
-                          child: child,
-                        ),
-                      ),
-                      if (!focusedMobileRoute)
-                        _YorksMobileNavigation(
-                          destinations: _mobileDestinationsFor(
-                            role,
-                            nativeMobile: YorksMobileUi.isActive(context),
-                            teamChatEnabled: teamChatEnabled,
-                            chatUnread: chatUnread,
-                            permissionState: permissionState,
-                            accountsEnabled: accountsEnabled,
-                            workforceEnabled: workforceEnabled,
-                            analyticsEnabled: analyticsEnabled,
-                          ),
-                          activePath: location,
-                          language: language,
-                        ),
-                    ],
-                  ),
-                );
-              }
-              return Row(
-                children: [
-                  sidebar,
-                  Expanded(
+            body: Builder(
+              builder: (scaffoldContext) {
+                if (!desktop) {
+                  final unread = ref.watch(unreadNotificationCountProvider);
+                  return ColoredBox(
+                    color: AppColors.mobileSurface,
                     child: Column(
                       children: [
-                        _YorksWorkspaceTopBar(
-                          breadcrumbs: breadcrumbs,
-                          language: language,
-                          role: role,
-                          destinations: destinations,
-                          teamChatEnabled: teamChatEnabled,
-                          unreadChat: chatUnread,
-                          sidebarExpanded: sidebarExpanded,
-                          showBack:
-                              yorksCanNavigateBack(
-                                context,
-                                ref,
-                                currentLocation,
-                              ) ||
-                              (current?.path != null &&
-                                  location != current!.path),
-                          onToggleSidebar: () =>
-                              ref
-                                      .read(
-                                        yorksV1SidebarExpandedProvider.notifier,
-                                      )
-                                      .state =
-                                  !sidebarExpanded,
-                          onBack: () => yorksNavigateBack(
-                            context,
-                            ref,
-                            currentLocation,
-                            fallback: current?.path ?? RoutePaths.engineerHome,
+                        if (!(YorksMobileUi.isActive(context) &&
+                            featureOwnsMobileTopBar))
+                          _YorksWorkspaceMobileTopBar(
+                            breadcrumbs: breadcrumbs,
+                            language: language,
+                            location: location,
+                            showBack: yorksCanNavigateBack(
+                              context,
+                              ref,
+                              currentLocation,
+                            ),
+                            unreadNotifications: unread,
+                            teamChatEnabled: teamChatEnabled,
+                            unreadChat: chatUnread,
+                            onMenu: () =>
+                                context.go(RoutePaths.yorksV1MobileMore),
+                            onBack: () => yorksNavigateBack(
+                              context,
+                              ref,
+                              currentLocation,
+                              fallback:
+                                  current?.path ?? RoutePaths.engineerHome,
+                            ),
                           ),
-                        ),
                         Expanded(
                           child: YorksWorkspaceZoomViewport(
                             routeKey: location,
@@ -286,12 +228,77 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                             child: child,
                           ),
                         ),
+                        if (!focusedMobileRoute)
+                          _YorksMobileNavigation(
+                            destinations: _mobileDestinationsFor(
+                              role,
+                              nativeMobile: YorksMobileUi.isActive(context),
+                              teamChatEnabled: teamChatEnabled,
+                              chatUnread: chatUnread,
+                              permissionState: permissionState,
+                              accountsEnabled: accountsEnabled,
+                              workforceEnabled: workforceEnabled,
+                              analyticsEnabled: analyticsEnabled,
+                            ),
+                            activePath: location,
+                            language: language,
+                          ),
                       ],
                     ),
-                  ),
-                ],
-              );
-            },
+                  );
+                }
+                return Row(
+                  children: [
+                    sidebar,
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _YorksWorkspaceTopBar(
+                            breadcrumbs: breadcrumbs,
+                            language: language,
+                            role: role,
+                            destinations: destinations,
+                            teamChatEnabled: teamChatEnabled,
+                            unreadChat: chatUnread,
+                            sidebarExpanded: sidebarExpanded,
+                            showBack:
+                                yorksCanNavigateBack(
+                                  context,
+                                  ref,
+                                  currentLocation,
+                                ) ||
+                                (current?.path != null &&
+                                    location != current!.path),
+                            onToggleSidebar: () =>
+                                ref
+                                        .read(
+                                          yorksV1SidebarExpandedProvider
+                                              .notifier,
+                                        )
+                                        .state =
+                                    !sidebarExpanded,
+                            onBack: () => yorksNavigateBack(
+                              context,
+                              ref,
+                              currentLocation,
+                              fallback:
+                                  current?.path ?? RoutePaths.engineerHome,
+                            ),
+                          ),
+                          Expanded(
+                            child: YorksWorkspaceZoomViewport(
+                              routeKey: location,
+                              language: language,
+                              child: child,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -2020,6 +2027,7 @@ class YorksAccountPopover extends ConsumerWidget {
                   label: AppStrings.about.active(language),
                   onTap: onHelp,
                 ),
+                YorksWorkspaceZoomMenu(language: language),
                 const Divider(height: AppSpacing.sm),
                 _YorksAccountPopoverAction(
                   icon: Icons.logout_rounded,

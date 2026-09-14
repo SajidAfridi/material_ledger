@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
@@ -1860,26 +1861,28 @@ class _ControlledDeliveryOrderPreview extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
     clipBehavior: Clip.antiAlias,
-    child: PdfPreview(
-      build: (_) => documents.buildDeliveryOrderPdf(
-        workspace: workspace,
-        dispatch: dispatch,
-        revision: revision,
-        format: PdfPageFormat.a4,
-      ),
-      allowPrinting: false,
-      allowSharing: false,
-      canChangeOrientation: false,
-      canChangePageFormat: false,
-      initialPageFormat: PdfPageFormat.a4,
-      useActions: false,
-      // The native PDF rasterizer completes asynchronously. A determinate
-      // indicator keeps the loading state accessible without leaving an
-      // indeterminate test ticker running when no native rasterizer exists.
-      loadingWidget: const Center(
-        child: SizedBox.square(
-          dimension: 28,
-          child: CircularProgressIndicator(value: .38, strokeWidth: 2.5),
+    child: YorksWorkspaceZoomExclusion(
+      child: PdfPreview(
+        build: (_) => documents.buildDeliveryOrderPdf(
+          workspace: workspace,
+          dispatch: dispatch,
+          revision: revision,
+          format: PdfPageFormat.a4,
+        ),
+        allowPrinting: false,
+        allowSharing: false,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        initialPageFormat: PdfPageFormat.a4,
+        useActions: false,
+        // The native PDF rasterizer completes asynchronously. A determinate
+        // indicator keeps the loading state accessible without leaving an
+        // indeterminate test ticker running when no native rasterizer exists.
+        loadingWidget: const Center(
+          child: SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(value: .38, strokeWidth: 2.5),
+          ),
         ),
       ),
     ),

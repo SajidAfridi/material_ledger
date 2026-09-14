@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 
+import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/yorks_v1_workforce_strings.dart';
@@ -650,15 +651,17 @@ final class _YorksWorkforceReportsPanelState
                 ),
               ),
               Expanded(
-                child: PdfPreview(
-                  build: (_) async => bytes,
-                  allowPrinting: false,
-                  allowSharing: false,
-                  canChangeOrientation: false,
-                  canChangePageFormat: false,
-                  pdfFileName: YorksWorkforceReportService().fileName(
-                    artifact,
-                    'pdf',
+                child: YorksWorkspaceZoomExclusion(
+                  child: PdfPreview(
+                    build: (_) async => bytes,
+                    allowPrinting: false,
+                    allowSharing: false,
+                    canChangeOrientation: false,
+                    canChangePageFormat: false,
+                    pdfFileName: YorksWorkforceReportService().fileName(
+                      artifact,
+                      'pdf',
+                    ),
                   ),
                 ),
               ),

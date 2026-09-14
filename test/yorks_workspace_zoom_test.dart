@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,51 @@ import 'package:material_ledger/shared/models/app_language.dart';
 import 'package:material_ledger/shared/models/yorks_v1_zoom_strings.dart';
 
 void main() {
+  if (kIsWeb) {
+    testWidgets('browser owns zoom without a second workspace transform', (
+      tester,
+    ) async {
+      final controller = YorksWorkspaceZoomController();
+      addTearDown(controller.dispose);
+      controller.updateViewportSize(const Size(800, 600));
+      controller.setScale(2);
+      await tester.pumpWidget(
+        _ZoomTestApp(
+          controller: controller,
+          routeKey: '/web',
+          child: const Center(
+            child: SizedBox(
+              key: ValueKey('unscaled-content'),
+              width: 100,
+              height: 50,
+            ),
+          ),
+        ),
+      );
+      final box = tester.renderObject<RenderBox>(
+        find.byKey(const ValueKey('unscaled-content')),
+      );
+      final origin = box.localToGlobal(Offset.zero);
+      expect(
+        box.localToGlobal(const Offset(100, 50)) - origin,
+        const Offset(100, 50),
+      );
+      expect(find.byType(YorksWorkspaceZoomShortcuts), findsNothing);
+      expect(find.byType(YorksWorkspaceZoomMenu), findsNothing);
+      await tester.sendEventToBinding(
+        const PointerScaleEvent(
+          kind: PointerDeviceKind.trackpad,
+          position: Offset(400, 300),
+          scale: 1.5,
+        ),
+      );
+      await tester.pump();
+      expect(controller.currentScale, 2);
+      expect(tester.takeException(), isNull);
+    });
+    return;
+  }
+
   test('focal-point zoom preserves the inspected scene coordinate', () {
     final controller = YorksWorkspaceZoomController();
     addTearDown(controller.dispose);
@@ -88,34 +134,43 @@ void main() {
     expect(controller.transformationController.value, Matrix4.identity());
   });
 
-  testWidgets('desktop controls zoom, reset and stay outside route content', (
+  testWidgets('desktop has no floating controls; menu can zoom and reset', (
     tester,
   ) async {
     _setViewport(tester, const Size(1200, 800));
     final controller = YorksWorkspaceZoomController();
     addTearDown(controller.dispose);
-
     await tester.pumpWidget(
-      _ZoomTestApp(
-        controller: controller,
-        routeKey: '/yorks/overview',
-        child: const _ScrollableRouteContent(),
+      MaterialApp(
+        home: YorksWorkspaceZoomScope(
+          controller: controller,
+          child: Scaffold(
+            drawer: const Drawer(
+              child: YorksWorkspaceZoomMenu(language: AppLanguage.english),
+            ),
+            appBar: AppBar(),
+            body: YorksWorkspaceZoomViewport(
+              controller: controller,
+              routeKey: '/test',
+              language: AppLanguage.english,
+              child: const _ScrollableRouteContent(),
+            ),
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
-
     expect(
       find.byKey(const ValueKey('yorks-workspace-zoom-controls')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Route content'), findsOneWidget);
-
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
     await tester.tap(
-      find.byTooltip(YorksV1ZoomStrings.zoomIn.active(AppLanguage.english)),
+      find.text(YorksV1ZoomStrings.zoomIn.active(AppLanguage.english)),
     );
     await tester.pumpAndSettle();
     expect(controller.currentScale, greaterThan(1));
-
     await tester.tap(
       find.text(YorksV1ZoomStrings.resetZoom.active(AppLanguage.english)),
     );
@@ -155,9 +210,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('tablet workspace keeps the fixed precision controls', (
-    tester,
-  ) async {
+  testWidgets('tablet workspace has no floating controls', (tester) async {
     _setViewport(tester, const Size(820, 900));
     final controller = YorksWorkspaceZoomController();
     addTearDown(controller.dispose);
@@ -173,7 +226,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('yorks-workspace-zoom-controls')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(tester.takeException(), isNull);
   });
@@ -398,6 +451,275 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Last controlled action'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('two-finger pinch is immediate, pans and returns to normal', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 800));
+    final controller = YorksWorkspaceZoomController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _ZoomTestApp(
+        controller: controller,
+        routeKey: '/test',
+        child: const _ScrollableRouteContent(),
+      ),
+    );
+    final first = await tester.startGesture(const Offset(130, 350), pointer: 1);
+    final second = await tester.startGesture(
+      const Offset(230, 350),
+      pointer: 2,
+    );
+    await first.moveTo(const Offset(80, 350));
+    await second.moveTo(const Offset(280, 350));
+    expect(controller.currentScale, closeTo(2, .001));
+    final before = controller.transformationController.value.getTranslation().y;
+    await first.moveBy(const Offset(0, -40));
+    await second.moveBy(const Offset(0, -40));
+    expect(
+      controller.transformationController.value.getTranslation().y,
+      closeTo(before - 40, .001),
+    );
+    await first.moveTo(const Offset(130, 310));
+    await second.moveTo(const Offset(230, 310));
+    expect(controller.currentScale, closeTo(1, .001));
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'native trackpad pinch and magnified pan do not animate behind input',
+    (tester) async {
+      _setViewport(tester, const Size(1200, 800));
+      final controller = YorksWorkspaceZoomController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _ZoomTestApp(
+          controller: controller,
+          routeKey: '/test',
+          child: const _ScrollableRouteContent(),
+        ),
+      );
+      await tester.sendEventToBinding(
+        const PointerPanZoomStartEvent(pointer: 42, position: Offset(500, 400)),
+      );
+      await tester.sendEventToBinding(
+        const PointerPanZoomUpdateEvent(
+          pointer: 42,
+          position: Offset(500, 400),
+          scale: 2,
+        ),
+      );
+      expect(controller.currentScale, 2);
+      final before = controller.transformationController.value.getTranslation();
+      await tester.sendEventToBinding(
+        const PointerPanZoomUpdateEvent(
+          pointer: 42,
+          position: Offset(500, 400),
+          scale: 2,
+          pan: Offset(-50, -30),
+          panDelta: Offset(-50, -30),
+        ),
+      );
+      expect(
+        controller.transformationController.value.getTranslation().x,
+        closeTo(before.x - 50, .001),
+      );
+      await tester.sendEventToBinding(
+        const PointerPanZoomEndEvent(pointer: 42),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('view history restores only within the same authenticated host', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1200, 800));
+    YorksWorkspaceZoomController? controller;
+    Widget host(String route, String user) => MaterialApp(
+      home: YorksWorkspaceZoomHost(
+        key: ValueKey(user),
+        routeKey: route,
+        child: Builder(
+          builder: (context) {
+            controller = YorksWorkspaceZoomScope.maybeOf(context);
+            return Scaffold(
+              body: YorksWorkspaceZoomViewport(
+                routeKey: route,
+                language: AppLanguage.english,
+                child: const _ScrollableRouteContent(),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpWidget(host('/a', 'user-a'));
+    await tester.pumpAndSettle();
+    controller!.setScale(2);
+    await tester.pumpWidget(host('/b', 'user-a'));
+    await tester.pumpAndSettle();
+    expect(controller!.currentScale, 1);
+    await tester.pumpWidget(host('/a', 'user-a'));
+    await tester.pumpAndSettle();
+    expect(controller!.currentScale, 2);
+    await tester.pumpWidget(host('/a', 'user-b'));
+    await tester.pumpAndSettle();
+    expect(controller!.currentScale, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('single finger still scrolls when magnified', (tester) async {
+    _setViewport(tester, const Size(360, 800));
+    final controller = YorksWorkspaceZoomController();
+    final scroll = ScrollController();
+    addTearDown(controller.dispose);
+    addTearDown(scroll.dispose);
+    await tester.pumpWidget(
+      _ZoomTestApp(
+        controller: controller,
+        routeKey: '/test',
+        child: _ScrollableRouteContent(scrollController: scroll),
+      ),
+    );
+    controller.setScale(2);
+    await tester.pump();
+    await tester.dragFrom(const Offset(180, 500), const Offset(0, -150));
+    await tester.pumpAndSettle();
+    expect(scroll.offset, greaterThan(0));
+    expect(controller.currentScale, 2);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('reduced motion applies keyboard zoom without an animation', (
+    tester,
+  ) async {
+    final controller = YorksWorkspaceZoomController();
+    addTearDown(controller.dispose);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await tester.pumpWidget(
+      _ZoomTestApp(
+        controller: controller,
+        routeKey: '/test',
+        child: const _ScrollableRouteContent(),
+      ),
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    expect(controller.currentScale, 1.125);
+    await tester.pump();
+    expect(tester.binding.transientCallbackCount, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dedicated viewer does not also magnify the workspace', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(360, 800));
+    final controller = YorksWorkspaceZoomController();
+    final viewer = TransformationController();
+    addTearDown(controller.dispose);
+    addTearDown(viewer.dispose);
+    await tester.pumpWidget(
+      _ZoomTestApp(
+        controller: controller,
+        routeKey: '/test',
+        child: YorksWorkspaceZoomExclusion(
+          child: InteractiveViewer(
+            transformationController: viewer,
+            child: const SizedBox.expand(child: ColoredBox(color: Colors.blue)),
+          ),
+        ),
+      ),
+    );
+    final first = await tester.startGesture(const Offset(100, 350), pointer: 1);
+    final second = await tester.startGesture(
+      const Offset(250, 350),
+      pointer: 2,
+    );
+    await first.moveTo(const Offset(50, 350));
+    await second.moveTo(const Offset(300, 350));
+    await tester.pump();
+    expect(controller.currentScale, 1);
+    expect(viewer.value.getMaxScaleOnAxis(), greaterThan(1));
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('space and primary mouse drag pan without a middle button', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1200, 800));
+    final controller = YorksWorkspaceZoomController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _ZoomTestApp(
+        controller: controller,
+        routeKey: '/test',
+        child: const _ScrollableRouteContent(),
+      ),
+    );
+    controller.setScale(2);
+    await tester.pump();
+    final before = controller.transformationController.value.getTranslation().x;
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+    final drag = await tester.startGesture(
+      const Offset(600, 400),
+      kind: PointerDeviceKind.mouse,
+    );
+    await drag.moveBy(const Offset(-50, 0));
+    await drag.moveBy(const Offset(-80, 0));
+    await drag.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(
+      controller.transformationController.value.getTranslation().x,
+      lessThan(before),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('magnified form preserves editing and dropdown selection', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1200, 800));
+    final controller = YorksWorkspaceZoomController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _ZoomTestApp(
+        controller: controller,
+        routeKey: '/test',
+        child: const _FormRouteContent(),
+      ),
+    );
+    controller.setScale(2, focalPoint: Offset.zero);
+    await tester.pump();
+    await tester.tapAt(const Offset(200, 100));
+    await tester.enterText(
+      find.byKey(const ValueKey('zoom-test-text-field')),
+      'Copper pipe 25 mm',
+    );
+    await tester.pumpAndSettle();
+    await tester.tapAt(
+      tester.getTopLeft(find.byKey(const ValueKey('zoom-test-dropdown'))) +
+          const Offset(100, 30),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Project BOQ').last);
+    await tester.pumpAndSettle();
+    controller.reset();
+    await tester.pumpAndSettle();
+    expect(find.text('Copper pipe 25 mm'), findsOneWidget);
+    expect(find.text('Project BOQ'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
