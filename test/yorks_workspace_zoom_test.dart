@@ -9,7 +9,7 @@ import 'package:material_ledger/shared/models/yorks_v1_zoom_strings.dart';
 
 void main() {
   if (kIsWeb) {
-    testWidgets('browser owns zoom without a second workspace transform', (
+    testWidgets('browser uses a fixed-layout workspace transform', (
       tester,
     ) async {
       final controller = YorksWorkspaceZoomController();
@@ -35,10 +35,9 @@ void main() {
       final origin = box.localToGlobal(Offset.zero);
       expect(
         box.localToGlobal(const Offset(100, 50)) - origin,
-        const Offset(100, 50),
+        const Offset(200, 100),
       );
-      expect(find.byType(YorksWorkspaceZoomShortcuts), findsNothing);
-      expect(find.byType(YorksWorkspaceZoomMenu), findsNothing);
+      expect(find.byType(YorksWorkspaceZoomShortcuts), findsOneWidget);
       await tester.sendEventToBinding(
         const PointerScaleEvent(
           kind: PointerDeviceKind.trackpad,
@@ -47,7 +46,15 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(controller.currentScale, 2);
+      expect(controller.currentScale, 3);
+      final transformedBox = tester.renderObject<RenderBox>(
+        find.byKey(const ValueKey('unscaled-content')),
+      );
+      final transformedOrigin = transformedBox.localToGlobal(Offset.zero);
+      expect(
+        transformedBox.localToGlobal(const Offset(100, 50)) - transformedOrigin,
+        const Offset(300, 150),
+      );
       expect(tester.takeException(), isNull);
     });
     return;

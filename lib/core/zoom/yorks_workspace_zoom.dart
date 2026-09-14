@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -178,8 +177,8 @@ class YorksWorkspaceZoomController extends ChangeNotifier {
 }
 
 /// Zooms only a workspace's central route content. Shell navigation, headers,
-/// overlays, dialogs and toasts remain untransformed. Browser builds bypass
-/// this layer entirely; operating-system text scaling is never changed.
+/// overlays, dialogs and toasts remain untransformed. Operating-system text
+/// scaling is never changed.
 class YorksWorkspaceZoomViewport extends StatefulWidget {
   const YorksWorkspaceZoomViewport({
     super.key,
@@ -212,7 +211,7 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   void initState() {
     super.initState();
     _setController(widget.controller);
-    if (!kIsWeb) FocusManager.instance.addListener(_focusChanged);
+    FocusManager.instance.addListener(_focusChanged);
   }
 
   @override
@@ -450,9 +449,6 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
 
   @override
   Widget build(BuildContext context) {
-    // No transform, shortcut, signal interception or invisible gesture layer
-    // on web: the browser owns page zoom and pinch magnification.
-    if (kIsWeb) return widget.child;
     return LayoutBuilder(
       builder: (context, constraints) {
         _controller.updateViewportSize(constraints.biggest);
@@ -706,7 +702,7 @@ class _YorksZoomResetIntent extends Intent {
 }
 
 /// Accessible alternatives live in the existing account/drawer menu, never
-/// above business content. Browsers retain their own menus and percentages.
+/// above business content.
 class YorksWorkspaceZoomMenu extends StatelessWidget {
   const YorksWorkspaceZoomMenu({super.key, required this.language});
   final AppLanguage language;
@@ -714,7 +710,7 @@ class YorksWorkspaceZoomMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = YorksWorkspaceZoomScope.maybeOf(context);
-    if (kIsWeb || controller == null) return const SizedBox.shrink();
+    if (controller == null) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) => Column(
@@ -779,7 +775,7 @@ class _YorksWorkspaceZoomHostState extends State<YorksWorkspaceZoomHost> {
   @override
   void didUpdateWidget(covariant YorksWorkspaceZoomHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.routeKey == widget.routeKey || kIsWeb) return;
+    if (oldWidget.routeKey == widget.routeKey) return;
     _history.remove(oldWidget.routeKey);
     _history[oldWidget.routeKey] = Matrix4.copy(
       _controller.transformationController.value,
@@ -798,9 +794,8 @@ class _YorksWorkspaceZoomHostState extends State<YorksWorkspaceZoomHost> {
   }
 
   @override
-  Widget build(BuildContext context) => kIsWeb
-      ? widget.child
-      : YorksWorkspaceZoomScope(controller: _controller, child: widget.child);
+  Widget build(BuildContext context) =>
+      YorksWorkspaceZoomScope(controller: _controller, child: widget.child);
 }
 
 /// Marks a dedicated document/image viewer as the sole owner of its gestures.

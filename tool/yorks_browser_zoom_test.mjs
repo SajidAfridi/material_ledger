@@ -6,14 +6,11 @@ import { runInNewContext } from 'node:vm';
 const bootstrap = readFileSync(new URL('../web/flutter_bootstrap.js', import.meta.url), 'utf8')
   .replace('{{flutter_js}}', '').replace('{{flutter_build_config}}', '');
 
-test('web host preserves layout during pinch, keyboard and page zoom changes', async () => {
+test('web host follows only the window layout', async () => {
   const host = { style: {} };
   const windowEvents = new Map();
-  const viewportEvents = new Map();
-  const viewport = { height: 800, scale: 1, addEventListener: (name, fn) => viewportEvents.set(name, fn) };
-  const window = { innerWidth: 1280, innerHeight: 800, visualViewport: viewport,
-    addEventListener: (name, fn) => windowEvents.set(name, fn),
-    setTimeout: () => {} };
+  const window = { innerWidth: 1280, innerHeight: 800,
+    addEventListener: (name, fn) => windowEvents.set(name, fn) };
   let boot;
   let receivedHost;
   runInNewContext(bootstrap, {
@@ -31,30 +28,20 @@ test('web host preserves layout during pinch, keyboard and page zoom changes', a
   assert.equal(receivedHost, host);
   assert.equal(host.style.width, '1280px');
   assert.equal(host.style.height, '800px');
-  viewport.scale = 2;
-  viewport.height = 400;
-  viewportEvents.get('resize')();
-  assert.equal(host.style.width, '1280.0625px');
-  assert.equal(host.style.height, '800.0625px');
-  viewport.height = 250; // Keyboard covers part of the magnified viewport.
-  viewportEvents.get('resize')();
-  assert.equal(host.style.height, '500.125px');
-  viewport.scale = 1;
-  viewport.height = 800;
-  viewportEvents.get('resize')();
-  assert.equal(host.style.height, '800.0625px');
-  window.innerWidth = 640; // Browser page zoom changes layout dimensions.
+  assert.equal(windowEvents.has('resize'), true);
+  window.innerWidth = 640;
   window.innerHeight = 400;
-  viewport.height = 400;
   windowEvents.get('resize')();
-  assert.equal(host.style.width, '640.125px');
-  assert.equal(host.style.height, '400.125px');
+  assert.equal(host.style.width, '640px');
+  assert.equal(host.style.height, '400px');
 });
 
-test('zoom ownership leaves browser defaults intact and ordinary input untouched', () => {
+test('zoom ownership suppresses browser scaling but keeps events for Flutter', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  assert.match(html, /maximum-scale=1\.0, user-scalable=no/);
+  assert.match(html, /touch-action: none !important/);
   const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
-    .map(match => match[1]).find(source => source.includes('Browser zoom must'));
+    .map(match => match[1]).find(source => source.includes('fixed-layout workspace'));
   const listeners = new Map();
   runInNewContext(script, {
     window: { addEventListener: (name, fn) => listeners.set(name, fn), setTimeout: () => {} },
@@ -71,11 +58,13 @@ test('zoom ownership leaves browser defaults intact and ordinary input untouched
     ['keydown', { ctrlKey: true, altKey: true, key: '=' }, false],
   ]) {
     let stopped = false;
+    let prevented = false;
     listeners.get(type)({ ...values,
       stopImmediatePropagation: () => { stopped = true; },
-      preventDefault: () => assert.fail('Yorks must not suppress browser zoom defaults'),
+      preventDefault: () => { prevented = true; },
     });
-    assert.equal(stopped, expected, `${type}: ${JSON.stringify(values)}`);
+    assert.equal(prevented, expected, `${type}: ${JSON.stringify(values)}`);
+    assert.equal(stopped, false, `${type} must continue to Flutter`);
   }
   assert.equal(listeners.has('gesturestart'), false);
   assert.equal(listeners.has('mousedown'), false);

@@ -17,7 +17,7 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Yorks Airconditioning & Refrigeration LLC-SPC — controlled projects, materials, procurement and documents.">
 
@@ -39,10 +39,10 @@
   <title>Yorks AC. & Ref.</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    /* Keep single-finger scrolling in Flutter, but let the browser own pinch.
-       The engine sets touch-action:none inline on its host, hence !important. */
+    /* Flutter owns inspection zoom so magnification never changes breakpoints
+       or rearranges the Yorks workspace. */
     html, body, #yorks-app, flutter-view, flt-glass-pane {
-      touch-action: pinch-zoom !important;
+      touch-action: none !important;
     }
 
     #yorks-app {
@@ -278,18 +278,19 @@
     );
   </script>
   <script>
-    // Browser zoom must not also reach Flutter's wheel/shortcut handlers.
-    // Stop propagation, never the browser default. Ordinary input is untouched.
+    // Keep browser page zoom from competing with Yorks' fixed-layout workspace
+    // zoom. The events continue to Flutter, which applies the composited scale.
+    // Ordinary keyboard and wheel input remains untouched.
     (() => {
       window.addEventListener('keydown', (event) => {
         if ((event.ctrlKey || event.metaKey) && !event.altKey &&
             ['+', '=', '-', '_', '0'].includes(event.key)) {
-          event.stopImmediatePropagation();
+          event.preventDefault();
         }
       }, { capture: true });
       window.addEventListener('wheel', (event) => {
-        if (event.ctrlKey || event.metaKey) event.stopImmediatePropagation();
-      }, { capture: true, passive: true });
+        if (event.ctrlKey || event.metaKey) event.preventDefault();
+      }, { capture: true, passive: false });
 
       const boot = document.getElementById('yorks-boot');
       const retry = document.getElementById('yorks-boot-retry');
