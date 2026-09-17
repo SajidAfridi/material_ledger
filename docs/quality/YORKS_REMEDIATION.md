@@ -44,6 +44,7 @@ Live read-only checks on 17 September:
 | A2: Twenty-second submission outcomes are ambiguous | Repository `.timeout(20s)` wraps the RPC without transport cancellation; controller reduces it to backend-unavailable/failed. | Confirmed code behavior; recovery implementation pending. | Keep timeout unchanged. Add explicit unknown state and bounded authorized status reconciliation; verify payload/key and revoked-access semantics first. |
 | A3: Late command after disposal/account change | Two fault-injection tests reproduced disposed-controller exceptions for success and denial. | Fixed and tested locally for disposal: late command callbacks return without state/navigation outcome or draft cleanup; stale provider notifications are suppressed. | MR suite 57 passed; cross-account browser walkthrough remains unverified. No automatic resubmit. |
 | B: Permission-category incident | Raw codes absent from historical analytics; four successful server commits do not explain 13 denials. | Insufficient evidence for an RLS change. | Trace scoped membership, original server codes and replay authorization; preserve intended denials. |
+| B1: JWT failures misclassified | Four mapping tests reproduced `28000` as denied and `PGRST301/302/303` as server rejection. | Fixed locally: map explicit authentication codes to unauthenticated; keep 42501 denied and PGRST300 server configuration failure. | Six mapping cases, MR suite 63 passed. No RLS/grants change or claim about the historical denials. |
 | C: Procurement MR load, Inventory, Projects, Dashboard | Snapshot client p95s only; no comparable request trace or SQL plan yet. | Investigation pending. | Measure release/profile fixtures, request counts/bytes and primary-content readiness before optimization; inspect dispatch failure separately. |
 | D: Forms, navigation, lookup | Project validation counts do not identify invalid fields; manual material entry is expected behavior. | Investigation pending. | Reproduce conditional validation and navigation recovery; desktop/360px evidence required for presentation changes. |
 | E: Telemetry and release identity | Historical metadata is 1.0.0/build 1; wrapped timeouts become network. | Investigation pending. | Preserve timers, add real build identity and controlled outcomes; verify replay-off code and blocked delivery. |
@@ -95,3 +96,6 @@ Local temporary logs are `/tmp/yorks-race-before.log`,
 `/tmp/yorks-mr-after.log`, `/tmp/yorks-pub-get.log`,
 `/tmp/yorks-pub-offline.log`, `/tmp/yorks-analyze.log`, and
 `/tmp/yorks-full-tests.log` (copy relevant evidence before final handoff).
+
+B1 API reference: [PostgREST error codes](https://docs.postgrest.org/en/stable/references/errors.html).
+A3 commit: `ffef5f4`. B1 focused MR suite: 63 passed.

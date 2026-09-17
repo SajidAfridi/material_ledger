@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:material_ledger/shared/controllers/yorks_v1_material_request_draft_controller.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
@@ -551,6 +552,46 @@ void main() {
         );
       },
     );
+
+    for (final entry in {
+      '28000': YorksV1DomainErrorCode.unauthenticated,
+      'PGRST301': YorksV1DomainErrorCode.unauthenticated,
+      'PGRST302': YorksV1DomainErrorCode.unauthenticated,
+      'PGRST303': YorksV1DomainErrorCode.unauthenticated,
+      '42501': YorksV1DomainErrorCode.unauthorized,
+      'PGRST300': YorksV1DomainErrorCode.serverRejected,
+    }.entries) {
+      test(
+        'MR RPC preserves authentication versus denial: ${entry.key}',
+        () async {
+          final connectivity = DefaultConnectivity();
+          addTearDown(connectivity.dispose);
+          final repository = YorksV1SupabaseMaterialRequestRepository(
+            featureFlags: const YorksV1FeatureFlags(
+              foundation: true,
+              projects: true,
+              boq: true,
+              excel: true,
+              requests: true,
+            ),
+            connectivity: connectivity,
+            rpcClient: _RejectingRpcClient(entry.key),
+          );
+          await expectLater(
+            repository.listDraftProjects(),
+            throwsA(
+              isA<YorksV1DomainException>()
+                  .having((error) => error.code, 'category', entry.value)
+                  .having(
+                    (error) => error.serverCode,
+                    'original safe code',
+                    entry.key,
+                  ),
+            ),
+          );
+        },
+      );
+    }
 
     test('maps a stalled RPC to a bounded backend failure', () async {
       final connectivity = DefaultConnectivity();
@@ -2928,3 +2969,14 @@ YorksV1MaterialRequest _request({
   'request_number': number,
   'lines': lines,
 });
+
+class _RejectingRpcClient implements YorksV1MaterialRequestRpcClient {
+  _RejectingRpcClient(this.code);
+  final String code;
+  @override
+  Future<Object?> invoke({
+    required String functionName,
+    required Map<String, Object?> parameters,
+  }) async =>
+      throw PostgrestException(message: 'Private server detail', code: code);
+}

@@ -824,7 +824,11 @@ class YorksV1SupabaseMaterialRequestRepository
     PostgrestException error,
   ) {
     final code = switch (error.code) {
-      '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
+      '28000' ||
+      'PGRST301' ||
+      'PGRST302' ||
+      'PGRST303' => YorksV1DomainErrorCode.unauthenticated,
+      '42501' => YorksV1DomainErrorCode.unauthorized,
       '40001' || '23505' || '55P03' => YorksV1DomainErrorCode.conflict,
       'PGRST002' || 'PGRST003' => YorksV1DomainErrorCode.backendUnavailable,
       '22023' ||
