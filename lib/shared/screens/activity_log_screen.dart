@@ -446,35 +446,30 @@ class _SummaryGrid extends StatelessWidget {
       _SummaryValue(
         label: YorksV1AuditInvestigationStrings.matching.active(language),
         value: _formatInteger(summary.totalActivities),
-        hint: YorksV1AuditInvestigationStrings.selectedScope.active(language),
         icon: Icons.receipt_long_outlined,
         color: AppColors.primary,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.criticalActivities.active(language),
         value: _formatInteger(summary.criticalActivities),
-        hint: YorksV1AuditInvestigationStrings.selectedScope.active(language),
         icon: Icons.gpp_maybe_outlined,
         color: AppColors.error,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.activeUsers.active(language),
         value: _formatInteger(summary.activeUsers),
-        hint: YorksV1AuditInvestigationStrings.selectedScope.active(language),
         icon: Icons.people_alt_outlined,
         color: AppColors.warning,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.entitiesMonitored.active(language),
         value: _formatInteger(summary.entitiesMonitored),
-        hint: YorksV1AuditInvestigationStrings.selectedScope.active(language),
         icon: Icons.account_tree_outlined,
         color: AppColors.tertiary,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.auditAlerts.active(language),
         value: _formatInteger(summary.auditAlerts),
-        hint: YorksV1AuditInvestigationStrings.selectedScope.active(language),
         icon: Icons.notifications_active_outlined,
         color: const Color(0xFF00A7B5),
       ),
@@ -485,7 +480,7 @@ class _SummaryGrid extends StatelessWidget {
             : '${_formatDecimal(summary.dataIntegrityPercent)}%',
         hint: summary.totalActivities == 0
             ? YorksV1AuditInvestigationStrings.noEvidence.active(language)
-            : YorksV1AuditStrings.trustedCoverage.active(language),
+            : null,
         icon: Icons.verified_user_outlined,
         color: AppColors.success,
       ),
@@ -508,15 +503,75 @@ class _SummaryGrid extends StatelessWidget {
             ? 3
             : 2;
         final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final card in cards)
-              SizedBox(width: width, child: _SummaryCard(card)),
+            Semantics(
+              container: true,
+              label:
+                  '${YorksV1AuditInvestigationStrings.selectedScope.active(language)}. '
+                  '${YorksV1AuditStrings.trustedCoverage.active(language)}.',
+              child: ExcludeSemantics(
+                child: Wrap(
+                  spacing: 18,
+                  runSpacing: 6,
+                  children: [
+                    _SummaryContext(
+                      key: const ValueKey('audit-summary-selected-scope'),
+                      icon: Icons.filter_alt_outlined,
+                      label: YorksV1AuditInvestigationStrings.selectedScope
+                          .active(language),
+                    ),
+                    _SummaryContext(
+                      key: const ValueKey('audit-summary-attribution-coverage'),
+                      icon: Icons.verified_user_outlined,
+                      label: YorksV1AuditStrings.trustedCoverage.active(
+                        language,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Gap(8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final card in cards)
+                  SizedBox(width: width, child: _SummaryCard(card)),
+              ],
+            ),
           ],
         );
       },
+    );
+  }
+}
+
+class _SummaryContext extends StatelessWidget {
+  const _SummaryContext({super.key, required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.inkSecondary),
+        const Gap(5),
+        Flexible(
+          child: Text(
+            label,
+            softWrap: true,
+            style: AppTypography.labelSmall.copyWith(
+              color: AppColors.inkSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -525,14 +580,14 @@ class _SummaryValue {
   const _SummaryValue({
     required this.label,
     required this.value,
-    required this.hint,
     required this.icon,
     required this.color,
+    this.hint,
   });
 
   final String label;
   final String value;
-  final String hint;
+  final String? hint;
   final IconData icon;
   final Color color;
 }
@@ -543,50 +598,60 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _AuditPanel(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: value.color.withValues(alpha: .1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(value.icon, color: value.color, size: 21),
+    final semanticLabel = value.hint == null
+        ? '${value.label}: ${value.value}'
+        : '${value.label}: ${value.value}. ${value.hint}';
+    return Semantics(
+      container: true,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: _AuditPanel(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: value.color.withValues(alpha: .1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(value.icon, color: value.color, size: 21),
+              ),
+              const Gap(10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.inkSecondary,
+                      ),
+                    ),
+                    const Gap(2),
+                    Text(
+                      value.value,
+                      style: AppTypography.headlineSmall.copyWith(fontSize: 20),
+                    ),
+                    if (value.hint case final hint?) ...[
+                      const Gap(2),
+                      Text(
+                        hint,
+                        softWrap: true,
+                        style: AppTypography.labelSmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-          const Gap(10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
-                ),
-                const Gap(2),
-                Text(
-                  value.value,
-                  style: AppTypography.headlineSmall.copyWith(fontSize: 20),
-                ),
-                const Gap(2),
-                Text(
-                  value.hint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelSmall,
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

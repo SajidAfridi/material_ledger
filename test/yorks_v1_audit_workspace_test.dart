@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -292,6 +293,46 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets(
+      'summary context and card labels remain fully visible at 1512px',
+      (tester) async {
+        await _pumpAuditShell(tester, const Size(1512, 781));
+
+        for (final key in [
+          'audit-summary-selected-scope',
+          'audit-summary-attribution-coverage',
+        ]) {
+          final text = find.descendant(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Text),
+          );
+          expect(text, findsOneWidget);
+          expect(
+            tester.renderObject<RenderParagraph>(text).didExceedMaxLines,
+            isFalse,
+          );
+        }
+
+        for (final label in [
+          'Matching events',
+          'Critical activities',
+          'Active actors',
+          'Records with activity',
+          'Flagged events',
+          'Attribution coverage',
+        ]) {
+          expect(
+            tester
+                .renderObject<RenderParagraph>(find.text(label))
+                .didExceedMaxLines,
+            isFalse,
+            reason: '$label should remain fully readable',
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 
   group('deterministic Audit Workspace visual evidence', () {
