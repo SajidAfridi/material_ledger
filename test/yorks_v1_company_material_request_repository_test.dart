@@ -149,6 +149,56 @@ void main() {
         });
       },
     );
+
+    test(
+      'loads protected company issue history with the issue note identity',
+      () async {
+        final rpc = _RecordingRpc();
+        final repository = _repository(rpc);
+
+        final register = await repository.listRegister(
+          YorksV1CompanyMaterialRequestRegisterView.issueHistory,
+        );
+        expect(register.single.id, _requestId);
+        expect(register.single.requestNumber, 'CM-ISS-0000001');
+        expect(rpc.calls.first.parameters, {
+          'p_view': 'issue_history',
+          'p_limit': 100,
+        });
+        expect(rpc.calls, hasLength(1));
+      },
+    );
+
+    test('withdraws only an explicitly approved remainder', () async {
+      final rpc = _RecordingRpc();
+      final repository = _repository(rpc);
+
+      await repository.withdrawRemainder(
+        requestId: _requestId,
+        expectedVersion: 8,
+        reason: 'Demand cancelled by management',
+        lines: const [
+          {'request_line_id': _lineId, 'quantity': '4'},
+        ],
+        idempotencyKey: _idempotencyKey,
+      );
+
+      expect(
+        rpc.calls.single.functionName,
+        'v1_withdraw_company_material_request_remainder',
+      );
+      expect(rpc.calls.single.parameters, {
+        'p_payload': {
+          'request_id': _requestId,
+          'expected_version': 8,
+          'reason': 'Demand cancelled by management',
+          'lines': const [
+            {'request_line_id': _lineId, 'quantity': '4'},
+          ],
+        },
+        'p_idempotency_key': _idempotencyKey,
+      });
+    });
   });
 }
 
@@ -222,6 +272,8 @@ final class _RecordingRpc implements YorksV1MaterialRequestRpcClient {
         'decisions': const [],
       },
       'v1_decide_company_material_request' => _returnedRequestJson,
+      'v1_list_company_material_request_register' => [_registerJson],
+      'v1_withdraw_company_material_request_remainder' => _returnedRequestJson,
       _ => throw StateError('Unexpected RPC: $functionName'),
     };
   }
@@ -278,6 +330,7 @@ const _requestJson = <String, dynamic>{
   'delivery_collection_point': 'Workshop issue desk',
   'beneficiary_auth_user_id': _beneficiaryId,
   'beneficiary_display_name': 'Amina Hassan',
+  'submitted_at': '2026-09-18T09:00:00Z',
   'authorized_receiver_auth_user_id': _beneficiaryId,
   'authorized_receiver_display_name': 'Amina Hassan',
   'requester_display_name': 'Site Engineer',
@@ -309,6 +362,27 @@ const _inboxJson = <String, dynamic>{
   'beneficiary_display_name': 'Amina Hassan',
   'submitted_at': '2026-09-18T09:30:00Z',
   'line_count': 1,
+};
+
+const _registerJson = <String, dynamic>{
+  'row_id': _requestId,
+  'request_id': _requestId,
+  'request_number': 'CMR-000001',
+  'record_version': 7,
+  'state': 'closed',
+  'category_name': 'Safety and PPE',
+  'responsible_unit_name': 'Workshop',
+  'purpose': 'Replace worn safety jacket',
+  'requester_display_name': 'Site Engineer',
+  'beneficiary_display_name': 'Amina Hassan',
+  'submitted_at': '2026-09-18T09:00:00Z',
+  'updated_at': '2026-09-18T11:00:00Z',
+  'line_count': 1,
+  'approved_qty': '1.0000',
+  'arranged_qty': '1.0000',
+  'good_received_qty': '1.0000',
+  'handed_over_qty': '1.0000',
+  'latest_issue_note_number': 'CM-ISS-0000001',
 };
 
 final _returnedRequestJson = <String, dynamic>{

@@ -56,6 +56,48 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'فی الحال کسی کمپنی درخواست پر آپ کی کارروائی درکار نہیں۔',
     hi: 'अभी किसी कंपनी अनुरोध पर आपकी कार्रवाई आवश्यक नहीं है।',
   );
+  static const myWork = TranslatableString(
+    en: 'My work',
+    ar: 'مهامي',
+    ur: 'میرا کام',
+    hi: 'मेरा काम',
+  );
+  static const requests = TranslatableString(
+    en: 'Requests',
+    ar: 'الطلبات',
+    ur: 'درخواستیں',
+    hi: 'अनुरोध',
+  );
+  static const planning = TranslatableString(
+    en: 'Planning',
+    ar: 'التخطيط',
+    ur: 'منصوبہ بندی',
+    hi: 'योजना',
+  );
+  static const issueHistory = TranslatableString(
+    en: 'Issue history',
+    ar: 'سجل الصرف',
+    ur: 'اجرا کی تاریخ',
+    hi: 'जारी इतिहास',
+  );
+  static const noRegisterItems = TranslatableString(
+    en: 'No company requests match this view.',
+    ar: 'لا توجد طلبات شركة مطابقة لهذا العرض.',
+    ur: 'اس منظر سے کوئی کمپنی درخواست مطابقت نہیں رکھتی۔',
+    hi: 'इस दृश्य से कोई कंपनी अनुरोध मेल नहीं खाता।',
+  );
+  static const withdrawRemainder = TranslatableString(
+    en: 'Withdraw remaining need',
+    ar: 'سحب الاحتياج المتبقي',
+    ur: 'باقی ضرورت واپس لیں',
+    hi: 'शेष आवश्यकता वापस लें',
+  );
+  static const withdrawn = TranslatableString(
+    en: 'Withdrawn',
+    ar: 'مسحوب',
+    ur: 'واپس لیا گیا',
+    hi: 'वापस लिया गया',
+  );
   static const reviewRequest = TranslatableString(
     en: 'Review request',
     ar: 'مراجعة الطلب',

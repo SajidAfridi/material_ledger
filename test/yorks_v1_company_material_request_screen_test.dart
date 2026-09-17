@@ -317,6 +317,11 @@ void main() {
         'goldens/company_requests/after_company_approval_inbox_mobile.png',
       ),
     );
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Issue history').last);
+    await tester.pumpAndSettle();
+    expect(find.text('CM-ISS-0001'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -374,6 +379,7 @@ void main() {
       expect(find.text('Fulfilment'), findsOneWidget);
       expect(find.text('Save supply plan'), findsOneWidget);
       expect(find.text('Dispatch ready quantity'), findsOneWidget);
+      expect(find.text('Withdraw remaining need'), findsOneWidget);
       await expectLater(
         find.byType(Scaffold),
         matchesGoldenFile(
@@ -382,6 +388,22 @@ void main() {
               : 'goldens/company_requests/after_company_fulfilment_desktop.png',
         ),
       );
+      if (size.width < 500) {
+        final withdrawalButton = find.widgetWithText(
+          OutlinedButton,
+          'Withdraw remaining need',
+        );
+        await tester.drag(find.byType(ListView), const Offset(0, -700));
+        await tester.pumpAndSettle();
+        await tester.tap(withdrawalButton);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'No longer required');
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Withdraw remaining need'),
+        );
+        await tester.pumpAndSettle();
+        expect(repository.withdrawalCalls, 1);
+      }
       expect(tester.takeException(), isNull);
     }
   });
@@ -519,6 +541,7 @@ class _CompanyRequestRepository
   int submitCalls = 0;
   int saveCalls = 0;
   int decisionCalls = 0;
+  int withdrawalCalls = 0;
   YorksV1CompanyMaterialRequestDecisionType? lastDecision;
 
   static const _person = YorksV1CompanyMaterialRequestPerson(
@@ -624,6 +647,29 @@ class _CompanyRequestRepository
   ];
 
   @override
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>> listRegister(
+    YorksV1CompanyMaterialRequestRegisterView view, {
+    int limit = 100,
+  }) async => [
+    YorksV1CompanyMaterialRequestApprovalInboxItem(
+      id: 'c1000000-0000-4000-8000-000000000010',
+      requestNumber:
+          view == YorksV1CompanyMaterialRequestRegisterView.issueHistory
+          ? 'CM-ISS-0001'
+          : 'CMR-0001',
+      recordVersion: 2,
+      state: 'awaiting_company_approval',
+      categoryName: 'Personal protective equipment',
+      responsibleUnitName: 'Workshop',
+      purpose: 'Workshop safety stock',
+      requesterDisplayName: 'Test requester',
+      beneficiaryDisplayName: 'Amina Hassan',
+      submittedAt: DateTime.utc(2026, 9, 18, 9, 30),
+      lineCount: 1,
+    ),
+  ];
+
+  @override
   Future<YorksV1CompanyMaterialRequest> getRequest(String requestId) async =>
       request ?? _approvalRequest;
 
@@ -659,6 +705,18 @@ class _CompanyRequestRepository
       approver: _approvalRequest.approver,
       approvalPolicyVersion: _approvalRequest.approvalPolicyVersion,
     );
+  }
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> withdrawRemainder({
+    required String requestId,
+    required int expectedVersion,
+    required String reason,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async {
+    withdrawalCalls++;
+    return request ?? _fulfilmentRequest;
   }
 
   @override
@@ -714,10 +772,12 @@ class _CompanyRequestRepository
         quantity: '12',
         unit: 'Nos',
         arrangedQuantity: '12',
+        withdrawableQuantity: '12',
       ),
     ],
     canPlan: true,
     canDispatch: true,
+    canWithdrawRemainder: true,
     requestNumber: 'CMR-0001',
     approver: _approver,
     approvalPolicyVersion: 'cmr-test-v1',

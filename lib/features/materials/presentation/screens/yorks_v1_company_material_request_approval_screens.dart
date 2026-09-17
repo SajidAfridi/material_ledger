@@ -9,31 +9,92 @@ import '../../../../shared/models/yorks_v1_company_material_request.dart';
 import '../../../../shared/models/yorks_v1_company_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_arrangement.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_role.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_company_material_request_provider.dart';
 import '../../../../shared/providers/yorks_v1_arrangement_provider.dart';
+import '../../../../shared/providers/yorks_v1_identity_provider.dart';
 
-class YorksV1CompanyMaterialRequestApprovalInboxScreen extends ConsumerWidget {
+class YorksV1CompanyMaterialRequestApprovalInboxScreen
+    extends ConsumerStatefulWidget {
   const YorksV1CompanyMaterialRequestApprovalInboxScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<YorksV1CompanyMaterialRequestApprovalInboxScreen>
+  createState() => _CompanyInboxState();
+}
+
+class _CompanyInboxState
+    extends ConsumerState<YorksV1CompanyMaterialRequestApprovalInboxScreen> {
+  YorksV1CompanyMaterialRequestRegisterView? _view;
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>? _register;
+
+  void _select(YorksV1CompanyMaterialRequestRegisterView? view) {
+    setState(() {
+      _view = view;
+      _register = view == null
+          ? null
+          : ref
+                .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+                .listRegister(view);
+    });
+  }
+
+  void _refresh() {
+    if (_view == null) {
+      ref.invalidate(yorksV1CompanyMaterialRequestApprovalInboxProvider);
+    } else {
+      _select(_view);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
     final inbox = ref.watch(yorksV1CompanyMaterialRequestApprovalInboxProvider);
+    final views = <YorksV1CompanyMaterialRequestRegisterView>[
+      YorksV1CompanyMaterialRequestRegisterView.requests,
+      if (ref.watch(yorksV1CurrentRoleProvider) == YorksV1Role.procurement)
+        YorksV1CompanyMaterialRequestRegisterView.planning,
+      YorksV1CompanyMaterialRequestRegisterView.issueHistory,
+    ];
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
-          YorksV1CompanyMaterialRequestStrings.approvalInbox.active(language),
+          _view == null
+              ? YorksV1CompanyMaterialRequestStrings.approvalInbox.active(
+                  language,
+                )
+              : _registerLabel(_view!, language),
         ),
         actions: [
+          PopupMenuButton<String>(
+            initialValue: _view?.wireValue ?? 'work',
+            onSelected: (value) => _select(
+              value == 'work'
+                  ? null
+                  : views.singleWhere((view) => view.wireValue == value),
+            ),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'work',
+                child: Text(
+                  YorksV1CompanyMaterialRequestStrings.myWork.active(language),
+                ),
+              ),
+              for (final view in views)
+                PopupMenuItem(
+                  value: view.wireValue,
+                  child: Text(_registerLabel(view, language)),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: YorksV1CompanyMaterialRequestStrings.retry.active(
               language,
             ),
-            onPressed: () => ref.invalidate(
-              yorksV1CompanyMaterialRequestApprovalInboxProvider,
-            ),
+            onPressed: _refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -46,75 +107,104 @@ class YorksV1CompanyMaterialRequestApprovalInboxScreen extends ConsumerWidget {
           YorksV1CompanyMaterialRequestStrings.companyUse.active(language),
         ),
       ),
-      body: inbox.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => _Message(
-          icon: Icons.cloud_off_outlined,
-          message: YorksV1CompanyMaterialRequestStrings.decisionFailed.active(
-            language,
-          ),
-          action: YorksV1CompanyMaterialRequestStrings.retry.active(language),
-          onPressed: () => ref.invalidate(
-            yorksV1CompanyMaterialRequestApprovalInboxProvider,
-          ),
-        ),
-        data: (items) => items.isEmpty
-            ? _Message(
-                icon: Icons.task_alt_rounded,
-                message: YorksV1CompanyMaterialRequestStrings.noApprovals
-                    .active(language),
-              )
-            : RefreshIndicator(
-                onRefresh: () async => ref.refresh(
-                  yorksV1CompanyMaterialRequestApprovalInboxProvider.future,
+      body: _view == null
+          ? inbox.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, _) => _loadError(language),
+              data: (items) => _requestList(items, language),
+            )
+          : FutureBuilder(
+              future: _register,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return _loadError(language);
+                final items = snapshot.data;
+                return items == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : _requestList(items, language);
+              },
+            ),
+    );
+  }
+
+  Widget _loadError(AppLanguage language) => _Message(
+    icon: Icons.cloud_off_outlined,
+    message: YorksV1CompanyMaterialRequestStrings.decisionFailed.active(
+      language,
+    ),
+    action: YorksV1CompanyMaterialRequestStrings.retry.active(language),
+    onPressed: _refresh,
+  );
+
+  Widget _requestList(
+    List<YorksV1CompanyMaterialRequestApprovalInboxItem> items,
+    AppLanguage language,
+  ) => items.isEmpty
+      ? _Message(
+          icon: Icons.task_alt_rounded,
+          message: _view == null
+              ? YorksV1CompanyMaterialRequestStrings.noApprovals.active(
+                  language,
+                )
+              : YorksV1CompanyMaterialRequestStrings.noRegisterItems.active(
+                  language,
                 ),
-                child: ListView(
-                  key: const ValueKey('company-approval-inbox-list'),
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 104),
+        )
+      : ListView(
+          key: ValueKey(_view?.wireValue ?? 'company-approval-inbox-list'),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 104),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1000),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1000),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              YorksV1CompanyMaterialRequestStrings.approvals
-                                  .active(language),
-                              style: AppTypography.headlineMedium.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              YorksV1CompanyMaterialRequestStrings
-                                  .approvalInboxDescription
-                                  .active(language),
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: AppColors.muted,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            for (final item in items) ...[
-                              _InboxCard(
-                                item: item,
-                                language: language,
-                                onOpen: () => context.push(
-                                  '/yorks/material-requests/company/${item.id}',
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                          ],
-                        ),
+                    Text(
+                      _view == null
+                          ? YorksV1CompanyMaterialRequestStrings.approvals
+                                .active(language)
+                          : _registerLabel(_view!, language),
+                      style: AppTypography.headlineMedium.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    for (final item in items) ...[
+                      _InboxCard(
+                        item: item,
+                        language: language,
+                        onOpen: () => context.push(
+                          '/yorks/material-requests/company/${item.id}',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   ],
                 ),
               ),
-      ),
-    );
-  }
+            ),
+          ],
+        );
+}
+
+String _registerLabel(
+  YorksV1CompanyMaterialRequestRegisterView view,
+  AppLanguage language,
+) => switch (view) {
+  YorksV1CompanyMaterialRequestRegisterView.requests =>
+    YorksV1CompanyMaterialRequestStrings.requests.active(language),
+  YorksV1CompanyMaterialRequestRegisterView.planning =>
+    YorksV1CompanyMaterialRequestStrings.planning.active(language),
+  YorksV1CompanyMaterialRequestRegisterView.issueHistory =>
+    YorksV1CompanyMaterialRequestStrings.issueHistory.active(language),
+};
+
+String _decimalText(double value) {
+  if (value == value.truncateToDouble()) return value.toInt().toString();
+  return value
+      .toStringAsFixed(4)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
 }
 
 class YorksV1CompanyMaterialRequestApprovalScreen
@@ -382,7 +472,12 @@ class _ApprovalDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 24, 16, 96),
+    padding: EdgeInsets.fromLTRB(
+      16,
+      24,
+      16,
+      MediaQuery.sizeOf(context).width < 600 ? 176 : 96,
+    ),
     children: [
       Center(
         child: ConstrainedBox(
@@ -471,8 +566,23 @@ class _ApprovalDetail extends StatelessWidget {
                           ),
                           title: Text(line.description),
                           subtitle: line.brandOrigin == null
-                              ? null
-                              : Text(line.brandOrigin!),
+                              ? (double.tryParse(line.withdrawnQuantity) ?? 0) >
+                                        0
+                                    ? Text(
+                                        '${YorksV1CompanyMaterialRequestStrings.withdrawn.active(language)}: ${line.withdrawnQuantity} ${line.unit}',
+                                      )
+                                    : null
+                              : Text(
+                                  [
+                                    line.brandOrigin!,
+                                    if ((double.tryParse(
+                                              line.withdrawnQuantity,
+                                            ) ??
+                                            0) >
+                                        0)
+                                      '${YorksV1CompanyMaterialRequestStrings.withdrawn.active(language)}: ${line.withdrawnQuantity} ${line.unit}',
+                                  ].join(' · '),
+                                ),
                           trailing: Text('${line.quantity} ${line.unit}'),
                         ),
                     ],
@@ -732,6 +842,8 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
     if (!mounted) return;
     final lines = <Map<String, Object?>>[];
     for (final line in widget.request.lines) {
+      final outstanding = double.tryParse(line.withdrawableQuantity) ?? 0;
+      if (outstanding <= 0) continue;
       final available = inventory
           .where((item) => item.unit.toLowerCase() == line.unit.toLowerCase())
           .toList(growable: false);
@@ -739,6 +851,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
         context: context,
         builder: (dialogContext) => _PlanDialog(
           line: line,
+          outstandingQuantity: _decimalText(outstanding),
           inventory: available,
           language: widget.language,
         ),
@@ -765,12 +878,8 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
     final lines = <Map<String, Object?>>[];
     for (final raw in planLines.whereType<Map>()) {
       final map = Map<String, dynamic>.from(raw);
-      final requestLine = widget.request.lines.firstWhere(
-        (line) => line.id == map['request_line_id'],
-      );
       final remaining =
-          (double.tryParse(map['arranged_qty']?.toString() ?? '') ?? 0) -
-          (double.tryParse(requestLine.dispatchedQuantity) ?? 0);
+          double.tryParse(map['arranged_qty']?.toString() ?? '') ?? 0;
       if (remaining > 0) {
         lines.add({
           'supply_line_id': map['id'],
@@ -846,7 +955,14 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
   }
 
   Future<void> _return() async {
-    final reason = await _promptReason();
+    final reason = await _promptReason(
+      title: YorksV1CompanyMaterialRequestStrings.submitReturn.active(
+        widget.language,
+      ),
+      confirmLabel: YorksV1CompanyMaterialRequestStrings.submitReturn.active(
+        widget.language,
+      ),
+    );
     if (reason == null || !mounted) return;
     final lines = [
       for (final line in widget.request.returnableHandoverLines)
@@ -858,6 +974,34 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
           .read(yorksV1CompanyMaterialRequestRepositoryProvider)
           .submitReturn(
             requestId: widget.request.id,
+            reason: reason,
+            lines: lines,
+            idempotencyKey: const Uuid().v4(),
+          ),
+    );
+  }
+
+  Future<void> _withdrawRemainder() async {
+    final reason = await _promptReason(
+      title: YorksV1CompanyMaterialRequestStrings.withdrawRemainder.active(
+        widget.language,
+      ),
+      confirmLabel: YorksV1CompanyMaterialRequestStrings.withdrawRemainder
+          .active(widget.language),
+    );
+    if (reason == null || !mounted) return;
+    final lines = <Map<String, Object?>>[
+      for (final line in widget.request.lines)
+        if ((double.tryParse(line.withdrawableQuantity) ?? 0) > 0)
+          {'request_line_id': line.id, 'quantity': line.withdrawableQuantity},
+    ];
+    if (lines.isEmpty) return;
+    await _run(
+      () => ref
+          .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+          .withdrawRemainder(
+            requestId: widget.request.id,
+            expectedVersion: widget.request.recordVersion,
             reason: reason,
             lines: lines,
             idempotencyKey: const Uuid().v4(),
@@ -914,45 +1058,23 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
     );
   }
 
-  Future<String?> _promptReason() async {
-    final controller = TextEditingController();
+  Future<String?> _promptReason({
+    required String title,
+    required String confirmLabel,
+  }) async {
     final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          YorksV1CompanyMaterialRequestStrings.submitReturn.active(
-            widget.language,
-          ),
+      builder: (dialogContext) => _CompanyReasonDialog(
+        title: title,
+        confirmLabel: confirmLabel,
+        reasonLabel: YorksV1CompanyMaterialRequestStrings.reasonRequired.active(
+          widget.language,
         ),
-        content: TextField(
-          controller: controller,
-          minLines: 2,
-          maxLines: 5,
-          decoration: InputDecoration(
-            labelText: YorksV1CompanyMaterialRequestStrings.reasonRequired
-                .active(widget.language),
-          ),
+        cancelLabel: YorksV1MaterialRequestStrings.cancel.active(
+          widget.language,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
-              YorksV1MaterialRequestStrings.cancel.active(widget.language),
-            ),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: Text(
-              YorksV1CompanyMaterialRequestStrings.submitReturn.active(
-                widget.language,
-              ),
-            ),
-          ),
-        ],
       ),
     );
-    controller.dispose();
     return result?.trim().isEmpty == true ? null : result;
   }
 
@@ -1057,6 +1179,19 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
         );
       }
     }
+    if (widget.request.canWithdrawRemainder) {
+      actions.add(
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _withdrawRemainder,
+          icon: const Icon(Icons.remove_circle_outline_rounded),
+          label: Text(
+            YorksV1CompanyMaterialRequestStrings.withdrawRemainder.active(
+              widget.language,
+            ),
+          ),
+        ),
+      );
+    }
     if (widget.request.canClose && widget.request.state == 'fulfilled') {
       actions.add(
         FilledButton.icon(
@@ -1103,6 +1238,54 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
       ),
     );
   }
+}
+
+class _CompanyReasonDialog extends StatefulWidget {
+  const _CompanyReasonDialog({
+    required this.title,
+    required this.confirmLabel,
+    required this.reasonLabel,
+    required this.cancelLabel,
+  });
+
+  final String title;
+  final String confirmLabel;
+  final String reasonLabel;
+  final String cancelLabel;
+
+  @override
+  State<_CompanyReasonDialog> createState() => _CompanyReasonDialogState();
+}
+
+class _CompanyReasonDialogState extends State<_CompanyReasonDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: TextField(
+      controller: _controller,
+      minLines: 2,
+      maxLines: 5,
+      decoration: InputDecoration(labelText: widget.reasonLabel),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(widget.cancelLabel),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+        child: Text(widget.confirmLabel),
+      ),
+    ],
+  );
 }
 
 class _ReceiptChoice {
@@ -1309,10 +1492,12 @@ class _PlanChoice {
 class _PlanDialog extends StatefulWidget {
   const _PlanDialog({
     required this.line,
+    required this.outstandingQuantity,
     required this.inventory,
     required this.language,
   });
   final YorksV1CompanyMaterialRequestLine line;
+  final String outstandingQuantity;
   final List<YorksV1InventoryItem> inventory;
   final AppLanguage language;
 
@@ -1322,7 +1507,7 @@ class _PlanDialog extends StatefulWidget {
 
 class _PlanDialogState extends State<_PlanDialog> {
   late final TextEditingController _quantity = TextEditingController(
-    text: widget.line.quantity,
+    text: widget.outstandingQuantity,
   );
   final TextEditingController _supplier = TextEditingController();
   final TextEditingController _reason = TextEditingController();
@@ -1382,7 +1567,9 @@ class _PlanDialogState extends State<_PlanDialog> {
             ],
             onChanged: (value) => setState(() {
               _decision = value!;
-              if (value == 'unavailable') _quantity.text = '0';
+              _quantity.text = value == 'unavailable'
+                  ? '0'
+                  : widget.outstandingQuantity;
             }),
           ),
           const SizedBox(height: 12),

@@ -94,6 +94,8 @@ class YorksV1CompanyMaterialRequestLine {
     this.goodReceivedQuantity = '0',
     this.handedOverQuantity = '0',
     this.returnedQuantity = '0',
+    this.withdrawnQuantity = '0',
+    this.withdrawableQuantity = '0',
   });
 
   final String id;
@@ -107,6 +109,8 @@ class YorksV1CompanyMaterialRequestLine {
   final String goodReceivedQuantity;
   final String handedOverQuantity;
   final String returnedQuantity;
+  final String withdrawnQuantity;
+  final String withdrawableQuantity;
 
   bool get isValid =>
       description.trim().isNotEmpty &&
@@ -153,6 +157,8 @@ class YorksV1CompanyMaterialRequestLine {
     goodReceivedQuantity: json['good_received_qty']?.toString() ?? '0',
     handedOverQuantity: json['handed_over_qty']?.toString() ?? '0',
     returnedQuantity: json['returned_qty']?.toString() ?? '0',
+    withdrawnQuantity: json['withdrawn_qty']?.toString() ?? '0',
+    withdrawableQuantity: json['withdrawable_qty']?.toString() ?? '0',
   );
 }
 
@@ -340,6 +346,15 @@ class YorksV1CompanyMaterialRequestApprovalInboxItem {
   );
 }
 
+enum YorksV1CompanyMaterialRequestRegisterView {
+  requests('requests'),
+  planning('planning'),
+  issueHistory('issue_history');
+
+  const YorksV1CompanyMaterialRequestRegisterView(this.wireValue);
+  final String wireValue;
+}
+
 class YorksV1CompanyMaterialRequest {
   const YorksV1CompanyMaterialRequest({
     required this.id,
@@ -364,6 +379,7 @@ class YorksV1CompanyMaterialRequest {
     this.canSubmitReturn = false,
     this.canDecideReturns = false,
     this.canRevise = false,
+    this.canWithdrawRemainder = false,
     this.currentSupplyPlan,
     this.pendingDispatches = const [],
     this.unallocatedReceiptLines = const [],
@@ -402,6 +418,7 @@ class YorksV1CompanyMaterialRequest {
   final bool canSubmitReturn;
   final bool canDecideReturns;
   final bool canRevise;
+  final bool canWithdrawRemainder;
   final Map<String, dynamic>? currentSupplyPlan;
   final List<Map<String, dynamic>> pendingDispatches;
   final List<Map<String, dynamic>> unallocatedReceiptLines;
@@ -452,6 +469,7 @@ class YorksV1CompanyMaterialRequest {
     canSubmitReturn: json['can_submit_return'] == true,
     canDecideReturns: json['can_decide_returns'] == true,
     canRevise: json['can_revise'] == true,
+    canWithdrawRemainder: json['can_withdraw_remainder'] == true,
     currentSupplyPlan: json['current_supply_plan'] is Map
         ? Map<String, dynamic>.from(json['current_supply_plan'] as Map)
         : null,

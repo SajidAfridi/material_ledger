@@ -29,6 +29,10 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
   );
   Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>
   listApprovalInbox();
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>> listRegister(
+    YorksV1CompanyMaterialRequestRegisterView view, {
+    int limit = 100,
+  });
   Future<YorksV1CompanyMaterialRequest> getRequest(String requestId);
   Future<YorksV1CompanyMaterialRequest> decide({
     required String requestId,
@@ -66,6 +70,13 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
   Future<YorksV1CompanyMaterialRequest> close({
     required String requestId,
     required int expectedVersion,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> withdrawRemainder({
+    required String requestId,
+    required int expectedVersion,
+    required String reason,
+    required List<Map<String, Object?>> lines,
     required String idempotencyKey,
   });
   Future<YorksV1CompanyMaterialRequest> submitReturn({
@@ -204,6 +215,37 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
   }
 
   @override
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>> listRegister(
+    YorksV1CompanyMaterialRequestRegisterView view, {
+    int limit = 100,
+  }) async {
+    final response = await _invoke(
+      'v1_list_company_material_request_register',
+      {'p_view': view.wireValue, 'p_limit': limit},
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final item in response)
+        if (item is Map) _registerItem(Map<String, dynamic>.from(item), view),
+    ];
+  }
+
+  YorksV1CompanyMaterialRequestApprovalInboxItem _registerItem(
+    Map<String, dynamic> json,
+    YorksV1CompanyMaterialRequestRegisterView view,
+  ) => YorksV1CompanyMaterialRequestApprovalInboxItem.fromRpcJson({
+    ...json,
+    'id': json['request_id'],
+    if (view == YorksV1CompanyMaterialRequestRegisterView.issueHistory &&
+        json['latest_issue_note_number'] != null)
+      'request_number': json['latest_issue_note_number'],
+  });
+
+  @override
   Future<YorksV1CompanyMaterialRequest> getRequest(String requestId) async =>
       _requestFromResponse(
         await _invoke('v1_company_material_request_projection', {
@@ -311,6 +353,25 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
     await _invoke('v1_close_company_material_request', {
       'p_request_id': requestId,
       'p_expected_version': expectedVersion,
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> withdrawRemainder({
+    required String requestId,
+    required int expectedVersion,
+    required String reason,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_withdraw_company_material_request_remainder', {
+      'p_payload': {
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'reason': reason,
+        'lines': lines,
+      },
       'p_idempotency_key': idempotencyKey,
     }),
   );
