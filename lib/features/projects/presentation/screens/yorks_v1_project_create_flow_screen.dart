@@ -1232,9 +1232,11 @@ class _YorksV1ProjectCreateFlowScreenState
     }
     final errors = draft.toCreationInput().validate();
     if (errors.isNotEmpty) {
-      _presentValidationErrors(errors);
       final targetStage = _firstInvalidStage(errors);
       if (targetStage != draft.currentStage) await _setStage(targetStage);
+      // Stage navigation clears prior errors. Present this validation result
+      // afterwards so the destination retains its actionable inline feedback.
+      _presentValidationErrors(errors);
       return;
     }
 
