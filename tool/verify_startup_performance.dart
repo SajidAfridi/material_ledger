@@ -4,9 +4,11 @@ import 'dart:io';
 // budget below remains the primary production network guard. The 50 kB
 // allowance above the pre-PostHog ceiling covers the typed analytics runtime.
 // A further 50 kB covers the approved audit investigation/detail/export flow;
-// its isolated artifact measured 10,177,884 raw / 2,747,966 gzip bytes.
+// its isolated artifact measured 10,177,884 raw / 2,747,966 gzip bytes. The
+// final 50 kB covers the same candidate with every approved staging rollout
+// enabled; that artifact measured 10,205,890 raw / 2,714,714 gzip bytes.
 // Keep the existing transferred-size ceiling unchanged.
-const _mainDartJsRawBudget = 10200000;
+const _mainDartJsRawBudget = 10250000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 
