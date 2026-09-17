@@ -333,6 +333,40 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets(
+      'activity overview is collapsed, useful, and above the event feed',
+      (tester) async {
+        for (final size in const [Size(1512, 781), Size(360, 800)]) {
+          await _pumpAuditShell(tester, size);
+
+          final overview = find.byKey(
+            const PageStorageKey('audit-activity-overview'),
+          );
+          expect(overview, findsOneWidget);
+          expect(find.text('Top entities by activity'), findsNothing);
+          expect(
+            tester.getTopLeft(overview).dy,
+            lessThan(tester.getTopLeft(find.text('Recent activity feed')).dy),
+          );
+          expect(
+            find.text(
+              'Trends, modules, activity leaders and flagged events for the selected scope',
+            ),
+            findsOneWidget,
+          );
+
+          await tester.tap(overview);
+          await tester.pumpAndSettle();
+
+          expect(find.text('Top entities by activity'), findsOneWidget);
+          expect(find.text('Alerts & exceptions'), findsOneWidget);
+          expect(find.text('Activity trend'), findsOneWidget);
+          expect(find.text('Attribution coverage'), findsAtLeastNWidgets(1));
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
   });
 
   group('deterministic Audit Workspace visual evidence', () {

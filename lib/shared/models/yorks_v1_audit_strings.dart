@@ -171,6 +171,12 @@ abstract final class YorksV1AuditStrings {
     ur: 'سرگرمی کا جائزہ',
     hi: 'गतिविधि अवलोकन',
   );
+  static const activityOverviewHint = TranslatableString(
+    en: 'Trends, modules, activity leaders and flagged events for the selected scope',
+    ar: 'الاتجاهات والوحدات وأبرز الأنشطة والأحداث المعلّمة للنطاق المحدد',
+    ur: 'منتخب دائرے کے رجحانات، ماڈیولز، نمایاں سرگرمیاں اور نشان زد واقعات',
+    hi: 'चुने गए दायरे के रुझान, मॉड्यूल, प्रमुख गतिविधियाँ और चिह्नित इवेंट',
+  );
   static const activityTrend = TranslatableString(
     en: 'Activity trend',
     ar: 'اتجاه النشاط',

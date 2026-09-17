@@ -143,6 +143,11 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                                 },
                               ),
                               const Gap(12),
+                              _ActivityOverviewDisclosure(
+                                language: language,
+                                workspace: state.workspace!,
+                              ),
+                              const Gap(12),
                               _RecentActivityPanel(
                                 language: language,
                                 workspace: state.workspace!,
@@ -150,29 +155,6 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                                 onModule: controller.setModule,
                                 onPage: controller.goToPage,
                                 mobileCards: compact,
-                              ),
-                              const Gap(12),
-                              ExpansionTile(
-                                title: Text(
-                                  YorksV1AuditStrings.activityOverview.active(
-                                    language,
-                                  ),
-                                ),
-                                children: [
-                                  _TopEntitiesPanel(
-                                    language: language,
-                                    workspace: state.workspace!,
-                                  ),
-                                  _AlertsPanel(
-                                    language: language,
-                                    workspace: state.workspace!,
-                                  ),
-                                  _AuditCharts(
-                                    language: language,
-                                    workspace: state.workspace!,
-                                    stacked: compact,
-                                  ),
-                                ],
                               ),
                             ],
                           ],
@@ -652,6 +634,116 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ActivityOverviewDisclosure extends StatelessWidget {
+  const _ActivityOverviewDisclosure({
+    required this.language,
+    required this.workspace,
+  });
+
+  final AppLanguage language;
+  final YorksV1AuditWorkspace workspace;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      side: const BorderSide(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    );
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: const PageStorageKey('audit-activity-overview'),
+        initiallyExpanded: false,
+        maintainState: false,
+        clipBehavior: Clip.antiAlias,
+        shape: shape,
+        collapsedShape: shape,
+        backgroundColor: AppColors.surfaceContainerLowest,
+        collapsedBackgroundColor: AppColors.surfaceContainerLowest,
+        iconColor: AppColors.primary,
+        collapsedIconColor: AppColors.inkSecondary,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            color: AppColors.primaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.insights_outlined,
+            size: 20,
+            color: AppColors.primary,
+          ),
+        ),
+        title: Text(
+          YorksV1AuditStrings.activityOverview.active(language),
+          style: AppTypography.titleSmall,
+        ),
+        subtitle: Text(
+          YorksV1AuditStrings.activityOverviewHint.active(language),
+          softWrap: true,
+          style: AppTypography.bodySmall,
+        ),
+        children: [
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 900;
+                final highlights = stacked
+                    ? Column(
+                        children: [
+                          _TopEntitiesPanel(
+                            language: language,
+                            workspace: workspace,
+                          ),
+                          const Gap(12),
+                          _AlertsPanel(
+                            language: language,
+                            workspace: workspace,
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _TopEntitiesPanel(
+                              language: language,
+                              workspace: workspace,
+                            ),
+                          ),
+                          const Gap(12),
+                          Expanded(
+                            child: _AlertsPanel(
+                              language: language,
+                              workspace: workspace,
+                            ),
+                          ),
+                        ],
+                      );
+                return Column(
+                  children: [
+                    highlights,
+                    const Gap(12),
+                    _AuditCharts(
+                      language: language,
+                      workspace: workspace,
+                      stacked: stacked,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
