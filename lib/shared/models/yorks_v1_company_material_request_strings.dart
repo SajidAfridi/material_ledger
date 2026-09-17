@@ -33,10 +33,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'कंपनी उपयोग',
   );
   static const approvals = TranslatableString(
-    en: 'Company approvals',
-    ar: 'موافقات الشركة',
-    ur: 'کمپنی منظوریاں',
-    hi: 'कंपनी अनुमोदन',
+    en: 'Company Material Requests',
+    ar: 'طلبات مواد الشركة',
+    ur: 'کمپنی مٹیریل درخواستیں',
+    hi: 'कंपनी सामग्री अनुरोध',
   );
   static const approvalInbox = TranslatableString(
     en: 'Approval inbox',
@@ -45,16 +45,16 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'अनुमोदन इनबॉक्स',
   );
   static const approvalInboxDescription = TranslatableString(
-    en: 'Review only the company requests assigned to you.',
-    ar: 'راجع فقط طلبات الشركة المسندة إليك.',
-    ur: 'صرف آپ کو تفویض کردہ کمپنی درخواستوں کا جائزہ لیں۔',
-    hi: 'केवल आपको सौंपे गए कंपनी अनुरोधों की समीक्षा करें।',
+    en: 'Requests shown here require an action you are authorized to perform.',
+    ar: 'تتطلب الطلبات المعروضة هنا إجراءً مخولاً لك.',
+    ur: 'یہاں دکھائی گئی درخواستوں پر آپ کی مجاز کارروائی درکار ہے۔',
+    hi: 'यहाँ दिखाए गए अनुरोधों पर आपकी अधिकृत कार्रवाई आवश्यक है।',
   );
   static const noApprovals = TranslatableString(
-    en: 'No company requests are waiting for your approval.',
-    ar: 'لا توجد طلبات شركة بانتظار موافقتك.',
-    ur: 'کوئی کمپنی درخواست آپ کی منظوری کی منتظر نہیں۔',
-    hi: 'कोई कंपनी अनुरोध आपकी स्वीकृति की प्रतीक्षा में नहीं है।',
+    en: 'No company request currently needs your action.',
+    ar: 'لا يوجد طلب شركة يحتاج إلى إجراء منك حالياً.',
+    ur: 'فی الحال کسی کمپنی درخواست پر آپ کی کارروائی درکار نہیں۔',
+    hi: 'अभी किसी कंपनी अनुरोध पर आपकी कार्रवाई आवश्यक नहीं है।',
   );
   static const reviewRequest = TranslatableString(
     en: 'Review request',
@@ -564,5 +564,191 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ar: 'تعذر حفظ طلب الشركة. لم يتم تسجيل أي إرسال.',
     ur: 'کمپنی درخواست محفوظ نہیں ہو سکی۔ کوئی جمع کرانا ریکارڈ نہیں ہوا۔',
     hi: 'कंपनी अनुरोध सहेजा नहीं जा सका। कोई सबमिशन दर्ज नहीं हुआ।',
+  );
+  static const fulfilment = TranslatableString(
+    en: 'Fulfilment',
+    ar: 'التنفيذ',
+    ur: 'تکمیل',
+    hi: 'पूर्ति',
+  );
+  static const saveSupplyPlan = TranslatableString(
+    en: 'Save supply plan',
+    ar: 'حفظ خطة التوريد',
+    ur: 'سپلائی پلان محفوظ کریں',
+    hi: 'आपूर्ति योजना सहेजें',
+  );
+  static const dispatch = TranslatableString(
+    en: 'Dispatch ready quantity',
+    ar: 'إرسال الكمية الجاهزة',
+    ur: 'تیار مقدار روانہ کریں',
+    hi: 'तैयार मात्रा भेजें',
+  );
+  static const confirmReceipt = TranslatableString(
+    en: 'Confirm receipt',
+    ar: 'تأكيد الاستلام',
+    ur: 'وصولی کی تصدیق کریں',
+    hi: 'प्राप्ति की पुष्टि करें',
+  );
+  static const confirmHandover = TranslatableString(
+    en: 'Confirm beneficiary handover',
+    ar: 'تأكيد التسليم للمستفيد',
+    ur: 'مستفید کو حوالگی کی تصدیق',
+    hi: 'लाभार्थी को सौंपने की पुष्टि',
+  );
+  static const closeRequest = TranslatableString(
+    en: 'Close completed request',
+    ar: 'إغلاق الطلب المكتمل',
+    ur: 'مکمل درخواست بند کریں',
+    hi: 'पूरा अनुरोध बंद करें',
+  );
+  static const submitReturn = TranslatableString(
+    en: 'Submit material return',
+    ar: 'إرسال مرتجع المواد',
+    ur: 'مٹیریل واپسی جمع کریں',
+    hi: 'सामग्री वापसी जमा करें',
+  );
+  static const confirmReturn = TranslatableString(
+    en: 'Confirm warehouse return',
+    ar: 'تأكيد الإرجاع للمستودع',
+    ur: 'گودام واپسی کی تصدیق',
+    hi: 'गोदाम वापसी की पुष्टि करें',
+  );
+  static const actionRecorded = TranslatableString(
+    en: 'The company material action was recorded.',
+    ar: 'تم تسجيل إجراء مواد الشركة.',
+    ur: 'کمپنی مٹیریل کارروائی ریکارڈ ہو گئی۔',
+    hi: 'कंपनी सामग्री कार्रवाई दर्ज की गई।',
+  );
+  static const actionFailed = TranslatableString(
+    en: 'The action was not recorded. Refresh and try again.',
+    ar: 'لم يتم تسجيل الإجراء. حدّث وحاول مرة أخرى.',
+    ur: 'کارروائی ریکارڈ نہیں ہوئی۔ ریفریش کرکے دوبارہ کوشش کریں۔',
+    hi: 'कार्रवाई दर्ज नहीं हुई। रीफ़्रेश करके फिर प्रयास करें।',
+  );
+  static const warehouseSource = TranslatableString(
+    en: 'Warehouse stock',
+    ar: 'مخزون المستودع',
+    ur: 'گودام اسٹاک',
+    hi: 'गोदाम स्टॉक',
+  );
+  static const externalSource = TranslatableString(
+    en: 'External supplier',
+    ar: 'مورد خارجي',
+    ur: 'بیرونی سپلائر',
+    hi: 'बाहरी आपूर्तिकर्ता',
+  );
+  static const reasonRequired = TranslatableString(
+    en: 'Reason / follow-up',
+    ar: 'السبب / المتابعة',
+    ur: 'وجہ / فالو اپ',
+    hi: 'कारण / अनुवर्ती',
+  );
+  static const receivedGood = TranslatableString(
+    en: 'Received in good condition',
+    ar: 'تم الاستلام بحالة جيدة',
+    ur: 'اچھی حالت میں موصول',
+    hi: 'अच्छी स्थिति में प्राप्त',
+  );
+  static const reusableReturn = TranslatableString(
+    en: 'Reusable stock',
+    ar: 'مخزون قابل لإعادة الاستخدام',
+    ur: 'دوبارہ قابل استعمال اسٹاک',
+    hi: 'पुन: उपयोग योग्य स्टॉक',
+  );
+  static const arranging = TranslatableString(
+    en: 'Procurement arrangement',
+    ar: 'ترتيب المشتريات',
+    ur: 'پروکیورمنٹ انتظام',
+    hi: 'खरीद व्यवस्था',
+  );
+  static const readyForDelivery = TranslatableString(
+    en: 'Ready for delivery',
+    ar: 'جاهز للتسليم',
+    ur: 'ڈیلیوری کے لیے تیار',
+    hi: 'डिलीवरी के लिए तैयार',
+  );
+  static const receiptPending = TranslatableString(
+    en: 'Receipt pending',
+    ar: 'بانتظار الاستلام',
+    ur: 'وصولی زیر التوا',
+    hi: 'प्राप्ति लंबित',
+  );
+  static const partiallyReceived = TranslatableString(
+    en: 'Partially received',
+    ar: 'تم الاستلام جزئياً',
+    ur: 'جزوی طور پر موصول',
+    hi: 'आंशिक रूप से प्राप्त',
+  );
+  static const awaitingHandover = TranslatableString(
+    en: 'Awaiting beneficiary handover',
+    ar: 'بانتظار التسليم للمستفيد',
+    ur: 'مستفید کو حوالگی کا منتظر',
+    hi: 'लाभार्थी को सौंपना लंबित',
+  );
+  static const fulfilled = TranslatableString(
+    en: 'Fulfilled',
+    ar: 'تم التنفيذ',
+    ur: 'مکمل فراہمی',
+    hi: 'पूर्ति पूर्ण',
+  );
+  static const closed = TranslatableString(
+    en: 'Closed',
+    ar: 'مغلق',
+    ur: 'بند',
+    hi: 'बंद',
+  );
+  static const full = TranslatableString(
+    en: 'Full',
+    ar: 'كامل',
+    ur: 'مکمل',
+    hi: 'पूर्ण',
+  );
+  static const partial = TranslatableString(
+    en: 'Partial',
+    ar: 'جزئي',
+    ur: 'جزوی',
+    hi: 'आंशिक',
+  );
+  static const cannotProvideNow = TranslatableString(
+    en: 'Cannot provide now',
+    ar: 'لا يمكن التوفير الآن',
+    ur: 'ابھی فراہم نہیں کیا جا سکتا',
+    hi: 'अभी उपलब्ध नहीं',
+  );
+  static const reviseAndResubmit = TranslatableString(
+    en: 'Revise and resubmit',
+    ar: 'تعديل وإعادة الإرسال',
+    ur: 'ترمیم کرکے دوبارہ جمع کریں',
+    hi: 'संशोधित कर फिर जमा करें',
+  );
+  static const nonReusableReturn = TranslatableString(
+    en: 'Accepted, not reusable',
+    ar: 'مقبول، غير قابل لإعادة الاستخدام',
+    ur: 'قبول، دوبارہ قابل استعمال نہیں',
+    hi: 'स्वीकार, पुन: उपयोग योग्य नहीं',
+  );
+  static const missing = TranslatableString(
+    en: 'Missing',
+    ar: 'مفقود',
+    ur: 'غائب',
+    hi: 'गुम',
+  );
+  static const damaged = TranslatableString(
+    en: 'Damaged',
+    ar: 'تالف',
+    ur: 'خراب',
+    hi: 'क्षतिग्रस्त',
+  );
+  static const incorrect = TranslatableString(
+    en: 'Incorrect item / size',
+    ar: 'صنف / مقاس غير صحيح',
+    ur: 'غلط آئٹم / سائز',
+    hi: 'गलत आइटम / आकार',
+  );
+  static const receiptNote = TranslatableString(
+    en: 'Receipt exception note',
+    ar: 'ملاحظة استثناء الاستلام',
+    ur: 'وصولی استثنا نوٹ',
+    hi: 'प्राप्ति अपवाद टिप्पणी',
   );
 }

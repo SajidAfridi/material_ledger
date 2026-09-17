@@ -37,6 +37,58 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
     required String idempotencyKey,
     String? reason,
   });
+  Future<YorksV1CompanyMaterialRequest> saveSupplyPlan({
+    required String requestId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> dispatch({
+    required String requestId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> confirmReceipt({
+    required String requestId,
+    required String dispatchId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> confirmHandover({
+    required String requestId,
+    required int expectedVersion,
+    required String acknowledgementBasis,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> close({
+    required String requestId,
+    required int expectedVersion,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> submitReturn({
+    required String requestId,
+    required String reason,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> decideReturn({
+    required String returnId,
+    required bool confirm,
+    required bool reusable,
+    required String? reason,
+    required String idempotencyKey,
+  });
+  Future<YorksV1CompanyMaterialRequest> reviseAndResubmit({
+    required String requestId,
+    required int expectedVersion,
+    required String purpose,
+    required String deliveryCollectionPoint,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  });
 }
 
 class YorksV1SupabaseCompanyMaterialRequestRepository
@@ -134,7 +186,7 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
   Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>
   listApprovalInbox() async {
     final response = await _invoke(
-      'v1_list_company_material_request_approval_inbox',
+      'v1_list_company_material_request_work_inbox',
       const {},
     );
     if (response is! List) {
@@ -173,6 +225,142 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
         'expected_version': expectedVersion,
         'decision': decision.wireValue,
         'reason': reason?.trim().isEmpty == true ? null : reason?.trim(),
+      },
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> saveSupplyPlan({
+    required String requestId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_save_company_material_supply_plan', {
+      'p_payload': {
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'lines': lines,
+      },
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> dispatch({
+    required String requestId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_dispatch_company_materials', {
+      'p_payload': {
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'lines': lines,
+      },
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> confirmReceipt({
+    required String requestId,
+    required String dispatchId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_confirm_company_material_receipt', {
+      'p_payload': {
+        'request_id': requestId,
+        'dispatch_id': dispatchId,
+        'expected_version': expectedVersion,
+        'lines': lines,
+      },
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> confirmHandover({
+    required String requestId,
+    required int expectedVersion,
+    required String acknowledgementBasis,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_confirm_company_material_handover', {
+      'p_payload': {
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'acknowledgement_basis': acknowledgementBasis,
+        'lines': lines,
+      },
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> close({
+    required String requestId,
+    required int expectedVersion,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_close_company_material_request', {
+      'p_request_id': requestId,
+      'p_expected_version': expectedVersion,
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> submitReturn({
+    required String requestId,
+    required String reason,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_submit_company_material_return', {
+      'p_payload': {'request_id': requestId, 'reason': reason, 'lines': lines},
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> decideReturn({
+    required String returnId,
+    required bool confirm,
+    required bool reusable,
+    required String? reason,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_decide_company_material_return', {
+      'p_return_id': returnId,
+      'p_decision': confirm ? 'confirmed' : 'rejected',
+      'p_reusable': confirm ? reusable : null,
+      'p_reason': reason,
+      'p_idempotency_key': idempotencyKey,
+    }),
+  );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> reviseAndResubmit({
+    required String requestId,
+    required int expectedVersion,
+    required String purpose,
+    required String deliveryCollectionPoint,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async => _requestFromResponse(
+    await _invoke('v1_revise_and_resubmit_company_material_request', {
+      'p_payload': {
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'purpose': purpose,
+        'delivery_collection_point': deliveryCollectionPoint,
+        'lines': lines,
       },
       'p_idempotency_key': idempotencyKey,
     }),

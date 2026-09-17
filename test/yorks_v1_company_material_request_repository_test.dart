@@ -134,7 +134,7 @@ void main() {
         expect(result.state, 'returned_for_changes');
         expect(result.decisions.single.reason, 'Confirm the size.');
         expect(rpc.calls.map((call) => call.functionName), [
-          'v1_list_company_material_request_approval_inbox',
+          'v1_list_company_material_request_work_inbox',
           'v1_company_material_request_projection',
           'v1_decide_company_material_request',
         ]);
@@ -214,7 +214,7 @@ final class _RecordingRpc implements YorksV1MaterialRequestRpcClient {
       'v1_list_company_material_request_draft_options' => [_optionJson],
       'v1_company_material_request_approval_preflight' => _preflightJson,
       'v1_save_and_submit_company_material_request' => _requestJson,
-      'v1_list_company_material_request_approval_inbox' => [_inboxJson],
+      'v1_list_company_material_request_work_inbox' => [_inboxJson],
       'v1_company_material_request_projection' => {
         ..._requestJson,
         'record_version': 2,

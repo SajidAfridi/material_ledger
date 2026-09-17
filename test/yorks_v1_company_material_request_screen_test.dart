@@ -308,7 +308,7 @@ void main() {
       child: const YorksV1CompanyMaterialRequestApprovalInboxScreen(),
     );
 
-    expect(find.text('Company approvals'), findsOneWidget);
+    expect(find.text('Company Material Requests'), findsOneWidget);
     expect(find.text('CMR-0001'), findsOneWidget);
     expect(find.textContaining('Workshop safety stock'), findsOneWidget);
     await expectLater(
@@ -354,6 +354,36 @@ void main() {
     );
     expect(find.text('Company approval decision recorded.'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('fulfilment actions stay usable on desktop and mobile', (
+    tester,
+  ) async {
+    for (final size in [const Size(1366, 900), const Size(360, 800)]) {
+      final repository = _CompanyRequestRepository(
+        request: _CompanyRequestRepository._fulfilmentRequest,
+      );
+      await _pumpApproval(
+        tester,
+        repository: repository,
+        size: size,
+        child: const YorksV1CompanyMaterialRequestApprovalScreen(
+          requestId: 'c1000000-0000-4000-8000-000000000010',
+        ),
+      );
+      expect(find.text('Fulfilment'), findsOneWidget);
+      expect(find.text('Save supply plan'), findsOneWidget);
+      expect(find.text('Dispatch ready quantity'), findsOneWidget);
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile(
+          size.width < 500
+              ? 'goldens/company_requests/after_company_fulfilment_mobile.png'
+              : 'goldens/company_requests/after_company_fulfilment_desktop.png',
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    }
   });
 }
 
@@ -482,6 +512,9 @@ Future<void> _enterVisible(
 
 class _CompanyRequestRepository
     implements YorksV1CompanyMaterialRequestRepository {
+  _CompanyRequestRepository({this.request});
+
+  final YorksV1CompanyMaterialRequest? request;
   int preflightCalls = 0;
   int submitCalls = 0;
   int saveCalls = 0;
@@ -592,7 +625,7 @@ class _CompanyRequestRepository
 
   @override
   Future<YorksV1CompanyMaterialRequest> getRequest(String requestId) async =>
-      _approvalRequest;
+      request ?? _approvalRequest;
 
   @override
   Future<YorksV1CompanyMaterialRequest> decide({
@@ -628,6 +661,10 @@ class _CompanyRequestRepository
     );
   }
 
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
+
   static const _approvalRequest = YorksV1CompanyMaterialRequest(
     id: 'c1000000-0000-4000-8000-000000000010',
     recordVersion: 2,
@@ -654,5 +691,46 @@ class _CompanyRequestRepository
     requestNumber: 'CMR-0001',
     approver: _approver,
     approvalPolicyVersion: 'cmr-test-v1',
+  );
+
+  static const _fulfilmentRequest = YorksV1CompanyMaterialRequest(
+    id: 'c1000000-0000-4000-8000-000000000010',
+    recordVersion: 4,
+    state: 'ready_for_delivery',
+    categoryName: 'Personal protective equipment',
+    responsibleUnitName: 'Workshop',
+    purpose: 'Workshop safety stock',
+    timing: YorksV1MaterialRequestTiming.normal,
+    deliveryCollectionPoint: 'Main workshop store',
+    beneficiary: _person,
+    authorizedReceiver: _person,
+    requesterDisplayName: 'Test requester',
+    requesterExactRole: 'site_engineer',
+    lines: [
+      YorksV1CompanyMaterialRequestLine(
+        id: 'c1000000-0000-4000-8000-000000000011',
+        displayOrder: 1,
+        description: 'Safety helmets',
+        quantity: '12',
+        unit: 'Nos',
+        arrangedQuantity: '12',
+      ),
+    ],
+    canPlan: true,
+    canDispatch: true,
+    requestNumber: 'CMR-0001',
+    approver: _approver,
+    approvalPolicyVersion: 'cmr-test-v1',
+    currentSupplyPlan: {
+      'id': 'c1000000-0000-4000-8000-000000000020',
+      'plan_version': 1,
+      'lines': [
+        {
+          'id': 'c1000000-0000-4000-8000-000000000021',
+          'request_line_id': 'c1000000-0000-4000-8000-000000000011',
+          'arranged_qty': '12',
+        },
+      ],
+    },
   );
 }

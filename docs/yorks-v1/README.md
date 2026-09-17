@@ -72,6 +72,7 @@ explicit V7-to-V1 conflict resolution.
 | [`CURRENT_MATERIAL_REQUEST_USER_GUIDE.md`](CURRENT_MATERIAL_REQUEST_USER_GUIDE.md) | Current approval-first MR operating guide, roles, screen cues and legacy-record boundary |
 | [`COMPANY_MATERIAL_REQUEST_T01_IMPLEMENTATION.md`](COMPANY_MATERIAL_REQUEST_T01_IMPLEMENTATION.md) | Release-gated, project-independent company-use create and submit slice, authorization boundary and rollout requirements |
 | [`COMPANY_MATERIAL_REQUEST_T02_APPROVAL.md`](COMPANY_MATERIAL_REQUEST_T02_APPROVAL.md) | Feature-gated independent company approval candidate, immutable decision evidence and explicit pre-fulfilment boundary |
+| [`COMPANY_MATERIAL_REQUEST_T03_T05_FULFILMENT.md`](COMPANY_MATERIAL_REQUEST_T03_T05_FULFILMENT.md) | Feature-gated supply planning, shared reservations, dispatch, receipt, beneficiary custody, returns and closure |
 | [`MATERIAL_REQUEST_ACTION_INTELLIGENCE.md`](MATERIAL_REQUEST_ACTION_INTELLIGENCE.md) | My Work, Exceptions, required-date/age indicators, trusted line ledger, operational metrics and the explicit SLA boundary |
 | [`MATERIAL_REQUEST_DISCUSSION_SPEC.md`](MATERIAL_REQUEST_DISCUSSION_SPEC.md) | Proposed full-width contextual Material Request discussion, replies, direct attachments, exact-comment notifications, responsive UX and staged release contract |
 | [`MATERIAL_REQUEST_FILE_AND_ACTION_UI.md`](MATERIAL_REQUEST_FILE_AND_ACTION_UI.md) | Shared file markers, grouped Material Request actions and consistent Request Information panel behavior |

@@ -40,20 +40,18 @@ which pass that predicate. `v1_decide_company_material_request(jsonb, uuid)` is
 the only client decision command. The decision relation has RLS enabled and no
 authenticated table privileges.
 
-## Explicit boundary before fulfilment
+## Fulfilment continuation
 
-The broader lifecycle review remains a proposal. T02 does not authorize
-Procurement visibility, arrangement, reservation, dispatch, Delivery Order,
-receipt, beneficiary issue/attestation, return or closure. Those stages require
-product-owner decisions recorded in
-[`COMPANY_MATERIAL_REQUEST_LIFECYCLE_REVIEW.md`](COMPANY_MATERIAL_REQUEST_LIFECYCLE_REVIEW.md),
-including company categories/units, requester/receiver populations, custody
-handover evidence and allowance/replacement rules. The current feature flag
-therefore remains off by default.
+T02 itself stops at approved demand. The later approved T03-T05 implementation
+in [`COMPANY_MATERIAL_REQUEST_T03_T05_FULFILMENT.md`](COMPANY_MATERIAL_REQUEST_T03_T05_FULFILMENT.md)
+adds Procurement planning, the shared reservation pool, dispatch, receipt,
+beneficiary handover, returns and explicit closure. The feature flag remains
+off by default until the combined acceptance gate is released.
 
-`returned_for_changes` preserves the reason and request history. Editing and
-resubmission are not exposed until that follow-up contract is approved, so an
-operator must not present T02 as a complete fulfilment lifecycle.
+`returned_for_changes` preserves the reason and request history. The original
+requester can revise purpose, delivery point and line quantities against the
+same reference and resubmit through a freshly resolved independent route. The
+system never sends a returned revision to Procurement before approval.
 
 ## Verification
 
