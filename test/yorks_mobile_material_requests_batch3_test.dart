@@ -2160,7 +2160,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(repository.saveAndSubmitCount, 1);
+      expect(repository.saveSubmitAndApproveCount, 1);
       expect(
         find.text(
           YorksV1MaterialRequestStrings.approvedForProcurementConfirmed.primary,
@@ -2888,7 +2888,100 @@ void main() {
     });
   }
 
-  testWidgets('mobile Review gives Site Engineer Submit without Approve', (
+  testWidgets(
+    'authorized creator defaults to Submit and Approve and can choose Create only',
+    (tester) async {
+      await _setViewport(tester, const Size(390, 844));
+      final repository = await _pumpDraft(
+        tester,
+        role: YorksV1Role.projectEngineer,
+      );
+      await _addCustomMaterial(tester);
+      await _openReview(tester);
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(YorksV1MaterialRequestStrings.submitAndApprove.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-mr-submit-menu')),
+        findsOneWidget,
+      );
+      final menuSize = tester.getSize(
+        find.byKey(const ValueKey('mobile-mr-submit-menu')),
+      );
+      expect(menuSize.width, greaterThanOrEqualTo(44));
+      expect(menuSize.height, greaterThanOrEqualTo(44));
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-mr-submit-menu')).hitTestable(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(YorksV1MaterialRequestStrings.createOnly.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1MaterialRequestStrings.createAndApprove.primary),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.text(YorksV1MaterialRequestStrings.createOnly.primary),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.saveAndSubmitCount, 1);
+      expect(repository.saveSubmitAndApproveCount, 0);
+    },
+  );
+
+  testWidgets('authorized creator main action uses the atomic command', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = await _pumpDraft(
+      tester,
+      role: YorksV1Role.projectEngineer,
+    );
+    await _addCustomMaterial(tester);
+    await _openReview(tester);
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-mr-primary-action')).hitTestable(),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.saveSubmitAndApproveCount, 1);
+    expect(repository.saveAndSubmitCount, 0);
+  });
+
+  testWidgets('Create and Approve menu choice uses the atomic command', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = await _pumpDraft(
+      tester,
+      role: YorksV1Role.projectEngineer,
+    );
+    await _addCustomMaterial(tester);
+    await _openReview(tester);
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-mr-submit-menu')).hitTestable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.text(YorksV1MaterialRequestStrings.createAndApprove.primary),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.saveSubmitAndApproveCount, 1);
+    expect(repository.saveAndSubmitCount, 0);
+  });
+
+  testWidgets('mobile Review gives Site Engineer Submit for Approval only', (
     tester,
   ) async {
     await _setViewport(tester, const Size(390, 844));
@@ -2900,10 +2993,14 @@ void main() {
       find.byKey(const ValueKey('mobile-mr-primary-action')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('mobile-mr-approve')), findsNothing);
+    expect(find.byKey(const ValueKey('mobile-mr-submit-menu')), findsNothing);
     expect(
-      find.text(YorksV1MaterialRequestStrings.submit.primary),
+      find.text(YorksV1MaterialRequestStrings.submitForApproval.primary),
       findsOneWidget,
+    );
+    expect(
+      find.text(YorksV1MaterialRequestStrings.submitAndApprove.primary),
+      findsNothing,
     );
   });
 }

@@ -11,8 +11,10 @@ evidence of their original releases, not current workflow authority.
 1. **Engineering prepares the request.** A Project Engineer or Site Engineer
    selects the project and exact Common/building scope, adds BOQ or custom
    items, saves a private Draft and explicitly submits it. An independently
-   authorized non-Site-Engineer creator may instead choose **Approve** on the
-   creation form, which safely submits and approves in one server command.
+   authorized non-Site-Engineer creator sees **Submit and Approve** with
+   **Create only** and **Create and Approve** choices. Create only waits for a
+   different authorized approver; Create and Approve safely performs both
+   transitions in one server command.
 2. **Engineering approves the need.** Requests submitted by a creator without
    that authority are reviewed by an authorized Project Engineer, who either
    approves them for Procurement or returns them for changes with a reason.
@@ -48,11 +50,12 @@ The composer has three short steps: **Details**, **Items** and **Review**.
    Planning Model/Tag visible together so no material detail is hidden behind
    an extra disclosure action.
 3. In Review, check the scope and each quantity, then confirm the review
-   statement. Every authorized creator sees **Submit**. An independently
-   authorized non-Site-Engineer creator also sees **Approve**, which performs
-   submission and approval atomically; an exact Site Engineer sees **Submit**
-   only. Save draft remains separate. Procurement receives nothing until the
-   protected command succeeds.
+   statement. A creator without approval authority sees **Submit for Approval**.
+   An independently authorized non-Site-Engineer creator sees the split
+   **Submit and Approve** action: **Create only** sends it for another person's
+   approval, while **Create and Approve** performs submission and approval
+   atomically. Save draft remains separate. Procurement receives nothing until
+   the protected command succeeds.
 
 ## What the register tells you
 

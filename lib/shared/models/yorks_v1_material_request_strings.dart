@@ -1833,6 +1833,48 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'جمع کرائیں',
     hi: 'जमा करें',
   );
+  static const submitForApproval = TranslatableString(
+    en: 'Submit for Approval',
+    ar: 'إرسال للموافقة',
+    ur: 'منظوری کے لیے جمع کرائیں',
+    hi: 'अनुमोदन के लिए जमा करें',
+  );
+  static const submitAndApprove = TranslatableString(
+    en: 'Submit and Approve',
+    ar: 'إرسال واعتماد',
+    ur: 'جمع کرائیں اور منظور کریں',
+    hi: 'जमा करें और अनुमोदित करें',
+  );
+  static const createOnly = TranslatableString(
+    en: 'Create only',
+    ar: 'إنشاء فقط',
+    ur: 'صرف بنائیں',
+    hi: 'केवल बनाएँ',
+  );
+  static const createOnlyDescription = TranslatableString(
+    en: 'Create it and wait for another authorized approver.',
+    ar: 'أنشئه وانتظر موافقة شخص آخر مخول.',
+    ur: 'اسے بنائیں اور کسی دوسرے مجاز منظور کنندہ کا انتظار کریں۔',
+    hi: 'इसे बनाएँ और किसी अन्य अधिकृत अनुमोदक की प्रतीक्षा करें।',
+  );
+  static const createAndApprove = TranslatableString(
+    en: 'Create and Approve',
+    ar: 'إنشاء واعتماد',
+    ur: 'بنائیں اور منظور کریں',
+    hi: 'बनाएँ और अनुमोदित करें',
+  );
+  static const createAndApproveDescription = TranslatableString(
+    en: 'Create it and approve it for Procurement now.',
+    ar: 'أنشئه واعتمده للمشتريات الآن.',
+    ur: 'اسے بنائیں اور ابھی پروکیورمنٹ کے لیے منظور کریں۔',
+    hi: 'इसे बनाएँ और अभी खरीद विभाग के लिए अनुमोदित करें।',
+  );
+  static const chooseCreationAction = TranslatableString(
+    en: 'Choose how to create this request',
+    ar: 'اختر كيفية إنشاء هذا الطلب',
+    ur: 'منتخب کریں کہ یہ درخواست کیسے بنانی ہے',
+    hi: 'चुनें कि यह अनुरोध कैसे बनाना है',
+  );
   static const submitted = TranslatableString(
     en: 'Submitted',
     ar: 'تم الإرسال',

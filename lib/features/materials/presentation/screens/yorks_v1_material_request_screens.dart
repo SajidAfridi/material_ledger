@@ -2900,6 +2900,7 @@ class _DraftForm extends ConsumerWidget {
             : null,
         bottomNavigationBar: compactRoute
             ? _TabletMrDraftActions(
+                language: language,
                 onCancel: () => context.pop(),
                 onSave: isBusy
                     ? null
@@ -3087,6 +3088,7 @@ class _DraftForm extends ConsumerWidget {
                       children: [
                         if (!compactRoute) ...[
                           _R35RequestHero(
+                            language: language,
                             title: requestNumber,
                             requesterName: ref.watch(actorNameProvider),
                             projectName: selectedProject?.name,
@@ -3385,8 +3387,8 @@ class _DraftForm extends ConsumerWidget {
   }
 }
 
-/// Returns whether the creation form may present the optional **Approve**
-/// action. It is intentionally more restrictive than the server policy: an
+/// Returns whether the creation form may present the **Submit and Approve**
+/// split action. It is intentionally more restrictive than the server policy: an
 /// exact Site Engineer never sees a self-approval affordance, even when stale
 /// membership/capability data says otherwise. This grants no authority.
 bool yorksV1CanOfferMaterialRequestCreationApproval({
@@ -4475,20 +4477,30 @@ class _YorksMobileMaterialRequestDraftFlowState
             _language,
           ),
           onSecondary: _busy ? null : widget.onSave,
-          primaryLabel: YorksV1MaterialRequestStrings.submit.active(_language),
+          primaryLabel: YorksV1MaterialRequestStrings.submitForApproval.active(
+            _language,
+          ),
           primaryIcon: Icons.send_rounded,
-          tertiaryLabel: widget.canSubmitAndApprove
-              ? YorksV1MaterialRequestStrings.approve.active(_language)
-              : null,
-          tertiaryIcon: Icons.verified_rounded,
           loading:
               _busy &&
               widget.state.status ==
                   YorksV1MaterialRequestDraftSyncStatus.submitting,
           onPrimary: canAttemptSubmit ? _submit : null,
-          onTertiary: canAttemptApprove
-              ? () => _submit(approveImmediately: true)
-              : null,
+          primaryAction: _MaterialRequestCreationSubmitAction(
+            language: _language,
+            mainButtonKey: const ValueKey('mobile-mr-primary-action'),
+            menuButtonKey: const ValueKey('mobile-mr-submit-menu'),
+            expanded: true,
+            canSubmitAndApprove: widget.canSubmitAndApprove,
+            submitting:
+                _busy &&
+                widget.state.status ==
+                    YorksV1MaterialRequestDraftSyncStatus.submitting,
+            onSubmitOnly: canAttemptSubmit ? _submit : null,
+            onSubmitAndApprove: canAttemptApprove
+                ? () => _submit(approveImmediately: true)
+                : null,
+          ),
         ),
       ],
     );
@@ -5393,9 +5405,7 @@ class _MobileMrStickyActions extends StatelessWidget {
     required this.onPrimary,
     this.secondaryLabel,
     this.onSecondary,
-    this.tertiaryLabel,
-    this.tertiaryIcon,
-    this.onTertiary,
+    this.primaryAction,
     this.loading = false,
   });
 
@@ -5404,9 +5414,7 @@ class _MobileMrStickyActions extends StatelessWidget {
   final VoidCallback? onPrimary;
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
-  final String? tertiaryLabel;
-  final IconData? tertiaryIcon;
-  final VoidCallback? onTertiary;
+  final Widget? primaryAction;
   final bool loading;
 
   @override
@@ -5418,8 +5426,22 @@ class _MobileMrStickyActions extends StatelessWidget {
         color: AppColors.surfaceContainerLowest,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      child: tertiaryLabel == null
-          ? Row(
+      child: primaryAction != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (secondaryLabel != null) ...[
+                  OutlinedButton(
+                    key: const ValueKey('mobile-mr-secondary-action'),
+                    onPressed: onSecondary,
+                    child: Text(secondaryLabel!),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                primaryAction!,
+              ],
+            )
+          : Row(
               children: [
                 if (secondaryLabel != null) ...[
                   Expanded(
@@ -5447,48 +5469,6 @@ class _MobileMrStickyActions extends StatelessWidget {
                         : Icon(primaryIcon),
                     label: Text(primaryLabel),
                   ),
-                ),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (secondaryLabel != null) ...[
-                  OutlinedButton(
-                    key: const ValueKey('mobile-mr-secondary-action'),
-                    onPressed: onSecondary,
-                    child: Text(secondaryLabel!),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        key: const ValueKey('mobile-mr-primary-action'),
-                        onPressed: onPrimary,
-                        icon: Icon(primaryIcon),
-                        label: Text(primaryLabel),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        key: const ValueKey('mobile-mr-approve'),
-                        onPressed: onTertiary,
-                        icon: loading
-                            ? const SizedBox.square(
-                                dimension: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.onPrimary,
-                                ),
-                              )
-                            : Icon(tertiaryIcon),
-                        label: Text(tertiaryLabel!),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -5889,6 +5869,7 @@ String _materialRequestNextAction(
 
 class _TabletMrDraftActions extends StatelessWidget {
   const _TabletMrDraftActions({
+    required this.language,
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
@@ -5896,6 +5877,7 @@ class _TabletMrDraftActions extends StatelessWidget {
     required this.submitting,
   });
 
+  final AppLanguage language;
   final VoidCallback onCancel;
   final VoidCallback? onSave;
   final VoidCallback? onSubmit;
@@ -5936,35 +5918,15 @@ class _TabletMrDraftActions extends StatelessWidget {
             icon: const Icon(Icons.save_outlined),
             label: Text(YorksV1MaterialRequestStrings.saveDraft.primary),
           ),
-          FilledButton.icon(
-            key: const ValueKey('tablet-mr-submit'),
-            onPressed: onSubmit,
-            icon: submitting
-                ? const SizedBox.square(
-                    dimension: 17,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.onPrimary,
-                    ),
-                  )
-                : const Icon(Icons.arrow_forward_rounded),
-            label: Text(YorksV1MaterialRequestStrings.submit.primary),
+          _MaterialRequestCreationSubmitAction(
+            language: language,
+            mainButtonKey: const ValueKey('tablet-mr-submit'),
+            menuButtonKey: const ValueKey('tablet-mr-submit-menu'),
+            canSubmitAndApprove: onApprove != null,
+            submitting: submitting,
+            onSubmitOnly: onSubmit,
+            onSubmitAndApprove: onApprove,
           ),
-          if (onApprove != null)
-            FilledButton.icon(
-              key: const ValueKey('tablet-mr-approve'),
-              onPressed: onApprove,
-              icon: submitting
-                  ? const SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.onPrimary,
-                      ),
-                    )
-                  : const Icon(Icons.verified_rounded),
-              label: Text(YorksV1MaterialRequestStrings.approve.primary),
-            ),
         ],
       ),
     ),
@@ -5973,6 +5935,7 @@ class _TabletMrDraftActions extends StatelessWidget {
 
 class _R35RequestHero extends StatelessWidget {
   const _R35RequestHero({
+    required this.language,
     required this.title,
     required this.requesterName,
     required this.projectName,
@@ -5986,6 +5949,7 @@ class _R35RequestHero extends StatelessWidget {
     required this.onToggleInspector,
   });
 
+  final AppLanguage language;
   final String title;
   final String requesterName;
   final String? projectName;
@@ -6086,23 +6050,15 @@ class _R35RequestHero extends StatelessWidget {
               label: YorksV1MaterialRequestStrings.cancel.primary,
               onPressed: onCancel,
             ),
-            _R35RequestAction(
-              key: const ValueKey('mr-request-submit'),
-              label: YorksV1MaterialRequestStrings.submit.primary,
-              icon: Icons.send_rounded,
-              primary: onApprove == null,
-              onPressed: onSubmit,
-              loading: submitting,
+            _MaterialRequestCreationSubmitAction(
+              language: language,
+              mainButtonKey: const ValueKey('mr-request-submit'),
+              menuButtonKey: const ValueKey('mr-request-submit-menu'),
+              canSubmitAndApprove: onApprove != null,
+              submitting: submitting,
+              onSubmitOnly: onSubmit,
+              onSubmitAndApprove: onApprove,
             ),
-            if (onApprove != null)
-              _R35RequestAction(
-                key: const ValueKey('mr-request-approve'),
-                label: YorksV1MaterialRequestStrings.approve.primary,
-                icon: Icons.verified_rounded,
-                primary: true,
-                onPressed: onApprove,
-                loading: submitting,
-              ),
           ],
         ),
       );
@@ -6871,7 +6827,6 @@ class _R35RequestAction extends StatelessWidget {
     this.icon,
     this.leading,
     this.primary = false,
-    this.loading = false,
     this.tooltip,
   });
 
@@ -6880,7 +6835,6 @@ class _R35RequestAction extends StatelessWidget {
   final Widget? leading;
   final VoidCallback? onPressed;
   final bool primary;
-  final bool loading;
   final String? tooltip;
 
   @override
@@ -6889,18 +6843,10 @@ class _R35RequestAction extends StatelessWidget {
       height: AppSpacing.minTapTarget,
       child: primary
           ? FilledButton.icon(
-              onPressed: loading ? null : onPressed,
-              icon: loading
-                  ? const SizedBox(
-                      width: 17,
-                      height: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : leading ??
-                        Icon(icon ?? Icons.arrow_forward_rounded, size: 19),
+              onPressed: onPressed,
+              icon:
+                  leading ??
+                  Icon(icon ?? Icons.arrow_forward_rounded, size: 19),
               label: Text(label),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.blue,
@@ -6928,6 +6874,200 @@ class _R35RequestAction extends StatelessWidget {
     );
     return tooltip == null ? child : Tooltip(message: tooltip!, child: child);
   }
+}
+
+enum _MaterialRequestCreationActionChoice { createOnly, createAndApprove }
+
+/// One explicit creation action with a guarded alternative for creators who
+/// also hold approval authority. The client decides presentation only; the
+/// selected command is still re-authorized by the trusted server RPC.
+class _MaterialRequestCreationSubmitAction extends StatelessWidget {
+  const _MaterialRequestCreationSubmitAction({
+    required this.language,
+    required this.canSubmitAndApprove,
+    required this.submitting,
+    required this.onSubmitOnly,
+    required this.onSubmitAndApprove,
+    this.mainButtonKey,
+    this.menuButtonKey,
+    this.expanded = false,
+  });
+
+  final AppLanguage language;
+  final bool canSubmitAndApprove;
+  final bool submitting;
+  final VoidCallback? onSubmitOnly;
+  final VoidCallback? onSubmitAndApprove;
+  final Key? mainButtonKey;
+  final Key? menuButtonKey;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final mainAction = canSubmitAndApprove ? onSubmitAndApprove : onSubmitOnly;
+    final mainLabel = canSubmitAndApprove
+        ? YorksV1MaterialRequestStrings.submitAndApprove.active(language)
+        : YorksV1MaterialRequestStrings.submitForApproval.active(language);
+    final mainButton = SizedBox(
+      height: AppSpacing.minTapTarget,
+      child: FilledButton.icon(
+        key: mainButtonKey,
+        onPressed: submitting ? null : mainAction,
+        icon: submitting
+            ? const SizedBox.square(
+                dimension: 17,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.onPrimary,
+                ),
+              )
+            : Icon(
+                canSubmitAndApprove
+                    ? Icons.verified_rounded
+                    : Icons.send_rounded,
+                size: 19,
+              ),
+        label: Text(mainLabel),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.blue,
+          shape: RoundedRectangleBorder(
+            borderRadius: canSubmitAndApprove
+                ? const BorderRadiusDirectional.only(
+                    topStart: Radius.circular(AppSpacing.radiusMd + 2),
+                    bottomStart: Radius.circular(AppSpacing.radiusMd + 2),
+                  )
+                : BorderRadius.circular(AppSpacing.radiusMd + 2),
+          ),
+        ),
+      ),
+    );
+    if (!canSubmitAndApprove) return mainButton;
+
+    final menuEnabled =
+        !submitting && (onSubmitOnly != null || onSubmitAndApprove != null);
+    final menuButton = SizedBox(
+      key: menuButtonKey,
+      width: AppSpacing.minTapTarget,
+      height: AppSpacing.minTapTarget,
+      child: Material(
+        color: menuEnabled ? AppColors.blue : AppColors.line,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadiusDirectional.only(
+            topEnd: Radius.circular(AppSpacing.radiusMd + 2),
+            bottomEnd: Radius.circular(AppSpacing.radiusMd + 2),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: PopupMenuButton<_MaterialRequestCreationActionChoice>(
+          enabled: menuEnabled,
+          tooltip: YorksV1MaterialRequestStrings.chooseCreationAction.active(
+            language,
+          ),
+          position: PopupMenuPosition.under,
+          padding: EdgeInsets.zero,
+          icon: const Icon(
+            Icons.arrow_drop_down_rounded,
+            color: AppColors.onPrimary,
+          ),
+          onSelected: (choice) {
+            switch (choice) {
+              case _MaterialRequestCreationActionChoice.createOnly:
+                onSubmitOnly?.call();
+                break;
+              case _MaterialRequestCreationActionChoice.createAndApprove:
+                onSubmitAndApprove?.call();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              key: const ValueKey('mr-create-only'),
+              value: _MaterialRequestCreationActionChoice.createOnly,
+              enabled: onSubmitOnly != null,
+              child: _MaterialRequestCreationActionMenuItem(
+                icon: Icons.send_outlined,
+                title: YorksV1MaterialRequestStrings.createOnly.active(
+                  language,
+                ),
+                description: YorksV1MaterialRequestStrings.createOnlyDescription
+                    .active(language),
+              ),
+            ),
+            PopupMenuItem(
+              key: const ValueKey('mr-create-and-approve'),
+              value: _MaterialRequestCreationActionChoice.createAndApprove,
+              enabled: onSubmitAndApprove != null,
+              child: _MaterialRequestCreationActionMenuItem(
+                icon: Icons.verified_outlined,
+                title: YorksV1MaterialRequestStrings.createAndApprove.active(
+                  language,
+                ),
+                description: YorksV1MaterialRequestStrings
+                    .createAndApproveDescription
+                    .active(language),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Semantics(
+      container: true,
+      label: YorksV1MaterialRequestStrings.chooseCreationAction.active(
+        language,
+      ),
+      child: Row(
+        mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          if (expanded) Expanded(child: mainButton) else mainButton,
+          const SizedBox(width: 1),
+          menuButton,
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialRequestCreationActionMenuItem extends StatelessWidget {
+  const _MaterialRequestCreationActionMenuItem({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Icon(icon, size: 20, color: AppColors.blue),
+      ),
+      const SizedBox(width: AppSpacing.sm),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: AppTypography.labelLarge.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              description,
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 /// Keeps source/import actions in the primary visual lane while preserving the

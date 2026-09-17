@@ -274,8 +274,10 @@ retaining custom/Excel rows. **Submit** is the connected primary action with
 validation and connectivity state. A new Draft additionally shows **Approve**
 beside **Submit** only when the exact creator role, published self-approval
 policy and effective approval capability permit the atomic submit-and-approve
-command; an exact Site Engineer sees **Submit** only. The client preflight
-fails closed and the trusted command remains authoritative.
+command. That authority is presented as one **Submit and Approve** split action
+with **Create only** and **Create and Approve** choices. A creator without that
+authority, including an exact Site Engineer, sees **Submit for Approval** only.
+The client preflight fails closed and the trusted command remains authoritative.
 Before approval, the creator and authorized Project Engineer can reopen the
 same consistent editor; status and version conflict remain visible.
 
