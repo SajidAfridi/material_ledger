@@ -1,11 +1,31 @@
 import 'dart:async';
 
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/analytics_configuration.dart';
 import 'package:material_ledger/shared/models/analytics_event.dart';
 import 'package:material_ledger/shared/services/analytics_service.dart';
 
 void main() {
+  test('wrapped transport timeout keeps its observed category', () {
+    expect(
+      analyticsErrorCategory(
+        YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
+          cause: TimeoutException('not sent to analytics'),
+        ),
+      ),
+      AnalyticsErrorCategory.timeout,
+    );
+    expect(
+      analyticsErrorCategory(
+        const YorksV1DomainException(YorksV1DomainErrorCode.backendUnavailable),
+      ),
+      AnalyticsErrorCategory.network,
+    );
+  });
+
   late _RecordingSink sink;
   late GuardedAnalyticsService analytics;
   late DateTime now;
@@ -76,7 +96,7 @@ void main() {
 
   test('taxonomy stays bounded, stable, and unique', () {
     final names = AnalyticsEvent.values.map((event) => event.wireName).toList();
-    expect(names, hasLength(59));
+    expect(names, hasLength(61));
     expect(names.toSet(), hasLength(names.length));
     expect(names, everyElement(matches(RegExp(r'^[a-z0-9]+(?: [a-z0-9]+)*$'))));
     expect(names, isNot(contains('material_request_opened')));

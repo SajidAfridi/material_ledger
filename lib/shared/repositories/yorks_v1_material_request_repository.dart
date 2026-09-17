@@ -32,6 +32,15 @@ class SupabaseYorksV1MaterialRequestRpcClient
   }) => _client.rpc(functionName, params: parameters);
 }
 
+/// Optional additive API. Older backends can fail this read safely; callers
+/// must keep the intent unresolved rather than retry a mutation automatically.
+abstract interface class YorksV1MaterialRequestSubmissionRecoveryRepository {
+  Future<YorksV1MaterialRequest?> findSubmissionResult(
+    YorksV1MaterialRequestDraft draft, {
+    required bool approveImmediately,
+  });
+}
+
 abstract interface class YorksV1MaterialRequestRepository {
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects();
 
@@ -182,6 +191,7 @@ abstract interface class YorksV1MaterialRequestOperationsRepository {
 class YorksV1SupabaseMaterialRequestRepository
     implements
         YorksV1MaterialRequestRepository,
+        YorksV1MaterialRequestSubmissionRecoveryRepository,
         YorksV1MaterialRequestPhase2Repository,
         YorksV1MaterialRequestPhase3Repository,
         YorksV1MaterialRequestOperationsRepository {
@@ -202,6 +212,22 @@ class YorksV1SupabaseMaterialRequestRepository
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
   final AnalyticsService _analytics;
+
+  @override
+  Future<YorksV1MaterialRequest?> findSubmissionResult(
+    YorksV1MaterialRequestDraft draft, {
+    required bool approveImmediately,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_get_material_request_submission_result',
+      parameters: {
+        'p_payload': draft.toSaveInput().toRpcPayload(),
+        'p_idempotency_key': draft.submissionIdempotencyKey,
+        'p_approve_immediately': approveImmediately,
+      },
+    );
+    return response == null ? null : _single(response);
+  }
 
   @override
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects() async {

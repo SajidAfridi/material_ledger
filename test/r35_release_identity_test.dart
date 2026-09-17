@@ -33,8 +33,9 @@ void main() {
         0,
       );
       final sha = (await git(['rev-parse', 'HEAD'])).stdout.toString().trim();
-      if (dirty)
+      if (dirty) {
         File('${repo.path}/untracked.dart').writeAsStringSync('// edit');
+      }
       final result = await Process.run(
         'bash',
         [script.path, 'run'],

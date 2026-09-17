@@ -1458,6 +1458,7 @@ class YorksV1MaterialRequestDraft {
     required this.submissionIdempotencyKey,
     required this.updatedAt,
     this.serverRecordVersion = 0,
+    this.pendingSubmissionApproval,
     this.privateSyncVersion = 0,
     this.privateSyncedAt,
     this.projectId,
@@ -1475,6 +1476,10 @@ class YorksV1MaterialRequestDraft {
   final String ownerAuthUserId;
   final String submissionIdempotencyKey;
   final int serverRecordVersion;
+
+  /// Null means no unresolved submission. False/true freezes the original
+  /// Submit/Approve intent until an authorized result check confirms it.
+  final bool? pendingSubmissionApproval;
   final int privateSyncVersion;
   final DateTime? privateSyncedAt;
   final String? projectId;
@@ -1499,6 +1504,7 @@ class YorksV1MaterialRequestDraft {
 
   YorksV1MaterialRequestDraft copyWith({
     int? serverRecordVersion,
+    Object? pendingSubmissionApproval = _keep,
     int? privateSyncVersion,
     Object? privateSyncedAt = _keep,
     Object? projectId = _keep,
@@ -1517,6 +1523,9 @@ class YorksV1MaterialRequestDraft {
         ? this.submissionIdempotencyKey
         : submissionIdempotencyKey as String,
     serverRecordVersion: serverRecordVersion ?? this.serverRecordVersion,
+    pendingSubmissionApproval: identical(pendingSubmissionApproval, _keep)
+        ? this.pendingSubmissionApproval
+        : pendingSubmissionApproval as bool?,
     privateSyncVersion: privateSyncVersion ?? this.privateSyncVersion,
     privateSyncedAt: identical(privateSyncedAt, _keep)
         ? this.privateSyncedAt
@@ -1571,6 +1580,7 @@ class YorksV1MaterialRequestDraft {
     'ownerAuthUserId': ownerAuthUserId,
     'submissionIdempotencyKey': submissionIdempotencyKey,
     'serverRecordVersion': serverRecordVersion,
+    'pendingSubmissionApproval': pendingSubmissionApproval,
     'privateSyncVersion': privateSyncVersion,
     'privateSyncedAt': privateSyncedAt?.toUtc().toIso8601String(),
     'projectId': projectId,
@@ -1589,6 +1599,9 @@ class YorksV1MaterialRequestDraft {
       ownerAuthUserId: _string(json['ownerAuthUserId']),
       submissionIdempotencyKey: _string(json['submissionIdempotencyKey']),
       serverRecordVersion: _nonNegativeInt(json['serverRecordVersion']),
+      pendingSubmissionApproval: json['pendingSubmissionApproval'] is bool
+          ? json['pendingSubmissionApproval'] as bool
+          : null,
       privateSyncVersion: _nonNegativeInt(json['privateSyncVersion']),
       privateSyncedAt: _nullableDate(json['privateSyncedAt']),
       projectId: _trimToNull(json['projectId']),

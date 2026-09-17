@@ -7,6 +7,24 @@ import 'yorks_v1_project_strings.dart';
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const submissionUnconfirmed = TranslatableString(
+    en: 'Submission is not yet confirmed. Your entries are preserved. Check its status before trying again.',
+    ar: 'لم يتم تأكيد الإرسال بعد. تم الاحتفاظ ببياناتك. تحقق من الحالة قبل المحاولة مجدداً.',
+    ur: 'جمع ہونے کی ابھی تصدیق نہیں ہوئی۔ آپ کی معلومات محفوظ ہیں۔ دوبارہ کوشش سے پہلے حالت چیک کریں۔',
+    hi: 'सबमिशन की अभी पुष्टि नहीं हुई है। आपकी जानकारी सुरक्षित है। दोबारा कोशिश करने से पहले स्थिति जाँचें।',
+  );
+  static const checkSubmissionStatus = TranslatableString(
+    en: 'Check submission status',
+    ar: 'التحقق من حالة الإرسال',
+    ur: 'جمع ہونے کی حالت چیک کریں',
+    hi: 'सबमिशन की स्थिति जाँचें',
+  );
+  static const retrySameSubmission = TranslatableString(
+    en: 'Retry same submission',
+    ar: 'إعادة محاولة الإرسال نفسه',
+    ur: 'اسی درخواست کو دوبارہ جمع کریں',
+    hi: 'यही सबमिशन दोबारा आज़माएँ',
+  );
   static const quantityHistory = TranslatableString(
     en: 'Quantity history',
     ar: 'سجل الكميات',

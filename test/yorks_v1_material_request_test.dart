@@ -544,7 +544,7 @@ void main() {
         expect(await controller.submit(), isNull);
         expect(
           controller.state.status,
-          YorksV1MaterialRequestDraftSyncStatus.failed,
+          YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
         );
         expect(
           controller.state.errorCode,
@@ -2282,7 +2282,14 @@ void main() {
       await controller.setTitle('Late callback');
       await Future<void>.delayed(Duration.zero);
       expect(repository.privateSyncCallCount, 0);
-      expect(controller.currentDraft, same(intent));
+      expect(
+        controller.currentDraft.toSaveInput().toRpcPayload(),
+        intent.toSaveInput().toRpcPayload(),
+      );
+      expect(
+        controller.currentDraft.submissionIdempotencyKey,
+        intent.submissionIdempotencyKey,
+      );
       blocker.complete();
       expect(await submission, isNotNull);
     },
@@ -2321,6 +2328,7 @@ void main() {
           final submission = saveOnly
               ? controller.saveConnected()
               : controller.submit();
+          await Future<void>.delayed(Duration.zero);
           controller.dispose();
           blocker.complete();
           expect(await submission, isNull);
@@ -2329,6 +2337,177 @@ void main() {
       );
     }
   }
+
+  for (final approve in [false, true]) {
+    test(
+      'lost response reconciles original frozen intent, approve=$approve',
+      () async {
+        final repository = _RecoveryRequestRepository();
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final controller = await _recoveryController(repository, store);
+        expect(
+          approve
+              ? await controller.submitAndApprove()
+              : await controller.submit(),
+          isNull,
+        );
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+        );
+        final intent = controller.currentDraft;
+        expect(intent.pendingSubmissionApproval, approve);
+        await controller.setTitle('Must not change unresolved intent');
+        await controller.saveConnected();
+        expect(controller.currentDraft, same(intent));
+        expect(repository.writeCount, 1);
+        // Simulate a browser restart using the actual draft JSON format.
+        final persisted = YorksV1MaterialRequestDraft.fromJson(
+          store.readAll().single.toJson(),
+        );
+        controller.dispose();
+        await store.writeAll([persisted]);
+        final reopened = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+        );
+        addTearDown(reopened.dispose);
+        expect(
+          reopened.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+        );
+        final result = await reopened.reconcileSubmission();
+        expect(result?.id, _draftId);
+        expect(repository.checkedModes, [approve]);
+        expect(repository.writeCount, 1);
+        expect(repository.commitCount, 1);
+        expect(store.readAll(), isEmpty);
+      },
+    );
+  }
+
+  test(
+    'unconfirmed read permits only explicit retry of unchanged intent',
+    () async {
+      final repository = _RecoveryRequestRepository()
+        ..commitBeforeFailure = false;
+      final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+      final controller = await _recoveryController(repository, store);
+      addTearDown(controller.dispose);
+      expect(await controller.submit(), isNull);
+      expect(await controller.retryUnconfirmedSubmission(), isNull);
+      expect(repository.writeCount, 1);
+      expect(await controller.reconcileSubmission(), isNull);
+      expect(controller.state.canRetryUnconfirmed, isTrue);
+      expect(repository.writeCount, 1);
+      repository.loseResponse = false;
+      expect(await controller.retryUnconfirmedSubmission(), isNotNull);
+      expect(repository.writeCount, 2);
+      expect(repository.commitCount, 1);
+      expect(
+        repository.intents[0].submissionIdempotencyKey,
+        repository.intents[1].submissionIdempotencyKey,
+      );
+      expect(
+        repository.intents[0].toSaveInput().toRpcPayload(),
+        repository.intents[1].toSaveInput().toRpcPayload(),
+      );
+    },
+  );
+
+  test('a denied retry cannot resolve the original unknown outcome', () async {
+    final repository = _RecoveryRequestRepository()
+      ..commitBeforeFailure = false;
+    final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+    final controller = await _recoveryController(repository, store);
+    addTearDown(controller.dispose);
+    await controller.submit();
+    final key = controller.currentDraft.submissionIdempotencyKey;
+    await controller.reconcileSubmission();
+    repository.writeFailure = const YorksV1DomainException(
+      YorksV1DomainErrorCode.unauthorized,
+      serverCode: '42501',
+    );
+    expect(await controller.retryUnconfirmedSubmission(), isNull);
+    expect(
+      controller.state.status,
+      YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+    );
+    expect(controller.currentDraft.submissionIdempotencyKey, key);
+    expect(controller.currentDraft.pendingSubmissionApproval, isFalse);
+    expect(store.readAll(), isNotEmpty);
+    expect(controller.state.canRetryUnconfirmed, isFalse);
+  });
+
+  test(
+    'unavailable or denied reconciliation never clears draft or enables retry',
+    () async {
+      final repository = _RecoveryRequestRepository()
+        ..lookupFailure = const YorksV1DomainException(
+          YorksV1DomainErrorCode.unauthorized,
+        );
+      final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+      final controller = await _recoveryController(repository, store);
+      addTearDown(controller.dispose);
+      await controller.submit();
+      expect(await controller.reconcileSubmission(), isNull);
+      expect(
+        controller.state.status,
+        YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+      );
+      expect(controller.state.canRetryUnconfirmed, isFalse);
+      expect(store.readAll(), hasLength(1));
+      expect(await controller.retryUnconfirmedSubmission(), isNull);
+      expect(repository.writeCount, 1);
+    },
+  );
+
+  test(
+    'disposal during status read retains owner recovery and ignores late result',
+    () async {
+      final blocker = Completer<void>();
+      final repository = _RecoveryRequestRepository()
+        ..lookupDelay = blocker.future;
+      final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+      final controller = await _recoveryController(repository, store);
+      await controller.submit();
+      final check = controller.reconcileSubmission();
+      expect(await controller.reconcileSubmission(), isNull);
+      controller.dispose();
+      blocker.complete();
+      expect(await check, isNull);
+      expect(store.readAll(), hasLength(1));
+      expect(repository.checkedModes, hasLength(1));
+    },
+  );
+
+  test(
+    'account switch during result check cannot clear the prior owner draft',
+    () async {
+      var currentOwner = true;
+      final blocker = Completer<void>();
+      final repository = _RecoveryRequestRepository()
+        ..lookupDelay = blocker.future;
+      final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+      final controller = await _recoveryController(
+        repository,
+        store,
+        isCurrentOwner: () => currentOwner,
+      );
+      addTearDown(controller.dispose);
+      await controller.submit();
+      final check = controller.reconcileSubmission();
+      currentOwner = false;
+      blocker.complete();
+      expect(await check, isNull);
+      expect(store.readAll(), hasLength(1));
+      expect(await controller.submit(), isNull);
+      expect(repository.writeCount, 1);
+    },
+  );
 
   test(
     'private autosave serializes requests and never restores an older row edit',
@@ -2979,4 +3158,89 @@ class _RejectingRpcClient implements YorksV1MaterialRequestRpcClient {
     required Map<String, Object?> parameters,
   }) async =>
       throw PostgrestException(message: 'Private server detail', code: code);
+}
+
+Future<YorksV1MaterialRequestDraftController> _recoveryController(
+  _RecoveryRequestRepository repository,
+  _MemoryStore<YorksV1MaterialRequestDraft> store, {
+  bool Function()? isCurrentOwner,
+}) async {
+  final controller = YorksV1MaterialRequestDraftController(
+    ownerAuthUserId: _siteEngineer,
+    isCurrentOwner: isCurrentOwner,
+    draftId: _draftId,
+    store: store,
+    repository: repository,
+    uuidFactory: _Ids().next,
+  );
+  await controller.setProject(_projectId);
+  await controller.setScope(_scopeId);
+  await controller.addCustomLine();
+  await controller.updateLine(
+    controller.currentDraft.lines.single.id,
+    (line) => line.copyWith(description: 'Duct', quantity: '2', unit: 'Nos'),
+  );
+  return controller;
+}
+
+class _RecoveryRequestRepository extends _FakeRequestRepository
+    implements YorksV1MaterialRequestSubmissionRecoveryRepository {
+  bool commitBeforeFailure = true;
+  bool loseResponse = true;
+  int writeCount = 0;
+  int commitCount = 0;
+  Object? lookupFailure;
+  Object? writeFailure;
+  Future<void>? lookupDelay;
+  YorksV1MaterialRequest? committed;
+  final List<bool> checkedModes = [];
+  final List<YorksV1MaterialRequestDraft> intents = [];
+
+  Future<YorksV1MaterialRequest> _write(
+    YorksV1MaterialRequestDraft draft,
+    bool approve,
+  ) async {
+    writeCount++;
+    intents.add(draft);
+    final failure = writeFailure;
+    if (failure != null) throw failure;
+    if ((!loseResponse || commitBeforeFailure) && committed == null) {
+      commitCount++;
+      committed = _request(
+        requestId: draft.id,
+        version: 2,
+        number: 'B5TEST-MR001',
+        state: approve
+            ? YorksV1MaterialRequestState.approvedForArrangement
+            : YorksV1MaterialRequestState.awaitingRequestApproval,
+      );
+    }
+    if (loseResponse) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: TimeoutException('lost response'),
+      );
+    }
+    return committed!;
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveAndSubmit(
+    YorksV1MaterialRequestDraft draft,
+  ) => _write(draft, false);
+  @override
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  ) => _write(draft, true);
+  @override
+  Future<YorksV1MaterialRequest?> findSubmissionResult(
+    YorksV1MaterialRequestDraft draft, {
+    required bool approveImmediately,
+  }) async {
+    checkedModes.add(approveImmediately);
+    await lookupDelay;
+    final error = lookupFailure;
+    if (error != null) throw error;
+    return committed;
+  }
 }

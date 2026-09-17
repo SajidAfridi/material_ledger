@@ -352,3 +352,31 @@ debug/profile/release constants. These additive fields do not replace app
 version/build or silently change operation names, duration boundaries or schema
 version. Compare clean releases by revision and environment. A dirty revision
 is not an exact artifact identity; retain deployment/build hashes separately.
+
+### 17 September remediation: submission attempt versus confirmed outcome
+
+R35 launcher builds now carry `release_id` (actual full Git revision, with
+`-dirty` for a modified checkout) and actual compiled `build_mode`. Direct builds
+without a valid revision report unknown. Version/build labels and operation
+names/timer boundaries are unchanged. Compare release cohorts, not just 1.0.0/1.
+
+New-request Submit/Approve transport loss is `outcome: unknown` on the existing
+attempt-level operation failure. It emits `material request submission
+unconfirmed`, rather than the confirmed-failure business event. The new
+`material request submission reconciled` event means a later authorized read
+confirmed the original command. It is not a second submission attempt or a new
+business creation. Do not sum these streams or interpret `success: false` on
+an attempt as a server rollback. No raw payload, operation key or request content
+is transmitted. Historical attempts cannot be retrospectively matched without
+additional authorized evidence; correlation remains a measurement limitation.
+
+Wrapped `TimeoutException` in a backend-unavailable domain error is now classified
+as timeout, rather than network. Only use this classification for new release
+cohorts; the eight historical 20-second network events remain unchanged. Missing
+raw server codes cannot be reconstructed from normalized categories.
+
+Password sign-in attempts terminate after Auth and profile materialization;
+restored sessions use `session restored`, not a new password attempt. Browser
+closure, telemetry delivery loss and materialization exceptions must remain
+unresolved measurement cases, not inferred failed logins. No auth flow change
+or live dashboard edit is included in this remediation.

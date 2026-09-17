@@ -702,6 +702,10 @@ class _ValidationFailureState {
 
 AnalyticsErrorCategory analyticsErrorCategory(Object error) {
   if (error is YorksV1DomainException) {
+    if (error.code == YorksV1DomainErrorCode.backendUnavailable &&
+        error.cause is TimeoutException) {
+      return AnalyticsErrorCategory.timeout;
+    }
     return switch (error.code) {
       YorksV1DomainErrorCode.invalidInput ||
       YorksV1DomainErrorCode.invalidTransition ||

@@ -10,6 +10,7 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
+import '../widgets/yorks_v1_submission_recovery_panel.dart';
 import '../../../../app/router.dart';
 import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
@@ -2819,8 +2820,10 @@ class _DraftForm extends ConsumerWidget {
     // button leaves engineers guessing which row is blocking submission.
     final canAttemptSubmit =
         submitAccess.canWrite &&
+        draft.pendingSubmissionApproval == null &&
         state.status != YorksV1MaterialRequestDraftSyncStatus.submitting;
     final isBusy =
+        draft.pendingSubmissionApproval != null ||
         !editAccess.canWrite ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
@@ -2851,7 +2854,10 @@ class _DraftForm extends ConsumerWidget {
           scopes: scopes,
           allowedTimings: allowedTimings,
           canEdit: editAccess.canWrite,
-          canSubmit: submitAccess.canWrite,
+          canSubmit:
+              submitAccess.canWrite && draft.pendingSubmissionApproval == null,
+          onRecover: (retry) =>
+              _recoverSubmission(context, ref, controller, retry: retry),
           canSubmitAndApprove: canOfferSubmitAndApprove,
           onSave: () => _save(context, ref, controller, draft),
           onSubmit: () => _submitForMobile(context, ref, controller),
@@ -2996,6 +3002,27 @@ class _DraftForm extends ConsumerWidget {
                   ],
                 ),
               );
+              final recovery =
+                  draft.pendingSubmissionApproval != null &&
+                      state.status !=
+                          YorksV1MaterialRequestDraftSyncStatus.submitting
+                  ? YorksV1SubmissionRecoveryPanel(
+                      language: language,
+                      checking:
+                          state.status ==
+                          YorksV1MaterialRequestDraftSyncStatus
+                              .checkingSubmission,
+                      canRetry: state.canRetryUnconfirmed,
+                      onCheck: () =>
+                          _recoverSubmission(context, ref, controller),
+                      onRetry: () => _recoverSubmission(
+                        context,
+                        ref,
+                        controller,
+                        retry: true,
+                      ),
+                    )
+                  : null;
               final notices = [
                 if (state.status ==
                     YorksV1MaterialRequestDraftSyncStatus.savedToAccount)
@@ -3038,7 +3065,7 @@ class _DraftForm extends ConsumerWidget {
                     language: language,
                   ),
               ];
-              return _MaterialRequestKeyboardShortcuts(
+              final content = _MaterialRequestKeyboardShortcuts(
                 onSave: save,
                 onAddCustom: !isBusy && draft.projectId != null
                     ? controller.addCustomLine
@@ -3213,6 +3240,17 @@ class _DraftForm extends ConsumerWidget {
                   ),
                 ),
               );
+              if (recovery == null) return content;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: horizontal),
+                    child: recovery,
+                  ),
+                  Expanded(child: content),
+                ],
+              );
             },
           ),
         ),
@@ -3245,6 +3283,20 @@ class _DraftForm extends ConsumerWidget {
     }
     _snack(context, YorksV1MaterialRequestStrings.saved.primary);
     ref.invalidate(yorksV1MaterialRequestListProvider);
+  }
+
+  Future<void> _recoverSubmission(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1MaterialRequestDraftController controller, {
+    bool retry = false,
+  }) async {
+    final result = retry
+        ? await controller.retryUnconfirmedSubmission()
+        : await controller.reconcileSubmission();
+    if (!context.mounted || result == null) return;
+    ref.invalidate(yorksV1MaterialRequestListProvider);
+    context.go(RoutePaths.yorksV1MaterialRequestPath(result.id));
   }
 
   Future<void> _submit(
@@ -3320,7 +3372,9 @@ class _DraftForm extends ConsumerWidget {
     if (!context.mounted) return null;
     if (submitted == null) {
       final errorCode = controller.lastErrorCode;
-      final message = errorCode == null
+      final message = controller.currentDraft.pendingSubmissionApproval != null
+          ? YorksV1MaterialRequestStrings.submissionUnconfirmed.primary
+          : errorCode == null
           ? YorksV1MaterialRequestStrings.submitFailed.primary
           : YorksV1MaterialRequestStrings.commandFailure(errorCode).primary;
       _snack(context, message);
@@ -3773,6 +3827,7 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
     required this.canSubmit,
     required this.canSubmitAndApprove,
     required this.onSave,
+    required this.onRecover,
     required this.onSubmit,
     required this.onSubmitAndApprove,
   });
@@ -3786,6 +3841,7 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
   final bool canSubmit;
   final bool canSubmitAndApprove;
   final Future<void> Function() onSave;
+  final Future<void> Function(bool retry) onRecover;
   final Future<YorksV1MaterialRequest?> Function() onSubmit;
   final Future<YorksV1MaterialRequest?> Function() onSubmitAndApprove;
 
@@ -3840,6 +3896,7 @@ class _YorksMobileMaterialRequestDraftFlowState
   YorksV1MaterialRequestDraft get _draft => widget.state.draft;
 
   bool get _busy =>
+      _draft.pendingSubmissionApproval != null ||
       !widget.canEdit ||
       widget.state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
       widget.state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
@@ -3884,6 +3941,18 @@ class _YorksMobileMaterialRequestDraftFlowState
                   onPressed: _back,
                 ),
               ),
+              if (_draft.pendingSubmissionApproval != null &&
+                  widget.state.status !=
+                      YorksV1MaterialRequestDraftSyncStatus.submitting)
+                YorksV1SubmissionRecoveryPanel(
+                  language: language,
+                  checking:
+                      widget.state.status ==
+                      YorksV1MaterialRequestDraftSyncStatus.checkingSubmission,
+                  canRetry: widget.state.canRetryUnconfirmed,
+                  onCheck: () => widget.onRecover(false),
+                  onRetry: () => widget.onRecover(true),
+                ),
               if (widget.state.status ==
                   YorksV1MaterialRequestDraftSyncStatus.syncingToAccount)
                 const LinearProgressIndicator(minHeight: 2),
