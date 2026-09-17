@@ -2122,6 +2122,131 @@ void main() {
     );
   });
 
+  for (final syncFailure in <Object?>[
+    null,
+    const YorksV1DomainException(YorksV1DomainErrorCode.conflict),
+    StateError('transport interrupted'),
+  ]) {
+    test(
+      'private sync cannot replace pending submission: $syncFailure',
+      () async {
+        final syncBlocker = Completer<void>();
+        final submitBlocker = Completer<void>();
+        final repository = _Phase2FakeRequestRepository()
+          ..privateSyncDelay = syncBlocker.future
+          ..privateSyncFailure = syncFailure
+          ..submitDelay = submitBlocker.future;
+        final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+        final controller = YorksV1MaterialRequestDraftController(
+          ownerAuthUserId: _siteEngineer,
+          draftId: _draftId,
+          store: store,
+          repository: repository,
+          uuidFactory: _Ids().next,
+          privateSyncDebounce: Duration.zero,
+        );
+        addTearDown(controller.dispose);
+        await controller.setProject(_projectId);
+        await controller.setScope(_scopeId);
+        await controller.addCustomLine();
+        await controller.updateLine(
+          controller.currentDraft.lines.single.id,
+          (line) =>
+              line.copyWith(description: 'Duct', quantity: '2', unit: 'Nos'),
+        );
+        await repository.firstPrivateSyncStarted.future;
+        final submission = controller.submit();
+        final intentKey = controller.currentDraft.submissionIdempotencyKey;
+        syncBlocker.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.submitting,
+        );
+        expect(controller.currentDraft.submissionIdempotencyKey, intentKey);
+        expect(await controller.submit(), isNull);
+        expect(repository.saveAndSubmitInputs, hasLength(1));
+        submitBlocker.complete();
+        expect(await submission, isNotNull);
+        expect(
+          controller.state.status,
+          YorksV1MaterialRequestDraftSyncStatus.submitted,
+        );
+        expect(store.readAll(), isEmpty);
+      },
+    );
+  }
+
+  test(
+    'late recovery success cannot recreate a submitted local draft',
+    () async {
+      final blocker = Completer<void>();
+      final repository = _Phase2FakeRequestRepository()
+        ..privateSyncDelay = blocker.future;
+      final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: store,
+        repository: repository,
+        uuidFactory: _Ids().next,
+        privateSyncDebounce: Duration.zero,
+      );
+      addTearDown(controller.dispose);
+      await controller.setProject(_projectId);
+      await controller.setScope(_scopeId);
+      await controller.addCustomLine();
+      await controller.updateLine(
+        controller.currentDraft.lines.single.id,
+        (line) =>
+            line.copyWith(description: 'Duct', quantity: '2', unit: 'Nos'),
+      );
+      await repository.firstPrivateSyncStarted.future;
+      expect(await controller.submit(), isNotNull);
+      blocker.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        controller.state.status,
+        YorksV1MaterialRequestDraftSyncStatus.submitted,
+      );
+      expect(store.readAll(), isEmpty);
+    },
+  );
+
+  test(
+    'connected submission cancels queued autosave and rejects pending edits',
+    () async {
+      final blocker = Completer<void>();
+      final repository = _Phase2FakeRequestRepository()
+        ..submitDelay = blocker.future;
+      final controller = YorksV1MaterialRequestDraftController(
+        ownerAuthUserId: _siteEngineer,
+        draftId: _draftId,
+        store: _MemoryStore<YorksV1MaterialRequestDraft>(),
+        repository: repository,
+        uuidFactory: _Ids().next,
+        privateSyncDebounce: Duration.zero,
+      );
+      addTearDown(controller.dispose);
+      await controller.setProject(_projectId);
+      await controller.setScope(_scopeId);
+      await controller.addCustomLine();
+      await controller.updateLine(
+        controller.currentDraft.lines.single.id,
+        (line) =>
+            line.copyWith(description: 'Duct', quantity: '2', unit: 'Nos'),
+      );
+      final intent = controller.currentDraft;
+      final submission = controller.submit();
+      await controller.setTitle('Late callback');
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.privateSyncCallCount, 0);
+      expect(controller.currentDraft, same(intent));
+      blocker.complete();
+      expect(await submission, isNotNull);
+    },
+  );
+
   test(
     'private autosave serializes requests and never restores an older row edit',
     () async {
@@ -2394,6 +2519,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   final List<Object> submitFailures = [];
   YorksV1MaterialRequest? requestResult;
   Future<void>? saveDelay;
+  Future<void>? submitDelay;
 
   @override
   Future<List<YorksV1MaterialRequestComment>> addComment(
@@ -2496,6 +2622,7 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
     YorksV1MaterialRequestDraft draft,
   ) async {
     saveAndSubmitInputs.add(draft);
+    await submitDelay;
     if (submitFailures.isNotEmpty) throw submitFailures.removeAt(0);
     final failure = submitFailure;
     if (failure != null) throw failure;
