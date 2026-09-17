@@ -42,7 +42,7 @@ Live read-only checks on 17 September:
 |---|---|---|---|
 | A1: Background recovery overwrites pending or completed submission | Three fault-injection tests failed before the fix: late private sync success, conflict, and transport failure replaced `submitting`. A late success could also persist a cleared draft. | Fixed and tested locally: connected commands supersede older recovery callbacks, cancel queued autosave, and prevent pending edits from changing the intent. | Five new tests; full MR suite 53 passed. No claim this caused historical denials/timeouts. Test full gate before release. |
 | A2: Twenty-second submission outcomes are ambiguous | Repository `.timeout(20s)` wraps the RPC without transport cancellation; controller reduces it to backend-unavailable/failed. | Confirmed code behavior; recovery implementation pending. | Keep timeout unchanged. Add explicit unknown state and bounded authorized status reconciliation; verify payload/key and revoked-access semantics first. |
-| A3: Late command after disposal/account change | Recovery callbacks check disposal, connected save/submit callbacks need broader review. | Investigation pending. | Fault-inject disposal and identity change; no automatic resubmit. |
+| A3: Late command after disposal/account change | Two fault-injection tests reproduced disposed-controller exceptions for success and denial. | Fixed and tested locally for disposal: late command callbacks return without state/navigation outcome or draft cleanup; stale provider notifications are suppressed. | MR suite 57 passed; cross-account browser walkthrough remains unverified. No automatic resubmit. |
 | B: Permission-category incident | Raw codes absent from historical analytics; four successful server commits do not explain 13 denials. | Insufficient evidence for an RLS change. | Trace scoped membership, original server codes and replay authorization; preserve intended denials. |
 | C: Procurement MR load, Inventory, Projects, Dashboard | Snapshot client p95s only; no comparable request trace or SQL plan yet. | Investigation pending. | Measure release/profile fixtures, request counts/bytes and primary-content readiness before optimization; inspect dispatch failure separately. |
 | D: Forms, navigation, lookup | Project validation counts do not identify invalid fields; manual material entry is expected behavior. | Investigation pending. | Reproduce conditional validation and navigation recovery; desktop/360px evidence required for presentation changes. |
@@ -56,7 +56,11 @@ Live read-only checks on 17 September:
 - After fix: `flutter test test/yorks_v1_material_request_test.dart`: **53 pass**.
 - Online `flutter pub get` stalled resolving dependencies; stopped after over
   two minutes. `flutter pub get --offline`: **pass**, cached locked dependencies.
-- Full analyzer, suite and release-like build results: pending below.
+- A1 full gate: analyzer passed; 1,720 tests passed; release web build passed
+  its existing startup budget (main JS 10,117,462 bytes, gzip 2,734,676 bytes).
+  These are artifact sizes, not end-user latency measurements.
+- A3: two disposal tests failed before the fix, then MR suite **57 passed**, including save and submit disposal coverage.
+  Final analyzer/suite/build results after later changes remain pending.
 - Supabase CLI is absent from PATH; Docker CLI exists but its daemon/socket is
   unavailable. Local database reset/pgTAP not run. No privileged SQL read is
   treated as a role test. No database files have been changed.
@@ -83,7 +87,9 @@ preserved drafts with named scoped synthetic users before broader rollout.
 
 ## Resume point
 
-Complete A1 gates and commit it separately. Then A2/A3, B, C, D and E in order.
+A1 commit: `ad374fc`. A3 follows as a separate commit. A2 needs a tested
+reconciliation/access design; continue independent safe investigation while
+the local database environment is unavailable. Then B, C, D and E in order.
 Do not present this tracker or one controller fix as completion of all batches.
 Local temporary logs are `/tmp/yorks-race-before.log`,
 `/tmp/yorks-mr-after.log`, `/tmp/yorks-pub-get.log`,

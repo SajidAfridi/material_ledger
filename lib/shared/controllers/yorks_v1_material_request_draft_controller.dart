@@ -684,6 +684,7 @@ class YorksV1MaterialRequestDraftController
       final pending = _saveConnected();
       feedback.feedbackObserved();
       final result = await pending;
+      if (_disposed) return null;
       if (result == null) {
         operation.fail(
           YorksV1DomainException(
@@ -737,6 +738,7 @@ class YorksV1MaterialRequestDraftController
               ),
             )
           : await _repository.saveDraft(draft.toSaveInput());
+      if (_disposed) return null;
       final updated = draft.copyWith(
         serverRecordVersion: saved.recordVersion,
         submissionIdempotencyKey: _editingBeforeApproval
@@ -745,6 +747,7 @@ class YorksV1MaterialRequestDraftController
         updatedAt: DateTime.now().toUtc(),
       );
       await _persist(updated);
+      if (_disposed) return null;
       _acceptedDraft = updated;
       state = YorksV1MaterialRequestDraftState(
         draft: updated,
@@ -752,6 +755,7 @@ class YorksV1MaterialRequestDraftController
       );
       return saved;
     } on YorksV1DomainException catch (error) {
+      if (_disposed) return null;
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
         status: error.code == YorksV1DomainErrorCode.conflict
@@ -761,6 +765,7 @@ class YorksV1MaterialRequestDraftController
       );
       return null;
     } catch (error) {
+      if (_disposed) return null;
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
         status: YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -784,6 +789,7 @@ class YorksV1MaterialRequestDraftController
   Future<YorksV1MaterialRequest?> _submitWorkflow({
     required bool approveImmediately,
   }) async {
+    if (_disposed) return null;
     if (approveImmediately && _editingBeforeApproval) {
       state = YorksV1MaterialRequestDraftState(
         draft: state.draft,
@@ -829,6 +835,7 @@ class YorksV1MaterialRequestDraftController
       final pending = _submitConnected(approveImmediately: approveImmediately);
       feedback.feedbackObserved();
       final result = await pending;
+      if (_disposed) return null;
       if (result == null) {
         final error = YorksV1DomainException(
           state.errorCode ?? YorksV1DomainErrorCode.backendUnavailable,
@@ -871,6 +878,7 @@ class YorksV1MaterialRequestDraftController
   }) async {
     if (_editingBeforeApproval) {
       final saved = await _saveConnected();
+      if (_disposed) return null;
       if (saved != null) {
         // A returned request may pass through this edit/approval cycle more
         // than once. Once this version reaches the server, its local recovery
@@ -884,6 +892,7 @@ class YorksV1MaterialRequestDraftController
           // The connected command already committed. As with first submit,
           // local cleanup is best effort and cannot turn it into a failure.
         }
+        if (_disposed) return null;
         state = YorksV1MaterialRequestDraftState(
           draft: state.draft,
           status: YorksV1MaterialRequestDraftSyncStatus.submitted,
@@ -918,14 +927,17 @@ class YorksV1MaterialRequestDraftController
           ? await _repository.saveSubmitAndApprove(draft)
           : await _repository.saveAndSubmit(draft);
     } on YorksV1DomainException catch (error) {
+      if (_disposed) return null;
       if (error.code == YorksV1DomainErrorCode.conflict) {
         final rebased = await _rebaseAmbiguousInitialSave(draft);
+        if (_disposed) return null;
         if (rebased != null) {
           try {
             submitted = approveImmediately
                 ? await _repository.saveSubmitAndApprove(rebased)
                 : await _repository.saveAndSubmit(rebased);
           } on YorksV1DomainException catch (retryError) {
+            if (_disposed) return null;
             state = YorksV1MaterialRequestDraftState(
               draft: rebased,
               status: retryError.code == YorksV1DomainErrorCode.conflict
@@ -935,6 +947,7 @@ class YorksV1MaterialRequestDraftController
             );
             return null;
           } catch (_) {
+            if (_disposed) return null;
             state = YorksV1MaterialRequestDraftState(
               draft: rebased,
               status: YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -968,6 +981,7 @@ class YorksV1MaterialRequestDraftController
             errorCode: error.code,
           );
           await _persist(nextDraft);
+          if (_disposed) return null;
         }
         state = YorksV1MaterialRequestDraftState(
           draft: nextDraft,
@@ -979,6 +993,7 @@ class YorksV1MaterialRequestDraftController
         return null;
       }
     } catch (error) {
+      if (_disposed) return null;
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
         status: YorksV1MaterialRequestDraftSyncStatus.failed,
@@ -986,6 +1001,8 @@ class YorksV1MaterialRequestDraftController
       );
       return null;
     }
+
+    if (_disposed) return null;
 
     // The server transition has succeeded. Local cleanup is best effort and
     // must never turn an authoritative submission into a false failure state
@@ -997,6 +1014,7 @@ class YorksV1MaterialRequestDraftController
       // The submitted server record remains authoritative; the next refresh
       // can safely reconcile any stale local recovery copy.
     }
+    if (_disposed) return null;
     state = YorksV1MaterialRequestDraftState(
       draft: state.draft,
       status: YorksV1MaterialRequestDraftSyncStatus.submitted,
@@ -1018,6 +1036,7 @@ class YorksV1MaterialRequestDraftController
     if (draft.serverRecordVersion != 0) return null;
     try {
       final remote = await _repository.getRequest(draft.id);
+      if (_disposed) return null;
       final localLineIds = draft.lines.map((line) => line.id).toSet();
       final sameDraftBoundary =
           remote.state.isDraft &&
@@ -1033,6 +1052,7 @@ class YorksV1MaterialRequestDraftController
         updatedAt: DateTime.now().toUtc(),
       );
       await _persist(rebased);
+      if (_disposed) return null;
       state = YorksV1MaterialRequestDraftState(
         draft: rebased,
         status: YorksV1MaterialRequestDraftSyncStatus.submitting,
@@ -1051,6 +1071,7 @@ class YorksV1MaterialRequestDraftController
     // confirmed submit removes the recoverable draft. Without this barrier a
     // late keystroke write could recreate a draft after submission.
     await _persistQueue;
+    if (_disposed) return;
     final repository = _phase2Repository;
     final syncVersion = state.draft.privateSyncVersion;
     if (requireServerConfirmation && repository != null && syncVersion > 0) {
@@ -1068,7 +1089,7 @@ class YorksV1MaterialRequestDraftController
         )
         .toList(growable: false);
     await _store.writeAll(all);
-    _onLocalDraftsChanged?.call();
+    if (!_disposed) _onLocalDraftsChanged?.call();
     if (!requireServerConfirmation && repository != null && syncVersion > 0) {
       try {
         await repository.deletePrivateDraft(
@@ -1235,7 +1256,7 @@ class YorksV1MaterialRequestDraftController
       }
       if (!found) replaced.add(draft);
       await _store.writeAll(replaced);
-      _onLocalDraftsChanged?.call();
+      if (!_disposed) _onLocalDraftsChanged?.call();
     });
     // Keep the queue usable after an individual local-storage failure while
     // still returning the original error to the caller.

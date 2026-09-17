@@ -2247,6 +2247,48 @@ void main() {
     },
   );
 
+  for (final saveOnly in [false, true]) {
+    for (final failure in <Object?>[
+      null,
+      const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized),
+    ]) {
+      test(
+        'disposed command ignores late result: save=$saveOnly, $failure',
+        () async {
+          final blocker = Completer<void>();
+          final repository = _FakeRequestRepository()
+            ..submitDelay = blocker.future
+            ..submitFailure = failure
+            ..saveDelay = blocker.future
+            ..saveFailure = failure;
+          final store = _MemoryStore<YorksV1MaterialRequestDraft>();
+          final controller = YorksV1MaterialRequestDraftController(
+            ownerAuthUserId: _siteEngineer,
+            draftId: _draftId,
+            store: store,
+            repository: repository,
+            uuidFactory: _Ids().next,
+          );
+          await controller.setProject(_projectId);
+          await controller.setScope(_scopeId);
+          await controller.addCustomLine();
+          await controller.updateLine(
+            controller.currentDraft.lines.single.id,
+            (line) =>
+                line.copyWith(description: 'Duct', quantity: '2', unit: 'Nos'),
+          );
+          final submission = saveOnly
+              ? controller.saveConnected()
+              : controller.submit();
+          controller.dispose();
+          blocker.complete();
+          expect(await submission, isNull);
+          expect(store.readAll(), hasLength(1));
+        },
+      );
+    }
+  }
+
   test(
     'private autosave serializes requests and never restores an older row edit',
     () async {
@@ -2610,9 +2652,9 @@ class _FakeRequestRepository implements YorksV1MaterialRequestRepository {
   Future<YorksV1MaterialRequest> saveDraft(
     YorksV1SaveMaterialRequestDraftInput input,
   ) async {
+    await saveDelay;
     final failure = saveFailure;
     if (failure != null) throw failure;
-    await saveDelay;
     saveInputs.add(input);
     return _request(requestId: input.draft.id, version: 1);
   }
