@@ -99,3 +99,28 @@ Local temporary logs are `/tmp/yorks-race-before.log`,
 
 B1 API reference: [PostgREST error codes](https://docs.postgrest.org/en/stable/references/errors.html).
 A3 commit: `ffef5f4`. B1 focused MR suite: 63 passed.
+
+## Additional safe slice E1
+
+The central lookup detector labelled three typing lookups with two empty results,
+or 15 seconds without selection, as struggle. Both material-request and inventory
+regression cases failed before correction. Removed that speculative detector;
+kept result counts/durations and inventory no-result observations unchanged.
+Historical event enum remains for interpretation/compatibility. Updated the
+analytics contract and proposed dashboard interpretation; no remote edit.
+`flutter test --no-pub test/analytics_service_test.dart`: **17 passed**.
+B1 commit: `83d8aa3`.
+
+C/D inspection so far: MR detail timing wraps a single projection RPC plus
+model decoding, not visible rendering; the summary register is already paged,
+and realtime listens to recipient-filtered notifications with a 20-second
+fallback only while unavailable. Project creation already has stage-specific
+validation and retained inline error state. These code facts do not prove
+acceptable latency or explain the historical validation failures. No speculative
+performance change or validation relaxation is included.
+
+Replay audit: `web/index.html` sets `disable_session_recording: true` and disables
+autocapture and exception capture; native sink sets `sessionReplay = false`.
+Production debug is gated off in `AnalyticsConfiguration`. Actual remote replay
+contents remain unavailable (connector lacks recording-read scope); no setting
+was changed.

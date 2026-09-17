@@ -196,7 +196,6 @@ class GuardedAnalyticsService implements AnalyticsService {
   final List<Future<void> Function()> _backlog = [];
   final Map<String, _RepeatedActionState> _repeatedActions = {};
   final Map<String, _ValidationFailureState> _validationFailures = {};
-  final List<_SearchAttempt> _searchAttempts = [];
   Future<void> _serial = Future<void>.value();
   Future<void>? _initialization;
   bool _ready = false;
@@ -205,10 +204,6 @@ class GuardedAnalyticsService implements AnalyticsService {
   String? _identifiedUserId;
   String? _identifiedRole;
   AnalyticsScreen? _currentScreen;
-  AnalyticsSearchContext? _activeSearchContext;
-  DateTime? _searchSequenceStartedAt;
-  DateTime? _lastSearchAttemptAt;
-  bool _searchStruggleReported = false;
 
   @override
   bool get enabled => _configuration.enabled && !_transportFailed;
@@ -272,11 +267,6 @@ class GuardedAnalyticsService implements AnalyticsService {
     _identityInitialized = true;
     _identifiedUserId = null;
     _identifiedRole = null;
-    _searchAttempts.clear();
-    _activeSearchContext = null;
-    _searchSequenceStartedAt = null;
-    _lastSearchAttemptAt = null;
-    _searchStruggleReported = false;
     _validationFailures.clear();
     _submit(_sink.reset);
   }
@@ -401,25 +391,8 @@ class GuardedAnalyticsService implements AnalyticsService {
     AnalyticsSearchContext context = AnalyticsSearchContext.materialRequest,
   }) {
     if (!enabled) return;
-    final now = _now();
-    if (_activeSearchContext != context ||
-        (_lastSearchAttemptAt != null &&
-            now.difference(_lastSearchAttemptAt!) >
-                const Duration(seconds: 30))) {
-      _searchAttempts.clear();
-      _searchSequenceStartedAt = now;
-      _searchStruggleReported = false;
-    }
-    _activeSearchContext = context;
-    _lastSearchAttemptAt = now;
-    _searchSequenceStartedAt ??= now;
-    _searchAttempts.add(
-      _SearchAttempt(resultCount: resultCount, recordedAt: now),
-    );
-    _searchAttempts.removeWhere(
-      (attempt) =>
-          now.difference(attempt.recordedAt) > const Duration(seconds: 30),
-    );
+    // This runs during typing. No match can be a valid non-stock material;
+    // lookup count and elapsed time do not establish a failed employee task.
     capture(
       context == AnalyticsSearchContext.inventory
           ? AnalyticsEvent.inventorySearched
@@ -441,25 +414,6 @@ class GuardedAnalyticsService implements AnalyticsService {
         },
       );
     }
-
-    final noResultCount = _searchAttempts
-        .where((attempt) => attempt.resultCount == 0)
-        .length;
-    final elapsed = now.difference(_searchSequenceStartedAt!);
-    final struggling =
-        (_searchAttempts.length >= 3 && noResultCount >= 2) ||
-        elapsed >= const Duration(seconds: 15);
-    if (!struggling || _searchStruggleReported) return;
-    _searchStruggleReported = true;
-    capture(
-      AnalyticsEvent.materialSearchStruggleDetected,
-      properties: {
-        AnalyticsProperty.attemptCount: _searchAttempts.length,
-        AnalyticsProperty.noResultCount: noResultCount,
-        AnalyticsProperty.durationMs: elapsed.inMilliseconds,
-        AnalyticsProperty.searchContext: context,
-      },
-    );
   }
 
   void _recordValidationFailure(AnalyticsProperties properties) {
@@ -501,11 +455,8 @@ class GuardedAnalyticsService implements AnalyticsService {
 
   @override
   void recordMaterialSearchSelection() {
-    _searchAttempts.clear();
-    _activeSearchContext = null;
-    _searchSequenceStartedAt = null;
-    _lastSearchAttemptAt = null;
-    _searchStruggleReported = false;
+    // Retained for existing callers; automatic lookups no longer start a
+    // speculative frustration sequence that a selection would need to clear.
   }
 
   @override
@@ -744,13 +695,6 @@ class _ValidationFailureState {
         count: count ?? this.count,
         reported: reported ?? this.reported,
       );
-}
-
-class _SearchAttempt {
-  const _SearchAttempt({required this.resultCount, required this.recordedAt});
-
-  final int resultCount;
-  final DateTime recordedAt;
 }
 
 AnalyticsErrorCategory analyticsErrorCategory(Object error) {

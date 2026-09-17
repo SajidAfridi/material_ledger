@@ -158,36 +158,46 @@ void main() {
     );
   });
 
-  test('search struggle uses counts and never receives the query', () async {
-    analytics.recordMaterialSearch(
-      queryLength: 4,
-      resultCount: 0,
-      duration: const Duration(milliseconds: 50),
+  for (final context in AnalyticsSearchContext.values) {
+    test(
+      'automatic lookup observations do not imply struggle: $context',
+      () async {
+        for (var index = 0; index < 5; index++) {
+          analytics.recordMaterialSearch(
+            queryLength: index + 3,
+            resultCount: index < 3 ? 0 : 2,
+            duration: const Duration(milliseconds: 70),
+            context: context,
+          );
+          now = now.add(const Duration(seconds: 5));
+        }
+        analytics.recordMaterialSearchSelection();
+        await analytics.drain();
+        expect(
+          sink.events.where(
+            (event) => event.name == 'search struggle detected',
+          ),
+          isEmpty,
+        );
+        expect(
+          sink.events.where(
+            (event) =>
+                event.name ==
+                (context == AnalyticsSearchContext.inventory
+                    ? 'inventory searched'
+                    : 'material search completed'),
+          ),
+          hasLength(5),
+        );
+        expect(
+          sink.events
+              .expand((event) => event.properties.values)
+              .whereType<String>(),
+          isNot(contains('duct tape')),
+        );
+      },
     );
-    now = now.add(const Duration(seconds: 1));
-    analytics.recordMaterialSearch(
-      queryLength: 7,
-      resultCount: 0,
-      duration: const Duration(milliseconds: 70),
-    );
-    now = now.add(const Duration(seconds: 1));
-    analytics.recordMaterialSearch(
-      queryLength: 8,
-      resultCount: 2,
-      duration: const Duration(milliseconds: 90),
-    );
-    await analytics.drain();
-
-    final struggle = sink.events.singleWhere(
-      (event) => event.name == 'search struggle detected',
-    );
-    expect(struggle.properties['attempt_count'], 3);
-    expect(struggle.properties['no_result_count'], 2);
-    expect(
-      struggle.properties.values.whereType<String>(),
-      isNot(contains('duct tape')),
-    );
-  });
+  }
 
   test(
     'inventory search emits semantic result events without query text',
