@@ -142,7 +142,7 @@ after the protected server command returns:
 - material return: identifies the return, resulting state and line count.
 
 In Procurement arrangement, the register action is **Review arrangement**.
-Before saving, Procurement can use **Clarify item** to correct the effective
+Before saving, Procurement can use **Edit item details** to correct the effective
 item name or add the model number. Search checks the selected-scope BOQ, the
 wider project BOQ and inventory in that order; Procurement may keep a valid
 custom description. The screen always retains the original Engineering wording

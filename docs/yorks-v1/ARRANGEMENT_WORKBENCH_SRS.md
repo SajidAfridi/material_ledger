@@ -62,7 +62,7 @@ observations, not a live-production or device certification.
 | `didUpdateWidget` / arrangement provider | Same-ID refresh can update request version separately from line state; provider intentionally avoids Realtime-driven editor destruction. Keep immutable edit-base versions and explicitly reconcile newer projections. |
 | Workflow command controller / critical-command key store | Durable per-actor command keys and payload fingerprints already exist. Reuse them; do not create a competing idempotency system. Extend uncertainty recovery where needed. |
 | MR private draft controller | Provides separate accepted-draft and recovery concepts with serialized persistence. Reuse the pattern, not its Engineering-only MR-draft RPC or access policy. |
-| Clarify item and Create inventory item | Real protected commands with distinct effects. Preserve them, including cancellation and ambiguous-result recovery inside nested editors. |
+| Edit item details and Create inventory item | Real protected commands with distinct effects. Preserve them, including cancellation and ambiguous-result recovery inside nested editors. |
 | MR record, discussion, history, documents, logistics | Remain the source of truth. The workbench must not replace or duplicate these modules. |
 
 ### Mandatory functional parity map
@@ -153,7 +153,7 @@ MR approved for Procurement
   -> restore authorized working arrangement + private progress
   -> edit sources, quantities, exceptions and note
        -> Save progress -> continue, or return to the same MR
-       -> Clarify item -> Engineering review -> same preserved workbench
+       -> Edit item details -> Engineering review -> same preserved workbench
        -> Review arrangement -> resolve blocking issues
   -> explicit Save arrangement -> reconcile server result
   -> MR refreshed with confirmed state, owner, next action and history

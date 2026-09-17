@@ -23,7 +23,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
-    'procurement can clarify an item in the unsaved arrangement editor',
+    'procurement can edit item details in the unsaved arrangement editor',
     (tester) async {
       tester.view.physicalSize = const Size(1366, 900);
       tester.view.devicePixelRatio = 1;
@@ -80,7 +80,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Clarify item'));
+      await tester.tap(find.text('Edit item details'));
       await tester.pumpAndSettle();
       expect(find.text('Originally requested'), findsOneWidget);
       expect(
@@ -145,7 +145,7 @@ void main() {
     },
   );
 
-  testWidgets('clarification uses a focused mobile sheet at 360px', (
+  testWidgets('item detail editing uses a focused mobile sheet at 360px', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 800);
@@ -188,7 +188,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Clarify item'));
+    await tester.tap(find.text('Edit item details'));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('procurement-item-description')),
@@ -242,7 +242,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Clarify item'));
+    await tester.tap(find.text('Edit item details'));
     await tester.pumpAndSettle();
     final description = find.byKey(
       const ValueKey('procurement-item-description'),
@@ -324,7 +324,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text('Clarify item'));
+      await tester.tap(find.text('Edit item details'));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('procurement-item-description')),

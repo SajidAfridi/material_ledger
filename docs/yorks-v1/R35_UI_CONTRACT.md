@@ -358,7 +358,7 @@ approval prompt for new requests. Existing legacy post-arrangement approvals
 retain their recorded review UI until resolved.
 
 While that arrangement is still working and unsaved, Procurement may open
-**Clarify item** for a requested line. The editor uses the same ranked
+**Edit item details** for a requested line. The editor uses the same ranked
 selected-scope BOQ, project BOQ and inventory search used during creation,
 allows a valid custom description, and changes only the effective item name and
 model. Original Engineering values remain visibly read-only. The action is
