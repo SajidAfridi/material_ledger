@@ -1,141 +1,172 @@
 # Yorks reliability, performance and usability remediation
 
-Branch: `codex/yorks-reliability-remediation-20260917`.
-Starting commit: `1b497e8`. Starting worktree: clean.
-Scope: local implementation and tests; remote inspection read-only. No merge,
-deployment, live migration, operational transaction or remote setting change.
+Branch: `codex/yorks-reliability-remediation-20260917`; starting clean HEAD
+`1b497e8`. Local implementation and synthetic fixtures only. Production and
+staging inspection was read-only. No deployment, merge, live migration, live
+operational write, analytics-setting change or new replay collection.
 
-## Evidence and interpretation
+## Evidence boundary
 
-Read the three supplied 17 September evidence files and both implementation
-requests. Snapshot cutoff is **2026-09-17 14:40 UTC**, not a release diagnosis.
-Follow the current Yorks authority, including approval before arrangement and
-separate Submit/Approve creation commands. Manual/non-stock entry is valid;
-lookup misses and typing are not failed tasks. Material Master is deferred.
+Both supplied implementation requests and all three 17 September evidence files
+were read. The historical snapshot ends **2026-09-17 14:40 UTC**. Current Yorks
+contracts govern, including approval before arrangement and separate creation
+Submit/Approve commands. Manual/non-stock materials remain valid. Material Master
+is deferred. GeoIP is not travel evidence; another engineer may be a support user.
 
-Live read-only checks on 17 September:
+Live read-only checks reconfirmed active production `czykuksmlwswjsgotrpo`, staging
+`iqltcyimlqtcwyzlemwx`, PostHog project 600792/UTC, and the owner-test person
+`05dbd5b8-c16b-5f15-8909-1a320b3b8a50`. Exclude that resolved person and linked
+anonymous events in analysis only, not all admins or normal app behavior.
 
-- Supabase lists production `czykuksmlwswjsgotrpo` and staging
-  `iqltcyimlqtcwyzlemwx` as active. No staging data was changed.
-- PostHog project 600792 is UTC. Targeted Auth lookup and event identity lookup
-  reconfirmed owner test person `05dbd5b8-c16b-5f15-8909-1a320b3b8a50`.
-  Exclude that person, including linked anonymous events, only in analysis.
-- Production schema-v2 MR submission failures from 13:00 to 14:40 UTC reproduce
-  13 permission-category and 8 network-category events; network durations are
-  20,002–20,023 ms. These are client categories, not original server codes.
-- Narrow server idempotency inspection for the affected actor returned **four
-  completed outer save-and-submit commands for four distinct request IDs** in
-  that interval, each with its nested submit. Nested rows are not duplicates.
-  Their completion times were 13:12:03, 13:34:55, 13:51:10 and 14:04:58 UTC.
-  No client operation key exists in these events, so individual failed attempts
-  cannot be conclusively reconciled. No duplicate or lost MR is asserted.
-- Live function definitions confirm actor/command/key-scoped idempotency,
-  canonical payload hashing and transaction advisory locking. Wrapper replay
-  precedes project-access rechecks: audit revoked-access replay before adding
-  automatic write retries. No retry or policy change is included here.
-- Other-account support/testing remains uncertain. GeoIP is not travel or
-  compromise evidence. This is incident debugging, not a governed KPI.
+The historical submission sample reproduced 13 permission-category and eight
+network-category attempts (20,002–20,023 ms). Raw server error codes and logical
+operation keys are absent. A narrowly scoped server read found four completed
+outer submissions for four distinct requests at 13:12:03, 13:34:55, 13:51:10 and
+14:04:58 UTC. Their nested command rows are not duplicates. Individual client
+failures cannot be matched to those commits; no lost or duplicate MR is asserted.
+The recorded dispatch failure at 07:55:46 UTC has only category `database`, role
+`procurement`, and no duration/operation on the business event. It does not
+identify a stock, permission or SQL cause. No historical writes were replayed.
 
-## Batch tracker
+The actual historical deployed Git revision remains unavailable from the supplied
+version 1.0.0/build 1 telemetry. New release identity does not backfill that gap.
 
-| Finding | Evidence / verified cause | Status / change | Regression / remaining risk / next action |
+## Findings and bounded changes
+
+| Finding | Verified cause | Change / status | Regression and remaining boundary |
 |---|---|---|---|
-| A1: Background recovery overwrites pending or completed submission | Three fault-injection tests failed before the fix: late private sync success, conflict, and transport failure replaced `submitting`. A late success could also persist a cleared draft. | Fixed and tested locally: connected commands supersede older recovery callbacks, cancel queued autosave, and prevent pending edits from changing the intent. | Five new tests; full MR suite 53 passed. No claim this caused historical denials/timeouts. Test full gate before release. |
-| A2: Twenty-second submission outcomes are ambiguous | Repository `.timeout(20s)` wraps the RPC without transport cancellation; controller reduces it to backend-unavailable/failed. | Confirmed code behavior; recovery implementation pending. | Keep timeout unchanged. Add explicit unknown state and bounded authorized status reconciliation; verify payload/key and revoked-access semantics first. |
-| A3: Late command after disposal/account change | Two fault-injection tests reproduced disposed-controller exceptions for success and denial. | Fixed and tested locally for disposal: late command callbacks return without state/navigation outcome or draft cleanup; stale provider notifications are suppressed. | MR suite 57 passed; cross-account browser walkthrough remains unverified. No automatic resubmit. |
-| B: Permission-category incident | Raw codes absent from historical analytics; four successful server commits do not explain 13 denials. | Insufficient evidence for an RLS change. | Trace scoped membership, original server codes and replay authorization; preserve intended denials. |
-| B1: JWT failures misclassified | Four mapping tests reproduced `28000` as denied and `PGRST301/302/303` as server rejection. | Fixed locally: map explicit authentication codes to unauthenticated; keep 42501 denied and PGRST300 server configuration failure. | Six mapping cases, MR suite 63 passed. No RLS/grants change or claim about the historical denials. |
-| C: Procurement MR load, Inventory, Projects, Dashboard | Snapshot client p95s only; no comparable request trace or SQL plan yet. | Investigation pending. | Measure release/profile fixtures, request counts/bytes and primary-content readiness before optimization; inspect dispatch failure separately. |
-| D: Forms, navigation, lookup | Project validation counts do not identify invalid fields; manual material entry is expected behavior. | Investigation pending. | Reproduce conditional validation and navigation recovery; desktop/360px evidence required for presentation changes. |
-| E: Telemetry and release identity | Historical metadata is 1.0.0/build 1; wrapped timeouts become network. | Investigation pending. | Preserve timers, add real build identity and controlled outcomes; verify replay-off code and blocked delivery. |
+| A1: Late private recovery overwrites submission | Three failing fault-injection tests: sync success/conflict/transport replaced submitting state; late callbacks could restore cleared drafts. | Fixed-and-tested-locally, `ad374fc`: generation guards, cancel queued sync, freeze pending edits. | Five race tests; not claimed as the historical timeout/denial cause. |
+| A3: Disposed/account-changed command callbacks | Two failing disposal tests; later identity tests exercise owner changes. | Fixed-and-tested-locally, `ffef5f4` and `688935a`: ignore inactive callbacks, preserve original owner's recovery. | Save/submit success and denial disposal, status-read disposal/account switch. Full cross-account browser journey still pending. |
+| B1: Authentication classified as authorization/server failure | Four failing mapping tests for 28000 and PGRST301/302/303. | Fixed-and-tested-locally, `83d8aa3`: explicit unauthenticated mapping; 42501 stays forbidden, PGRST300 stays server configuration. | Six mapping cases. Does not explain the historical thirteen denials. |
+| A2: Timeout treated as known failure | `.timeout(20s)` stops waiting without cancelling the source future. | Fixed-and-tested-locally, `688935a`: durable account-owned intent marker, outcome unknown, explicit bounded status read, explicit same-key/payload/mode retry only after authorized unconfirmed lookup. | Before/after-commit response loss, reload, frozen edits, duplicate interactions, denied lookup/retry, stale identity. No automatic write retry or timeout increase. Returned/edit-before-approval flow is unchanged. |
+| B2: Revoked user can replay cached success | Local before-test expected 42501 but received cached response. | Fixed-and-tested-locally, `5c6b70c`: replay rechecks current authorization; read-only result RPC binds original actor, command, key, hash, request, project and creator; current role-safe projection. | 23 focused pgTAP assertions; full 2,779 database assertions; two real concurrent sessions return one request and preserve side-effect counts. Live migration awaits authorization. |
+| D1: Project Review loses inline validation on returning to invalid stage | Two before-failing desktop/mobile tests: `_setStage` cleared errors just presented. | Fixed-and-tested-locally, `21e71d4`: present validation after navigation. | Invalid date remains inline after toast expires; values preserved and no create RPC. No requirement removed. No claim that this explains all historical validation attempts. |
+| E1: Automatic lookups labelled as struggle | Two before-failing tests for three typing lookups/two misses or 15-second delay. | Fixed-and-tested-locally, `d994b35`: remove speculative detector; preserve duration/count/availability observations and historical enum. | Manual entry remains allowed. No material text sent. |
+| E2: Release metadata cannot distinguish builds | Launcher lacked checkout revision context. | Fixed-and-tested-locally, `07a4fdd`: actual Git hash, dirty suffix, actual build mode; direct builds report unknown. | Two isolated-repository launcher tests; no operator label accepted. Version/build and timer boundaries unchanged. |
+| E3: Wrapped timeout category and outcomes | Domain wrapper obscured TimeoutException; attempt failure did not express uncertainty. | Fixed-and-tested-locally, `688935a`: observed timeout category, unknown outcome, separate unconfirmed/reconciled events. | Privacy-safe allowlist and taxonomy tests; no raw exceptions/payload/key sent. No correlation backfill; compare release cohorts only. |
+| B/C/D remaining incidents | Historical normalized categories lack request traces, fields and original codes. | Insufficient-evidence for further permission, query, stock or validation changes. | Obtain representative local/profile request traces and original authorized incident codes; do not change RLS or indexes from event counts. |
 
-## Verification record
+## Investigation without speculative changes
 
-- Flutter 3.48.0-1.0.pre-44 (`9c71d30c3f`); Dart 3.13.1.
-- Before fix: three new pending-submission race tests failed with the expected
-  wrong states (`savedToAccount`, `conflict`, `local`).
-- After fix: `flutter test test/yorks_v1_material_request_test.dart`: **53 pass**.
-- Online `flutter pub get` stalled resolving dependencies; stopped after over
-  two minutes. `flutter pub get --offline`: **pass**, cached locked dependencies.
-- A1 full gate: analyzer passed; 1,720 tests passed; release web build passed
-  its existing startup budget (main JS 10,117,462 bytes, gzip 2,734,676 bytes).
-  These are artifact sizes, not end-user latency measurements.
-- A3: two disposal tests failed before the fix, then MR suite **57 passed**, including save and submit disposal coverage.
-  Final analyzer/suite/build results after later changes remain pending.
-- Supabase CLI is absent from PATH; Docker CLI exists but its daemon/socket is
-  unavailable. Local database reset/pgTAP not run. No privileged SQL read is
-  treated as a role test. No database files have been changed.
-- Official Dart timeout contract confirms late source completion is possible:
-  [Future.timeout](https://api.dart.dev/dart-async/Future/timeout.html).
-  Supabase changelog web fetch rejected its content type; shell fetch stalled
-  and was stopped. No new SDK/database API was selected from unverified docs.
+- MR detail timer uses one `v1_material_request_projection` RPC plus model decode;
+  it does not measure visible rendering. Register summaries are already paged.
+  Recipient-filtered notification realtime triggers refresh; 20-second fallback
+  applies while realtime is unavailable. No refetch defect is proved by counts.
+- The central operation timer is per-operation and monotonic; browser scheduling
+  and network wait remain inside client duration. No timer boundaries changed.
+- Project validation is already stage-specific; the confirmed error-reset defect
+  is separate from missing/conditional-field rules. Full keyboard focus-to-first-
+  invalid-field and conditional-field matrix remain acceptance work.
+- Auth password attempts terminate after authentication/profile materialization;
+  restoration uses a separate event. Delivery loss, browser closure and unexpected
+  materialization errors remain unresolved instrumentation cases. No missing
+  terminal event is labelled a failed login.
+- Analytics delivery stays centralized/best-effort. Replay is disabled in web
+  (`disable_session_recording: true`, no autocapture/exception capture) and native
+  (`sessionReplay = false`); production debug is off. Connector recording scope
+  was unavailable, so no remote recording-content claim or setting edit.
 
-## Release and rollback
+## Verification and measurements
 
-No release is authorized by this task. For A1 alone there is no migration,
-API change, new dependency or flag; old clients remain compatible. After full
-local checks and desktop/mobile state evidence, review the commit and obtain
-separate staging/deployment approval. Roll back by reverting the A1 commit and
-rebuilding through the existing signed release process; no data rollback.
-This reintroduces the recovery race, so prefer a tested forward fix.
+Environment: Flutter 3.48.0-1.0.pre-44 (`9c71d30c3f`), Dart 3.13.1,
+Supabase CLI 2.117.0 through cached `npx --offline`, local PostgreSQL 17.6/Docker.
+Online `flutter pub get` stalled and was stopped; `flutter pub get --offline`
+passed using locked cached dependencies. Docker was initially stopped, then the
+local stack was started and explicitly reset with `--local`, never `--linked`.
 
-Post-release: compare like-for-like production schema-v2 operation samples,
-with the revalidated owner-person exclusion, exact UTC windows, release and
-sample counts. Report attempted submissions separately from confirmed server
-outcomes and unresolved attempts. Do not add reliability errors to operation
-failures or sum daily unique users. Verify no pending-state regressions and
-preserved drafts with named scoped synthetic users before broader rollout.
+- Analyzer passed before the final Project validation slice; final gate below.
+- A2 full Flutter suite: **1,747 passed**. The new full-form desktop/mobile tests
+  separately passed after moving recovery controls above the scrolling form.
+  An earlier run exposed two ownerless test fixtures; their explicit synthetic
+  identity was corrected, without weakening the production guard.
+- `supabase db reset --local`: passed, including the proposed migration/seed.
+  `supabase test db`: **96 files, 2,779 assertions passed** (100 seconds).
+  Reapplying the migration directly to the local DB also passed.
+- Local two-connection probe: two identical commands returned one header/line;
+  one outer key, one audit event, three recipient notifications. Another result
+  read and replay left all counts unchanged. See [probe result](evidence/2026-09-17/mr-concurrency.json)
+  and [reproduction script](../../test/support/yorks_mr_reconciliation_concurrency.py).
+- Recovery panel screenshot/interaction coverage: desktop 1366 and mobile 360,
+  English/Arabic at 1.5x text, 44px targets, checking disables actions, no retry
+  before allowed. Full form screenshots at 1366x768 and 360x800 verify visible
+  status action and preserved fields. This is not full accessibility compliance.
+- A2 CI web release build and startup budget passed: main JS **10,126,866 bytes**,
+  gzip **2,736,847**; A1 baseline 10,117,462 / 2,734,676. Size increase is not a
+  performance improvement. CI Android passed, 105.1 MB, **ephemeral CI signing**;
+  it is not a production-signed artifact. Final source gate remains below.
+- No comparable production before/after latency, transfer, or rendering sample
+  exists. No speedup or compute benefit is claimed. Local fixtures do not model
+  production data volume or latency percentiles.
 
-## Resume point
+## Review, rollout and rollback
 
-A1 commit: `ad374fc`. A3 follows as a separate commit. A2 needs a tested
-reconciliation/access design; continue independent safe investigation while
-the local database environment is unavailable. Then B, C, D and E in order.
-Do not present this tracker or one controller fix as completion of all batches.
-Local temporary logs are `/tmp/yorks-race-before.log`,
-`/tmp/yorks-mr-after.log`, `/tmp/yorks-pub-get.log`,
-`/tmp/yorks-pub-offline.log`, `/tmp/yorks-analyze.log`, and
-`/tmp/yorks-full-tests.log` (copy relevant evidence before final handoff).
+1. Review commits in this branch; no PR was opened, pushed, merged or deployed.
+2. Review migration `20260917154516_material_request_submission_reconciliation.sql`
+   separately. It changes function definitions only; strict anchors abort on
+   definition drift, no backfill/index/data rewrite, original write locks remain.
+3. With separate explicit staging authorization, apply the migration **before**
+   the client. Repeat PE/Site/Procurement/Admin checks using synthetic accounts,
+   revoked membership, dropped response, concurrent same-intent retry, account
+   switch, reload and commercial-safe projection. Older backend lookup failure
+   safely preserves unknown state but is not a usable rollout acceptance.
+4. Build the reviewed clean revision through `tool/r35.sh`; validate matching
+   `release_id`/build mode, web assets/routes and a properly signed Android lane.
+   Employee browser/device acceptance and authorized production rollout remain.
+5. Application rollback should retain the compatible read RPC and stricter
+   replay guards. Do not revert clients while unresolved recovery drafts exist:
+   older clients do not understand the marker. Reconcile them or forward-fix.
+   Never delete key, audit, notification or workflow history. See the detailed
+   [migration/rollback contract](../yorks-v1/MIGRATION_AND_ROLLBACK_PLAN.md).
+6. After authorized release, use [query templates](evidence/2026-09-17/post-release-query-templates.json).
+   Replace every UTC/release placeholder, revalidate owner-person mapping, retain
+   `filterTestAccounts: true`, the exact owner-person exclusion, production and
+   schema-v2 filters. Templates are prepared, not executed against a new release.
+   Compare equal windows/releases, report samples and affected identities, and
+   separate attempts, confirmed business outcomes and unresolved outcomes.
+   Never sum failure streams, daily uniques or unrelated cross-role funnels.
 
-B1 API reference: [PostgREST error codes](https://docs.postgrest.org/en/stable/references/errors.html).
-A3 commit: `ffef5f4`. B1 focused MR suite: 63 passed.
+## Current handoff / next bounded work
 
-## Additional safe slice E1
+The final verification and local browser results are recorded below as they
+complete. Remaining acceptance: authenticated Chrome/Edge procurement review
+trace with representative synthetic volume (RPC count/bytes/wait/decode/render),
+then Inventory/Projects/Dashboard; dispatch original server-code evidence;
+conditional Project validation/focus recovery; stale search/reconnect navigation
+and tablet/device walkthrough. No speculative performance or authorization fix
+is justified by the current historical evidence. No background work is implied.
 
-The central lookup detector labelled three typing lookups with two empty results,
-or 15 seconds without selection, as struggle. Both material-request and inventory
-regression cases failed before correction. Removed that speculative detector;
-kept result counts/durations and inventory no-result observations unchanged.
-Historical event enum remains for interpretation/compatibility. Updated the
-analytics contract and proposed dashboard interpretation; no remote edit.
-`flutter test --no-pub test/analytics_service_test.dart`: **17 passed**.
-B1 commit: `83d8aa3`.
 
-C/D inspection so far: MR detail timing wraps a single projection RPC plus
-model decoding, not visible rendering; the summary register is already paged,
-and realtime listens to recipient-filtered notifications with a 20-second
-fallback only while unavailable. Project creation already has stage-specific
-validation and retained inline error state. These code facts do not prove
-acceptable latency or explain the historical validation failures. No speculative
-performance change or validation relaxation is included.
+## Final verification record
 
-Replay audit: `web/index.html` sets `disable_session_recording: true` and disables
-autocapture and exception capture; native sink sets `sessionReplay = false`.
-Production debug is gated off in `AnalyticsConfiguration`. Actual remote replay
-contents remain unavailable (connector lacks recording-read scope); no setting
-was changed.
+- Final source analyzer: **pass**, no issues; all 17 changed Dart files pass
+  `dart format --output=none --set-exit-if-changed`.
+- Final complete Flutter suite: **1,751 passed**. Project Creation focused suite
+  also passed all 23 tests after the two before-failing validation cases.
+- Final local database gate: **2,779 passed**; no database changes followed it
+  other than successful repeat application of the same idempotent migration and
+  the synthetic concurrent-call probe.
+- Chrome 152 / local profile build: login rendered. A synthetic Procurement
+  sign-in returned local Auth HTTP 200, but the UI remained on login with a busy
+  indicator during the bounded observation. See [observed state](evidence/2026-09-17/local-chrome-auth-pending.png).
+  Auth success is not workspace readiness. Authenticated procurement/Edge/mobile
+  browser acceptance and trustworthy performance measurement remain blocked by
+  this unresolved local sign-in/materialization path. Do not label it a production
+  regression or bypass release-security checks. Next bounded task: isolate that
+  path against the baseline and collect sanitized Auth/profile HTTP timings.
+- The local HTTP release build correctly failed closed. The browser used an
+  explicit loopback-only profile configuration with PostHog off; no remote
+  analytics delivery or production operational write was used for the smoke test.
+- Task browser and profile/HTTP servers were stopped. Local Docker database/API
+  containers remain available for reproducing the synthetic tests.
 
-## Additional safe slice E2
+Final CI web build: **pass**, main JS 10,126,866 bytes, gzip 2,736,848 bytes;
+startup budget retained. Sanitized gate excerpts are in
+[verification.txt](evidence/2026-09-17/verification.txt). Source commit is
+`21e71d4`; build metadata truthfully includes `-dirty` because documentation and
+evidence were being finalized. No application source changed after that commit.
 
-R35 now injects the checkout's full Git revision and marks uncommitted builds
-`-dirty`. Central telemetry adds validated `release_id` and actual `build_mode`;
-app version/build and existing operation timers remain unchanged. Direct builds
-without metadata honestly report unknown. No names, paths, keys or content are
-used as release labels. Two synthetic-repository launcher tests verify clean
-and dirty revisions and rejection of an operator label; 19 analytics tests pass.
-E1 commit: `d994b35`.
-
-The A3-era CI Android build passed (105.1 MB), using the required **ephemeral CI
-certificate**, not a production signing identity. Gradle/AGP/Kotlin emitted
-future-support warnings; dependencies were not upgraded in this task. Rebuild
-final source before treating it as the final candidate.
+Final CI Android rebuild: **pass**, 105.1 MB, 42.8 seconds, ephemeral signing.
+[Artifact hashes](evidence/2026-09-17/artifacts.json) identify the locally tested
+CI outputs; they are not deployed or approved production artifacts. All final
+source gates passed. The outstanding browser and production checks above remain
+release blockers, so this is **ready for code review, not production-verified**.

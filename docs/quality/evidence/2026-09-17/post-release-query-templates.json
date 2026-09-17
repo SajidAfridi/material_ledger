@@ -1,0 +1,285 @@
+{
+  "E4_workflow_events": {
+    "dateRange": {
+      "date_from": "REPLACE_WITH_APPROVED_ROLLOUT_START_UTC",
+      "date_to": "REPLACE_WITH_EXACT_WINDOW_END_UTC"
+    },
+    "filterTestAccounts": true,
+    "properties": [
+      {
+        "type": "hogql",
+        "key": "person_id != '05dbd5b8-c16b-5f15-8909-1a320b3b8a50'"
+      },
+      {
+        "key": "environment",
+        "type": "event",
+        "operator": "exact",
+        "value": "production"
+      },
+      {
+        "key": "schema_version",
+        "type": "event",
+        "operator": "exact",
+        "value": "2"
+      },
+      {
+        "key": "release_id",
+        "type": "event",
+        "operator": "exact",
+        "value": "REPLACE_WITH_VERIFIED_FULL_GIT_REVISION"
+      }
+    ],
+    "interval": "day",
+    "series": [
+      {
+        "event": "material request started",
+        "math": "total"
+      },
+      {
+        "event": "material request submit attempted",
+        "math": "total"
+      },
+      {
+        "event": "material request submitted",
+        "math": "total"
+      },
+      {
+        "event": "material request submission failed",
+        "math": "total"
+      },
+      {
+        "event": "material request approved",
+        "math": "total"
+      },
+      {
+        "event": "procurement started",
+        "math": "total"
+      },
+      {
+        "event": "procurement action completed",
+        "math": "total"
+      },
+      {
+        "event": "procurement action failed",
+        "math": "total"
+      },
+      {
+        "event": "dispatch completed",
+        "math": "total"
+      },
+      {
+        "event": "dispatch failed",
+        "math": "total"
+      },
+      {
+        "event": "receipt review completed",
+        "math": "total"
+      },
+      {
+        "event": "project created",
+        "math": "total"
+      },
+      {
+        "event": "project creation failed",
+        "math": "total"
+      },
+      {
+        "event": "project updated",
+        "math": "total"
+      },
+      {
+        "event": "material request submission unconfirmed",
+        "math": "total"
+      },
+      {
+        "event": "material request submission reconciled",
+        "math": "total"
+      }
+    ]
+  },
+  "E5_operation_outcomes": {
+    "dateRange": {
+      "date_from": "REPLACE_WITH_APPROVED_ROLLOUT_START_UTC",
+      "date_to": "REPLACE_WITH_EXACT_WINDOW_END_UTC"
+    },
+    "filterTestAccounts": true,
+    "properties": [
+      {
+        "type": "hogql",
+        "key": "person_id != '05dbd5b8-c16b-5f15-8909-1a320b3b8a50'"
+      },
+      {
+        "key": "environment",
+        "type": "event",
+        "operator": "exact",
+        "value": "production"
+      },
+      {
+        "key": "schema_version",
+        "type": "event",
+        "operator": "exact",
+        "value": "2"
+      },
+      {
+        "key": "release_id",
+        "type": "event",
+        "operator": "exact",
+        "value": "REPLACE_WITH_VERIFIED_FULL_GIT_REVISION"
+      }
+    ],
+    "interval": "day",
+    "series": [
+      {
+        "event": "operation completed",
+        "math": "total",
+        "custom_name": "Successes",
+        "properties": [
+          {
+            "key": "success",
+            "type": "event",
+            "operator": "exact",
+            "value": "true"
+          }
+        ]
+      },
+      {
+        "event": "operation completed",
+        "math": "total",
+        "custom_name": "Failures",
+        "properties": [
+          {
+            "key": "success",
+            "type": "event",
+            "operator": "exact",
+            "value": "false"
+          }
+        ]
+      }
+    ],
+    "breakdownFilter": {
+      "breakdowns": [
+        {
+          "property": "operation",
+          "type": "event"
+        }
+      ],
+      "breakdown_limit": 25
+    }
+  },
+  "E6_operation_timings": {
+    "dateRange": {
+      "date_from": "REPLACE_WITH_APPROVED_ROLLOUT_START_UTC",
+      "date_to": "REPLACE_WITH_EXACT_WINDOW_END_UTC"
+    },
+    "filterTestAccounts": true,
+    "properties": [
+      {
+        "type": "hogql",
+        "key": "person_id != '05dbd5b8-c16b-5f15-8909-1a320b3b8a50'"
+      },
+      {
+        "key": "success",
+        "type": "event",
+        "operator": "exact",
+        "value": "true"
+      },
+      {
+        "key": "environment",
+        "type": "event",
+        "operator": "exact",
+        "value": "production"
+      },
+      {
+        "key": "schema_version",
+        "type": "event",
+        "operator": "exact",
+        "value": "2"
+      },
+      {
+        "key": "release_id",
+        "type": "event",
+        "operator": "exact",
+        "value": "REPLACE_WITH_VERIFIED_FULL_GIT_REVISION"
+      }
+    ],
+    "interval": "day",
+    "series": [
+      {
+        "event": "operation completed",
+        "math": "median",
+        "math_property": "duration_ms"
+      },
+      {
+        "event": "operation completed",
+        "math": "p95",
+        "math_property": "duration_ms"
+      }
+    ],
+    "breakdownFilter": {
+      "breakdowns": [
+        {
+          "property": "operation",
+          "type": "event"
+        }
+      ],
+      "breakdown_limit": 25
+    }
+  },
+  "E7_latest_errors": {
+    "dateRange": {
+      "date_from": "REPLACE_WITH_APPROVED_ROLLOUT_START_UTC",
+      "date_to": "REPLACE_WITH_EXACT_WINDOW_END_UTC"
+    },
+    "filterTestAccounts": true,
+    "properties": [
+      {
+        "type": "hogql",
+        "key": "person_id != '05dbd5b8-c16b-5f15-8909-1a320b3b8a50'"
+      },
+      {
+        "key": "environment",
+        "type": "event",
+        "operator": "exact",
+        "value": "production"
+      },
+      {
+        "key": "schema_version",
+        "type": "event",
+        "operator": "exact",
+        "value": "2"
+      },
+      {
+        "key": "release_id",
+        "type": "event",
+        "operator": "exact",
+        "value": "REPLACE_WITH_VERIFIED_FULL_GIT_REVISION"
+      }
+    ],
+    "series": [
+      {
+        "event": "reliability error occurred",
+        "math": "total"
+      },
+      {
+        "event": "reliability error occurred",
+        "math": "dau"
+      }
+    ],
+    "breakdownFilter": {
+      "breakdowns": [
+        {
+          "property": "operation",
+          "type": "event"
+        },
+        {
+          "property": "error_category",
+          "type": "event"
+        }
+      ],
+      "breakdown_limit": 30
+    },
+    "trendsFilter": {
+      "display": "ActionsTable"
+    }
+  }
+}
