@@ -202,7 +202,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                 )
               : null,
           onCreateCompany: companyRequestsEnabled
-              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequestNew)
+              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequests)
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () {},
@@ -245,7 +245,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                 )
               : null,
           onCreateCompany: companyRequestsEnabled
-              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequestNew)
+              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequests)
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () => ref.invalidate(yorksV1MaterialRequestListProvider),
@@ -506,7 +506,7 @@ class _YorksMobileMaterialRequestsPageState
                       : null,
                   onCreateCompany: companyRequestsEnabled
                       ? () => context.push(
-                          RoutePaths.yorksV1CompanyMaterialRequestNew,
+                          RoutePaths.yorksV1CompanyMaterialRequests,
                         )
                       : null,
                   onOpen: (request) =>

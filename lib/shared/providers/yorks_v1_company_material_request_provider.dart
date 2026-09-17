@@ -23,3 +23,19 @@ final yorksV1CompanyMaterialRequestDraftOptionsProvider =
           .watch(yorksV1CompanyMaterialRequestRepositoryProvider)
           .listDraftOptions();
     });
+
+final yorksV1CompanyMaterialRequestApprovalInboxProvider =
+    FutureProvider.autoDispose<
+      List<YorksV1CompanyMaterialRequestApprovalInboxItem>
+    >((ref) {
+      return ref
+          .watch(yorksV1CompanyMaterialRequestRepositoryProvider)
+          .listApprovalInbox();
+    });
+
+final yorksV1CompanyMaterialRequestProvider = FutureProvider.autoDispose
+    .family<YorksV1CompanyMaterialRequest, String>((ref, requestId) {
+      return ref
+          .watch(yorksV1CompanyMaterialRequestRepositoryProvider)
+          .getRequest(requestId);
+    });

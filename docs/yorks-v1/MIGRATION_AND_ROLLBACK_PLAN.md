@@ -1169,3 +1169,22 @@ idempotency, notification, audit or request history. Do not roll clients back
 while employees have unresolved recovery drafts: old clients do not understand
 the marker and may edit the intent. Reconcile those drafts first or forward-fix.
 No remote migration or deployment is authorized by the implementation task.
+
+## 20260917185345 — Company Material Request independent approval
+
+Additive relation and function migration. Existing T01 request IDs, company
+references, line IDs, route/policy snapshots, timestamps and events are
+preserved. The request-state and event constraints are expanded; no existing
+row is rewritten or backfilled. Decision evidence is append-only and has no
+authenticated table privileges.
+
+Validate through a clean local reset and the focused approval pgTAP file before
+the complete database suite. The application must ship with the existing
+Company Material Request flag still default-off until the broader lifecycle
+contract and staged acceptance are approved.
+
+Rollback restores the prior application artifact and disables the feature
+flag. Retain the new states, decision rows, events and notifications. Never
+delete a recorded decision or remap an approved company request into a project
+request. Use a forward migration for corrections. No remote migration or
+deployment is authorized by this implementation slice.

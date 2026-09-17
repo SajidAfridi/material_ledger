@@ -80,6 +80,7 @@ class YorksV1NotificationRecord {
     final resolvedProjectId = projectId?.trim() ?? '';
     final resolvedChatConversationId = chatConversationId?.trim() ?? '';
     final isMaterialReturn = entityType == 'material_return';
+    final isCompanyMaterialRequest = entityType == 'company_material_request';
     final isMaterialRequestCommentMention =
         eventCode == 'material_request_mentioned' &&
         entityType == 'chat_message' &&
@@ -106,6 +107,8 @@ class YorksV1NotificationRecord {
           ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
           : isMaterialReturn
           ? RoutePaths.yorksV1MaterialReturnPath(entityId)
+          : isCompanyMaterialRequest
+          ? RoutePaths.yorksV1CompanyMaterialRequestPath(entityId)
           : resolvedRequestId.isNotEmpty
           ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
           : resolvedProjectId.isNotEmpty &&
@@ -231,6 +234,50 @@ const _requestWorkAssigned = YorksV1NotificationCopy(
 );
 
 const _eventCopy = <String, YorksV1NotificationCopy>{
+  'company_material_request_approval_requested': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request approval required',
+    englishBody: 'A company material request is waiting for your decision.',
+    arabicTitle: 'مطلوب اعتماد طلب مواد الشركة',
+    arabicBody: 'طلب مواد للشركة بانتظار قرارك.',
+    urduTitle: 'کمپنی مٹیریل درخواست کی منظوری درکار ہے',
+    urduBody: 'کمپنی مٹیریل درخواست آپ کے فیصلے کی منتظر ہے۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध की स्वीकृति आवश्यक',
+    hindiBody: 'एक कंपनी सामग्री अनुरोध आपके निर्णय की प्रतीक्षा में है।',
+  ),
+  'company_material_request_approved': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request approved',
+    englishBody: 'Your company material request was approved.',
+    arabicTitle: 'تم اعتماد طلب مواد الشركة',
+    arabicBody: 'تم اعتماد طلب مواد الشركة الخاص بك.',
+    urduTitle: 'کمپنی مٹیریل درخواست منظور',
+    urduBody: 'آپ کی کمپنی مٹیریل درخواست منظور ہو گئی۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध स्वीकृत',
+    hindiBody: 'आपका कंपनी सामग्री अनुरोध स्वीकृत हो गया।',
+  ),
+  'company_material_request_returned': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request changes required',
+    englishBody: 'Your company material request was returned with a reason.',
+    arabicTitle: 'مطلوب تعديل طلب مواد الشركة',
+    arabicBody: 'تمت إعادة طلب مواد الشركة الخاص بك مع السبب.',
+    urduTitle: 'کمپنی مٹیریل درخواست میں تبدیلی درکار ہے',
+    urduBody: 'آپ کی کمپنی مٹیریل درخواست وجہ کے ساتھ واپس کر دی گئی۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध में बदलाव आवश्यक',
+    hindiBody: 'आपका कंपनी सामग्री अनुरोध कारण सहित लौटाया गया।',
+  ),
+  'company_material_request_rejected': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request rejected',
+    englishBody: 'Your company material request was rejected with a reason.',
+    arabicTitle: 'تم رفض طلب مواد الشركة',
+    arabicBody: 'تم رفض طلب مواد الشركة الخاص بك مع السبب.',
+    urduTitle: 'کمپنی مٹیریل درخواست مسترد',
+    urduBody: 'آپ کی کمپنی مٹیریل درخواست وجہ کے ساتھ مسترد کر دی گئی۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध अस्वीकृत',
+    hindiBody: 'आपका कंपनी सामग्री अनुरोध कारण सहित अस्वीकृत किया गया।',
+  ),
   'material_request_approval_required': _requestApprovalRequired,
   'material_request_updated_for_approval': _requestApprovalRequired,
   'material_request_approved_for_arrangement': _requestApprovedForArrangement,

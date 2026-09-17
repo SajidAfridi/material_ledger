@@ -159,8 +159,12 @@ abstract final class RoutePaths {
   static const String yorksV1MaterialRequests = '/yorks/material-requests';
   static const String yorksV1MaterialRequestDraft =
       '/yorks/material-requests/draft/:draftId';
+  static const String yorksV1CompanyMaterialRequests =
+      '/yorks/material-requests/company';
   static const String yorksV1CompanyMaterialRequestNew =
       '/yorks/material-requests/company/new';
+  static const String yorksV1CompanyMaterialRequest =
+      '/yorks/material-requests/company/:requestId';
   static const String yorksV1MaterialRequest =
       '/yorks/material-requests/:requestId';
   static const String yorksV1MaterialRequestArrangement =
@@ -285,6 +289,10 @@ abstract final class RoutePaths {
         ? null
         : {'comment': commentId.trim()},
   ).toString();
+
+  static String yorksV1CompanyMaterialRequestPath(String requestId) =>
+      '/yorks/material-requests/company/$requestId';
+
   static String yorksV1TeamChatPath([String? conversationId]) {
     final id = conversationId?.trim() ?? '';
     return id.isEmpty ? yorksV1TeamChat : '/yorks/team-chat/$id';
@@ -708,7 +716,10 @@ bool? _isYorksV1RouteAllowedForRole(
     // Company-use requests have their own server-authoritative, effective
     // category/unit authorization. Do not make the project-register capability
     // a client-side substitute for that independent boundary.
-    if (path == RoutePaths.yorksV1CompanyMaterialRequestNew) return true;
+    if (path == RoutePaths.yorksV1CompanyMaterialRequests ||
+        path.startsWith('${RoutePaths.yorksV1CompanyMaterialRequests}/')) {
+      return true;
+    }
     final projectId = uri.queryParameters['project_id']?.trim();
     final decision = _hybridRouteAllows(
       permissionResolver,
@@ -1030,7 +1041,10 @@ GoRouter createAppRouter({
           !yorksV1RequestsEnabled) {
         return _yorksV1ProjectFallbackPath();
       }
-      if (path == RoutePaths.yorksV1CompanyMaterialRequestNew &&
+      if ((path == RoutePaths.yorksV1CompanyMaterialRequests ||
+              path.startsWith(
+                '${RoutePaths.yorksV1CompanyMaterialRequests}/',
+              )) &&
           !yorksV1CompanyMaterialRequestsEnabled) {
         return RoutePaths.yorksV1MaterialRequests;
       }
@@ -1566,10 +1580,28 @@ GoRouter createAppRouter({
       ),
       if (yorksV1CompanyMaterialRequestsEnabled)
         GoRoute(
+          path: RoutePaths.yorksV1CompanyMaterialRequests,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            const _DeferredCompanyMaterialRequestScreen(inbox: true),
+          ),
+        ),
+      if (yorksV1CompanyMaterialRequestsEnabled)
+        GoRoute(
           path: RoutePaths.yorksV1CompanyMaterialRequestNew,
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
             const _DeferredCompanyMaterialRequestScreen(),
+          ),
+        ),
+      if (yorksV1CompanyMaterialRequestsEnabled)
+        GoRoute(
+          path: RoutePaths.yorksV1CompanyMaterialRequest,
+          pageBuilder: (context, state) => _yorksV1Slide(
+            state.pageKey,
+            _DeferredCompanyMaterialRequestScreen(
+              requestId: state.pathParameters['requestId'] ?? '',
+            ),
           ),
         ),
       GoRoute(
@@ -2057,7 +2089,13 @@ class _DeferredEngineerProfileScreenState
 /// unopened workflow out of the initial web download without changing its
 /// route or lifecycle behavior.
 class _DeferredCompanyMaterialRequestScreen extends StatefulWidget {
-  const _DeferredCompanyMaterialRequestScreen();
+  const _DeferredCompanyMaterialRequestScreen({
+    this.requestId,
+    this.inbox = false,
+  });
+
+  final String? requestId;
+  final bool inbox;
 
   @override
   State<_DeferredCompanyMaterialRequestScreen> createState() =>
@@ -2088,6 +2126,14 @@ class _DeferredCompanyMaterialRequestScreenState
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&
             !snapshot.hasError) {
+          if (widget.inbox) {
+            return company_material_request.YorksV1CompanyMaterialRequestApprovalInboxScreen();
+          }
+          if (widget.requestId != null) {
+            return company_material_request.YorksV1CompanyMaterialRequestApprovalScreen(
+              requestId: widget.requestId!,
+            );
+          }
           return company_material_request.YorksV1CompanyMaterialRequestScreen();
         }
         if (snapshot.hasError) {

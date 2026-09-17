@@ -54,6 +54,31 @@ void main() {
     expect(notification.title, 'New material request');
   });
 
+  test('company decisions use specific copy and the company request route', () {
+    for (final eventCode in <String>[
+      'company_material_request_approval_requested',
+      'company_material_request_approved',
+      'company_material_request_returned',
+      'company_material_request_rejected',
+    ]) {
+      final notification = YorksV1NotificationRecord.fromRpcJson({
+        'notification_id': '21000000-0000-4000-8000-000000000005',
+        'event_code': eventCode,
+        'entity_type': 'company_material_request',
+        'entity_id': requestId,
+        'request_id': null,
+        'project_id': null,
+        'created_at': '2026-09-18T12:00:00Z',
+        'seen_at': null,
+      }).toAppNotification(AppLanguage.english);
+
+      expect(notification.route, '/yorks/material-requests/company/$requestId');
+      expect(notification.refId, requestId);
+      expect(notification.title, isNot('Yorks workflow update'));
+      expect(notification.body.trim(), isNotEmpty);
+    }
+  });
+
   test('request comment mention opens and identifies the exact comment', () {
     const commentId = '26000000-0000-4000-8000-000000000001';
     final record = YorksV1NotificationRecord.fromRpcJson({

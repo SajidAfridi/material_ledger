@@ -503,3 +503,21 @@ retry after an authorized unconfirmed read. Existing transaction locks/hash
 checks deduplicate a retry even if the first command commits later. A denied
 retry leaves the first attempt unresolved. No server workflow state or stock
 transition is added. Reconciliation does not resubmit or issue side effects.
+
+## Company Material Request T02 approval (18 September 2026)
+
+| State | Actor | Trusted command | Server checks | Result |
+|---|---|---|---|---|
+| `awaiting_company_approval` | snapshotted independent approver | `v1_decide_company_material_request` | active exact identity, non-Procurement role, current explicit category/unit approver authorization, not requester/beneficiary/receiver, expected version, decision/reason shape, idempotency key | one immutable decision and event; state becomes `approved_for_procurement`, `returned_for_changes` or `rejected`; requester notified |
+
+`v1_list_company_material_request_approval_inbox()` returns only pending rows
+assigned to the current actor after the same authorization predicate.
+Authenticated clients have no table privileges on
+`v1_company_material_request_decisions`. The safe projection includes
+`can_decide` and immutable decision history; it adds no commercial, project,
+BOQ or stock fields. A completed request cannot be decided again. An exact
+retry returns the current authorized projection without duplicating evidence.
+
+This is an approval-only candidate behind the existing default-off Company
+Material Request flag. No company fulfilment state or stock command is
+authorized by T02.

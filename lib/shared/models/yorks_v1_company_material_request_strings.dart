@@ -32,6 +32,126 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'کمپنی استعمال',
     hi: 'कंपनी उपयोग',
   );
+  static const approvals = TranslatableString(
+    en: 'Company approvals',
+    ar: 'موافقات الشركة',
+    ur: 'کمپنی منظوریاں',
+    hi: 'कंपनी अनुमोदन',
+  );
+  static const approvalInbox = TranslatableString(
+    en: 'Approval inbox',
+    ar: 'صندوق الموافقات',
+    ur: 'منظوری اِن باکس',
+    hi: 'अनुमोदन इनबॉक्स',
+  );
+  static const approvalInboxDescription = TranslatableString(
+    en: 'Review only the company requests assigned to you.',
+    ar: 'راجع فقط طلبات الشركة المسندة إليك.',
+    ur: 'صرف آپ کو تفویض کردہ کمپنی درخواستوں کا جائزہ لیں۔',
+    hi: 'केवल आपको सौंपे गए कंपनी अनुरोधों की समीक्षा करें।',
+  );
+  static const noApprovals = TranslatableString(
+    en: 'No company requests are waiting for your approval.',
+    ar: 'لا توجد طلبات شركة بانتظار موافقتك.',
+    ur: 'کوئی کمپنی درخواست آپ کی منظوری کی منتظر نہیں۔',
+    hi: 'कोई कंपनी अनुरोध आपकी स्वीकृति की प्रतीक्षा में नहीं है।',
+  );
+  static const reviewRequest = TranslatableString(
+    en: 'Review request',
+    ar: 'مراجعة الطلب',
+    ur: 'درخواست کا جائزہ',
+    hi: 'अनुरोध की समीक्षा करें',
+  );
+  static const requestedBy = TranslatableString(
+    en: 'Requested by',
+    ar: 'مقدم الطلب',
+    ur: 'درخواست کنندہ',
+    hi: 'अनुरोधकर्ता',
+  );
+  static const submittedOn = TranslatableString(
+    en: 'Submitted',
+    ar: 'تم الإرسال',
+    ur: 'جمع کرایا گیا',
+    hi: 'सबमिट किया गया',
+  );
+  static const awaitingApproval = TranslatableString(
+    en: 'Awaiting company approval',
+    ar: 'بانتظار موافقة الشركة',
+    ur: 'کمپنی منظوری کا منتظر',
+    hi: 'कंपनी अनुमोदन की प्रतीक्षा',
+  );
+  static const approvedForProcurement = TranslatableString(
+    en: 'Approved for procurement',
+    ar: 'معتمد للمشتريات',
+    ur: 'پروکیورمنٹ کے لیے منظور شدہ',
+    hi: 'खरीद के लिए स्वीकृत',
+  );
+  static const returnedForChanges = TranslatableString(
+    en: 'Returned for changes',
+    ar: 'معاد للتعديل',
+    ur: 'تبدیلیوں کے لیے واپس',
+    hi: 'बदलाव के लिए लौटाया गया',
+  );
+  static const rejected = TranslatableString(
+    en: 'Rejected',
+    ar: 'مرفوض',
+    ur: 'مسترد',
+    hi: 'अस्वीकृत',
+  );
+  static const approve = TranslatableString(
+    en: 'Approve',
+    ar: 'موافقة',
+    ur: 'منظور کریں',
+    hi: 'स्वीकृत करें',
+  );
+  static const returnForChanges = TranslatableString(
+    en: 'Return for changes',
+    ar: 'إعادة للتعديل',
+    ur: 'تبدیلیوں کے لیے واپس کریں',
+    hi: 'बदलाव के लिए लौटाएँ',
+  );
+  static const reject = TranslatableString(
+    en: 'Reject',
+    ar: 'رفض',
+    ur: 'مسترد کریں',
+    hi: 'अस्वीकार करें',
+  );
+  static const decisionReason = TranslatableString(
+    en: 'Reason',
+    ar: 'السبب',
+    ur: 'وجہ',
+    hi: 'कारण',
+  );
+  static const decisionReasonHint = TranslatableString(
+    en: 'Explain what the requester must change or why this is rejected.',
+    ar: 'وضح ما يجب على مقدم الطلب تعديله أو سبب الرفض.',
+    ur: 'بتائیں درخواست کنندہ کو کیا تبدیل کرنا ہے یا مسترد کرنے کی وجہ۔',
+    hi: 'बताएँ कि अनुरोधकर्ता को क्या बदलना है या अस्वीकृति का कारण क्या है।',
+  );
+  static const approveConfirmTitle = TranslatableString(
+    en: 'Approve this company request?',
+    ar: 'الموافقة على طلب الشركة هذا؟',
+    ur: 'یہ کمپنی درخواست منظور کریں؟',
+    hi: 'इस कंपनी अनुरोध को स्वीकृत करें?',
+  );
+  static const decisionRecorded = TranslatableString(
+    en: 'Company approval decision recorded.',
+    ar: 'تم تسجيل قرار موافقة الشركة.',
+    ur: 'کمپنی منظوری کا فیصلہ ریکارڈ ہو گیا۔',
+    hi: 'कंपनी अनुमोदन निर्णय दर्ज किया गया।',
+  );
+  static const decisionFailed = TranslatableString(
+    en: 'The decision was not recorded. Refresh and try again.',
+    ar: 'لم يتم تسجيل القرار. حدّث وحاول مرة أخرى.',
+    ur: 'فیصلہ ریکارڈ نہیں ہوا۔ ریفریش کرکے دوبارہ کوشش کریں۔',
+    hi: 'निर्णय दर्ज नहीं हुआ। रीफ़्रेश करके फिर प्रयास करें।',
+  );
+  static const decisionHistory = TranslatableString(
+    en: 'Decision history',
+    ar: 'سجل القرارات',
+    ur: 'فیصلوں کی تاریخ',
+    hi: 'निर्णय इतिहास',
+  );
   static const privateDraft = TranslatableString(
     en: 'Private draft',
     ar: 'مسودة خاصة',

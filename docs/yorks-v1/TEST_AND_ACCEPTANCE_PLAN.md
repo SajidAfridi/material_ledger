@@ -1140,3 +1140,25 @@ parity/security results, clean-reset and forward-rollback proof, all required
 Accounts responsive/accessibility states, performance measurements, staged
 Site Engineer/Project Engineer/Accountant/Procurement/Admin E2E and explicit
 production flag-enablement approval.
+
+## Company Material Request T02 local acceptance
+
+The T02 approval candidate must prove all of the following before any release:
+
+1. clean local reset applies the additive migration;
+2. the requester and Procurement cannot decide, and Procurement remains denied
+   even if an erroneous approver authorization exists;
+3. only the snapshotted active approver with a current category/unit grant sees
+   the pending request in the inbox;
+4. stale versions, missing Return/Reject reasons, direct decision-table writes
+   and a second decision fail without partial effects;
+5. exact retries append one decision, event and requester notification;
+6. the safe projection contains `can_decide` and decision evidence without
+   project, BOQ, stock or commercial fields;
+7. the Flutter repository emits the exact narrow RPC payloads; and
+8. the inbox/detail/action states render without overflow at 360px and desktop
+   width, with no optimistic success before the RPC response.
+
+The flag stays off and no production migration/deployment is permitted by this
+acceptance section. Company fulfilment requires separately approved custody,
+quantity, authorization and evidence rules.

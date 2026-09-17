@@ -235,6 +235,96 @@ class YorksV1CompanyMaterialRequestDraft {
   };
 }
 
+enum YorksV1CompanyMaterialRequestDecisionType {
+  approved('approved'),
+  returned('returned'),
+  rejected('rejected');
+
+  const YorksV1CompanyMaterialRequestDecisionType(this.wireValue);
+
+  final String wireValue;
+}
+
+class YorksV1CompanyMaterialRequestDecision {
+  const YorksV1CompanyMaterialRequestDecision({
+    required this.id,
+    required this.decision,
+    required this.requestRecordVersion,
+    required this.decidedByDisplayName,
+    required this.decidedByExactRole,
+    required this.decidedAt,
+    this.reason,
+  });
+
+  final String id;
+  final String decision;
+  final String? reason;
+  final int requestRecordVersion;
+  final String decidedByDisplayName;
+  final String decidedByExactRole;
+  final DateTime decidedAt;
+
+  factory YorksV1CompanyMaterialRequestDecision.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1CompanyMaterialRequestDecision(
+    id: _requiredText(json, 'id'),
+    decision: _requiredText(json, 'decision'),
+    reason: _trimToNull(json['reason']?.toString()),
+    requestRecordVersion: _requiredInt(json, 'request_record_version'),
+    decidedByDisplayName: _requiredText(json, 'decided_by_display_name'),
+    decidedByExactRole: _requiredText(json, 'decided_by_exact_role'),
+    decidedAt:
+        _date(json['decided_at']) ??
+        (throw const FormatException('Missing decided_at')),
+  );
+}
+
+class YorksV1CompanyMaterialRequestApprovalInboxItem {
+  const YorksV1CompanyMaterialRequestApprovalInboxItem({
+    required this.id,
+    required this.requestNumber,
+    required this.recordVersion,
+    required this.state,
+    required this.categoryName,
+    required this.responsibleUnitName,
+    required this.purpose,
+    required this.requesterDisplayName,
+    required this.beneficiaryDisplayName,
+    required this.submittedAt,
+    required this.lineCount,
+  });
+
+  final String id;
+  final String requestNumber;
+  final int recordVersion;
+  final String state;
+  final String categoryName;
+  final String responsibleUnitName;
+  final String purpose;
+  final String requesterDisplayName;
+  final String beneficiaryDisplayName;
+  final DateTime submittedAt;
+  final int lineCount;
+
+  factory YorksV1CompanyMaterialRequestApprovalInboxItem.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1CompanyMaterialRequestApprovalInboxItem(
+    id: _requiredText(json, 'id'),
+    requestNumber: _requiredText(json, 'request_number'),
+    recordVersion: _requiredInt(json, 'record_version'),
+    state: _requiredText(json, 'state'),
+    categoryName: _requiredText(json, 'category_name'),
+    responsibleUnitName: _requiredText(json, 'responsible_unit_name'),
+    purpose: _requiredText(json, 'purpose'),
+    requesterDisplayName: _requiredText(json, 'requester_display_name'),
+    beneficiaryDisplayName: _requiredText(json, 'beneficiary_display_name'),
+    submittedAt:
+        _date(json['submitted_at']) ??
+        (throw const FormatException('Missing submitted_at')),
+    lineCount: _requiredInt(json, 'line_count'),
+  );
+}
+
 class YorksV1CompanyMaterialRequest {
   const YorksV1CompanyMaterialRequest({
     required this.id,
@@ -250,6 +340,8 @@ class YorksV1CompanyMaterialRequest {
     required this.requesterDisplayName,
     required this.requesterExactRole,
     required this.lines,
+    this.canDecide = false,
+    this.decisions = const [],
     this.requestNumber,
     this.scheduledDate,
     this.approver,
@@ -273,6 +365,8 @@ class YorksV1CompanyMaterialRequest {
   final String? approvalPolicyVersion;
   final String? requestNumber;
   final List<YorksV1CompanyMaterialRequestLine> lines;
+  final bool canDecide;
+  final List<YorksV1CompanyMaterialRequestDecision> decisions;
 
   factory YorksV1CompanyMaterialRequest.fromRpcJson(
     Map<String, dynamic> json,
@@ -308,8 +402,12 @@ class YorksV1CompanyMaterialRequest {
       json['approval_policy_version']?.toString(),
     ),
     requestNumber: _trimToNull(json['request_number']?.toString()),
+    canDecide: json['can_decide'] == true,
     lines: _maps(json['lines'])
         .map(YorksV1CompanyMaterialRequestLine.fromRpcJson)
+        .toList(growable: false),
+    decisions: _maps(json['decisions'])
+        .map(YorksV1CompanyMaterialRequestDecision.fromRpcJson)
         .toList(growable: false),
   );
 }

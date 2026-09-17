@@ -14,6 +14,8 @@ import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_company_material_request_provider.dart';
 
+export 'yorks_v1_company_material_request_approval_screens.dart';
+
 enum _CompanyRequestStep { details, items, review }
 
 enum _CompanyRequestExitChoice { save, discard }

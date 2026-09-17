@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_company_material_request_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_company_material_request.dart';
+import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_company_material_request_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_company_material_request_repository.dart';
@@ -297,6 +298,63 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('approval inbox stays usable at 360px', (tester) async {
+    final repository = _CompanyRequestRepository();
+    await _pumpApproval(
+      tester,
+      repository: repository,
+      size: const Size(360, 800),
+      child: const YorksV1CompanyMaterialRequestApprovalInboxScreen(),
+    );
+
+    expect(find.text('Company approvals'), findsOneWidget);
+    expect(find.text('CMR-0001'), findsOneWidget);
+    expect(find.textContaining('Workshop safety stock'), findsOneWidget);
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'goldens/company_requests/after_company_approval_inbox_mobile.png',
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assigned approver confirms one server decision', (tester) async {
+    final repository = _CompanyRequestRepository();
+    await _pumpApproval(
+      tester,
+      repository: repository,
+      size: const Size(1366, 900),
+      child: const YorksV1CompanyMaterialRequestApprovalScreen(
+        requestId: 'c1000000-0000-4000-8000-000000000010',
+      ),
+    );
+
+    expect(find.text('CMR-0001'), findsOneWidget);
+    expect(find.text('Safety helmets'), findsOneWidget);
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'goldens/company_requests/after_company_approval_detail_desktop.png',
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('company-approval-approve')));
+    await tester.pumpAndSettle();
+    expect(find.text('Approve this company request?'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('company-approval-confirm-approve')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.decisionCalls, 1);
+    expect(
+      repository.lastDecision,
+      YorksV1CompanyMaterialRequestDecisionType.approved,
+    );
+    expect(find.text('Company approval decision recorded.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpComposer(
@@ -322,6 +380,36 @@ Future<void> _pumpComposer(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         home: const YorksV1CompanyMaterialRequestScreen(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpApproval(
+  WidgetTester tester, {
+  required _CompanyRequestRepository repository,
+  required Size size,
+  required Widget child,
+}) async {
+  SharedPreferences.setMockInitialValues({'selected_language': 'en'});
+  final preferences = await SharedPreferences.getInstance();
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        yorksV1CompanyMaterialRequestRepositoryProvider.overrideWithValue(
+          repository,
+        ),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: child,
       ),
     ),
   );
@@ -397,6 +485,8 @@ class _CompanyRequestRepository
   int preflightCalls = 0;
   int submitCalls = 0;
   int saveCalls = 0;
+  int decisionCalls = 0;
+  YorksV1CompanyMaterialRequestDecisionType? lastDecision;
 
   static const _person = YorksV1CompanyMaterialRequestPerson(
     authUserId: '10000000-0000-4000-8000-000000000002',
@@ -481,4 +571,88 @@ class _CompanyRequestRepository
     required int expectedVersion,
     required String idempotencyKey,
   }) => Future.error(UnimplementedError());
+
+  @override
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>
+  listApprovalInbox() async => [
+    YorksV1CompanyMaterialRequestApprovalInboxItem(
+      id: 'c1000000-0000-4000-8000-000000000010',
+      requestNumber: 'CMR-0001',
+      recordVersion: 2,
+      state: 'awaiting_company_approval',
+      categoryName: 'Personal protective equipment',
+      responsibleUnitName: 'Workshop',
+      purpose: 'Workshop safety stock',
+      requesterDisplayName: 'Test requester',
+      beneficiaryDisplayName: 'Amina Hassan',
+      submittedAt: DateTime.utc(2026, 9, 18, 9, 30),
+      lineCount: 1,
+    ),
+  ];
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> getRequest(String requestId) async =>
+      _approvalRequest;
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> decide({
+    required String requestId,
+    required int expectedVersion,
+    required YorksV1CompanyMaterialRequestDecisionType decision,
+    required String idempotencyKey,
+    String? reason,
+  }) async {
+    decisionCalls++;
+    lastDecision = decision;
+    return YorksV1CompanyMaterialRequest(
+      id: _approvalRequest.id,
+      recordVersion: _approvalRequest.recordVersion + 1,
+      state: decision == YorksV1CompanyMaterialRequestDecisionType.approved
+          ? 'approved_for_procurement'
+          : decision == YorksV1CompanyMaterialRequestDecisionType.returned
+          ? 'returned_for_changes'
+          : 'rejected',
+      categoryName: _approvalRequest.categoryName,
+      responsibleUnitName: _approvalRequest.responsibleUnitName,
+      purpose: _approvalRequest.purpose,
+      timing: _approvalRequest.timing,
+      deliveryCollectionPoint: _approvalRequest.deliveryCollectionPoint,
+      beneficiary: _approvalRequest.beneficiary,
+      authorizedReceiver: _approvalRequest.authorizedReceiver,
+      requesterDisplayName: _approvalRequest.requesterDisplayName,
+      requesterExactRole: _approvalRequest.requesterExactRole,
+      lines: _approvalRequest.lines,
+      requestNumber: _approvalRequest.requestNumber,
+      approver: _approvalRequest.approver,
+      approvalPolicyVersion: _approvalRequest.approvalPolicyVersion,
+    );
+  }
+
+  static const _approvalRequest = YorksV1CompanyMaterialRequest(
+    id: 'c1000000-0000-4000-8000-000000000010',
+    recordVersion: 2,
+    state: 'awaiting_company_approval',
+    categoryName: 'Personal protective equipment',
+    responsibleUnitName: 'Workshop',
+    purpose: 'Workshop safety stock',
+    timing: YorksV1MaterialRequestTiming.normal,
+    deliveryCollectionPoint: 'Main workshop store',
+    beneficiary: _person,
+    authorizedReceiver: _person,
+    requesterDisplayName: 'Test requester',
+    requesterExactRole: 'site_engineer',
+    lines: [
+      YorksV1CompanyMaterialRequestLine(
+        id: 'c1000000-0000-4000-8000-000000000011',
+        displayOrder: 1,
+        description: 'Safety helmets',
+        quantity: '12',
+        unit: 'pcs',
+      ),
+    ],
+    canDecide: true,
+    requestNumber: 'CMR-0001',
+    approver: _approver,
+    approvalPolicyVersion: 'cmr-test-v1',
+  );
 }

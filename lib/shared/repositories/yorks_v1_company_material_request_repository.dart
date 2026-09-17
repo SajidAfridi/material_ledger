@@ -27,6 +27,16 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
   Future<YorksV1CompanyMaterialRequest> saveAndSubmit(
     YorksV1CompanyMaterialRequestDraft draft,
   );
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>
+  listApprovalInbox();
+  Future<YorksV1CompanyMaterialRequest> getRequest(String requestId);
+  Future<YorksV1CompanyMaterialRequest> decide({
+    required String requestId,
+    required int expectedVersion,
+    required YorksV1CompanyMaterialRequestDecisionType decision,
+    required String idempotencyKey,
+    String? reason,
+  });
 }
 
 class YorksV1SupabaseCompanyMaterialRequestRepository
@@ -117,6 +127,54 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
     await _invoke('v1_save_and_submit_company_material_request', {
       'p_payload': draft.toSavePayload(),
       'p_idempotency_key': draft.submissionIdempotencyKey,
+    }),
+  );
+
+  @override
+  Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>
+  listApprovalInbox() async {
+    final response = await _invoke(
+      'v1_list_company_material_request_approval_inbox',
+      const {},
+    );
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final item in response)
+        if (item is Map)
+          YorksV1CompanyMaterialRequestApprovalInboxItem.fromRpcJson(
+            Map<String, dynamic>.from(item),
+          ),
+    ];
+  }
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> getRequest(String requestId) async =>
+      _requestFromResponse(
+        await _invoke('v1_company_material_request_projection', {
+          'p_request_id': requestId,
+        }),
+      );
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> decide({
+    required String requestId,
+    required int expectedVersion,
+    required YorksV1CompanyMaterialRequestDecisionType decision,
+    required String idempotencyKey,
+    String? reason,
+  }) async => _requestFromResponse(
+    await _invoke('v1_decide_company_material_request', {
+      'p_payload': {
+        'request_id': requestId,
+        'expected_version': expectedVersion,
+        'decision': decision.wireValue,
+        'reason': reason?.trim().isEmpty == true ? null : reason?.trim(),
+      },
+      'p_idempotency_key': idempotencyKey,
     }),
   );
 
