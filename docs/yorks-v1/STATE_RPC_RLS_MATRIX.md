@@ -482,3 +482,24 @@ Every relevant migration/test must prove at least:
     revision/audit row (AT-CONC-002/003); and
 29. two T02 confirmations with the same expected version yield one success and
     one stale conflict with no lost update or partial effect (AT-PROG-005).
+
+## Submission response reconciliation (17 September 2026)
+
+`v1_get_material_request_submission_result(payload, idempotency_key,
+approve_immediately)` is a read-only RPC for the original actor's exact
+save-and-submit or save-submit-and-approve intent. It requires current active
+identity, engineering project access and submit capability; combined approval
+also rechecks decision authority and approve capability. Payload hash, request
+identity, project and original creator must match. Another actor gets no result
+for a caller-owned key; denied project access fails closed. Responses use the
+current role-safe projection. Cached replay branches of both write wrappers now
+use the same checks, preventing revoked membership from replaying old responses.
+
+No matching committed key means **unconfirmed**, never proof of rollback.
+The client persists the original key/payload/mode in its existing account-owned
+recovery draft before sending; freezes editing while unresolved; offers one
+bounded read per explicit status check; and permits only an explicit same-intent
+retry after an authorized unconfirmed read. Existing transaction locks/hash
+checks deduplicate a retry even if the first command commits later. A denied
+retry leaves the first attempt unresolved. No server workflow state or stock
+transition is added. Reconciliation does not resubmit or issue side effects.

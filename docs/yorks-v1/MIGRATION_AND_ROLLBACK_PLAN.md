@@ -1142,3 +1142,30 @@ Every migration PR includes:
 - positive and negative RLS tests;
 - complete-build redeploy/rollback procedure;
 - known quarantine cases and operator action.
+
+## 20260917154516 — MR submission response reconciliation
+
+Additive read RPC plus strict-anchor replacement of the two outer submission
+wrappers' cached-response return branches. Write transactions, idempotency
+hashes/advisory locks, role grants on existing commands, quantity rules and
+history remain intact. Current authorization is rechecked on replay and the
+current safe projection replaces stale cached commercial output. No relation,
+index, backfill, row rewrite, stock or operational data migration is needed.
+Routine function-definition locks apply; no concurrent index runner is required.
+Anchor drift aborts the migration transaction. Reruns skip already patched bodies.
+
+Validate first in the disposable local stack with `supabase db reset --local`
+and `supabase test db`, then the local-only probe
+`python3 test/support/yorks_mr_reconciliation_concurrency.py`. That probe creates
+synthetic fixtures and requires another local reset before repetition. Never
+point it at production. The migration must precede the recovery client in an
+explicitly authorized staging/production rollout. An older backend leaves status
+reads unconfirmed and retry disabled; that is safe but not a usable release gate.
+
+Rollback: restore the preceding application artifact while retaining this
+compatible additive RPC and stricter replay checks. Prefer a forward database
+fix over restoring the demonstrated revoked-access vulnerability. Never delete
+idempotency, notification, audit or request history. Do not roll clients back
+while employees have unresolved recovery drafts: old clients do not understand
+the marker and may edit the intent. Reconcile those drafts first or forward-fix.
+No remote migration or deployment is authorized by the implementation task.
