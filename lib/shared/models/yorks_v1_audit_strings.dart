@@ -46,22 +46,22 @@ abstract final class YorksV1AuditStrings {
     hi: 'सक्रिय कर्ता',
   );
   static const entitiesMonitored = TranslatableString(
-    en: 'Entities monitored',
-    ar: 'الكيانات المراقبة',
-    ur: 'نگرانی شدہ ادارے',
-    hi: 'निगरानी की गई इकाइयाँ',
+    en: 'Records with activity',
+    ar: 'سجلات ذات نشاط',
+    ur: 'سرگرمی والے ریکارڈ',
+    hi: 'गतिविधि वाले रिकॉर्ड',
   );
   static const auditAlerts = TranslatableString(
-    en: 'Audit alerts',
-    ar: 'تنبيهات التدقيق',
-    ur: 'آڈٹ الرٹس',
-    hi: 'ऑडिट अलर्ट',
+    en: 'Flagged events',
+    ar: 'أحداث معلّمة',
+    ur: 'نشان زد واقعات',
+    hi: 'चिह्नित इवेंट',
   );
   static const dataIntegrity = TranslatableString(
-    en: 'Attribution integrity',
-    ar: 'سلامة الإسناد',
-    ur: 'نسبت کی سالمیت',
-    hi: 'एट्रिब्यूशन अखंडता',
+    en: 'Attribution coverage',
+    ar: 'تغطية الإسناد',
+    ur: 'نسبت کی کوریج',
+    hi: 'एट्रिब्यूशन कवरेज',
   );
   static const allTime = TranslatableString(
     en: 'All recorded time',
@@ -252,6 +252,24 @@ abstract final class YorksV1AuditStrings {
 
   static TranslatableString module(YorksV1AuditModule module) =>
       switch (module) {
+        YorksV1AuditModule.accounts => const TranslatableString(
+          en: 'Accounts',
+          ar: 'الحسابات',
+          ur: 'اکاؤنٹس',
+          hi: 'लेखा',
+        ),
+        YorksV1AuditModule.workforce => const TranslatableString(
+          en: 'Workforce',
+          ar: 'القوى العاملة',
+          ur: 'افرادی قوت',
+          hi: 'कार्यबल',
+        ),
+        YorksV1AuditModule.configuration => const TranslatableString(
+          en: 'Configuration',
+          ar: 'الإعدادات',
+          ur: 'ترتیبات',
+          hi: 'कॉन्फ़िगरेशन',
+        ),
         YorksV1AuditModule.projects => const TranslatableString(
           en: 'Projects & BOQ',
           ar: 'المشاريع وجداول الكميات',
