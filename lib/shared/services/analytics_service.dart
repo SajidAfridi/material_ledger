@@ -512,6 +512,9 @@ class GuardedAnalyticsService implements AnalyticsService {
         _safeValue(_configuration.appVersion) ?? 'unknown';
     safe[AnalyticsProperty.appBuild.wireName] =
         _safeValue(_configuration.appBuild) ?? 'unknown';
+    safe[AnalyticsProperty.releaseId.wireName] =
+        _configuration.validatedReleaseId;
+    safe[AnalyticsProperty.buildMode.wireName] = _configuration.buildMode;
     safe[AnalyticsProperty.environment.wireName] =
         _configuration.environment.name;
     safe[AnalyticsProperty.platform.wireName] = _configuration.platform.name;

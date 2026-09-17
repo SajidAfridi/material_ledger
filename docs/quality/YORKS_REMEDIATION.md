@@ -124,3 +124,18 @@ autocapture and exception capture; native sink sets `sessionReplay = false`.
 Production debug is gated off in `AnalyticsConfiguration`. Actual remote replay
 contents remain unavailable (connector lacks recording-read scope); no setting
 was changed.
+
+## Additional safe slice E2
+
+R35 now injects the checkout's full Git revision and marks uncommitted builds
+`-dirty`. Central telemetry adds validated `release_id` and actual `build_mode`;
+app version/build and existing operation timers remain unchanged. Direct builds
+without metadata honestly report unknown. No names, paths, keys or content are
+used as release labels. Two synthetic-repository launcher tests verify clean
+and dirty revisions and rejection of an operator label; 19 analytics tests pass.
+E1 commit: `d994b35`.
+
+The A3-era CI Android build passed (105.1 MB), using the required **ephemeral CI
+certificate**, not a production signing identity. Gradle/AGP/Kotlin emitted
+future-support warnings; dependencies were not upgraded in this task. Rebuild
+final source before treating it as the final candidate.

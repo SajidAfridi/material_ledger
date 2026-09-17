@@ -74,6 +74,8 @@ enum AnalyticsProperty {
   schemaVersion,
   appVersion,
   appBuild,
+  releaseId,
+  buildMode,
   environment,
   platform,
   role,

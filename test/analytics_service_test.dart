@@ -22,6 +22,7 @@ void main() {
         platform: AnalyticsPlatform.android,
         appVersion: '1.2.3',
         appBuild: '45',
+        releaseId: '0123456789abcdef0123456789abcdef01234567',
       ),
       sink: sink,
       now: () => now,
@@ -29,6 +30,49 @@ void main() {
     );
     await analytics.initialize();
   });
+
+  test(
+    'events carry source identity and actual build mode without changing app version',
+    () async {
+      analytics.capture(AnalyticsEvent.materialRequestSubmitted);
+      await analytics.drain();
+      final properties = sink.events.single.properties;
+      expect(
+        properties['release_id'],
+        '0123456789abcdef0123456789abcdef01234567',
+      );
+      expect(properties['build_mode'], 'debug');
+      expect(properties['app_version'], '1.2.3');
+      expect(properties['app_build'], '45');
+    },
+  );
+
+  test(
+    'release identifier rejects operator text and accepts dirty source revisions',
+    () {
+      AnalyticsConfiguration configuration(String releaseId) =>
+          AnalyticsConfiguration(
+            requestedEnabled: true,
+            projectToken: 'phc_test',
+            host: 'https://eu.i.posthog.com',
+            environment: AnalyticsEnvironment.staging,
+            platform: AnalyticsPlatform.web,
+            appVersion: '1',
+            appBuild: '1',
+            releaseId: releaseId,
+          );
+      expect(
+        configuration('private@example.com').validatedReleaseId,
+        'unknown',
+      );
+      expect(
+        configuration(
+          '0123456789abcdef0123456789abcdef01234567-dirty',
+        ).validatedReleaseId,
+        '0123456789abcdef0123456789abcdef01234567-dirty',
+      );
+    },
+  );
 
   test('taxonomy stays bounded, stable, and unique', () {
     final names = AnalyticsEvent.values.map((event) => event.wireName).toList();

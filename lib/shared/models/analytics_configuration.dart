@@ -54,6 +54,7 @@ class AnalyticsConfiguration {
     required this.appVersion,
     required this.appBuild,
     this.debugRequested = false,
+    this.releaseId = 'unknown',
   });
 
   factory AnalyticsConfiguration.fromEnvironment({
@@ -74,6 +75,10 @@ class AnalyticsConfiguration {
     appVersion: appVersion,
     appBuild: appBuild,
     debugRequested: const bool.fromEnvironment('POSTHOG_DEBUG'),
+    releaseId: const String.fromEnvironment(
+      'YORKS_RELEASE_ID',
+      defaultValue: 'unknown',
+    ),
   );
 
   final bool requestedEnabled;
@@ -84,6 +89,18 @@ class AnalyticsConfiguration {
   final String appVersion;
   final String appBuild;
   final bool debugRequested;
+  final String releaseId;
+
+  String get validatedReleaseId =>
+      RegExp(r'^[0-9a-f]{40}(-dirty)?$').hasMatch(releaseId)
+      ? releaseId
+      : 'unknown';
+
+  String get buildMode => kReleaseMode
+      ? 'release'
+      : kProfileMode
+      ? 'profile'
+      : 'debug';
 
   static final RegExp _projectToken = RegExp(r'^[A-Za-z0-9._-]+$');
 

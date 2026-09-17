@@ -77,7 +77,8 @@ friction, performance and reliability coverage. Historical version 1 events
 remain in PostHog, but Yorks never dual-sends them.
 
 Properties remain snake_case dimensions. Every event automatically receives
-`schema_version`, `environment`, `platform`, `app_version`, `app_build`, and,
+`schema_version`, `environment`, `platform`, `app_version`, `app_build`,
+`release_id`, `build_mode`, and,
 when available, `screen_name` and `role`. Call sites may add controlled
 `source`, `entry_point`, `network_state`, `workflow`, `operation`, counts,
 durations and outcome categories.
@@ -342,3 +343,12 @@ detector events must not be reinterpreted as failed tasks. Event names and timer
 boundaries for lookup observations are unchanged. This is a documented detector
 retirement, not a reduction in measured infrastructure failures. Remote dashboard
 edits remain proposed and require separate approval.
+
+The R35 launcher derives `YORKS_RELEASE_ID` from the actual Git HEAD, with a
+`-dirty` suffix for an uncommitted checkout. Events expose this as `release_id`;
+only a full lowercase commit hash (optionally dirty) is accepted. Direct builds
+without the define report `unknown`. `build_mode` comes from Flutter's compiled
+debug/profile/release constants. These additive fields do not replace app
+version/build or silently change operation names, duration boundaries or schema
+version. Compare clean releases by revision and environment. A dirty revision
+is not an exact artifact identity; retain deployment/build hashes separately.
