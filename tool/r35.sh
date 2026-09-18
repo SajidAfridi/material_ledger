@@ -36,6 +36,7 @@ operator_supabase_key="${SUPABASE_ANON_KEY:-}"
 operator_r35_environment="${R35_ENVIRONMENT:-}"
 operator_firebase_web_vapid_key="${FIREBASE_WEB_VAPID_KEY:-}"
 operator_accounts_flag="${YORKS_V1_ACCOUNTS:-}"
+operator_company_material_requests_flag="${YORKS_V1_COMPANY_MATERIAL_REQUESTS:-}"
 operator_workforce_flag="${YORKS_V1_WORKFORCE:-}"
 operator_analytics_flag="${YORKS_V1_ANALYTICS:-}"
 operator_posthog_enabled="${POSTHOG_ENABLED:-}"
@@ -60,6 +61,7 @@ supabase_key="${operator_supabase_key:-${SUPABASE_ANON_KEY:-}}"
 r35_environment="${operator_r35_environment:-${R35_ENVIRONMENT:-}}"
 firebase_web_vapid_key="${operator_firebase_web_vapid_key:-${FIREBASE_WEB_VAPID_KEY:-}}"
 accounts_flag="${operator_accounts_flag:-${YORKS_V1_ACCOUNTS:-false}}"
+company_material_requests_flag="${operator_company_material_requests_flag:-${YORKS_V1_COMPANY_MATERIAL_REQUESTS:-false}}"
 workforce_flag="${operator_workforce_flag:-${YORKS_V1_WORKFORCE:-false}}"
 analytics_flag="${operator_analytics_flag:-${YORKS_V1_ANALYTICS:-false}}"
 posthog_enabled="${operator_posthog_enabled:-${POSTHOG_ENABLED:-false}}"
@@ -73,6 +75,9 @@ posthog_debug="${operator_posthog_debug:-${POSTHOG_DEBUG:-false}}"
 # rollout rehearsal.
 if [[ "$r35_environment" == "ci" && -z "$operator_accounts_flag" ]]; then
   accounts_flag=false
+fi
+if [[ "$r35_environment" == "ci" && -z "$operator_company_material_requests_flag" ]]; then
+  company_material_requests_flag=false
 fi
 if [[ "$r35_environment" == "ci" && -z "$operator_workforce_flag" ]]; then
   workforce_flag=false
@@ -107,6 +112,13 @@ case "$accounts_flag" in
   true|false) ;;
   *)
     echo "YORKS_V1_ACCOUNTS must be true or false." >&2
+    exit 64
+    ;;
+esac
+case "$company_material_requests_flag" in
+  true|false) ;;
+  *)
+    echo "YORKS_V1_COMPANY_MATERIAL_REQUESTS must be true or false." >&2
     exit 64
     ;;
 esac
@@ -198,6 +210,7 @@ r35_defines=(
   '--dart-define=YORKS_V1_RETURNS_DOCUMENTS=true'
   '--dart-define=YORKS_V1_DOCUMENTS=true'
   "--dart-define=YORKS_V1_ACCOUNTS=${accounts_flag}"
+  "--dart-define=YORKS_V1_COMPANY_MATERIAL_REQUESTS=${company_material_requests_flag}"
   "--dart-define=YORKS_V1_WORKFORCE=${workforce_flag}"
   "--dart-define=YORKS_V1_ANALYTICS=${analytics_flag}"
   "--dart-define=POSTHOG_ENABLED=${posthog_enabled}"
@@ -213,6 +226,7 @@ r35_defines=(
 # This rollout state is safe to print and provides release evidence without
 # exposing backend configuration, telemetry tokens or public-notification credentials.
 echo "Yorks Accounts rollout: ${accounts_flag}" >&2
+echo "Yorks Company Material Requests rollout: ${company_material_requests_flag}" >&2
 echo "Yorks Workforce rollout: ${workforce_flag}" >&2
 echo "Yorks Analytics rollout: ${analytics_flag}" >&2
 echo "Yorks PostHog telemetry: ${posthog_enabled}" >&2

@@ -445,6 +445,18 @@ independent authorized approver. The trusted decision command reads only the
 published value, so a configuration draft cannot change workflow behavior and
 historical decisions are never rewritten.
 
+For a new creation-form Draft only, the UI presents **Submit** to every
+authorized creator and additionally presents **Approve** only to an exact
+Project Engineer, global Engineering role or Admin when the published policy
+and effective `material_requests.approve` capability permit it. **Approve** is
+one trusted idempotent transaction that saves the draft, records the canonical
+submission, and records the immutable approved decision; it never chains two
+client calls. If any state, role, membership, policy, capability, version or
+quantity validation fails, the transaction rolls back without exposing a
+submitted request. An exact Site Engineer never receives that affordance or
+authority, including when a historical `project_engineer` membership row
+exists. Returned-request edits remain a separate submit/review path.
+
 External supplier identity remains optional during the adoption period. This
 is a deliberate temporary policy, not proof of supplier readiness. Procurement
 may record a lightweight confirmation, expected date and commitment reference

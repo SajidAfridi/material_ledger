@@ -11,7 +11,16 @@ const setYorksBootStatus = (value) => {
 _flutter.loader.load({
   onEntrypointLoaded: async (engineInitializer) => {
     setYorksBootStatus('Preparing your workspace…');
-    const appRunner = await engineInitializer.initializeEngine();
+    // Flutter owns inspection zoom. The host follows only the window layout;
+    // composited magnification never changes these constraints or breakpoints.
+    const host = document.getElementById('yorks-app');
+    const sizeHost = () => {
+      host.style.width = `${window.innerWidth}px`;
+      host.style.height = `${window.innerHeight}px`;
+    };
+    sizeHost();
+    window.addEventListener('resize', sizeHost, { passive: true });
+    const appRunner = await engineInitializer.initializeEngine({hostElement: host});
     setYorksBootStatus('Opening Yorks…');
     await appRunner.runApp();
   },

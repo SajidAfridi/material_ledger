@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/models/app_language.dart';
@@ -1111,12 +1112,14 @@ class _MobileDocumentViewerState extends State<_MobileDocumentViewer> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        return PdfPreview(
-          build: (_) async => snapshot.data!,
-          canChangePageFormat: false,
-          canDebug: false,
-          allowPrinting: false,
-          allowSharing: false,
+        return YorksWorkspaceZoomExclusion(
+          child: PdfPreview(
+            build: (_) async => snapshot.data!,
+            canChangePageFormat: false,
+            canDebug: false,
+            allowPrinting: false,
+            allowSharing: false,
+          ),
         );
       },
     );

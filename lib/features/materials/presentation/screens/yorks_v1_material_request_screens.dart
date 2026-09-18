@@ -11,6 +11,7 @@ import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/router.dart';
+import '../../../../core/zoom/yorks_workspace_zoom.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../shared/controllers/yorks_v1_material_request_draft_controller.dart';
@@ -26,6 +27,7 @@ import '../../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../../shared/models/yorks_v1_logistics.dart';
 import '../../../../shared/models/yorks_v1_logistics_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
+import '../../../../shared/models/yorks_v1_company_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request_document.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/models/yorks_v1_project.dart';
@@ -98,6 +100,9 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
       );
     }
     final language = ref.watch(languageProvider);
+    final companyRequestsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .companyMaterialRequests;
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final createAccess = yorksV1FeatureActionAccess(
@@ -178,6 +183,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
           requests: const [],
           language: language,
           canCreate: canCreate,
+          canCreateCompany: companyRequestsEnabled,
           fixedProjectId: projectId,
           summaryPageLoader: phase2Repository.listRequestSummaries,
           operationsDashboardLoader: operationsRepository == null
@@ -193,6 +199,9 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                     projectId: projectId,
                   ),
                 )
+              : null,
+          onCreateCompany: companyRequestsEnabled
+              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequestNew)
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () {},
@@ -224,6 +233,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
               .toList(growable: false),
           language: language,
           canCreate: canCreate,
+          canCreateCompany: companyRequestsEnabled,
           fixedProjectId: projectId,
           onCreate: createAccess.canWrite
               ? () => context.push(
@@ -232,6 +242,9 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                     projectId: projectId,
                   ),
                 )
+              : null,
+          onCreateCompany: companyRequestsEnabled
+              ? () => context.push(RoutePaths.yorksV1CompanyMaterialRequestNew)
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () => ref.invalidate(yorksV1MaterialRequestListProvider),
@@ -344,6 +357,9 @@ class _YorksMobileMaterialRequestsPageState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    final companyRequestsEnabled = ref
+        .watch(yorksV1FeatureFlagsProvider)
+        .companyMaterialRequests;
     final role = ref.watch(yorksV1CurrentRoleProvider);
     final permissionState = ref.watch(yorksV1CurrentPermissionSnapshotProvider);
     final createAccess = yorksV1FeatureActionAccess(
@@ -453,6 +469,7 @@ class _YorksMobileMaterialRequestsPageState
                       : summary?.valueOrNull?.totalCount,
                   page: _page,
                   canCreate: canCreate,
+                  canCreateCompany: companyRequestsEnabled,
                   localDrafts: savedDrafts,
                   operationsDashboard: operations,
                   onRetryOperations: operations == null
@@ -484,6 +501,11 @@ class _YorksMobileMaterialRequestsPageState
                             const Uuid().v4(),
                             projectId: widget.projectId,
                           ),
+                        )
+                      : null,
+                  onCreateCompany: companyRequestsEnabled
+                      ? () => context.push(
+                          RoutePaths.yorksV1CompanyMaterialRequestNew,
                         )
                       : null,
                   onOpen: (request) =>
@@ -534,6 +556,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     this.totalCount,
     this.page = 0,
     required this.canCreate,
+    required this.canCreateCompany,
     required this.localDrafts,
     this.operationsDashboard,
     this.onRetryOperations,
@@ -545,6 +568,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     required this.onFiltersChanged,
     this.onPageChanged,
     required this.onCreate,
+    this.onCreateCompany,
     required this.onOpen,
     required this.onAction,
     required this.onResume,
@@ -557,6 +581,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final int? totalCount;
   final int page;
   final bool canCreate;
+  final bool canCreateCompany;
   final List<YorksV1MaterialRequestDraft> localDrafts;
   final AsyncValue<YorksV1MaterialRequestOperationsDashboard>?
   operationsDashboard;
@@ -569,6 +594,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final ValueChanged<_MobileMaterialRequestFilterSelection> onFiltersChanged;
   final ValueChanged<int>? onPageChanged;
   final VoidCallback? onCreate;
+  final VoidCallback? onCreateCompany;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
   final ValueChanged<YorksV1MaterialRequest> onAction;
   final ValueChanged<YorksV1MaterialRequestDraft> onResume;
@@ -581,6 +607,27 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
         .where(_matches)
         .where(_matchesSearch)
         .toList(growable: false);
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          YorksV1MaterialRequestStrings.requests.active(language),
+          style: AppTypography.headlineMedium.copyWith(
+            fontSize: 25,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          YorksV1MaterialRequestStrings.mobileRequestsDescription.active(
+            language,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
+        ),
+      ],
+    );
     final activeFilterCount =
         (filter == _MobileMaterialRequestFilter.all ? 0 : 1) +
         ((registerView == YorksV1MaterialRequestRegisterView.myWork ||
@@ -594,50 +641,64 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 104),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      YorksV1MaterialRequestStrings.requests.active(language),
-                      style: AppTypography.headlineMedium.copyWith(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w800,
+          if (canCreateCompany) ...[
+            heading,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (canCreate)
+                  FilledButton.icon(
+                    key: const ValueKey('mobile-mr-new-request'),
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.add_rounded, size: 19),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.newRequestShort.active(
+                        language,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      YorksV1MaterialRequestStrings.mobileRequestsDescription
-                          .active(language),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.muted,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, AppSpacing.minTapTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                    ),
+                  ),
+                SizedBox(
+                  height: AppSpacing.minTapTarget,
+                  child: OutlinedButton(
+                    key: const ValueKey('mobile-mr-new-company-request'),
+                    onPressed: onCreateCompany,
+                    child: Text(
+                      YorksV1CompanyMaterialRequestStrings.companyUse.active(
+                        language,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              if (canCreate)
-                FilledButton.icon(
-                  key: const ValueKey('mobile-mr-new-request'),
-                  onPressed: onCreate,
-                  icon: const Icon(Icons.add_rounded, size: 19),
-                  label: Text(
-                    YorksV1MaterialRequestStrings.newRequestShort.active(
-                      language,
+              ],
+            ),
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: heading),
+                if (canCreate)
+                  FilledButton.icon(
+                    key: const ValueKey('mobile-mr-new-request'),
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.add_rounded, size: 19),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.newRequestShort.active(
+                        language,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, AppSpacing.minTapTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
                     ),
                   ),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, AppSpacing.minTapTarget),
-                    padding: const EdgeInsets.symmetric(horizontal: 13),
-                  ),
-                ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
@@ -2694,6 +2755,31 @@ class _DraftForm extends ConsumerWidget {
       anyProject: draft.projectId == null,
     );
     final runtimeConfiguration = ref.watch(yorksV1RuntimeConfigurationProvider);
+    final approvalAccess = yorksV1FeatureActionAccess(
+      permissionState,
+      YorksV1CapabilityKeys.materialRequestsApprove,
+      legacyAllowed:
+          role == YorksV1Role.projectEngineer ||
+          (role?.isGlobalProjectEngineer ?? false) ||
+          role == YorksV1Role.admin,
+      projectId: draft.projectId,
+      anyProject: draft.projectId == null,
+    );
+    // This is deliberately only a fail-closed presentation preflight. The
+    // combined trusted command re-reads the exact role, project membership,
+    // published policy, request version and approval capability under lock.
+    final canOfferSubmitAndApprove =
+        yorksV1CanOfferMaterialRequestCreationApproval(
+          role: role,
+          publishedSelfApprovalEnabled:
+              runtimeConfiguration
+                  .valueOrNull
+                  ?.allowAuthorizedCreatorSelfApproval ==
+              true,
+          hasApprovalAccess: approvalAccess.canWrite,
+          isNewDraft: draft.serverRecordVersion == 0,
+          isEditingBeforeApproval: controller.isEditingBeforeApproval,
+        );
     final controlledUnitsAsync = ref.watch(
       yorksV1ConfigurationUnitCodesProvider,
     );
@@ -2766,8 +2852,15 @@ class _DraftForm extends ConsumerWidget {
           allowedTimings: allowedTimings,
           canEdit: editAccess.canWrite,
           canSubmit: submitAccess.canWrite,
+          canSubmitAndApprove: canOfferSubmitAndApprove,
           onSave: () => _save(context, ref, controller, draft),
           onSubmit: () => _submitForMobile(context, ref, controller),
+          onSubmitAndApprove: () => _submitForMobile(
+            context,
+            ref,
+            controller,
+            approveImmediately: true,
+          ),
         ),
       );
     }
@@ -2808,6 +2901,9 @@ class _DraftForm extends ConsumerWidget {
                 onSubmit: canAttemptSubmit
                     ? () => _submit(context, ref, controller)
                     : null,
+                onApprove: canAttemptSubmit && canOfferSubmitAndApprove
+                    ? () => _approve(context, ref, controller)
+                    : null,
                 submitting:
                     state.status ==
                     YorksV1MaterialRequestDraftSyncStatus.submitting,
@@ -2824,6 +2920,9 @@ class _DraftForm extends ConsumerWidget {
                   : AppSpacing.lg;
               final submit = canAttemptSubmit
                   ? () => _submit(context, ref, controller)
+                  : null;
+              final approve = canAttemptSubmit && canOfferSubmitAndApprove
+                  ? () => _approve(context, ref, controller)
                   : null;
               final save = isBusy
                   ? null
@@ -2968,6 +3067,7 @@ class _DraftForm extends ConsumerWidget {
                             onCancel: () => context.pop(),
                             onSave: save,
                             onSubmit: submit,
+                            onApprove: approve,
                             submitting:
                                 state.status ==
                                 YorksV1MaterialRequestDraftSyncStatus
@@ -3157,11 +3257,27 @@ class _DraftForm extends ConsumerWidget {
     context.go(RoutePaths.yorksV1MaterialRequestPath(submitted.id));
   }
 
-  Future<YorksV1MaterialRequest?> _submitForMobile(
+  Future<void> _approve(
     BuildContext context,
     WidgetRef ref,
     YorksV1MaterialRequestDraftController controller,
   ) async {
+    final approved = await _submitForMobile(
+      context,
+      ref,
+      controller,
+      approveImmediately: true,
+    );
+    if (!context.mounted || approved == null) return;
+    context.go(RoutePaths.yorksV1MaterialRequestPath(approved.id));
+  }
+
+  Future<YorksV1MaterialRequest?> _submitForMobile(
+    BuildContext context,
+    WidgetRef ref,
+    YorksV1MaterialRequestDraftController controller, {
+    bool approveImmediately = false,
+  }) async {
     // See _save: Submit must validate the value the engineer can still see in
     // the active local editor instead of a stale draft snapshot.
     FocusManager.instance.primaryFocus?.unfocus();
@@ -3198,7 +3314,9 @@ class _DraftForm extends ConsumerWidget {
       }
       return null;
     }
-    final submitted = await controller.submit();
+    final submitted = approveImmediately
+        ? await controller.submitAndApprove()
+        : await controller.submit();
     if (!context.mounted) return null;
     if (submitted == null) {
       final errorCode = controller.lastErrorCode;
@@ -3211,6 +3329,29 @@ class _DraftForm extends ConsumerWidget {
     ref.invalidate(yorksV1MaterialRequestListProvider);
     return submitted;
   }
+}
+
+/// Returns whether the creation form may present the optional **Approve**
+/// action. It is intentionally more restrictive than the server policy: an
+/// exact Site Engineer never sees a self-approval affordance, even when stale
+/// membership/capability data says otherwise. This grants no authority.
+bool yorksV1CanOfferMaterialRequestCreationApproval({
+  required YorksV1Role? role,
+  required bool publishedSelfApprovalEnabled,
+  required bool hasApprovalAccess,
+  required bool isNewDraft,
+  required bool isEditingBeforeApproval,
+}) {
+  final hasEligibleExactRole =
+      role == YorksV1Role.projectEngineer ||
+      (role?.isGlobalProjectEngineer ?? false) ||
+      role == YorksV1Role.admin;
+  return publishedSelfApprovalEnabled &&
+      hasApprovalAccess &&
+      isNewDraft &&
+      !isEditingBeforeApproval &&
+      role != YorksV1Role.siteEngineer &&
+      hasEligibleExactRole;
 }
 
 enum _MaterialRequestDraftExitChoice { save, discard }
@@ -3630,8 +3771,10 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
     required this.allowedTimings,
     required this.canEdit,
     required this.canSubmit,
+    required this.canSubmitAndApprove,
     required this.onSave,
     required this.onSubmit,
+    required this.onSubmitAndApprove,
   });
 
   final YorksV1MaterialRequestDraftState state;
@@ -3641,8 +3784,10 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
   final List<YorksV1MaterialRequestTiming> allowedTimings;
   final bool canEdit;
   final bool canSubmit;
+  final bool canSubmitAndApprove;
   final Future<void> Function() onSave;
   final Future<YorksV1MaterialRequest?> Function() onSubmit;
+  final Future<YorksV1MaterialRequest?> Function() onSubmitAndApprove;
 
   @override
   ConsumerState<_YorksMobileMaterialRequestDraftFlow> createState() =>
@@ -4120,6 +4265,8 @@ class _YorksMobileMaterialRequestDraftFlowState
         .firstOrNull;
     final active = project?.state == YorksV1ProjectLifecycle.active.wireValue;
     final canAttemptSubmit = widget.canSubmit && _reviewConfirmed && !_busy;
+    final canAttemptApprove =
+        widget.canSubmitAndApprove && _reviewConfirmed && !_busy;
     final invalidLineCount = _draft.lines
         .where((line) => !line.hasValidOperationalValues)
         .length;
@@ -4259,14 +4406,20 @@ class _YorksMobileMaterialRequestDraftFlowState
             _language,
           ),
           onSecondary: _busy ? null : widget.onSave,
-          primaryLabel: YorksV1MaterialRequestStrings.submitToProcurement
-              .active(_language),
+          primaryLabel: YorksV1MaterialRequestStrings.submit.active(_language),
           primaryIcon: Icons.send_rounded,
+          tertiaryLabel: widget.canSubmitAndApprove
+              ? YorksV1MaterialRequestStrings.approve.active(_language)
+              : null,
+          tertiaryIcon: Icons.verified_rounded,
           loading:
               _busy &&
               widget.state.status ==
                   YorksV1MaterialRequestDraftSyncStatus.submitting,
           onPrimary: canAttemptSubmit ? _submit : null,
+          onTertiary: canAttemptApprove
+              ? () => _submit(approveImmediately: true)
+              : null,
         ),
       ],
     );
@@ -4637,98 +4790,110 @@ class _YorksMobileMaterialRequestDraftFlowState
     );
   }
 
-  Widget _successPage(BuildContext context, YorksV1MaterialRequest request) =>
-      ColoredBox(
-        color: AppColors.mobileSurface,
-        child: Column(
-          children: [
-            YorksMobileAppBar(
-              title: YorksV1MaterialRequestStrings.submitted.active(_language),
-              leading: YorksMobileIconButton(
-                icon: Icons.close_rounded,
-                tooltip: YorksV1MaterialRequestStrings.backToRequests.active(
-                  _language,
-                ),
-                onPressed: () => context.go(RoutePaths.yorksV1MaterialRequests),
-              ),
+  Widget _successPage(
+    BuildContext context,
+    YorksV1MaterialRequest request,
+  ) => ColoredBox(
+    color: AppColors.mobileSurface,
+    child: Column(
+      children: [
+        YorksMobileAppBar(
+          title: YorksV1MaterialRequestStrings.submitted.active(_language),
+          leading: YorksMobileIconButton(
+            icon: Icons.close_rounded,
+            tooltip: YorksV1MaterialRequestStrings.backToRequests.active(
+              _language,
             ),
-            Expanded(
-              child: Center(
+            onPressed: () => context.go(RoutePaths.yorksV1MaterialRequests),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: YorksMobileCard(
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: YorksMobileCard(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 28,
-                        horizontal: 8,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 28,
+                    horizontal: 8,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DecoratedBox(
+                        decoration: const BoxDecoration(
+                          color: AppColors.successContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const SizedBox.square(
+                          dimension: 64,
+                          child: Icon(
+                            Icons.check_rounded,
+                            color: AppColors.success,
+                            size: 34,
+                          ),
+                        ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          DecoratedBox(
-                            decoration: const BoxDecoration(
-                              color: AppColors.successContainer,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const SizedBox.square(
-                              dimension: 64,
-                              child: Icon(
-                                Icons.check_rounded,
-                                color: AppColors.success,
-                                size: 34,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            YorksV1MaterialRequestStrings.submitted.active(
-                              _language,
-                            ),
-                            textAlign: TextAlign.center,
-                            style: AppTypography.headlineSmall.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            YorksV1MaterialRequestStrings.serverConfirmed
+                      const SizedBox(height: 18),
+                      Text(
+                        (request.state ==
+                                    YorksV1MaterialRequestState
+                                        .approvedForArrangement
+                                ? YorksV1MaterialRequestStrings
+                                      .approvedForArrangement
+                                : YorksV1MaterialRequestStrings.submitted)
+                            .active(_language),
+                        textAlign: TextAlign.center,
+                        style: AppTypography.headlineSmall.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        (request.state ==
+                                    YorksV1MaterialRequestState
+                                        .approvedForArrangement
+                                ? YorksV1MaterialRequestStrings
+                                      .approvedForProcurementConfirmed
+                                : YorksV1MaterialRequestStrings.serverConfirmed)
+                            .active(_language),
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        request.requestNumber ??
+                            YorksV1MaterialRequestStrings.assignedOnSubmit
                                 .active(_language),
-                            textAlign: TextAlign.center,
-                            style: AppTypography.bodyMedium.copyWith(
-                              color: AppColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            request.requestNumber ??
-                                YorksV1MaterialRequestStrings.assignedOnSubmit
-                                    .active(_language),
-                            style: AppTypography.labelLarge.copyWith(
-                              color: AppColors.blue,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.blue,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
             ),
-            _MobileMrStickyActions(
-              secondaryLabel: YorksV1MaterialRequestStrings.backToRequests
-                  .active(_language),
-              onSecondary: () => context.go(RoutePaths.yorksV1MaterialRequests),
-              primaryLabel: YorksV1MaterialRequestStrings.viewRequest.active(
-                _language,
-              ),
-              primaryIcon: Icons.arrow_forward_rounded,
-              onPrimary: () =>
-                  context.go(RoutePaths.yorksV1MaterialRequestPath(request.id)),
-            ),
-          ],
+          ),
         ),
-      );
+        _MobileMrStickyActions(
+          secondaryLabel: YorksV1MaterialRequestStrings.backToRequests.active(
+            _language,
+          ),
+          onSecondary: () => context.go(RoutePaths.yorksV1MaterialRequests),
+          primaryLabel: YorksV1MaterialRequestStrings.viewRequest.active(
+            _language,
+          ),
+          primaryIcon: Icons.arrow_forward_rounded,
+          onPrimary: () =>
+              context.go(RoutePaths.yorksV1MaterialRequestPath(request.id)),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _continueToMaterials() async {
     if (_draft.projectId == null || _draft.scopeId == null) {
@@ -5041,7 +5206,7 @@ class _YorksMobileMaterialRequestDraftFlowState
     });
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit({bool approveImmediately = false}) async {
     final validationMessage = _materialRequestSubmitValidationMessage(_draft);
     if (validationMessage != null) {
       setState(() => _step = _MobileMaterialRequestDraftStep.materials);
@@ -5051,7 +5216,9 @@ class _YorksMobileMaterialRequestDraftFlowState
       });
       return;
     }
-    final submitted = await widget.onSubmit();
+    final submitted = approveImmediately
+        ? await widget.onSubmitAndApprove()
+        : await widget.onSubmit();
     if (submitted != null && mounted) setState(() => _submitted = submitted);
   }
 
@@ -5157,6 +5324,9 @@ class _MobileMrStickyActions extends StatelessWidget {
     required this.onPrimary,
     this.secondaryLabel,
     this.onSecondary,
+    this.tertiaryLabel,
+    this.tertiaryIcon,
+    this.onTertiary,
     this.loading = false,
   });
 
@@ -5165,6 +5335,9 @@ class _MobileMrStickyActions extends StatelessWidget {
   final VoidCallback? onPrimary;
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
+  final String? tertiaryLabel;
+  final IconData? tertiaryIcon;
+  final VoidCallback? onTertiary;
   final bool loading;
 
   @override
@@ -5176,37 +5349,80 @@ class _MobileMrStickyActions extends StatelessWidget {
         color: AppColors.surfaceContainerLowest,
         border: Border(top: BorderSide(color: AppColors.line)),
       ),
-      child: Row(
-        children: [
-          if (secondaryLabel != null) ...[
-            Expanded(
-              child: OutlinedButton(
-                key: const ValueKey('mobile-mr-secondary-action'),
-                onPressed: onSecondary,
-                child: Text(secondaryLabel!),
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
-          Expanded(
-            flex: secondaryLabel == null ? 1 : 2,
-            child: FilledButton.icon(
-              key: const ValueKey('mobile-mr-primary-action'),
-              onPressed: onPrimary,
-              icon: loading
-                  ? const SizedBox.square(
-                      dimension: 17,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.onPrimary,
+      child: tertiaryLabel == null
+          ? Row(
+              children: [
+                if (secondaryLabel != null) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('mobile-mr-secondary-action'),
+                      onPressed: onSecondary,
+                      child: Text(secondaryLabel!),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  flex: secondaryLabel == null ? 1 : 2,
+                  child: FilledButton.icon(
+                    key: const ValueKey('mobile-mr-primary-action'),
+                    onPressed: onPrimary,
+                    icon: loading
+                        ? const SizedBox.square(
+                            dimension: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.onPrimary,
+                            ),
+                          )
+                        : Icon(primaryIcon),
+                    label: Text(primaryLabel),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (secondaryLabel != null) ...[
+                  OutlinedButton(
+                    key: const ValueKey('mobile-mr-secondary-action'),
+                    onPressed: onSecondary,
+                    child: Text(secondaryLabel!),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('mobile-mr-primary-action'),
+                        onPressed: onPrimary,
+                        icon: Icon(primaryIcon),
+                        label: Text(primaryLabel),
                       ),
-                    )
-                  : Icon(primaryIcon),
-              label: Text(primaryLabel),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        key: const ValueKey('mobile-mr-approve'),
+                        onPressed: onTertiary,
+                        icon: loading
+                            ? const SizedBox.square(
+                                dimension: 17,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.onPrimary,
+                                ),
+                              )
+                            : Icon(tertiaryIcon),
+                        label: Text(tertiaryLabel!),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     ),
   );
 }
@@ -5607,12 +5823,14 @@ class _TabletMrDraftActions extends StatelessWidget {
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
+    required this.onApprove,
     required this.submitting,
   });
 
   final VoidCallback onCancel;
   final VoidCallback? onSave;
   final VoidCallback? onSubmit;
+  final VoidCallback? onApprove;
   final bool submitting;
 
   @override
@@ -5634,21 +5852,21 @@ class _TabletMrDraftActions extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
         children: [
           TextButton(
             onPressed: onCancel,
             child: Text(YorksV1MaterialRequestStrings.cancel.primary),
           ),
-          const SizedBox(width: AppSpacing.sm),
           OutlinedButton.icon(
             key: const ValueKey('tablet-mr-save'),
             onPressed: onSave,
             icon: const Icon(Icons.save_outlined),
             label: Text(YorksV1MaterialRequestStrings.saveDraft.primary),
           ),
-          const SizedBox(width: AppSpacing.sm),
           FilledButton.icon(
             key: const ValueKey('tablet-mr-submit'),
             onPressed: onSubmit,
@@ -5661,10 +5879,23 @@ class _TabletMrDraftActions extends StatelessWidget {
                     ),
                   )
                 : const Icon(Icons.arrow_forward_rounded),
-            label: Text(
-              YorksV1MaterialRequestStrings.submitToProcurement.primary,
-            ),
+            label: Text(YorksV1MaterialRequestStrings.submit.primary),
           ),
+          if (onApprove != null)
+            FilledButton.icon(
+              key: const ValueKey('tablet-mr-approve'),
+              onPressed: onApprove,
+              icon: submitting
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.onPrimary,
+                      ),
+                    )
+                  : const Icon(Icons.verified_rounded),
+              label: Text(YorksV1MaterialRequestStrings.approve.primary),
+            ),
         ],
       ),
     ),
@@ -5680,6 +5911,7 @@ class _R35RequestHero extends StatelessWidget {
     required this.onCancel,
     required this.onSave,
     required this.onSubmit,
+    required this.onApprove,
     required this.submitting,
     required this.inspectorExpanded,
     required this.onToggleInspector,
@@ -5692,6 +5924,7 @@ class _R35RequestHero extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback? onSave;
   final VoidCallback? onSubmit;
+  final VoidCallback? onApprove;
   final bool submitting;
   final bool inspectorExpanded;
   final VoidCallback onToggleInspector;
@@ -5785,12 +6018,22 @@ class _R35RequestHero extends StatelessWidget {
               onPressed: onCancel,
             ),
             _R35RequestAction(
-              label: YorksV1MaterialRequestStrings.submitToProcurement.primary,
-              icon: Icons.arrow_forward_rounded,
-              primary: true,
+              key: const ValueKey('mr-request-submit'),
+              label: YorksV1MaterialRequestStrings.submit.primary,
+              icon: Icons.send_rounded,
+              primary: onApprove == null,
               onPressed: onSubmit,
               loading: submitting,
             ),
+            if (onApprove != null)
+              _R35RequestAction(
+                key: const ValueKey('mr-request-approve'),
+                label: YorksV1MaterialRequestStrings.approve.primary,
+                icon: Icons.verified_rounded,
+                primary: true,
+                onPressed: onApprove,
+                loading: submitting,
+              ),
           ],
         ),
       );
@@ -15234,15 +15477,17 @@ class _ControlledRequestPreview extends StatelessWidget {
           ? 620
           : 900,
       child: documentModel.when(
-        data: (model) => PdfPreview(
-          build: (_) => YorksV1MaterialRequestDocumentService()
-              .buildDocumentPdf(model, PdfPageFormat.a4),
-          allowPrinting: false,
-          allowSharing: false,
-          canChangeOrientation: false,
-          canChangePageFormat: false,
-          initialPageFormat: PdfPageFormat.a4,
-          useActions: false,
+        data: (model) => YorksWorkspaceZoomExclusion(
+          child: PdfPreview(
+            build: (_) => YorksV1MaterialRequestDocumentService()
+                .buildDocumentPdf(model, PdfPageFormat.a4),
+            allowPrinting: false,
+            allowSharing: false,
+            canChangeOrientation: false,
+            canChangePageFormat: false,
+            initialPageFormat: PdfPageFormat.a4,
+            useActions: false,
+          ),
         ),
         loading: () => const _ControlledDocumentAvailability(loading: true),
         error: (_, _) => const _ControlledDocumentAvailability(),

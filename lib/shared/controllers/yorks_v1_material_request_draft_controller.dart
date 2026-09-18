@@ -757,14 +757,42 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<YorksV1MaterialRequest?> submit() async {
+    return _submitWorkflow(approveImmediately: false);
+  }
+
+  /// Runs the approved creation-form fast path as one server transaction. It
+  /// deliberately cannot be used while re-editing a returned request: that
+  /// workflow must remain independently reviewable.
+  Future<YorksV1MaterialRequest?> submitAndApprove() async {
+    return _submitWorkflow(approveImmediately: true);
+  }
+
+  Future<YorksV1MaterialRequest?> _submitWorkflow({
+    required bool approveImmediately,
+  }) async {
+    if (approveImmediately && _editingBeforeApproval) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: state.draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.failed,
+        errorCode: YorksV1DomainErrorCode.invalidInput,
+      );
+      return null;
+    }
+    final action = approveImmediately
+        ? 'submit_and_approve_material_request'
+        : 'submit_material_request';
     final feedback = _analytics.expectFeedback(
-      action: 'submit_material_request',
+      action: action,
       screen: AnalyticsScreen.materialRequestDraft,
       operationWasLoading: _connectedCommandInFlight,
     );
     if (_connectedCommandInFlight) return null;
     _connectedCommandInFlight = true;
-    final source = _editingBeforeApproval ? 'edit_before_approval' : 'new';
+    final source = approveImmediately
+        ? 'new_submit_and_approve'
+        : _editingBeforeApproval
+        ? 'edit_before_approval'
+        : 'new';
     _analytics.capture(
       AnalyticsEvent.materialRequestSubmissionAttempted,
       properties: {
@@ -774,7 +802,9 @@ class YorksV1MaterialRequestDraftController
       },
     );
     final operation = _analytics.beginOperation(
-      'material_request_submit',
+      approveImmediately
+          ? 'material_request_submit_and_approve'
+          : 'material_request_submit',
       properties: {
         AnalyticsProperty.workflow: 'material_request',
         AnalyticsProperty.source: source,
@@ -782,7 +812,7 @@ class YorksV1MaterialRequestDraftController
       },
     );
     try {
-      final pending = _submitConnected();
+      final pending = _submitConnected(approveImmediately: approveImmediately);
       feedback.feedbackObserved();
       final result = await pending;
       if (result == null) {
@@ -806,6 +836,15 @@ class YorksV1MaterialRequestDraftController
             AnalyticsProperty.itemCount: state.draft.lines.length,
           },
         );
+        if (approveImmediately) {
+          _analytics.capture(
+            AnalyticsEvent.materialRequestApproved,
+            properties: const {
+              AnalyticsProperty.actionType: 'approved',
+              AnalyticsProperty.source: 'creation_form',
+            },
+          );
+        }
       }
       return result;
     } finally {
@@ -813,7 +852,9 @@ class YorksV1MaterialRequestDraftController
     }
   }
 
-  Future<YorksV1MaterialRequest?> _submitConnected() async {
+  Future<YorksV1MaterialRequest?> _submitConnected({
+    required bool approveImmediately,
+  }) async {
     if (_editingBeforeApproval) {
       final saved = await _saveConnected();
       if (saved != null) {
@@ -859,13 +900,17 @@ class YorksV1MaterialRequestDraftController
     );
     YorksV1MaterialRequest? submitted;
     try {
-      submitted = await _repository.saveAndSubmit(draft);
+      submitted = approveImmediately
+          ? await _repository.saveSubmitAndApprove(draft)
+          : await _repository.saveAndSubmit(draft);
     } on YorksV1DomainException catch (error) {
       if (error.code == YorksV1DomainErrorCode.conflict) {
         final rebased = await _rebaseAmbiguousInitialSave(draft);
         if (rebased != null) {
           try {
-            submitted = await _repository.saveAndSubmit(rebased);
+            submitted = approveImmediately
+                ? await _repository.saveSubmitAndApprove(rebased)
+                : await _repository.saveAndSubmit(rebased);
           } on YorksV1DomainException catch (retryError) {
             state = YorksV1MaterialRequestDraftState(
               draft: rebased,

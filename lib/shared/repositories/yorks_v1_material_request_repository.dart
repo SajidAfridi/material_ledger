@@ -56,6 +56,13 @@ abstract interface class YorksV1MaterialRequestRepository {
     YorksV1MaterialRequestDraft draft,
   );
 
+  /// Atomically persists, submits and approves a newly created request. The
+  /// trusted command remains the authority for both the published creator
+  /// self-approval policy and the actor's live project capability.
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  );
+
   Future<YorksV1MaterialRequest> updateForApproval(
     YorksV1UpdateMaterialRequestForApprovalInput input,
   );
@@ -369,6 +376,20 @@ class YorksV1SupabaseMaterialRequestRepository
   ) async {
     final response = await _invoke(
       functionName: 'v1_save_and_submit_material_request',
+      parameters: {
+        'p_payload': draft.toSaveInput().toRpcPayload(),
+        'p_idempotency_key': draft.submissionIdempotencyKey,
+      },
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_save_submit_and_approve_material_request',
       parameters: {
         'p_payload': draft.toSaveInput().toRpcPayload(),
         'p_idempotency_key': draft.submissionIdempotencyKey,

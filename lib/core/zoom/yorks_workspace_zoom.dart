@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../shared/models/app_language.dart';
 import '../../shared/models/yorks_v1_zoom_strings.dart';
-import '../constants/constants.dart';
+import 'yorks_inspection_gesture.dart';
 
 /// The transform authority for one R35 workspace route.
 ///
@@ -177,7 +177,8 @@ class YorksWorkspaceZoomController extends ChangeNotifier {
 }
 
 /// Zooms only a workspace's central route content. Shell navigation, headers,
-/// overlays, dialogs, toasts and the controls below remain untransformed.
+/// overlays, dialogs and toasts remain untransformed. Operating-system text
+/// scaling is never changed.
 class YorksWorkspaceZoomViewport extends StatefulWidget {
   const YorksWorkspaceZoomViewport({
     super.key,
@@ -203,11 +204,27 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   late bool _ownsController;
   AnimationController? _animationController;
   int? _middlePanPointer;
+  final _viewportKey = GlobalKey();
+  bool _usesScope = false;
 
   @override
   void initState() {
     super.initState();
     _setController(widget.controller);
+    FocusManager.instance.addListener(_focusChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scoped = YorksWorkspaceZoomScope.maybeOf(context);
+    if (widget.controller == null && scoped != null && scoped != _controller) {
+      _disposeAnimation();
+      if (_ownsController) _controller.dispose();
+      _controller = scoped;
+      _ownsController = false;
+      _usesScope = true;
+    }
   }
 
   @override
@@ -218,11 +235,11 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
       if (_ownsController) _controller.dispose();
       _setController(widget.controller);
     }
-    // Zoom is intentionally route-local. A new major page starts at 100% so
-    // users never unknowingly enter an unrelated workspace magnified.
+    // The shell host restores bounded session history. Standalone viewports
+    // start new routes at 100%; neither path changes accessibility text size.
     if (oldWidget.routeKey != widget.routeKey) {
       _disposeAnimation();
-      _controller.reset();
+      if (!_usesScope) _controller.reset();
     }
   }
 
@@ -233,6 +250,7 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_focusChanged);
     _disposeAnimation();
     if (_ownsController) _controller.dispose();
     super.dispose();
@@ -247,13 +265,13 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   void _animateToScale(double targetScale, {Offset? focalPoint}) {
     final end = _controller.transformationForScaleAt(
       targetScale,
-      focalPoint ?? _controller.defaultFocalPoint,
+      focalPoint ?? _keyboardFocalPoint,
     );
+    _disposeAnimation();
     if (MediaQuery.disableAnimationsOf(context)) {
       _controller.setTransformation(end);
       return;
     }
-    _disposeAnimation();
     final begin = Matrix4.copy(_controller.transformationController.value);
     final animationController = AnimationController(
       vsync: this,
@@ -278,10 +296,12 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
+    if (!_allowsInspection(event.position, event.viewId)) return;
     if (event is PointerScaleEvent) {
       GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
         if (!mounted || resolved is! PointerScaleEvent) return;
-        _animateToScale(
+        _disposeAnimation();
+        _controller.setScale(
           _controller.currentScale * resolved.scale,
           focalPoint: resolved.localPosition,
         );
@@ -311,7 +331,8 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
       if (delta == 0) return;
       // localPosition is the pointer's actual location in this viewport, so
       // the value under a physical mouse cursor remains anchored as it grows.
-      _animateToScale(
+      _disposeAnimation();
+      _controller.setScale(
         _controller.currentScale + delta,
         focalPoint: resolved.localPosition,
       );
@@ -319,6 +340,7 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (!_allowsInspection(event.position, event.viewId)) return;
     if (event.kind != PointerDeviceKind.mouse ||
         event.buttons & kMiddleMouseButton == 0 ||
         _controller.currentScale <= _controller.minimumScale + .001) {
@@ -341,88 +363,161 @@ class _YorksWorkspaceZoomViewportState extends State<YorksWorkspaceZoomViewport>
     setState(() => _middlePanPointer = null);
   }
 
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      _controller.updateViewportSize(constraints.biggest);
-      // Phone widths stay gesture/shortcut-only; compact tablets and desktop
-      // keep an explicit, fixed precision control.
-      final showControls = constraints.maxWidth > AppSpacing.compactBreakpoint;
-      return YorksWorkspaceZoomShortcuts(
-        controller: _controller,
-        onZoomIn: () =>
-            _animateToScale(_controller.currentScale + _controller.step),
-        onZoomOut: () =>
-            _animateToScale(_controller.currentScale - _controller.step),
-        onReset: () => _animateToScale(_controller.minimumScale),
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) => MouseRegion(
-            cursor: _middlePanPointer != null
-                ? SystemMouseCursors.grabbing
-                : _controller.currentScale > _controller.minimumScale + .001
-                ? SystemMouseCursors.grab
-                : SystemMouseCursors.basic,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                InteractiveViewer(
-                  key: const ValueKey('yorks-workspace-zoom-viewport'),
-                  transformationController:
-                      _controller.transformationController,
-                  minScale: _controller.minimumScale,
-                  maxScale: _controller.maximumScale,
-                  alignment: Alignment.topLeft,
-                  boundaryMargin: EdgeInsets.zero,
-                  constrained: true,
-                  clipBehavior: Clip.hardEdge,
-                  // One-finger scrolling belongs to the route's existing nested
-                  // scrollables. A canvas pan would steal that familiar behavior.
-                  panEnabled: false,
-                  // Mouse/trackpad scale signals are handled by the passthrough
-                  // layer so that only Ctrl/Command-wheel can zoom. Keeping the
-                  // built-in wheel scaling off is what lets normal and Shift wheel
-                  // events reach their native page/table Scrollable.
-                  scaleEnabled: false,
-                  trackpadScrollCausesScale: false,
-                  child: widget.child,
-                ),
-                // A transparent front listener wins only Ctrl/Command wheel input
-                // and an active middle-button drag. It does not register ordinary
-                // or Shift wheel signals, so normal nested page/table scrolling is
-                // still resolved by the route below.
-                Positioned.fill(
-                  child: _YorksPointerPassthroughLayer(
-                    onPointerSignal: _handlePointerSignal,
-                    onPointerDown: _handlePointerDown,
-                    onPointerMove: _handlePointerMove,
-                    onPointerUp: _endMiddlePan,
-                    onPointerCancel: _endMiddlePan,
-                  ),
-                ),
-                if (showControls)
-                  Positioned(
-                    right: AppSpacing.lg,
-                    bottom: AppSpacing.lg,
-                    child: YorksWorkspaceZoomControls(
-                      controller: _controller,
-                      language: widget.language,
-                      onZoomIn: () => _animateToScale(
-                        _controller.currentScale + _controller.step,
-                      ),
-                      onZoomOut: () => _animateToScale(
-                        _controller.currentScale - _controller.step,
-                      ),
-                      onReset: () => _animateToScale(_controller.minimumScale),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+  bool _allowsInspection(Offset position, int viewId) {
+    final result = HitTestResult();
+    GestureBinding.instance.hitTestInView(result, position, viewId);
+    return !result.path.any((entry) => entry.target is _YorksZoomExclusionBox);
+  }
+
+  Rect? get _focusedRect {
+    final view = _viewportKey.currentContext?.findRenderObject();
+    final focused = FocusManager.instance.primaryFocus?.context
+        ?.findRenderObject();
+    if (view is! RenderBox || focused is! RenderBox || !focused.attached) {
+      return null;
+    }
+    RenderObject? ancestor = focused;
+    while (ancestor != null && ancestor != view) {
+      ancestor = ancestor.parent;
+    }
+    if (ancestor == null) {
+      return null; // A dialog/menu owns focus, not this view.
+    }
+    return MatrixUtils.transformRect(
+      focused.getTransformTo(view),
+      Offset.zero & focused.size,
+    );
+  }
+
+  Offset get _keyboardFocalPoint {
+    final center = _focusedRect?.center ?? _controller.defaultFocalPoint;
+    final view = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (view == null) return center;
+    return Offset(
+      center.dx.clamp(0, view.size.width),
+      center.dy.clamp(0, view.size.height),
+    );
+  }
+
+  void _focusChanged() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_controller.canZoomOut) return;
+      final rect = _focusedRect;
+      final view =
+          _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+      if (rect == null || view == null) return;
+      const margin = 12.0;
+      double correction(double start, double end, double extent) =>
+          end - start > extent - 2 * margin
+          ? margin - start
+          : start < margin
+          ? margin - start
+          : end > extent - margin
+          ? extent - margin - end
+          : 0;
+      _controller.panBy(
+        Offset(
+          correction(rect.left, rect.right, view.size.width),
+          correction(rect.top, rect.bottom, view.size.height),
         ),
       );
-    },
-  );
+    });
+  }
+
+  bool _canSpacePan(PointerDownEvent event) {
+    final focused = FocusManager.instance.primaryFocus?.context;
+    final editing =
+        focused?.widget is EditableText ||
+        focused?.findAncestorWidgetOfExactType<EditableText>() != null;
+    return !editing &&
+        _controller.canZoomOut &&
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.space,
+        ) &&
+        _allowsInspection(event.position, event.viewId);
+  }
+
+  void _inspect(double ratio, Offset previous, Offset current) {
+    final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    _disposeAnimation();
+    final before = box.globalToLocal(previous);
+    final after = box.globalToLocal(current);
+    _controller.setScale(_controller.currentScale * ratio, focalPoint: before);
+    _controller.panBy(after - before);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _controller.updateViewportSize(constraints.biggest);
+        return YorksWorkspaceZoomShortcuts(
+          controller: _controller,
+          onZoomIn: () =>
+              _animateToScale(_controller.currentScale + _controller.step),
+          onZoomOut: () =>
+              _animateToScale(_controller.currentScale - _controller.step),
+          onReset: () => _animateToScale(_controller.minimumScale),
+          child: RawGestureDetector(
+            gestures: {
+              YorksInspectionGestureRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                    YorksInspectionGestureRecognizer
+                  >(
+                    () => YorksInspectionGestureRecognizer(),
+                    (recognizer) => recognizer
+                      ..onInspect = _inspect
+                      ..canPan = (() => _controller.canZoomOut)
+                      ..allowsStart = _allowsInspection,
+                  ),
+              YorksInspectionMousePanRecognizer:
+                  GestureRecognizerFactoryWithHandlers<
+                    YorksInspectionMousePanRecognizer
+                  >(
+                    () => YorksInspectionMousePanRecognizer(),
+                    (recognizer) => recognizer
+                      ..allowsStart = _canSpacePan
+                      ..onStart = ((_) => _disposeAnimation())
+                      ..onUpdate = ((details) =>
+                          _controller.panBy(details.delta)),
+                  ),
+            },
+            child: MouseRegion(
+              cursor: _middlePanPointer != null
+                  ? SystemMouseCursors.grabbing
+                  : MouseCursor.defer,
+              child: Stack(
+                key: _viewportKey,
+                fit: StackFit.expand,
+                children: [
+                  ClipRect(
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      child: widget.child,
+                      builder: (context, child) => Transform(
+                        transform: _controller.transformationController.value,
+                        child: child,
+                      ),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: _YorksPointerPassthroughLayer(
+                      onPointerSignal: _handlePointerSignal,
+                      onPointerDown: _handlePointerDown,
+                      onPointerMove: _handlePointerMove,
+                      onPointerUp: _endMiddlePan,
+                      onPointerCancel: _endMiddlePan,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// Sits above the workspace in paint order without becoming its input target.
@@ -606,129 +701,117 @@ class _YorksZoomResetIntent extends Intent {
   const _YorksZoomResetIntent();
 }
 
-/// Fixed desktop/tablet control. It stays outside the transformed scene.
-class YorksWorkspaceZoomControls extends StatelessWidget {
-  const YorksWorkspaceZoomControls({
-    super.key,
-    required this.controller,
-    required this.language,
-    required this.onZoomIn,
-    required this.onZoomOut,
-    required this.onReset,
-  });
-
-  final YorksWorkspaceZoomController controller;
+/// Accessible alternatives live in the existing account/drawer menu, never
+/// above business content.
+class YorksWorkspaceZoomMenu extends StatelessWidget {
+  const YorksWorkspaceZoomMenu({super.key, required this.language});
   final AppLanguage language;
-  final VoidCallback onZoomIn;
-  final VoidCallback onZoomOut;
-  final VoidCallback onReset;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    label: YorksV1ZoomStrings.workspaceZoom.active(language),
-    child: Material(
-      key: const ValueKey('yorks-workspace-zoom-controls'),
-      color: AppColors.surfaceContainerLowest,
-      elevation: 4,
-      shadowColor: AppColors.scrim.withValues(alpha: .14),
-      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) => Container(
-          height: AppSpacing.minTapTarget,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.line),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+  Widget build(BuildContext context) {
+    final controller = YorksWorkspaceZoomScope.maybeOf(context);
+    if (controller == null) return const SizedBox.shrink();
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.zoom_in),
+            title: Text(YorksV1ZoomStrings.zoomIn.active(language)),
+            enabled: controller.canZoomIn,
+            onTap: controller.canZoomIn ? controller.zoomIn : null,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ZoomIconButton(
-                icon: Icons.remove_rounded,
-                tooltip: YorksV1ZoomStrings.zoomOut.active(language),
-                semanticsLabel: YorksV1ZoomStrings.zoomOut.active(language),
-                onPressed: controller.canZoomOut ? onZoomOut : null,
-              ),
-              Semantics(
-                label:
-                    '${YorksV1ZoomStrings.zoomPercentage.active(language)}: ${controller.percentage}%',
-                child: SizedBox(
-                  width: 54,
-                  child: Text(
-                    '${controller.percentage}%',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.labelLarge.copyWith(
-                      color: AppColors.ink,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              ),
-              _ZoomIconButton(
-                icon: Icons.add_rounded,
-                tooltip: YorksV1ZoomStrings.zoomIn.active(language),
-                semanticsLabel: YorksV1ZoomStrings.zoomIn.active(language),
-                onPressed: controller.canZoomIn ? onZoomIn : null,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              SizedBox(
-                height: 34,
-                child: TextButton(
-                  onPressed: controller.canZoomOut ? onReset : null,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.blue,
-                    minimumSize: const Size(58, AppSpacing.minTapTarget),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                    ),
-                    tapTargetSize: MaterialTapTargetSize.padded,
-                  ),
-                  child: Text(
-                    YorksV1ZoomStrings.resetZoom.active(language),
-                    style: AppTypography.labelMedium,
-                  ),
-                ),
-              ),
-            ],
+          ListTile(
+            leading: const Icon(Icons.zoom_out),
+            title: Text(YorksV1ZoomStrings.zoomOut.active(language)),
+            enabled: controller.canZoomOut,
+            onTap: controller.canZoomOut ? controller.zoomOut : null,
           ),
-        ),
+          ListTile(
+            leading: const Icon(Icons.fit_screen),
+            title: Text(YorksV1ZoomStrings.resetZoom.active(language)),
+            enabled: controller.canZoomOut,
+            onTap: controller.canZoomOut ? controller.reset : null,
+          ),
+        ],
       ),
-    ),
-  );
+    );
+  }
 }
 
-class _ZoomIconButton extends StatelessWidget {
-  const _ZoomIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.semanticsLabel,
-    required this.onPressed,
+class YorksWorkspaceZoomScope extends InheritedWidget {
+  const YorksWorkspaceZoomScope({
+    super.key,
+    required this.controller,
+    required super.child,
   });
+  final YorksWorkspaceZoomController controller;
+  static YorksWorkspaceZoomController? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<YorksWorkspaceZoomScope>()
+      ?.controller;
+  @override
+  bool updateShouldNotify(YorksWorkspaceZoomScope oldWidget) =>
+      controller != oldWidget.controller;
+}
 
-  final IconData icon;
-  final String tooltip;
-  final String semanticsLabel;
-  final VoidCallback? onPressed;
+/// Bounded, in-memory view history. Key this host by authenticated identity;
+/// inspection transforms must never survive logout or cross between people.
+class YorksWorkspaceZoomHost extends StatefulWidget {
+  const YorksWorkspaceZoomHost({
+    super.key,
+    required this.routeKey,
+    required this.child,
+  });
+  final String routeKey;
+  final Widget child;
+  @override
+  State<YorksWorkspaceZoomHost> createState() => _YorksWorkspaceZoomHostState();
+}
+
+class _YorksWorkspaceZoomHostState extends State<YorksWorkspaceZoomHost> {
+  final _controller = YorksWorkspaceZoomController();
+  final _history = <String, Matrix4>{};
+  @override
+  void didUpdateWidget(covariant YorksWorkspaceZoomHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routeKey == widget.routeKey) return;
+    _history.remove(oldWidget.routeKey);
+    _history[oldWidget.routeKey] = Matrix4.copy(
+      _controller.transformationController.value,
+    );
+    final restored = _history.remove(widget.routeKey);
+    while (_history.length > 20) {
+      _history.remove(_history.keys.first);
+    }
+    _controller.setTransformation(restored ?? Matrix4.identity());
+  }
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    enabled: onPressed != null,
-    label: semanticsLabel,
-    child: Tooltip(
-      message: tooltip,
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 19),
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints.tightFor(
-          width: AppSpacing.minTapTarget,
-          height: AppSpacing.minTapTarget,
-        ),
-        padding: EdgeInsets.zero,
-      ),
-    ),
-  );
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      YorksWorkspaceZoomScope(controller: _controller, child: widget.child);
+}
+
+/// Marks a dedicated document/image viewer as the sole owner of its gestures.
+class YorksWorkspaceZoomExclusion extends SingleChildRenderObjectWidget {
+  const YorksWorkspaceZoomExclusion({super.key, required super.child});
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _YorksZoomExclusionBox();
+}
+
+class _YorksZoomExclusionBox extends RenderProxyBox {
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (!size.contains(position)) return false;
+    final hit = super.hitTest(result, position: position);
+    if (hit) result.add(BoxHitTestEntry(this, position));
+    return hit;
+  }
 }

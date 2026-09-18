@@ -2146,7 +2146,7 @@ void main() {
       expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
       expect(
         tester
-            .widget<FilledButton>(
+            .widget<ButtonStyleButton>(
               find.byKey(const ValueKey('mobile-mr-primary-action')),
             )
             .onPressed,
@@ -2162,7 +2162,9 @@ void main() {
 
       expect(repository.saveAndSubmitCount, 1);
       expect(
-        find.text(YorksV1MaterialRequestStrings.serverConfirmed.primary),
+        find.text(
+          YorksV1MaterialRequestStrings.approvedForProcurementConfirmed.primary,
+        ),
         findsOneWidget,
       );
       await expectLater(
@@ -2835,6 +2837,25 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('mobile Review gives Site Engineer Submit without Approve', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    await _pumpDraft(tester, role: YorksV1Role.siteEngineer);
+    await _addCustomMaterial(tester);
+    await _openReview(tester);
+
+    expect(
+      find.byKey(const ValueKey('mobile-mr-primary-action')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('mobile-mr-approve')), findsNothing);
+    expect(
+      find.text(YorksV1MaterialRequestStrings.submit.primary),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget _scope({
@@ -2868,6 +2889,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   YorksV1MaterialRequest? serverRequest,
   String? initialProjectId = _projectId,
   List<YorksV1MaterialRequestProjectOption>? projectOptions,
+  YorksV1Role role = YorksV1Role.projectEngineer,
 }) async {
   final projects = projectOptions ?? _draftProjects.take(1).toList();
   final repository = _MaterialRequestRepositoryFixture(
@@ -2877,9 +2899,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
     _scope(
       overrides: [
         yorksV1AuthUserIdProvider.overrideWithValue('mobile-mr-user'),
-        yorksV1CurrentRoleProvider.overrideWithValue(
-          YorksV1Role.projectEngineer,
-        ),
+        yorksV1CurrentRoleProvider.overrideWithValue(role),
         yorksV1MaterialRequestRepositoryProvider.overrideWithValue(repository),
         yorksV1RuntimeConfigurationProvider.overrideWith(
           (ref) async => runtimeConfiguration ?? _runtimeConfiguration(),
@@ -3222,6 +3242,7 @@ class _MaterialRequestRepositoryFixture
 
   final YorksV1MaterialRequest? serverRequest;
   int saveAndSubmitCount = 0;
+  int saveSubmitAndApproveCount = 0;
   final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
   final List<YorksV1CancelMaterialRequestInput> cancelInputs = [];
   bool commentFailure = false;
@@ -3323,6 +3344,14 @@ class _MaterialRequestRepositoryFixture
     YorksV1MaterialRequestDraft draft,
   ) async {
     saveAndSubmitCount++;
+    return _submittedRequest;
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    saveSubmitAndApproveCount++;
     return _submittedRequest;
   }
 

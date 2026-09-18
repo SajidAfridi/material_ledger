@@ -13,6 +13,7 @@ import '../models/yorks_v1_role.dart';
 import '../repositories/storage.dart';
 import '../repositories/yorks_v1_material_request_repository.dart';
 import '../services/analytics_service.dart';
+import '../sync/connectivity_service.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 import 'yorks_v1_permission_provider.dart';
 import 'language_provider.dart';
@@ -337,6 +338,7 @@ final yorksV1MaterialRequestRealtimeRevisionProvider =
             client != null,
         authUserId: authUserId,
         client: client,
+        connectivity: ref.watch(connectivityProvider),
       );
       unawaited(notifier.start());
       return notifier;
@@ -358,11 +360,13 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     required bool enabled,
     required String? authUserId,
     required SupabaseClient? client,
+    ConnectivityService? connectivity,
     YorksV1MaterialRequestRefreshSignalSubscription? signalSubscription,
     Duration fallbackInterval = const Duration(seconds: 20),
   }) : _enabled = enabled,
        _authUserId = authUserId,
        _client = client,
+       _connectivity = connectivity ?? const _AlwaysOnlineConnectivity(),
        _signalSubscription = signalSubscription,
        _fallbackInterval = fallbackInterval,
        super(0);
@@ -370,11 +374,13 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
   final bool _enabled;
   final String? _authUserId;
   final SupabaseClient? _client;
+  final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRefreshSignalSubscription? _signalSubscription;
   final Duration _fallbackInterval;
 
   RealtimeChannel? _channel;
   StreamSubscription<AuthState>? _authSubscription;
+  StreamSubscription<bool>? _connectivitySubscription;
   Timer? _fallbackTimer;
   bool _started = false;
   bool _disposed = false;
@@ -393,6 +399,9 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     _started = true;
     WidgetsBinding.instance.addObserver(this);
     _observingLifecycle = true;
+    _connectivitySubscription = _connectivity.onChange.listen(
+      _onConnectivityChanged,
+    );
     final subscription = _signalSubscription ?? _subscribeToNotificationSignals;
     final subscribed = await subscription(
       onSignal: _refreshAuthorizedProjections,
@@ -548,12 +557,28 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     if (_disposed || _fallbackTimer != null) return;
     _fallbackTimer = Timer.periodic(
       _fallbackInterval,
-      (_) => unawaited(
-        _refreshAuthorizedProjections(
-          YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
-        ),
+      (_) => _refreshFromFallback(),
+    );
+  }
+
+  /// A dropped socket should not turn a definitely-offline device into a
+  /// repeating authorized-RPC loop. Connectivity is only a transport hint;
+  /// every refresh still reads the normal server-authorized projection.
+  void _refreshFromFallback() {
+    if (!_connectivity.isOnline) return;
+    unawaited(
+      _refreshAuthorizedProjections(
+        YorksV1MaterialRequestRefreshReason.subscriptionReconnected,
       ),
     );
+  }
+
+  /// Once connectivity returns, one refresh closes the stale-data window
+  /// without waiting for the next fallback interval. A healthy Realtime
+  /// channel already handles its own reconnect and has no fallback timer.
+  void _onConnectivityChanged(bool online) {
+    if (!online || _disposed || _fallbackTimer == null) return;
+    _refreshFromFallback();
   }
 
   void _stopFallbackTimer() {
@@ -570,6 +595,7 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     }
     _stopFallbackTimer();
     unawaited(_authSubscription?.cancel() ?? Future<void>.value());
+    unawaited(_connectivitySubscription?.cancel() ?? Future<void>.value());
     final channel = _channel;
     final client = _client;
     if (channel != null && client != null) {
@@ -578,6 +604,18 @@ class YorksV1MaterialRequestRealtimeNotifier extends StateNotifier<int>
     _channel = null;
     super.dispose();
   }
+}
+
+/// Keeps direct notifier tests and non-Riverpod callers transport-neutral.
+/// Production always injects [connectivityProvider] above.
+class _AlwaysOnlineConnectivity implements ConnectivityService {
+  const _AlwaysOnlineConnectivity();
+
+  @override
+  bool get isOnline => true;
+
+  @override
+  Stream<bool> get onChange => const Stream<bool>.empty();
 }
 
 /// Whether a request belongs in the signed-in role's action queue.
