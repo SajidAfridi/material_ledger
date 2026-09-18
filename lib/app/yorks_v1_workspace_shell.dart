@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
+import '../core/fullscreen/yorks_workspace_fullscreen.dart';
 import '../core/zoom/yorks_workspace_zoom.dart';
 import '../core/widgets/brand_logo.dart';
 import '../core/widgets/yorks_mobile_ui.dart';
@@ -16,6 +17,7 @@ import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/models/yorks_v1_team_chat_strings.dart';
 import '../shared/models/yorks_v1_workspace_status.dart';
+import '../shared/models/yorks_v1_zoom_strings.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/notification_provider.dart';
 import '../shared/providers/session_provider.dart';
@@ -106,6 +108,9 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final desktop =
         MediaQuery.sizeOf(context).width >=
         AppSpacing.yorksV1ShellDesktopBreakpoint;
+    final fullscreen = desktop
+        ? ref.watch(yorksWorkspaceFullscreenControllerProvider)
+        : null;
     final sidebarExpanded = desktop
         ? ref.watch(yorksV1SidebarExpandedProvider)
         : true;
@@ -172,6 +177,10 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                 openSearch,
             const SingleActivator(LogicalKeyboardKey.keyK, control: true):
                 openSearch,
+            if (fullscreen?.shouldHideWorkspaceChrome ?? false)
+              const SingleActivator(LogicalKeyboardKey.escape): () {
+                fullscreen!.toggle();
+              },
           },
           child: Scaffold(
             backgroundColor: AppColors.surface,
@@ -245,6 +254,41 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                           ),
                       ],
                     ),
+                  );
+                }
+                if (fullscreen?.shouldHideWorkspaceChrome ?? false) {
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: YorksWorkspaceZoomViewport(
+                          routeKey: location,
+                          language: language,
+                          child: child,
+                        ),
+                      ),
+                      SafeArea(
+                        child: Align(
+                          alignment: AlignmentDirectional.topEnd,
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            child: Material(
+                              key: const ValueKey(
+                                'yorks-workspace-fullscreen-exit-surface',
+                              ),
+                              color: AppColors.workspaceChrome,
+                              elevation: 3,
+                              shape: const CircleBorder(
+                                side: BorderSide(color: AppColors.line),
+                              ),
+                              child: _YorksWorkspaceFullscreenButton(
+                                language: language,
+                                controller: fullscreen!,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   );
                 }
                 return Row(
@@ -1352,6 +1396,7 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
+    final fullscreen = ref.watch(yorksWorkspaceFullscreenControllerProvider);
     return Material(
       color: AppColors.workspaceChrome,
       child: Container(
@@ -1428,6 +1473,13 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.md),
+            if (fullscreen.isSupported) ...[
+              _YorksWorkspaceFullscreenButton(
+                language: language,
+                controller: fullscreen,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
             if (teamChatEnabled) ...[
               IconButton(
                 tooltip: YorksV1TeamChatStrings.teamChat.active(language),
@@ -1448,6 +1500,32 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _YorksWorkspaceFullscreenButton extends StatelessWidget {
+  const _YorksWorkspaceFullscreenButton({
+    required this.language,
+    required this.controller,
+  });
+
+  final AppLanguage language;
+  final YorksWorkspaceFullscreenController controller;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('yorks-workspace-fullscreen-toggle'),
+    tooltip:
+        (controller.isFullscreen
+                ? YorksV1ZoomStrings.exitFullscreen
+                : YorksV1ZoomStrings.enterFullscreen)
+            .active(language),
+    onPressed: controller.toggle,
+    icon: Icon(
+      controller.isFullscreen
+          ? Icons.fullscreen_exit_rounded
+          : Icons.fullscreen_rounded,
+    ),
+  );
 }
 
 class _YorksWorkspaceMobileTopBar extends StatelessWidget {
