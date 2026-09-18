@@ -611,7 +611,7 @@ select is(
 reset role;
 
 select ok(
-  public.v1_can_decide_material_request(
+  not public.v1_can_decide_material_request(
     'cc200000-0000-4000-8000-000000000002'
   )
   and not public.v1_can_decide_material_request(
@@ -623,7 +623,7 @@ select ok(
   and public.v1_can_generate_delivery_order(
     'cc200000-0000-4000-8000-000000000003'
   ),
-  'Site approval needs both dated Project Engineer membership and an explicit grant'
+  'An exact Site Engineer cannot approve, even with a Project Engineer membership label and approval grant'
 );
 
 select ok(
@@ -649,10 +649,10 @@ select throws_ok(
     'cc400000-0000-4000-8000-000000000001'::uuid
   )$$,
   '42501', 'V1_MATERIAL_REQUEST_DECISION_DENIED',
-  'A Site approval grant cannot bypass a non-Project-Engineer membership'
+  'A Site Engineer approval grant cannot bypass the exact-role boundary'
 );
 
-select lives_ok(
+select throws_ok(
   $$select public.v1_decide_material_request(
     jsonb_build_object(
       'request_id', 'cc200000-0000-4000-8000-000000000002',
@@ -660,19 +660,19 @@ select lives_ok(
     ),
     'cc400000-0000-4000-8000-000000000003'::uuid
   )$$,
-  'A Site Engineer assigned as Project Engineer can approve with an explicit grant'
+  '42501', 'V1_MATERIAL_REQUEST_DECISION_DENIED',
+  'A Project Engineer membership label cannot elevate an exact Site Engineer to approve'
 );
 
-select ok(
-  exists (
-    select 1
+select is(
+  (
+    select count(*)
     from public.v1_material_request_decisions decision_record
     where decision_record.request_id =
       'cc200000-0000-4000-8000-000000000002'
-      and decision_record.decided_by_role = 'project_engineer'
-      and decision_record.decided_by_exact_role = 'site_engineer'
   ),
-  'The immutable decision records Project Engineer capacity and exact Site role'
+  0::bigint,
+  'A denied exact Site Engineer approval creates no decision record'
 );
 
 select lives_ok(

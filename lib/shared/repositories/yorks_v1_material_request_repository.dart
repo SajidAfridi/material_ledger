@@ -32,6 +32,30 @@ class SupabaseYorksV1MaterialRequestRpcClient
   }) => _client.rpc(functionName, params: parameters);
 }
 
+/// Optional additive API. Older backends can fail this read safely; callers
+/// must keep the intent unresolved rather than retry a mutation automatically.
+abstract interface class YorksV1MaterialRequestSubmissionRecoveryRepository {
+  Future<YorksV1MaterialRequest?> findSubmissionResult(
+    YorksV1MaterialRequestDraft draft, {
+    required bool approveImmediately,
+  });
+}
+
+/// Additive save receipt contract. Older test/backends keep the original
+/// projection-returning save method, while production uses this interface to
+/// distinguish a committed save from an unconfirmed transport outcome.
+abstract interface class YorksV1MaterialRequestDraftSaveRecoveryRepository {
+  Future<YorksV1MaterialRequestDraftSaveAcknowledgement> saveDraftIdempotent(
+    YorksV1SaveMaterialRequestDraftInput input, {
+    required String operationId,
+  });
+
+  Future<YorksV1MaterialRequestDraftSaveAcknowledgement?> findDraftSaveResult(
+    YorksV1SaveMaterialRequestDraftInput input, {
+    required String operationId,
+  });
+}
+
 abstract interface class YorksV1MaterialRequestRepository {
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects();
 
@@ -53,6 +77,13 @@ abstract interface class YorksV1MaterialRequestRepository {
   /// workflow transition must never depend on a second client request after a
   /// draft version has changed on the server.
   Future<YorksV1MaterialRequest> saveAndSubmit(
+    YorksV1MaterialRequestDraft draft,
+  );
+
+  /// Atomically persists, submits and approves a newly created request. The
+  /// trusted command remains the authority for both the published creator
+  /// self-approval policy and the actor's live project capability.
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
     YorksV1MaterialRequestDraft draft,
   );
 
@@ -175,6 +206,8 @@ abstract interface class YorksV1MaterialRequestOperationsRepository {
 class YorksV1SupabaseMaterialRequestRepository
     implements
         YorksV1MaterialRequestRepository,
+        YorksV1MaterialRequestDraftSaveRecoveryRepository,
+        YorksV1MaterialRequestSubmissionRecoveryRepository,
         YorksV1MaterialRequestPhase2Repository,
         YorksV1MaterialRequestPhase3Repository,
         YorksV1MaterialRequestOperationsRepository {
@@ -195,6 +228,22 @@ class YorksV1SupabaseMaterialRequestRepository
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _rpcTimeout;
   final AnalyticsService _analytics;
+
+  @override
+  Future<YorksV1MaterialRequest?> findSubmissionResult(
+    YorksV1MaterialRequestDraft draft, {
+    required bool approveImmediately,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_get_material_request_submission_result',
+      parameters: {
+        'p_payload': draft.toSaveInput().toRpcPayload(),
+        'p_idempotency_key': draft.submissionIdempotencyKey,
+        'p_approve_immediately': approveImmediately,
+      },
+    );
+    return response == null ? null : _single(response);
+  }
 
   @override
   Future<List<YorksV1MaterialRequestProjectOption>> listDraftProjects() async {
@@ -364,11 +413,60 @@ class YorksV1SupabaseMaterialRequestRepository
   }
 
   @override
+  Future<YorksV1MaterialRequestDraftSaveAcknowledgement> saveDraftIdempotent(
+    YorksV1SaveMaterialRequestDraftInput input, {
+    required String operationId,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_save_material_request_draft_idempotent',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': operationId,
+      },
+    );
+    return YorksV1MaterialRequestDraftSaveAcknowledgement.fromRpcJson(
+      _map(response),
+    );
+  }
+
+  @override
+  Future<YorksV1MaterialRequestDraftSaveAcknowledgement?> findDraftSaveResult(
+    YorksV1SaveMaterialRequestDraftInput input, {
+    required String operationId,
+  }) async {
+    final response = await _invoke(
+      functionName: 'v1_get_material_request_draft_save_result',
+      parameters: {
+        'p_payload': input.toRpcPayload(),
+        'p_idempotency_key': operationId,
+      },
+    );
+    if (response == null) return null;
+    return YorksV1MaterialRequestDraftSaveAcknowledgement.fromRpcJson(
+      _map(response),
+    );
+  }
+
+  @override
   Future<YorksV1MaterialRequest> saveAndSubmit(
     YorksV1MaterialRequestDraft draft,
   ) async {
     final response = await _invoke(
       functionName: 'v1_save_and_submit_material_request',
+      parameters: {
+        'p_payload': draft.toSaveInput().toRpcPayload(),
+        'p_idempotency_key': draft.submissionIdempotencyKey,
+      },
+    );
+    return _single(response);
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    final response = await _invoke(
+      functionName: 'v1_save_submit_and_approve_material_request',
       parameters: {
         'p_payload': draft.toSaveInput().toRpcPayload(),
         'p_idempotency_key': draft.submissionIdempotencyKey,
@@ -803,7 +901,11 @@ class YorksV1SupabaseMaterialRequestRepository
     PostgrestException error,
   ) {
     final code = switch (error.code) {
-      '42501' || '28000' => YorksV1DomainErrorCode.unauthorized,
+      '28000' ||
+      'PGRST301' ||
+      'PGRST302' ||
+      'PGRST303' => YorksV1DomainErrorCode.unauthenticated,
+      '42501' => YorksV1DomainErrorCode.unauthorized,
       '40001' || '23505' || '55P03' => YorksV1DomainErrorCode.conflict,
       'PGRST002' || 'PGRST003' => YorksV1DomainErrorCode.backendUnavailable,
       '22023' ||

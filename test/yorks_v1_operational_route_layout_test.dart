@@ -9,6 +9,7 @@ import 'package:material_ledger/features/projects/presentation/screens/yorks_v1_
 import 'package:material_ledger/shared/models/yorks_v1_arrangement.dart';
 import 'package:material_ledger/shared/models/yorks_v1_boq.dart';
 import 'package:material_ledger/shared/models/yorks_v1_document.dart';
+import 'package:material_ledger/shared/models/yorks_v1_feature_flags.dart';
 import 'package:material_ledger/shared/models/yorks_v1_logistics.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request_document.dart';
@@ -25,6 +26,7 @@ import 'package:material_ledger/shared/providers/yorks_v1_documents_provider.dar
 import 'package:material_ledger/shared/providers/yorks_v1_project_portfolio_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_feature_flags_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/yorks_v1_permission_test_support.dart';
@@ -140,6 +142,68 @@ void main() {
 
       expect(find.text('Material Requests'), findsWidgets);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Company Use entry appears at desktop and mobile widths when released',
+    (tester) async {
+      final preferences = await SharedPreferences.getInstance();
+      const companyRequestsEnabled = YorksV1FeatureFlags(
+        foundation: true,
+        projects: true,
+        boq: true,
+        excel: true,
+        requests: true,
+        arrangement: true,
+        logistics: true,
+        returnsDocuments: true,
+        documents: true,
+        companyMaterialRequests: true,
+      );
+
+      for (final entry in <({Size size, Key entryKey})>[
+        (
+          size: const Size(1366, 768),
+          entryKey: const ValueKey('material-request-centre-create-company'),
+        ),
+        (
+          size: const Size(360, 800),
+          entryKey: const ValueKey('mobile-mr-new-company-request'),
+        ),
+      ]) {
+        tester.view.physicalSize = entry.size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(preferences),
+              yorksV1FeatureFlagsProvider.overrideWithValue(
+                companyRequestsEnabled,
+              ),
+              yorksV1CurrentPermissionSnapshotProvider.overrideWith(
+                (ref) => YorksV1TestPermissionController(
+                  yorksV1TrustedFeaturePermissionState(),
+                ),
+              ),
+              yorksV1CurrentRoleProvider.overrideWithValue(
+                YorksV1Role.projectEngineer,
+              ),
+              yorksV1MaterialRequestListProvider(
+                null,
+              ).overrideWith((ref) async => []),
+            ],
+            child: const MaterialApp(home: YorksV1MaterialRequestsScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(entry.entryKey), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: '${entry.size}');
+      }
+
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     },
   );
 

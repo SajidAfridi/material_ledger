@@ -524,6 +524,53 @@ void main() {
     },
   );
 
+  for (final size in [const Size(1366, 768), const Size(360, 800)]) {
+    testWidgets(
+      'review validation survives return to invalid stage ${size.width}',
+      (tester) async {
+        final repository = _FakeProjectRepository();
+        final container = await createContainer(
+          role: YorksV1Role.siteEngineer,
+          repository: repository,
+        );
+        final provider = yorksV1ProjectCreationDraftProvider(_authUserId);
+        final draft = container
+            .read(provider)
+            .copyWith(
+              reference: 'VALIDATION-LOCAL-001',
+              name: 'Preserved project',
+              clientName: 'Synthetic client',
+              startDate: DateTime(2026, 9, 17),
+              endDate: DateTime(2026, 9, 16),
+              currentStage: YorksV1ProjectCreationStage.reviewAndCreate,
+              buildings: const [
+                YorksV1ProjectBuildingInput(code: 'B01', name: 'Building One'),
+              ],
+            );
+        await container.read(provider.notifier).save(draft);
+        await _pumpScreen(tester, container, size: size);
+        final create = find.byKey(const ValueKey('yorks-v1-project-create'));
+        await tester.ensureVisible(create);
+        await tester.tap(create);
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 6));
+        await tester.pumpAndSettle();
+        expect(repository.receivedCreationInputs, isEmpty);
+        expect(
+          container.read(provider).currentStage,
+          YorksV1ProjectCreationStage.projectDetails,
+        );
+        expect(container.read(provider).name, draft.name);
+        expect(container.read(provider).endDate, draft.endDate);
+        expect(
+          find.text(YorksV1ProjectStrings.endDateAfterStart.primary),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('creates through the V1 command controller and retries safely', (
     tester,
   ) async {

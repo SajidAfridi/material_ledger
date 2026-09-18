@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(54);
+select plan(59);
 
 select ok(
   (select relrowsecurity from pg_class
@@ -873,6 +873,116 @@ select is(
    where id = (select arrangement_line_id from v1_af_self_arrangement)),
   'Supplier follow-up is still pending',
   'The revised unavailable reason is stored without closing the request'
+);
+
+-- Creation-form submit and approve is one trusted transaction, not two
+-- browser commands. It preserves the ordinary submitted/decision evidence.
+set local role postgres;
+create temporary table v1_af_combined_payload as
+select jsonb_build_object(
+  'request_id', 'af100000-0000-4000-8000-000000000003',
+  'expected_version', 0,
+  'project_id', project_id,
+  'scope_id', scope_id,
+  'title', 'Creation form combined approval',
+  'timing', 'normal', 'scheduled_date', null,
+  'delivery_note', 'Creation form',
+  'lines', jsonb_build_array(jsonb_build_object(
+    'id', 'af110000-0000-4000-8000-000000000003',
+    'display_order', 1, 'source_kind', 'custom',
+    'source_boq_group_id', null, 'source_boq_row_id', null,
+    'item_description', 'Creation form damper',
+    'brand_origin', 'UAE', 'technical_attributes', '{}'::jsonb,
+    'requested_qty', '1', 'unit', 'Nos'
+  ))
+) as payload
+from v1_af_targets;
+grant select on table v1_af_combined_payload to authenticated;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"role":"project_engineer","app_user_id":"usr-local-project-engineer"}}',
+  true
+);
+select lives_ok(
+  $$select public.v1_save_submit_and_approve_material_request(
+    (select payload from v1_af_combined_payload),
+    'af800000-0000-4000-8000-000000000001'::uuid
+  )$$,
+  'Authorized Project Engineer submits and approves a new request atomically'
+);
+select is(
+  public.v1_save_submit_and_approve_material_request(
+    (select payload from v1_af_combined_payload),
+    'af800000-0000-4000-8000-000000000001'::uuid
+  ) ->> 'id',
+  'af100000-0000-4000-8000-000000000003',
+  'Combined-command retry returns the original approved request'
+);
+
+set local role postgres;
+select ok(
+  (select state = 'approved_for_arrangement'
+     from public.v1_material_requests
+    where id = 'af100000-0000-4000-8000-000000000003')
+  and (select count(*) from public.v1_material_request_decisions
+       where request_id = 'af100000-0000-4000-8000-000000000003'
+         and decision = 'approved') = 1,
+  'Combined command records exactly one approved decision and final state'
+);
+
+-- An incorrect legacy Project Engineer membership must not elevate an exact
+-- Site Engineer. Failure at the decision step rolls the draft/submission back.
+insert into public.v1_project_members (
+  project_id, member_auth_user_id, project_role, reason,
+  assigned_by_auth_user_id, assigned_by_role
+)
+select project_id,
+  '10000000-0000-4000-8000-000000000002'::uuid,
+  'project_engineer',
+  'Negative test legacy membership must not elevate exact Site Engineer',
+  '10000000-0000-4000-8000-000000000001'::uuid,
+  'project_engineer'
+from v1_af_targets;
+
+create temporary table v1_af_site_combined_payload as
+select payload
+  || jsonb_build_object(
+    'request_id', 'af100000-0000-4000-8000-000000000004',
+    'lines', jsonb_build_array(jsonb_build_object(
+      'id', 'af110000-0000-4000-8000-000000000004',
+      'display_order', 1, 'source_kind', 'custom',
+      'source_boq_group_id', null, 'source_boq_row_id', null,
+      'item_description', 'Site engineer non-approvable damper',
+      'brand_origin', null, 'technical_attributes', '{}'::jsonb,
+      'requested_qty', '1', 'unit', 'Nos'
+    ))
+  ) as payload
+from v1_af_combined_payload;
+grant select on table v1_af_site_combined_payload to authenticated;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer","app_user_id":"usr-local-site-engineer"}}',
+  true
+);
+select throws_ok(
+  $$select public.v1_save_submit_and_approve_material_request(
+    (select payload from v1_af_site_combined_payload),
+    'af800000-0000-4000-8000-000000000002'::uuid
+  )$$,
+  '42501', 'V1_MATERIAL_REQUEST_DECISION_DENIED',
+  'Exact Site Engineer cannot use the combined approval command'
+);
+
+set local role postgres;
+select is(
+  (select count(*) from public.v1_material_requests
+   where id = 'af100000-0000-4000-8000-000000000004'),
+  0::bigint,
+  'Denied combined approval leaves no saved or submitted request behind'
 );
 
 select * from finish();

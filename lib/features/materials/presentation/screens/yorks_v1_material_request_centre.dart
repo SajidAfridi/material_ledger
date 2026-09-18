@@ -9,6 +9,7 @@ import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
+import '../../../../shared/models/yorks_v1_company_material_request_strings.dart';
 
 /// The cross-project Material Request register.
 ///
@@ -23,6 +24,8 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
     required this.language,
     required this.canCreate,
     required this.onCreate,
+    this.canCreateCompany = false,
+    this.onCreateCompany,
     required this.onOpen,
     required this.onRefresh,
     this.localDraftNotice,
@@ -36,6 +39,8 @@ class YorksV1MaterialRequestCentre extends StatefulWidget {
   final AppLanguage language;
   final bool canCreate;
   final VoidCallback? onCreate;
+  final bool canCreateCompany;
+  final VoidCallback? onCreateCompany;
   final ValueChanged<YorksV1MaterialRequest> onOpen;
   final VoidCallback onRefresh;
   final Widget? localDraftNotice;
@@ -303,6 +308,8 @@ class _YorksV1MaterialRequestCentreState
             language: widget.language,
             canCreate: widget.canCreate,
             onCreate: widget.onCreate,
+            canCreateCompany: widget.canCreateCompany,
+            onCreateCompany: widget.onCreateCompany,
             onRefresh: widget.summaryPageLoader == null
                 ? widget.onRefresh
                 : () => unawaited(_loadServerPage()),
@@ -945,12 +952,16 @@ class _CentreHeader extends StatelessWidget {
     required this.language,
     required this.canCreate,
     required this.onCreate,
+    required this.canCreateCompany,
+    required this.onCreateCompany,
     required this.onRefresh,
   });
 
   final AppLanguage language;
   final bool canCreate;
   final VoidCallback? onCreate;
+  final bool canCreateCompany;
+  final VoidCallback? onCreateCompany;
   final VoidCallback onRefresh;
 
   @override
@@ -1029,6 +1040,20 @@ class _CentreHeader extends StatelessWidget {
                 copy: YorksV1MaterialRequestStrings.newRequest,
                 language: language,
                 style: AppTypography.titleSmall.copyWith(color: Colors.white),
+              ),
+            ),
+          ),
+        if (canCreateCompany)
+          SizedBox(
+            height: AppSpacing.minTapTarget,
+            child: OutlinedButton.icon(
+              key: const ValueKey('material-request-centre-create-company'),
+              onPressed: onCreateCompany,
+              icon: const Icon(Icons.business_center_outlined),
+              label: YorksV1ActiveText(
+                copy: YorksV1CompanyMaterialRequestStrings.companyUse,
+                language: language,
+                style: AppTypography.titleSmall,
               ),
             ),
           ),

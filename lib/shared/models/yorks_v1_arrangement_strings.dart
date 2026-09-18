@@ -226,16 +226,16 @@ abstract final class YorksV1ArrangementStrings {
     hi: 'अनुरोधित आइटम',
   );
   static const clarifyItem = TranslatableString(
-    en: 'Clarify item',
-    ar: 'توضيح البند',
-    ur: 'آئٹم کی وضاحت کریں',
-    hi: 'वस्तु स्पष्ट करें',
+    en: 'Edit item details',
+    ar: 'تعديل تفاصيل البند',
+    ur: 'آئٹم کی تفصیل میں ترمیم کریں',
+    hi: 'वस्तु विवरण संपादित करें',
   );
   static const clarifyItemDescription = TranslatableString(
-    en: 'Confirm the item name and model before saving the arrangement.',
-    ar: 'أكد اسم البند والطراز قبل حفظ الترتيب.',
-    ur: 'انتظام محفوظ کرنے سے پہلے آئٹم کا نام اور ماڈل پکا کریں۔',
-    hi: 'व्यवस्था सहेजने से पहले वस्तु का नाम और मॉडल पक्का करें।',
+    en: 'Edit the Procurement item name or model before arranging it. The original request stays in history and Engineering must approve the change.',
+    ar: 'عدّل اسم بند المشتريات أو طرازه قبل ترتيبه. يبقى الطلب الأصلي في السجل ويجب أن تعتمد الهندسة التغيير.',
+    ur: 'انتظام سے پہلے پروکیورمنٹ آئٹم کا نام یا ماڈل تبدیل کریں۔ اصل درخواست تاریخ میں محفوظ رہے گی اور تبدیلی کے لیے انجینئرنگ کی منظوری ضروری ہے۔',
+    hi: 'व्यवस्था से पहले खरीद वस्तु का नाम या मॉडल संपादित करें। मूल अनुरोध इतिहास में रहेगा और बदलाव के लिए इंजीनियरिंग की स्वीकृति आवश्यक है।',
   );
   static const effectiveItem = TranslatableString(
     en: 'Procurement item',

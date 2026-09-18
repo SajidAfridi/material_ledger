@@ -117,6 +117,31 @@ void main() {
     );
   });
 
+  testWidgets(
+    'new draft entry never probes the normalized request projection',
+    (tester) async {
+      await _setViewport(tester, const Size(1366, 768));
+      final repository = await _pumpDraft(tester);
+
+      expect(repository.getRequestCount, 0);
+      expect(find.text('Request Information'), findsWidgets);
+    },
+  );
+
+  testWidgets('saved draft denial never opens a replacement blank editor', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1366, 768));
+    final repository = await _pumpDraft(
+      tester,
+      entryMode: YorksV1MaterialRequestDraftEntryMode.resumeSavedDraft,
+    );
+
+    expect(repository.getRequestCount, 1);
+    expect(find.text('Add Custom Item'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
   testWidgets('desktop custom item action waits for project selection', (
     tester,
   ) async {
@@ -2146,7 +2171,7 @@ void main() {
       expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
       expect(
         tester
-            .widget<FilledButton>(
+            .widget<ButtonStyleButton>(
               find.byKey(const ValueKey('mobile-mr-primary-action')),
             )
             .onPressed,
@@ -2160,9 +2185,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(repository.saveAndSubmitCount, 1);
+      expect(repository.saveSubmitAndApproveCount, 1);
       expect(
-        find.text(YorksV1MaterialRequestStrings.serverConfirmed.primary),
+        find.text(
+          YorksV1MaterialRequestStrings.approvedForProcurementConfirmed.primary,
+        ),
         findsOneWidget,
       );
       await expectLater(
@@ -2780,6 +2807,55 @@ void main() {
   for (final size in [const Size(1366, 768), const Size(360, 800)]) {
     final suffix = '${size.width.toInt()}x${size.height.toInt()}';
 
+    testWidgets('MR unconfirmed outcome preserves full form $suffix', (
+      tester,
+    ) async {
+      await _setViewport(tester, size);
+      final repository = await _pumpDraft(tester);
+      repository.submissionResponseLost = true;
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final controller = container.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: 'mobile-mr-user',
+            draftId: _draftId,
+          ),
+        ).notifier,
+      );
+      await controller.setScope('scope-common');
+      await controller.addCustomLine();
+      await controller.updateLine(
+        controller.currentDraft.lines.single.id,
+        (line) => line.copyWith(
+          description: 'Preserved duct',
+          quantity: '2',
+          unit: 'Nos',
+        ),
+      );
+      await controller.submit();
+      await tester.pumpAndSettle();
+      expect(repository.saveAndSubmitCount, 1);
+      expect(
+        find.byKey(const ValueKey('mr-check-submission')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mr-retry-same-submission')),
+        findsNothing,
+      );
+      expect(
+        controller.currentDraft.lines.single.description,
+        'Preserved duct',
+      );
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/mr_unconfirmed_$suffix.png'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('MR register exposes owner-local draft recovery $suffix', (
       tester,
     ) async {
@@ -2788,6 +2864,7 @@ void main() {
       final repository = _MaterialRequestRepositoryFixture();
       final recoveryContainer = ProviderContainer(
         overrides: [
+          yorksV1AuthUserIdProvider.overrideWithValue(ownerAuthUserId),
           sharedPreferencesProvider.overrideWithValue(_preferences),
           yorksV1MaterialRequestRepositoryProvider.overrideWithValue(
             repository,
@@ -2835,6 +2912,122 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    'authorized creator defaults to Submit and Approve and can choose Create only',
+    (tester) async {
+      await _setViewport(tester, const Size(390, 844));
+      final repository = await _pumpDraft(
+        tester,
+        role: YorksV1Role.projectEngineer,
+      );
+      await _addCustomMaterial(tester);
+      await _openReview(tester);
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(YorksV1MaterialRequestStrings.submitAndApprove.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mobile-mr-submit-menu')),
+        findsOneWidget,
+      );
+      final menuSize = tester.getSize(
+        find.byKey(const ValueKey('mobile-mr-submit-menu')),
+      );
+      expect(menuSize.width, greaterThanOrEqualTo(44));
+      expect(menuSize.height, greaterThanOrEqualTo(44));
+      await tester.tap(
+        find.byKey(const ValueKey('mobile-mr-submit-menu')).hitTestable(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(YorksV1MaterialRequestStrings.createOnly.primary),
+        findsOneWidget,
+      );
+      expect(
+        find.text(YorksV1MaterialRequestStrings.createAndApprove.primary),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.text(YorksV1MaterialRequestStrings.createOnly.primary),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.saveAndSubmitCount, 1);
+      expect(repository.saveSubmitAndApproveCount, 0);
+    },
+  );
+
+  testWidgets('authorized creator main action uses the atomic command', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = await _pumpDraft(
+      tester,
+      role: YorksV1Role.projectEngineer,
+    );
+    await _addCustomMaterial(tester);
+    await _openReview(tester);
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-mr-primary-action')).hitTestable(),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.saveSubmitAndApproveCount, 1);
+    expect(repository.saveAndSubmitCount, 0);
+  });
+
+  testWidgets('Create and Approve menu choice uses the atomic command', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    final repository = await _pumpDraft(
+      tester,
+      role: YorksV1Role.projectEngineer,
+    );
+    await _addCustomMaterial(tester);
+    await _openReview(tester);
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('mobile-mr-submit-menu')).hitTestable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.text(YorksV1MaterialRequestStrings.createAndApprove.primary),
+    );
+    await tester.pumpAndSettle();
+    expect(repository.saveSubmitAndApproveCount, 1);
+    expect(repository.saveAndSubmitCount, 0);
+  });
+
+  testWidgets('mobile Review gives Site Engineer Submit for Approval only', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    await _pumpDraft(tester, role: YorksV1Role.siteEngineer);
+    await _addCustomMaterial(tester);
+    await _openReview(tester);
+
+    expect(
+      find.byKey(const ValueKey('mobile-mr-primary-action')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('mobile-mr-submit-menu')), findsNothing);
+    expect(
+      find.text(YorksV1MaterialRequestStrings.submitForApproval.primary),
+      findsOneWidget,
+    );
+    expect(
+      find.text(YorksV1MaterialRequestStrings.submitAndApprove.primary),
+      findsNothing,
+    );
+  });
 }
 
 Widget _scope({
@@ -2866,8 +3059,10 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
   String? boqGroupId,
   YorksV1RuntimeConfiguration? runtimeConfiguration,
   YorksV1MaterialRequest? serverRequest,
+  YorksV1MaterialRequestDraftEntryMode? entryMode,
   String? initialProjectId = _projectId,
   List<YorksV1MaterialRequestProjectOption>? projectOptions,
+  YorksV1Role role = YorksV1Role.projectEngineer,
 }) async {
   final projects = projectOptions ?? _draftProjects.take(1).toList();
   final repository = _MaterialRequestRepositoryFixture(
@@ -2877,9 +3072,7 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
     _scope(
       overrides: [
         yorksV1AuthUserIdProvider.overrideWithValue('mobile-mr-user'),
-        yorksV1CurrentRoleProvider.overrideWithValue(
-          YorksV1Role.projectEngineer,
-        ),
+        yorksV1CurrentRoleProvider.overrideWithValue(role),
         yorksV1MaterialRequestRepositoryProvider.overrideWithValue(repository),
         yorksV1RuntimeConfigurationProvider.overrideWith(
           (ref) async => runtimeConfiguration ?? _runtimeConfiguration(),
@@ -2916,6 +3109,11 @@ Future<_MaterialRequestRepositoryFixture> _pumpDraft(
       ],
       child: YorksV1MaterialRequestDraftScreen(
         draftId: _draftId,
+        entryMode:
+            entryMode ??
+            (serverRequest == null
+                ? YorksV1MaterialRequestDraftEntryMode.newDraft
+                : YorksV1MaterialRequestDraftEntryMode.resumeSavedDraft),
         projectId: initialProjectId,
         boqGroupId: boqGroupId,
       ),
@@ -3222,6 +3420,9 @@ class _MaterialRequestRepositoryFixture
 
   final YorksV1MaterialRequest? serverRequest;
   int saveAndSubmitCount = 0;
+  int getRequestCount = 0;
+  bool submissionResponseLost = false;
+  int saveSubmitAndApproveCount = 0;
   final List<YorksV1AddMaterialRequestCommentInput> addCommentInputs = [];
   final List<YorksV1CancelMaterialRequestInput> cancelInputs = [];
   bool commentFailure = false;
@@ -3292,6 +3493,7 @@ class _MaterialRequestRepositoryFixture
 
   @override
   Future<YorksV1MaterialRequest> getRequest(String requestId) async {
+    getRequestCount++;
     if (serverRequest != null) return serverRequest!;
     throw const YorksV1DomainException(
       YorksV1DomainErrorCode.unauthorized,
@@ -3323,6 +3525,20 @@ class _MaterialRequestRepositoryFixture
     YorksV1MaterialRequestDraft draft,
   ) async {
     saveAndSubmitCount++;
+    if (submissionResponseLost) {
+      throw YorksV1DomainException(
+        YorksV1DomainErrorCode.backendUnavailable,
+        cause: TimeoutException('Synthetic response loss'),
+      );
+    }
+    return _submittedRequest;
+  }
+
+  @override
+  Future<YorksV1MaterialRequest> saveSubmitAndApprove(
+    YorksV1MaterialRequestDraft draft,
+  ) async {
+    saveSubmitAndApproveCount++;
     return _submittedRequest;
   }
 

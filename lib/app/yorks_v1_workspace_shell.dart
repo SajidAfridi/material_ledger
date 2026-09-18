@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/constants.dart';
+import '../core/fullscreen/yorks_workspace_fullscreen.dart';
 import '../core/zoom/yorks_workspace_zoom.dart';
 import '../core/widgets/brand_logo.dart';
 import '../core/widgets/yorks_mobile_ui.dart';
@@ -16,6 +17,7 @@ import '../shared/models/yorks_v1_role.dart';
 import '../shared/models/yorks_v1_shell_strings.dart';
 import '../shared/models/yorks_v1_team_chat_strings.dart';
 import '../shared/models/yorks_v1_workspace_status.dart';
+import '../shared/models/yorks_v1_zoom_strings.dart';
 import '../shared/providers/language_provider.dart';
 import '../shared/providers/notification_provider.dart';
 import '../shared/providers/session_provider.dart';
@@ -106,6 +108,9 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final desktop =
         MediaQuery.sizeOf(context).width >=
         AppSpacing.yorksV1ShellDesktopBreakpoint;
+    final fullscreen = desktop
+        ? ref.watch(yorksWorkspaceFullscreenControllerProvider)
+        : null;
     final sidebarExpanded = desktop
         ? ref.watch(yorksV1SidebarExpandedProvider)
         : true;
@@ -149,136 +154,82 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
     final canPopNatively = Navigator.maybeOf(context)?.canPop() ?? false;
     final canUseWorkspaceHistory = navigationHistory.canGoBack(currentLocation);
 
-    return PopScope(
-      // Root destinations in StatefulShellRoute have no Navigator page to pop.
-      // Intercept system/gesture Back there and consume the shared workspace
-      // history. Native nested routes keep their normal pop semantics.
-      canPop: canPopNatively || !canUseWorkspaceHistory,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || !canUseWorkspaceHistory) return;
-        yorksNavigateBack(
-          context,
-          ref,
-          currentLocation,
-          fallback: current?.path ?? RoutePaths.engineerHome,
-        );
-      },
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-              openSearch,
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-              openSearch,
+    return YorksWorkspaceZoomHost(
+      key: ValueKey(user?.id),
+      routeKey: location,
+      child: PopScope(
+        // Root destinations in StatefulShellRoute have no Navigator page to pop.
+        // Intercept system/gesture Back there and consume the shared workspace
+        // history. Native nested routes keep their normal pop semantics.
+        canPop: canPopNatively || !canUseWorkspaceHistory,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || !canUseWorkspaceHistory) return;
+          yorksNavigateBack(
+            context,
+            ref,
+            currentLocation,
+            fallback: current?.path ?? RoutePaths.engineerHome,
+          );
         },
-        child: Scaffold(
-          backgroundColor: AppColors.surface,
-          drawer: desktop
-              ? null
-              : Drawer(
-                  width: 246,
-                  shape: const RoundedRectangleBorder(),
-                  child: _YorksDesktopSidebar(
-                    destinations: destinations,
-                    activePath: current?.path,
-                    language: language,
-                    role: role,
-                    userName: user?.fullName,
-                    expanded: true,
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+                openSearch,
+            const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                openSearch,
+            if (fullscreen?.shouldHideWorkspaceChrome ?? false)
+              const SingleActivator(LogicalKeyboardKey.escape): () {
+                fullscreen!.toggle();
+              },
+          },
+          child: Scaffold(
+            backgroundColor: AppColors.surface,
+            drawer: desktop
+                ? null
+                : Drawer(
+                    width: 246,
+                    shape: const RoundedRectangleBorder(),
+                    child: _YorksDesktopSidebar(
+                      destinations: destinations,
+                      activePath: current?.path,
+                      language: language,
+                      role: role,
+                      userName: user?.fullName,
+                      expanded: true,
+                    ),
                   ),
-                ),
-          body: Builder(
-            builder: (scaffoldContext) {
-              if (!desktop) {
-                final unread = ref.watch(unreadNotificationCountProvider);
-                return ColoredBox(
-                  color: AppColors.mobileSurface,
-                  child: Column(
-                    children: [
-                      if (!(YorksMobileUi.isActive(context) &&
-                          featureOwnsMobileTopBar))
-                        _YorksWorkspaceMobileTopBar(
-                          breadcrumbs: breadcrumbs,
-                          language: language,
-                          location: location,
-                          showBack: yorksCanNavigateBack(
-                            context,
-                            ref,
-                            currentLocation,
-                          ),
-                          unreadNotifications: unread,
-                          teamChatEnabled: teamChatEnabled,
-                          unreadChat: chatUnread,
-                          onMenu: () =>
-                              context.go(RoutePaths.yorksV1MobileMore),
-                          onBack: () => yorksNavigateBack(
-                            context,
-                            ref,
-                            currentLocation,
-                            fallback: current?.path ?? RoutePaths.engineerHome,
-                          ),
-                        ),
-                      Expanded(
-                        child: YorksWorkspaceZoomViewport(
-                          routeKey: location,
-                          language: language,
-                          child: child,
-                        ),
-                      ),
-                      if (!focusedMobileRoute)
-                        _YorksMobileNavigation(
-                          destinations: _mobileDestinationsFor(
-                            role,
-                            nativeMobile: YorksMobileUi.isActive(context),
-                            teamChatEnabled: teamChatEnabled,
-                            chatUnread: chatUnread,
-                            permissionState: permissionState,
-                            accountsEnabled: accountsEnabled,
-                            workforceEnabled: workforceEnabled,
-                            analyticsEnabled: analyticsEnabled,
-                          ),
-                          activePath: location,
-                          language: language,
-                        ),
-                    ],
-                  ),
-                );
-              }
-              return Row(
-                children: [
-                  sidebar,
-                  Expanded(
+            body: Builder(
+              builder: (scaffoldContext) {
+                if (!desktop) {
+                  final unread = ref.watch(unreadNotificationCountProvider);
+                  return ColoredBox(
+                    color: AppColors.mobileSurface,
                     child: Column(
                       children: [
-                        _YorksWorkspaceTopBar(
-                          breadcrumbs: breadcrumbs,
-                          language: language,
-                          role: role,
-                          destinations: destinations,
-                          teamChatEnabled: teamChatEnabled,
-                          unreadChat: chatUnread,
-                          sidebarExpanded: sidebarExpanded,
-                          showBack:
-                              yorksCanNavigateBack(
-                                context,
-                                ref,
-                                currentLocation,
-                              ) ||
-                              (current?.path != null &&
-                                  location != current!.path),
-                          onToggleSidebar: () =>
-                              ref
-                                      .read(
-                                        yorksV1SidebarExpandedProvider.notifier,
-                                      )
-                                      .state =
-                                  !sidebarExpanded,
-                          onBack: () => yorksNavigateBack(
-                            context,
-                            ref,
-                            currentLocation,
-                            fallback: current?.path ?? RoutePaths.engineerHome,
+                        if (!(YorksMobileUi.isActive(context) &&
+                            featureOwnsMobileTopBar))
+                          _YorksWorkspaceMobileTopBar(
+                            breadcrumbs: breadcrumbs,
+                            language: language,
+                            location: location,
+                            showBack: yorksCanNavigateBack(
+                              context,
+                              ref,
+                              currentLocation,
+                            ),
+                            unreadNotifications: unread,
+                            teamChatEnabled: teamChatEnabled,
+                            unreadChat: chatUnread,
+                            onMenu: () =>
+                                context.go(RoutePaths.yorksV1MobileMore),
+                            onBack: () => yorksNavigateBack(
+                              context,
+                              ref,
+                              currentLocation,
+                              fallback:
+                                  current?.path ?? RoutePaths.engineerHome,
+                            ),
                           ),
-                        ),
                         Expanded(
                           child: YorksWorkspaceZoomViewport(
                             routeKey: location,
@@ -286,12 +237,112 @@ class YorksV1WorkspaceShell extends ConsumerWidget {
                             child: child,
                           ),
                         ),
+                        if (!focusedMobileRoute)
+                          _YorksMobileNavigation(
+                            destinations: _mobileDestinationsFor(
+                              role,
+                              nativeMobile: YorksMobileUi.isActive(context),
+                              teamChatEnabled: teamChatEnabled,
+                              chatUnread: chatUnread,
+                              permissionState: permissionState,
+                              accountsEnabled: accountsEnabled,
+                              workforceEnabled: workforceEnabled,
+                              analyticsEnabled: analyticsEnabled,
+                            ),
+                            activePath: location,
+                            language: language,
+                          ),
                       ],
                     ),
-                  ),
-                ],
-              );
-            },
+                  );
+                }
+                if (fullscreen?.shouldHideWorkspaceChrome ?? false) {
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: YorksWorkspaceZoomViewport(
+                          routeKey: location,
+                          language: language,
+                          child: child,
+                        ),
+                      ),
+                      SafeArea(
+                        child: Align(
+                          alignment: AlignmentDirectional.topEnd,
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.md),
+                            child: Material(
+                              key: const ValueKey(
+                                'yorks-workspace-fullscreen-exit-surface',
+                              ),
+                              color: AppColors.workspaceChrome,
+                              elevation: 3,
+                              shape: const CircleBorder(
+                                side: BorderSide(color: AppColors.line),
+                              ),
+                              child: _YorksWorkspaceFullscreenButton(
+                                language: language,
+                                controller: fullscreen!,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    sidebar,
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _YorksWorkspaceTopBar(
+                            breadcrumbs: breadcrumbs,
+                            language: language,
+                            role: role,
+                            destinations: destinations,
+                            teamChatEnabled: teamChatEnabled,
+                            unreadChat: chatUnread,
+                            sidebarExpanded: sidebarExpanded,
+                            showBack:
+                                yorksCanNavigateBack(
+                                  context,
+                                  ref,
+                                  currentLocation,
+                                ) ||
+                                (current?.path != null &&
+                                    location != current!.path),
+                            onToggleSidebar: () =>
+                                ref
+                                        .read(
+                                          yorksV1SidebarExpandedProvider
+                                              .notifier,
+                                        )
+                                        .state =
+                                    !sidebarExpanded,
+                            onBack: () => yorksNavigateBack(
+                              context,
+                              ref,
+                              currentLocation,
+                              fallback:
+                                  current?.path ?? RoutePaths.engineerHome,
+                            ),
+                          ),
+                          Expanded(
+                            child: YorksWorkspaceZoomViewport(
+                              routeKey: location,
+                              language: language,
+                              child: child,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -1345,6 +1396,7 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceStatus = ref.watch(yorksV1WorkspaceStatusProvider);
+    final fullscreen = ref.watch(yorksWorkspaceFullscreenControllerProvider);
     return Material(
       color: AppColors.workspaceChrome,
       child: Container(
@@ -1421,6 +1473,13 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.md),
+            if (fullscreen.isSupported) ...[
+              _YorksWorkspaceFullscreenButton(
+                language: language,
+                controller: fullscreen,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
             if (teamChatEnabled) ...[
               IconButton(
                 tooltip: YorksV1TeamChatStrings.teamChat.active(language),
@@ -1441,6 +1500,32 @@ class _YorksWorkspaceTopBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _YorksWorkspaceFullscreenButton extends StatelessWidget {
+  const _YorksWorkspaceFullscreenButton({
+    required this.language,
+    required this.controller,
+  });
+
+  final AppLanguage language;
+  final YorksWorkspaceFullscreenController controller;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey('yorks-workspace-fullscreen-toggle'),
+    tooltip:
+        (controller.isFullscreen
+                ? YorksV1ZoomStrings.exitFullscreen
+                : YorksV1ZoomStrings.enterFullscreen)
+            .active(language),
+    onPressed: controller.toggle,
+    icon: Icon(
+      controller.isFullscreen
+          ? Icons.fullscreen_exit_rounded
+          : Icons.fullscreen_rounded,
+    ),
+  );
 }
 
 class _YorksWorkspaceMobileTopBar extends StatelessWidget {
@@ -2020,6 +2105,7 @@ class YorksAccountPopover extends ConsumerWidget {
                   label: AppStrings.about.active(language),
                   onTap: onHelp,
                 ),
+                YorksWorkspaceZoomMenu(language: language),
                 const Divider(height: AppSpacing.sm),
                 _YorksAccountPopoverAction(
                   icon: Icons.logout_rounded,

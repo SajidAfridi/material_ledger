@@ -6,6 +6,9 @@ enum YorksV1AuditModule {
   rentals('rentals'),
   users('users'),
   documents('documents'),
+  accounts('accounts'),
+  workforce('workforce'),
+  configuration('configuration'),
   system('system');
 
   const YorksV1AuditModule(this.wireValue);
@@ -18,13 +21,14 @@ enum YorksV1AuditModule {
 }
 
 enum YorksV1AuditSeverity {
+  unclassified,
   normal,
   warning,
   critical;
 
   static YorksV1AuditSeverity fromWire(Object? value) => values.firstWhere(
     (severity) => severity.name == value,
-    orElse: () => YorksV1AuditSeverity.normal,
+    orElse: () => YorksV1AuditSeverity.unclassified,
   );
 }
 
@@ -48,6 +52,16 @@ class YorksV1AuditFilter {
     this.to,
     this.page = 0,
     this.pageSize = 12,
+    this.actorId,
+    this.projectId,
+    this.eventType,
+    this.severity,
+    this.entityId,
+    this.entityType,
+    this.scope,
+    this.asOf,
+    this.cursorAt,
+    this.cursorId,
   });
 
   final String search;
@@ -57,6 +71,16 @@ class YorksV1AuditFilter {
   final DateTime? to;
   final int page;
   final int pageSize;
+  final String? actorId,
+      projectId,
+      eventType,
+      severity,
+      entityId,
+      entityType,
+      scope;
+  final DateTime? asOf;
+  final DateTime? cursorAt;
+  final String? cursorId;
 
   int get offset => page * pageSize;
 
@@ -71,6 +95,19 @@ class YorksV1AuditFilter {
     bool clearDates = false,
     int? page,
     int? pageSize,
+    String? actorId,
+    projectId,
+    eventType,
+    severity,
+    entityId,
+    entityType,
+    scope,
+    DateTime? asOf,
+    bool clearAdvanced = false,
+    bool clearSnapshot = false,
+    DateTime? cursorAt,
+    String? cursorId,
+    bool clearCursor = false,
   }) => YorksV1AuditFilter(
     search: search ?? this.search,
     module: clearModule ? null : module ?? this.module,
@@ -79,6 +116,16 @@ class YorksV1AuditFilter {
     to: clearDates ? null : to ?? this.to,
     page: page ?? this.page,
     pageSize: pageSize ?? this.pageSize,
+    actorId: clearAdvanced ? null : actorId ?? this.actorId,
+    projectId: clearAdvanced ? null : projectId ?? this.projectId,
+    eventType: clearAdvanced ? null : eventType ?? this.eventType,
+    severity: clearAdvanced ? null : severity ?? this.severity,
+    entityId: clearAdvanced ? null : entityId ?? this.entityId,
+    entityType: clearAdvanced ? null : entityType ?? this.entityType,
+    scope: clearAdvanced ? null : scope ?? this.scope,
+    asOf: clearSnapshot ? null : asOf ?? this.asOf,
+    cursorAt: clearCursor ? null : cursorAt ?? this.cursorAt,
+    cursorId: clearCursor ? null : cursorId ?? this.cursorId,
   );
 
   Map<String, Object?> toRpcParameters() => {
@@ -89,6 +136,16 @@ class YorksV1AuditFilter {
     'p_to': to?.toUtc().toIso8601String(),
     'p_limit': pageSize,
     'p_offset': offset,
+    'p_actor': actorId,
+    'p_project': projectId,
+    'p_event_type': eventType,
+    'p_severity': severity,
+    'p_entity_id': entityId,
+    'p_entity_type': entityType,
+    'p_scope': scope,
+    'p_as_of': asOf?.toUtc().toIso8601String(),
+    'p_cursor_at': cursorAt?.toUtc().toIso8601String(),
+    'p_cursor_id': cursorId,
   };
 }
 
@@ -145,6 +202,8 @@ class YorksV1AuditEvent {
     this.projectRef,
     this.projectName,
     this.reason,
+    this.beforeFacts = const {},
+    this.scope = 'organization',
   });
 
   final String id;
@@ -164,6 +223,8 @@ class YorksV1AuditEvent {
   final String? reason;
   final Map<String, String> facts;
   final bool attributionVerified;
+  final Map<String, String> beforeFacts;
+  final String scope;
 
   factory YorksV1AuditEvent.fromJson(Map<String, dynamic> json) =>
       YorksV1AuditEvent(
@@ -187,6 +248,11 @@ class YorksV1AuditEvent {
             if (entry.value != null) entry.key: entry.value.toString(),
         },
         attributionVerified: json['attribution_verified'] == true,
+        beforeFacts: {
+          for (final entry in _object(json['before_facts']).entries)
+            if (entry.value != null) entry.key: entry.value.toString(),
+        },
+        scope: _nullableText(json['scope']) ?? 'organization',
       );
 }
 
@@ -276,6 +342,8 @@ class YorksV1AuditWorkspace {
     required this.trend,
     required this.quickFilterCounts,
     required this.alerts,
+    this.filterOptions = const {},
+    this.asOf,
   });
 
   final DateTime generatedAt;
@@ -289,13 +357,49 @@ class YorksV1AuditWorkspace {
   final List<YorksV1AuditTrendPoint> trend;
   final Map<YorksV1AuditQuickFilter, int> quickFilterCounts;
   final List<YorksV1AuditAlert> alerts;
+  final Map<String, List<Map<String, String>>> filterOptions;
+  final DateTime? asOf;
 
   int get pageCount => filteredCount == 0 ? 1 : (filteredCount / limit).ceil();
 
   factory YorksV1AuditWorkspace.fromRpcJson(Map<String, dynamic> json) {
+    final limit = json['limit'];
+    final count = json['filtered_count'];
+    final offset = json['offset'];
+    if (limit is! int ||
+        limit < 1 ||
+        limit > 5001 ||
+        count is! int ||
+        count < 0 ||
+        offset is! int ||
+        offset < 0 ||
+        json['events'] is! List ||
+        json['summary'] is! Map ||
+        DateTime.tryParse(json['generated_at']?.toString() ?? '') == null) {
+      throw const FormatException('Invalid audit workspace');
+    }
+    final events = json['events'] as List;
+    if (events.length > limit ||
+        events.length > count ||
+        events.any(
+          (e) =>
+              e is! Map ||
+              e['id'] is! String ||
+              e['entity_id'] is! String ||
+              DateTime.tryParse(e['occurred_at']?.toString() ?? '') == null,
+        )) {
+      throw const FormatException('Invalid audit events');
+    }
     final quick = _object(json['quick_filters']);
     return YorksV1AuditWorkspace(
       generatedAt: _dateTime(json['generated_at']),
+      asOf: json['as_of'] == null ? null : _dateTime(json['as_of']),
+      filterOptions: {
+        for (final entry in _object(json['filter_options']).entries)
+          entry.key: _list(entry.value)
+              .map((v) => _object(v).map((k, v) => MapEntry(k, v.toString())))
+              .toList(),
+      },
       summary: YorksV1AuditSummary.fromJson(_object(json['summary'])),
       filteredCount: _integer(json['filtered_count']),
       limit: _integer(json['limit']),

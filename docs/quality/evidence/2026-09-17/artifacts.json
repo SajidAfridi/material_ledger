@@ -1,0 +1,16 @@
+{
+  "source_commit": "21e71d4ac5890f673fefff53ad9c58793ee284e9",
+  "release_id_suffix": "-dirty (documentation/evidence only)",
+  "environment": "ci",
+  "android_signing": "ephemeral CI certificate, not production",
+  "artifacts": {
+    "build/web/main.dart.js": {
+      "bytes": 10126866,
+      "sha256": "8cf6b5dba5222f952a65064837d1753be087ad2b0a8b4e4bcbbee6323624e5da"
+    },
+    "build/app/outputs/flutter-apk/app-release.apk": {
+      "bytes": 105142160,
+      "sha256": "e6ba1c7c47b469f288645c9a59bdfd78db41774cfdf9b6cee86b42e680e5968b"
+    }
+  }
+}

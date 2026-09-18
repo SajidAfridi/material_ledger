@@ -1,11 +1,31 @@
 import 'dart:async';
 
+import 'package:material_ledger/shared/models/yorks_v1_domain_error.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/models/analytics_configuration.dart';
 import 'package:material_ledger/shared/models/analytics_event.dart';
 import 'package:material_ledger/shared/services/analytics_service.dart';
 
 void main() {
+  test('wrapped transport timeout keeps its observed category', () {
+    expect(
+      analyticsErrorCategory(
+        YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
+          cause: TimeoutException('not sent to analytics'),
+        ),
+      ),
+      AnalyticsErrorCategory.timeout,
+    );
+    expect(
+      analyticsErrorCategory(
+        const YorksV1DomainException(YorksV1DomainErrorCode.backendUnavailable),
+      ),
+      AnalyticsErrorCategory.network,
+    );
+  });
+
   late _RecordingSink sink;
   late GuardedAnalyticsService analytics;
   late DateTime now;
@@ -22,6 +42,7 @@ void main() {
         platform: AnalyticsPlatform.android,
         appVersion: '1.2.3',
         appBuild: '45',
+        releaseId: '0123456789abcdef0123456789abcdef01234567',
       ),
       sink: sink,
       now: () => now,
@@ -30,9 +51,52 @@ void main() {
     await analytics.initialize();
   });
 
+  test(
+    'events carry source identity and actual build mode without changing app version',
+    () async {
+      analytics.capture(AnalyticsEvent.materialRequestSubmitted);
+      await analytics.drain();
+      final properties = sink.events.single.properties;
+      expect(
+        properties['release_id'],
+        '0123456789abcdef0123456789abcdef01234567',
+      );
+      expect(properties['build_mode'], 'debug');
+      expect(properties['app_version'], '1.2.3');
+      expect(properties['app_build'], '45');
+    },
+  );
+
+  test(
+    'release identifier rejects operator text and accepts dirty source revisions',
+    () {
+      AnalyticsConfiguration configuration(String releaseId) =>
+          AnalyticsConfiguration(
+            requestedEnabled: true,
+            projectToken: 'phc_test',
+            host: 'https://eu.i.posthog.com',
+            environment: AnalyticsEnvironment.staging,
+            platform: AnalyticsPlatform.web,
+            appVersion: '1',
+            appBuild: '1',
+            releaseId: releaseId,
+          );
+      expect(
+        configuration('private@example.com').validatedReleaseId,
+        'unknown',
+      );
+      expect(
+        configuration(
+          '0123456789abcdef0123456789abcdef01234567-dirty',
+        ).validatedReleaseId,
+        '0123456789abcdef0123456789abcdef01234567-dirty',
+      );
+    },
+  );
+
   test('taxonomy stays bounded, stable, and unique', () {
     final names = AnalyticsEvent.values.map((event) => event.wireName).toList();
-    expect(names, hasLength(59));
+    expect(names, hasLength(61));
     expect(names.toSet(), hasLength(names.length));
     expect(names, everyElement(matches(RegExp(r'^[a-z0-9]+(?: [a-z0-9]+)*$'))));
     expect(names, isNot(contains('material_request_opened')));
@@ -158,36 +222,46 @@ void main() {
     );
   });
 
-  test('search struggle uses counts and never receives the query', () async {
-    analytics.recordMaterialSearch(
-      queryLength: 4,
-      resultCount: 0,
-      duration: const Duration(milliseconds: 50),
+  for (final context in AnalyticsSearchContext.values) {
+    test(
+      'automatic lookup observations do not imply struggle: $context',
+      () async {
+        for (var index = 0; index < 5; index++) {
+          analytics.recordMaterialSearch(
+            queryLength: index + 3,
+            resultCount: index < 3 ? 0 : 2,
+            duration: const Duration(milliseconds: 70),
+            context: context,
+          );
+          now = now.add(const Duration(seconds: 5));
+        }
+        analytics.recordMaterialSearchSelection();
+        await analytics.drain();
+        expect(
+          sink.events.where(
+            (event) => event.name == 'search struggle detected',
+          ),
+          isEmpty,
+        );
+        expect(
+          sink.events.where(
+            (event) =>
+                event.name ==
+                (context == AnalyticsSearchContext.inventory
+                    ? 'inventory searched'
+                    : 'material search completed'),
+          ),
+          hasLength(5),
+        );
+        expect(
+          sink.events
+              .expand((event) => event.properties.values)
+              .whereType<String>(),
+          isNot(contains('duct tape')),
+        );
+      },
     );
-    now = now.add(const Duration(seconds: 1));
-    analytics.recordMaterialSearch(
-      queryLength: 7,
-      resultCount: 0,
-      duration: const Duration(milliseconds: 70),
-    );
-    now = now.add(const Duration(seconds: 1));
-    analytics.recordMaterialSearch(
-      queryLength: 8,
-      resultCount: 2,
-      duration: const Duration(milliseconds: 90),
-    );
-    await analytics.drain();
-
-    final struggle = sink.events.singleWhere(
-      (event) => event.name == 'search struggle detected',
-    );
-    expect(struggle.properties['attempt_count'], 3);
-    expect(struggle.properties['no_result_count'], 2);
-    expect(
-      struggle.properties.values.whereType<String>(),
-      isNot(contains('duct tape')),
-    );
-  });
+  }
 
   test(
     'inventory search emits semantic result events without query text',

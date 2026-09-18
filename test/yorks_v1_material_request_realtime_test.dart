@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_material_request_provider.dart';
+import 'package:material_ledger/shared/sync/connectivity_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -147,6 +148,35 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 20));
 
         expect(notifier.state, greaterThan(0));
+      },
+    );
+
+    test(
+      'an offline device does not poll until connectivity returns',
+      () async {
+        final connectivity = DefaultConnectivity(online: false);
+        final notifier = YorksV1MaterialRequestRealtimeNotifier(
+          enabled: true,
+          authUserId: '10000000-0000-4000-8000-000000000001',
+          client: null,
+          connectivity: connectivity,
+          signalSubscription: ({required onSignal, required onUnavailable}) {
+            return Future.value(false);
+          },
+          fallbackInterval: const Duration(days: 1),
+        );
+        addTearDown(() {
+          notifier.dispose();
+          connectivity.dispose();
+        });
+
+        await notifier.start();
+        expect(notifier.state, 0);
+
+        connectivity.setOnline(true);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(notifier.state, 1);
       },
     );
   });

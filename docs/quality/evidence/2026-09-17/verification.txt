@@ -1,0 +1,49 @@
+Analyzer
+Analyzing material_ledger...
+No issues found! (ran in 7.1s)
+
+Flutter suite
+02:00 +1747: /Users/eapple/StudioProjects/material_ledger/test/yorks_r38_9_inventory_workbook_test.dart: unit review retains prior category, supplier, and condition decisions
+02:00 +1748: /Users/eapple/StudioProjects/material_ledger/test/yorks_r38_9_inventory_workbook_test.dart: controller cannot mutate before stage four confirmation
+02:00 +1749: /Users/eapple/StudioProjects/material_ledger/test/yorks_r38_9_inventory_workbook_test.dart: controller prepares a workbook off the native UI isolate
+02:00 +1750: /Users/eapple/StudioProjects/material_ledger/test/yorks_r38_9_inventory_workbook_test.dart: controller exposes ambiguous worksheet names for explicit choice
+02:00 +1751: All tests passed!
+
+Database suite
+# T13 local wall times ms: overview=5364.32, roster=881.18, queue=1990.67
+ok
+All tests successful.
+Files=96, Tests=2779, 100 wallclock secs ( 0.36 usr  0.11 sys +  0.47 cusr  0.35 csys =  1.29 CPU)
+Result: PASS
+
+Web build
+Font asset "CupertinoIcons.ttf" was tree-shaken, reducing it from 257628 to 1472 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 72912 bytes (95.6% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Compiling lib/main.dart for the Web...                             37.4s
+✓ Built build/web
+Running build hooks...Running build hooks...Startup budget passed: main.dart.js=10126866 bytes (gzip=2736848), index.html=11024 bytes.
+
+Project validation before
+00:00 +0 -2: Some tests failed.
+
+Failing tests:
+  /Users/eapple/StudioProjects/material_ledger/test/yorks_v1_project_create_flow_test.dart: review validation survives return to invalid stage 1366.0
+  /Users/eapple/StudioProjects/material_ledger/test/yorks_v1_project_create_flow_test.dart: review validation survives return to invalid stage 360.0
+
+Project validation after
+00:01 +19: uses a safe display label when a directory name equals its UUID
+00:01 +20: never renders an email-like directory label from typed picker state
+00:01 +21: a Site Engineer can nominate one base Project Engineer and no Site Engineer
+00:01 +22: screen does not reach a legacy/local project writer
+00:01 +23: All tests passed!
+
+Migration repeated
+CREATE FUNCTION
+REVOKE
+GRANT
+DO
+COMMIT
+
+Final Android build
+Running Gradle task 'assembleRelease'...                           42.8s
+✓ Built build/app/outputs/flutter-apk/app-release.apk (105.1MB)

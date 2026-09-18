@@ -208,6 +208,7 @@ RPC/projection rows here before consumer cutover.
 | `v1_list_boq_folder_management` | Active project actor with `boq.manage_folders` | project/selected real scope/include-archived | no | active/archived folder projections, stable template identity and server-derived action/blocker flags; no cross-scope mutation |
 | `v1_assign_legacy_boq_group_scope` | BOQ-authorized Engineer/Admin | group/version | yes | explicit legacy group-to-real-scope reconciliation, audit; submitted/conflicting history rejected |
 | `v1_submit_material_request` | Assigned Engineer draft creator | draft/project/counter/version | yes | number, snapshots, state, owner, audit/notification |
+| `v1_save_submit_and_approve_material_request` | New-draft creator with exact non-Site-Engineer approval authority, published self-approval policy and effective approval capability | draft/project/current policy/version/idempotency | yes | canonical submitted and approved transitions, one immutable decision/audit/notification set, final approved projection; any failure rolls back the whole command |
 | `v1_update_material_request_for_approval` | Creator or assigned/global Project Engineer/Admin | MR/version/line set; no arrangement permitted | yes | replace Engineering snapshot, retain number/submission attribution, audit/notification |
 | `v1_decide_material_request` | Assigned/global Project Engineer/Admin | MR/current Engineering version | yes | immutable approval/return decision, state/owner, exact role, audit/notification |
 | `v1_begin_arrangement` | Procurement/Admin | approved MR/version | yes | current arrangement work version, `arranging`, audit |
@@ -481,3 +482,42 @@ Every relevant migration/test must prove at least:
     revision/audit row (AT-CONC-002/003); and
 29. two T02 confirmations with the same expected version yield one success and
     one stale conflict with no lost update or partial effect (AT-PROG-005).
+
+## Submission response reconciliation (17 September 2026)
+
+`v1_get_material_request_submission_result(payload, idempotency_key,
+approve_immediately)` is a read-only RPC for the original actor's exact
+save-and-submit or save-submit-and-approve intent. It requires current active
+identity, engineering project access and submit capability; combined approval
+also rechecks decision authority and approve capability. Payload hash, request
+identity, project and original creator must match. Another actor gets no result
+for a caller-owned key; denied project access fails closed. Responses use the
+current role-safe projection. Cached replay branches of both write wrappers now
+use the same checks, preventing revoked membership from replaying old responses.
+
+No matching committed key means **unconfirmed**, never proof of rollback.
+The client persists the original key/payload/mode in its existing account-owned
+recovery draft before sending; freezes editing while unresolved; offers one
+bounded read per explicit status check; and permits only an explicit same-intent
+retry after an authorized unconfirmed read. Existing transaction locks/hash
+checks deduplicate a retry even if the first command commits later. A denied
+retry leaves the first attempt unresolved. No server workflow state or stock
+transition is added. Reconciliation does not resubmit or issue side effects.
+
+## Company Material Request T02 approval (18 September 2026)
+
+| State | Actor | Trusted command | Server checks | Result |
+|---|---|---|---|---|
+| `awaiting_company_approval` | snapshotted independent approver | `v1_decide_company_material_request` | active exact identity, non-Procurement role, current explicit category/unit approver authorization, not requester/beneficiary/receiver, expected version, decision/reason shape, idempotency key | one immutable decision and event; state becomes `approved_for_procurement`, `returned_for_changes` or `rejected`; requester notified |
+
+`v1_list_company_material_request_approval_inbox()` returns only pending rows
+assigned to the current actor after the same authorization predicate.
+Authenticated clients have no table privileges on
+`v1_company_material_request_decisions`. The safe projection includes
+`can_decide` and immutable decision history; it adds no commercial, project,
+BOQ or stock fields. A completed request cannot be decided again. An exact
+retry returns the current authorized projection without duplicating evidence.
+
+This is an approval-only candidate behind the existing default-off Company
+Material Request flag. No company fulfilment state or stock command is
+authorized by T02.

@@ -28,6 +28,10 @@ class SupabaseYorksV1AuditRpcClient implements YorksV1AuditRpcClient {
 
 abstract interface class YorksV1AuditRepository {
   Future<YorksV1AuditWorkspace> getWorkspace(YorksV1AuditFilter filter);
+  Future<YorksV1AuditWorkspace> exportWorkspace(
+    YorksV1AuditFilter filter,
+    String id,
+  );
 }
 
 class YorksV1SupabaseAuditRepository implements YorksV1AuditRepository {
@@ -48,6 +52,32 @@ class YorksV1SupabaseAuditRepository implements YorksV1AuditRepository {
 
   @override
   Future<YorksV1AuditWorkspace> getWorkspace(YorksV1AuditFilter filter) async {
+    return _invoke('v1_get_audit_workspace_v2', filter.toRpcParameters());
+  }
+
+  @override
+  Future<YorksV1AuditWorkspace> exportWorkspace(
+    YorksV1AuditFilter filter,
+    String id,
+  ) async {
+    final workspace = await _invoke('v1_export_audit_workspace', {
+      'p_filters': filter.toRpcParameters(),
+      'p_id': id,
+    });
+    if (workspace.offset != 0 ||
+        workspace.filteredCount > 5000 ||
+        workspace.events.length != workspace.filteredCount) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return workspace;
+  }
+
+  Future<YorksV1AuditWorkspace> _invoke(
+    String function,
+    Map<String, Object?> parameters,
+  ) async {
     if (!_featureFlags.foundation) {
       throw const YorksV1DomainException(
         YorksV1DomainErrorCode.featureDisabled,
@@ -65,10 +95,7 @@ class YorksV1SupabaseAuditRepository implements YorksV1AuditRepository {
 
     try {
       final response = await rpc
-          .invoke(
-            'v1_get_audit_workspace',
-            parameters: filter.toRpcParameters(),
-          )
+          .invoke(function, parameters: parameters)
           .timeout(_rpcTimeout);
       if (response is! Map) {
         throw const YorksV1DomainException(

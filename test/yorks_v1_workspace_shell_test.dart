@@ -1,7 +1,13 @@
 import 'dart:async';
 
+import 'package:material_ledger/core/zoom/yorks_workspace_zoom.dart';
+import 'package:material_ledger/core/fullscreen/yorks_workspace_fullscreen.dart';
+import 'package:material_ledger/shared/models/yorks_v1_zoom_strings.dart';
+import 'package:material_ledger/shared/models/app_language.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ledger/app/yorks_v1_workspace_shell.dart';
@@ -21,6 +27,44 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  for (final width in [1366.0, 360.0]) {
+    testWidgets('native account menu controls current view at $width', (
+      tester,
+    ) async {
+      _setViewport(tester, Size(width, 800));
+      addTearDown(() => _resetViewport(tester));
+      final preferences = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        _ShellTestApp(role: YorksV1Role.procurement, preferences: preferences),
+      );
+      await tester.pumpAndSettle();
+      final viewport = tester.element(find.byType(YorksWorkspaceZoomViewport));
+      final controller = YorksWorkspaceZoomScope.maybeOf(viewport)!;
+      if (width < 720) {
+        tester.state<ScaffoldState>(find.byType(Scaffold).first).openDrawer();
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byKey(const ValueKey('yorks-account-entry')));
+      await tester.pumpAndSettle();
+      final zoom = find.text(
+        YorksV1ZoomStrings.zoomIn.active(AppLanguage.english),
+      );
+      expect(zoom, findsOneWidget);
+      await tester.ensureVisible(zoom);
+      await tester.tap(zoom);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, greaterThan(1));
+      final reset = find.text(
+        YorksV1ZoomStrings.resetZoom.active(AppLanguage.english),
+      );
+      await tester.ensureVisible(reset);
+      await tester.tap(reset);
+      await tester.pumpAndSettle();
+      expect(controller.currentScale, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('R35 procurement workspace shell renders desktop navigation', (
     tester,
@@ -45,6 +89,69 @@ void main() {
     expect(find.text(YorksV1ShellStrings.viewOnly.primary), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'desktop fullscreen control enters, exits, and follows browser state',
+    (tester) async {
+      _setViewport(tester, const Size(1366, 768));
+      addTearDown(() => _resetViewport(tester));
+      final preferences = await SharedPreferences.getInstance();
+      final fullscreen = _FakeWorkspaceFullscreenController();
+
+      await tester.pumpWidget(
+        _ShellTestApp(
+          role: YorksV1Role.procurement,
+          preferences: preferences,
+          fullscreenController: fullscreen,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final toggle = find.byKey(
+        const ValueKey('yorks-workspace-fullscreen-toggle'),
+      );
+      expect(toggle, findsOneWidget);
+      expect(
+        find.byTooltip(YorksV1ZoomStrings.enterFullscreen.primary),
+        findsOneWidget,
+      );
+
+      await tester.tap(toggle);
+      await tester.pump();
+
+      expect(fullscreen.isFullscreen, isTrue);
+      expect(
+        find.byTooltip(YorksV1ZoomStrings.exitFullscreen.primary),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.fullscreen_exit_rounded), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('yorks-workspace-sidebar-toggle')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('yorks-workspace-fullscreen-exit-surface')),
+        findsOneWidget,
+      );
+
+      await tester.tap(toggle);
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('yorks-workspace-sidebar-toggle')),
+        findsOneWidget,
+      );
+
+      fullscreen.setFullscreen(true);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+
+      expect(fullscreen.isFullscreen, isFalse);
+      expect(find.byIcon(Icons.fullscreen_rounded), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('desktop places Accounts directly below Material Requests', (
     tester,
@@ -537,10 +644,15 @@ void _resetViewport(WidgetTester tester) {
 }
 
 class _ShellTestApp extends StatelessWidget {
-  const _ShellTestApp({required this.role, required this.preferences});
+  const _ShellTestApp({
+    required this.role,
+    required this.preferences,
+    this.fullscreenController,
+  });
 
   final YorksV1Role role;
   final SharedPreferences preferences;
+  final YorksWorkspaceFullscreenController? fullscreenController;
 
   @override
   Widget build(BuildContext context) {
@@ -563,9 +675,36 @@ class _ShellTestApp extends StatelessWidget {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1CurrentRoleProvider.overrideWithValue(role),
+        if (fullscreenController != null)
+          yorksWorkspaceFullscreenControllerProvider.overrideWith(
+            (_) => fullscreenController!,
+          ),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
+  }
+}
+
+class _FakeWorkspaceFullscreenController
+    extends YorksWorkspaceFullscreenController {
+  bool _isFullscreen = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  bool get isFullscreen => _isFullscreen;
+
+  @override
+  bool get shouldHideWorkspaceChrome => _isFullscreen;
+
+  @override
+  Future<void> toggle() async => setFullscreen(!_isFullscreen);
+
+  void setFullscreen(bool value) {
+    if (_isFullscreen == value) return;
+    _isFullscreen = value;
+    notifyListeners();
   }
 }
 

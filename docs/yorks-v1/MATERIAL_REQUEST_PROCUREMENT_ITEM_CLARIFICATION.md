@@ -18,6 +18,9 @@ Request workflow.
   legitimate custom description when there is no catalogue match.
 - Selecting a result fills the effective item name and model. Procurement may
   still refine either value before saving.
+- The arrangement action is labelled **Edit item details** so Procurement can
+  find it as the edit step before arranging. The audit and server command keep
+  the approved clarification terminology.
 - Saving corrected identity immediately sends the request to the Project
   Engineer. The arrangement stays visible but its operational fields and Save
   action are read-only until the latest correction is approved.

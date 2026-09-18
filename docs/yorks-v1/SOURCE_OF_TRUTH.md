@@ -306,6 +306,20 @@ published Configuration values and adds a one-time linked replacement Draft
 only after that terminal cancellation. It does not reopen the source, grant
 Procurement Engineering authority or fabricate downstream workflow history.
 
+Product-owner approval on 18 September 2026 clarifies the creation action. An
+authorized non-Site-Engineer creator sees one **Submit and Approve** split
+button. Its menu offers **Create only**, which submits into the independently
+reviewable approval stage, and **Create and Approve**, which invokes one
+idempotent trusted command that preserves
+the canonical submission and approval transitions, audit and notifications in
+one transaction; a failed approval rolls the complete command back. The form
+fails closed while the published self-approval policy or effective approval
+capability is unavailable. A creator without approval authority, including an
+exact Site Engineer, sees **Submit for Approval** only and cannot gain approval
+authority from an old or incorrect Project Engineer membership row. This is a
+creation-form convenience only: returned/requested changes continue through
+the independently reviewable approval stage.
+
 The detailed transition, migration and rollback contract is
 `MATERIAL_REQUEST_FLOW_REVISION_2026-08-13.md`. Existing in-flight Procurement
 arrangements are not rewritten or given synthetic request approvals.
