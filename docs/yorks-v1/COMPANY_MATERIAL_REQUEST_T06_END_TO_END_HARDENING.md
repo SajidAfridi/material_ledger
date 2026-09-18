@@ -67,3 +67,29 @@ reservations, dispatches, receipts, handovers, returns, movements and events
 remain intact. Rollback is flag-off plus the previous application artifact;
 committed issue and withdrawal evidence must be preserved and defects fixed
 forward.
+
+## Composer and tracking parity follow-up — 18 September 2026
+
+The Company composer and register now use the established Material Request
+interaction model while retaining the separate Company authority model:
+
+- successful submission opens the protected Company request detail instead of
+  returning to the project request register;
+- the Company workspace defaults to **Requests** and keeps **My work**,
+  **Planning** and **Issue history** visible as direct views;
+- request cards and details show lifecycle progress, current owner and next
+  action;
+- the desktop Request Information panel can be opened and closed without
+  shrinking the item workspace;
+- Company item rows use R No, Item Description, Size, Model / Tag,
+  Brand / Origin, Qty, Unit and Action, with the same focused mobile fields;
+- description search uses a Company-specific trusted RPC. It requires active
+  requester authority for the selected category and responsible unit and
+  returns only active non-commercial catalogue descriptors. It exposes no
+  stock quantity, project or commercial value.
+
+Migration `20260918143000_company_material_request_composer_parity.sql` is
+additive. Existing request lines remain valid; nullable technical fields are
+not backfilled with invented values. Rollback is the previous application
+artifact while preserving the added columns and any recorded values for a
+fix-forward release.

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ledger/core/theme/app_theme.dart';
 import 'package:material_ledger/features/materials/presentation/screens/yorks_v1_company_material_request_screen.dart';
 import 'package:material_ledger/shared/models/yorks_v1_company_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_company_material_request_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_company_material_request_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,8 +24,13 @@ void main() {
     );
 
     expect(find.text('New Company Material Request'), findsOneWidget);
-    expect(find.text('Request Information'), findsOneWidget);
+    expect(find.text('Request Information'), findsWidgets);
     expect(find.text('Material items'), findsWidgets);
+    expect(find.text('Request summary'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('company-request-information-toggle')),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Request summary'), findsOneWidget);
     expect(find.text('Private draft'), findsOneWidget);
     expect(find.text('Submit for approval'), findsOneWidget);
@@ -145,6 +152,55 @@ void main() {
     );
     expect(submit.onPressed, isNotNull);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('submitted Company request opens its tracked detail', (
+    tester,
+  ) async {
+    final repository = _CompanyRequestRepository();
+    await _pumpComposer(
+      tester,
+      repository: repository,
+      size: const Size(1366, 900),
+    );
+    await _completeDetails(tester);
+    await _completeFirstLine(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-submit')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('company-material-request-confirm-submit')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Company request submitted'), findsOneWidget);
+    await tester.tap(find.text('View request'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tracked Company request'), findsOneWidget);
+  });
+
+  testWidgets('catalogue search fills the normal technical fields', (
+    tester,
+  ) async {
+    final repository = _CompanyRequestRepository();
+    await _pumpComposer(
+      tester,
+      repository: repository,
+      size: const Size(1366, 900),
+    );
+    await _completeDetails(tester);
+    await _enterVisible(
+      tester,
+      _formFieldWithLabel('Item description').first,
+      'helmet',
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Safety helmets').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Adjustable'), findsOneWidget);
+    expect(find.text('H-700'), findsOneWidget);
+    expect(find.text('3M / USA'), findsOneWidget);
   });
 
   testWidgets('unsaved company request requires an explicit exit decision', (
@@ -317,9 +373,9 @@ void main() {
         'goldens/company_requests/after_company_approval_inbox_mobile.png',
       ),
     );
-    await tester.tap(find.byType(PopupMenuButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Issue history').last);
+    await tester.tap(
+      find.byKey(const ValueKey('company-register-issue_history')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('CM-ISS-0001'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -378,7 +434,7 @@ void main() {
       );
       expect(find.text('Fulfilment'), findsOneWidget);
       expect(find.text('Save supply plan'), findsOneWidget);
-      expect(find.text('Dispatch ready quantity'), findsOneWidget);
+      expect(find.text('Dispatch ready quantity'), findsWidgets);
       expect(find.text('Withdraw remaining need'), findsOneWidget);
       await expectLater(
         find.byType(Scaffold),
@@ -427,11 +483,32 @@ Future<void> _pumpComposer(
         yorksV1CompanyMaterialRequestRepositoryProvider.overrideWithValue(
           repository,
         ),
+        yorksV1ConfigurationUnitCodesProvider.overrideWith(
+          (ref) async => const ['pcs', 'set', 'm'],
+        ),
       ],
-      child: MaterialApp(
+      child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: const YorksV1CompanyMaterialRequestScreen(),
+        routerConfig: GoRouter(
+          initialLocation: '/yorks/material-requests/company/new',
+          routes: [
+            GoRoute(
+              path: '/yorks/material-requests/company/new',
+              builder: (_, _) => const YorksV1CompanyMaterialRequestScreen(),
+            ),
+            GoRoute(
+              path: '/yorks/material-requests/company/:requestId',
+              builder: (_, _) => const Scaffold(
+                body: Center(child: Text('Tracked Company request')),
+              ),
+            ),
+            GoRoute(
+              path: '/yorks/material-requests',
+              builder: (_, _) => const Scaffold(body: Text('MR register')),
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -503,11 +580,19 @@ Future<void> _completeDetails(WidgetTester tester) async {
 Future<void> _completeFirstLine(WidgetTester tester) async {
   await _enterVisible(
     tester,
-    _formFieldWithLabel('Item description'),
+    _formFieldWithLabel('Item description').first,
     'Safety helmets',
   );
   await _enterVisible(tester, _formFieldWithLabel('Quantity'), '12');
-  await _enterVisible(tester, _formFieldWithLabel('Unit'), 'pcs');
+  final unitField = find.byWidgetPredicate(
+    (widget) =>
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value.startsWith(
+          'company-line-unit-',
+        ),
+  );
+  await _tapVisible(tester, unitField);
+  await tester.tap(find.text('pcs').last);
   await tester.pumpAndSettle();
 }
 
@@ -565,6 +650,23 @@ class _CompanyRequestRepository
       responsibleUnitName: 'Workshop',
       beneficiaries: [_person],
       receivers: [_person],
+    ),
+  ];
+
+  @override
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchMaterials({
+    required String categoryId,
+    required String responsibleUnitId,
+    required String query,
+  }) async => const [
+    YorksV1MaterialRequestInventorySuggestion(
+      id: 'c1000000-0000-4000-8000-000000000090',
+      itemCode: 'PPE-001',
+      description: 'Safety helmets',
+      brandOrigin: '3M / USA',
+      size: 'Adjustable',
+      model: 'H-700',
+      unit: 'pcs',
     ),
   ];
 

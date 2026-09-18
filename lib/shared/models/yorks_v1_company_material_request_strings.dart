@@ -68,6 +68,78 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     ur: 'درخواستیں',
     hi: 'अनुरोध',
   );
+  static const trackRequests = TranslatableString(
+    en: 'Track every Company use request from submission to closure.',
+    ar: 'تتبّع كل طلب لاستخدام الشركة من الإرسال حتى الإغلاق.',
+    ur: 'ہر کمپنی استعمال کی درخواست جمع ہونے سے بند ہونے تک ٹریک کریں۔',
+    hi: 'हर कंपनी उपयोग अनुरोध को सबमिशन से समापन तक ट्रैक करें।',
+  );
+  static const currentOwner = TranslatableString(
+    en: 'Current owner',
+    ar: 'المسؤول الحالي',
+    ur: 'موجودہ ذمہ دار',
+    hi: 'वर्तमान उत्तरदायी',
+  );
+  static const nextAction = TranslatableString(
+    en: 'Next action',
+    ar: 'الإجراء التالي',
+    ur: 'اگلی کارروائی',
+    hi: 'अगली कार्रवाई',
+  );
+  static const companyApprover = TranslatableString(
+    en: 'Company approver',
+    ar: 'معتمد الشركة',
+    ur: 'کمپنی منظور کنندہ',
+    hi: 'कंपनी अनुमोदक',
+  );
+  static const procurementOwner = TranslatableString(
+    en: 'Procurement',
+    ar: 'المشتريات',
+    ur: 'پروکیورمنٹ',
+    hi: 'खरीद',
+  );
+  static const requesterOwner = TranslatableString(
+    en: 'Requester',
+    ar: 'مقدم الطلب',
+    ur: 'درخواست کنندہ',
+    hi: 'अनुरोधकर्ता',
+  );
+  static const reviewAndDecide = TranslatableString(
+    en: 'Review and decide',
+    ar: 'المراجعة واتخاذ القرار',
+    ur: 'جائزہ لیں اور فیصلہ کریں',
+    hi: 'समीक्षा करें और निर्णय लें',
+  );
+  static const arrangeSupply = TranslatableString(
+    en: 'Plan and arrange supply',
+    ar: 'تخطيط وترتيب التوريد',
+    ur: 'سپلائی کی منصوبہ بندی اور انتظام کریں',
+    hi: 'आपूर्ति की योजना और व्यवस्था करें',
+  );
+  static const awaitResolution = TranslatableString(
+    en: 'Open the request for its current action',
+    ar: 'افتح الطلب لإجراء الخطوة الحالية',
+    ur: 'موجودہ کارروائی کے لیے درخواست کھولیں',
+    hi: 'वर्तमान कार्रवाई के लिए अनुरोध खोलें',
+  );
+  static const viewRequest = TranslatableString(
+    en: 'View request',
+    ar: 'عرض الطلب',
+    ur: 'درخواست دیکھیں',
+    hi: 'अनुरोध देखें',
+  );
+  static const showRequestInformation = TranslatableString(
+    en: 'Request Information',
+    ar: 'معلومات الطلب',
+    ur: 'درخواست کی معلومات',
+    hi: 'अनुरोध जानकारी',
+  );
+  static const hideRequestInformation = TranslatableString(
+    en: 'Hide Request Information',
+    ar: 'إخفاء معلومات الطلب',
+    ur: 'درخواست کی معلومات چھپائیں',
+    hi: 'अनुरोध जानकारी छिपाएँ',
+  );
   static const planning = TranslatableString(
     en: 'Planning',
     ar: 'التخطيط',
@@ -291,10 +363,10 @@ abstract final class YorksV1CompanyMaterialRequestStrings {
     hi: 'सामग्री आइटम',
   );
   static const itemsDescription = TranslatableString(
-    en: 'Add each physical material and confirm its requested quantity.',
-    ar: 'أضف كل مادة فعلية وأكد الكمية المطلوبة.',
-    ur: 'ہر فزیکل مٹیریل شامل کریں اور مطلوبہ مقدار کی تصدیق کریں۔',
-    hi: 'हर भौतिक सामग्री जोड़ें और उसकी मांगी गई मात्रा की पुष्टि करें।',
+    en: 'Type an item description to search the company catalogue, or enter a custom material, then confirm every field and quantity.',
+    ar: 'اكتب وصف الصنف للبحث في كتالوج الشركة، أو أدخل مادة مخصصة، ثم أكد كل حقل والكمية.',
+    ur: 'کمپنی کیٹلاگ میں تلاش کے لیے آئٹم کی تفصیل لکھیں، یا کسٹم مٹیریل درج کریں، پھر ہر فیلڈ اور مقدار کی تصدیق کریں۔',
+    hi: 'कंपनी कैटलॉग में खोजने के लिए आइटम का विवरण लिखें, या कस्टम सामग्री दर्ज करें, फिर हर फ़ील्ड और मात्रा की पुष्टि करें।',
   );
   static TranslatableString itemCount(int count) => TranslatableString(
     en: '$count ${count == 1 ? 'item' : 'items'}',

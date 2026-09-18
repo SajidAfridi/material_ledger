@@ -82,6 +82,34 @@ void main() {
     );
 
     test(
+      'searches the Company catalogue without project or stock input',
+      () async {
+        final rpc = _RecordingRpc();
+        final repository = _repository(rpc);
+
+        final results = await repository.searchMaterials(
+          categoryId: _categoryId,
+          responsibleUnitId: _unitId,
+          query: ' helmet ',
+        );
+
+        expect(results.single.description, 'Safety helmet');
+        expect(results.single.size, 'Adjustable');
+        expect(results.single.model, 'H-700');
+        expect(
+          rpc.calls.single.functionName,
+          'v1_search_company_material_request_candidates',
+        );
+        expect(rpc.calls.single.parameters, {
+          'p_category_id': _categoryId,
+          'p_responsible_unit_id': _unitId,
+          'p_query': 'helmet',
+          'p_limit': 18,
+        });
+      },
+    );
+
+    test(
       'atomically saves and submits the exact company-only payload',
       () async {
         final rpc = _RecordingRpc();
@@ -263,6 +291,18 @@ final class _RecordingRpc implements YorksV1MaterialRequestRpcClient {
     return switch (functionName) {
       'v1_list_company_material_request_draft_options' => [_optionJson],
       'v1_company_material_request_approval_preflight' => _preflightJson,
+      'v1_search_company_material_request_candidates' => const [
+        {
+          'id': 'c1000000-0000-4000-8000-000000000099',
+          'source_kind': 'inventory',
+          'item_code': 'PPE-001',
+          'item_description': 'Safety helmet',
+          'brand_origin': '3M / USA',
+          'size': 'Adjustable',
+          'model': 'H-700',
+          'unit': 'Nos',
+        },
+      ],
       'v1_save_and_submit_company_material_request' => _requestJson,
       'v1_list_company_material_request_work_inbox' => [_inboxJson],
       'v1_company_material_request_projection' => {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +15,7 @@ import '../../../../shared/models/yorks_v1_material_request.dart';
 import '../../../../shared/models/yorks_v1_material_request_strings.dart';
 import '../../../../shared/providers/language_provider.dart';
 import '../../../../shared/providers/yorks_v1_company_material_request_provider.dart';
+import 'yorks_v1_controlled_unit_field.dart';
 
 export 'yorks_v1_company_material_request_approval_screens.dart';
 
@@ -65,6 +68,7 @@ class _YorksV1CompanyMaterialRequestScreenState
   bool _hasUnsavedChanges = false;
   bool _allowPop = false;
   bool _exitDecisionOpen = false;
+  bool _inspectorExpanded = false;
 
   @override
   void initState() {
@@ -313,7 +317,12 @@ class _YorksV1CompanyMaterialRequestScreenState
       if (submit) {
         setState(() => _saving = false);
         await _showSubmitted(result, language);
-        if (mounted) _leave();
+        if (mounted) {
+          ref.invalidate(yorksV1CompanyMaterialRequestApprovalInboxProvider);
+          ref.invalidate(yorksV1CompanyMaterialRequestProvider(result.id));
+          setState(() => _allowPop = true);
+          context.go('/yorks/material-requests/company/${result.id}');
+        }
       } else {
         _show(YorksV1CompanyMaterialRequestStrings.draftSaved.active(language));
       }
@@ -402,7 +411,7 @@ class _YorksV1CompanyMaterialRequestScreenState
         FilledButton(
           onPressed: () => Navigator.pop(context),
           child: Text(
-            YorksV1CompanyMaterialRequestStrings.done.active(language),
+            YorksV1CompanyMaterialRequestStrings.viewRequest.active(language),
           ),
         ),
       ],
@@ -570,6 +579,8 @@ class _YorksV1CompanyMaterialRequestScreenState
       _CompanyLineEditor(
         language: language,
         lines: _draft.lines,
+        categoryId: _draft.categoryId,
+        responsibleUnitId: _draft.responsibleUnitId,
         compact: true,
         onChanged: (lines) => _update(_draft.copyWith(lines: lines)),
       ),
@@ -728,7 +739,13 @@ class _YorksV1CompanyMaterialRequestScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _DesktopHero(language: language),
+                      _DesktopHero(
+                        language: language,
+                        inspectorExpanded: _inspectorExpanded,
+                        onToggleInspector: () => setState(
+                          () => _inspectorExpanded = !_inspectorExpanded,
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -783,6 +800,8 @@ class _YorksV1CompanyMaterialRequestScreenState
                                   child: _CompanyLineEditor(
                                     language: language,
                                     lines: _draft.lines,
+                                    categoryId: _draft.categoryId,
+                                    responsibleUnitId: _draft.responsibleUnitId,
                                     compact: false,
                                     onChanged: (lines) =>
                                         _update(_draft.copyWith(lines: lines)),
@@ -791,29 +810,34 @@ class _YorksV1CompanyMaterialRequestScreenState
                               ],
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.lg),
-                          SizedBox(
-                            width: 340,
-                            child: Column(
-                              children: [
-                                _CompanyRequestSummary(
-                                  language: language,
-                                  options: options,
-                                  draft: _current,
-                                  preflight: _preflight,
-                                  routeChecking: _routeChecking,
-                                  routeUnavailable: _routeUnavailable,
-                                ),
-                                const SizedBox(height: AppSpacing.md),
-                                _ApprovalStatus(
-                                  language: language,
-                                  checking: _routeChecking,
-                                  routeUnavailable: _routeUnavailable,
-                                  preflight: _preflight,
-                                ),
-                              ],
+                          if (_inspectorExpanded) ...[
+                            const SizedBox(width: AppSpacing.lg),
+                            SizedBox(
+                              width: 340,
+                              child: Column(
+                                children: [
+                                  _CompanyRequestSummary(
+                                    language: language,
+                                    options: options,
+                                    draft: _current,
+                                    preflight: _preflight,
+                                    routeChecking: _routeChecking,
+                                    routeUnavailable: _routeUnavailable,
+                                    onClose: () => setState(
+                                      () => _inspectorExpanded = false,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _ApprovalStatus(
+                                    language: language,
+                                    checking: _routeChecking,
+                                    routeUnavailable: _routeUnavailable,
+                                    preflight: _preflight,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ],
@@ -839,8 +863,14 @@ class _YorksV1CompanyMaterialRequestScreenState
 }
 
 class _DesktopHero extends StatelessWidget {
-  const _DesktopHero({required this.language});
+  const _DesktopHero({
+    required this.language,
+    required this.inspectorExpanded,
+    required this.onToggleInspector,
+  });
   final AppLanguage language;
+  final bool inspectorExpanded;
+  final VoidCallback onToggleInspector;
 
   @override
   Widget build(BuildContext context) => _CompanyCard(
@@ -876,6 +906,23 @@ class _DesktopHero extends StatelessWidget {
             Wrap(
               spacing: AppSpacing.sm,
               children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('company-request-information-toggle'),
+                  onPressed: onToggleInspector,
+                  icon: Icon(
+                    inspectorExpanded
+                        ? Icons.close_rounded
+                        : Icons.info_outline_rounded,
+                  ),
+                  label: Text(
+                    (inspectorExpanded
+                            ? YorksV1CompanyMaterialRequestStrings
+                                  .hideRequestInformation
+                            : YorksV1CompanyMaterialRequestStrings
+                                  .showRequestInformation)
+                        .active(language),
+                  ),
+                ),
                 _StatusChip(
                   icon: Icons.apartment_rounded,
                   label: YorksV1CompanyMaterialRequestStrings.companyUse.active(
@@ -1291,15 +1338,224 @@ class _RequestDetailFields extends StatelessWidget {
   );
 }
 
+class _CompanyMaterialDescriptionSearch extends ConsumerStatefulWidget {
+  const _CompanyMaterialDescriptionSearch({
+    super.key,
+    required this.language,
+    required this.line,
+    required this.categoryId,
+    required this.responsibleUnitId,
+    required this.compact,
+    required this.onChanged,
+  });
+
+  final AppLanguage language;
+  final YorksV1CompanyMaterialRequestLine line;
+  final String? categoryId;
+  final String? responsibleUnitId;
+  final bool compact;
+  final ValueChanged<YorksV1CompanyMaterialRequestLine> onChanged;
+
+  @override
+  ConsumerState<_CompanyMaterialDescriptionSearch> createState() =>
+      _CompanyMaterialDescriptionSearchState();
+}
+
+class _CompanyMaterialDescriptionSearchState
+    extends ConsumerState<_CompanyMaterialDescriptionSearch> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  Timer? _debounce;
+  int _generation = 0;
+  bool _loading = false;
+  List<YorksV1MaterialRequestInventorySuggestion> _suggestions = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.line.description);
+    _focusNode = FocusNode()..addListener(_onFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CompanyMaterialDescriptionSearch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focusNode.hasFocus && widget.line.description != _controller.text) {
+      _controller.text = widget.line.description;
+    }
+    if (oldWidget.categoryId != widget.categoryId ||
+        oldWidget.responsibleUnitId != widget.responsibleUnitId) {
+      _suggestions = const [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _focusNode
+      ..removeListener(_onFocusChanged)
+      ..dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _search(String value) {
+    widget.onChanged(widget.line.copyWith(description: value));
+    _debounce?.cancel();
+    final query = value.trim();
+    final categoryId = widget.categoryId;
+    final responsibleUnitId = widget.responsibleUnitId;
+    if (query.length < 2 || categoryId == null || responsibleUnitId == null) {
+      setState(() {
+        _loading = false;
+        _suggestions = const [];
+      });
+      return;
+    }
+    final generation = ++_generation;
+    _debounce = Timer(const Duration(milliseconds: 250), () async {
+      if (!mounted) return;
+      setState(() => _loading = true);
+      try {
+        final results = await ref.read(
+          yorksV1CompanyMaterialSearchProvider(
+            YorksV1CompanyMaterialSearchKey(
+              categoryId: categoryId,
+              responsibleUnitId: responsibleUnitId,
+              query: query,
+            ),
+          ).future,
+        );
+        if (!mounted || generation != _generation) return;
+        setState(() {
+          _loading = false;
+          _suggestions = results;
+        });
+      } catch (_) {
+        if (!mounted || generation != _generation) return;
+        setState(() {
+          _loading = false;
+          _suggestions = const [];
+        });
+      }
+    });
+  }
+
+  void _select(YorksV1MaterialRequestInventorySuggestion suggestion) {
+    _controller.text = suggestion.description;
+    widget.onChanged(
+      widget.line.copyWith(
+        description: suggestion.description,
+        brandOrigin: suggestion.brandOrigin,
+        clearBrandOrigin: suggestion.brandOrigin == null,
+        size: suggestion.size,
+        clearSize: suggestion.size == null,
+        model: suggestion.model,
+        clearModel: suggestion.model == null,
+        equipmentTag: suggestion.equipmentTag,
+        clearEquipmentTag: suggestion.equipmentTag == null,
+        unit: suggestion.unit,
+      ),
+    );
+    setState(() => _suggestions = const []);
+    _focusNode.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showResults =
+        _focusNode.hasFocus && (_loading || _suggestions.isNotEmpty);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: _controller,
+          focusNode: _focusNode,
+          onChanged: _search,
+          decoration: InputDecoration(
+            labelText: widget.compact
+                ? YorksV1CompanyMaterialRequestStrings.itemDescription.active(
+                    widget.language,
+                  )
+                : null,
+            hintText: YorksV1CompanyMaterialRequestStrings.itemDescription
+                .active(widget.language),
+            suffixIcon: _loading
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : const Icon(Icons.search_rounded),
+            isDense: !widget.compact,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        if (showResults && _suggestions.isNotEmpty)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 260),
+            child: Material(
+              color: AppColors.surfaceContainerLowest,
+              shape: const RoundedRectangleBorder(
+                side: BorderSide(color: AppColors.line),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(AppSpacing.radiusMd),
+                ),
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                children: [
+                  for (final suggestion in _suggestions)
+                    ListTile(
+                      key: ValueKey(
+                        'company-material-suggestion-${suggestion.id}',
+                      ),
+                      dense: !widget.compact,
+                      minVerticalPadding: 10,
+                      title: Text(suggestion.description),
+                      subtitle: Text(
+                        [
+                              suggestion.itemCode,
+                              suggestion.size,
+                              suggestion.model,
+                              suggestion.brandOrigin,
+                              suggestion.unit,
+                            ]
+                            .whereType<String>()
+                            .where((value) => value.isNotEmpty)
+                            .join(' · '),
+                      ),
+                      onTap: () => _select(suggestion),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _CompanyLineEditor extends StatelessWidget {
   const _CompanyLineEditor({
     required this.language,
     required this.lines,
+    required this.categoryId,
+    required this.responsibleUnitId,
     required this.compact,
     required this.onChanged,
   });
   final AppLanguage language;
   final List<YorksV1CompanyMaterialRequestLine> lines;
+  final String? categoryId;
+  final String? responsibleUnitId;
   final bool compact;
   final ValueChanged<List<YorksV1CompanyMaterialRequestLine>> onChanged;
 
@@ -1350,6 +1606,8 @@ class _CompanyLineEditor extends StatelessWidget {
             key: ValueKey(lines[index].id),
             language: language,
             line: lines[index],
+            categoryId: categoryId,
+            responsibleUnitId: responsibleUnitId,
             compact: compact,
             canDelete: lines.length > 1,
             onChanged: (line) {
@@ -1362,11 +1620,33 @@ class _CompanyLineEditor extends StatelessWidget {
                 if (i != index)
                   lines[i].copyWith(displayOrder: i < index ? i + 1 : i),
             ]),
+            onInsertSimilar: () => _insertAfter(index, lines[index]),
+            onInsertBlank: () => _insertAfter(index, null),
           ),
         ],
       ],
     );
     return compact ? YorksMobileCard(child: body) : body;
+  }
+
+  void _insertAfter(int index, YorksV1CompanyMaterialRequestLine? source) {
+    const uuid = Uuid();
+    final inserted = YorksV1CompanyMaterialRequestLine(
+      id: uuid.v4(),
+      displayOrder: index + 2,
+      description: source?.description ?? '',
+      brandOrigin: source?.brandOrigin,
+      size: source?.size,
+      model: source?.model,
+      equipmentTag: source?.equipmentTag,
+      quantity: '',
+      unit: source?.unit ?? '',
+    );
+    final next = [...lines]..insert(index + 1, inserted);
+    onChanged([
+      for (var i = 0; i < next.length; i++)
+        next[i].copyWith(displayOrder: i + 1),
+    ]);
   }
 }
 
@@ -1407,7 +1687,19 @@ class _DesktopLineHeaders extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          flex: 3,
+          flex: 2,
+          child: _label(YorksV1MaterialRequestStrings.size.active(language)),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          flex: 2,
+          child: _label(
+            YorksV1MaterialRequestStrings.planningModelTag.active(language),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          flex: 2,
           child: _label(
             YorksV1CompanyMaterialRequestStrings.brandOrigin.active(language),
           ),
@@ -1437,40 +1729,61 @@ class _CompanyLineFields extends StatelessWidget {
     super.key,
     required this.language,
     required this.line,
+    required this.categoryId,
+    required this.responsibleUnitId,
     required this.compact,
     required this.canDelete,
     required this.onChanged,
     required this.onDelete,
+    required this.onInsertSimilar,
+    required this.onInsertBlank,
   });
   final AppLanguage language;
   final YorksV1CompanyMaterialRequestLine line;
+  final String? categoryId;
+  final String? responsibleUnitId;
   final bool compact;
   final bool canDelete;
   final ValueChanged<YorksV1CompanyMaterialRequestLine> onChanged;
   final VoidCallback onDelete;
+  final VoidCallback onInsertSimilar;
+  final VoidCallback onInsertBlank;
 
-  Widget _description() => TextFormField(
+  Widget _description() => _CompanyMaterialDescriptionSearch(
     key: ValueKey('company-line-description-${line.id}'),
-    initialValue: line.description,
-    onChanged: (value) => onChanged(line.copyWith(description: value)),
+    language: language,
+    line: line,
+    categoryId: categoryId,
+    responsibleUnitId: responsibleUnitId,
+    compact: compact,
+    onChanged: onChanged,
+  );
+
+  Widget _technical({required bool model}) => TextFormField(
+    key: ValueKey(
+      'company-line-${model ? 'model' : 'size'}-${line.id}-${model ? line.model : line.size}',
+    ),
+    initialValue: model ? line.model : line.size,
+    onChanged: (value) => onChanged(
+      model
+          ? line.copyWith(model: value, clearModel: value.trim().isEmpty)
+          : line.copyWith(size: value, clearSize: value.trim().isEmpty),
+    ),
     decoration: InputDecoration(
       labelText: compact
-          ? YorksV1CompanyMaterialRequestStrings.itemDescription.active(
-              language,
-            )
+          ? (model
+                ? YorksV1MaterialRequestStrings.planningModelTag.active(
+                    language,
+                  )
+                : YorksV1MaterialRequestStrings.size.active(language))
           : null,
-      hintText: compact
-          ? null
-          : YorksV1CompanyMaterialRequestStrings.itemDescription.active(
-              language,
-            ),
       isDense: !compact,
       border: const OutlineInputBorder(),
     ),
   );
 
   Widget _brand() => TextFormField(
-    key: ValueKey('company-line-brand-${line.id}'),
+    key: ValueKey('company-line-brand-${line.id}-${line.brandOrigin}'),
     initialValue: line.brandOrigin,
     onChanged: (value) => onChanged(
       line.copyWith(brandOrigin: value, clearBrandOrigin: value.trim().isEmpty),
@@ -1504,20 +1817,14 @@ class _CompanyLineFields extends StatelessWidget {
     ),
   );
 
-  Widget _unit() => TextFormField(
-    key: ValueKey('company-line-unit-${line.id}'),
-    initialValue: line.unit,
+  Widget _unit() => YorksV1ControlledUnitDropdown(
+    fieldKey: ValueKey('company-line-unit-${line.id}'),
+    label: YorksV1CompanyMaterialRequestStrings.unit.active(language),
+    value: line.unit,
+    enabled: true,
+    isDense: !compact,
+    desktopCell: !compact,
     onChanged: (value) => onChanged(line.copyWith(unit: value)),
-    decoration: InputDecoration(
-      labelText: compact
-          ? YorksV1CompanyMaterialRequestStrings.unit.active(language)
-          : null,
-      hintText: compact
-          ? null
-          : YorksV1CompanyMaterialRequestStrings.unit.active(language),
-      isDense: !compact,
-      border: const OutlineInputBorder(),
-    ),
   );
 
   @override
@@ -1541,6 +1848,14 @@ class _CompanyLineFields extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               _description(),
               const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(child: _technical(model: false)),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(child: _technical(model: true)),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
               _brand(),
               const SizedBox(height: AppSpacing.sm),
               Row(
@@ -1548,6 +1863,31 @@ class _CompanyLineFields extends StatelessWidget {
                   Expanded(child: _quantity()),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(child: _unit()),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  TextButton.icon(
+                    onPressed: onInsertSimilar,
+                    icon: const Icon(Icons.content_copy_rounded),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.addSimilarRow.active(
+                        language,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: onInsertBlank,
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text(
+                      YorksV1MaterialRequestStrings.addBlankRow.active(
+                        language,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -1569,23 +1909,52 @@ class _CompanyLineFields extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(flex: 4, child: _description()),
               const SizedBox(width: AppSpacing.sm),
-              Expanded(flex: 3, child: _brand()),
+              Expanded(flex: 2, child: _technical(model: false)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(flex: 2, child: _technical(model: true)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(flex: 2, child: _brand()),
               const SizedBox(width: AppSpacing.sm),
               Expanded(flex: 2, child: _quantity()),
               const SizedBox(width: AppSpacing.sm),
               Expanded(flex: 2, child: _unit()),
-              SizedBox(
-                width: AppSpacing.minTapTarget,
-                height: AppSpacing.minTapTarget,
-                child: canDelete
-                    ? IconButton(
-                        tooltip: MaterialLocalizations.of(
-                          context,
-                        ).deleteButtonTooltip,
-                        onPressed: onDelete,
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      )
-                    : null,
+              PopupMenuButton<String>(
+                tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+                onSelected: (value) {
+                  if (value == 'similar') onInsertSimilar();
+                  if (value == 'blank') onInsertBlank();
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'similar',
+                    child: Text(
+                      YorksV1MaterialRequestStrings.addSimilarRow.active(
+                        language,
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'blank',
+                    child: Text(
+                      YorksV1MaterialRequestStrings.addBlankRow.active(
+                        language,
+                      ),
+                    ),
+                  ),
+                  if (canDelete)
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        MaterialLocalizations.of(context).deleteButtonTooltip,
+                      ),
+                    ),
+                ],
+                child: const SizedBox(
+                  width: AppSpacing.minTapTarget,
+                  height: AppSpacing.minTapTarget,
+                  child: Icon(Icons.more_vert_rounded),
+                ),
               ),
             ],
           ),
@@ -1637,6 +2006,7 @@ class _CompanyRequestSummary extends StatelessWidget {
     required this.preflight,
     required this.routeChecking,
     required this.routeUnavailable,
+    this.onClose,
   });
   final AppLanguage language;
   final List<YorksV1CompanyMaterialRequestDraftOption> options;
@@ -1644,6 +2014,7 @@ class _CompanyRequestSummary extends StatelessWidget {
   final YorksV1CompanyMaterialRequestApprovalPreflight? preflight;
   final bool routeChecking;
   final bool routeUnavailable;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -1676,6 +2047,12 @@ class _CompanyRequestSummary extends StatelessWidget {
                   style: AppTypography.titleMedium,
                 ),
               ),
+              if (onClose != null)
+                IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

@@ -89,6 +89,9 @@ class YorksV1CompanyMaterialRequestLine {
     required this.quantity,
     required this.unit,
     this.brandOrigin,
+    this.size,
+    this.model,
+    this.equipmentTag,
     this.arrangedQuantity = '0',
     this.dispatchedQuantity = '0',
     this.goodReceivedQuantity = '0',
@@ -104,6 +107,9 @@ class YorksV1CompanyMaterialRequestLine {
   final String quantity;
   final String unit;
   final String? brandOrigin;
+  final String? size;
+  final String? model;
+  final String? equipmentTag;
   final String arrangedQuantity;
   final String dispatchedQuantity;
   final String goodReceivedQuantity;
@@ -124,7 +130,13 @@ class YorksV1CompanyMaterialRequestLine {
     String? quantity,
     String? unit,
     String? brandOrigin,
+    String? size,
+    String? model,
+    String? equipmentTag,
     bool clearBrandOrigin = false,
+    bool clearSize = false,
+    bool clearModel = false,
+    bool clearEquipmentTag = false,
   }) => YorksV1CompanyMaterialRequestLine(
     id: id ?? this.id,
     displayOrder: displayOrder ?? this.displayOrder,
@@ -132,6 +144,16 @@ class YorksV1CompanyMaterialRequestLine {
     quantity: quantity ?? this.quantity,
     unit: unit ?? this.unit,
     brandOrigin: clearBrandOrigin ? null : brandOrigin ?? this.brandOrigin,
+    size: clearSize ? null : size ?? this.size,
+    model: clearModel ? null : model ?? this.model,
+    equipmentTag: clearEquipmentTag ? null : equipmentTag ?? this.equipmentTag,
+    arrangedQuantity: arrangedQuantity,
+    dispatchedQuantity: dispatchedQuantity,
+    goodReceivedQuantity: goodReceivedQuantity,
+    handedOverQuantity: handedOverQuantity,
+    returnedQuantity: returnedQuantity,
+    withdrawnQuantity: withdrawnQuantity,
+    withdrawableQuantity: withdrawableQuantity,
   );
 
   Map<String, dynamic> toRpcJson() => {
@@ -139,6 +161,9 @@ class YorksV1CompanyMaterialRequestLine {
     'display_order': displayOrder,
     'item_description': description.trim(),
     'brand_origin': _trimToNull(brandOrigin),
+    'size': _trimToNull(size),
+    'model': _trimToNull(model),
+    'equipment_tag': _trimToNull(equipmentTag),
     'requested_qty': quantity.trim(),
     'unit': unit.trim(),
   };
@@ -152,6 +177,9 @@ class YorksV1CompanyMaterialRequestLine {
     quantity: _requiredText(json, 'requested_qty'),
     unit: _requiredText(json, 'unit'),
     brandOrigin: _trimToNull(json['brand_origin']?.toString()),
+    size: _trimToNull(json['size']?.toString()),
+    model: _trimToNull(json['model']?.toString()),
+    equipmentTag: _trimToNull(json['equipment_tag']?.toString()),
     arrangedQuantity: json['arranged_qty']?.toString() ?? '0',
     dispatchedQuantity: json['dispatched_qty']?.toString() ?? '0',
     goodReceivedQuantity: json['good_received_qty']?.toString() ?? '0',

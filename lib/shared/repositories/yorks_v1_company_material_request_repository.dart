@@ -5,11 +5,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/yorks_v1_company_material_request.dart';
 import '../models/yorks_v1_domain_error.dart';
 import '../models/yorks_v1_feature_flags.dart';
+import '../models/yorks_v1_material_request.dart';
 import '../sync/connectivity_service.dart';
 import 'yorks_v1_material_request_repository.dart';
 
 abstract interface class YorksV1CompanyMaterialRequestRepository {
   Future<List<YorksV1CompanyMaterialRequestDraftOption>> listDraftOptions();
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchMaterials({
+    required String categoryId,
+    required String responsibleUnitId,
+    required String query,
+  });
   Future<YorksV1CompanyMaterialRequestApprovalPreflight> preflightApproval({
     required String categoryId,
     required String responsibleUnitId,
@@ -135,6 +141,34 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
       for (final item in response)
         if (item is Map)
           YorksV1CompanyMaterialRequestDraftOption.fromRpcJson(
+            Map<String, dynamic>.from(item),
+          ),
+    ];
+  }
+
+  @override
+  Future<List<YorksV1MaterialRequestInventorySuggestion>> searchMaterials({
+    required String categoryId,
+    required String responsibleUnitId,
+    required String query,
+  }) async {
+    if (query.trim().length < 2) return const [];
+    final response =
+        await _invoke('v1_search_company_material_request_candidates', {
+          'p_category_id': categoryId,
+          'p_responsible_unit_id': responsibleUnitId,
+          'p_query': query.trim(),
+          'p_limit': 18,
+        });
+    if (response is! List) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return [
+      for (final item in response)
+        if (item is Map)
+          YorksV1MaterialRequestInventorySuggestion.fromRpcJson(
             Map<String, dynamic>.from(item),
           ),
     ];

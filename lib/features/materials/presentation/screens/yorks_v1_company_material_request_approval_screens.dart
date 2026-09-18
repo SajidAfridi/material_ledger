@@ -26,8 +26,17 @@ class YorksV1CompanyMaterialRequestApprovalInboxScreen
 
 class _CompanyInboxState
     extends ConsumerState<YorksV1CompanyMaterialRequestApprovalInboxScreen> {
-  YorksV1CompanyMaterialRequestRegisterView? _view;
+  YorksV1CompanyMaterialRequestRegisterView? _view =
+      YorksV1CompanyMaterialRequestRegisterView.requests;
   Future<List<YorksV1CompanyMaterialRequestApprovalInboxItem>>? _register;
+
+  @override
+  void initState() {
+    super.initState();
+    _register = ref
+        .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+        .listRegister(YorksV1CompanyMaterialRequestRegisterView.requests);
+  }
 
   void _select(YorksV1CompanyMaterialRequestRegisterView? view) {
     setState(() {
@@ -62,34 +71,9 @@ class _CompanyInboxState
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: Text(
-          _view == null
-              ? YorksV1CompanyMaterialRequestStrings.approvalInbox.active(
-                  language,
-                )
-              : _registerLabel(_view!, language),
+          YorksV1CompanyMaterialRequestStrings.approvals.active(language),
         ),
         actions: [
-          PopupMenuButton<String>(
-            initialValue: _view?.wireValue ?? 'work',
-            onSelected: (value) => _select(
-              value == 'work'
-                  ? null
-                  : views.singleWhere((view) => view.wireValue == value),
-            ),
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'work',
-                child: Text(
-                  YorksV1CompanyMaterialRequestStrings.myWork.active(language),
-                ),
-              ),
-              for (final view in views)
-                PopupMenuItem(
-                  value: view.wireValue,
-                  child: Text(_registerLabel(view, language)),
-                ),
-            ],
-          ),
           IconButton(
             tooltip: YorksV1CompanyMaterialRequestStrings.retry.active(
               language,
@@ -107,22 +91,79 @@ class _CompanyInboxState
           YorksV1CompanyMaterialRequestStrings.companyUse.active(language),
         ),
       ),
-      body: _view == null
-          ? inbox.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => _loadError(language),
-              data: (items) => _requestList(items, language),
-            )
-          : FutureBuilder(
-              future: _register,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) return _loadError(language);
-                final items = snapshot.data;
-                return items == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : _requestList(items, language);
-              },
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              border: Border(bottom: BorderSide(color: AppColors.line)),
             ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1000),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      YorksV1CompanyMaterialRequestStrings.trackRequests.active(
+                        language,
+                      ),
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          key: const ValueKey('company-register-my-work'),
+                          selected: _view == null,
+                          onSelected: (_) => _select(null),
+                          label: Text(
+                            YorksV1CompanyMaterialRequestStrings.myWork.active(
+                              language,
+                            ),
+                          ),
+                        ),
+                        for (final view in views)
+                          ChoiceChip(
+                            key: ValueKey('company-register-${view.wireValue}'),
+                            selected: _view == view,
+                            onSelected: (_) => _select(view),
+                            label: Text(_registerLabel(view, language)),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _view == null
+                ? inbox.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, _) => _loadError(language),
+                    data: (items) => _requestList(items, language),
+                  )
+                : FutureBuilder(
+                    future: _register,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) return _loadError(language);
+                      final items = snapshot.data;
+                      return items == null
+                          ? const Center(child: CircularProgressIndicator())
+                          : _requestList(items, language);
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -434,6 +475,27 @@ class _InboxCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(item.purpose),
                   const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(_stateLabel(item.state, language)),
+                      ),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        avatar: const Icon(
+                          Icons.person_outline_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          '${YorksV1CompanyMaterialRequestStrings.currentOwner.active(language)}: ${_currentOwner(item.state, language)}',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   Text(
                     '${item.categoryName} · ${item.responsibleUnitName} · ${YorksV1CompanyMaterialRequestStrings.itemCount(item.lineCount).active(language)}',
                     style: AppTypography.bodySmall.copyWith(
@@ -446,6 +508,20 @@ class _InboxCard extends StatelessWidget {
                       color: AppColors.muted,
                     ),
                   ),
+                  Text(
+                    '${YorksV1CompanyMaterialRequestStrings.submittedOn.active(language)}: ${MaterialLocalizations.of(context).formatMediumDate(item.submittedAt.toLocal())}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${YorksV1CompanyMaterialRequestStrings.nextAction.active(language)}: ${_nextAction(item.state, language)}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.blue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -455,6 +531,72 @@ class _InboxCard extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _CompanyLifecycleProgress extends StatelessWidget {
+  const _CompanyLifecycleProgress({
+    required this.state,
+    required this.language,
+  });
+
+  final String state;
+  final AppLanguage language;
+
+  int get _activeIndex => switch (state) {
+    'submitted_pending_approval' ||
+    'awaiting_company_approval' ||
+    'returned_for_changes' ||
+    'rejected' => 1,
+    'approved_for_procurement' || 'arranging' => 2,
+    'ready_for_delivery' => 3,
+    'partially_dispatched' || 'receipt_pending' => 4,
+    'partially_received' || 'awaiting_beneficiary_handover' => 5,
+    'fulfilled' || 'closed' => 6,
+    _ => 0,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = [
+      YorksV1CompanyMaterialRequestStrings.requests.active(language),
+      YorksV1CompanyMaterialRequestStrings.awaitingApproval.active(language),
+      YorksV1CompanyMaterialRequestStrings.planning.active(language),
+      YorksV1CompanyMaterialRequestStrings.readyForDelivery.active(language),
+      YorksV1CompanyMaterialRequestStrings.dispatch.active(language),
+      YorksV1CompanyMaterialRequestStrings.awaitingHandover.active(language),
+      YorksV1CompanyMaterialRequestStrings.closed.active(language),
+    ];
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var index = 0; index < labels.length; index++)
+              Chip(
+                avatar: Icon(
+                  index < _activeIndex
+                      ? Icons.check_circle_rounded
+                      : index == _activeIndex
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 18,
+                  color: index <= _activeIndex
+                      ? AppColors.blue
+                      : AppColors.muted,
+                ),
+                label: Text(labels[index]),
+                backgroundColor: index == _activeIndex
+                    ? AppColors.blueContainer
+                    : AppColors.surfaceContainerLow,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ApprovalDetail extends StatelessWidget {
@@ -499,6 +641,11 @@ class _ApprovalDetail extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
+              _CompanyLifecycleProgress(
+                state: request.state,
+                language: language,
+              ),
+              const SizedBox(height: 20),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -512,6 +659,16 @@ class _ApprovalDetail extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 14),
+                      _Fact(
+                        label: YorksV1CompanyMaterialRequestStrings.currentOwner
+                            .active(language),
+                        value: _currentOwner(request.state, language),
+                      ),
+                      _Fact(
+                        label: YorksV1CompanyMaterialRequestStrings.nextAction
+                            .active(language),
+                        value: _nextAction(request.state, language),
+                      ),
                       _Fact(
                         label: YorksV1CompanyMaterialRequestStrings
                             .responsibleUnit
@@ -1756,6 +1913,25 @@ String _stateLabel(String state, AppLanguage language) => switch (state) {
   ),
   'closed' => YorksV1CompanyMaterialRequestStrings.closed.active(language),
   _ => YorksV1CompanyMaterialRequestStrings.awaitingApproval.active(language),
+};
+
+String _currentOwner(String state, AppLanguage language) => switch (state) {
+  'submitted_pending_approval' || 'awaiting_company_approval' =>
+    YorksV1CompanyMaterialRequestStrings.companyApprover.active(language),
+  'approved_for_procurement' ||
+  'arranging' ||
+  'ready_for_delivery' ||
+  'partially_dispatched' =>
+    YorksV1CompanyMaterialRequestStrings.procurementOwner.active(language),
+  _ => YorksV1CompanyMaterialRequestStrings.requesterOwner.active(language),
+};
+
+String _nextAction(String state, AppLanguage language) => switch (state) {
+  'submitted_pending_approval' || 'awaiting_company_approval' =>
+    YorksV1CompanyMaterialRequestStrings.reviewAndDecide.active(language),
+  'approved_for_procurement' || 'arranging' =>
+    YorksV1CompanyMaterialRequestStrings.arrangeSupply.active(language),
+  _ => YorksV1CompanyMaterialRequestStrings.awaitResolution.active(language),
 };
 
 String _decisionLabel(
