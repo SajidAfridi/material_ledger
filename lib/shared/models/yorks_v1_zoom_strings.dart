@@ -35,4 +35,16 @@ abstract final class YorksV1ZoomStrings {
     ur: 'زوم لیول',
     hi: 'ज़ूम स्तर',
   );
+  static const enterFullscreen = TranslatableString(
+    en: 'Enter full screen',
+    ar: 'دخول وضع ملء الشاشة',
+    ur: 'فل اسکرین کھولیں',
+    hi: 'फ़ुल स्क्रीन खोलें',
+  );
+  static const exitFullscreen = TranslatableString(
+    en: 'Exit full screen',
+    ar: 'الخروج من وضع ملء الشاشة',
+    ur: 'فل اسکرین بند کریں',
+    hi: 'फ़ुल स्क्रीन बंद करें',
+  );
 }

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/yorks_v1_audit_workspace.dart';
+import '../models/yorks_v1_domain_error.dart';
+import 'yorks_v1_identity_provider.dart';
 import '../repositories/yorks_v1_audit_repository.dart';
 import '../sync/connectivity_service.dart';
 import 'language_provider.dart';
@@ -12,6 +14,10 @@ final yorksV1AuditRpcClientProvider = Provider<YorksV1AuditRpcClient?>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return client == null ? null : SupabaseYorksV1AuditRpcClient(client);
 });
+
+final yorksV1AuditNowProvider = Provider.autoDispose<DateTime>(
+  (ref) => DateTime.now(),
+);
 
 final yorksV1AuditRepositoryProvider = Provider<YorksV1AuditRepository>((ref) {
   return YorksV1SupabaseAuditRepository(
@@ -29,6 +35,7 @@ class YorksV1AuditViewState {
     this.isRefreshing = false,
     this.error,
     this.stackTrace,
+    this.loadedFilter,
   });
 
   final YorksV1AuditFilter filter;
@@ -37,6 +44,9 @@ class YorksV1AuditViewState {
   final bool isRefreshing;
   final Object? error;
   final StackTrace? stackTrace;
+  final YorksV1AuditFilter? loadedFilter;
+  bool get canExport =>
+      workspace != null && !isLoading && !isRefreshing && error == null;
 
   YorksV1AuditViewState copyWith({
     YorksV1AuditFilter? filter,
@@ -46,9 +56,12 @@ class YorksV1AuditViewState {
     Object? error,
     StackTrace? stackTrace,
     bool clearError = false,
+    bool clearWorkspace = false,
+    YorksV1AuditFilter? loadedFilter,
   }) => YorksV1AuditViewState(
     filter: filter ?? this.filter,
-    workspace: workspace ?? this.workspace,
+    workspace: clearWorkspace ? null : workspace ?? this.workspace,
+    loadedFilter: clearWorkspace ? null : loadedFilter ?? this.loadedFilter,
     isLoading: isLoading ?? this.isLoading,
     isRefreshing: isRefreshing ?? this.isRefreshing,
     error: clearError ? null : error ?? this.error,
@@ -61,19 +74,34 @@ final yorksV1AuditControllerProvider =
       YorksV1AuditController,
       YorksV1AuditViewState
     >((ref) {
-      return YorksV1AuditController(ref.watch(yorksV1AuditRepositoryProvider));
+      ref.watch(yorksV1AuthUserIdProvider);
+      ref.watch(yorksV1CurrentRoleProvider);
+      return YorksV1AuditController(
+        ref.watch(yorksV1AuditRepositoryProvider),
+        now: ref.watch(yorksV1AuditNowProvider),
+      );
     });
 
 class YorksV1AuditController extends StateNotifier<YorksV1AuditViewState> {
-  YorksV1AuditController(this._repository)
-    : super(const YorksV1AuditViewState()) {
+  YorksV1AuditController(this._repository, {DateTime? now})
+    : super(YorksV1AuditViewState(filter: recentFilter(now))) {
     scheduleMicrotask(load);
   }
 
   final YorksV1AuditRepository _repository;
+  static YorksV1AuditFilter recentFilter([DateTime? anchor]) {
+    final now = anchor ?? DateTime.now();
+    return YorksV1AuditFilter(
+      from: DateTime(now.year, now.month, now.day - 29),
+      to: DateTime(now.year, now.month, now.day + 1),
+    );
+  }
+
   int _requestSerial = 0;
+  final _pageCursors = <int, (DateTime, String)>{};
 
   Future<void> load() async {
+    final filter = state.filter;
     final serial = ++_requestSerial;
     final retaining = state.workspace != null;
     state = state.copyWith(
@@ -82,10 +110,16 @@ class YorksV1AuditController extends StateNotifier<YorksV1AuditViewState> {
       clearError: true,
     );
     try {
-      final workspace = await _repository.getWorkspace(state.filter);
+      final workspace = await _repository.getWorkspace(filter);
       if (!mounted || serial != _requestSerial) return;
+      if (workspace.events.isNotEmpty) {
+        final last = workspace.events.last;
+        _pageCursors[filter.page + 1] = (last.occurredAt, last.id);
+      }
       state = state.copyWith(
         workspace: workspace,
+        loadedFilter: filter.copyWith(asOf: workspace.asOf),
+        filter: filter.copyWith(asOf: workspace.asOf),
         isLoading: false,
         isRefreshing: false,
         clearError: true,
@@ -97,6 +131,13 @@ class YorksV1AuditController extends StateNotifier<YorksV1AuditViewState> {
         isRefreshing: false,
         error: error,
         stackTrace: stackTrace,
+        clearWorkspace:
+            error is YorksV1DomainException &&
+            {
+              YorksV1DomainErrorCode.unauthorized,
+              YorksV1DomainErrorCode.unauthenticated,
+              YorksV1DomainErrorCode.featureDisabled,
+            }.contains(error.code),
       );
     }
   }
@@ -130,12 +171,80 @@ class YorksV1AuditController extends StateNotifier<YorksV1AuditViewState> {
     final maximum = (workspace?.pageCount ?? 1) - 1;
     final next = page.clamp(0, maximum);
     if (next == state.filter.page) return Future.value();
-    return _setFilter(state.filter.copyWith(page: next));
+    state = state.copyWith(
+      filter: state.filter
+          .copyWith(page: next, clearCursor: true)
+          .copyWith(
+            cursorAt: _pageCursors[next]?.$1,
+            cursorId: _pageCursors[next]?.$2,
+          ),
+      clearError: true,
+    );
+    return load();
   }
 
   Future<void> _setFilter(YorksV1AuditFilter filter) {
-    state = state.copyWith(filter: filter, clearError: true);
+    _pageCursors.clear();
+    state = state.copyWith(
+      filter: filter.copyWith(clearSnapshot: true, clearCursor: true),
+      clearError: true,
+    );
     return load();
+  }
+
+  Future<void> refresh() {
+    _pageCursors.clear();
+    state = state.copyWith(
+      filter: state.filter.copyWith(
+        clearSnapshot: true,
+        clearCursor: true,
+        page: 0,
+      ),
+    );
+    return load();
+  }
+
+  Future<void> applyFilter(YorksV1AuditFilter filter) =>
+      _setFilter(filter.copyWith(page: 0));
+  Future<void> clearFilters() => _setFilter(const YorksV1AuditFilter());
+
+  Future<YorksV1AuditWorkspace> history(
+    YorksV1AuditEvent event, {
+    int page = 0,
+    DateTime? asOf,
+    YorksV1AuditEvent? after,
+  }) async {
+    try {
+      return await _repository.getWorkspace(
+        YorksV1AuditFilter(
+          entityId: event.entityId,
+          entityType: event.entityType,
+          page: page,
+          asOf: asOf,
+          cursorAt: after?.occurredAt,
+          cursorId: after?.id,
+        ),
+      );
+    } on YorksV1DomainException catch (error) {
+      if (error.code == YorksV1DomainErrorCode.unauthorized && mounted) {
+        state = state.copyWith(clearWorkspace: true, error: error);
+      }
+      rethrow;
+    }
+  }
+
+  Future<YorksV1AuditWorkspace> export(String id) async {
+    if (!state.canExport) {
+      throw const YorksV1DomainException(YorksV1DomainErrorCode.invalidInput);
+    }
+    try {
+      return await _repository.exportWorkspace(state.loadedFilter!, id);
+    } on YorksV1DomainException catch (error) {
+      if (error.code == YorksV1DomainErrorCode.unauthorized && mounted) {
+        state = state.copyWith(clearWorkspace: true, error: error);
+      }
+      rethrow;
+    }
   }
 
   @override

@@ -7,6 +7,48 @@ import 'yorks_v1_project_strings.dart';
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const saveUnconfirmed = TranslatableString(
+    en: 'The account save is not yet confirmed. Your device copy and the original save identity are preserved while Yorks checks the result.',
+    ar: 'لم يتم تأكيد الحفظ في الحساب بعد. تم الاحتفاظ بنسخة الجهاز وهوية الحفظ الأصلية أثناء التحقق من النتيجة.',
+    ur: 'اکاؤنٹ میں محفوظ ہونے کی ابھی تصدیق نہیں ہوئی۔ نتیجہ چیک کرتے وقت ڈیوائس کاپی اور اصل سیو شناخت محفوظ ہیں۔',
+    hi: 'अकाउंट सेव की अभी पुष्टि नहीं हुई है। परिणाम जाँचते समय डिवाइस कॉपी और मूल सेव पहचान सुरक्षित हैं।',
+  );
+  static const checkSaveStatus = TranslatableString(
+    en: 'Check save status',
+    ar: 'التحقق من حالة الحفظ',
+    ur: 'محفوظ ہونے کی حالت چیک کریں',
+    hi: 'सेव की स्थिति जाँचें',
+  );
+  static const retrySameSave = TranslatableString(
+    en: 'Retry same save',
+    ar: 'إعادة محاولة الحفظ نفسه',
+    ur: 'اسی سیو کو دوبارہ آزمائیں',
+    hi: 'यही सेव दोबारा आज़माएँ',
+  );
+  static const serverSavedLocalRecoveryFailed = TranslatableString(
+    en: 'Saved to your account, but this device could not refresh its recovery copy.',
+    ar: 'تم الحفظ في حسابك، لكن تعذر على هذا الجهاز تحديث نسخة الاسترداد.',
+    ur: 'آپ کے اکاؤنٹ میں محفوظ ہو گیا، لیکن یہ ڈیوائس اپنی ریکوری کاپی تازہ نہیں کر سکی۔',
+    hi: 'आपके अकाउंट में सेव हो गया, लेकिन यह डिवाइस अपनी रिकवरी कॉपी अपडेट नहीं कर सका।',
+  );
+  static const submissionUnconfirmed = TranslatableString(
+    en: 'Submission is not yet confirmed. Your entries are preserved. Check its status before trying again.',
+    ar: 'لم يتم تأكيد الإرسال بعد. تم الاحتفاظ ببياناتك. تحقق من الحالة قبل المحاولة مجدداً.',
+    ur: 'جمع ہونے کی ابھی تصدیق نہیں ہوئی۔ آپ کی معلومات محفوظ ہیں۔ دوبارہ کوشش سے پہلے حالت چیک کریں۔',
+    hi: 'सबमिशन की अभी पुष्टि नहीं हुई है। आपकी जानकारी सुरक्षित है। दोबारा कोशिश करने से पहले स्थिति जाँचें।',
+  );
+  static const checkSubmissionStatus = TranslatableString(
+    en: 'Check submission status',
+    ar: 'التحقق من حالة الإرسال',
+    ur: 'جمع ہونے کی حالت چیک کریں',
+    hi: 'सबमिशन की स्थिति जाँचें',
+  );
+  static const retrySameSubmission = TranslatableString(
+    en: 'Retry same submission',
+    ar: 'إعادة محاولة الإرسال نفسه',
+    ur: 'اسی درخواست کو دوبارہ جمع کریں',
+    hi: 'यही सबमिशन दोबारा आज़माएँ',
+  );
   static const quantityHistory = TranslatableString(
     en: 'Quantity history',
     ar: 'سجل الكميات',
@@ -1814,6 +1856,48 @@ abstract final class YorksV1MaterialRequestStrings {
     ar: 'إرسال',
     ur: 'جمع کرائیں',
     hi: 'जमा करें',
+  );
+  static const submitForApproval = TranslatableString(
+    en: 'Submit for Approval',
+    ar: 'إرسال للموافقة',
+    ur: 'منظوری کے لیے جمع کرائیں',
+    hi: 'अनुमोदन के लिए जमा करें',
+  );
+  static const submitAndApprove = TranslatableString(
+    en: 'Submit and Approve',
+    ar: 'إرسال واعتماد',
+    ur: 'جمع کرائیں اور منظور کریں',
+    hi: 'जमा करें और अनुमोदित करें',
+  );
+  static const createOnly = TranslatableString(
+    en: 'Create only',
+    ar: 'إنشاء فقط',
+    ur: 'صرف بنائیں',
+    hi: 'केवल बनाएँ',
+  );
+  static const createOnlyDescription = TranslatableString(
+    en: 'Create it and wait for another authorized approver.',
+    ar: 'أنشئه وانتظر موافقة شخص آخر مخول.',
+    ur: 'اسے بنائیں اور کسی دوسرے مجاز منظور کنندہ کا انتظار کریں۔',
+    hi: 'इसे बनाएँ और किसी अन्य अधिकृत अनुमोदक की प्रतीक्षा करें।',
+  );
+  static const createAndApprove = TranslatableString(
+    en: 'Create and Approve',
+    ar: 'إنشاء واعتماد',
+    ur: 'بنائیں اور منظور کریں',
+    hi: 'बनाएँ और अनुमोदित करें',
+  );
+  static const createAndApproveDescription = TranslatableString(
+    en: 'Create it and approve it for Procurement now.',
+    ar: 'أنشئه واعتمده للمشتريات الآن.',
+    ur: 'اسے بنائیں اور ابھی پروکیورمنٹ کے لیے منظور کریں۔',
+    hi: 'इसे बनाएँ और अभी खरीद विभाग के लिए अनुमोदित करें।',
+  );
+  static const chooseCreationAction = TranslatableString(
+    en: 'Choose how to create this request',
+    ar: 'اختر كيفية إنشاء هذا الطلب',
+    ur: 'منتخب کریں کہ یہ درخواست کیسے بنانی ہے',
+    hi: 'चुनें कि यह अनुरोध कैसे बनाना है',
   );
   static const submitted = TranslatableString(
     en: 'Submitted',

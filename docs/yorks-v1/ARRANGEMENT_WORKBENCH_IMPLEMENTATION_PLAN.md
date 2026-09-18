@@ -154,7 +154,7 @@ Requirements: AW-08–13, AW-14–23, AW-27, AW-29–30.
 
 - Reuse the same controller in item list, one-row editor and Review flow.
 - Keep source evidence, commercial controls, reasons, external readiness and
-  Clarify item reachable without desktop horizontal editing.
+  Edit item details reachable without desktop horizontal editing.
 - Use honest Continue/Next item wording, visible save status and Save progress
   from every step. Handle keyboard/safe-area and previous-item navigation.
 - Complete loading/empty/error/denied/offline/stale/conflict/uncertain/saved

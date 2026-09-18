@@ -196,7 +196,20 @@ if [[ "$r35_environment" == "production"
   exit 64
 fi
 
+# Source identity comes from this checkout, never an operator-supplied label.
+# Keep application version/build semantics unchanged. Dirty includes untracked
+# files, so an uncommitted candidate cannot masquerade as the clean revision.
+r35_source_root="$(cd "$(dirname "$0")/.." && pwd)"
+r35_release_id=unknown
+if r35_revision="$(git -C "$r35_source_root" rev-parse --verify HEAD 2>/dev/null)"; then
+  r35_release_id="$r35_revision"
+  if [[ -n "$(git -C "$r35_source_root" status --porcelain --untracked-files=normal)" ]]; then
+    r35_release_id="${r35_release_id}-dirty"
+  fi
+fi
+
 r35_defines=(
+  "--dart-define=YORKS_RELEASE_ID=${r35_release_id}"
   "--dart-define=SUPABASE_URL=${supabase_url}"
   "--dart-define=SUPABASE_ANON_KEY=${supabase_key}"
   "--dart-define=R35_ENVIRONMENT=${r35_environment}"

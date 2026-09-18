@@ -89,6 +89,16 @@ class YorksV1CompanyMaterialRequestLine {
     required this.quantity,
     required this.unit,
     this.brandOrigin,
+    this.size,
+    this.model,
+    this.equipmentTag,
+    this.arrangedQuantity = '0',
+    this.dispatchedQuantity = '0',
+    this.goodReceivedQuantity = '0',
+    this.handedOverQuantity = '0',
+    this.returnedQuantity = '0',
+    this.withdrawnQuantity = '0',
+    this.withdrawableQuantity = '0',
   });
 
   final String id;
@@ -97,6 +107,16 @@ class YorksV1CompanyMaterialRequestLine {
   final String quantity;
   final String unit;
   final String? brandOrigin;
+  final String? size;
+  final String? model;
+  final String? equipmentTag;
+  final String arrangedQuantity;
+  final String dispatchedQuantity;
+  final String goodReceivedQuantity;
+  final String handedOverQuantity;
+  final String returnedQuantity;
+  final String withdrawnQuantity;
+  final String withdrawableQuantity;
 
   bool get isValid =>
       description.trim().isNotEmpty &&
@@ -110,7 +130,13 @@ class YorksV1CompanyMaterialRequestLine {
     String? quantity,
     String? unit,
     String? brandOrigin,
+    String? size,
+    String? model,
+    String? equipmentTag,
     bool clearBrandOrigin = false,
+    bool clearSize = false,
+    bool clearModel = false,
+    bool clearEquipmentTag = false,
   }) => YorksV1CompanyMaterialRequestLine(
     id: id ?? this.id,
     displayOrder: displayOrder ?? this.displayOrder,
@@ -118,6 +144,16 @@ class YorksV1CompanyMaterialRequestLine {
     quantity: quantity ?? this.quantity,
     unit: unit ?? this.unit,
     brandOrigin: clearBrandOrigin ? null : brandOrigin ?? this.brandOrigin,
+    size: clearSize ? null : size ?? this.size,
+    model: clearModel ? null : model ?? this.model,
+    equipmentTag: clearEquipmentTag ? null : equipmentTag ?? this.equipmentTag,
+    arrangedQuantity: arrangedQuantity,
+    dispatchedQuantity: dispatchedQuantity,
+    goodReceivedQuantity: goodReceivedQuantity,
+    handedOverQuantity: handedOverQuantity,
+    returnedQuantity: returnedQuantity,
+    withdrawnQuantity: withdrawnQuantity,
+    withdrawableQuantity: withdrawableQuantity,
   );
 
   Map<String, dynamic> toRpcJson() => {
@@ -125,6 +161,9 @@ class YorksV1CompanyMaterialRequestLine {
     'display_order': displayOrder,
     'item_description': description.trim(),
     'brand_origin': _trimToNull(brandOrigin),
+    'size': _trimToNull(size),
+    'model': _trimToNull(model),
+    'equipment_tag': _trimToNull(equipmentTag),
     'requested_qty': quantity.trim(),
     'unit': unit.trim(),
   };
@@ -138,6 +177,16 @@ class YorksV1CompanyMaterialRequestLine {
     quantity: _requiredText(json, 'requested_qty'),
     unit: _requiredText(json, 'unit'),
     brandOrigin: _trimToNull(json['brand_origin']?.toString()),
+    size: _trimToNull(json['size']?.toString()),
+    model: _trimToNull(json['model']?.toString()),
+    equipmentTag: _trimToNull(json['equipment_tag']?.toString()),
+    arrangedQuantity: json['arranged_qty']?.toString() ?? '0',
+    dispatchedQuantity: json['dispatched_qty']?.toString() ?? '0',
+    goodReceivedQuantity: json['good_received_qty']?.toString() ?? '0',
+    handedOverQuantity: json['handed_over_qty']?.toString() ?? '0',
+    returnedQuantity: json['returned_qty']?.toString() ?? '0',
+    withdrawnQuantity: json['withdrawn_qty']?.toString() ?? '0',
+    withdrawableQuantity: json['withdrawable_qty']?.toString() ?? '0',
   );
 }
 
@@ -235,6 +284,105 @@ class YorksV1CompanyMaterialRequestDraft {
   };
 }
 
+enum YorksV1CompanyMaterialRequestDecisionType {
+  approved('approved'),
+  returned('returned'),
+  rejected('rejected');
+
+  const YorksV1CompanyMaterialRequestDecisionType(this.wireValue);
+
+  final String wireValue;
+}
+
+class YorksV1CompanyMaterialRequestDecision {
+  const YorksV1CompanyMaterialRequestDecision({
+    required this.id,
+    required this.decision,
+    required this.requestRecordVersion,
+    required this.decidedByDisplayName,
+    required this.decidedByExactRole,
+    required this.decidedAt,
+    this.reason,
+  });
+
+  final String id;
+  final String decision;
+  final String? reason;
+  final int requestRecordVersion;
+  final String decidedByDisplayName;
+  final String decidedByExactRole;
+  final DateTime decidedAt;
+
+  factory YorksV1CompanyMaterialRequestDecision.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1CompanyMaterialRequestDecision(
+    id: _requiredText(json, 'id'),
+    decision: _requiredText(json, 'decision'),
+    reason: _trimToNull(json['reason']?.toString()),
+    requestRecordVersion: _requiredInt(json, 'request_record_version'),
+    decidedByDisplayName: _requiredText(json, 'decided_by_display_name'),
+    decidedByExactRole: _requiredText(json, 'decided_by_exact_role'),
+    decidedAt:
+        _date(json['decided_at']) ??
+        (throw const FormatException('Missing decided_at')),
+  );
+}
+
+class YorksV1CompanyMaterialRequestApprovalInboxItem {
+  const YorksV1CompanyMaterialRequestApprovalInboxItem({
+    required this.id,
+    required this.requestNumber,
+    required this.recordVersion,
+    required this.state,
+    required this.categoryName,
+    required this.responsibleUnitName,
+    required this.purpose,
+    required this.requesterDisplayName,
+    required this.beneficiaryDisplayName,
+    required this.submittedAt,
+    required this.lineCount,
+  });
+
+  final String id;
+  final String requestNumber;
+  final int recordVersion;
+  final String state;
+  final String categoryName;
+  final String responsibleUnitName;
+  final String purpose;
+  final String requesterDisplayName;
+  final String beneficiaryDisplayName;
+  final DateTime submittedAt;
+  final int lineCount;
+
+  factory YorksV1CompanyMaterialRequestApprovalInboxItem.fromRpcJson(
+    Map<String, dynamic> json,
+  ) => YorksV1CompanyMaterialRequestApprovalInboxItem(
+    id: _requiredText(json, 'id'),
+    requestNumber: _requiredText(json, 'request_number'),
+    recordVersion: _requiredInt(json, 'record_version'),
+    state: _requiredText(json, 'state'),
+    categoryName: _requiredText(json, 'category_name'),
+    responsibleUnitName: _requiredText(json, 'responsible_unit_name'),
+    purpose: _requiredText(json, 'purpose'),
+    requesterDisplayName: _requiredText(json, 'requester_display_name'),
+    beneficiaryDisplayName: _requiredText(json, 'beneficiary_display_name'),
+    submittedAt:
+        _date(json['submitted_at']) ??
+        (throw const FormatException('Missing submitted_at')),
+    lineCount: _requiredInt(json, 'line_count'),
+  );
+}
+
+enum YorksV1CompanyMaterialRequestRegisterView {
+  requests('requests'),
+  planning('planning'),
+  issueHistory('issue_history');
+
+  const YorksV1CompanyMaterialRequestRegisterView(this.wireValue);
+  final String wireValue;
+}
+
 class YorksV1CompanyMaterialRequest {
   const YorksV1CompanyMaterialRequest({
     required this.id,
@@ -250,6 +398,22 @@ class YorksV1CompanyMaterialRequest {
     required this.requesterDisplayName,
     required this.requesterExactRole,
     required this.lines,
+    this.canDecide = false,
+    this.canPlan = false,
+    this.canDispatch = false,
+    this.canReceive = false,
+    this.canHandover = false,
+    this.canClose = false,
+    this.canSubmitReturn = false,
+    this.canDecideReturns = false,
+    this.canRevise = false,
+    this.canWithdrawRemainder = false,
+    this.currentSupplyPlan,
+    this.pendingDispatches = const [],
+    this.unallocatedReceiptLines = const [],
+    this.returnableHandoverLines = const [],
+    this.pendingReturns = const [],
+    this.decisions = const [],
     this.requestNumber,
     this.scheduledDate,
     this.approver,
@@ -273,6 +437,22 @@ class YorksV1CompanyMaterialRequest {
   final String? approvalPolicyVersion;
   final String? requestNumber;
   final List<YorksV1CompanyMaterialRequestLine> lines;
+  final bool canDecide;
+  final bool canPlan;
+  final bool canDispatch;
+  final bool canReceive;
+  final bool canHandover;
+  final bool canClose;
+  final bool canSubmitReturn;
+  final bool canDecideReturns;
+  final bool canRevise;
+  final bool canWithdrawRemainder;
+  final Map<String, dynamic>? currentSupplyPlan;
+  final List<Map<String, dynamic>> pendingDispatches;
+  final List<Map<String, dynamic>> unallocatedReceiptLines;
+  final List<Map<String, dynamic>> returnableHandoverLines;
+  final List<Map<String, dynamic>> pendingReturns;
+  final List<YorksV1CompanyMaterialRequestDecision> decisions;
 
   factory YorksV1CompanyMaterialRequest.fromRpcJson(
     Map<String, dynamic> json,
@@ -308,8 +488,28 @@ class YorksV1CompanyMaterialRequest {
       json['approval_policy_version']?.toString(),
     ),
     requestNumber: _trimToNull(json['request_number']?.toString()),
+    canDecide: json['can_decide'] == true,
+    canPlan: json['can_plan'] == true,
+    canDispatch: json['can_dispatch'] == true,
+    canReceive: json['can_receive'] == true,
+    canHandover: json['can_handover'] == true,
+    canClose: json['can_close'] == true,
+    canSubmitReturn: json['can_submit_return'] == true,
+    canDecideReturns: json['can_decide_returns'] == true,
+    canRevise: json['can_revise'] == true,
+    canWithdrawRemainder: json['can_withdraw_remainder'] == true,
+    currentSupplyPlan: json['current_supply_plan'] is Map
+        ? Map<String, dynamic>.from(json['current_supply_plan'] as Map)
+        : null,
+    pendingDispatches: _maps(json['pending_dispatches']),
+    unallocatedReceiptLines: _maps(json['unallocated_receipt_lines']),
+    returnableHandoverLines: _maps(json['returnable_handover_lines']),
+    pendingReturns: _maps(json['pending_returns']),
     lines: _maps(json['lines'])
         .map(YorksV1CompanyMaterialRequestLine.fromRpcJson)
+        .toList(growable: false),
+    decisions: _maps(json['decisions'])
+        .map(YorksV1CompanyMaterialRequestDecision.fromRpcJson)
         .toList(growable: false),
   );
 }

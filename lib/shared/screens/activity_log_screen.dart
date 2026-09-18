@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:convert';
+import 'package:file_selector/file_selector.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,9 +15,19 @@ import '../../core/constants/constants.dart';
 import '../models/app_language.dart';
 import '../models/app_strings.dart';
 import '../models/yorks_v1_audit_strings.dart';
+import '../models/yorks_v1_audit_investigation_strings.dart';
+import '../models/yorks_v1_domain_error.dart';
+import '../services/yorks_v1_audit_export.dart';
 import '../models/yorks_v1_audit_workspace.dart';
 import '../providers/language_provider.dart';
 import '../providers/yorks_v1_audit_provider.dart';
+import '../providers/yorks_v1_identity_provider.dart';
+
+part 'audit_investigation_widgets.dart';
+
+final _auditCompactRowsProvider = StateProvider.autoDispose<bool>(
+  (ref) => false,
+);
 
 /// Admin-only, read-only projection of the trusted server audit ledger.
 ///
@@ -53,21 +66,20 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     final state = ref.watch(yorksV1AuditControllerProvider);
     final controller = ref.read(yorksV1AuditControllerProvider.notifier);
 
-    return ColoredBox(
+    return Material(
       color: AppColors.surface,
       child: SafeArea(
         top: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 760;
-            final showRightRail = constraints.maxWidth >= 1000;
             final horizontal = compact
                 ? AppSpacing.mobileScreenHorizontal
                 : AppSpacing.xxl;
             return Stack(
               children: [
                 RefreshIndicator(
-                  onRefresh: controller.load,
+                  onRefresh: controller.refresh,
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
@@ -88,11 +100,22 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                               filter: state.filter,
                               onDateRange: (from, to) =>
                                   controller.setDateRange(from, to),
-                              onRefresh: controller.load,
+                              onRefresh: controller.refresh,
                             ),
                             const Gap(20),
                             if (state.isLoading && state.workspace == null)
                               const _AuditLoading()
+                            else if (state.workspace == null &&
+                                state.error is YorksV1DomainException &&
+                                (state.error as YorksV1DomainException).code ==
+                                    YorksV1DomainErrorCode.unauthorized)
+                              Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Text(
+                                  YorksV1AuditInvestigationStrings.denied
+                                      .active(language),
+                                ),
+                              )
                             else if (state.workspace == null)
                               _AuditFailure(
                                 language: language,
@@ -110,40 +133,29 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
                                   onRetry: controller.load,
                                 ),
                               if (state.error != null) const Gap(12),
-                              if (showRightRail)
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: _MainAuditColumn(
-                                        language: language,
-                                        workspace: state.workspace!,
-                                        filter: state.filter,
-                                        onModule: controller.setModule,
-                                        onPage: controller.goToPage,
-                                      ),
-                                    ),
-                                    const Gap(16),
-                                    SizedBox(
-                                      width: 308,
-                                      child: _AuditRightRail(
-                                        language: language,
-                                        workspace: state.workspace!,
-                                        selected: state.filter.quickFilter,
-                                        onFilter: controller.setQuickFilter,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                _CompactAuditLayout(
-                                  language: language,
-                                  workspace: state.workspace!,
-                                  filter: state.filter,
-                                  onModule: controller.setModule,
-                                  onPage: controller.goToPage,
-                                  onFilter: controller.setQuickFilter,
-                                ),
+                              _InvestigationToolbar(
+                                language: language,
+                                state: state,
+                                onClear: () {
+                                  _searchDebounce?.cancel();
+                                  _searchController.clear();
+                                  controller.clearFilters();
+                                },
+                              ),
+                              const Gap(12),
+                              _ActivityOverviewDisclosure(
+                                language: language,
+                                workspace: state.workspace!,
+                              ),
+                              const Gap(12),
+                              _RecentActivityPanel(
+                                language: language,
+                                workspace: state.workspace!,
+                                filter: state.filter,
+                                onModule: controller.setModule,
+                                onPage: controller.goToPage,
+                                mobileCards: compact,
+                              ),
                             ],
                           ],
                         ),
@@ -251,7 +263,7 @@ class _AuditHeader extends StatelessWidget {
       _HeaderAction(
         icon: Icons.calendar_today_outlined,
         label: _dateRangeLabel(context, language),
-        onTap: () => _pickDates(context),
+        onTap: () => _chooseDates(context),
       ),
       _HeaderAction(
         icon: Icons.refresh_rounded,
@@ -302,7 +314,46 @@ class _AuditHeader extends StatelessWidget {
       return YorksV1AuditStrings.allTime.active(language);
     }
     return '${localizations.formatShortDate(filter.from!)} – '
-        '${localizations.formatShortDate(filter.to!)}';
+        '${localizations.formatShortDate(filter.to!.subtract(const Duration(microseconds: 1)))}';
+  }
+
+  Future<void> _chooseDates(BuildContext context) async {
+    final choice = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(YorksV1AuditStrings.timeColumn.active(language)),
+        children: [
+          for (final entry in <int, String>{
+            1: YorksV1AuditInvestigationStrings.today.active(language),
+            7: YorksV1AuditStrings.lastSevenDays.active(language),
+            30: YorksV1AuditStrings.lastThirtyDays.active(language),
+            0: YorksV1AuditStrings.allTime.active(language),
+            -1: YorksV1AuditInvestigationStrings.customDates.active(language),
+          }.entries)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, entry.key),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(entry.value),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    if (choice == -1) {
+      await _pickDates(context);
+      return;
+    }
+    if (choice == 0) {
+      onDateRange(null, null);
+      return;
+    }
+    final now = DateTime.now();
+    onDateRange(
+      DateTime(now.year, now.month, now.day - choice + 1),
+      DateTime(now.year, now.month, now.day + 1),
+    );
   }
 
   Future<void> _pickDates(BuildContext context) async {
@@ -313,12 +364,15 @@ class _AuditHeader extends StatelessWidget {
       lastDate: now,
       initialDateRange: filter.from == null || filter.to == null
           ? null
-          : DateTimeRange(start: filter.from!, end: filter.to!),
+          : DateTimeRange(
+              start: filter.from!,
+              end: filter.to!.subtract(const Duration(microseconds: 1)),
+            ),
     );
     if (range == null) return;
     onDateRange(
       DateTime(range.start.year, range.start.month, range.start.day),
-      DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999),
+      DateTime(range.end.year, range.end.month, range.end.day + 1),
     );
   }
 }
@@ -370,82 +424,136 @@ class _SummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final previous = summary.previousPeriodActivities;
-    final delta = previous == 0
-        ? null
-        : 100 *
-              (summary.currentPeriodActivities - previous) /
-              math.max(previous, 1);
     final cards = [
       _SummaryValue(
-        label: YorksV1AuditStrings.totalActivities.active(language),
+        label: YorksV1AuditInvestigationStrings.matching.active(language),
         value: _formatInteger(summary.totalActivities),
-        hint: YorksV1AuditStrings.allTime.active(language),
         icon: Icons.receipt_long_outlined,
         color: AppColors.primary,
-        delta: delta,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.criticalActivities.active(language),
         value: _formatInteger(summary.criticalActivities),
-        hint: YorksV1AuditStrings.allTime.active(language),
         icon: Icons.gpp_maybe_outlined,
         color: AppColors.error,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.activeUsers.active(language),
         value: _formatInteger(summary.activeUsers),
-        hint: YorksV1AuditStrings.lastThirtyDays.active(language),
         icon: Icons.people_alt_outlined,
         color: AppColors.warning,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.entitiesMonitored.active(language),
         value: _formatInteger(summary.entitiesMonitored),
-        hint: YorksV1AuditStrings.allTime.active(language),
         icon: Icons.account_tree_outlined,
         color: AppColors.tertiary,
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.auditAlerts.active(language),
         value: _formatInteger(summary.auditAlerts),
-        hint: YorksV1AuditStrings.lastSevenDays.active(language),
         icon: Icons.notifications_active_outlined,
         color: const Color(0xFF00A7B5),
       ),
       _SummaryValue(
         label: YorksV1AuditStrings.dataIntegrity.active(language),
-        value: '${_formatDecimal(summary.dataIntegrityPercent)}%',
-        hint: YorksV1AuditStrings.trustedCoverage.active(language),
+        value: summary.totalActivities == 0
+            ? '—'
+            : '${_formatDecimal(summary.dataIntegrityPercent)}%',
+        hint: summary.totalActivities == 0
+            ? YorksV1AuditInvestigationStrings.noEvidence.active(language)
+            : null,
         icon: Icons.verified_user_outlined,
         color: AppColors.success,
       ),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (constraints.maxWidth < 650) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final card in [cards[0], cards[4]])
+                Chip(label: Text('${card.label}: ${card.value}')),
+            ],
+          );
+        }
         final columns = constraints.maxWidth >= 1000
             ? 6
             : constraints.maxWidth >= 650
             ? 3
             : 2;
         final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final card in cards)
-              SizedBox(
-                width: width,
-                height: columns == 2
-                    ? 126
-                    : columns == 6
-                    ? 124
-                    : 118,
-                child: _SummaryCard(card),
+            Semantics(
+              container: true,
+              label:
+                  '${YorksV1AuditInvestigationStrings.selectedScope.active(language)}. '
+                  '${YorksV1AuditStrings.trustedCoverage.active(language)}.',
+              child: ExcludeSemantics(
+                child: Wrap(
+                  spacing: 18,
+                  runSpacing: 6,
+                  children: [
+                    _SummaryContext(
+                      key: const ValueKey('audit-summary-selected-scope'),
+                      icon: Icons.filter_alt_outlined,
+                      label: YorksV1AuditInvestigationStrings.selectedScope
+                          .active(language),
+                    ),
+                    _SummaryContext(
+                      key: const ValueKey('audit-summary-attribution-coverage'),
+                      icon: Icons.verified_user_outlined,
+                      label: YorksV1AuditStrings.trustedCoverage.active(
+                        language,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ),
+            const Gap(8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final card in cards)
+                  SizedBox(width: width, child: _SummaryCard(card)),
+              ],
+            ),
           ],
         );
       },
+    );
+  }
+}
+
+class _SummaryContext extends StatelessWidget {
+  const _SummaryContext({super.key, required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.inkSecondary),
+        const Gap(5),
+        Flexible(
+          child: Text(
+            label,
+            softWrap: true,
+            style: AppTypography.labelSmall.copyWith(
+              color: AppColors.inkSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -454,18 +562,16 @@ class _SummaryValue {
   const _SummaryValue({
     required this.label,
     required this.value,
-    required this.hint,
     required this.icon,
     required this.color,
-    this.delta,
+    this.hint,
   });
 
   final String label;
   final String value;
-  final String hint;
+  final String? hint;
   final IconData icon;
   final Color color;
-  final double? delta;
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -474,57 +580,167 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _AuditPanel(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: value.color.withValues(alpha: .1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(value.icon, color: value.color, size: 21),
-          ),
-          const Gap(10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
+    final semanticLabel = value.hint == null
+        ? '${value.label}: ${value.value}'
+        : '${value.label}: ${value.value}. ${value.hint}';
+    return Semantics(
+      container: true,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: _AuditPanel(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: value.color.withValues(alpha: .1),
+                  shape: BoxShape.circle,
                 ),
-                const Gap(2),
-                Text(
-                  value.value,
-                  style: AppTypography.headlineSmall.copyWith(fontSize: 20),
-                ),
-                const Gap(2),
-                if (value.delta case final delta?)
-                  Text(
-                    '${delta >= 0 ? '↑' : '↓'} '
-                    '${_formatDecimal(delta.abs())}% · ${value.hint}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.labelSmall.copyWith(
-                      color: delta >= 0 ? AppColors.success : AppColors.error,
+                child: Icon(value.icon, color: value.color, size: 21),
+              ),
+              const Gap(10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.inkSecondary,
+                      ),
                     ),
-                  )
-                else
-                  Text(
-                    value.hint,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.labelSmall,
-                  ),
-              ],
+                    const Gap(2),
+                    Text(
+                      value.value,
+                      style: AppTypography.headlineSmall.copyWith(fontSize: 20),
+                    ),
+                    if (value.hint case final hint?) ...[
+                      const Gap(2),
+                      Text(
+                        hint,
+                        softWrap: true,
+                        style: AppTypography.labelSmall,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityOverviewDisclosure extends StatelessWidget {
+  const _ActivityOverviewDisclosure({
+    required this.language,
+    required this.workspace,
+  });
+
+  final AppLanguage language;
+  final YorksV1AuditWorkspace workspace;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      side: const BorderSide(color: AppColors.line),
+      borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+    );
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: const PageStorageKey('audit-activity-overview'),
+        initiallyExpanded: false,
+        maintainState: false,
+        clipBehavior: Clip.antiAlias,
+        shape: shape,
+        collapsedShape: shape,
+        backgroundColor: AppColors.surfaceContainerLowest,
+        collapsedBackgroundColor: AppColors.surfaceContainerLowest,
+        iconColor: AppColors.primary,
+        collapsedIconColor: AppColors.inkSecondary,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            color: AppColors.primaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.insights_outlined,
+            size: 20,
+            color: AppColors.primary,
+          ),
+        ),
+        title: Text(
+          YorksV1AuditStrings.activityOverview.active(language),
+          style: AppTypography.titleSmall,
+        ),
+        subtitle: Text(
+          YorksV1AuditStrings.activityOverviewHint.active(language),
+          softWrap: true,
+          style: AppTypography.bodySmall,
+        ),
+        children: [
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 900;
+                final highlights = stacked
+                    ? Column(
+                        children: [
+                          _TopEntitiesPanel(
+                            language: language,
+                            workspace: workspace,
+                          ),
+                          const Gap(12),
+                          _AlertsPanel(
+                            language: language,
+                            workspace: workspace,
+                          ),
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _TopEntitiesPanel(
+                              language: language,
+                              workspace: workspace,
+                            ),
+                          ),
+                          const Gap(12),
+                          Expanded(
+                            child: _AlertsPanel(
+                              language: language,
+                              workspace: workspace,
+                            ),
+                          ),
+                        ],
+                      );
+                return Column(
+                  children: [
+                    highlights,
+                    const Gap(12),
+                    _AuditCharts(
+                      language: language,
+                      workspace: workspace,
+                      stacked: stacked,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -533,119 +749,7 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _MainAuditColumn extends StatelessWidget {
-  const _MainAuditColumn({
-    required this.language,
-    required this.workspace,
-    required this.filter,
-    required this.onModule,
-    required this.onPage,
-  });
-
-  final AppLanguage language;
-  final YorksV1AuditWorkspace workspace;
-  final YorksV1AuditFilter filter;
-  final ValueChanged<YorksV1AuditModule?> onModule;
-  final ValueChanged<int> onPage;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _RecentActivityPanel(
-          language: language,
-          workspace: workspace,
-          filter: filter,
-          onModule: onModule,
-          onPage: onPage,
-        ),
-        const Gap(16),
-        _AuditCharts(language: language, workspace: workspace),
-      ],
-    );
-  }
-}
-
-class _AuditRightRail extends StatelessWidget {
-  const _AuditRightRail({
-    required this.language,
-    required this.workspace,
-    required this.selected,
-    required this.onFilter,
-  });
-
-  final AppLanguage language;
-  final YorksV1AuditWorkspace workspace;
-  final YorksV1AuditQuickFilter? selected;
-  final ValueChanged<YorksV1AuditQuickFilter?> onFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _TopEntitiesPanel(language: language, workspace: workspace),
-        const Gap(16),
-        _QuickFiltersPanel(
-          language: language,
-          workspace: workspace,
-          selected: selected,
-          onFilter: onFilter,
-        ),
-        const Gap(16),
-        _AlertsPanel(language: language, workspace: workspace),
-      ],
-    );
-  }
-}
-
-class _CompactAuditLayout extends StatelessWidget {
-  const _CompactAuditLayout({
-    required this.language,
-    required this.workspace,
-    required this.filter,
-    required this.onModule,
-    required this.onPage,
-    required this.onFilter,
-  });
-
-  final AppLanguage language;
-  final YorksV1AuditWorkspace workspace;
-  final YorksV1AuditFilter filter;
-  final ValueChanged<YorksV1AuditModule?> onModule;
-  final ValueChanged<int> onPage;
-  final ValueChanged<YorksV1AuditQuickFilter?> onFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _QuickFiltersPanel(
-          language: language,
-          workspace: workspace,
-          selected: filter.quickFilter,
-          onFilter: onFilter,
-        ),
-        const Gap(12),
-        _RecentActivityPanel(
-          language: language,
-          workspace: workspace,
-          filter: filter,
-          onModule: onModule,
-          onPage: onPage,
-          mobileCards: true,
-        ),
-        const Gap(12),
-        _TopEntitiesPanel(language: language, workspace: workspace),
-        const Gap(12),
-        _AlertsPanel(language: language, workspace: workspace),
-        const Gap(12),
-        _AuditCharts(language: language, workspace: workspace, stacked: true),
-      ],
-    );
-  }
-}
-
-class _RecentActivityPanel extends StatelessWidget {
+class _RecentActivityPanel extends ConsumerWidget {
   const _RecentActivityPanel({
     required this.language,
     required this.workspace,
@@ -663,53 +767,66 @@ class _RecentActivityPanel extends StatelessWidget {
   final bool mobileCards;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(yorksV1AuditControllerProvider);
+    final heading = Row(
+      children: [
+        const Icon(Icons.fact_check_outlined, size: 19, color: AppColors.navy),
+        const Gap(9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                YorksV1AuditStrings.recentActivity.active(language),
+                style: AppTypography.titleMedium,
+              ),
+              Text(
+                YorksV1AuditInvestigationStrings.selectedScope.active(language),
+                style: AppTypography.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    final actions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ModulePicker(
+          language: language,
+          selected: filter.module,
+          onChanged: onModule,
+        ),
+        const Gap(6),
+        IconButton(
+          tooltip:
+              '${YorksV1AuditInvestigationStrings.copyPage.active(language)} (${workspace.events.length})',
+          onPressed: !state.canExport || workspace.events.isEmpty
+              ? null
+              : () => _exportCurrentPage(context),
+          icon: const Icon(Icons.copy_outlined, size: 18),
+        ),
+      ],
+    );
     return _AuditPanel(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.fact_check_outlined,
-                  size: 19,
-                  color: AppColors.navy,
-                ),
-                const Gap(9),
-                Expanded(
-                  child: Column(
+            child: mobileCards
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [heading, const Gap(8), actions],
+                  )
+                : Row(
                     children: [
-                      Text(
-                        YorksV1AuditStrings.recentActivity.active(language),
-                        style: AppTypography.titleMedium,
-                      ),
-                      const Gap(2),
-                      Text(
-                        YorksV1AuditStrings.recentActivityHint.active(language),
-                        style: AppTypography.bodySmall,
-                      ),
+                      Expanded(child: heading),
+                      const Gap(8),
+                      actions,
                     ],
                   ),
-                ),
-                const Gap(8),
-                _ModulePicker(
-                  language: language,
-                  selected: filter.module,
-                  onChanged: onModule,
-                ),
-                const Gap(6),
-                IconButton(
-                  tooltip: AppStrings.exportAudit.active(language),
-                  onPressed: workspace.events.isEmpty
-                      ? null
-                      : () => _exportCurrentPage(context),
-                  icon: const Icon(Icons.ios_share_rounded, size: 18),
-                ),
-              ],
-            ),
           ),
           const Divider(height: 1),
           if (workspace.events.isEmpty)
@@ -732,24 +849,7 @@ class _RecentActivityPanel extends StatelessWidget {
   }
 
   Future<void> _exportCurrentPage(BuildContext context) async {
-    final buffer = StringBuffer(
-      'Timestamp,Actor,Role,Action,Module,Entity,Reference,Reason\n',
-    );
-    String safe(String value) => '"${value.replaceAll('"', '""')}"';
-    for (final event in workspace.events) {
-      buffer.writeln(
-        [
-          safe(event.occurredAt.toUtc().toIso8601String()),
-          safe(event.actorDisplayName),
-          safe(event.actorExactRole),
-          safe(event.eventType),
-          safe(event.module.wireValue),
-          safe(event.entityType),
-          safe(event.reference),
-          safe(event.reason ?? ''),
-        ].join(','),
-      );
-    }
+    final buffer = StringBuffer(yorksV1AuditCsv(workspace, filter));
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -787,7 +887,7 @@ class _ModulePicker extends StatelessWidget {
           ),
       ],
       child: Container(
-        constraints: const BoxConstraints(minHeight: 38, maxWidth: 150),
+        constraints: const BoxConstraints(minHeight: 44, maxWidth: 150),
         padding: const EdgeInsets.symmetric(horizontal: 11),
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.line),
@@ -815,17 +915,18 @@ class _ModulePicker extends StatelessWidget {
   }
 }
 
-class _AuditEventTable extends StatelessWidget {
+class _AuditEventTable extends ConsumerWidget {
   const _AuditEventTable({required this.events, required this.language});
 
   final List<YorksV1AuditEvent> events;
   final AppLanguage language;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dense = ref.watch(_auditCompactRowsProvider);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showEntity = constraints.maxWidth >= 760;
+        const showEntity = false;
         return Column(
           children: [
             Container(
@@ -850,13 +951,8 @@ class _AuditEventTable extends StatelessWidget {
                     YorksV1AuditStrings.moduleColumn.active(language),
                     flex: 13,
                   ),
-                  if (showEntity)
-                    _TableHeader(
-                      YorksV1AuditStrings.entityColumn.active(language),
-                      flex: 12,
-                    ),
                   _TableHeader(
-                    YorksV1AuditStrings.referenceColumn.active(language),
+                    YorksV1AuditInvestigationStrings.record.active(language),
                     flex: 12,
                   ),
                   _TableHeader(
@@ -866,12 +962,19 @@ class _AuditEventTable extends StatelessWidget {
                 ],
               ),
             ),
-            for (final event in events)
-              _DesktopAuditEvent(
-                event: event,
-                language: language,
-                showEntity: showEntity,
+            SizedBox(
+              height: math.min(520, events.length * (dense ? 76.0 : 100.0)),
+              child: ListView.builder(
+                key: const PageStorageKey('audit-table-scroll'),
+                itemCount: events.length,
+                itemBuilder: (context, index) => _DesktopAuditEvent(
+                  event: events[index],
+                  language: language,
+                  showEntity: showEntity,
+                  dense: dense,
+                ),
               ),
+            ),
           ],
         );
       },
@@ -906,27 +1009,21 @@ class _DesktopAuditEvent extends StatelessWidget {
     required this.event,
     required this.language,
     required this.showEntity,
+    this.dense = false,
   });
 
   final YorksV1AuditEvent event;
   final AppLanguage language;
   final bool showEntity;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
-    final canOpen =
-        event.entityType == 'material_request' ||
-        event.entityType == 'material_return';
+    const canOpen = true;
     return InkWell(
-      onTap: canOpen
-          ? () => context.go(
-              event.entityType == 'material_return'
-                  ? RoutePaths.yorksV1MaterialReturnPath(event.entityId)
-                  : RoutePaths.yorksV1MaterialRequestPath(event.entityId),
-            )
-          : null,
+      onTap: () => _showAuditDetails(context, event),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 62),
+        constraints: BoxConstraints(minHeight: dense ? 64 : 88),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.line)),
@@ -944,11 +1041,17 @@ class _DesktopAuditEvent extends StatelessWidget {
             ),
             Expanded(
               flex: 14,
-              child: _ActorCell(event: event, language: language),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 12),
+                child: _ActorCell(event: event, language: language),
+              ),
             ),
             Expanded(
               flex: 18,
-              child: _ActionChip(event: event, language: language),
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 12),
+                child: _ActionChip(event: event, language: language),
+              ),
             ),
             Expanded(
               flex: 13,
@@ -973,12 +1076,21 @@ class _DesktopAuditEvent extends StatelessWidget {
               ),
             Expanded(
               flex: 12,
-              child: Text(
-                event.reference,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.navy,
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.reference,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelMedium,
+                    ),
+                    if (event.projectRef != null &&
+                        event.projectRef != event.reference)
+                      Text(event.projectRef!, style: AppTypography.bodySmall),
+                  ],
                 ),
               ),
             ),
@@ -1017,17 +1129,9 @@ class _MobileAuditEvent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canOpen =
-        event.entityType == 'material_request' ||
-        event.entityType == 'material_return';
+    const canOpen = true;
     return InkWell(
-      onTap: canOpen
-          ? () => context.go(
-              event.entityType == 'material_return'
-                  ? RoutePaths.yorksV1MaterialReturnPath(event.entityId)
-                  : RoutePaths.yorksV1MaterialRequestPath(event.entityId),
-            )
-          : null,
+      onTap: () => _showAuditDetails(context, event),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: const BoxDecoration(
@@ -1168,9 +1272,9 @@ class _ActionChip extends StatelessWidget {
         AppColors.warning,
         AppColors.warningContainer,
       ),
-      YorksV1AuditSeverity.normal => (
-        AppColors.primary,
-        AppColors.primaryContainer,
+      YorksV1AuditSeverity.normal || YorksV1AuditSeverity.unclassified => (
+        AppColors.inkSecondary,
+        AppColors.surfaceContainerLow,
       ),
     };
     return Align(
@@ -1181,13 +1285,17 @@ class _ActionChip extends StatelessWidget {
           color: background,
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(
-          YorksV1AuditStrings.eventLabel(event.eventType, language),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.labelSmall.copyWith(
-            color: color,
-            fontWeight: FontWeight.w700,
+        child: Tooltip(
+          message:
+              '${YorksV1AuditStrings.eventLabel(event.eventType, language)} · ${_severityLabel(event.severity.name, language)}',
+          child: Text(
+            '${event.severity == YorksV1AuditSeverity.critical || event.severity == YorksV1AuditSeverity.warning ? '⚠ ' : ''}${YorksV1AuditStrings.eventLabel(event.eventType, language)}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.labelSmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -1314,112 +1422,6 @@ class _TopEntitiesPanel extends StatelessWidget {
               const Gap(12),
             ],
         ],
-      ),
-    );
-  }
-}
-
-class _QuickFiltersPanel extends StatelessWidget {
-  const _QuickFiltersPanel({
-    required this.language,
-    required this.workspace,
-    required this.selected,
-    required this.onFilter,
-  });
-
-  final AppLanguage language;
-  final YorksV1AuditWorkspace workspace;
-  final YorksV1AuditQuickFilter? selected;
-  final ValueChanged<YorksV1AuditQuickFilter?> onFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    return _AuditPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PanelTitle(
-            icon: Icons.filter_alt_outlined,
-            title: YorksV1AuditStrings.quickFilters.active(language),
-          ),
-          const Gap(12),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              for (final filter in YorksV1AuditQuickFilter.values)
-                _QuickFilterButton(
-                  label: YorksV1AuditStrings.quickFilter(
-                    filter,
-                  ).active(language),
-                  count: workspace.quickFilterCounts[filter] ?? 0,
-                  selected: selected == filter,
-                  onTap: () => onFilter(selected == filter ? null : filter),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickFilterButton extends StatelessWidget {
-  const _QuickFilterButton({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 42),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primaryContainer : Colors.transparent,
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.line,
-          ),
-          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.tune_rounded,
-              size: 15,
-              color: selected ? AppColors.primary : AppColors.muted,
-            ),
-            const Gap(6),
-            Text(label, style: AppTypography.labelMedium),
-            const Gap(8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.primary
-                    : AppColors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
-              ),
-              child: Text(
-                _formatInteger(count),
-                style: AppTypography.labelSmall.copyWith(
-                  color: selected ? AppColors.onPrimary : AppColors.muted,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1682,7 +1684,7 @@ class _TrendChart extends StatelessWidget {
             ),
             const Gap(4),
             Text(
-              YorksV1AuditStrings.lastSevenDays.active(language),
+              '${YorksV1AuditInvestigationStrings.selectedScope.active(language)} · UTC',
               style: AppTypography.labelSmall,
             ),
             const Gap(10),
@@ -1739,7 +1741,7 @@ class _HealthChart extends StatelessWidget {
           children: [
             _PanelTitle(
               icon: Icons.health_and_safety_outlined,
-              title: YorksV1AuditStrings.auditHealth.active(language),
+              title: YorksV1AuditStrings.dataIntegrity.active(language),
             ),
             const Gap(10),
             Expanded(
@@ -1753,11 +1755,16 @@ class _HealthChart extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '${_formatDecimal(score)}%',
+                            workspace.summary.totalActivities == 0
+                                ? '—'
+                                : '${_formatDecimal(score)}%',
                             style: AppTypography.headlineMedium,
                           ),
                           Text(
-                            score >= 99
+                            workspace.summary.totalActivities == 0
+                                ? YorksV1AuditInvestigationStrings.noEvidence
+                                      .active(language)
+                                : score >= 99
                                 ? YorksV1AuditStrings.trusted.active(language)
                                 : YorksV1AuditStrings.historicalGap.active(
                                     language,

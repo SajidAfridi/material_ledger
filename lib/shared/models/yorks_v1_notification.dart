@@ -80,6 +80,7 @@ class YorksV1NotificationRecord {
     final resolvedProjectId = projectId?.trim() ?? '';
     final resolvedChatConversationId = chatConversationId?.trim() ?? '';
     final isMaterialReturn = entityType == 'material_return';
+    final isCompanyMaterialRequest = entityType == 'company_material_request';
     final isMaterialRequestCommentMention =
         eventCode == 'material_request_mentioned' &&
         entityType == 'chat_message' &&
@@ -106,6 +107,8 @@ class YorksV1NotificationRecord {
           ? RoutePaths.yorksV1TeamChatPath(resolvedChatConversationId)
           : isMaterialReturn
           ? RoutePaths.yorksV1MaterialReturnPath(entityId)
+          : isCompanyMaterialRequest
+          ? RoutePaths.yorksV1CompanyMaterialRequestPath(entityId)
           : resolvedRequestId.isNotEmpty
           ? RoutePaths.yorksV1MaterialRequestPath(resolvedRequestId)
           : resolvedProjectId.isNotEmpty &&
@@ -231,6 +234,118 @@ const _requestWorkAssigned = YorksV1NotificationCopy(
 );
 
 const _eventCopy = <String, YorksV1NotificationCopy>{
+  'company_material_request_approval_requested': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request approval required',
+    englishBody: 'A company material request is waiting for your decision.',
+    arabicTitle: 'مطلوب اعتماد طلب مواد الشركة',
+    arabicBody: 'طلب مواد للشركة بانتظار قرارك.',
+    urduTitle: 'کمپنی مٹیریل درخواست کی منظوری درکار ہے',
+    urduBody: 'کمپنی مٹیریل درخواست آپ کے فیصلے کی منتظر ہے۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध की स्वीकृति आवश्यक',
+    hindiBody: 'एक कंपनी सामग्री अनुरोध आपके निर्णय की प्रतीक्षा में है।',
+  ),
+  'company_material_request_approved': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request approved',
+    englishBody: 'Your company material request was approved.',
+    arabicTitle: 'تم اعتماد طلب مواد الشركة',
+    arabicBody: 'تم اعتماد طلب مواد الشركة الخاص بك.',
+    urduTitle: 'کمپنی مٹیریل درخواست منظور',
+    urduBody: 'آپ کی کمپنی مٹیریل درخواست منظور ہو گئی۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध स्वीकृत',
+    hindiBody: 'आपका कंपनी सामग्री अनुरोध स्वीकृत हो गया।',
+  ),
+  'company_material_request_returned': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request changes required',
+    englishBody: 'Your company material request was returned with a reason.',
+    arabicTitle: 'مطلوب تعديل طلب مواد الشركة',
+    arabicBody: 'تمت إعادة طلب مواد الشركة الخاص بك مع السبب.',
+    urduTitle: 'کمپنی مٹیریل درخواست میں تبدیلی درکار ہے',
+    urduBody: 'آپ کی کمپنی مٹیریل درخواست وجہ کے ساتھ واپس کر دی گئی۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध में बदलाव आवश्यक',
+    hindiBody: 'आपका कंपनी सामग्री अनुरोध कारण सहित लौटाया गया।',
+  ),
+  'company_material_request_rejected': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request rejected',
+    englishBody: 'Your company material request was rejected with a reason.',
+    arabicTitle: 'تم رفض طلب مواد الشركة',
+    arabicBody: 'تم رفض طلب مواد الشركة الخاص بك مع السبب.',
+    urduTitle: 'کمپنی مٹیریل درخواست مسترد',
+    urduBody: 'آپ کی کمپنی مٹیریل درخواست وجہ کے ساتھ مسترد کر دی گئی۔',
+    hindiTitle: 'कंपनी सामग्री अनुरोध अस्वीकृत',
+    hindiBody: 'आपका कंपनी सामग्री अनुरोध कारण सहित अस्वीकृत किया गया।',
+  ),
+  'company_material_request_supply_planned': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company request supply planned',
+    englishBody:
+        'Procurement updated the supply plan for your company request.',
+    arabicTitle: 'تم تخطيط توريد طلب الشركة',
+    arabicBody: 'حدّثت المشتريات خطة التوريد لطلب الشركة الخاص بك.',
+    urduTitle: 'کمپنی درخواست کی سپلائی پلان ہو گئی',
+    urduBody: 'پروکیورمنٹ نے آپ کی کمپنی درخواست کا سپلائی پلان اپ ڈیٹ کیا۔',
+    hindiTitle: 'कंपनी अनुरोध की आपूर्ति योजना बनी',
+    hindiBody: 'खरीद टीम ने आपके कंपनी अनुरोध की आपूर्ति योजना अपडेट की।',
+  ),
+  'company_material_request_dispatched': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company materials dispatched',
+    englishBody: 'Company materials are waiting for your receipt review.',
+    arabicTitle: 'تم إرسال مواد الشركة',
+    arabicBody: 'مواد الشركة بانتظار مراجعة الاستلام منك.',
+    urduTitle: 'کمپنی مٹیریل روانہ ہو گیا',
+    urduBody: 'کمپنی مٹیریل آپ کی وصولی جانچ کا منتظر ہے۔',
+    hindiTitle: 'कंपनी सामग्री भेजी गई',
+    hindiBody: 'कंपनी सामग्री आपकी प्राप्ति समीक्षा की प्रतीक्षा में है।',
+  ),
+  'company_material_request_received': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company materials received',
+    englishBody: 'Good received quantities are ready for beneficiary handover.',
+    arabicTitle: 'تم استلام مواد الشركة',
+    arabicBody: 'الكميات المستلمة بحالة جيدة جاهزة للتسليم للمستفيد.',
+    urduTitle: 'کمپنی مٹیریل موصول ہو گیا',
+    urduBody: 'اچھی حالت میں موصول مقدار مستفید کو حوالگی کے لیے تیار ہے۔',
+    hindiTitle: 'कंपनी सामग्री प्राप्त हुई',
+    hindiBody: 'अच्छी प्राप्त मात्रा लाभार्थी को सौंपने के लिए तैयार है।',
+  ),
+  'company_material_request_handed_over': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Beneficiary handover confirmed',
+    englishBody: 'The company material beneficiary handover was recorded.',
+    arabicTitle: 'تم تأكيد التسليم للمستفيد',
+    arabicBody: 'تم تسجيل تسليم مواد الشركة للمستفيد.',
+    urduTitle: 'مستفید کو حوالگی کی تصدیق',
+    urduBody: 'کمپنی مٹیریل کی مستفید کو حوالگی ریکارڈ ہو گئی۔',
+    hindiTitle: 'लाभार्थी को सौंपना दर्ज हुआ',
+    hindiBody: 'कंपनी सामग्री लाभार्थी को सौंपने का रिकॉर्ड दर्ज हुआ।',
+  ),
+  'company_material_request_return_confirmed': YorksV1NotificationCopy(
+    type: NotificationType.request,
+    englishTitle: 'Company material return confirmed',
+    englishBody:
+        'Procurement confirmed physical receipt of the returned material.',
+    arabicTitle: 'تم تأكيد مرتجع مواد الشركة',
+    arabicBody: 'أكدت المشتريات الاستلام الفعلي للمواد المرتجعة.',
+    urduTitle: 'کمپنی مٹیریل واپسی کی تصدیق',
+    urduBody: 'پروکیورمنٹ نے واپس کیے گئے مٹیریل کی جسمانی وصولی کی تصدیق کی۔',
+    hindiTitle: 'कंपनी सामग्री वापसी की पुष्टि',
+    hindiBody: 'खरीद टीम ने लौटाई गई सामग्री की भौतिक प्राप्ति की पुष्टि की।',
+  ),
+  'company_material_request_closed': YorksV1NotificationCopy(
+    type: NotificationType.info,
+    englishTitle: 'Company request closed',
+    englishBody: 'The completed company material request was closed.',
+    arabicTitle: 'تم إغلاق طلب الشركة',
+    arabicBody: 'تم إغلاق طلب مواد الشركة المكتمل.',
+    urduTitle: 'کمپنی درخواست بند ہو گئی',
+    urduBody: 'مکمل کمپنی مٹیریل درخواست بند کر دی گئی۔',
+    hindiTitle: 'कंपनी अनुरोध बंद हुआ',
+    hindiBody: 'पूरा कंपनी सामग्री अनुरोध बंद कर दिया गया।',
+  ),
   'material_request_approval_required': _requestApprovalRequired,
   'material_request_updated_for_approval': _requestApprovalRequired,
   'material_request_approved_for_arrangement': _requestApprovedForArrangement,

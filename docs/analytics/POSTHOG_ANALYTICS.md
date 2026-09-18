@@ -77,7 +77,8 @@ friction, performance and reliability coverage. Historical version 1 events
 remain in PostHog, but Yorks never dual-sends them.
 
 Properties remain snake_case dimensions. Every event automatically receives
-`schema_version`, `environment`, `platform`, `app_version`, `app_build`, and,
+`schema_version`, `environment`, `platform`, `app_version`, `app_build`,
+`release_id`, `build_mode`, and,
 when available, `screen_name` and `role`. Call sites may add controlled
 `source`, `entry_point`, `network_state`, `workflow`, `operation`, counts,
 durations and outcome categories.
@@ -134,7 +135,7 @@ All events below are centrally defined in `analytics_event.dart`.
 | `receipt review completed` | Delivery outcome | Receipt confirmation RPC succeeds | line counts, exception boolean, outcome category | Logistics repository; no line content or quantities |
 | `inventory opened` | Inventory engagement | Inventory route entry | `source` | Route mapper |
 | `inventory searched` | Search usage | Inventory search RPC completes | result count, query-length bucket, duration | Logistics repository; never query text |
-| `inventory search no results` | Search quality | Inventory result count is zero | query-length bucket, duration | Analytics service |
+| `inventory search no results` | Availability observation, not task failure | Inventory result count is zero | query-length bucket, duration | Analytics service |
 | `material search completed` | MR candidate search | MR candidate RPC completes | result count, query-length bucket, duration | MR repository; never query text |
 | `inventory item selected` | Search usefulness | Detail projection succeeds | `source` | Logistics repository; no item ID |
 | `inventory item created` | Item-master creation | Create-item RPC succeeds | `inventory_action` | Logistics repository |
@@ -146,7 +147,7 @@ All events below are centrally defined in `analytics_event.dart`.
 | `inventory import failed` | Import failure | Import RPC fails | row count, `error_category` | Logistics repository; no workbook data |
 | `form validation failed` | Safe form friction | Reviewed validation boundary | `form_type`, `validation_reason`, count | Controller/repository; categorical reason only |
 | `validation loop detected` | Repeated validation friction | Same category three times within two minutes | form/category, attempts, duration | Analytics service |
-| `search struggle detected` | Search friction | Threshold reached before selection | context, attempts, zero results, duration | Analytics service |
+| `search struggle detected` | Historical unvalidated detector; retired 17 September 2026 | No longer emitted from automatic lookup | Historical only | Do not infer frustration or failure |
 | `repeated action detected` | Unclear/slow feedback signal | Same meaningful action three times in two seconds | action, taps, duration, loading state | Analytics service |
 | `action produced no feedback` | Dead-action signal | Explicit feedback contract expires | action, screen, wait, loading state | Analytics service; critical actions only |
 | `operation completed` | Performance/success basis | Timed operation finishes once | operation, duration, success, cached, result count | Analytics operation handle |
@@ -229,8 +230,7 @@ reader observes version 2 events and verifies each event/property combination.
 ### 1. Yorks UX Health
 
 1. Multi-series line: total counts for `repeated action detected`, `action
-   produced no feedback`, `search struggle detected`, `inventory search no
-   results`, `form validation failed`, and `validation loop detected`;
+   produced no feedback`, `form validation failed`, and `validation loop detected`;
    breakdown separately by `screen_name`, `role`, `platform`, `app_version`.
 2. Slow critical operations: `operation completed`, `duration_ms > 2000`, bar
    by `operation`; companion count for `duration_ms > 5000`.
@@ -278,9 +278,9 @@ not application failure conditions.
 ### 4. Inventory Intelligence
 
 1. Search count: `inventory searched`.
-2. Zero-result rate: `inventory search no results / inventory searched * 100`.
-3. Struggle rate: `search struggle detected search_context=inventory /
-   inventory searched * 100`.
+2. Zero-result observation rate: `inventory search no results / inventory searched * 100`.
+   This reflects lookup availability while typing, not failed tasks or relevance.
+3. Historical struggle detector: retired; do not use it as a product KPI.
 4. Selection rate: `inventory item selected / inventory searched * 100`.
 5. Item creation count: `inventory item created`.
 6. Stock success rate: `stock action completed / stock action started * 100`;
@@ -323,7 +323,8 @@ as an exact KPI until a privacy-safe workflow-run correlation key is approved.
 
 - Unit-test readable unique event names, common context, identity/reset,
   safe-value rejection, environment/debug gates, failure isolation, repeated
-  actions, no-feedback, search struggle, zero results and validation loops.
+  actions, no-feedback, absence of false lookup-struggle signals, zero-result
+  observations and validation loops.
 - Search source for direct `Posthog().capture` and legacy event literals.
 - Run `flutter analyze`, `flutter test`, web build and Android build gates.
 - Verify a staging capture before production promotion. Confirm new schema v2
@@ -332,3 +333,50 @@ as an exact KPI until a privacy-safe workflow-run correlation key is approved.
 - Dashboard shells may be created before ingestion. Create their saved insights
   only after the schema reader confirms schema v2 events/properties exist in
   that PostHog project.
+
+## 17 September remediation interpretation
+
+Automatic lookup continues to record the same result-count/duration observations.
+Repeated empty results and elapsed typing time no longer emit `search struggle
+detected`. A manual/non-stock entry is a legitimate outcome; existing historical
+detector events must not be reinterpreted as failed tasks. Event names and timer
+boundaries for lookup observations are unchanged. This is a documented detector
+retirement, not a reduction in measured infrastructure failures. Remote dashboard
+edits remain proposed and require separate approval.
+
+The R35 launcher derives `YORKS_RELEASE_ID` from the actual Git HEAD, with a
+`-dirty` suffix for an uncommitted checkout. Events expose this as `release_id`;
+only a full lowercase commit hash (optionally dirty) is accepted. Direct builds
+without the define report `unknown`. `build_mode` comes from Flutter's compiled
+debug/profile/release constants. These additive fields do not replace app
+version/build or silently change operation names, duration boundaries or schema
+version. Compare clean releases by revision and environment. A dirty revision
+is not an exact artifact identity; retain deployment/build hashes separately.
+
+### 17 September remediation: submission attempt versus confirmed outcome
+
+R35 launcher builds now carry `release_id` (actual full Git revision, with
+`-dirty` for a modified checkout) and actual compiled `build_mode`. Direct builds
+without a valid revision report unknown. Version/build labels and operation
+names/timer boundaries are unchanged. Compare release cohorts, not just 1.0.0/1.
+
+New-request Submit/Approve transport loss is `outcome: unknown` on the existing
+attempt-level operation failure. It emits `material request submission
+unconfirmed`, rather than the confirmed-failure business event. The new
+`material request submission reconciled` event means a later authorized read
+confirmed the original command. It is not a second submission attempt or a new
+business creation. Do not sum these streams or interpret `success: false` on
+an attempt as a server rollback. No raw payload, operation key or request content
+is transmitted. Historical attempts cannot be retrospectively matched without
+additional authorized evidence; correlation remains a measurement limitation.
+
+Wrapped `TimeoutException` in a backend-unavailable domain error is now classified
+as timeout, rather than network. Only use this classification for new release
+cohorts; the eight historical 20-second network events remain unchanged. Missing
+raw server codes cannot be reconstructed from normalized categories.
+
+Password sign-in attempts terminate after Auth and profile materialization;
+restored sessions use `session restored`, not a new password attempt. Browser
+closure, telemetry delivery loss and materialization exceptions must remain
+unresolved measurement cases, not inferred failed logins. No auth flow change
+or live dashboard edit is included in this remediation.

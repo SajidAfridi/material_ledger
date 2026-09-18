@@ -4,7 +4,7 @@ import 'package:material_ledger/shared/models/yorks_v1_role.dart';
 
 void main() {
   group('Material Request creation-form approval preflight', () {
-    test('offers Approve only to a policy-enabled authorized creator', () {
+    test('offers the split approval action to an authorized creator', () {
       expect(
         yorksV1CanOfferMaterialRequestCreationApproval(
           role: YorksV1Role.projectEngineer,
@@ -17,7 +17,7 @@ void main() {
       );
     });
 
-    test('keeps Submit-only presentation for an exact Site Engineer', () {
+    test('keeps Submit for Approval for an exact Site Engineer', () {
       expect(
         yorksV1CanOfferMaterialRequestCreationApproval(
           role: YorksV1Role.siteEngineer,

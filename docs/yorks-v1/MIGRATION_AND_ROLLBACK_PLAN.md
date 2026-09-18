@@ -1142,3 +1142,49 @@ Every migration PR includes:
 - positive and negative RLS tests;
 - complete-build redeploy/rollback procedure;
 - known quarantine cases and operator action.
+
+## 20260917154516 — MR submission response reconciliation
+
+Additive read RPC plus strict-anchor replacement of the two outer submission
+wrappers' cached-response return branches. Write transactions, idempotency
+hashes/advisory locks, role grants on existing commands, quantity rules and
+history remain intact. Current authorization is rechecked on replay and the
+current safe projection replaces stale cached commercial output. No relation,
+index, backfill, row rewrite, stock or operational data migration is needed.
+Routine function-definition locks apply; no concurrent index runner is required.
+Anchor drift aborts the migration transaction. Reruns skip already patched bodies.
+
+Validate first in the disposable local stack with `supabase db reset --local`
+and `supabase test db`, then the local-only probe
+`python3 test/support/yorks_mr_reconciliation_concurrency.py`. That probe creates
+synthetic fixtures and requires another local reset before repetition. Never
+point it at production. The migration must precede the recovery client in an
+explicitly authorized staging/production rollout. An older backend leaves status
+reads unconfirmed and retry disabled; that is safe but not a usable release gate.
+
+Rollback: restore the preceding application artifact while retaining this
+compatible additive RPC and stricter replay checks. Prefer a forward database
+fix over restoring the demonstrated revoked-access vulnerability. Never delete
+idempotency, notification, audit or request history. Do not roll clients back
+while employees have unresolved recovery drafts: old clients do not understand
+the marker and may edit the intent. Reconcile those drafts first or forward-fix.
+No remote migration or deployment is authorized by the implementation task.
+
+## 20260917185345 — Company Material Request independent approval
+
+Additive relation and function migration. Existing T01 request IDs, company
+references, line IDs, route/policy snapshots, timestamps and events are
+preserved. The request-state and event constraints are expanded; no existing
+row is rewritten or backfilled. Decision evidence is append-only and has no
+authenticated table privileges.
+
+Validate through a clean local reset and the focused approval pgTAP file before
+the complete database suite. The application must ship with the existing
+Company Material Request flag still default-off until the broader lifecycle
+contract and staged acceptance are approved.
+
+Rollback restores the prior application artifact and disables the feature
+flag. Retain the new states, decision rows, events and notifications. Never
+delete a recorded decision or remap an approved company request into a project
+request. Use a forward migration for corrections. No remote migration or
+deployment is authorized by this implementation slice.

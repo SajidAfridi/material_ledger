@@ -21,6 +21,9 @@ enum YorksV1MaterialRequestDraftSyncStatus {
   saved,
   submitting,
   submitted,
+  outcomeUnknown,
+  checkingSave,
+  checkingSubmission,
   conflict,
   failed,
 }
@@ -30,11 +33,22 @@ class YorksV1MaterialRequestDraftState {
     required this.draft,
     this.status = YorksV1MaterialRequestDraftSyncStatus.local,
     this.errorCode,
+    this.canRetryUnconfirmed = false,
+    this.localPersistenceFailed = false,
   });
 
   final YorksV1MaterialRequestDraft draft;
   final YorksV1MaterialRequestDraftSyncStatus status;
   final YorksV1DomainErrorCode? errorCode;
+  final bool canRetryUnconfirmed;
+  final bool localPersistenceFailed;
+}
+
+class _DraftSaveResult {
+  const _DraftSaveResult({required this.acknowledged, this.request});
+
+  final bool acknowledged;
+  final YorksV1MaterialRequest? request;
 }
 
 /// Local-recovery plus connected-command controller. Editing remains private
@@ -49,6 +63,7 @@ class YorksV1MaterialRequestDraftController
     required YorksV1MaterialRequestRepository repository,
     String Function()? uuidFactory,
     VoidCallback? onLocalDraftsChanged,
+    bool Function()? isCurrentOwner,
     AnalyticsService analytics = const NoopAnalyticsService(),
     Duration privateSyncDebounce = const Duration(milliseconds: 1200),
   }) : _ownerAuthUserId = ownerAuthUserId,
@@ -57,6 +72,7 @@ class YorksV1MaterialRequestDraftController
        _repository = repository,
        _uuidFactory = uuidFactory ?? const Uuid().v4,
        _onLocalDraftsChanged = onLocalDraftsChanged,
+       _isCurrentOwner = isCurrentOwner,
        _analytics = analytics,
        _privateSyncDebounceDuration = privateSyncDebounce,
        super(
@@ -70,6 +86,14 @@ class YorksV1MaterialRequestDraftController
          ),
        ) {
     _acceptedDraft = state.draft;
+    if (state.draft.pendingSubmissionApproval != null ||
+        state.draft.hasPendingSave) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: state.draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+        canRetryUnconfirmed: state.draft.hasPendingSave,
+      );
+    }
   }
 
   final String _ownerAuthUserId;
@@ -78,10 +102,26 @@ class YorksV1MaterialRequestDraftController
   final YorksV1MaterialRequestRepository _repository;
   final String Function() _uuidFactory;
   final VoidCallback? _onLocalDraftsChanged;
+  final bool Function()? _isCurrentOwner;
   final AnalyticsService _analytics;
   final Duration _privateSyncDebounceDuration;
   Future<void> _persistQueue = Future<void>.value();
   bool _connectedCommandInFlight = false;
+  // A connected command supersedes older recovery reads/writes, including
+  // responses that arrive after the command has finished.
+  int _recoveryGeneration = 0;
+  Object? _connectedFailure;
+
+  void _beginConnectedCommand() {
+    _connectedCommandInFlight = true;
+    _connectedFailure = null;
+    _recoveryGeneration++;
+    _privateSyncDebounce?.cancel();
+    _privateSyncRequested = false;
+  }
+
+  bool _recoveryIsCurrent(int generation) =>
+      !_inactive && generation == _recoveryGeneration;
   bool _editingBeforeApproval = false;
   Timer? _privateSyncDebounce;
   Future<void>? _privateHydration;
@@ -89,6 +129,7 @@ class YorksV1MaterialRequestDraftController
   bool _privateSyncInFlight = false;
   bool _privateSyncRequested = false;
   bool _disposed = false;
+  bool get _inactive => _disposed || !(_isCurrentOwner?.call() ?? true);
   late YorksV1MaterialRequestDraft _acceptedDraft;
 
   /// Read-only snapshot for UI callbacks that need to guard a deferred
@@ -125,7 +166,9 @@ class YorksV1MaterialRequestDraftController
   /// editor starts. A newer local crash-recovery copy always wins; a newer
   /// account copy replaces only an untouched/older device copy.
   Future<void> hydratePrivateDraft() {
-    if (_privateHydrationCompleted || state.draft.serverRecordVersion > 0) {
+    if (state.draft.pendingSubmissionApproval != null ||
+        _privateHydrationCompleted ||
+        state.draft.serverRecordVersion > 0) {
       return Future<void>.value();
     }
     return _privateHydration ??= _hydratePrivateDraftOnce().whenComplete(() {
@@ -138,13 +181,14 @@ class YorksV1MaterialRequestDraftController
     final repository = _phase2Repository;
     if (repository == null || state.draft.serverRecordVersion > 0) return;
     final initialLocal = state.draft;
+    final generation = _recoveryGeneration;
     try {
       final remote = await repository.getPrivateDraft(
         draftId: _draftId,
         ownerAuthUserId: _ownerAuthUserId,
         submissionIdempotencyKey: initialLocal.submissionIdempotencyKey,
       );
-      if (_disposed) return;
+      if (!_recoveryIsCurrent(generation)) return;
       final current = state.draft;
       final editedWhileLoading = current.updatedAt != initialLocal.updatedAt;
       if (remote == null) {
@@ -189,7 +233,7 @@ class YorksV1MaterialRequestDraftController
         _schedulePrivateSync();
       }
     } on YorksV1DomainException catch (error) {
-      if (_disposed) return;
+      if (!_recoveryIsCurrent(generation)) return;
       if (error.code == YorksV1DomainErrorCode.conflict) {
         state = YorksV1MaterialRequestDraftState(
           draft: state.draft,
@@ -217,6 +261,11 @@ class YorksV1MaterialRequestDraftController
           ownerAuthUserId: draft.ownerAuthUserId,
           submissionIdempotencyKey: uuidFactory(),
           serverRecordVersion: draft.serverRecordVersion,
+          localRevision: draft.localRevision,
+          pendingSaveOperationId: draft.pendingSaveOperationId,
+          pendingSaveExpectedVersion: draft.pendingSaveExpectedVersion,
+          pendingSaveRevision: draft.pendingSaveRevision,
+          pendingSavePayloadHash: draft.pendingSavePayloadHash,
           privateSyncVersion: draft.privateSyncVersion,
           privateSyncedAt: draft.privateSyncedAt,
           projectId: draft.projectId,
@@ -347,6 +396,7 @@ class YorksV1MaterialRequestDraftController
       ownerAuthUserId: current.ownerAuthUserId,
       submissionIdempotencyKey: current.submissionIdempotencyKey,
       serverRecordVersion: request.recordVersion,
+      localRevision: current.localRevision,
       projectId: request.projectId,
       scopeId: request.scopeId,
       title: request.title,
@@ -630,7 +680,10 @@ class YorksV1MaterialRequestDraftController
   /// accepted by the server.  Incomplete input is still durable on this
   /// device and can be reopened and edited later; complete input is synced
   /// through the versioned draft RPC.
-  Future<YorksV1MaterialRequest?> saveDraft() async {
+  Future<bool> saveDraft() async {
+    if (_inactive || state.draft.pendingSubmissionApproval != null) {
+      return false;
+    }
     final draft = state.draft;
     if (!draft.canSubmitLocally) {
       await _persist(draft);
@@ -646,19 +699,25 @@ class YorksV1MaterialRequestDraftController
           AnalyticsProperty.itemCount: draft.lines.length,
         },
       );
-      return null;
+      return true;
     }
     return saveConnected();
   }
 
-  Future<YorksV1MaterialRequest?> saveConnected() async {
+  Future<bool> saveConnected() async {
+    if (_inactive || state.draft.pendingSubmissionApproval != null) {
+      return false;
+    }
+    if (state.draft.hasPendingSave) {
+      return reconcileDraftSave(retryIfAbsent: true);
+    }
     final feedback = _analytics.expectFeedback(
       action: 'save_material_request_draft',
       screen: AnalyticsScreen.materialRequestDraft,
       operationWasLoading: _connectedCommandInFlight,
     );
-    if (_connectedCommandInFlight) return null;
-    _connectedCommandInFlight = true;
+    if (_inactive || _connectedCommandInFlight) return false;
+    _beginConnectedCommand();
     final operation = _analytics.beginOperation(
       'material_request_save_draft',
       properties: {
@@ -670,7 +729,8 @@ class YorksV1MaterialRequestDraftController
       final pending = _saveConnected();
       feedback.feedbackObserved();
       final result = await pending;
-      if (result == null) {
+      if (_inactive) return false;
+      if (!result.acknowledged) {
         operation.fail(
           YorksV1DomainException(
             state.errorCode ?? YorksV1DomainErrorCode.backendUnavailable,
@@ -686,14 +746,14 @@ class YorksV1MaterialRequestDraftController
           },
         );
       }
-      return result;
+      return result.acknowledged;
     } finally {
       _connectedCommandInFlight = false;
     }
   }
 
-  Future<YorksV1MaterialRequest?> _saveConnected() async {
-    final draft = state.draft;
+  Future<_DraftSaveResult> _saveConnected() async {
+    var draft = state.draft;
     if (!draft.canSubmitLocally) {
       _analytics.capture(
         AnalyticsEvent.formValidationFailed,
@@ -708,7 +768,25 @@ class YorksV1MaterialRequestDraftController
         status: YorksV1MaterialRequestDraftSyncStatus.failed,
         errorCode: YorksV1DomainErrorCode.invalidInput,
       );
-      return null;
+      return const _DraftSaveResult(acknowledged: false);
+    }
+    final receiptRepository =
+        _repository is YorksV1MaterialRequestDraftSaveRecoveryRepository
+        ? _repository as YorksV1MaterialRequestDraftSaveRecoveryRepository
+        : null;
+    if (!_editingBeforeApproval && receiptRepository != null) {
+      final operationId = _uuidFactory();
+      final payloadHash = draft.savePayloadHash();
+      draft = draft.copyWith(
+        pendingSaveOperationId: operationId,
+        pendingSaveExpectedVersion: draft.serverRecordVersion,
+        pendingSaveRevision: draft.localRevision,
+        pendingSavePayloadHash: payloadHash,
+      );
+      await _persist(draft);
+      if (_inactive) {
+        return const _DraftSaveResult(acknowledged: false);
+      }
     }
     state = YorksV1MaterialRequestDraftState(
       draft: draft,
@@ -722,37 +800,95 @@ class YorksV1MaterialRequestDraftController
                 idempotencyKey: draft.submissionIdempotencyKey,
               ),
             )
-          : await _repository.saveDraft(draft.toSaveInput());
+          : null;
+      final acknowledgement =
+          !_editingBeforeApproval && receiptRepository != null
+          ? await receiptRepository.saveDraftIdempotent(
+              draft.toSaveInput(),
+              operationId: draft.pendingSaveOperationId!,
+            )
+          : null;
+      final legacySaved = !_editingBeforeApproval && receiptRepository == null
+          ? await _repository.saveDraft(draft.toSaveInput())
+          : null;
+      if (_inactive) {
+        return const _DraftSaveResult(acknowledged: false);
+      }
+      final recordVersion =
+          acknowledgement?.recordVersion ??
+          saved?.recordVersion ??
+          legacySaved!.recordVersion;
       final updated = draft.copyWith(
-        serverRecordVersion: saved.recordVersion,
+        serverRecordVersion: recordVersion,
+        pendingSaveOperationId: null,
+        pendingSaveExpectedVersion: null,
+        pendingSaveRevision: null,
+        pendingSavePayloadHash: null,
         submissionIdempotencyKey: _editingBeforeApproval
             ? _uuidFactory()
             : draft.submissionIdempotencyKey,
-        updatedAt: DateTime.now().toUtc(),
+        updatedAt: acknowledgement?.committedAt ?? DateTime.now().toUtc(),
       );
-      await _persist(updated);
       _acceptedDraft = updated;
       state = YorksV1MaterialRequestDraftState(
         draft: updated,
         status: YorksV1MaterialRequestDraftSyncStatus.saved,
       );
-      return saved;
+      try {
+        await _persist(updated);
+      } catch (_) {
+        if (!_inactive) {
+          state = YorksV1MaterialRequestDraftState(
+            draft: updated,
+            status: YorksV1MaterialRequestDraftSyncStatus.saved,
+            localPersistenceFailed: true,
+          );
+        }
+      }
+      return _DraftSaveResult(
+        acknowledged: true,
+        request: saved ?? legacySaved,
+      );
     } on YorksV1DomainException catch (error) {
+      if (_inactive) return const _DraftSaveResult(acknowledged: false);
+      final outcomeUnknown =
+          draft.hasPendingSave &&
+          error.code == YorksV1DomainErrorCode.backendUnavailable;
+      final retained = outcomeUnknown
+          ? draft
+          : draft.copyWith(
+              pendingSaveOperationId: null,
+              pendingSaveExpectedVersion: null,
+              pendingSaveRevision: null,
+              pendingSavePayloadHash: null,
+            );
+      if (!outcomeUnknown && draft.hasPendingSave) {
+        try {
+          await _persist(retained);
+        } catch (_) {}
+      }
       state = YorksV1MaterialRequestDraftState(
-        draft: draft,
-        status: error.code == YorksV1DomainErrorCode.conflict
+        draft: retained,
+        status: outcomeUnknown
+            ? YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown
+            : error.code == YorksV1DomainErrorCode.conflict
             ? YorksV1MaterialRequestDraftSyncStatus.conflict
             : YorksV1MaterialRequestDraftSyncStatus.failed,
         errorCode: error.code,
+        canRetryUnconfirmed: outcomeUnknown,
       );
-      return null;
+      return const _DraftSaveResult(acknowledged: false);
     } catch (error) {
+      if (_inactive) return const _DraftSaveResult(acknowledged: false);
       state = YorksV1MaterialRequestDraftState(
         draft: draft,
-        status: YorksV1MaterialRequestDraftSyncStatus.failed,
+        status: draft.hasPendingSave
+            ? YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown
+            : YorksV1MaterialRequestDraftSyncStatus.failed,
         errorCode: YorksV1DomainErrorCode.backendUnavailable,
+        canRetryUnconfirmed: draft.hasPendingSave,
       );
-      return null;
+      return const _DraftSaveResult(acknowledged: false);
     }
   }
 
@@ -767,9 +903,129 @@ class YorksV1MaterialRequestDraftController
     return _submitWorkflow(approveImmediately: true);
   }
 
+  Future<bool> reconcileDraftSave({bool retryIfAbsent = false}) async {
+    if (_inactive || _connectedCommandInFlight) return false;
+    final draft = state.draft;
+    final repository =
+        _repository is YorksV1MaterialRequestDraftSaveRecoveryRepository
+        ? _repository as YorksV1MaterialRequestDraftSaveRecoveryRepository
+        : null;
+    if (!draft.hasPendingSave || repository == null) return false;
+    if (draft.pendingSaveExpectedVersion != draft.serverRecordVersion ||
+        draft.pendingSaveRevision != draft.localRevision ||
+        draft.pendingSavePayloadHash != draft.savePayloadHash()) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.conflict,
+        errorCode: YorksV1DomainErrorCode.conflict,
+      );
+      return false;
+    }
+    _beginConnectedCommand();
+    state = YorksV1MaterialRequestDraftState(
+      draft: draft,
+      status: YorksV1MaterialRequestDraftSyncStatus.checkingSave,
+    );
+    try {
+      var acknowledgement = await repository.findDraftSaveResult(
+        draft.toSaveInput(),
+        operationId: draft.pendingSaveOperationId!,
+      );
+      if (_inactive) return false;
+      if (acknowledgement == null && retryIfAbsent) {
+        acknowledgement = await repository.saveDraftIdempotent(
+          draft.toSaveInput(),
+          operationId: draft.pendingSaveOperationId!,
+        );
+      }
+      if (_inactive) return false;
+      if (acknowledgement == null) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: draft,
+          status: YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+          errorCode: YorksV1DomainErrorCode.backendUnavailable,
+          canRetryUnconfirmed: true,
+        );
+        return false;
+      }
+      return await _acceptDraftSaveAcknowledgement(draft, acknowledgement);
+    } on YorksV1DomainException catch (error) {
+      if (!_inactive) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: draft,
+          status: YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+          errorCode: error.code,
+          canRetryUnconfirmed:
+              error.code == YorksV1DomainErrorCode.backendUnavailable,
+        );
+      }
+      return false;
+    } catch (_) {
+      if (!_inactive) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: draft,
+          status: YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+          errorCode: YorksV1DomainErrorCode.backendUnavailable,
+          canRetryUnconfirmed: true,
+        );
+      }
+      return false;
+    } finally {
+      _connectedCommandInFlight = false;
+    }
+  }
+
+  Future<bool> _acceptDraftSaveAcknowledgement(
+    YorksV1MaterialRequestDraft draft,
+    YorksV1MaterialRequestDraftSaveAcknowledgement acknowledgement,
+  ) async {
+    if (acknowledgement.requestId != draft.id ||
+        acknowledgement.operationId != draft.pendingSaveOperationId ||
+        acknowledgement.recordVersion <= draft.serverRecordVersion) {
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.conflict,
+        errorCode: YorksV1DomainErrorCode.unexpectedResponse,
+      );
+      return false;
+    }
+    final updated = draft.copyWith(
+      serverRecordVersion: acknowledgement.recordVersion,
+      pendingSaveOperationId: null,
+      pendingSaveExpectedVersion: null,
+      pendingSaveRevision: null,
+      pendingSavePayloadHash: null,
+      updatedAt: acknowledgement.committedAt,
+    );
+    _acceptedDraft = updated;
+    state = YorksV1MaterialRequestDraftState(
+      draft: updated,
+      status: YorksV1MaterialRequestDraftSyncStatus.saved,
+    );
+    try {
+      await _persist(updated);
+    } catch (_) {
+      if (!_inactive) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: updated,
+          status: YorksV1MaterialRequestDraftSyncStatus.saved,
+          localPersistenceFailed: true,
+        );
+      }
+    }
+    return true;
+  }
+
   Future<YorksV1MaterialRequest?> _submitWorkflow({
     required bool approveImmediately,
+    bool retryUnconfirmed = false,
   }) async {
+    if (_inactive || _connectedCommandInFlight || state.draft.hasPendingSave) {
+      return null;
+    }
+    if (state.draft.pendingSubmissionApproval != null && !retryUnconfirmed) {
+      return reconcileSubmission();
+    }
     if (approveImmediately && _editingBeforeApproval) {
       state = YorksV1MaterialRequestDraftState(
         draft: state.draft,
@@ -786,8 +1042,8 @@ class YorksV1MaterialRequestDraftController
       screen: AnalyticsScreen.materialRequestDraft,
       operationWasLoading: _connectedCommandInFlight,
     );
-    if (_connectedCommandInFlight) return null;
-    _connectedCommandInFlight = true;
+    if (_inactive || _connectedCommandInFlight) return null;
+    _beginConnectedCommand();
     final source = approveImmediately
         ? 'new_submit_and_approve'
         : _editingBeforeApproval
@@ -812,16 +1068,32 @@ class YorksV1MaterialRequestDraftController
       },
     );
     try {
-      final pending = _submitConnected(approveImmediately: approveImmediately);
+      final pending = _submitConnected(
+        approveImmediately: approveImmediately,
+        preserveUnconfirmed: retryUnconfirmed,
+      );
       feedback.feedbackObserved();
       final result = await pending;
+      if (_inactive) return null;
       if (result == null) {
-        final error = YorksV1DomainException(
-          state.errorCode ?? YorksV1DomainErrorCode.backendUnavailable,
+        final error =
+            _connectedFailure ??
+            YorksV1DomainException(
+              state.errorCode ?? YorksV1DomainErrorCode.backendUnavailable,
+            );
+        final unknown =
+            state.status ==
+            YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown;
+        operation.fail(
+          error,
+          properties: {
+            AnalyticsProperty.outcome: unknown ? 'unknown' : 'rejected',
+          },
         );
-        operation.fail(error);
         _analytics.capture(
-          AnalyticsEvent.materialRequestSubmissionFailed,
+          unknown
+              ? AnalyticsEvent.materialRequestSubmissionUnconfirmed
+              : AnalyticsEvent.materialRequestSubmissionFailed,
           properties: {
             AnalyticsProperty.source: source,
             AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
@@ -854,10 +1126,12 @@ class YorksV1MaterialRequestDraftController
 
   Future<YorksV1MaterialRequest?> _submitConnected({
     required bool approveImmediately,
+    bool preserveUnconfirmed = false,
   }) async {
     if (_editingBeforeApproval) {
       final saved = await _saveConnected();
-      if (saved != null) {
+      if (_inactive) return null;
+      if (saved.acknowledged) {
         // A returned request may pass through this edit/approval cycle more
         // than once. Once this version reaches the server, its local recovery
         // copy must not survive as the starting point for a later return: the
@@ -865,19 +1139,20 @@ class YorksV1MaterialRequestDraftController
         // version. The auto-disposed family provider drops the in-memory
         // session when the route closes; this removes its persisted twin.
         try {
-          await discardLocal();
+          await discardLocal(submissionConfirmed: true);
         } catch (_) {
           // The connected command already committed. As with first submit,
           // local cleanup is best effort and cannot turn it into a failure.
         }
+        if (_inactive) return null;
         state = YorksV1MaterialRequestDraftState(
           draft: state.draft,
           status: YorksV1MaterialRequestDraftSyncStatus.submitted,
         );
       }
-      return saved;
+      return saved.request;
     }
-    final draft = state.draft;
+    var draft = state.draft;
     if (!draft.canSubmitLocally) {
       _analytics.capture(
         AnalyticsEvent.formValidationFailed,
@@ -894,40 +1169,57 @@ class YorksV1MaterialRequestDraftController
       );
       return null;
     }
+    draft = draft.copyWith(pendingSubmissionApproval: approveImmediately);
     state = YorksV1MaterialRequestDraftState(
       draft: draft,
       status: YorksV1MaterialRequestDraftSyncStatus.submitting,
     );
+    try {
+      await _persist(draft);
+    } catch (_) {
+      if (_inactive) return null;
+      if (preserveUnconfirmed) {
+        _markSubmissionUnknown(
+          draft,
+          YorksV1DomainErrorCode.backendUnavailable,
+        );
+        return null;
+      }
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft.copyWith(pendingSubmissionApproval: null),
+        status: YorksV1MaterialRequestDraftSyncStatus.failed,
+        errorCode: YorksV1DomainErrorCode.backendUnavailable,
+      );
+      return null; // No RPC was issued without a durable intent.
+    }
+    if (_inactive) return null;
     YorksV1MaterialRequest? submitted;
     try {
       submitted = approveImmediately
           ? await _repository.saveSubmitAndApprove(draft)
           : await _repository.saveAndSubmit(draft);
     } on YorksV1DomainException catch (error) {
+      if (_inactive) return null;
+      _connectedFailure = error;
+      if (preserveUnconfirmed ||
+          (error.code == YorksV1DomainErrorCode.backendUnavailable &&
+              error.serverCode == null) ||
+          error.code == YorksV1DomainErrorCode.unexpectedResponse) {
+        _markSubmissionUnknown(draft, error.code);
+        return null;
+      }
+      draft = draft.copyWith(pendingSubmissionApproval: null);
+      try {
+        await _persist(draft);
+      } catch (_) {
+        /* Retain recovery conservatively. */
+      }
+      if (_inactive) return null;
       if (error.code == YorksV1DomainErrorCode.conflict) {
         final rebased = await _rebaseAmbiguousInitialSave(draft);
+        if (_inactive) return null;
         if (rebased != null) {
-          try {
-            submitted = approveImmediately
-                ? await _repository.saveSubmitAndApprove(rebased)
-                : await _repository.saveAndSubmit(rebased);
-          } on YorksV1DomainException catch (retryError) {
-            state = YorksV1MaterialRequestDraftState(
-              draft: rebased,
-              status: retryError.code == YorksV1DomainErrorCode.conflict
-                  ? YorksV1MaterialRequestDraftSyncStatus.conflict
-                  : YorksV1MaterialRequestDraftSyncStatus.failed,
-              errorCode: retryError.code,
-            );
-            return null;
-          } catch (_) {
-            state = YorksV1MaterialRequestDraftState(
-              draft: rebased,
-              status: YorksV1MaterialRequestDraftSyncStatus.failed,
-              errorCode: YorksV1DomainErrorCode.backendUnavailable,
-            );
-            return null;
-          }
+          return _submitConnected(approveImmediately: approveImmediately);
         } else {
           state = YorksV1MaterialRequestDraftState(
             draft: draft,
@@ -954,6 +1246,7 @@ class YorksV1MaterialRequestDraftController
             errorCode: error.code,
           );
           await _persist(nextDraft);
+          if (_inactive) return null;
         }
         state = YorksV1MaterialRequestDraftState(
           draft: nextDraft,
@@ -965,29 +1258,104 @@ class YorksV1MaterialRequestDraftController
         return null;
       }
     } catch (error) {
-      state = YorksV1MaterialRequestDraftState(
-        draft: draft,
-        status: YorksV1MaterialRequestDraftSyncStatus.failed,
-        errorCode: YorksV1DomainErrorCode.backendUnavailable,
-      );
+      if (_inactive) return null;
+      _connectedFailure = error;
+      _markSubmissionUnknown(draft, YorksV1DomainErrorCode.backendUnavailable);
       return null;
     }
+
+    if (_inactive) return null;
 
     // The server transition has succeeded. Local cleanup is best effort and
     // must never turn an authoritative submission into a false failure state
     // (for example when browser storage is unavailable or a late draft write
     // is still draining).
     try {
-      await discardLocal();
+      await discardLocal(submissionConfirmed: true);
     } catch (_) {
       // The submitted server record remains authoritative; the next refresh
       // can safely reconcile any stale local recovery copy.
     }
+    if (_inactive) return null;
     state = YorksV1MaterialRequestDraftState(
       draft: state.draft,
       status: YorksV1MaterialRequestDraftSyncStatus.submitted,
     );
     return submitted;
+  }
+
+  void _markSubmissionUnknown(
+    YorksV1MaterialRequestDraft draft,
+    YorksV1DomainErrorCode? error,
+  ) {
+    state = YorksV1MaterialRequestDraftState(
+      draft: draft,
+      status: YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+      errorCode: error,
+    );
+  }
+
+  Future<YorksV1MaterialRequest?> reconcileSubmission() async {
+    if (_inactive || _connectedCommandInFlight) return null;
+    final draft = state.draft;
+    final mode = draft.pendingSubmissionApproval;
+    final repository = _repository;
+    if (mode == null ||
+        repository is! YorksV1MaterialRequestSubmissionRecoveryRepository) {
+      return null;
+    }
+    _beginConnectedCommand();
+    state = YorksV1MaterialRequestDraftState(
+      draft: draft,
+      status: YorksV1MaterialRequestDraftSyncStatus.checkingSubmission,
+    );
+    try {
+      final result =
+          await (repository
+                  as YorksV1MaterialRequestSubmissionRecoveryRepository)
+              .findSubmissionResult(draft, approveImmediately: mode);
+      if (_inactive) return null;
+      if (result == null) {
+        state = YorksV1MaterialRequestDraftState(
+          draft: draft,
+          status: YorksV1MaterialRequestDraftSyncStatus.outcomeUnknown,
+          canRetryUnconfirmed: true,
+        );
+        return null;
+      }
+      try {
+        await discardLocal(submissionConfirmed: true);
+      } catch (_) {}
+      if (_inactive) return null;
+      state = YorksV1MaterialRequestDraftState(
+        draft: draft,
+        status: YorksV1MaterialRequestDraftSyncStatus.submitted,
+      );
+      _analytics.capture(AnalyticsEvent.materialRequestSubmissionReconciled);
+      return result;
+    } on YorksV1DomainException catch (error) {
+      if (!_inactive) _markSubmissionUnknown(draft, error.code);
+      return null;
+    } catch (_) {
+      if (!_inactive) {
+        _markSubmissionUnknown(
+          draft,
+          YorksV1DomainErrorCode.backendUnavailable,
+        );
+      }
+      return null;
+    } finally {
+      _connectedCommandInFlight = false;
+    }
+  }
+
+  Future<YorksV1MaterialRequest?> retryUnconfirmedSubmission() async {
+    if (_inactive || !state.canRetryUnconfirmed || _connectedCommandInFlight) {
+      return null;
+    }
+    final mode = state.draft.pendingSubmissionApproval;
+    if (mode == null) return null;
+    return _submitWorkflow(approveImmediately: mode, retryUnconfirmed: true);
   }
 
   /// Recovers the one safe stale-version case caused by an ambiguous first
@@ -1004,6 +1372,7 @@ class YorksV1MaterialRequestDraftController
     if (draft.serverRecordVersion != 0) return null;
     try {
       final remote = await _repository.getRequest(draft.id);
+      if (_inactive) return null;
       final localLineIds = draft.lines.map((line) => line.id).toSet();
       final sameDraftBoundary =
           remote.state.isDraft &&
@@ -1019,6 +1388,7 @@ class YorksV1MaterialRequestDraftController
         updatedAt: DateTime.now().toUtc(),
       );
       await _persist(rebased);
+      if (_inactive) return null;
       state = YorksV1MaterialRequestDraftState(
         draft: rebased,
         status: YorksV1MaterialRequestDraftSyncStatus.submitting,
@@ -1029,12 +1399,24 @@ class YorksV1MaterialRequestDraftController
     }
   }
 
-  Future<void> discardLocal({bool requireServerConfirmation = false}) async {
+  Future<void> discardLocal({
+    bool requireServerConfirmation = false,
+    bool submissionConfirmed = false,
+  }) async {
+    if (_inactive ||
+        (state.draft.pendingSubmissionApproval != null &&
+            !submissionConfirmed) ||
+        (state.draft.hasPendingSave && !submissionConfirmed)) {
+      return;
+    }
+    _recoveryGeneration++;
+    _privateSyncRequested = false;
     _privateSyncDebounce?.cancel();
     // Complete edits that may still be flushing from a text field before the
     // confirmed submit removes the recoverable draft. Without this barrier a
     // late keystroke write could recreate a draft after submission.
     await _persistQueue;
+    if (_inactive) return;
     final repository = _phase2Repository;
     final syncVersion = state.draft.privateSyncVersion;
     if (requireServerConfirmation && repository != null && syncVersion > 0) {
@@ -1052,7 +1434,7 @@ class YorksV1MaterialRequestDraftController
         )
         .toList(growable: false);
     await _store.writeAll(all);
-    _onLocalDraftsChanged?.call();
+    if (!_inactive) _onLocalDraftsChanged?.call();
     if (!requireServerConfirmation && repository != null && syncVersion > 0) {
       try {
         await repository.deletePrivateDraft(
@@ -1077,6 +1459,7 @@ class YorksV1MaterialRequestDraftController
   Future<void> restoreLocalSnapshot(
     YorksV1MaterialRequestDraft snapshot,
   ) async {
+    if (_inactive || state.draft.pendingSubmissionApproval != null) return;
     if (snapshot.id != _draftId ||
         snapshot.ownerAuthUserId != _ownerAuthUserId) {
       throw ArgumentError('The draft snapshot does not belong to this editor.');
@@ -1092,7 +1475,15 @@ class YorksV1MaterialRequestDraftController
   }
 
   Future<void> _replace(YorksV1MaterialRequestDraft draft) async {
+    if (_inactive ||
+        _connectedCommandInFlight ||
+        state.draft.hasPendingSave ||
+        state.draft.pendingSubmissionApproval != null ||
+        state.status == YorksV1MaterialRequestDraftSyncStatus.submitted) {
+      return;
+    }
     final updated = draft.copyWith(
+      localRevision: state.draft.localRevision + 1,
       submissionIdempotencyKey: _uuidFactory(),
       updatedAt: DateTime.now().toUtc(),
     );
@@ -1106,6 +1497,13 @@ class YorksV1MaterialRequestDraftController
   }
 
   void _schedulePrivateSync() {
+    if (_inactive ||
+        _connectedCommandInFlight ||
+        state.draft.hasPendingSave ||
+        state.draft.pendingSubmissionApproval != null ||
+        state.status == YorksV1MaterialRequestDraftSyncStatus.submitted) {
+      return;
+    }
     if (_phase2Repository == null || state.draft.serverRecordVersion > 0) {
       return;
     }
@@ -1117,17 +1515,17 @@ class YorksV1MaterialRequestDraftController
   }
 
   void _requestPrivateSync() {
-    if (_disposed) return;
+    if (_inactive || _connectedCommandInFlight) return;
     _privateSyncRequested = true;
     if (_privateSyncInFlight) return;
     unawaited(_drainPrivateSync());
   }
 
   Future<void> _drainPrivateSync() async {
-    if (_privateSyncInFlight || _disposed) return;
+    if (_privateSyncInFlight || _inactive) return;
     _privateSyncInFlight = true;
     try {
-      while (_privateSyncRequested && !_disposed) {
+      while (_privateSyncRequested && !_inactive) {
         _privateSyncRequested = false;
         await _syncPrivateDraftOnce();
       }
@@ -1135,7 +1533,7 @@ class YorksV1MaterialRequestDraftController
       _privateSyncInFlight = false;
       // Close the narrow hand-off race where a debounce fires after the loop
       // observes no queued work but before this in-flight flag is released.
-      if (_privateSyncRequested && !_disposed) {
+      if (_privateSyncRequested && !_inactive) {
         unawaited(_drainPrivateSync());
       }
     }
@@ -1144,6 +1542,8 @@ class YorksV1MaterialRequestDraftController
   Future<void> _syncPrivateDraftOnce() async {
     final repository = _phase2Repository;
     final snapshot = state.draft;
+    final generation = _recoveryGeneration;
+    if (_connectedCommandInFlight) return;
     if (repository == null || snapshot.serverRecordVersion > 0) return;
     if (!snapshot.hasRecoverableContent) return;
     state = YorksV1MaterialRequestDraftState(
@@ -1157,7 +1557,7 @@ class YorksV1MaterialRequestDraftController
           idempotencyKey: _uuidFactory(),
         ),
       );
-      if (_disposed) return;
+      if (!_recoveryIsCurrent(generation)) return;
       final current = state.draft;
       final reconciled = current.copyWith(
         privateSyncVersion: remote.syncVersion,
@@ -1171,7 +1571,7 @@ class YorksV1MaterialRequestDraftController
       );
       await _persist(reconciled);
     } on YorksV1DomainException catch (error) {
-      if (_disposed) return;
+      if (!_recoveryIsCurrent(generation)) return;
       final current = state.draft;
       state = YorksV1MaterialRequestDraftState(
         draft: current,
@@ -1183,7 +1583,7 @@ class YorksV1MaterialRequestDraftController
             : null,
       );
     } catch (_) {
-      if (_disposed) return;
+      if (!_recoveryIsCurrent(generation)) return;
       state = YorksV1MaterialRequestDraftState(
         draft: state.draft,
         status: YorksV1MaterialRequestDraftSyncStatus.local,
@@ -1207,7 +1607,7 @@ class YorksV1MaterialRequestDraftController
       }
       if (!found) replaced.add(draft);
       await _store.writeAll(replaced);
-      _onLocalDraftsChanged?.call();
+      if (!_inactive) _onLocalDraftsChanged?.call();
     });
     // Keep the queue usable after an individual local-storage failure while
     // still returning the original error to the caller.

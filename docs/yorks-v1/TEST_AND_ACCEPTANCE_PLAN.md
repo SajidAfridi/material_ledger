@@ -63,7 +63,7 @@ slices extend the same stable sequence without renumbering those originals.
 | AT-41 | Procurement clarifies item name/model through shared ranked search before arrangement save; requested evidence remains immutable, Engineering/direct writes fail, stale and competing saves are safe, retries are idempotent, and post-save editing is locked. | model/repository/widget/responsive visual/RPC/RLS/idempotency/pgTAP |
 | AT-41 | MR description suggestions remain anchored to the active field, use a readable grouped BOQ/inventory panel with descriptive metadata, fit the viewport at 1366px, tablet and mobile widths, and copy no commercial value or quantity. | repository/widget/golden/responsive visual |
 | AT-42 | Publishing or discarding Configuration changes clears staged settings/actions with production-safe primary-key predicates; a reviewed non-system category archive and controlled-unit creation publish atomically without weakening authority, history, audit, validation or idempotency. | migration/pgTAP/control-plane regression |
-| AT-43 | The new MR form always offers Submit; only a published-policy, effective-capability non-Site-Engineer creator may also use Approve. The combined command records one canonical submitted/approved history, is idempotent, and a denied Site Engineer path leaves no draft/submitted record. | widget/controller/RPC/pgTAP/idempotency |
+| AT-43 | The new MR form gives creators without approval authority **Submit for Approval** only. A published-policy, effective-capability non-Site-Engineer creator instead receives one **Submit and Approve** split action whose **Create only** choice enters the independently reviewable approval stage and whose **Create and Approve** choice records one canonical submitted/approved history. Both commands are idempotent, and a denied Site Engineer approval path leaves no draft/submitted record. | widget/controller/RPC/pgTAP/idempotency |
 
 The BOQ **Overview** option is read-only summary, not the Common scope and not a
 persisted scope. Common is its own real BOQ. Database coverage proves per-scope
@@ -1140,3 +1140,25 @@ parity/security results, clean-reset and forward-rollback proof, all required
 Accounts responsive/accessibility states, performance measurements, staged
 Site Engineer/Project Engineer/Accountant/Procurement/Admin E2E and explicit
 production flag-enablement approval.
+
+## Company Material Request T02 local acceptance
+
+The T02 approval candidate must prove all of the following before any release:
+
+1. clean local reset applies the additive migration;
+2. the requester and Procurement cannot decide, and Procurement remains denied
+   even if an erroneous approver authorization exists;
+3. only the snapshotted active approver with a current category/unit grant sees
+   the pending request in the inbox;
+4. stale versions, missing Return/Reject reasons, direct decision-table writes
+   and a second decision fail without partial effects;
+5. exact retries append one decision, event and requester notification;
+6. the safe projection contains `can_decide` and decision evidence without
+   project, BOQ, stock or commercial fields;
+7. the Flutter repository emits the exact narrow RPC payloads; and
+8. the inbox/detail/action states render without overflow at 360px and desktop
+   width, with no optimistic success before the RPC response.
+
+The flag stays off and no production migration/deployment is permitted by this
+acceptance section. Company fulfilment requires separately approved custody,
+quantity, authorization and evidence rules.

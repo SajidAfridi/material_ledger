@@ -82,6 +82,34 @@ void main() {
     );
 
     test(
+      'searches the Company catalogue without project or stock input',
+      () async {
+        final rpc = _RecordingRpc();
+        final repository = _repository(rpc);
+
+        final results = await repository.searchMaterials(
+          categoryId: _categoryId,
+          responsibleUnitId: _unitId,
+          query: ' helmet ',
+        );
+
+        expect(results.single.description, 'Safety helmet');
+        expect(results.single.size, 'Adjustable');
+        expect(results.single.model, 'H-700');
+        expect(
+          rpc.calls.single.functionName,
+          'v1_search_company_material_request_candidates',
+        );
+        expect(rpc.calls.single.parameters, {
+          'p_category_id': _categoryId,
+          'p_responsible_unit_id': _unitId,
+          'p_query': 'helmet',
+          'p_limit': 18,
+        });
+      },
+    );
+
+    test(
       'atomically saves and submits the exact company-only payload',
       () async {
         final rpc = _RecordingRpc();
@@ -108,6 +136,97 @@ void main() {
         expect(payload, isNot(contains('boq_group_id')));
       },
     );
+
+    test(
+      'lists assigned approvals and sends one exact decision command',
+      () async {
+        final rpc = _RecordingRpc();
+        final repository = _repository(rpc);
+
+        final inbox = await repository.listApprovalInbox();
+        expect(inbox, hasLength(1));
+        expect(inbox.single.requestNumber, 'CMR-000001');
+        expect(inbox.single.lineCount, 1);
+
+        final request = await repository.getRequest(_requestId);
+        expect(request.canDecide, isTrue);
+
+        final result = await repository.decide(
+          requestId: _requestId,
+          expectedVersion: 2,
+          decision: YorksV1CompanyMaterialRequestDecisionType.returned,
+          idempotencyKey: _decisionKey,
+          reason: ' Confirm the size. ',
+        );
+
+        expect(result.state, 'returned_for_changes');
+        expect(result.decisions.single.reason, 'Confirm the size.');
+        expect(rpc.calls.map((call) => call.functionName), [
+          'v1_list_company_material_request_work_inbox',
+          'v1_company_material_request_projection',
+          'v1_decide_company_material_request',
+        ]);
+        expect(rpc.calls.last.parameters, {
+          'p_payload': {
+            'request_id': _requestId,
+            'expected_version': 2,
+            'decision': 'returned',
+            'reason': 'Confirm the size.',
+          },
+          'p_idempotency_key': _decisionKey,
+        });
+      },
+    );
+
+    test(
+      'loads protected company issue history with the issue note identity',
+      () async {
+        final rpc = _RecordingRpc();
+        final repository = _repository(rpc);
+
+        final register = await repository.listRegister(
+          YorksV1CompanyMaterialRequestRegisterView.issueHistory,
+        );
+        expect(register.single.id, _requestId);
+        expect(register.single.requestNumber, 'CM-ISS-0000001');
+        expect(rpc.calls.first.parameters, {
+          'p_view': 'issue_history',
+          'p_limit': 100,
+        });
+        expect(rpc.calls, hasLength(1));
+      },
+    );
+
+    test('withdraws only an explicitly approved remainder', () async {
+      final rpc = _RecordingRpc();
+      final repository = _repository(rpc);
+
+      await repository.withdrawRemainder(
+        requestId: _requestId,
+        expectedVersion: 8,
+        reason: 'Demand cancelled by management',
+        lines: const [
+          {'request_line_id': _lineId, 'quantity': '4'},
+        ],
+        idempotencyKey: _idempotencyKey,
+      );
+
+      expect(
+        rpc.calls.single.functionName,
+        'v1_withdraw_company_material_request_remainder',
+      );
+      expect(rpc.calls.single.parameters, {
+        'p_payload': {
+          'request_id': _requestId,
+          'expected_version': 8,
+          'reason': 'Demand cancelled by management',
+          'lines': const [
+            {'request_line_id': _lineId, 'quantity': '4'},
+          ],
+        },
+        'p_idempotency_key': _idempotencyKey,
+      });
+    });
   });
 }
 
@@ -136,6 +255,7 @@ const _requestId = 'c1000000-0000-4000-8000-000000000010';
 const _lineId = 'c1000000-0000-4000-8000-000000000011';
 const _routeId = 'c1000000-0000-4000-8000-000000000003';
 const _idempotencyKey = 'c1000000-0000-4000-8000-000000000012';
+const _decisionKey = 'c1000000-0000-4000-8000-000000000013';
 
 const _draft = YorksV1CompanyMaterialRequestDraft(
   id: _requestId,
@@ -171,7 +291,29 @@ final class _RecordingRpc implements YorksV1MaterialRequestRpcClient {
     return switch (functionName) {
       'v1_list_company_material_request_draft_options' => [_optionJson],
       'v1_company_material_request_approval_preflight' => _preflightJson,
+      'v1_search_company_material_request_candidates' => const [
+        {
+          'id': 'c1000000-0000-4000-8000-000000000099',
+          'source_kind': 'inventory',
+          'item_code': 'PPE-001',
+          'item_description': 'Safety helmet',
+          'brand_origin': '3M / USA',
+          'size': 'Adjustable',
+          'model': 'H-700',
+          'unit': 'Nos',
+        },
+      ],
       'v1_save_and_submit_company_material_request' => _requestJson,
+      'v1_list_company_material_request_work_inbox' => [_inboxJson],
+      'v1_company_material_request_projection' => {
+        ..._requestJson,
+        'record_version': 2,
+        'can_decide': true,
+        'decisions': const [],
+      },
+      'v1_decide_company_material_request' => _returnedRequestJson,
+      'v1_list_company_material_request_register' => [_registerJson],
+      'v1_withdraw_company_material_request_remainder' => _returnedRequestJson,
       _ => throw StateError('Unexpected RPC: $functionName'),
     };
   }
@@ -228,6 +370,7 @@ const _requestJson = <String, dynamic>{
   'delivery_collection_point': 'Workshop issue desk',
   'beneficiary_auth_user_id': _beneficiaryId,
   'beneficiary_display_name': 'Amina Hassan',
+  'submitted_at': '2026-09-18T09:00:00Z',
   'authorized_receiver_auth_user_id': _beneficiaryId,
   'authorized_receiver_display_name': 'Amina Hassan',
   'requester_display_name': 'Site Engineer',
@@ -243,6 +386,59 @@ const _requestJson = <String, dynamic>{
       'brand_origin': null,
       'requested_qty': '1',
       'unit': 'Nos',
+    },
+  ],
+};
+
+const _inboxJson = <String, dynamic>{
+  'id': _requestId,
+  'request_number': 'CMR-000001',
+  'record_version': 2,
+  'state': 'awaiting_company_approval',
+  'category_name': 'Safety and PPE',
+  'responsible_unit_name': 'Workshop',
+  'purpose': 'Replace worn safety jacket',
+  'requester_display_name': 'Site Engineer',
+  'beneficiary_display_name': 'Amina Hassan',
+  'submitted_at': '2026-09-18T09:30:00Z',
+  'line_count': 1,
+};
+
+const _registerJson = <String, dynamic>{
+  'row_id': _requestId,
+  'request_id': _requestId,
+  'request_number': 'CMR-000001',
+  'record_version': 7,
+  'state': 'closed',
+  'category_name': 'Safety and PPE',
+  'responsible_unit_name': 'Workshop',
+  'purpose': 'Replace worn safety jacket',
+  'requester_display_name': 'Site Engineer',
+  'beneficiary_display_name': 'Amina Hassan',
+  'submitted_at': '2026-09-18T09:00:00Z',
+  'updated_at': '2026-09-18T11:00:00Z',
+  'line_count': 1,
+  'approved_qty': '1.0000',
+  'arranged_qty': '1.0000',
+  'good_received_qty': '1.0000',
+  'handed_over_qty': '1.0000',
+  'latest_issue_note_number': 'CM-ISS-0000001',
+};
+
+final _returnedRequestJson = <String, dynamic>{
+  ..._requestJson,
+  'record_version': 3,
+  'state': 'returned_for_changes',
+  'can_decide': false,
+  'decisions': const [
+    {
+      'id': _decisionKey,
+      'decision': 'returned',
+      'reason': 'Confirm the size.',
+      'request_record_version': 2,
+      'decided_by_display_name': 'Nadia Khalid',
+      'decided_by_exact_role': 'project_engineer',
+      'decided_at': '2026-09-18T10:00:00Z',
     },
   ],
 };

@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -19,9 +23,155 @@ import 'package:material_ledger/shared/repositories/yorks_v1_audit_repository.da
 import 'package:material_ledger/shared/screens/activity_log_screen.dart';
 import 'package:material_ledger/shared/sync/connectivity_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:material_ledger/shared/services/yorks_v1_audit_export.dart';
 
 void main() {
+  setUpAll(() async {
+    final font = FontLoader('NexusSans')
+      ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    final arabic = FontLoader('NotoSansArabic')
+      ..addFont(rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'));
+    await font.load();
+    await arabic.load();
+    var cache = File(Platform.resolvedExecutable).parent;
+    while (!cache.path.endsWith('${Platform.pathSeparator}cache') &&
+        cache.parent.path != cache.path) {
+      cache = cache.parent;
+    }
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(
+        Future.value(
+          ByteData.sublistView(
+            await File(
+              '${cache.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+            ).readAsBytes(),
+          ),
+        ),
+      );
+    await icons.load();
+  });
+  test('CSV keeps spreadsheet formulas and multiline evidence as text', () {
+    for (final value in [
+      '=SUM(A1:A2)',
+      '+cmd',
+      '-1+2',
+      '@SUM(1)',
+      '  =1',
+      '\t=1',
+      '\r=1',
+    ]) {
+      expect(yorksV1AuditCsvCell(value), startsWith('"\''));
+    }
+    expect(yorksV1AuditCsvCell('A,"B"\nC'), '"A,""B""\nC"');
+    final csv = yorksV1AuditCsv(
+      _fixtureWorkspace(),
+      const YorksV1AuditFilter(search: 'MR001'),
+    );
+    expect(csv, contains('Event ID'));
+    expect(csv, contains('p_search'));
+    expect(csv, contains('UTC'));
+    expect(csv, contains('YRA313-MR001'));
+  });
+  test('denied refresh purges evidence and disables exports', () async {
+    final repository = _DeferredRepository();
+    final controller = YorksV1AuditController(repository);
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+    repository.completers.single.complete(_fixtureWorkspace());
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.state.canExport, isTrue);
+    final refresh = controller.refresh();
+    expect(controller.state.canExport, isFalse);
+    repository.completers.last.completeError(
+      const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized),
+    );
+    await refresh;
+    expect(controller.state.workspace, isNull);
+    expect(controller.state.loadedFilter, isNull);
+    expect(controller.state.canExport, isFalse);
+  });
+  test(
+    'failed filter keeps last successful scope separate and blocks export',
+    () async {
+      final repository = _DeferredRepository();
+      final controller = YorksV1AuditController(repository);
+      addTearDown(controller.dispose);
+      await Future<void>.delayed(Duration.zero);
+      repository.completers.single.complete(_fixtureWorkspace());
+      await Future<void>.delayed(Duration.zero);
+      final request = controller.setSearch('different');
+      repository.completers.last.completeError(
+        const YorksV1DomainException(YorksV1DomainErrorCode.offline),
+      );
+      await request;
+      expect(controller.state.workspace, isNotNull);
+      expect(controller.state.loadedFilter!.search, isEmpty);
+      expect(controller.state.filter.search, 'different');
+      expect(controller.state.canExport, isFalse);
+    },
+  );
+  for (final size in [const Size(1366, 768), const Size(360, 800)]) {
+    testWidgets('inspect event facts and history at ${size.width}', (
+      tester,
+    ) async {
+      await _pumpAuditShell(tester, size);
+      await tester.scrollUntilVisible(
+        find.text('Arrangement approved').first,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Arrangement approved').first),
+        alignment: .35,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Arrangement approved').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Event details'), findsOneWidget);
+      expect(find.text('Same-record history'), findsOneWidget);
+      expect(find.textContaining('(UTC)'), findsOneWidget);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/audit_details_${size.width.toInt()}.png',
+        ),
+      );
+      await tester.tap(find.byTooltip('Close').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Event details'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
   group('trusted Audit Workspace repository', () {
+    test(
+      'export rejects a truncated response and binds idempotency identity',
+      () async {
+        final json = _fixtureJson();
+        json['filtered_count'] = 2;
+        final rpc = _RecordingRpc(json);
+        final repository = YorksV1SupabaseAuditRepository(
+          featureFlags: const YorksV1FeatureFlags(foundation: true),
+          connectivity: DefaultConnectivity(),
+          rpcClient: rpc,
+        );
+        await expectLater(
+          repository.exportWorkspace(
+            const YorksV1AuditFilter(search: 'MR001'),
+            'export-1',
+          ),
+          throwsA(
+            isA<YorksV1DomainException>().having(
+              (e) => e.code,
+              'code',
+              YorksV1DomainErrorCode.unexpectedResponse,
+            ),
+          ),
+        );
+        expect(rpc.functionName, 'v1_export_audit_workspace');
+        expect(rpc.parameters!['p_id'], 'export-1');
+        expect((rpc.parameters!['p_filters'] as Map)['p_search'], 'MR001');
+      },
+    );
     test(
       'uses the trusted RPC and maps exact server actor attribution',
       () async {
@@ -42,7 +192,7 @@ void main() {
           ),
         );
 
-        expect(rpc.functionName, 'v1_get_audit_workspace');
+        expect(rpc.functionName, 'v1_get_audit_workspace_v2');
         expect(rpc.parameters?['p_search'], 'MR001');
         expect(rpc.parameters?['p_module'], 'material_requests');
         expect(rpc.parameters?['p_quick_filter'], 'approvals');
@@ -139,10 +289,84 @@ void main() {
           find.text('Arrangement approved', skipOffstage: false),
           findsWidgets,
         );
-        expect(find.text('12,480'), findsWidgets);
+        expect(find.textContaining('12,480'), findsWidgets);
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets(
+      'summary context and card labels remain fully visible at 1512px',
+      (tester) async {
+        await _pumpAuditShell(tester, const Size(1512, 781));
+
+        for (final key in [
+          'audit-summary-selected-scope',
+          'audit-summary-attribution-coverage',
+        ]) {
+          final text = find.descendant(
+            of: find.byKey(ValueKey(key)),
+            matching: find.byType(Text),
+          );
+          expect(text, findsOneWidget);
+          expect(
+            tester.renderObject<RenderParagraph>(text).didExceedMaxLines,
+            isFalse,
+          );
+        }
+
+        for (final label in [
+          'Matching events',
+          'Critical activities',
+          'Active actors',
+          'Records with activity',
+          'Flagged events',
+          'Attribution coverage',
+        ]) {
+          expect(
+            tester
+                .renderObject<RenderParagraph>(find.text(label))
+                .didExceedMaxLines,
+            isFalse,
+            reason: '$label should remain fully readable',
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'activity overview is collapsed, useful, and above the event feed',
+      (tester) async {
+        for (final size in const [Size(1512, 781), Size(360, 800)]) {
+          await _pumpAuditShell(tester, size);
+
+          final overview = find.byKey(
+            const PageStorageKey('audit-activity-overview'),
+          );
+          expect(overview, findsOneWidget);
+          expect(find.text('Top entities by activity'), findsNothing);
+          expect(
+            tester.getTopLeft(overview).dy,
+            lessThan(tester.getTopLeft(find.text('Recent activity feed')).dy),
+          );
+          expect(
+            find.text(
+              'Trends, modules, activity leaders and flagged events for the selected scope',
+            ),
+            findsOneWidget,
+          );
+
+          await tester.tap(overview);
+          await tester.pumpAndSettle();
+
+          expect(find.text('Top entities by activity'), findsOneWidget);
+          expect(find.text('Alerts & exceptions'), findsOneWidget);
+          expect(find.text('Activity trend'), findsOneWidget);
+          expect(find.text('Attribution coverage'), findsAtLeastNWidgets(1));
+          expect(tester.takeException(), isNull);
+        }
+      },
+    );
   });
 
   group('deterministic Audit Workspace visual evidence', () {
@@ -162,19 +386,59 @@ void main() {
       });
     }
   });
+  for (final locale in ['ar', 'ur']) {
+    testWidgets('RTL $locale supports filters and enlarged text', (
+      tester,
+    ) async {
+      await _pumpAuditShell(
+        tester,
+        const Size(390, 844),
+        locale: locale,
+        textScale: 1.4,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('goldens/r35/audit_workspace_${locale}_large.png'),
+      );
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -450),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('tablet supports details and filter controls', (tester) async {
+    await _pumpAuditShell(tester, const Size(820, 1180));
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    expect(find.text('Apply filters'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/audit_filters_tablet.png'),
+    );
+  });
 }
 
-Future<void> _pumpAuditShell(WidgetTester tester, Size size) async {
-  SharedPreferences.setMockInitialValues({});
+Future<void> _pumpAuditShell(
+  WidgetTester tester,
+  Size size, {
+  String locale = 'en',
+  double textScale = 1,
+}) async {
+  SharedPreferences.setMockInitialValues({'selected_language': locale});
   final preferences = await SharedPreferences.getInstance();
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   final router = GoRouter(
+    initialLocation: '/activity',
     routes: [
       GoRoute(
-        path: '/',
+        path: '/activity',
         builder: (_, _) =>
             const YorksV1WorkspaceShell(child: ActivityLogScreen()),
       ),
@@ -186,6 +450,7 @@ Future<void> _pumpAuditShell(WidgetTester tester, Size size) async {
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(preferences),
+        yorksV1AuditNowProvider.overrideWithValue(DateTime(2026, 9, 18)),
         yorksV1CurrentRoleProvider.overrideWithValue(YorksV1Role.admin),
         yorksV1WorkspaceStatusProvider.overrideWithValue(
           const YorksV1WorkspaceStatus(
@@ -196,7 +461,25 @@ Future<void> _pumpAuditShell(WidgetTester tester, Size size) async {
           _StaticRepository(_fixtureWorkspace()),
         ),
       ],
-      child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      child: MaterialApp.router(
+        theme: AppTheme.light,
+        routerConfig: router,
+        debugShowCheckedModeBanner: false,
+        locale: Locale(locale),
+        supportedLocales: const [
+          Locale('en'),
+          Locale('ar'),
+          Locale('ur'),
+          Locale('hi'),
+        ],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -229,6 +512,11 @@ class _RecordingRpc implements YorksV1AuditRpcClient {
 class _StaticRepository implements YorksV1AuditRepository {
   const _StaticRepository(this.workspace);
   final YorksV1AuditWorkspace workspace;
+  @override
+  Future<YorksV1AuditWorkspace> exportWorkspace(
+    YorksV1AuditFilter filter,
+    String id,
+  ) async => workspace;
 
   @override
   Future<YorksV1AuditWorkspace> getWorkspace(YorksV1AuditFilter filter) async =>
@@ -236,6 +524,11 @@ class _StaticRepository implements YorksV1AuditRepository {
 }
 
 class _DeferredRepository implements YorksV1AuditRepository {
+  @override
+  Future<YorksV1AuditWorkspace> exportWorkspace(
+    YorksV1AuditFilter filter,
+    String id,
+  ) => getWorkspace(filter);
   final requests = <YorksV1AuditFilter>[];
   final completers = <Completer<YorksV1AuditWorkspace>>[];
 

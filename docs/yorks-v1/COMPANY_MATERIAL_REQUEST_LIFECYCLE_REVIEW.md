@@ -1,6 +1,6 @@
 # Company Material Requests — lifecycle and control review
 
-Status: **proposed operating contract for discussion; not approved or implemented**
+Status: **approved operating contract; implemented locally behind the existing feature flag**
 
 Reviewed: 4 September 2026, against local `f37ee8a40515` plus the existing
 uncommitted work and the two screenshots supplied in this conversation.
@@ -28,9 +28,9 @@ Four connected records are needed:
    which responsible location accepted general supplies, and any later return
    or replacement links.
 
-All company behavior below is a recommendation requiring product approval.
-No existing project approval, quantity, receipt or closure rule is changed by
-this document.
+The company lifecycle below is the approved operating contract. It remains
+additive: no existing project approval, quantity, receipt or closure rule is
+changed by this document.
 
 ## 2. Evidence from the current product
 
@@ -382,13 +382,13 @@ and exceptions from real server facts. Acceptance targets for orphan actions,
 duplicate movements and false closure are zero. Operational time targets and
 PPE allowances require company policy; no numerical SLA is invented here.
 
-## 11. Decisions needed and audit limits
+## 11. Policy configuration and audit limits
 
-The recommended design is concrete enough to review. The business still needs
-to nominate company units, primary/alternate approvers, eligible requester and
-receiver populations, and the person-handover/attestation policy. Any allowance,
-replacement evidence or additional spending approval must be supplied rather
-than guessed. Authorizing this review does not publish those settings.
+Company units, primary/alternate approvers, eligible requester and receiver
+populations, and the person-handover/attestation policy are configured through
+protected authorization and routing records. Any allowance, replacement
+evidence or additional spending approval must still be supplied rather than
+guessed; an absent policy never becomes an invented limit.
 
 The earlier audit also records the mismatch between the supplied AGENTS
 arrangement-before-approval wording and the repository's later approval-first
@@ -396,9 +396,7 @@ revision, plus self-approval wording that needs reconciliation. This review
 uses the screenshot and current source to describe observed project behavior;
 it does not resolve conflicting authority by changing a project command.
 
-Reviewed current screenshots, source, mandatory product contracts, action
-intelligence, receipt authorization, worker identity and return controls. No
-application code, schema, feature flag, access assignment or production data
-was changed. Full Flutter/database/live-app gates were not rerun for this
-document-only review; the dirty application baseline remains unverified by
-this turn. Documentation links and whitespace were checked locally.
+The implementation retains the review's source and audit boundaries. The
+local T03-T05 slice is documented in
+[Company Material Requests T03-T05](COMPANY_MATERIAL_REQUEST_T03_T05_FULFILMENT.md);
+production configuration, access assignment and release remain separate gates.
