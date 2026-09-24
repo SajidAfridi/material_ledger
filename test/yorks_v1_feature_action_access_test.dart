@@ -7,6 +7,46 @@ import 'package:material_ledger/shared/providers/yorks_v1_permission_provider.da
 void main() {
   const projectId = '11111111-1111-4111-8111-111111111111';
 
+  test('unknown access keeps expected action visible while checking', () {
+    final access = yorksV1FeatureActionAccess(
+      const YorksV1CurrentPermissionSnapshotState(isInitialLoading: true),
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: true,
+    );
+
+    expect(access.isVisible, isTrue);
+    expect(access.canWrite, isFalse);
+    expect(access.availability, YorksV1ActionAvailability.checking);
+  });
+
+  test('transport failure is distinct from confirmed denial', () {
+    final access = yorksV1FeatureActionAccess(
+      const YorksV1CurrentPermissionSnapshotState(
+        error: YorksV1DomainException(
+          YorksV1DomainErrorCode.backendUnavailable,
+        ),
+      ),
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: true,
+    );
+    final denied = yorksV1FeatureActionAccess(
+      const YorksV1CurrentPermissionSnapshotState(
+        error: YorksV1DomainException(YorksV1DomainErrorCode.unauthorized),
+      ),
+      YorksV1CapabilityKeys.materialRequestsCreate,
+      legacyAllowed: true,
+    );
+
+    expect(access.isVisible, isTrue);
+    expect(access.canWrite, isFalse);
+    expect(
+      access.availability,
+      YorksV1ActionAvailability.temporarilyUnavailable,
+    );
+    expect(denied.availability, YorksV1ActionAvailability.denied);
+    expect(denied.isVisible, isFalse);
+  });
+
   test('enforced project grant enables the matching trusted action', () {
     final access = yorksV1FeatureActionAccess(
       _state(allowed: true),

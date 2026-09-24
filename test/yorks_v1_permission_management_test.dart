@@ -851,6 +851,28 @@ void main() {
 
   group('permission providers and controllers', () {
     test(
+      'retry rejoins revision signal before restoring write trust',
+      () async {
+        var joins = 0;
+        final controller = YorksV1CurrentPermissionSnapshotController(
+          enabled: true,
+          authUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          client: null,
+          repository: _FakePermissionRepository(currentSnapshot: _snapshot()),
+          revisionSignalSubscription:
+              ({required onSignal, required onUnavailable}) async =>
+                  ++joins > 1,
+        );
+        addTearDown(controller.dispose);
+        await controller.start();
+        expect(controller.state.isTrustedForWrites, isFalse);
+
+        await controller.retryVerification();
+        expect(joins, 2);
+        expect(controller.state.isTrustedForWrites, isTrue);
+      },
+    );
+    test(
       'unavailable revision signal keeps a readable snapshot and polls',
       () async {
         final repository = _FakePermissionRepository(

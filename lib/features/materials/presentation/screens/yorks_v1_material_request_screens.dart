@@ -178,6 +178,19 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
                   ),
           )
         : null;
+    final accessNotice = YorksV1ActionAvailabilityNotice(
+      access: createAccess,
+      language: language,
+      onRetry: () => ref
+          .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+          .retryVerification(),
+    );
+    final registerNotice = createAccess.isWritePaused
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [accessNotice, ?localDraftNotice],
+          )
+        : localDraftNotice;
     if (phase2Repository != null) {
       final body = SafeArea(
         top: false,
@@ -209,7 +222,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () {},
-          localDraftNotice: localDraftNotice,
+          localDraftNotice: registerNotice,
         ),
       );
       if (embedded) return body;
@@ -253,7 +266,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
               : null,
           onOpen: (request) => context.push(_materialRequestOpenPath(request)),
           onRefresh: () => ref.invalidate(yorksV1MaterialRequestListProvider),
-          localDraftNotice: localDraftNotice,
+          localDraftNotice: registerNotice,
         ),
       ),
     );
@@ -285,6 +298,7 @@ class _YorksMobileMaterialRequestsPage extends ConsumerStatefulWidget {
 
 class _YorksMobileMaterialRequestsPageState
     extends ConsumerState<_YorksMobileMaterialRequestsPage> {
+  bool _insightsRequested = false;
   _MobileMaterialRequestFilter _filter = _MobileMaterialRequestFilter.all;
   YorksV1MaterialRequestRegisterView _registerView =
       YorksV1MaterialRequestRegisterView.myWork;
@@ -334,7 +348,8 @@ class _YorksMobileMaterialRequestsPageState
 
   Future<void> _refreshRequests() async {
     final repository = ref.read(yorksV1MaterialRequestRepositoryProvider);
-    if (repository is YorksV1MaterialRequestOperationsRepository) {
+    if (_insightsRequested &&
+        repository is YorksV1MaterialRequestOperationsRepository) {
       ref.invalidate(
         yorksV1MaterialRequestOperationsDashboardProvider(widget.projectId),
       );
@@ -388,7 +403,9 @@ class _YorksMobileMaterialRequestsPageState
               .toList(growable: false);
     final repository = ref.watch(yorksV1MaterialRequestRepositoryProvider);
     final phase2 = repository is YorksV1MaterialRequestPhase2Repository;
-    final operations = repository is YorksV1MaterialRequestOperationsRepository
+    final operations =
+        _insightsRequested &&
+            repository is YorksV1MaterialRequestOperationsRepository
         ? ref.watch(
             yorksV1MaterialRequestOperationsDashboardProvider(widget.projectId),
           )
@@ -474,9 +491,24 @@ class _YorksMobileMaterialRequestsPageState
                       : summary?.valueOrNull?.totalCount,
                   page: _page,
                   canCreate: canCreate,
+                  createAccess: createAccess,
+                  onRetryAccess: () => ref
+                      .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+                      .retryVerification(),
                   canCreateCompany: companyRequestsEnabled,
                   localDrafts: savedDrafts,
-                  operationsDashboard: operations,
+                  operationsDashboard:
+                      operations ??
+                      (repository is YorksV1MaterialRequestOperationsRepository
+                          ? const AsyncLoading<
+                              YorksV1MaterialRequestOperationsDashboard
+                            >()
+                          : null),
+                  onOpenInsights: () {
+                    if (!_insightsRequested) {
+                      setState(() => _insightsRequested = true);
+                    }
+                  },
                   onRetryOperations: operations == null
                       ? null
                       : () => ref.invalidate(
@@ -565,9 +597,12 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
     this.totalCount,
     this.page = 0,
     required this.canCreate,
+    required this.createAccess,
+    required this.onRetryAccess,
     required this.canCreateCompany,
     required this.localDrafts,
     this.operationsDashboard,
+    this.onOpenInsights,
     this.onRetryOperations,
     required this.registerView,
     required this.onRegisterViewChanged,
@@ -590,10 +625,13 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
   final int? totalCount;
   final int page;
   final bool canCreate;
+  final YorksV1FeatureActionAccess createAccess;
+  final VoidCallback onRetryAccess;
   final bool canCreateCompany;
   final List<YorksV1MaterialRequestDraft> localDrafts;
   final AsyncValue<YorksV1MaterialRequestOperationsDashboard>?
   operationsDashboard;
+  final VoidCallback? onOpenInsights;
   final VoidCallback? onRetryOperations;
   final YorksV1MaterialRequestRegisterView registerView;
   final ValueChanged<YorksV1MaterialRequestRegisterView> onRegisterViewChanged;
@@ -708,6 +746,15 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
                   ),
               ],
             ),
+          if (createAccess.isWritePaused)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: YorksV1ActionAvailabilityNotice(
+                access: createAccess,
+                language: language,
+                onRetry: onRetryAccess,
+              ),
+            ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
@@ -817,6 +864,7 @@ class _MobileMaterialRequestRegister extends StatelessWidget {
               loading: operationsDashboard!.isLoading,
               failed: operationsDashboard!.hasError,
               onRetry: onRetryOperations ?? onRefresh,
+              onOpen: onOpenInsights,
             ),
           ],
         ],
@@ -2896,7 +2944,7 @@ class _DraftForm extends ConsumerWidget {
     final isBusy =
         draft.hasPendingSave ||
         draft.pendingSubmissionApproval != null ||
-        !editAccess.canWrite ||
+        !editAccess.isVisible ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.saving ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.checkingSave ||
         state.status == YorksV1MaterialRequestDraftSyncStatus.submitting;
@@ -2926,7 +2974,12 @@ class _DraftForm extends ConsumerWidget {
           projects: projects,
           scopes: scopes,
           allowedTimings: allowedTimings,
-          canEdit: editAccess.canWrite,
+          canEdit: editAccess.isVisible,
+          canSave: editAccess.canWrite,
+          editAccess: editAccess,
+          onRetryAccess: () => ref
+              .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+              .retryVerification(),
           canSubmit:
               submitAccess.canWrite &&
               !draft.hasPendingSave &&
@@ -2979,7 +3032,7 @@ class _DraftForm extends ConsumerWidget {
             ? _TabletMrDraftActions(
                 language: language,
                 onCancel: () => context.pop(),
-                onSave: isBusy
+                onSave: isBusy || !editAccess.canWrite
                     ? null
                     : () => _save(context, ref, controller, draft),
                 onSubmit: canAttemptSubmit
@@ -3008,7 +3061,7 @@ class _DraftForm extends ConsumerWidget {
               final approve = canAttemptSubmit && canOfferSubmitAndApprove
                   ? () => _approve(context, ref, controller)
                   : null;
-              final save = isBusy
+              final save = isBusy || !editAccess.canWrite
                   ? null
                   : () => _save(context, ref, controller, draft);
               final requestNumber = _previewRequestNumber(selectedProject);
@@ -3118,6 +3171,13 @@ class _DraftForm extends ConsumerWidget {
                     )
                   : null;
               final notices = [
+                YorksV1ActionAvailabilityNotice(
+                  access: editAccess,
+                  language: language,
+                  onRetry: () => ref
+                      .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
+                      .retryVerification(),
+                ),
                 if (state.status ==
                     YorksV1MaterialRequestDraftSyncStatus.savedToAccount)
                   _InlineMessage(
@@ -3944,6 +4004,9 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
     required this.scopes,
     required this.allowedTimings,
     required this.canEdit,
+    required this.canSave,
+    required this.editAccess,
+    required this.onRetryAccess,
     required this.canSubmit,
     required this.canSubmitAndApprove,
     required this.onSave,
@@ -3959,6 +4022,9 @@ class _YorksMobileMaterialRequestDraftFlow extends ConsumerStatefulWidget {
   final AsyncValue<List<YorksV1MaterialRequestScopeOption>> scopes;
   final List<YorksV1MaterialRequestTiming> allowedTimings;
   final bool canEdit;
+  final bool canSave;
+  final YorksV1FeatureActionAccess editAccess;
+  final VoidCallback onRetryAccess;
   final bool canSubmit;
   final bool canSubmitAndApprove;
   final Future<void> Function() onSave;
@@ -4066,6 +4132,17 @@ class _YorksMobileMaterialRequestDraftFlowState
                   onPressed: _back,
                 ),
               ),
+              if (widget.editAccess.isWritePaused)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
+                  child: YorksV1ActionAvailabilityNotice(
+                    access: widget.editAccess,
+                    language: language,
+                    onRetry: widget.onRetryAccess,
+                  ),
+                ),
               if (_draft.hasPendingSave)
                 YorksV1SubmissionRecoveryPanel(
                   save: true,
@@ -4627,7 +4704,7 @@ class _YorksMobileMaterialRequestDraftFlowState
           secondaryLabel: YorksV1MaterialRequestStrings.saveDraft.active(
             _language,
           ),
-          onSecondary: _busy ? null : widget.onSave,
+          onSecondary: _busy || !widget.canSave ? null : widget.onSave,
           primaryLabel: YorksV1MaterialRequestStrings.submitForApproval.active(
             _language,
           ),

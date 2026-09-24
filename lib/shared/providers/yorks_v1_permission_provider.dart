@@ -376,6 +376,35 @@ class YorksV1CurrentPermissionSnapshotController
   bool _observingLifecycle = false;
   DateTime? _leftForegroundAt;
   bool _revisionSignalHealthy = false;
+  Future<void>? _retryInFlight;
+
+  Future<void> retryVerification() {
+    if (_disposed || !_enabled) return Future<void>.value();
+    return _retryInFlight ??= _retryVerificationOnce().whenComplete(() {
+      _retryInFlight = null;
+    });
+  }
+
+  Future<void> _retryVerificationOnce() async {
+    if (!_revisionSignalHealthy) {
+      await _authSubscription?.cancel();
+      _authSubscription = null;
+      final client = _client;
+      if (client != null) {
+        for (final channel in _channels) {
+          await client.removeChannel(channel);
+        }
+      }
+      _channels.clear();
+      _initialJoin = null;
+      try {
+        _revisionSignalHealthy = await _subscribeToRevisionSignal();
+      } catch (error) {
+        _markRevisionSignalUnavailable(error);
+      }
+    }
+    if (!_disposed) await refresh(authorityMayHaveChanged: true);
+  }
 
   Future<void> start() async {
     if (!_enabled || _disposed) return;

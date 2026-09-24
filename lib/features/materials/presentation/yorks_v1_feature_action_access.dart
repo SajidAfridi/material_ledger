@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/constants.dart';
 import '../../../shared/models/app_language.dart';
+import '../../../shared/models/yorks_v1_domain_error.dart';
 import '../../../shared/models/yorks_v1_permission_management.dart';
 import '../../../shared/models/yorks_v1_permission_strings.dart';
 import '../../../shared/providers/yorks_v1_permission_provider.dart';
@@ -78,21 +79,81 @@ class YorksV1FeatureActionAccess {
     required this.isVisible,
     required this.canWrite,
     required this.authorizationMode,
+    required this.availability,
   });
 
   const YorksV1FeatureActionAccess.denied()
     : isVisible = false,
       canWrite = false,
-      authorizationMode = null;
+      authorizationMode = null,
+      availability = YorksV1ActionAvailability.denied;
 
   final bool isVisible;
   final bool canWrite;
   final YorksV1PermissionCapabilityAuthorizationMode? authorizationMode;
+  final YorksV1ActionAvailability availability;
 
   /// A confirmed allow remains usable during a routine background refresh.
   /// Writes pause only when the revision channel is unhealthy or an actual
   /// authority change has made the retained snapshot stale.
   bool get isWritePaused => isVisible && !canWrite;
+}
+
+/// Keeps the access check visible beside a disabled action, without implying
+/// that a transport failure was an authoritative denial.
+class YorksV1ActionAvailabilityNotice extends StatelessWidget {
+  const YorksV1ActionAvailabilityNotice({
+    super.key,
+    required this.access,
+    required this.language,
+    required this.onRetry,
+  });
+
+  final YorksV1FeatureActionAccess access;
+  final AppLanguage language;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!access.isWritePaused) return const SizedBox.shrink();
+    final checking = access.availability == YorksV1ActionAvailability.checking;
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        children: [
+          Icon(
+            checking ? Icons.hourglass_top_rounded : Icons.cloud_off_outlined,
+            color: AppColors.muted,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              YorksV1PermissionStrings.text(
+                language,
+                checking ? 'action_checking' : 'action_unavailable',
+              ),
+              style: AppTypography.bodySmall,
+            ),
+          ),
+          if (!checking)
+            TextButton(
+              onPressed: onRetry,
+              child: Text(
+                YorksV1PermissionStrings.text(language, 'action_retry'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Presentation state only. A command still rechecks authority on the server.
+enum YorksV1ActionAvailability {
+  checking,
+  allowed,
+  denied,
+  temporarilyUnavailable,
 }
 
 YorksV1FeatureActionAccess yorksV1FeatureActionAccess(
@@ -104,8 +165,24 @@ YorksV1FeatureActionAccess yorksV1FeatureActionAccess(
 }) {
   final snapshot = state.snapshot;
   final access = snapshot?.capability(capabilityKey);
-  if (snapshot == null ||
-      !snapshot.user.isActive ||
+  if (snapshot == null) {
+    final explicitDenial =
+        state.domainErrorCode == YorksV1DomainErrorCode.unauthorized ||
+        state.domainErrorCode == YorksV1DomainErrorCode.unauthenticated ||
+        state.domainErrorCode == YorksV1DomainErrorCode.featureDisabled;
+    if (explicitDenial || !legacyAllowed) {
+      return const YorksV1FeatureActionAccess.denied();
+    }
+    return YorksV1FeatureActionAccess(
+      isVisible: true,
+      canWrite: false,
+      authorizationMode: null,
+      availability: state.error == null
+          ? YorksV1ActionAvailability.checking
+          : YorksV1ActionAvailability.temporarilyUnavailable,
+    );
+  }
+  if (!snapshot.user.isActive ||
       access == null ||
       !access.catalog.isOperational) {
     return const YorksV1FeatureActionAccess.denied();
@@ -134,6 +211,13 @@ YorksV1FeatureActionAccess yorksV1FeatureActionAccess(
     // the invalidation channel is unhealthy or the snapshot is stale.
     canWrite: allowed && state.isTrustedForWrites,
     authorizationMode: access.authorizationMode,
+    availability: !allowed
+        ? YorksV1ActionAvailability.denied
+        : state.isTrustedForWrites
+        ? YorksV1ActionAvailability.allowed
+        : state.error == null && state.isRefreshing
+        ? YorksV1ActionAvailability.checking
+        : YorksV1ActionAvailability.temporarilyUnavailable,
   );
 }
 

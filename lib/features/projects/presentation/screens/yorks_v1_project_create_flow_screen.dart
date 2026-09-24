@@ -270,7 +270,6 @@ class _YorksV1ProjectCreateFlowScreenState
 
     final saving =
         _isCreating ||
-        !permission.canWrite ||
         ((commandState.operation ==
                     YorksV1ProjectCommandOperation.createProject ||
                 commandState.operation ==
@@ -307,7 +306,7 @@ class _YorksV1ProjectCreateFlowScreenState
               onBack: _back,
               onContinue: _continue,
               onSkip: _skipAttachments,
-              onCreate: _createProject,
+              onCreate: permission.canWrite ? _createProject : null,
               primaryLabel: _isEditing
                   ? YorksV1ProjectStrings.updateProject
                   : YorksV1ProjectStrings.createAndView,
@@ -334,6 +333,16 @@ class _YorksV1ProjectCreateFlowScreenState
                           children: [
                             _R35CreationStageHeader(stage: draft.currentStage),
                             const SizedBox(height: 4),
+                            YorksV1ActionAvailabilityNotice(
+                              access: permission,
+                              language: language,
+                              onRetry: () => ref
+                                  .read(
+                                    yorksV1CurrentPermissionSnapshotProvider
+                                        .notifier,
+                                  )
+                                  .retryVerification(),
+                            ),
                             content,
                           ],
                         ),
@@ -406,6 +415,15 @@ class _YorksV1ProjectCreateFlowScreenState
                               ),
                             ),
                         ],
+                      ),
+                      YorksV1ActionAvailabilityNotice(
+                        access: permission,
+                        language: language,
+                        onRetry: () => ref
+                            .read(
+                              yorksV1CurrentPermissionSnapshotProvider.notifier,
+                            )
+                            .retryVerification(),
                       ),
                       const SizedBox(height: 19),
                       _R35ProjectCreationFrame(
@@ -4205,7 +4223,7 @@ class _StageActions extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onContinue;
   final VoidCallback onSkip;
-  final VoidCallback onCreate;
+  final VoidCallback? onCreate;
   final TranslatableString primaryLabel;
 
   @override

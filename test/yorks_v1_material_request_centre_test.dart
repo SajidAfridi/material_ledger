@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -533,6 +534,142 @@ void main() {
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('historical insights load only when opened', (tester) async {
+    await _setViewport(tester, const Size(1280, 1000));
+    var insightsLoads = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: const [],
+            language: AppLanguage.english,
+            canCreate: false,
+            onCreate: null,
+            onOpen: (_) {},
+            onRefresh: () {},
+            summaryPageLoader: (query) async =>
+                YorksV1MaterialRequestSummaryPage(
+                  items: [],
+                  totalCount: 0,
+                  limit: 15,
+                  offset: 0,
+                  hasMore: false,
+                  metrics: YorksV1MaterialRequestSummaryMetrics(
+                    total: 0,
+                    open: 0,
+                    inProgress: 0,
+                    dispatched: 0,
+                    received: 0,
+                    closed: 0,
+                  ),
+                ),
+            operationsDashboardLoader: (_) async {
+              insightsLoads++;
+              throw StateError('test dashboard unavailable');
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(insightsLoads, 0);
+    await tester.tap(
+      find.byKey(const ValueKey('material-request-operational-insights')),
+    );
+    await tester.pumpAndSettle();
+    expect(insightsLoads, 1);
+  });
+
+  testWidgets('overlapping register changes keep only the latest page', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(1280, 1000));
+    final first = Completer<YorksV1MaterialRequestSummaryPage>();
+    final searches = <String>[];
+    var active = 0;
+    var peak = 0;
+    Future<YorksV1MaterialRequestSummaryPage> load(
+      YorksV1MaterialRequestSummaryQuery query,
+    ) async {
+      searches.add(query.search ?? '');
+      active++;
+      if (active > peak) peak = active;
+      try {
+        if (searches.length == 1) return await first.future;
+        return YorksV1MaterialRequestSummaryPage(
+          items: [_summary(index: 2, updatedAt: DateTime.utc(2026, 8, 21))],
+          totalCount: 1,
+          limit: 15,
+          offset: 0,
+          hasMore: false,
+          metrics: const YorksV1MaterialRequestSummaryMetrics(
+            total: 1,
+            open: 1,
+            inProgress: 0,
+            dispatched: 0,
+            received: 0,
+            closed: 0,
+          ),
+        );
+      } finally {
+        active--;
+      }
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+          body: YorksV1MaterialRequestCentre(
+            requests: const [],
+            language: AppLanguage.english,
+            canCreate: false,
+            onCreate: null,
+            onOpen: (_) {},
+            onRefresh: () {},
+            summaryPageLoader: load,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('material-request-centre-search')),
+      'latest',
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(searches.length, 1);
+    first.complete(
+      YorksV1MaterialRequestSummaryPage(
+        items: [_summary(index: 1, updatedAt: DateTime.utc(2026, 8, 21))],
+        totalCount: 1,
+        limit: 15,
+        offset: 0,
+        hasMore: false,
+        metrics: const YorksV1MaterialRequestSummaryMetrics(
+          total: 1,
+          open: 1,
+          inProgress: 0,
+          dispatched: 0,
+          received: 0,
+          closed: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(searches, ['', 'latest']);
+    expect(peak, 1);
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('material-request-row-server-summary-1')),
+      findsNothing,
+    );
   });
 
   testWidgets('operational insights remain readable at mobile width', (

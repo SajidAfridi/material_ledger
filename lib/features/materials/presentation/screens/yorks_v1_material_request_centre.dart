@@ -96,9 +96,15 @@ class _YorksV1MaterialRequestCentreState
   Object? _serverError;
   bool _serverLoading = false;
   Timer? _serverSearchDebounce;
+  Future<void>? _serverLoadInFlight;
+  bool _serverReloadQueued = false;
+  DateTime _dateRangeAnchor = DateTime.now().toUtc();
   YorksV1MaterialRequestOperationsDashboard? _operationsDashboard;
   Object? _operationsError;
   bool _operationsLoading = false;
+  bool _insightsRequested = false;
+  Future<void>? _operationsLoadInFlight;
+  int _operationsGeneration = 0;
   String? _selectedRequestId;
 
   @override
@@ -107,23 +113,21 @@ class _YorksV1MaterialRequestCentreState
     if (widget.summaryPageLoader != null) {
       unawaited(_loadServerPage());
     }
-    if (widget.operationsDashboardLoader != null) {
-      unawaited(_loadOperationsDashboard());
-    }
   }
 
   @override
   void didUpdateWidget(covariant YorksV1MaterialRequestCentre oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.summaryPageLoader != widget.summaryPageLoader ||
+    if ((oldWidget.summaryPageLoader == null) !=
+            (widget.summaryPageLoader == null) ||
         oldWidget.fixedProjectId != widget.fixedProjectId ||
         oldWidget.refreshRevision != widget.refreshRevision) {
       unawaited(_loadServerPage());
     }
-    if (oldWidget.operationsDashboardLoader !=
-            widget.operationsDashboardLoader ||
-        oldWidget.fixedProjectId != widget.fixedProjectId ||
-        oldWidget.refreshRevision != widget.refreshRevision) {
+    if (_insightsRequested &&
+        oldWidget.fixedProjectId != widget.fixedProjectId) {
+      _operationsGeneration++;
+      _operationsDashboard = null;
       unawaited(_loadOperationsDashboard());
     }
   }
@@ -136,9 +140,11 @@ class _YorksV1MaterialRequestCentreState
   }
 
   void _update(VoidCallback update, {bool search = false}) {
+    final oldDateRange = _dateRange;
     setState(() {
       update();
       _page = 0;
+      if (oldDateRange != _dateRange) _dateRangeAnchor = DateTime.now().toUtc();
     });
     if (widget.summaryPageLoader == null) return;
     _serverSearchDebounce?.cancel();
@@ -155,10 +161,12 @@ class _YorksV1MaterialRequestCentreState
   YorksV1MaterialRequestSummaryQuery get _serverQuery {
     final cutoff = switch (_dateRange) {
       _MaterialRequestCentreDateRange.allTime => null,
-      _MaterialRequestCentreDateRange.sevenDays =>
-        DateTime.now().toUtc().subtract(const Duration(days: 7)),
-      _MaterialRequestCentreDateRange.thirtyDays =>
-        DateTime.now().toUtc().subtract(const Duration(days: 30)),
+      _MaterialRequestCentreDateRange.sevenDays => _dateRangeAnchor.subtract(
+        const Duration(days: 7),
+      ),
+      _MaterialRequestCentreDateRange.thirtyDays => _dateRangeAnchor.subtract(
+        const Duration(days: 30),
+      ),
     };
     return YorksV1MaterialRequestSummaryQuery(
       projectId: widget.fixedProjectId?.trim().isNotEmpty == true
@@ -188,6 +196,27 @@ class _YorksV1MaterialRequestCentreState
   }
 
   Future<void> _loadServerPage() async {
+    if (_serverLoadInFlight != null) {
+      _serverReloadQueued = true;
+      return _serverLoadInFlight;
+    }
+    final operation = _drainServerPages();
+    _serverLoadInFlight = operation;
+    try {
+      await operation;
+    } finally {
+      _serverLoadInFlight = null;
+    }
+  }
+
+  Future<void> _drainServerPages() async {
+    do {
+      _serverReloadQueued = false;
+      await _loadServerPageOnce();
+    } while (mounted && _serverReloadQueued);
+  }
+
+  Future<void> _loadServerPageOnce() async {
     final loader = widget.summaryPageLoader;
     if (loader == null || !mounted) return;
     final query = _serverQuery;
@@ -203,6 +232,7 @@ class _YorksV1MaterialRequestCentreState
         var pagesLoaded = 1;
         while (page.hasMore && pagesLoaded < 100) {
           page = await loader(query.copyWith(offset: nextOffset));
+          if (!mounted || _serverReloadQueued || query != _serverQuery) return;
           items.addAll(page.items);
           nextOffset += page.items.length;
           pagesLoaded++;
@@ -217,13 +247,13 @@ class _YorksV1MaterialRequestCentreState
           metrics: page.metrics,
         );
       }
-      if (!mounted || query != _serverQuery) return;
+      if (!mounted || _serverReloadQueued || query != _serverQuery) return;
       setState(() {
         _serverPage = page;
         _serverLoading = false;
       });
     } catch (error) {
-      if (!mounted || query != _serverQuery) return;
+      if (!mounted || _serverReloadQueued || query != _serverQuery) return;
       setState(() {
         _serverError = error;
         _serverLoading = false;
@@ -234,19 +264,44 @@ class _YorksV1MaterialRequestCentreState
   Future<void> _loadOperationsDashboard() async {
     final loader = widget.operationsDashboardLoader;
     if (loader == null || !mounted) return;
+    _insightsRequested = true;
+    if (_operationsLoadInFlight != null) return _operationsLoadInFlight;
+    final generation = ++_operationsGeneration;
+    final projectId = widget.fixedProjectId;
+    final operation = _loadOperationsDashboardOnce(
+      loader,
+      projectId,
+      generation,
+    );
+    _operationsLoadInFlight = operation;
+    try {
+      await operation;
+    } finally {
+      _operationsLoadInFlight = null;
+      if (mounted && generation != _operationsGeneration) {
+        unawaited(_loadOperationsDashboard());
+      }
+    }
+  }
+
+  Future<void> _loadOperationsDashboardOnce(
+    Future<YorksV1MaterialRequestOperationsDashboard> Function(String?) loader,
+    String? projectId,
+    int generation,
+  ) async {
     setState(() {
       _operationsLoading = true;
       _operationsError = null;
     });
     try {
-      final dashboard = await loader(widget.fixedProjectId);
-      if (!mounted) return;
+      final dashboard = await loader(projectId);
+      if (!mounted || generation != _operationsGeneration) return;
       setState(() {
         _operationsDashboard = dashboard;
         _operationsLoading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _operationsGeneration) return;
       setState(() {
         _operationsError = error;
         _operationsLoading = false;
@@ -349,6 +404,9 @@ class _YorksV1MaterialRequestCentreState
               loading: _operationsLoading,
               failed: _operationsError != null,
               onRetry: () => unawaited(_loadOperationsDashboard()),
+              onOpen: () {
+                if (!_insightsRequested) unawaited(_loadOperationsDashboard());
+              },
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
@@ -630,6 +688,7 @@ class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
     required this.loading,
     required this.failed,
     required this.onRetry,
+    this.onOpen,
   });
 
   final AppLanguage language;
@@ -637,6 +696,7 @@ class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
   final bool loading;
   final bool failed;
   final VoidCallback onRetry;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -647,6 +707,9 @@ class YorksV1MaterialRequestOperationalInsightsPanel extends StatelessWidget {
         type: MaterialType.transparency,
         child: ExpansionTile(
           key: const ValueKey('material-request-operational-insights'),
+          onExpansionChanged: (expanded) {
+            if (expanded) onOpen?.call();
+          },
           leading: const Icon(Icons.insights_outlined, color: AppColors.blue),
           title: YorksV1ActiveText(
             copy: YorksV1MaterialRequestStrings.insights,

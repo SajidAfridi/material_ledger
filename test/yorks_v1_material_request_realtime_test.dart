@@ -152,6 +152,28 @@ void main() {
     );
 
     test(
+      'backgrounding suspends the fallback until foreground return',
+      () async {
+        final notifier = YorksV1MaterialRequestRealtimeNotifier(
+          enabled: true,
+          authUserId: '10000000-0000-4000-8000-000000000001',
+          client: null,
+          signalSubscription: ({required onSignal, required onUnavailable}) =>
+              Future.value(false),
+          fallbackInterval: const Duration(milliseconds: 5),
+        );
+        addTearDown(notifier.dispose);
+        await notifier.start();
+        notifier.didChangeAppLifecycleState(AppLifecycleState.paused);
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        expect(notifier.state, 0);
+        notifier.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        await Future<void>.delayed(Duration.zero);
+        expect(notifier.state, 1);
+      },
+    );
+
+    test(
       'an offline device does not poll until connectivity returns',
       () async {
         final connectivity = DefaultConnectivity(online: false);
