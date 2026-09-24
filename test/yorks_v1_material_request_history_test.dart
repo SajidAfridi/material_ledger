@@ -72,18 +72,21 @@ void main() {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            home: Scaffold(
-              body: Column(
-                children: [
-                  TextField(controller: input),
-                  YorksV1RequestInformationToolbar(
-                    request: _historyRequest,
-                    language: AppLanguage.english,
-                  ),
-                ],
+          child: RepaintBoundary(
+            key: const ValueKey('information-test-surface'),
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              home: Scaffold(
+                body: Column(
+                  children: [
+                    TextField(controller: input),
+                    YorksV1RequestInformationToolbar(
+                      request: _historyRequest,
+                      language: AppLanguage.english,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -119,7 +122,7 @@ void main() {
         expect(tester.takeException(), isNull);
         if (width == 1440 || width == 360) {
           await expectLater(
-            find.byType(MaterialApp),
+            find.byKey(const ValueKey('information-test-surface')),
             matchesGoldenFile(
               'goldens/r35/mr_flow_information_${width.toInt()}.png',
             ),
