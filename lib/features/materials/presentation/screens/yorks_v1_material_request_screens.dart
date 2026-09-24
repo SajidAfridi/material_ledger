@@ -7664,27 +7664,10 @@ class _RequestFieldBlock extends StatelessWidget {
         ),
       ),
       const SizedBox(height: AppSpacing.xs),
-      Theme(
-        data: Theme.of(context).copyWith(
-          textTheme: Theme.of(
-            context,
-          ).textTheme.copyWith(titleMedium: AppTypography.bodyLarge),
-          inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
-            isDense: true,
-            constraints: const BoxConstraints(minHeight: 48),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.md,
-            ),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 48,
-              minHeight: 48,
-            ),
-            suffixIconConstraints: const BoxConstraints(
-              minWidth: 48,
-              minHeight: 48,
-            ),
-          ),
+      InputDecorationTheme(
+        data: Theme.of(context).inputDecorationTheme.copyWith(
+          constraints: const BoxConstraints(minHeight: 48),
+          contentPadding: const EdgeInsets.all(AppSpacing.md),
         ),
         child: child,
       ),
