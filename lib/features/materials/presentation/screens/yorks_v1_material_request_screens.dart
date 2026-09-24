@@ -12564,8 +12564,9 @@ class _RequestApprovalActionsState
         );
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
