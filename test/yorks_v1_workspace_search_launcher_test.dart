@@ -51,6 +51,50 @@ void main() {
       expect(presentations, 2);
     },
   );
+  testWidgets('Search can reopen after its originating workspace is disposed', (
+    tester,
+  ) async {
+    late BuildContext context;
+    Widget workspace(Key key) => MaterialApp(
+      key: key,
+      home: Scaffold(
+        body: Builder(
+          builder: (value) {
+            context = value;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    final pending = Completer<void>();
+    var count = 0;
+    final launcher = YorksV1WorkspaceSearchLauncher(
+      load: () async {},
+      present: (_, targets, language, role) {
+        count++;
+        return count == 1 ? pending.future : Future.value();
+      },
+    );
+    await tester.pumpWidget(workspace(const ValueKey('first')));
+    final previous = launcher.open(
+      context,
+      targets: [],
+      language: AppLanguage.english,
+      role: null,
+    );
+    await tester.pump();
+    await tester.pumpWidget(workspace(const ValueKey('second')));
+    await launcher.open(
+      context,
+      targets: [],
+      language: AppLanguage.english,
+      role: null,
+    );
+    expect(count, 2);
+    pending.complete();
+    await previous;
+  });
+
   testWidgets(
     'Failed search chunk is recoverable without navigation or raw errors',
     (tester) async {

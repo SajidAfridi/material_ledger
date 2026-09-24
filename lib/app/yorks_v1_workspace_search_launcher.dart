@@ -57,7 +57,8 @@ class YorksV1WorkspaceSearchLauncher {
                ));
   final Future<void> Function() _load;
   final WorkspaceSearchPresentation _present;
-  bool _active = false;
+  BuildContext? _activeContext;
+  Object? _activeInvocation;
 
   Future<void> open(
     BuildContext context, {
@@ -65,8 +66,10 @@ class YorksV1WorkspaceSearchLauncher {
     required AppLanguage language,
     required YorksV1Role? role,
   }) async {
-    if (_active) return;
-    _active = true;
+    if (_activeContext?.mounted == true) return;
+    final invocation = Object();
+    _activeInvocation = invocation;
+    _activeContext = context;
     try {
       try {
         await _load();
@@ -90,7 +93,10 @@ class YorksV1WorkspaceSearchLauncher {
       if (!context.mounted) return;
       await _present(context, targets, language, role);
     } finally {
-      _active = false;
+      if (identical(_activeInvocation, invocation)) {
+        _activeContext = null;
+        _activeInvocation = null;
+      }
     }
   }
 }
