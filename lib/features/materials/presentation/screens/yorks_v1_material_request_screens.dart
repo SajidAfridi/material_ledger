@@ -3319,21 +3319,7 @@ class _DraftForm extends ConsumerWidget {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    form,
-                                    const SizedBox(height: AppSpacing.xxxl),
-                                    items,
-                                    for (final notice in notices) ...[
-                                      const SizedBox(height: AppSpacing.lg),
-                                      notice,
-                                    ],
-                                  ],
-                                ),
-                              ),
+                              Expanded(child: form),
                               if (inspectorExpanded) ...[
                                 const SizedBox(width: AppSpacing.lg),
                                 SizedBox(
@@ -3379,8 +3365,16 @@ class _DraftForm extends ConsumerWidget {
                                 ),
                               ],
                             ],
-                          )
-                        else ...[
+                          ),
+                        if (desktop) ...[
+                          const SizedBox(height: AppSpacing.xxxl),
+                          items,
+                          for (final notice in notices) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            notice,
+                          ],
+                        ],
+                        if (!desktop) ...[
                           form,
                           const SizedBox(height: AppSpacing.lg),
                           Align(
@@ -7536,7 +7530,8 @@ class _RequestFormFields extends StatelessWidget {
         child: _ScheduledDateField(draft: draft, controller: controller),
       );
       final contentWidth = math.min(constraints.maxWidth, 1320.0);
-      final wide = contentWidth >= 820;
+      final wide = contentWidth >= 620;
+      final fourColumns = contentWidth >= 1160;
       return Align(
         alignment: AlignmentDirectional.topStart,
         child: SizedBox(
@@ -7544,40 +7539,55 @@ class _RequestFormFields extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              title,
-              const SizedBox(height: AppSpacing.xl),
-              if (wide) ...[
+              if (fourColumns) ...[
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 6, child: project),
-                    const SizedBox(width: AppSpacing.xl),
-                    Expanded(flex: 5, child: scope),
+                    Expanded(child: title),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: project),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: scope),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: timing),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                if (draft.timing == YorksV1MaterialRequestTiming.scheduled) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  scheduledDate,
+                ],
+              ] else if (wide) ...[
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 6, child: timing),
-                    const SizedBox(width: AppSpacing.xl),
-                    Expanded(
-                      flex: 5,
-                      child:
-                          draft.timing == YorksV1MaterialRequestTiming.scheduled
-                          ? scheduledDate
-                          : const SizedBox.shrink(),
-                    ),
+                    Expanded(child: title),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: project),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: scope),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(child: timing),
+                  ],
+                ),
+                if (draft.timing == YorksV1MaterialRequestTiming.scheduled) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  scheduledDate,
+                ],
               ] else ...[
+                title,
+                const SizedBox(height: AppSpacing.lg),
                 project,
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.lg),
                 scope,
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.lg),
                 timing,
                 if (draft.timing == YorksV1MaterialRequestTiming.scheduled) ...[
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.lg),
                   scheduledDate,
                 ],
               ],
@@ -9175,9 +9185,7 @@ class _RequestLinesEditor extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
         ],
         LayoutBuilder(
-          builder: (context, constraints) =>
-              MediaQuery.sizeOf(context).width >=
-                  AppSpacing.yorksV1DesktopBreakpoint
+          builder: (context, constraints) => constraints.maxWidth >= 1120
               ? _DesktopLinesTable(
                   lines: lines,
                   controller: controller,
@@ -9188,21 +9196,40 @@ class _RequestLinesEditor extends ConsumerWidget {
               : Column(
                   children: [
                     for (final line in lines) ...[
-                      _FocusedLineEditor(
-                        line: line,
-                        controller: controller,
-                        enabled: enabled,
-                        onSearchInventory: projectId == null || scopeId == null
-                            ? null
-                            : () => _chooseInventorySuggestion(
-                                context,
-                                ref,
-                                projectId: projectId!,
-                                scopeId: scopeId!,
-                                line: line,
-                                controller: controller,
-                              ),
-                      ),
+                      if (constraints.maxWidth >= 680)
+                        _TabletLineEditor(
+                          line: line,
+                          controller: controller,
+                          enabled: enabled,
+                          onSearchInventory:
+                              projectId == null || scopeId == null
+                              ? null
+                              : () => _chooseInventorySuggestion(
+                                  context,
+                                  ref,
+                                  projectId: projectId!,
+                                  scopeId: scopeId!,
+                                  line: line,
+                                  controller: controller,
+                                ),
+                        )
+                      else
+                        _FocusedLineEditor(
+                          line: line,
+                          controller: controller,
+                          enabled: enabled,
+                          onSearchInventory:
+                              projectId == null || scopeId == null
+                              ? null
+                              : () => _chooseInventorySuggestion(
+                                  context,
+                                  ref,
+                                  projectId: projectId!,
+                                  scopeId: scopeId!,
+                                  line: line,
+                                  controller: controller,
+                                ),
+                        ),
                       const SizedBox(height: AppSpacing.md),
                     ],
                   ],
@@ -9451,6 +9478,7 @@ class _DesktopLinesTable extends StatelessWidget {
       );
     }
     return DecoratedBox(
+      key: const ValueKey('mr-lines-desktop-table'),
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.line),
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
@@ -9459,14 +9487,14 @@ class _DesktopLinesTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Table(
           columnWidths: const {
-            0: FixedColumnWidth(62),
-            1: FlexColumnWidth(2.8),
-            2: FlexColumnWidth(1.55),
-            3: FlexColumnWidth(1.7),
-            4: FlexColumnWidth(1.75),
-            5: FlexColumnWidth(1.05),
-            6: FixedColumnWidth(126),
-            7: FixedColumnWidth(184),
+            0: FixedColumnWidth(54),
+            1: FlexColumnWidth(3.4),
+            2: FlexColumnWidth(1.3),
+            3: FlexColumnWidth(1.5),
+            4: FlexColumnWidth(1.5),
+            5: FlexColumnWidth(1),
+            6: FixedColumnWidth(112),
+            7: FixedColumnWidth(176),
           },
           border: TableBorder(
             horizontalInside: BorderSide(color: AppColors.line),
@@ -9492,11 +9520,11 @@ class _MrTableCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.md,
+      horizontal: AppSpacing.sm,
       vertical: AppSpacing.xs,
     ),
     child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 68),
+      constraints: const BoxConstraints(minHeight: 56),
       child: Align(alignment: Alignment.centerLeft, child: child),
     ),
   );
@@ -9801,6 +9829,199 @@ class _LineUnitDropdown extends ConsumerWidget {
       isDense: true,
       desktopCell: true,
       onChanged: onChanged,
+    );
+  }
+}
+
+/// Keeps every planning field editable when a full spreadsheet would squeeze
+/// descriptions. The same field keys and controller commands serve all widths.
+class _TabletLineEditor extends StatelessWidget {
+  const _TabletLineEditor({
+    required this.line,
+    required this.controller,
+    required this.enabled,
+    required this.onSearchInventory,
+  });
+
+  final YorksV1MaterialRequestLine line;
+  final YorksV1MaterialRequestDraftController controller;
+  final bool enabled;
+  final VoidCallback? onSearchInventory;
+
+  @override
+  Widget build(BuildContext context) {
+    final invalid = !line.hasValidOperationalValues;
+    return Container(
+      key: _materialRequestLineKey(line.id),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: invalid ? AppColors.errorContainer.withValues(alpha: 0.3) : null,
+        border: Border.all(color: invalid ? AppColors.error : AppColors.line),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.md),
+                child: SizedBox(
+                  width: 26,
+                  child: Text(
+                    '${line.displayOrder}',
+                    style: AppTypography.titleSmall,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _MrValidatedCell(
+                  markerKey: ValueKey('${line.id}-tablet-description-error'),
+                  errorMessage: line.hasDescription
+                      ? null
+                      : YorksV1MaterialRequestStrings
+                            .itemDescriptionRequired
+                            .primary,
+                  child: _LineLabeledField(
+                    fieldKey: ValueKey('${line.id}-description'),
+                    label:
+                        YorksV1MaterialRequestStrings.itemDescription.primary,
+                    initialValue: line.description,
+                    enabled: enabled,
+                    onChanged: (value) => controller.updateLine(
+                      line.id,
+                      (current) => current.copyWith(description: value),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              SizedBox(
+                width: 92,
+                child: _MrValidatedCell(
+                  markerKey: ValueKey('${line.id}-tablet-quantity-error'),
+                  errorMessage: line.hasValidQuantity
+                      ? null
+                      : YorksV1MaterialRequestStrings.quantityRequired.primary,
+                  child: _LineLabeledField(
+                    fieldKey: ValueKey('${line.id}-quantity'),
+                    label: YorksV1MaterialRequestStrings.quantity.primary,
+                    initialValue: yorksV1DisplayQuantity(line.quantity),
+                    enabled: enabled,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (value) => controller.updateLine(
+                      line.id,
+                      (current) => current.copyWith(quantity: value),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              SizedBox(
+                width: 116,
+                child: _MrValidatedCell(
+                  markerKey: ValueKey('${line.id}-tablet-unit-error'),
+                  errorMessage: line.hasControlledUnit
+                      ? null
+                      : YorksV1MaterialRequestStrings.unitRequired.primary,
+                  child: _LineLabeledUnitDropdown(
+                    fieldKey: ValueKey('${line.id}-unit'),
+                    label: YorksV1MaterialRequestStrings.unit.primary,
+                    initialValue: line.unit,
+                    enabled: enabled,
+                    onChanged: (value) => controller.updateLine(
+                      line.id,
+                      (current) => current.copyWith(unit: value),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _LineLabeledField(
+                  fieldKey: ValueKey('${line.id}-size'),
+                  label: YorksV1MaterialRequestStrings.size.primary,
+                  initialValue: line.size ?? '',
+                  enabled: enabled,
+                  onChanged: (value) => controller.updateLine(
+                    line.id,
+                    (current) => current.copyWith(
+                      size: value.trim().isEmpty ? null : value,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _LineLabeledField(
+                  fieldKey: ValueKey('${line.id}-planning-model-tag'),
+                  label: YorksV1MaterialRequestStrings.planningModelTag.primary,
+                  initialValue: line.model ?? line.planningModelTag ?? '',
+                  enabled: enabled,
+                  onChanged: (value) => controller.updateLine(
+                    line.id,
+                    (current) => current.copyWith(
+                      model: value.trim().isEmpty ? null : value,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _LineLabeledField(
+                  fieldKey: ValueKey('${line.id}-brand-origin'),
+                  label: YorksV1MaterialRequestStrings.brandOrigin.primary,
+                  initialValue: line.brandOrigin ?? '',
+                  enabled: enabled,
+                  onChanged: (value) => controller.updateLine(
+                    line.id,
+                    (current) => current.copyWith(
+                      brandOrigin: value.trim().isEmpty ? null : value,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _MrSimilarButton(
+                buttonKey: ValueKey('${line.id}-tablet-similar'),
+                enabled: enabled,
+                onPressed: () =>
+                    controller.addSimilarLine(afterLineId: line.id),
+              ),
+              _MrCustomButton(
+                buttonKey: ValueKey('${line.id}-tablet-custom'),
+                enabled: enabled,
+                onPressed: () => controller.addCustomLine(afterLineId: line.id),
+              ),
+              _MrDeleteButton(
+                buttonKey: ValueKey('${line.id}-tablet-delete'),
+                enabled: enabled,
+                onPressed: () => controller.removeLine(line.id),
+              ),
+            ],
+          ),
+          if (enabled && onSearchInventory != null)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: onSearchInventory,
+                icon: const Icon(Icons.search_rounded, size: 18),
+                label: Text(
+                  YorksV1MaterialRequestStrings.searchInventory.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

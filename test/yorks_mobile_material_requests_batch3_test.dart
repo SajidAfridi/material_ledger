@@ -117,6 +117,102 @@ void main() {
     );
   });
 
+  for (final viewport in const [
+    (size: Size(1440, 900), layout: 'desktop', name: '1440'),
+    (size: Size(1024, 768), layout: 'tablet', name: '1024'),
+    (size: Size(820, 1180), layout: 'tablet', name: '820'),
+  ]) {
+    testWidgets('MR planning fields stay editable on ${viewport.name}', (
+      tester,
+    ) async {
+      await _setViewport(tester, viewport.size);
+      await _pumpDraft(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(YorksV1MaterialRequestDraftScreen)),
+      );
+      final controller = container.read(
+        yorksV1MaterialRequestDraftControllerProvider(
+          const YorksV1MaterialRequestDraftKey(
+            ownerAuthUserId: 'mobile-mr-user',
+            draftId: _draftId,
+          ),
+        ).notifier,
+      );
+      await controller.setScope('scope-common');
+      await controller.addCustomLine();
+      await tester.pumpAndSettle();
+      final lineId = controller.currentDraft.lines.single.id;
+
+      expect(find.byKey(ValueKey('$lineId-size')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('$lineId-planning-model-tag')),
+        findsOneWidget,
+      );
+      expect(find.byKey(ValueKey('$lineId-brand-origin')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('$lineId-${viewport.layout}-similar')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.byKey(ValueKey('$lineId-size')));
+      await tester.enterText(find.byKey(ValueKey('$lineId-size')), '10x10');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(ValueKey('$lineId-planning-model-tag')),
+      );
+      await tester.enterText(
+        find.byKey(ValueKey('$lineId-planning-model-tag')),
+        'P-100',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(ValueKey('$lineId-brand-origin')));
+      await tester.enterText(
+        find.byKey(ValueKey('$lineId-brand-origin')),
+        'Yorks',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(controller.currentDraft.lines.single.size, '10x10');
+      expect(controller.currentDraft.lines.single.model, 'P-100');
+      expect(controller.currentDraft.lines.single.brandOrigin, 'Yorks');
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile(
+          'goldens/r35/mr_composer_${viewport.name}_planning_fields.png',
+        ),
+      );
+      if (viewport.layout == 'desktop') {
+        final table = find.byKey(const ValueKey('mr-lines-desktop-table'));
+        final tableWidth = tester.getSize(table).width;
+        await tester.tap(
+          find.byKey(const ValueKey('mr-request-context-toggle')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('mr-request-context-panel')),
+          findsOneWidget,
+        );
+        expect(tester.getSize(table).width, tableWidth);
+        expect(tester.takeException(), isNull);
+      }
+    });
+  }
+
+  testWidgets('MR composer keeps its focused 360px entry', (tester) async {
+    await _setViewport(tester, const Size(360, 800));
+    await _pumpDraft(tester);
+    expect(find.byKey(const ValueKey('mobile-mr-information')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mobile-mr-project')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/r35/mr_composer_360_entry.png'),
+    );
+  });
+
   testWidgets('mobile MR draft retains local edits during access outage', (
     tester,
   ) async {
@@ -679,7 +775,7 @@ void main() {
     },
   );
 
-  testWidgets('tablet uses focused rows and compact validation markers', (
+  testWidgets('tablet keeps planning fields and compact validation markers', (
     tester,
   ) async {
     await _setViewport(tester, const Size(1024, 768));
@@ -701,19 +797,20 @@ void main() {
 
     expect(find.byKey(const ValueKey('mr-project')), findsOneWidget);
     expect(
-      find.byKey(ValueKey('${line.id}-focused-description-error')),
+      find.byKey(ValueKey('${line.id}-tablet-description-error')),
       findsOneWidget,
     );
     expect(
-      find.byKey(ValueKey('${line.id}-focused-quantity-error')),
+      find.byKey(ValueKey('${line.id}-tablet-quantity-error')),
       findsOneWidget,
     );
     expect(
-      find.byKey(ValueKey('${line.id}-focused-unit-error')),
+      find.byKey(ValueKey('${line.id}-tablet-unit-error')),
       findsOneWidget,
     );
     expect(find.text('Item description is required'), findsNothing);
-    expect(find.byKey(ValueKey('${line.id}-focused-delete')), findsOneWidget);
+    expect(find.byKey(ValueKey('${line.id}-size')), findsOneWidget);
+    expect(find.byKey(ValueKey('${line.id}-tablet-delete')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
