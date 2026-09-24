@@ -19,7 +19,7 @@ create or replace function public.v1_list_unified_material_request_summaries(
   p_request_kind text default 'all'
 ) returns jsonb
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $$
@@ -64,7 +64,7 @@ begin
     where p_request_kind in ('all','project') and public.v1_material_request_participant(request.id,auth.uid())
       and (p_project_id is null or request.project_id=p_project_id)
     union all
-    select r.id, null::uuid, null::uuid, r.state, r.record_version, r.request_number, r.purpose, r.timing, r.scheduled_date, null::text, r.requester_display_name, null::text, r.requester_exact_role, case when r.state in ('awaiting_company_approval','submitted_pending_approval') then 'company_approver' when r.state in ('approved_for_procurement','arranging','ready_for_delivery','partially_dispatched') then 'procurement' when r.state in ('receipt_pending','partially_received') then 'authorized_receiver' when r.state='awaiting_beneficiary_handover' then 'beneficiary' when r.state in ('closed','cancelled','rejected') then null else 'requester' end, case when r.state in ('awaiting_company_approval','submitted_pending_approval') then 'approve' when r.state in ('approved_for_procurement','arranging') then 'arrange' when r.state in ('ready_for_delivery','partially_dispatched') then 'dispatch' when r.state in ('receipt_pending','partially_received') then 'receive' when r.state='awaiting_beneficiary_handover' then 'handover' when r.state='fulfilled' then 'close' when r.state='returned_for_changes' then 'revise' else null end, r.submitted_at, r.created_at, r.updated_at, r.created_by_auth_user_id, null::text, null::text, null::text, null::text,
+    select r.id, null::uuid, null::uuid, r.state, r.record_version, r.request_number, r.purpose, r.timing, r.scheduled_date, null::text, r.requester_display_name, null::text, r.requester_exact_role, case when r.state in ('awaiting_company_approval','submitted_pending_approval') then 'company_approver' when r.state in ('approved_for_procurement','arranging','ready_for_delivery','partially_dispatched','partially_received') then 'procurement' when r.state='receipt_pending' then 'authorized_receiver' when r.state='awaiting_beneficiary_handover' then 'beneficiary' when r.state in ('closed','cancelled','rejected') then null else 'requester' end, case when r.state in ('awaiting_company_approval','submitted_pending_approval') then 'approve' when r.state in ('approved_for_procurement','arranging','partially_received') then 'arrange' when r.state in ('ready_for_delivery','partially_dispatched') then 'dispatch' when r.state='receipt_pending' then 'receive' when r.state='awaiting_beneficiary_handover' then 'handover' when r.state='fulfilled' then 'close' when r.state='returned_for_changes' then 'revise' else null end, r.submitted_at, r.created_at, r.updated_at, r.created_by_auth_user_id, null::text, null::text, null::text, null::text,
       'company'::text, c.display_name, u.display_name,
       r.approver_auth_user_id=auth.uid(),
       ((r.state in ('awaiting_company_approval','submitted_pending_approval')
@@ -122,7 +122,7 @@ begin
         or (p_metric = 'in_progress' and request.state not in (
           'draft', 'submitted', 'awaiting_request_approval',
           'changes_requested', 'submitted_pending_approval', 'awaiting_company_approval', 'returned_for_changes', 'partially_dispatched', 'dispatched', 'receipt_pending',
-          'partially_received', 'received', 'awaiting_beneficiary_handover', 'fulfilled', 'fulfilled', 'closed', 'cancelled', 'rejected'
+          'partially_received', 'received', 'awaiting_beneficiary_handover', 'fulfilled', 'closed', 'cancelled', 'rejected'
         ))
         or (p_metric = 'dispatched' and request.state in (
           'partially_dispatched', 'dispatched', 'receipt_pending'
@@ -226,7 +226,7 @@ begin
       'in_progress', count(*) filter (where state not in (
         'draft', 'submitted', 'awaiting_request_approval',
         'changes_requested', 'submitted_pending_approval', 'awaiting_company_approval', 'returned_for_changes', 'partially_dispatched', 'dispatched', 'receipt_pending',
-        'partially_received', 'received', 'awaiting_beneficiary_handover', 'fulfilled', 'fulfilled', 'closed', 'cancelled', 'rejected'
+        'partially_received', 'received', 'awaiting_beneficiary_handover', 'fulfilled', 'closed', 'cancelled', 'rejected'
       )),
       'dispatched', count(*) filter (where state in (
         'partially_dispatched', 'dispatched', 'receipt_pending'

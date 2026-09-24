@@ -165,7 +165,7 @@ void main() {
       for (final entry in <({Size size, Key entryKey})>[
         (
           size: const Size(1366, 768),
-          entryKey: const ValueKey('material-request-use-switch'),
+          entryKey: const ValueKey('material-request-centre-create-company'),
         ),
         (
           size: const Size(360, 800),
@@ -199,7 +199,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byKey(entry.entryKey), findsOneWidget);
-        expect(find.text('Project use'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('material-request-use-switch')),
+          findsNothing,
+        );
         expect(find.text('Company use'), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '${entry.size}');
       }

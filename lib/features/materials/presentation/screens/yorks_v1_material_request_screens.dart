@@ -102,7 +102,11 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
       projectId: projectId,
       embedded: embedded,
     );
-    if (!showUse) return project;
+    if (!showUse ||
+        ref.watch(yorksV1MaterialRequestRepositoryProvider)
+            is YorksV1UnifiedMaterialRequestRegisterRepository) {
+      return project;
+    }
     return Column(
       children: [
         YorksV1RequestUseSwitch(
@@ -235,7 +239,8 @@ class _ProjectMaterialRequestsScreen extends ConsumerWidget {
           requests: const [],
           language: language,
           canCreate: canCreate,
-          canCreateCompany: false,
+          canCreateCompany:
+              companyRequestsEnabled && projectId == null && !embedded,
           fixedProjectId: projectId,
           summaryPageLoader: phase2Repository.listRequestSummaries,
           registerPageLoader: unifiedRegisterEnabled

@@ -1559,8 +1559,11 @@ class _MainCentrePanel extends StatelessWidget {
                     children: [
                       search,
                       const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: [viewSwitcher, const Spacer(), filterButton],
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        children: [viewSwitcher, filterButton],
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Align(alignment: Alignment.centerLeft, child: sort),
@@ -1648,15 +1651,14 @@ class _CentreViewSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    height: AppSpacing.minTapTarget,
+    constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
     padding: const EdgeInsets.all(3),
     decoration: BoxDecoration(
       color: AppColors.surfaceContainerLow,
       border: Border.all(color: AppColors.line),
       borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
     ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+    child: Wrap(
       children: [
         _CentreViewOption(
           key: const ValueKey('material-request-centre-view-all'),
@@ -1702,9 +1704,7 @@ class _CentreViewOption extends StatelessWidget {
         onTap: onPressed,
         borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
         child: Container(
-          constraints: const BoxConstraints(
-            minHeight: AppSpacing.minTapTarget - 8,
-          ),
+          constraints: const BoxConstraints(minHeight: AppSpacing.minTapTarget),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           child: Row(
             mainAxisSize: MainAxisSize.min,

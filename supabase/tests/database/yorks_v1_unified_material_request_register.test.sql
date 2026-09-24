@@ -89,5 +89,11 @@ set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"role":"site_engineer"}}',true);
 select is((public.v1_list_unified_material_request_summaries(p_search=>'UNIFIED-REGISTER-PROOF')->>'total_count')::int,124,'Denied Project view does not prevent independently authorized Company records');
 select is((public.v1_list_material_request_summaries(p_search=>'UNIFIED-REGISTER-PROOF')->>'total_count')::int,0,'Project permission deny is still enforced in the same session');
+set local role postgres;
+update public.v1_company_material_requests set state='partially_received'
+where id='aa931000-0000-4000-8000-000000000001';
+set local role authenticated;
+select is(public.v1_list_unified_material_request_summaries(p_search=>'UNIFIED-REGISTER-PROOF-C1',p_states=>array['partially_received'])->'items'->0->>'current_action_owner_role','procurement','Receipt exceptions return outstanding supply to Procurement');
+select is(public.v1_list_unified_material_request_summaries(p_search=>'UNIFIED-REGISTER-PROOF-C1',p_states=>array['partially_received'])->'items'->0->>'current_action_code','arrange','Receipt exceptions show the replacement arrangement action');
 select * from finish();
 rollback;
