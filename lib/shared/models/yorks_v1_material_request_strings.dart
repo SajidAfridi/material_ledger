@@ -7,6 +7,18 @@ import 'yorks_v1_project_strings.dart';
 /// Centralized bilingual-capable presentation copy for the Yorks V1 Material
 /// Request slice. Domain and database layers use stable codes, never this copy.
 abstract final class YorksV1MaterialRequestStrings {
+  static const catalogueSearchEmpty = TranslatableString(
+    en: 'No matching materials. Keep your own description.',
+    ar: 'لا توجد مواد مطابقة. يمكنك الاحتفاظ بوصفك.',
+    ur: 'کوئی مماثل مواد نہیں۔ اپنی تفصیل برقرار رکھیں۔',
+    hi: 'कोई मिलती सामग्री नहीं। अपना विवरण रख सकते हैं।',
+  );
+  static const catalogueSearchFailed = TranslatableString(
+    en: 'Search unavailable. Keep typing or try again.',
+    ar: 'البحث غير متاح. تابع الكتابة أو حاول مجدداً.',
+    ur: 'تلاش دستیاب نہیں۔ لکھتے رہیں یا دوبارہ کوشش کریں۔',
+    hi: 'खोज उपलब्ध नहीं। लिखते रहें या फिर प्रयास करें।',
+  );
   static const saveUnconfirmed = TranslatableString(
     en: 'The account save is not yet confirmed. Your device copy and the original save identity are preserved while Yorks checks the result.',
     ar: 'لم يتم تأكيد الحفظ في الحساب بعد. تم الاحتفاظ بنسخة الجهاز وهوية الحفظ الأصلية أثناء التحقق من النتيجة.',

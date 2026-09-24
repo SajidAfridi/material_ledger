@@ -1,3 +1,4 @@
+import 'yorks_v1_material_line_editor.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -55,7 +56,8 @@ class _DraftSaveResult {
 /// on the device until a Save/Submit operation reaches the normalized server.
 /// Only Submit is an idempotent critical workflow transition.
 class YorksV1MaterialRequestDraftController
-    extends StateNotifier<YorksV1MaterialRequestDraftState> {
+    extends StateNotifier<YorksV1MaterialRequestDraftState>
+    implements YorksV1MaterialLineEditor {
   YorksV1MaterialRequestDraftController({
     required String ownerAuthUserId,
     required String draftId,
@@ -414,6 +416,7 @@ class YorksV1MaterialRequestDraftController
     await _persist(hydrated);
   }
 
+  @override
   Future<void> addCustomLine({String? afterLineId}) async {
     final draft = state.draft;
     final insertIndex = afterLineId == null
@@ -447,6 +450,7 @@ class YorksV1MaterialRequestDraftController
   /// without retaining a BOQ source pointer. This keeps a Similar Row useful
   /// for repeated items while preventing an accidental second request against
   /// the same source snapshot.
+  @override
   Future<void> addSimilarLine({String? afterLineId}) async {
     final draft = state.draft;
     final sourceIndex = afterLineId == null
@@ -615,6 +619,7 @@ class YorksV1MaterialRequestDraftController
     _captureItemChange('add_excel', count: additions.length);
   }
 
+  @override
   Future<void> updateLine(
     String lineId,
     YorksV1MaterialRequestLine Function(YorksV1MaterialRequestLine line)
@@ -631,6 +636,7 @@ class YorksV1MaterialRequestDraftController
     );
   }
 
+  @override
   Future<void> removeLine(String lineId) async {
     final remaining = state.draft.lines
         .where((line) => line.id != lineId)

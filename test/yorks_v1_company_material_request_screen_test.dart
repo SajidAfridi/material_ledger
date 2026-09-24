@@ -264,6 +264,36 @@ void main() {
     expect(find.textContaining('CMR-0001'), findsOneWidget);
   });
 
+  testWidgets('active material text survives a responsive row rebuild', (
+    tester,
+  ) async {
+    await _pumpComposer(
+      tester,
+      repository: _CompanyRequestRepository(),
+      size: const Size(360, 800),
+    );
+    await _completeDetails(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-continue')),
+    );
+    final description = _materialCell('-description');
+    await _enterVisible(tester, description, 'Pending keyboard input');
+    // The body relayouts when the viewport changes without ending editing.
+    tester.view.physicalSize = const Size(380, 800);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextFormField>(description).controller!.text,
+      'Pending keyboard input',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextFormField>(description).controller!.text,
+      'Pending keyboard input',
+    );
+  });
+
   testWidgets('mobile composer uses Details, Items and Review steps', (
     tester,
   ) async {
@@ -363,11 +393,7 @@ void main() {
       size: const Size(1366, 900),
     );
     await _completeDetails(tester);
-    await _enterVisible(
-      tester,
-      _formFieldWithLabel('Item description').first,
-      'helmet',
-    );
+    await _enterVisible(tester, _materialCell('-description').first, 'helmet');
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Safety helmets').last);
@@ -466,6 +492,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     await _completeFirstLine(tester);
+    await tester.ensureVisible(_materialCell('-description'));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'goldens/company_requests/after_company_request_mobile_items.png',
+      ),
+    );
     await tester.tap(
       find.byKey(const ValueKey('company-material-request-review')),
     );
@@ -890,24 +924,36 @@ Future<void> _completeDetails(WidgetTester tester) async {
 Future<void> _completeFirstLine(WidgetTester tester) async {
   await _enterVisible(
     tester,
-    _formFieldWithLabel('Item description').first,
+    _materialCell('-description').first,
     'Safety helmets',
   );
-  await _enterVisible(tester, _formFieldWithLabel('Quantity'), '12');
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await tester.pumpAndSettle();
+  await _enterVisible(tester, _materialCell('-quantity'), '12');
+  await tester.testTextInput.receiveAction(TextInputAction.done);
+  await tester.pumpAndSettle();
   final unitField = find.byWidgetPredicate(
     (widget) =>
         widget.key is ValueKey<String> &&
-        (widget.key! as ValueKey<String>).value.startsWith(
-          'company-line-unit-',
-        ),
+        (widget.key! as ValueKey<String>).value.endsWith('-unit'),
   );
-  await _tapVisible(tester, unitField);
+  await _tapVisible(
+    tester,
+    find.descendant(
+      of: unitField,
+      matching: find.byType(DropdownButton<String>),
+    ),
+  );
   await tester.tap(find.text('pcs').last);
   await tester.pumpAndSettle();
 }
 
-Finder _formFieldWithLabel(String label) =>
-    find.widgetWithText(TextFormField, label);
+Finder _materialCell(String suffix) => find.byWidgetPredicate(
+  (widget) =>
+      widget is TextFormField &&
+      widget.key is ValueKey<String> &&
+      (widget.key! as ValueKey<String>).value.endsWith(suffix),
+);
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
@@ -922,6 +968,8 @@ Future<void> _enterVisible(
   String value,
 ) async {
   await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
   await tester.pumpAndSettle();
   await tester.enterText(finder, value);
   await tester.pump();

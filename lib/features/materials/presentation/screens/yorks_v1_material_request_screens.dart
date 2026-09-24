@@ -17,6 +17,7 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../../core/widgets/yorks_panel_toggle_icon.dart';
 import '../../../../shared/controllers/yorks_v1_material_request_draft_controller.dart';
+import '../../../../shared/controllers/yorks_v1_material_line_editor.dart';
 import '../../../../shared/models/app_language.dart';
 import '../../../../shared/models/app_strings.dart';
 import '../../../../shared/models/yorks_v1_boq.dart';
@@ -2823,8 +2824,21 @@ TranslatableString? _materialRequestSubmitValidationMessage(
   return null;
 }
 
+// Row identity must survive rebuilds; interpolated Strings have distinct object
+// identities and a plain GlobalObjectKey would discard active text buffers.
+class _MaterialRequestLineKey extends GlobalObjectKey<State<StatefulWidget>> {
+  const _MaterialRequestLineKey(String super.value);
+
+  @override
+  bool operator ==(Object other) =>
+      other is _MaterialRequestLineKey && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(_MaterialRequestLineKey, value);
+}
+
 GlobalObjectKey<State<StatefulWidget>> _materialRequestLineKey(String lineId) =>
-    GlobalObjectKey<State<StatefulWidget>>('material-request-line-$lineId');
+    _MaterialRequestLineKey(lineId);
 
 Future<void> _revealFirstInvalidMaterialRequestLine(
   YorksV1MaterialRequestDraft draft,
@@ -8402,8 +8416,10 @@ class _MaterialSuggestionPanel extends StatelessWidget {
     this.onKeepCustom,
     this.highlightedId,
     this.onHovered,
+    this.statusMessage,
   });
 
+  final String? statusMessage;
   final List<YorksV1MaterialRequestInventorySuggestion> values;
   final ValueChanged<YorksV1MaterialRequestInventorySuggestion> onSelected;
   final double maxWidth;
@@ -8415,7 +8431,16 @@ class _MaterialSuggestionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final children = <Widget>[];
+    final children = <Widget>[
+      if (statusMessage != null)
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Semantics(
+            liveRegion: true,
+            child: Text(statusMessage!, style: AppTypography.bodySmall),
+          ),
+        ),
+    ];
     for (final source in YorksV1MaterialRequestSuggestionSource.values) {
       final group = values
           .where((item) => item.source == source)
@@ -8702,8 +8727,11 @@ class _AnchoredMaterialDescriptionAutocomplete extends ConsumerStatefulWidget {
     this.preferredHeight = 410,
     this.showSuffixIcon = true,
     this.desktopCell = false,
+    this.search,
+    this.searchContext,
   });
 
+  final Object? searchContext;
   final TextEditingController textController;
   final FocusNode focusNode;
   final bool enabled;
@@ -8722,6 +8750,10 @@ class _AnchoredMaterialDescriptionAutocomplete extends ConsumerStatefulWidget {
   final double preferredHeight;
   final bool showSuffixIcon;
   final bool desktopCell;
+  final Future<List<YorksV1MaterialRequestInventorySuggestion>> Function(
+    String,
+  )?
+  search;
 
   @override
   ConsumerState<_AnchoredMaterialDescriptionAutocomplete> createState() =>
@@ -8736,6 +8768,8 @@ class _AnchoredMaterialDescriptionAutocompleteState
   List<YorksV1MaterialRequestInventorySuggestion> _values = const [];
   int _highlightedIndex = 0;
   int _searchEpoch = 0;
+  bool _searching = false;
+  String? _searchNotice;
   final Object _tapRegionGroupId = Object();
 
   @override
@@ -8753,11 +8787,22 @@ class _AnchoredMaterialDescriptionAutocompleteState
       oldWidget.focusNode.removeListener(_handleFocusChanged);
       widget.focusNode.addListener(_handleFocusChanged);
     }
-    if (!widget.enabled && oldWidget.enabled) _hideOptions();
+    if ((!widget.enabled && oldWidget.enabled) ||
+        widget.projectId != oldWidget.projectId ||
+        widget.scopeId != oldWidget.scopeId ||
+        widget.searchContext != oldWidget.searchContext) {
+      ++_searchEpoch;
+      _values = const [];
+      _searching = false;
+      _searchNotice = null;
+      _hideOptions();
+    }
   }
 
   void _handleFocusChanged() {
     if (!widget.focusNode.hasFocus) {
+      ++_searchEpoch;
+      _searching = false;
       widget.onCommitted?.call();
       _hideOptions();
     }
@@ -8765,14 +8810,21 @@ class _AnchoredMaterialDescriptionAutocompleteState
 
   Future<void> _search(String rawQuery) async {
     final epoch = ++_searchEpoch;
+    _hideOptions();
+    setState(() {
+      _values = const [];
+      _searchNotice = null;
+      _searching = false;
+    });
     final query = rawQuery.trim();
     final projectId = widget.projectId?.trim();
     final scopeId = widget.scopeId?.trim();
     if (!widget.enabled ||
-        projectId == null ||
-        projectId.isEmpty ||
-        scopeId == null ||
-        scopeId.isEmpty ||
+        (widget.search == null &&
+            (projectId == null ||
+                projectId.isEmpty ||
+                scopeId == null ||
+                scopeId.isEmpty)) ||
         query.length < 2) {
       _values = const [];
       _hideOptions();
@@ -8780,28 +8832,42 @@ class _AnchoredMaterialDescriptionAutocompleteState
     }
     await Future<void>.delayed(const Duration(milliseconds: 220));
     if (!mounted || epoch != _searchEpoch) return;
+    setState(() => _searching = true);
     try {
-      final results = await ref.read(
-        yorksV1MaterialRequestInventorySearchProvider(
-          YorksV1MaterialRequestInventorySearchKey(
-            projectId: projectId,
-            scopeId: scopeId,
-            query: query,
-          ),
-        ).future,
-      );
+      final results =
+          await (widget.search?.call(query) ??
+              ref.read(
+                yorksV1MaterialRequestInventorySearchProvider(
+                  YorksV1MaterialRequestInventorySearchKey(
+                    projectId: projectId!,
+                    scopeId: scopeId!,
+                    query: query,
+                  ),
+                ).future,
+              ));
       if (!mounted || epoch != _searchEpoch) return;
-      _values = results;
+      setState(() {
+        _searching = false;
+        _values = results;
+        _searchNotice = results.isEmpty
+            ? YorksV1MaterialRequestStrings.catalogueSearchEmpty.primary
+            : null;
+      });
       _highlightedIndex = 0;
-      if (_values.isEmpty || !widget.focusNode.hasFocus) {
+      if (!widget.focusNode.hasFocus) {
         _hideOptions();
       } else {
         _showOptions();
       }
     } catch (_) {
       if (!mounted || epoch != _searchEpoch) return;
-      _values = const [];
-      _hideOptions();
+      setState(() {
+        _values = const [];
+        _searching = false;
+        _searchNotice =
+            YorksV1MaterialRequestStrings.catalogueSearchFailed.primary;
+      });
+      if (widget.focusNode.hasFocus) _showOptions();
     }
   }
 
@@ -8837,6 +8903,7 @@ class _AnchoredMaterialDescriptionAutocompleteState
                     groupId: _tapRegionGroupId,
                     child: _MaterialSuggestionPanel(
                       values: _values,
+                      statusMessage: _searchNotice,
                       onSelected: _select,
                       maxWidth: geometry.width,
                       maxHeight: geometry.height,
@@ -8868,6 +8935,7 @@ class _AnchoredMaterialDescriptionAutocompleteState
   }
 
   void _select(YorksV1MaterialRequestInventorySuggestion suggestion) {
+    ++_searchEpoch;
     widget.textController.value = TextEditingValue(
       text: suggestion.description,
       selection: TextSelection.collapsed(offset: suggestion.description.length),
@@ -8877,6 +8945,7 @@ class _AnchoredMaterialDescriptionAutocompleteState
   }
 
   void _keepCustom() {
+    ++_searchEpoch;
     widget.onChanged?.call(widget.textController.text);
     widget.onCommitted?.call();
     _hideOptions();
@@ -8890,13 +8959,14 @@ class _AnchoredMaterialDescriptionAutocompleteState
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent || _overlayEntry == null) {
-      return KeyEventResult.ignored;
-    }
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
+      ++_searchEpoch;
+      setState(() => _searching = false);
       _hideOptions();
       return KeyEventResult.handled;
     }
+    if (_overlayEntry == null) return KeyEventResult.ignored;
     if (_values.isEmpty) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       _highlightedIndex = (_highlightedIndex + 1) % _values.length;
@@ -8951,11 +9021,18 @@ class _AnchoredMaterialDescriptionAutocompleteState
             isDense: widget.isDense,
             labelText: widget.labelText,
             hintText: widget.hintText,
-            suffixIcon:
-                widget.showSuffixIcon &&
-                    widget.enabled &&
-                    widget.projectId != null &&
-                    widget.scopeId != null
+            suffixIcon: _searching
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : widget.showSuffixIcon &&
+                      widget.enabled &&
+                      widget.projectId != null &&
+                      widget.scopeId != null
                 ? Icon(Icons.search_rounded, size: 19, color: AppColors.muted)
                 : null,
             contentPadding: widget.contentPadding,
@@ -9320,6 +9397,61 @@ class _RequestLinesEditor extends ConsumerWidget {
   }
 }
 
+/// Uses the same Project MR cells, validation and row actions for Company MRs.
+/// Only catalogue search and the draft command adapter differ.
+class YorksV1MaterialItemsEditor extends StatelessWidget {
+  const YorksV1MaterialItemsEditor({
+    super.key,
+    required this.lines,
+    required this.controller,
+    required this.descriptionBuilder,
+    this.enabled = true,
+  });
+  final List<YorksV1MaterialRequestLine> lines;
+  final YorksV1MaterialLineEditor controller;
+  final Widget Function(YorksV1MaterialRequestLine, bool compact)
+  descriptionBuilder;
+  final bool enabled;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (constraints.maxWidth >= 1120) {
+        return _DesktopLinesTable(
+          lines: lines,
+          controller: controller,
+          enabled: enabled,
+          projectId: null,
+          scopeId: null,
+          descriptionBuilder: (line) => descriptionBuilder(line, false),
+        );
+      }
+      return Column(
+        children: [
+          for (final line in lines) ...[
+            if (constraints.maxWidth >= 680)
+              _TabletLineEditor(
+                line: line,
+                controller: controller,
+                enabled: enabled,
+                onSearchInventory: null,
+                descriptionField: descriptionBuilder(line, true),
+              )
+            else
+              _FocusedLineEditor(
+                line: line,
+                controller: controller,
+                enabled: enabled,
+                onSearchInventory: null,
+                descriptionField: descriptionBuilder(line, true),
+              ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+        ],
+      );
+    },
+  );
+}
+
 class _DesktopLinesTable extends StatelessWidget {
   const _DesktopLinesTable({
     required this.lines,
@@ -9327,10 +9459,12 @@ class _DesktopLinesTable extends StatelessWidget {
     required this.enabled,
     required this.projectId,
     required this.scopeId,
+    this.descriptionBuilder,
   });
 
+  final Widget Function(YorksV1MaterialRequestLine)? descriptionBuilder;
   final List<YorksV1MaterialRequestLine> lines;
-  final YorksV1MaterialRequestDraftController controller;
+  final YorksV1MaterialLineEditor controller;
   final bool enabled;
   final String? projectId;
   final String? scopeId;
@@ -9442,13 +9576,15 @@ class _DesktopLinesTable extends StatelessWidget {
               child: _MrValidatedCell(
                 markerKey: ValueKey('${line.id}-description-error'),
                 errorMessage: descriptionError,
-                child: _InventoryDescriptionField(
-                  line: line,
-                  controller: controller,
-                  enabled: enabled,
-                  projectId: projectId,
-                  scopeId: scopeId,
-                ),
+                child:
+                    descriptionBuilder?.call(line) ??
+                    YorksV1MaterialDescriptionField(
+                      line: line,
+                      controller: controller,
+                      enabled: enabled,
+                      projectId: projectId,
+                      scopeId: scopeId,
+                    ),
               ),
             ),
             _MrTableCell(
@@ -9677,28 +9813,38 @@ class _MrValidationMarker extends StatelessWidget {
 /// engineer gets useful matches while typing, without leaving the row.
 /// Selecting a result copies only the trusted non-commercial descriptive
 /// projection; quantity remains deliberate user input.
-class _InventoryDescriptionField extends StatefulWidget {
-  const _InventoryDescriptionField({
+class YorksV1MaterialDescriptionField extends StatefulWidget {
+  const YorksV1MaterialDescriptionField({
+    super.key,
     required this.line,
     required this.controller,
     required this.enabled,
     required this.projectId,
     required this.scopeId,
+    this.search,
+    this.searchContext,
+    this.compact = false,
   });
 
   final YorksV1MaterialRequestLine line;
-  final YorksV1MaterialRequestDraftController controller;
+  final YorksV1MaterialLineEditor controller;
   final bool enabled;
   final String? projectId;
   final String? scopeId;
+  final bool compact;
+  final Object? searchContext;
+  final Future<List<YorksV1MaterialRequestInventorySuggestion>> Function(
+    String,
+  )?
+  search;
 
   @override
-  State<_InventoryDescriptionField> createState() =>
+  State<YorksV1MaterialDescriptionField> createState() =>
       _InventoryDescriptionFieldState();
 }
 
 class _InventoryDescriptionFieldState
-    extends State<_InventoryDescriptionField> {
+    extends State<YorksV1MaterialDescriptionField> {
   late final TextEditingController _textController;
   late final FocusNode _focusNode;
   late String _lastCommitted;
@@ -9712,7 +9858,7 @@ class _InventoryDescriptionFieldState
   }
 
   @override
-  void didUpdateWidget(covariant _InventoryDescriptionField oldWidget) {
+  void didUpdateWidget(covariant YorksV1MaterialDescriptionField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_focusNode.hasFocus &&
         widget.line.description != _textController.text) {
@@ -9765,6 +9911,8 @@ class _InventoryDescriptionFieldState
         enabled: widget.enabled,
         projectId: widget.projectId,
         scopeId: widget.scopeId,
+        search: widget.search,
+        searchContext: widget.searchContext,
         onSelected: _select,
         onCommitted: _commit,
         fieldKey: ValueKey('${widget.line.id}-description'),
@@ -9774,7 +9922,10 @@ class _InventoryDescriptionFieldState
         preferredWidth: 560,
         preferredHeight: 410,
         showSuffixIcon: false,
-        desktopCell: true,
+        desktopCell: !widget.compact,
+        labelText: widget.compact
+            ? YorksV1MaterialRequestStrings.itemDescription.primary
+            : null,
       );
 }
 
@@ -9921,12 +10072,14 @@ class _TabletLineEditor extends StatelessWidget {
     required this.controller,
     required this.enabled,
     required this.onSearchInventory,
+    this.descriptionField,
   });
 
   final YorksV1MaterialRequestLine line;
-  final YorksV1MaterialRequestDraftController controller;
+  final YorksV1MaterialLineEditor controller;
   final bool enabled;
   final VoidCallback? onSearchInventory;
+  final Widget? descriptionField;
 
   @override
   Widget build(BuildContext context) {
@@ -9964,17 +10117,20 @@ class _TabletLineEditor extends StatelessWidget {
                       : YorksV1MaterialRequestStrings
                             .itemDescriptionRequired
                             .primary,
-                  child: _LineLabeledField(
-                    fieldKey: ValueKey('${line.id}-description'),
-                    label:
-                        YorksV1MaterialRequestStrings.itemDescription.primary,
-                    initialValue: line.description,
-                    enabled: enabled,
-                    onChanged: (value) => controller.updateLine(
-                      line.id,
-                      (current) => current.copyWith(description: value),
-                    ),
-                  ),
+                  child:
+                      descriptionField ??
+                      _LineLabeledField(
+                        fieldKey: ValueKey('${line.id}-description'),
+                        label: YorksV1MaterialRequestStrings
+                            .itemDescription
+                            .primary,
+                        initialValue: line.description,
+                        enabled: enabled,
+                        onChanged: (value) => controller.updateLine(
+                          line.id,
+                          (current) => current.copyWith(description: value),
+                        ),
+                      ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -10112,12 +10268,14 @@ class _FocusedLineEditor extends StatelessWidget {
     required this.controller,
     required this.enabled,
     required this.onSearchInventory,
+    this.descriptionField,
   });
 
   final YorksV1MaterialRequestLine line;
-  final YorksV1MaterialRequestDraftController controller;
+  final YorksV1MaterialLineEditor controller;
   final bool enabled;
   final VoidCallback? onSearchInventory;
+  final Widget? descriptionField;
 
   @override
   Widget build(BuildContext context) {
@@ -10165,16 +10323,18 @@ class _FocusedLineEditor extends StatelessWidget {
             errorMessage: line.hasDescription
                 ? null
                 : YorksV1MaterialRequestStrings.itemDescriptionRequired.primary,
-            child: _LineLabeledField(
-              fieldKey: ValueKey('${line.id}-description'),
-              label: YorksV1MaterialRequestStrings.itemDescription.primary,
-              initialValue: line.description,
-              enabled: enabled,
-              onChanged: (value) => controller.updateLine(
-                line.id,
-                (current) => current.copyWith(description: value),
-              ),
-            ),
+            child:
+                descriptionField ??
+                _LineLabeledField(
+                  fieldKey: ValueKey('${line.id}-description'),
+                  label: YorksV1MaterialRequestStrings.itemDescription.primary,
+                  initialValue: line.description,
+                  enabled: enabled,
+                  onChanged: (value) => controller.updateLine(
+                    line.id,
+                    (current) => current.copyWith(description: value),
+                  ),
+                ),
           ),
           if (enabled && onSearchInventory != null)
             Align(
