@@ -108,8 +108,19 @@ abstract interface class YorksV1CompanyMaterialRequestRepository {
   });
 }
 
+abstract interface class YorksV1CompanyMaterialRequestPagedRepository {
+  Future<YorksV1CompanyMaterialRequestPage> listPage({
+    String view = 'requests',
+    String query = '',
+    int offset = 0,
+    int limit = 15,
+  });
+}
+
 class YorksV1SupabaseCompanyMaterialRequestRepository
-    implements YorksV1CompanyMaterialRequestRepository {
+    implements
+        YorksV1CompanyMaterialRequestRepository,
+        YorksV1CompanyMaterialRequestPagedRepository {
   const YorksV1SupabaseCompanyMaterialRequestRepository({
     required YorksV1FeatureFlags featureFlags,
     required ConnectivityService connectivity,
@@ -124,6 +135,39 @@ class YorksV1SupabaseCompanyMaterialRequestRepository
   final ConnectivityService _connectivity;
   final YorksV1MaterialRequestRpcClient? _rpcClient;
   final Duration _timeout;
+
+  @override
+  Future<YorksV1CompanyMaterialRequestPage> listPage({
+    String view = 'requests',
+    String query = '',
+    int offset = 0,
+    int limit = 15,
+  }) async {
+    final response = _map(
+      await _invoke('v1_company_material_request_workspace_page', {
+        'p_view': view,
+        'p_query': query.trim(),
+        'p_offset': offset,
+        'p_limit': limit,
+      }),
+    );
+    final rawItems = response['items'];
+    final total = response['total_count'];
+    if (rawItems is! List || total is! num || total < 0) {
+      throw const YorksV1DomainException(
+        YorksV1DomainErrorCode.unexpectedResponse,
+      );
+    }
+    return YorksV1CompanyMaterialRequestPage(
+      totalCount: total.toInt(),
+      items: [
+        for (final item in rawItems)
+          YorksV1CompanyMaterialRequestApprovalInboxItem.fromRpcJson(
+            _map(item),
+          ),
+      ],
+    );
+  }
 
   @override
   Future<List<YorksV1CompanyMaterialRequestDraftOption>>

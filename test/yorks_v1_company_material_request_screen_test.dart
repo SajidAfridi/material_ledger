@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,12 +9,187 @@ import 'package:material_ledger/features/materials/presentation/screens/yorks_v1
 import 'package:material_ledger/shared/models/yorks_v1_company_material_request.dart';
 import 'package:material_ledger/shared/models/yorks_v1_material_request.dart';
 import 'package:material_ledger/shared/providers/language_provider.dart';
+import 'package:material_ledger/shared/providers/yorks_v1_identity_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_configuration_provider.dart';
 import 'package:material_ledger/shared/providers/yorks_v1_company_material_request_provider.dart';
 import 'package:material_ledger/shared/repositories/yorks_v1_company_material_request_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUpAll(() async {
+    final fonts = FontLoader('NexusSans')
+      ..addFont(rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+    final arabic = FontLoader('NotoSansArabic')
+      ..addFont(rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'));
+    var cache = File(Platform.resolvedExecutable).parent;
+    while (!cache.path.endsWith('${Platform.pathSeparator}cache') &&
+        cache.path != cache.parent.path) {
+      cache = cache.parent;
+    }
+    final bytes = await File(
+      '${cache.path}/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    ).readAsBytes();
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(Future.value(ByteData.sublistView(bytes)));
+    await Future.wait([fonts.load(), arabic.load(), icons.load()]);
+  });
+  testWidgets(
+    'saved company draft reopens with its protected details and lines',
+    (tester) async {
+      final draft = _CompanyRequestRepository()._result(
+        const YorksV1CompanyMaterialRequestDraft(
+          id: 'saved-draft',
+          recordVersion: 2,
+          submissionIdempotencyKey: 'key',
+          categoryId: 'c1000000-0000-4000-8000-000000000001',
+          responsibleUnitId: 'c1000000-0000-4000-8000-000000000002',
+          purpose: 'Saved company need',
+          deliveryCollectionPoint: 'Workshop',
+          timing: YorksV1MaterialRequestTiming.normal,
+          beneficiaryAuthUserId: 'person',
+          authorizedReceiverAuthUserId: 'person',
+          lines: [
+            YorksV1CompanyMaterialRequestLine(
+              id: 'line',
+              displayOrder: 1,
+              description: 'Saved helmets',
+              quantity: '4',
+              unit: 'pcs',
+            ),
+          ],
+        ),
+        state: 'draft',
+      );
+      final repository = _CompanyRequestRepository(request: draft);
+      await _pumpComposer(
+        tester,
+        repository: repository,
+        size: const Size(1366, 900),
+        draftId: 'saved-draft',
+      );
+      expect(find.text('Saved company need'), findsOneWidget);
+      expect(find.text('Saved helmets'), findsOneWidget);
+      expect(repository.preflightCalls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'dispatch reviews a partial selection and reuses its retry identity',
+    (tester) async {
+      final repository = _CompanyRequestRepository(
+        request: _CompanyRequestRepository._fulfilmentRequest,
+      )..failFirstDispatch = true;
+      await _pumpApproval(
+        tester,
+        repository: repository,
+        size: const Size(360, 800),
+        child: const YorksV1CompanyMaterialRequestApprovalScreen(
+          requestId: 'request',
+        ),
+      );
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await _tapVisible(
+          tester,
+          find.widgetWithText(FilledButton, 'Dispatch ready quantity'),
+        );
+        expect(repository.dispatchKeys.length, attempt);
+        await tester.enterText(
+          find.byKey(
+            const ValueKey(
+              'company-quantity-c1000000-0000-4000-8000-000000000021',
+            ),
+          ),
+          '2',
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('company-operation-confirm')),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(repository.lastLines!.single['dispatch_qty'], '2');
+      expect(repository.dispatchKeys, hasLength(2));
+      expect(repository.dispatchKeys.first, repository.dispatchKeys.last);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'handover acknowledges the signed-in beneficiary despite a different receiver',
+    (tester) async {
+      final repository = _CompanyRequestRepository(request: _handoverRequest);
+      await _pumpApproval(
+        tester,
+        repository: repository,
+        actorId: 'beneficiary',
+        size: const Size(360, 800),
+        child: const YorksV1CompanyMaterialRequestApprovalScreen(
+          requestId: 'handover',
+        ),
+      );
+      await _tapVisible(
+        tester,
+        find.widgetWithText(FilledButton, 'Confirm beneficiary handover'),
+      );
+      expect(repository.handoverBasis, isNull);
+      expect(find.textContaining('Confirm that you received'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('company-operation-confirm')));
+      await tester.pumpAndSettle();
+      expect(repository.handoverBasis, 'beneficiary_confirmed');
+      expect(repository.lastLines!.single['quantity'], '3');
+    },
+  );
+
+  testWidgets('receiver handover stays explicitly witnessed', (tester) async {
+    final repository = _CompanyRequestRepository(request: _handoverRequest);
+    await _pumpApproval(
+      tester,
+      repository: repository,
+      actorId: 'receiver',
+      size: const Size(360, 800),
+      child: const YorksV1CompanyMaterialRequestApprovalScreen(
+        requestId: 'handover',
+      ),
+    );
+    await _tapVisible(
+      tester,
+      find.widgetWithText(FilledButton, 'Confirm beneficiary handover'),
+    );
+    expect(find.textContaining('handed these items'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('company-operation-confirm')));
+    await tester.pumpAndSettle();
+    expect(repository.handoverBasis, 'authorized_receiver_witnessed');
+  });
+
+  testWidgets('company detail supports RTL and large text at 360px', (
+    tester,
+  ) async {
+    await _pumpApproval(
+      tester,
+      repository: _CompanyRequestRepository(),
+      size: const Size(360, 800),
+      languageCode: 'ar',
+      child: const YorksV1CompanyMaterialRequestApprovalScreen(
+        requestId: 'request',
+      ),
+    );
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile(
+        'goldens/company_requests/company_detail_rtl_mobile.png',
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    await _pumpApproval(
+      tester,
+      repository: _CompanyRequestRepository(),
+      size: const Size(360, 800),
+      textScale: 2,
+      child: const YorksV1CompanyMaterialRequestApprovalInboxScreen(),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('desktop composer follows the familiar MR hierarchy', (
     tester,
   ) async {
@@ -101,10 +278,7 @@ void main() {
     expect(find.text('Details'), findsWidgets);
     expect(find.text('Items'), findsOneWidget);
     expect(find.text('Review'), findsOneWidget);
-    expect(
-      find.text('A company request, not a project request'),
-      findsOneWidget,
-    );
+    expect(find.text('A company request, not a project request'), findsNothing);
 
     await _completeDetails(tester);
     expect(repository.preflightCalls, 1);
@@ -355,6 +529,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('new request options can recover without losing the register', (
+    tester,
+  ) async {
+    final repository = _CompanyRequestRepository()..failDraftOptions = true;
+    await _pumpApproval(
+      tester,
+      repository: repository,
+      size: const Size(360, 800),
+      child: const YorksV1CompanyMaterialRequestApprovalInboxScreen(),
+    );
+    expect(find.text('CMR-0001'), findsOneWidget);
+    expect(find.text('New request options could not load.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('company-request-new-from-inbox')),
+      findsNothing,
+    );
+    repository.failDraftOptions = false;
+    await tester.tap(
+      find.byKey(const ValueKey('company-request-options-retry')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('company-request-new-from-inbox')),
+      findsOneWidget,
+    );
+    expect(find.text('New request options could not load.'), findsNothing);
+    expect(find.text('CMR-0001'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('approval inbox stays usable at 360px', (tester) async {
     final repository = _CompanyRequestRepository();
     await _pumpApproval(
@@ -373,7 +577,8 @@ void main() {
         'goldens/company_requests/after_company_approval_inbox_mobile.png',
       ),
     );
-    await tester.tap(
+    await _tapVisible(
+      tester,
       find.byKey(const ValueKey('company-register-issue_history')),
     );
     await tester.pumpAndSettle();
@@ -432,8 +637,8 @@ void main() {
           requestId: 'c1000000-0000-4000-8000-000000000010',
         ),
       );
-      expect(find.text('Fulfilment'), findsOneWidget);
-      expect(find.text('Save supply plan'), findsOneWidget);
+      expect(find.text('Fulfilment'), findsNothing);
+      expect(find.text('Arrange items'), findsOneWidget);
       expect(find.text('Dispatch ready quantity'), findsWidgets);
       expect(find.text('Withdraw remaining need'), findsOneWidget);
       await expectLater(
@@ -449,13 +654,22 @@ void main() {
           OutlinedButton,
           'Withdraw remaining need',
         );
-        await tester.drag(find.byType(ListView), const Offset(0, -700));
+        await _tapVisible(tester, withdrawalButton);
         await tester.pumpAndSettle();
-        await tester.tap(withdrawalButton);
-        await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'No longer required');
+        await tester.enterText(
+          find.byKey(const ValueKey('company-operation-reason')),
+          'No longer required',
+        );
+        await tester.enterText(
+          find.byKey(
+            const ValueKey(
+              'company-quantity-c1000000-0000-4000-8000-000000000011',
+            ),
+          ),
+          '2',
+        );
         await tester.tap(
-          find.widgetWithText(FilledButton, 'Withdraw remaining need'),
+          find.byKey(const ValueKey('company-operation-confirm')),
         );
         await tester.pumpAndSettle();
         expect(repository.withdrawalCalls, 1);
@@ -469,6 +683,7 @@ Future<void> _pumpComposer(
   WidgetTester tester, {
   required _CompanyRequestRepository repository,
   required Size size,
+  String? draftId,
 }) async {
   SharedPreferences.setMockInitialValues({'selected_language': 'en'});
   final preferences = await SharedPreferences.getInstance();
@@ -495,7 +710,8 @@ Future<void> _pumpComposer(
           routes: [
             GoRoute(
               path: '/yorks/material-requests/company/new',
-              builder: (_, _) => const YorksV1CompanyMaterialRequestScreen(),
+              builder: (_, _) =>
+                  YorksV1CompanyMaterialRequestScreen(draftId: draftId),
             ),
             GoRoute(
               path: '/yorks/material-requests/company/:requestId',
@@ -520,8 +736,11 @@ Future<void> _pumpApproval(
   required _CompanyRequestRepository repository,
   required Size size,
   required Widget child,
+  String? actorId,
+  String languageCode = 'en',
+  double textScale = 1,
 }) async {
-  SharedPreferences.setMockInitialValues({'selected_language': 'en'});
+  SharedPreferences.setMockInitialValues({'selected_language': languageCode});
   final preferences = await SharedPreferences.getInstance();
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -530,6 +749,7 @@ Future<void> _pumpApproval(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        yorksV1AuthUserIdProvider.overrideWithValue(actorId),
         sharedPreferencesProvider.overrideWithValue(preferences),
         yorksV1CompanyMaterialRequestRepositoryProvider.overrideWithValue(
           repository,
@@ -538,7 +758,19 @@ Future<void> _pumpApproval(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: child,
+        home: Builder(
+          builder: (context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: Directionality(
+              textDirection: languageCode == 'ar'
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
+              child: child,
+            ),
+          ),
+        ),
       ),
     ),
   );
@@ -622,6 +854,39 @@ class _CompanyRequestRepository
   _CompanyRequestRepository({this.request});
 
   final YorksV1CompanyMaterialRequest? request;
+  bool failFirstDispatch = false;
+  bool failDraftOptions = false;
+  final List<String> dispatchKeys = [];
+  List<Map<String, Object?>>? lastLines;
+  String? handoverBasis;
+  @override
+  Future<YorksV1CompanyMaterialRequest> dispatch({
+    required String requestId,
+    required int expectedVersion,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async {
+    dispatchKeys.add(idempotencyKey);
+    lastLines = lines;
+    if (failFirstDispatch && dispatchKeys.length == 1) {
+      throw Exception('temporary outage');
+    }
+    return request ?? _fulfilmentRequest;
+  }
+
+  @override
+  Future<YorksV1CompanyMaterialRequest> confirmHandover({
+    required String requestId,
+    required int expectedVersion,
+    required String acknowledgementBasis,
+    required List<Map<String, Object?>> lines,
+    required String idempotencyKey,
+  }) async {
+    handoverBasis = acknowledgementBasis;
+    lastLines = lines;
+    return request!;
+  }
+
   int preflightCalls = 0;
   int submitCalls = 0;
   int saveCalls = 0;
@@ -640,18 +905,21 @@ class _CompanyRequestRepository
 
   @override
   Future<List<YorksV1CompanyMaterialRequestDraftOption>>
-  listDraftOptions() async => const [
-    YorksV1CompanyMaterialRequestDraftOption(
-      categoryId: 'c1000000-0000-4000-8000-000000000001',
-      categoryCode: 'ppe',
-      categoryName: 'Personal protective equipment',
-      responsibleUnitId: 'c1000000-0000-4000-8000-000000000002',
-      responsibleUnitCode: 'WORKSHOP',
-      responsibleUnitName: 'Workshop',
-      beneficiaries: [_person],
-      receivers: [_person],
-    ),
-  ];
+  listDraftOptions() async {
+    if (failDraftOptions) throw Exception('temporary options outage');
+    return const [
+      YorksV1CompanyMaterialRequestDraftOption(
+        categoryId: 'c1000000-0000-4000-8000-000000000001',
+        categoryCode: 'ppe',
+        categoryName: 'Personal protective equipment',
+        responsibleUnitId: 'c1000000-0000-4000-8000-000000000002',
+        responsibleUnitCode: 'WORKSHOP',
+        responsibleUnitName: 'Workshop',
+        beneficiaries: [_person],
+        receivers: [_person],
+      ),
+    ];
+  }
 
   @override
   Future<List<YorksV1MaterialRequestInventorySuggestion>> searchMaterials({
@@ -708,6 +976,8 @@ class _CompanyRequestRepository
     id: draft.id,
     recordVersion: draft.recordVersion + 1,
     state: state,
+    categoryId: draft.categoryId,
+    responsibleUnitId: draft.responsibleUnitId,
     categoryName: 'Personal protective equipment',
     responsibleUnitName: 'Workshop',
     purpose: draft.purpose!,
@@ -891,8 +1161,43 @@ class _CompanyRequestRepository
           'id': 'c1000000-0000-4000-8000-000000000021',
           'request_line_id': 'c1000000-0000-4000-8000-000000000011',
           'arranged_qty': '12',
+          'dispatchable_qty': '12',
         },
       ],
     },
   );
 }
+
+const _handoverRequest = YorksV1CompanyMaterialRequest(
+  id: 'handover',
+  recordVersion: 7,
+  state: 'awaiting_beneficiary_handover',
+  categoryName: 'PPE',
+  responsibleUnitName: 'Workshop',
+  purpose: 'Safety helmets',
+  timing: YorksV1MaterialRequestTiming.normal,
+  deliveryCollectionPoint: 'Workshop',
+  beneficiary: YorksV1CompanyMaterialRequestPerson(
+    authUserId: 'beneficiary',
+    displayName: 'Amina',
+  ),
+  authorizedReceiver: YorksV1CompanyMaterialRequestPerson(
+    authUserId: 'receiver',
+    displayName: 'Receiver',
+  ),
+  requesterDisplayName: 'Requester',
+  requesterExactRole: 'site_engineer',
+  canHandover: true,
+  lines: [
+    YorksV1CompanyMaterialRequestLine(
+      id: 'line',
+      displayOrder: 1,
+      description: 'Safety helmets',
+      quantity: '3',
+      unit: 'pcs',
+    ),
+  ],
+  unallocatedReceiptLines: [
+    {'id': 'receipt-line', 'request_line_id': 'line', 'available_qty': '3'},
+  ],
+);

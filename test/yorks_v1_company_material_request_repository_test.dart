@@ -12,6 +12,26 @@ import 'package:material_ledger/shared/sync/connectivity_service.dart';
 void main() {
   group('Company Material Request repository', () {
     test(
+      'workspace search sends a bounded server page and preserves totals',
+      () async {
+        final rpc = _RecordingRpc();
+        final repository = _repository(rpc);
+        final page = await repository.listPage(
+          view: 'requests',
+          query: '  helmet  ',
+          offset: 15,
+        );
+        expect(page.totalCount, 31);
+        expect(page.items.single.requestNumber, 'CMR-000001');
+        expect(rpc.calls.single.parameters, {
+          'p_view': 'requests',
+          'p_query': 'helmet',
+          'p_offset': 15,
+          'p_limit': 15,
+        });
+      },
+    );
+    test(
       'fails closed before RPC when rollout is disabled or offline',
       () async {
         final rpc = _RecordingRpc();
@@ -290,6 +310,10 @@ final class _RecordingRpc implements YorksV1MaterialRequestRpcClient {
     calls.add(_RpcCall(functionName, parameters));
     return switch (functionName) {
       'v1_list_company_material_request_draft_options' => [_optionJson],
+      'v1_company_material_request_workspace_page' => {
+        'items': [_inboxJson],
+        'total_count': 31,
+      },
       'v1_company_material_request_approval_preflight' => _preflightJson,
       'v1_search_company_material_request_candidates' => const [
         {

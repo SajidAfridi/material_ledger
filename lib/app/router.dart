@@ -1608,7 +1608,9 @@ GoRouter createAppRouter({
           path: RoutePaths.yorksV1CompanyMaterialRequestNew,
           pageBuilder: (context, state) => _yorksV1Slide(
             state.pageKey,
-            const _DeferredCompanyMaterialRequestScreen(),
+            _DeferredCompanyMaterialRequestScreen(
+              draftId: state.uri.queryParameters['draft'],
+            ),
           ),
         ),
       if (yorksV1CompanyMaterialRequestsEnabled)
@@ -2109,8 +2111,10 @@ class _DeferredCompanyMaterialRequestScreen extends StatefulWidget {
   const _DeferredCompanyMaterialRequestScreen({
     this.requestId,
     this.inbox = false,
+    this.draftId,
   });
 
+  final String? draftId;
   final String? requestId;
   final bool inbox;
 
@@ -2151,7 +2155,9 @@ class _DeferredCompanyMaterialRequestScreenState
               requestId: widget.requestId!,
             );
           }
-          return company_material_request.YorksV1CompanyMaterialRequestScreen();
+          return company_material_request.YorksV1CompanyMaterialRequestScreen(
+            draftId: widget.draftId,
+          );
         }
         if (snapshot.hasError) {
           return Center(

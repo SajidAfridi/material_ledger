@@ -47,7 +47,9 @@ bool _requestDetailsReady(YorksV1CompanyMaterialRequestDraft draft) =>
 /// The presentation follows the established Material Request language without
 /// introducing project, BOQ or inventory authority to this separate lane.
 class YorksV1CompanyMaterialRequestScreen extends ConsumerStatefulWidget {
-  const YorksV1CompanyMaterialRequestScreen({super.key});
+  const YorksV1CompanyMaterialRequestScreen({super.key, this.draftId});
+
+  final String? draftId;
 
   @override
   ConsumerState<YorksV1CompanyMaterialRequestScreen> createState() =>
@@ -69,6 +71,9 @@ class _YorksV1CompanyMaterialRequestScreenState
   bool _allowPop = false;
   bool _exitDecisionOpen = false;
   bool _inspectorExpanded = false;
+  bool _restoring = false;
+  bool _restoreFailed = false;
+  int _routeGeneration = 0;
 
   @override
   void initState() {
@@ -91,6 +96,54 @@ class _YorksV1CompanyMaterialRequestScreenState
     );
     _purpose.addListener(_onTextChanged);
     _point.addListener(_onTextChanged);
+    if (widget.draftId != null) unawaited(_restoreDraft());
+  }
+
+  Future<void> _restoreDraft() async {
+    setState(() {
+      _restoring = true;
+      _restoreFailed = false;
+    });
+    try {
+      final request = await ref
+          .read(yorksV1CompanyMaterialRequestRepositoryProvider)
+          .getRequest(widget.draftId!);
+      if (!mounted) return;
+      if (request.state != 'draft' ||
+          request.categoryId == null ||
+          request.responsibleUnitId == null) {
+        context.go('/yorks/material-requests/company/${request.id}');
+        return;
+      }
+      _purpose.text = request.purpose;
+      _point.text = request.deliveryCollectionPoint;
+      setState(() {
+        _draft = YorksV1CompanyMaterialRequestDraft(
+          id: request.id,
+          recordVersion: request.recordVersion,
+          submissionIdempotencyKey: const Uuid().v4(),
+          categoryId: request.categoryId,
+          responsibleUnitId: request.responsibleUnitId,
+          purpose: request.purpose,
+          deliveryCollectionPoint: request.deliveryCollectionPoint,
+          beneficiaryAuthUserId: request.beneficiary.authUserId,
+          authorizedReceiverAuthUserId: request.authorizedReceiver.authUserId,
+          timing: request.timing,
+          scheduledDate: request.scheduledDate,
+          lines: request.lines,
+        );
+        _hasUnsavedChanges = false;
+        _restoring = false;
+      });
+      await _checkRoute();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _restoring = false;
+          _restoreFailed = true;
+        });
+      }
+    }
   }
 
   @override
@@ -125,6 +178,7 @@ class _YorksV1CompanyMaterialRequestScreenState
       _reviewConfirmed = false;
       _hasUnsavedChanges = true;
       if (authorizationChanged) {
+        _routeGeneration++;
         _preflight = null;
         _routeUnavailable = false;
         _routeChecking = false;
@@ -134,6 +188,7 @@ class _YorksV1CompanyMaterialRequestScreenState
   }
 
   Future<void> _checkRoute() async {
+    final generation = ++_routeGeneration;
     final category = _draft.categoryId;
     final unit = _draft.responsibleUnitId;
     final beneficiary = _draft.beneficiaryAuthUserId;
@@ -155,6 +210,7 @@ class _YorksV1CompanyMaterialRequestScreenState
             authorizedReceiverAuthUserId: receiver,
           );
       if (!mounted ||
+          generation != _routeGeneration ||
           category != _draft.categoryId ||
           unit != _draft.responsibleUnitId ||
           beneficiary != _draft.beneficiaryAuthUserId ||
@@ -167,7 +223,7 @@ class _YorksV1CompanyMaterialRequestScreenState
         _routeChecking = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _routeGeneration) return;
       setState(() {
         _preflight = null;
         _routeUnavailable = true;
@@ -201,7 +257,7 @@ class _YorksV1CompanyMaterialRequestScreenState
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       } else {
-        GoRouter.maybeOf(context)?.go('/yorks/material-requests');
+        GoRouter.maybeOf(context)?.go('/yorks/material-requests/company');
       }
     });
   }
@@ -421,6 +477,15 @@ class _YorksV1CompanyMaterialRequestScreenState
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
+    if (_restoring) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_restoreFailed) {
+      return _CompanyRequestPolicyState(
+        language: language,
+        onRetry: _restoreDraft,
+      );
+    }
     final options = ref.watch(
       yorksV1CompanyMaterialRequestDraftOptionsProvider,
     );
@@ -520,16 +585,6 @@ class _YorksV1CompanyMaterialRequestScreenState
             .active(language),
       ),
       const SizedBox(height: AppSpacing.lg),
-      YorksMobileCallout(
-        icon: Icons.apartment_rounded,
-        title: YorksV1CompanyMaterialRequestStrings.companyLaneTitle.active(
-          language,
-        ),
-        message: YorksV1CompanyMaterialRequestStrings.companyLaneMessage.active(
-          language,
-        ),
-      ),
-      const SizedBox(height: AppSpacing.md),
       YorksMobileCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -871,81 +926,44 @@ class _DesktopHero extends StatelessWidget {
   final AppLanguage language;
   final bool inspectorExpanded;
   final VoidCallback onToggleInspector;
-
   @override
-  Widget build(BuildContext context) => _CompanyCard(
-    padding: const EdgeInsets.all(AppSpacing.lg),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          YorksV1CompanyMaterialRequestStrings.materialRequests
-              .active(language)
-              .toUpperCase(),
-          style: AppTypography.labelSmall.copyWith(
-            color: AppColors.blue,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.3,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
+  Widget build(BuildContext context) => Row(
+    children: [
+      const Icon(Icons.business_center_outlined, color: AppColors.blue),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                YorksV1CompanyMaterialRequestStrings.newRequest.active(
-                  language,
-                ),
-                style: AppTypography.headlineMedium.copyWith(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
+            Text(
+              YorksV1CompanyMaterialRequestStrings.newRequest.active(language),
+              style: AppTypography.headlineSmall.copyWith(
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(width: AppSpacing.lg),
-            Wrap(
-              spacing: AppSpacing.sm,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('company-request-information-toggle'),
-                  onPressed: onToggleInspector,
-                  icon: Icon(
-                    inspectorExpanded
-                        ? Icons.close_rounded
-                        : Icons.info_outline_rounded,
-                  ),
-                  label: Text(
-                    (inspectorExpanded
-                            ? YorksV1CompanyMaterialRequestStrings
-                                  .hideRequestInformation
-                            : YorksV1CompanyMaterialRequestStrings
-                                  .showRequestInformation)
-                        .active(language),
-                  ),
-                ),
-                _StatusChip(
-                  icon: Icons.apartment_rounded,
-                  label: YorksV1CompanyMaterialRequestStrings.companyUse.active(
-                    language,
-                  ),
-                ),
-                _StatusChip(
-                  icon: Icons.lock_outline_rounded,
-                  label: YorksV1CompanyMaterialRequestStrings.privateDraft
-                      .active(language),
-                  neutral: true,
-                ),
-              ],
+            const SizedBox(height: 4),
+            Text(
+              YorksV1CompanyMaterialRequestStrings.privateDraft.active(
+                language,
+              ),
+              style: AppTypography.bodySmall.copyWith(color: AppColors.muted),
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          YorksV1CompanyMaterialRequestStrings.subtitle.active(language),
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.muted),
+      ),
+      OutlinedButton.icon(
+        key: const ValueKey('company-request-information-toggle'),
+        onPressed: onToggleInspector,
+        icon: Icon(
+          inspectorExpanded ? Icons.close_rounded : Icons.info_outline_rounded,
         ),
-      ],
-    ),
+        label: Text(
+          YorksV1CompanyMaterialRequestStrings.showRequestInformation.active(
+            language,
+          ),
+        ),
+      ),
+    ],
   );
 }
 
@@ -1122,11 +1140,6 @@ class _ContextFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          YorksV1CompanyMaterialRequestStrings.categoryAndUnit.active(language),
-          style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: AppSpacing.md),
         DropdownButtonFormField<YorksV1CompanyMaterialRequestDraftOption>(
           key: const ValueKey('company-material-request-context'),
           initialValue: selected,
@@ -1252,8 +1265,10 @@ class _RequestDetailFields extends StatelessWidget {
         key: const ValueKey('company-material-request-purpose'),
         controller: purpose,
         maxLength: 1000,
+        minLines: 1,
         maxLines: 3,
         decoration: InputDecoration(
+          counterText: '',
           labelText: YorksV1CompanyMaterialRequestStrings.purpose.active(
             language,
           ),
@@ -1266,6 +1281,7 @@ class _RequestDetailFields extends StatelessWidget {
         controller: collectionPoint,
         maxLength: 500,
         decoration: InputDecoration(
+          counterText: '',
           labelText: YorksV1CompanyMaterialRequestStrings
               .deliveryCollectionPoint
               .active(language),
@@ -1580,9 +1596,11 @@ class _CompanyLineEditor extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         YorksMobileSectionHeader(
-          title: YorksV1CompanyMaterialRequestStrings.materialItems.active(
-            language,
-          ),
+          title: compact
+              ? YorksV1CompanyMaterialRequestStrings.materialItems.active(
+                  language,
+                )
+              : '',
           subtitle: YorksV1CompanyMaterialRequestStrings.itemCount(
             count,
           ).active(language),
@@ -2540,34 +2558,26 @@ class _CompanyCard extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.icon,
-    required this.label,
-    this.neutral = false,
-  });
+  const _StatusChip({required this.icon, required this.label});
   final IconData icon;
   final String label;
-  final bool neutral;
+
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: neutral ? AppColors.neutralContainer : AppColors.blueContainer,
+      color: AppColors.blueContainer,
       borderRadius: BorderRadius.circular(999),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          size: 15,
-          color: neutral ? AppColors.neutralText : AppColors.blue,
-        ),
+        Icon(icon, size: 15, color: AppColors.blue),
         const SizedBox(width: 5),
         Text(
           label,
           style: AppTypography.labelMedium.copyWith(
-            color: neutral ? AppColors.neutralText : AppColors.blue,
+            color: AppColors.blue,
             fontWeight: FontWeight.w800,
           ),
         ),

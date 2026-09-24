@@ -68,6 +68,7 @@ import 'yorks_v1_material_request_centre.dart';
 import 'yorks_v1_returns_documents_screen.dart';
 import '../yorks_v1_feature_action_access.dart';
 import '../widgets/yorks_v1_request_information.dart';
+import '../widgets/yorks_v1_request_use_switch.dart';
 import '../widgets/yorks_v1_material_request_history.dart';
 
 final yorksV1MaterialRequestInspectorExpandedProvider =
@@ -87,6 +88,34 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
     this.projectId,
     this.embedded = false,
   });
+  final String? projectId;
+  final bool embedded;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showUse =
+        projectId == null &&
+        !embedded &&
+        ref.watch(yorksV1FeatureFlagsProvider).companyMaterialRequests;
+    final project = _ProjectMaterialRequestsScreen(
+      projectId: projectId,
+      embedded: embedded,
+    );
+    if (!showUse) return project;
+    return Column(
+      children: [
+        YorksV1RequestUseSwitch(
+          company: false,
+          language: ref.watch(languageProvider),
+        ),
+        Expanded(child: project),
+      ],
+    );
+  }
+}
+
+class _ProjectMaterialRequestsScreen extends ConsumerWidget {
+  const _ProjectMaterialRequestsScreen({this.projectId, this.embedded = false});
 
   final String? projectId;
   final bool embedded;
@@ -200,7 +229,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
           requests: const [],
           language: language,
           canCreate: canCreate,
-          canCreateCompany: companyRequestsEnabled,
+          canCreateCompany: false,
           fixedProjectId: projectId,
           summaryPageLoader: phase2Repository.listRequestSummaries,
           operationsDashboardLoader: operationsRepository == null
@@ -251,7 +280,7 @@ class YorksV1MaterialRequestsScreen extends ConsumerWidget {
               .toList(growable: false),
           language: language,
           canCreate: canCreate,
-          canCreateCompany: companyRequestsEnabled,
+          canCreateCompany: false,
           fixedProjectId: projectId,
           onCreate: createAccess.canWrite
               ? () => context.push(
@@ -496,7 +525,7 @@ class _YorksMobileMaterialRequestsPageState
                   onRetryAccess: () => ref
                       .read(yorksV1CurrentPermissionSnapshotProvider.notifier)
                       .retryVerification(),
-                  canCreateCompany: companyRequestsEnabled,
+                  canCreateCompany: false,
                   localDrafts: savedDrafts,
                   operationsDashboard:
                       operations ??

@@ -359,7 +359,7 @@ class YorksV1CompanyMaterialRequestApprovalInboxItem {
     Map<String, dynamic> json,
   ) => YorksV1CompanyMaterialRequestApprovalInboxItem(
     id: _requiredText(json, 'id'),
-    requestNumber: _requiredText(json, 'request_number'),
+    requestNumber: _trimToNull(json['request_number']?.toString()) ?? '',
     recordVersion: _requiredInt(json, 'record_version'),
     state: _requiredText(json, 'state'),
     categoryName: _requiredText(json, 'category_name'),
@@ -369,7 +369,9 @@ class YorksV1CompanyMaterialRequestApprovalInboxItem {
     beneficiaryDisplayName: _requiredText(json, 'beneficiary_display_name'),
     submittedAt:
         _date(json['submitted_at']) ??
-        (throw const FormatException('Missing submitted_at')),
+        _date(json['updated_at']) ??
+        _date(json['created_at']) ??
+        (throw const FormatException('Missing request timestamp')),
     lineCount: _requiredInt(json, 'line_count'),
   );
 }
@@ -398,6 +400,8 @@ class YorksV1CompanyMaterialRequest {
     required this.requesterDisplayName,
     required this.requesterExactRole,
     required this.lines,
+    this.categoryId,
+    this.responsibleUnitId,
     this.canDecide = false,
     this.canPlan = false,
     this.canDispatch = false,
@@ -437,6 +441,8 @@ class YorksV1CompanyMaterialRequest {
   final String? approvalPolicyVersion;
   final String? requestNumber;
   final List<YorksV1CompanyMaterialRequestLine> lines;
+  final String? categoryId;
+  final String? responsibleUnitId;
   final bool canDecide;
   final bool canPlan;
   final bool canDispatch;
@@ -488,6 +494,8 @@ class YorksV1CompanyMaterialRequest {
       json['approval_policy_version']?.toString(),
     ),
     requestNumber: _trimToNull(json['request_number']?.toString()),
+    categoryId: _trimToNull(json['category_id']?.toString()),
+    responsibleUnitId: _trimToNull(json['responsible_unit_id']?.toString()),
     canDecide: json['can_decide'] == true,
     canPlan: json['can_plan'] == true,
     canDispatch: json['can_dispatch'] == true,
@@ -548,3 +556,12 @@ List<Map<String, dynamic>> _maps(Object? raw) => raw is! List
         for (final item in raw)
           if (item is Map) Map<String, dynamic>.from(item),
       ];
+
+class YorksV1CompanyMaterialRequestPage {
+  const YorksV1CompanyMaterialRequestPage({
+    required this.items,
+    required this.totalCount,
+  });
+  final List<YorksV1CompanyMaterialRequestApprovalInboxItem> items;
+  final int totalCount;
+}

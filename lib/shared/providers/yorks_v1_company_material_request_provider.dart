@@ -4,11 +4,13 @@ import '../models/yorks_v1_company_material_request.dart';
 import '../models/yorks_v1_material_request.dart';
 import '../repositories/yorks_v1_company_material_request_repository.dart';
 import 'yorks_v1_feature_flags_provider.dart';
+import 'yorks_v1_identity_provider.dart';
 import 'yorks_v1_material_request_repository_provider.dart';
 import '../sync/connectivity_service.dart';
 
 final yorksV1CompanyMaterialRequestRepositoryProvider =
     Provider<YorksV1CompanyMaterialRequestRepository>((ref) {
+      ref.watch(yorksV1AuthUserIdProvider);
       return YorksV1SupabaseCompanyMaterialRequestRepository(
         featureFlags: ref.watch(yorksV1FeatureFlagsProvider),
         connectivity: ref.watch(connectivityProvider),

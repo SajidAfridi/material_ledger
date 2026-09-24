@@ -2,6 +2,133 @@ import 'app_strings.dart';
 
 /// Bilingual-capable copy for the protected company-use request lane.
 abstract final class YorksV1CompanyMaterialRequestStrings {
+  static const projectUse = TranslatableString(
+    en: 'Project use',
+    ar: 'استخدام المشروع',
+    ur: 'پراجیکٹ استعمال',
+    hi: 'परियोजना उपयोग',
+  );
+  static const searchRequests = TranslatableString(
+    en: 'Search reference, purpose or person',
+    ar: 'ابحث بالمرجع أو الغرض أو الشخص',
+    ur: 'حوالہ، مقصد یا شخص تلاش کریں',
+    hi: 'संदर्भ, उद्देश्य या व्यक्ति खोजें',
+  );
+  static const resumeDraft = TranslatableString(
+    en: 'Continue draft',
+    ar: 'متابعة المسودة',
+    ur: 'ڈرافٹ جاری رکھیں',
+    hi: 'ड्राफ़्ट जारी रखें',
+  );
+  static const flowDetails = TranslatableString(
+    en: 'Request progress',
+    ar: 'تقدم الطلب',
+    ur: 'درخواست کی پیشرفت',
+    hi: 'अनुरोध की प्रगति',
+  );
+  static const reviewQuantities = TranslatableString(
+    en: 'Review items and quantities before confirming.',
+    ar: 'راجع المواد والكميات قبل التأكيد.',
+    ur: 'تصدیق سے پہلے اشیا اور مقدار کا جائزہ لیں۔',
+    hi: 'पुष्टि से पहले सामग्री और मात्रा की समीक्षा करें।',
+  );
+  static const quantityLimit = TranslatableString(
+    en: 'Enter a quantity within the available amount.',
+    ar: 'أدخل كمية ضمن المتاح.',
+    ur: 'دستیاب مقدار کے اندر مقدار درج کریں۔',
+    hi: 'उपलब्ध मात्रा के भीतर मात्रा दर्ज करें।',
+  );
+  static const available = TranslatableString(
+    en: 'Available',
+    ar: 'المتاح',
+    ur: 'دستیاب',
+    hi: 'उपलब्ध',
+  );
+  static const confirmSelection = TranslatableString(
+    en: 'Confirm selected items',
+    ar: 'تأكيد المواد المحددة',
+    ur: 'منتخب اشیا کی تصدیق کریں',
+    hi: 'चयनित सामग्री की पुष्टि करें',
+  );
+  static const arrangeItems = TranslatableString(
+    en: 'Arrange items',
+    ar: 'ترتيب المواد',
+    ur: 'اشیا کا انتظام کریں',
+    hi: 'सामग्री की व्यवस्था करें',
+  );
+  static const reviewItems = TranslatableString(
+    en: 'Review items',
+    ar: 'مراجعة المواد',
+    ur: 'اشیا کا جائزہ',
+    hi: 'सामग्री की समीक्षा करें',
+  );
+  static const editLine = TranslatableString(
+    en: 'Review / edit',
+    ar: 'مراجعة / تعديل',
+    ur: 'جائزہ / ترمیم',
+    hi: 'समीक्षा / संपादन',
+  );
+  static const notReviewed = TranslatableString(
+    en: 'Needs review',
+    ar: 'بحاجة إلى مراجعة',
+    ur: 'جائزہ درکار',
+    hi: 'समीक्षा आवश्यक',
+  );
+  static const followUpDate = TranslatableString(
+    en: 'Follow-up date',
+    ar: 'تاريخ المتابعة',
+    ur: 'فالو اپ کی تاریخ',
+    hi: 'अनुवर्ती तिथि',
+  );
+  static const chooseInventory = TranslatableString(
+    en: 'Choose the matching stock item',
+    ar: 'اختر مادة المخزون المطابقة',
+    ur: 'متعلقہ اسٹاک آئٹم منتخب کریں',
+    hi: 'मिलती हुई स्टॉक सामग्री चुनें',
+  );
+  static const checkLine = TranslatableString(
+    en: 'Check quantity, source and required details.',
+    ar: 'تحقق من الكمية والمصدر والبيانات المطلوبة.',
+    ur: 'مقدار، ماخذ اور ضروری تفصیلات چیک کریں۔',
+    hi: 'मात्रा, स्रोत और आवश्यक विवरण जाँचें।',
+  );
+  static const handoverSelf = TranslatableString(
+    en: 'Confirm that you received these items.',
+    ar: 'أكد استلامك لهذه المواد.',
+    ur: 'تصدیق کریں کہ آپ نے یہ اشیا وصول کی ہیں۔',
+    hi: 'पुष्टि करें कि आपने ये सामग्री प्राप्त की हैं।',
+  );
+  static const handoverWitness = TranslatableString(
+    en: 'Confirm that you handed these items to the named recipient.',
+    ar: 'أكد تسليم هذه المواد إلى المستفيد المحدد.',
+    ur: 'تصدیق کریں کہ آپ نے یہ اشیا نامزد وصول کنندہ کو دی ہیں۔',
+    hi: 'पुष्टि करें कि आपने ये सामग्री नामित प्राप्तकर्ता को सौंपी हैं।',
+  );
+  static const received = TranslatableString(
+    en: 'Received',
+    ar: 'مستلم',
+    ur: 'وصول شدہ',
+    hi: 'प्राप्त',
+  );
+  static const handedOver = TranslatableString(
+    en: 'Handed over',
+    ar: 'تم التسليم',
+    ur: 'حوالے کیا گیا',
+    hi: 'सौंपा गया',
+  );
+  static const returned = TranslatableString(
+    en: 'Returned',
+    ar: 'مرتجع',
+    ur: 'واپس کیا گیا',
+    hi: 'वापस किया गया',
+  );
+  static const requestOptionsFailed = TranslatableString(
+    en: 'New request options could not load.',
+    ar: 'تعذر تحميل خيارات الطلب الجديد.',
+    ur: 'نئی درخواست کے اختیارات لوڈ نہیں ہو سکے۔',
+    hi: 'नए अनुरोध के विकल्प लोड नहीं हो सके।',
+  );
+
   static const title = TranslatableString(
     en: 'Company material request',
     ar: 'طلب مواد للشركة',

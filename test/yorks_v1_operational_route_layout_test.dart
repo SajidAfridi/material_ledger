@@ -165,11 +165,11 @@ void main() {
       for (final entry in <({Size size, Key entryKey})>[
         (
           size: const Size(1366, 768),
-          entryKey: const ValueKey('material-request-centre-create-company'),
+          entryKey: const ValueKey('material-request-use-switch'),
         ),
         (
           size: const Size(360, 800),
-          entryKey: const ValueKey('mobile-mr-new-company-request'),
+          entryKey: const ValueKey('material-request-use-switch'),
         ),
       ]) {
         tester.view.physicalSize = entry.size;
@@ -199,6 +199,8 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byKey(entry.entryKey), findsOneWidget);
+        expect(find.text('Project use'), findsOneWidget);
+        expect(find.text('Company use'), findsOneWidget);
         expect(tester.takeException(), isNull, reason: '${entry.size}');
       }
 
