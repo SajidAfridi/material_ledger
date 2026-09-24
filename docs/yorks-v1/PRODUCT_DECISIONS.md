@@ -328,6 +328,12 @@ its own proposal and cannot arrange while reapproval is pending. The server
 enforces the cutoff, actor, capability, named grant and version under lock.
 Retained line IDs, protected commercial relations and all prior decision and
 revision evidence are preserved. No existing request is automatically enabled.
+The approved 25 September refinement adds an explicit, default-off per-request
+Procurement-role grant. The direct switch enables all active Procurement users
+with the required capability, or revokes Procurement editing, without a dialog.
+Named historical grants retain their original scope until explicitly changed.
+The same server lock, version, idempotency, approval and arrangement cutoff rules
+apply. The grant is audited; privacy-safe analytics record confirmed outcomes.
 The server-backed `draft` remains private to its creator and authorized Admin
 support, including discussion. Assigned/global Engineering participants become
 readers and may participate only after explicit submission; mentions identify

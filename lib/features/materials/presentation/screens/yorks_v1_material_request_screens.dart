@@ -12314,6 +12314,43 @@ class _RequestApprovalActionsState
     extends ConsumerState<_RequestApprovalActions> {
   bool _busy = false;
 
+  Future<void> _toggleProcurement(bool value) async {
+    if (_busy) return;
+    final repository = ref.read(yorksV1MaterialRequestRepositoryProvider);
+    if (repository is! YorksV1MaterialRequestPostApprovalEditRepository) return;
+    final editRepository =
+        repository as YorksV1MaterialRequestPostApprovalEditRepository;
+    setState(() => _busy = true);
+    try {
+      await editRepository.setPostApprovalEdit(
+        requestId: widget.request.id,
+        expectedVersion: widget.request.recordVersion,
+        enabled: value || widget.request.postApprovalEditEnabled,
+        procurementRoleEditEnabled: value,
+        idempotencyKey: const Uuid().v4(),
+      );
+      if (!mounted) return;
+      ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
+      ref.invalidate(yorksV1MaterialRequestListProvider);
+      await ref.read(
+        yorksV1MaterialRequestDetailProvider(widget.request.id).future,
+      );
+    } on YorksV1DomainException catch (error) {
+      if (mounted) {
+        _snack(
+          context,
+          YorksV1MaterialRequestStrings.commandFailure(error.code).primary,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = ref.watch(languageProvider);
@@ -12358,13 +12395,12 @@ class _RequestApprovalActionsState
                       ),
                       value:
                           widget.request.postApprovalEditEnabled &&
-                          widget.request.procurementEditorAuthUserId != null,
+                          (widget.request.procurementRoleEditEnabled ||
+                              widget.request.procurementEditorAuthUserId !=
+                                  null),
                       onChanged: _busy || !widget.canGrant
                           ? null
-                          : (value) => _configureEditGrant(
-                              procurementOnly: value,
-                              revokeProcurement: !value,
-                            ),
+                          : _toggleProcurement,
                     ),
                   ),
                   Flexible(
@@ -12377,6 +12413,12 @@ class _RequestApprovalActionsState
                 ],
               ),
             ),
+            if (_busy)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             TextButton(
               key: const ValueKey('material-request-editing-access-action'),
               onPressed: _busy || !widget.canGrant ? null : _configureEditGrant,
@@ -12427,49 +12469,18 @@ class _RequestApprovalActionsState
     ),
   );
 
-  Future<void> _configureEditGrant({
-    bool procurementOnly = false,
-    bool revokeProcurement = false,
-    bool openEditor = false,
-  }) async {
+  Future<void> _configureEditGrant({bool openEditor = false}) async {
+    if (_busy) return;
     final repository = ref.read(yorksV1MaterialRequestRepositoryProvider);
-    if (repository is! YorksV1MaterialRequestPostApprovalEditRepository) {
-      return;
-    }
+    if (repository is! YorksV1MaterialRequestPostApprovalEditRepository) return;
     final editRepository =
         repository as YorksV1MaterialRequestPostApprovalEditRepository;
     setState(() => _busy = true);
     try {
-      if (revokeProcurement) {
-        await editRepository.setPostApprovalEdit(
-          requestId: widget.request.id,
-          expectedVersion: widget.request.recordVersion,
-          enabled: widget.request.postApprovalEditEnabled,
-          procurementEditorAuthUserId: null,
-          idempotencyKey: const Uuid().v4(),
-        );
-        ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
-        ref.invalidate(yorksV1MaterialRequestListProvider);
-        return;
-      }
-      final candidates = await editRepository.listProcurementEditors(
-        widget.request.id,
-      );
-      if (!mounted) return;
-      var enabled =
-          widget.request.postApprovalEditEnabled ||
-          procurementOnly ||
-          openEditor;
-      var editorId =
-          candidates.any(
-            (candidate) =>
-                candidate.authUserId ==
-                widget.request.procurementEditorAuthUserId,
-          )
-          ? widget.request.procurementEditorAuthUserId ?? ''
-          : '';
+      var enabled = widget.request.postApprovalEditEnabled || openEditor;
+      var roleEnabled = widget.request.procurementRoleEditEnabled;
       final language = ref.read(languageProvider);
-      final selected = await showDialog<({bool enabled, String editorId})>(
+      final selected = await showDialog<({bool enabled, bool roleEnabled})>(
         context: context,
         animationStyle: AnimationStyle.noAnimation,
         builder: (dialogContext) => StatefulBuilder(
@@ -12477,62 +12488,39 @@ class _RequestApprovalActionsState
             title: Text(
               YorksV1MaterialRequestStrings.editingAccess.active(language),
             ),
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
+            content: SizedBox(
+              width: 430,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     YorksV1MaterialRequestStrings.editingAccessHelp.active(
                       language,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  if (!procurementOnly)
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      YorksV1MaterialRequestStrings.allowEditingAfterApproval
+                          .active(language),
+                    ),
+                    value: enabled,
+                    onChanged: (value) => setDialogState(() {
+                      enabled = value;
+                      if (!value) roleEnabled = false;
+                    }),
+                  ),
+                  if (enabled)
                     SwitchListTile.adaptive(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        YorksV1MaterialRequestStrings.allowEditingAfterApproval
+                        YorksV1MaterialRequestStrings.allProcurementUsers
                             .active(language),
                       ),
-                      value: enabled,
-                      onChanged: (value) => setDialogState(() {
-                        enabled = value;
-                        if (!value) editorId = '';
-                      }),
-                    ),
-                  if (enabled) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    DropdownButtonFormField<String>(
-                      initialValue: procurementOnly && editorId.isEmpty
-                          ? null
-                          : editorId,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: YorksV1MaterialRequestStrings
-                            .procurementEditor
-                            .active(language),
-                      ),
-                      items: [
-                        if (!procurementOnly)
-                          DropdownMenuItem(
-                            value: '',
-                            child: Text(
-                              YorksV1MaterialRequestStrings.approversOnly
-                                  .active(language),
-                            ),
-                          ),
-                        for (final candidate in candidates)
-                          DropdownMenuItem(
-                            value: candidate.authUserId,
-                            child: Text(candidate.displayName),
-                          ),
-                      ],
+                      value: roleEnabled,
                       onChanged: (value) =>
-                          setDialogState(() => editorId = value ?? ''),
+                          setDialogState(() => roleEnabled = value),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -12544,11 +12532,9 @@ class _RequestApprovalActionsState
                 ),
               ),
               FilledButton(
-                onPressed: procurementOnly && editorId.isEmpty
-                    ? null
-                    : () => Navigator.of(
-                        dialogContext,
-                      ).pop((enabled: enabled, editorId: editorId)),
+                onPressed: () => Navigator.of(
+                  dialogContext,
+                ).pop((enabled: enabled, roleEnabled: roleEnabled)),
                 child: Text(
                   YorksV1MaterialRequestStrings.saveEditingAccess.active(
                     language,
@@ -12564,9 +12550,7 @@ class _RequestApprovalActionsState
         requestId: widget.request.id,
         expectedVersion: widget.request.recordVersion,
         enabled: selected.enabled,
-        procurementEditorAuthUserId: selected.editorId.isEmpty
-            ? null
-            : selected.editorId,
+        procurementRoleEditEnabled: selected.enabled && selected.roleEnabled,
         idempotencyKey: const Uuid().v4(),
       );
       ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
@@ -12580,9 +12564,8 @@ class _RequestApprovalActionsState
         );
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted)
         _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
-      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -14400,7 +14383,9 @@ class _RequestRecordHeader extends StatelessWidget {
       // utilities occupy their own row, so their combined width no longer
       // forces a 14-inch office layout into the stacked action treatment.
       final decisionsInline =
-          hasWorkflowActions && constraints.maxWidth >= 1100;
+          hasWorkflowActions &&
+          constraints.maxWidth / MediaQuery.textScalerOf(context).scale(1) >=
+              900;
       final utilitiesInline = constraints.maxWidth >= 900;
       final title =
           request.requestNumber ??
@@ -16350,12 +16335,22 @@ Future<void> _showRequestWorkspaceInspector(
           child: SizedBox(
             width: panelWidth,
             height: double.infinity,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              child: _RequestWorkspaceInspector(
-                request: request,
-                language: language,
-                onClose: () => Navigator.of(dialogContext).pop(),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: math.max(
+                      0,
+                      constraints.maxHeight - AppSpacing.sm * 2,
+                    ),
+                  ),
+                  child: _RequestWorkspaceInspector(
+                    request: request,
+                    language: language,
+                    onClose: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ),
               ),
             ),
           ),

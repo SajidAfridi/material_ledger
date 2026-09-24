@@ -82,44 +82,53 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       var version = 4;
-      YorksV1MaterialRequest makeRequest(bool enabled, String? editor) =>
-          YorksV1MaterialRequest(
-            id: 'post-edit-layout',
-            projectId: 'project-layout',
-            projectReference: 'YRA-123',
-            projectName: 'Yorks Tower',
-            scopeId: 'scope-layout',
-            scopeName: 'Main Building',
-            state: YorksV1MaterialRequestState.approvedForArrangement,
-            recordVersion: version,
-            createdAt: DateTime.utc(2026, 9, 24),
-            updatedAt: DateTime.utc(2026, 9, 24),
-            timing: YorksV1MaterialRequestTiming.normal,
-            requestNumber: 'YRA123-MR102',
-            postApprovalEditEnabled: enabled,
-            procurementEditorAuthUserId: editor,
-            canManagePostApprovalEdit: scenario.manage,
-            canEditBeforeApproval: false,
-            canEditPostApproval:
-                enabled && (scenario.manage || editor == 'procurement-user'),
-            lines: const [
-              YorksV1MaterialRequestLine(
-                id: 'line-layout',
-                displayOrder: 1,
-                source: YorksV1MaterialRequestLineSource.custom,
-                description: 'Duct fitting',
-                quantity: '3',
-                unit: 'Nos',
-              ),
-            ],
-          );
+      YorksV1MaterialRequest makeRequest(
+        bool enabled,
+        String? editor, [
+        bool roleEnabled = false,
+      ]) => YorksV1MaterialRequest(
+        id: 'post-edit-layout',
+        projectId: 'project-layout',
+        projectReference: 'YRA-123',
+        projectName: 'Yorks Tower',
+        scopeId: 'scope-layout',
+        scopeName: 'Main Building',
+        state: YorksV1MaterialRequestState.approvedForArrangement,
+        recordVersion: version,
+        createdAt: DateTime.utc(2026, 9, 24),
+        updatedAt: DateTime.utc(2026, 9, 24),
+        timing: YorksV1MaterialRequestTiming.normal,
+        requestNumber: 'YRA123-MR102',
+        postApprovalEditEnabled: enabled,
+        procurementEditorAuthUserId: editor,
+        procurementRoleEditEnabled: roleEnabled,
+        canManagePostApprovalEdit: scenario.manage,
+        canEditBeforeApproval: false,
+        canEditPostApproval:
+            enabled &&
+            (scenario.manage || roleEnabled || editor == 'procurement-user'),
+        lines: const [
+          YorksV1MaterialRequestLine(
+            id: 'line-layout',
+            displayOrder: 1,
+            source: YorksV1MaterialRequestLineSource.custom,
+            description: 'Duct fitting',
+            quantity: '3',
+            unit: 'Nos',
+          ),
+        ],
+      );
       final request = makeRequest(
         scenario.enabled,
         scenario.enabled ? 'procurement-user' : null,
       );
-      final repository = _EditingRepository(request, (enabled, editor) {
+      final repository = _EditingRepository(request, (
+        enabled,
+        editor,
+        roleEnabled,
+      ) {
         version++;
-        return makeRequest(enabled, editor);
+        return makeRequest(enabled, editor, roleEnabled);
       });
       final workspace = YorksV1ArrangementWorkspace(
         requestId: request.id,
@@ -230,36 +239,60 @@ void main() {
           ),
         );
         if (!scenario.enabled) {
+          // The narrow-desktop modal remains viewport height even when history
+          // is empty/loading/unavailable instead of shrinking around its body.
+          await tester.tap(
+            find.byKey(const ValueKey('material-request-information-action')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            tester
+                .getSize(
+                  find.byKey(
+                    const ValueKey('material-request-workspace-inspector'),
+                  ),
+                )
+                .height,
+            greaterThanOrEqualTo(752),
+          );
+          await tester.tap(
+            find.byKey(const ValueKey('material-request-inspector-close')),
+          );
+          await tester.pumpAndSettle();
+          for (final width in [1920.0, 1440.0, 1280.0, 1024.0]) {
+            tester.view.physicalSize = Size(width, 900);
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+            expect(find.text('Edit request'), findsOneWidget);
+            expect(find.text('Arrange Items'), findsOneWidget);
+            if (width >= 1440) {
+              await expectLater(
+                find.byType(MaterialApp),
+                matchesGoldenFile(
+                  'goldens/r35/mr_record_header_${width.toInt()}.png',
+                ),
+              );
+            }
+          }
+          tester.view.physicalSize = const Size(1366, 768);
+          await tester.pumpAndSettle();
           await tester.tap(find.text('Edit request'));
           await tester.pumpAndSettle();
           expect(find.byType(AlertDialog), findsOneWidget);
           expect(repository.calls, isEmpty);
           await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
           await tester.pumpAndSettle();
-          await tester.tap(switchFinder);
-          await tester.pumpAndSettle();
-          expect(repository.calls, isEmpty);
-          expect(
-            tester
-                .widget<FilledButton>(
-                  find.widgetWithText(FilledButton, 'Save access'),
-                )
-                .onPressed,
-            isNull,
-          );
-          await tester.tap(find.byType(DropdownButtonFormField<String>));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Procurement Editor').last);
-          await tester.pumpAndSettle();
           repository.pending = Completer<void>();
-          await tester.tap(find.text('Save access'));
+          await tester.tap(switchFinder);
           await tester.pump();
+          expect(find.byType(AlertDialog), findsNothing);
           expect(tester.widget<Switch>(switchFinder).value, isFalse);
           expect(tester.widget<Switch>(switchFinder).onChanged, isNull);
           repository.pending!.complete();
           await tester.pumpAndSettle();
           expect(tester.widget<Switch>(switchFinder).value, isTrue);
-          expect(repository.calls.single.editor, 'procurement-user');
+          expect(repository.calls.single.roleEnabled, isTrue);
+          expect(repository.calls.single.editor, isNull);
           expect(repository.calls.single.version, 4);
           repository.pending = null;
         }
@@ -318,10 +351,11 @@ class _EditingRepository
         YorksV1MaterialRequestPostApprovalEditRepository {
   _EditingRepository(this.request, this.update);
   YorksV1MaterialRequest request;
-  final YorksV1MaterialRequest Function(bool, String?) update;
+  final YorksV1MaterialRequest Function(bool, String?, bool) update;
   Completer<void>? pending;
   bool fail = false;
-  final calls = <({bool enabled, String? editor, int version})>[];
+  final calls =
+      <({bool enabled, bool roleEnabled, String? editor, int version})>[];
   @override
   Future<List<YorksV1MaterialRequestMention>> listProcurementEditors(
     String requestId,
@@ -338,16 +372,22 @@ class _EditingRepository
     required int expectedVersion,
     required bool enabled,
     String? procurementEditorAuthUserId,
+    bool procurementRoleEditEnabled = false,
     required String idempotencyKey,
   }) async {
     calls.add((
       enabled: enabled,
+      roleEnabled: procurementRoleEditEnabled,
       editor: procurementEditorAuthUserId,
       version: expectedVersion,
     ));
     if (pending != null) await pending!.future;
     if (fail) throw StateError('Server rejected grant');
-    request = update(enabled, procurementEditorAuthUserId);
+    request = update(
+      enabled,
+      procurementEditorAuthUserId,
+      procurementRoleEditEnabled,
+    );
     return request;
   }
 

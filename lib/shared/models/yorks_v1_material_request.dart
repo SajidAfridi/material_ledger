@@ -1307,6 +1307,7 @@ class YorksV1MaterialRequest {
     this.postApprovalEditEnabled = false,
     this.postApprovalAmendmentPending = false,
     this.procurementEditorAuthUserId,
+    this.procurementRoleEditEnabled = false,
     this.canManagePostApprovalEdit = false,
     this.canEditPostApproval = false,
     this.requestDecision,
@@ -1349,6 +1350,7 @@ class YorksV1MaterialRequest {
   final bool postApprovalEditEnabled;
   final bool postApprovalAmendmentPending;
   final String? procurementEditorAuthUserId;
+  final bool procurementRoleEditEnabled;
   final bool canManagePostApprovalEdit;
   final bool canEditPostApproval;
   final YorksV1MaterialRequestDecision? requestDecision;
@@ -1410,6 +1412,7 @@ class YorksV1MaterialRequest {
       postApprovalEditEnabled: json['post_approval_edit_enabled'] == true,
       postApprovalAmendmentPending:
           json['post_approval_amendment_pending'] == true,
+      procurementRoleEditEnabled: json['procurement_role_edit_enabled'] == true,
       procurementEditorAuthUserId: _trimToNull(
         json['procurement_editor_auth_user_id'],
       ),

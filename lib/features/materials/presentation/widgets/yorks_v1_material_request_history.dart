@@ -62,6 +62,10 @@ class _YorksV1MaterialRequestHistorySectionState
     return _InspectorSurface(
       key: const ValueKey('material-request-history'),
       child: page.when(
+        // Dependency refreshes retain the last authorized timeline. Explicit
+        // invalidation (including permission revisions) must clear it.
+        skipLoadingOnReload: true,
+        skipLoadingOnRefresh: false,
         loading: () => SizedBox(
           height: 56,
           child: Row(
@@ -347,6 +351,8 @@ class _HistoryEventTile extends StatelessWidget {
   }
 
   IconData _iconFor(String eventType) => switch (eventType) {
+    'material_request_post_approval_edit_grant_changed' =>
+      Icons.manage_accounts_outlined,
     'material_request_submitted' => Icons.outbox_outlined,
     'material_request_updated_for_approval' => Icons.edit_note_outlined,
     'material_request_decided' ||
@@ -377,6 +383,8 @@ class _HistoryEventTile extends StatelessWidget {
       }
     }
     return switch (eventType) {
+      'material_request_post_approval_edit_grant_changed' =>
+        YorksV1MaterialRequestStrings.editingAccessUpdated,
       'material_request_created' =>
         YorksV1MaterialRequestStrings.historyRequestCreated,
       'material_request_updated_for_approval' =>

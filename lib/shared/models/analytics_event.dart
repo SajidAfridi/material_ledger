@@ -37,6 +37,10 @@ enum AnalyticsEvent {
   materialRequestApproved('material request approved'),
   materialRequestReturned('material request returned'),
   materialRequestDecisionFailed('material request decision failed'),
+  materialRequestEditingAccessChanged(
+    'material request editing access changed',
+  ),
+  materialRequestEditingAccessFailed('material request editing access failed'),
   approvalActionStarted('approval started'),
   approvalActionCompleted('approval completed'),
   procurementRequestOpened('procurement request opened'),

@@ -119,6 +119,8 @@ All events below are centrally defined in `analytics_event.dart`.
 | `material request submitted` | Submit success | Server returns submitted record | `source`, `item_count` | Draft controller |
 | `material request submission failed` | Submit failure | Connected submit fails | `source`, `error_category` | Draft controller |
 | `material request opened` | Request engagement | Detail route entry | `source` | Route mapper |
+| `material request editing access changed` | Confirmed MR grant/revoke | Grant RPC returns successfully | `action_type`, `success` | No request or editor IDs; server audit remains authoritative |
+| `material request editing access failed` | Rejected/unconfirmed access change | Grant RPC fails | `action_type`, `success`, `error_category` | No free text or identifiers |
 | `material request approved` | Request approval | Decision RPC returns approved | `action_type` | MR repository |
 | `material request returned` | Returned for changes | Decision RPC returns returned | `action_type` | MR repository; no reason |
 | `material request decision failed` | Decision failure | Decision RPC fails | `action_type`, `error_category` | MR repository |

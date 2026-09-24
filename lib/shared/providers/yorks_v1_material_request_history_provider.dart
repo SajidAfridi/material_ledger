@@ -29,14 +29,20 @@ final yorksV1MaterialRequestHistoryPageProvider = FutureProvider.autoDispose
     .family<
       YorksV1MaterialRequestHistoryPage,
       YorksV1MaterialRequestHistoryQuery
-    >((ref, query) {
+    >((ref, query) async {
       yorksV1RefreshProtectedProjectionOnPermissionRevision(ref);
       // A completed workflow command refreshes this trusted detail projection
       // immediately. The detail projection owns the recipient-scoped
       // Realtime subscription, so watching it keeps this secondary inspector
       // current without opening a duplicate subscription.
-      ref.watch(yorksV1MaterialRequestDetailProvider(query.requestId));
-      return ref
-          .watch(yorksV1MaterialRequestHistoryRepositoryProvider)
-          .getHistory(query);
+      final request = ref.watch(
+        yorksV1MaterialRequestDetailProvider(query.requestId).future,
+      );
+      final repository = ref.watch(
+        yorksV1MaterialRequestHistoryRepositoryProvider,
+      );
+      // Watch one refresh future rather than both its loading and data states.
+      // Recheck request access before retrieving the scoped audit projection.
+      await request;
+      return repository.getHistory(query);
     });

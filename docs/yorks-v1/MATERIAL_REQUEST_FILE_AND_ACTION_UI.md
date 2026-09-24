@@ -36,8 +36,8 @@ Submitted Material Request headers have two stable action lanes:
 The 25 September 2026 user-approved header refinement makes Cancel request
 visible beside Edit while preserving its destructive styling, confirmation and
 trusted server command. Approvers see a separate, default-off Allow Procurement
-to edit switch. Enabling requires one eligible named Procurement editor and a
-server-confirmed grant; disabling removes only that named delegation and keeps
+to edit switch. Enabling directly grants the eligible Procurement role through one
+server-confirmed command without a dialog; disabling removes Procurement delegation and keeps
 any approver edit window. Editing access exposes the existing complete window
 settings. Edit remains discoverable to eligible approvers while the window is
 closed and opens that explicit settings confirmation before navigation.
@@ -63,6 +63,15 @@ directional end.
 Opening or closing the panel does not issue a command, refresh protected data,
 or replace working input. Escape, Back, the close control and barrier dismissal
 close only the information surface.
+
+Routine request refreshes retain the last authorized history timeline while
+one detail refresh future is resolved, then re-fetch history once. Explicit
+history invalidation (including permission revisions) clears previous content;
+access failures never fall back to cached history. The overlay panel fills the
+available viewport height independently of loading/error/content height, with
+internal scrolling for longer content. Header decisions share the identity row
+when the available content width and text scale permit it, rather than relying
+on the browser width alone.
 
 ## Acceptance
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -115,6 +116,74 @@ void main() {
       );
       expect(rpc.functionName, isNull);
     });
+
+    testWidgets(
+      'history keeps its geometry through detail refresh and clears on explicit invalidation',
+      (tester) async {
+        final detailRevision = StateProvider((ref) => 0);
+        var detail = Completer<YorksV1MaterialRequest>();
+        final repository = _CountingHistoryRepository();
+        final container = ProviderContainer(
+          overrides: [
+            yorksV1MaterialRequestDetailProvider('request-1').overrideWith((
+              ref,
+            ) {
+              ref.watch(detailRevision);
+              return detail.future;
+            }),
+            yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
+              repository,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(
+              home: Scaffold(
+                body: YorksV1MaterialRequestHistorySection(
+                  requestId: 'request-1',
+                  language: AppLanguage.english,
+                ),
+              ),
+            ),
+          ),
+        );
+        detail.complete(_historyRequest);
+        await tester.pumpAndSettle();
+        expect(repository.calls, 1);
+        final surface = find.byKey(const ValueKey('material-request-history'));
+        final height = tester.getSize(surface).height;
+        expect(find.text('Submitted for approval'), findsOneWidget);
+        detail = Completer<YorksV1MaterialRequest>();
+        container.read(detailRevision.notifier).state++;
+        await tester.pump();
+        expect(find.text('Submitted for approval'), findsOneWidget);
+        expect(tester.getSize(surface).height, height);
+        expect(repository.calls, 1);
+        detail.complete(_historyRequest);
+        await tester.pumpAndSettle();
+        expect(repository.calls, 2);
+        expect(tester.getSize(surface).height, height);
+        // Explicit permission invalidation does not show previously authorized data.
+        repository.pending = Completer<YorksV1MaterialRequestHistoryPage>();
+        container.invalidate(
+          yorksV1MaterialRequestHistoryPageProvider(
+            const YorksV1MaterialRequestHistoryQuery(requestId: 'request-1'),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('Submitted for approval'), findsNothing);
+        repository.pending!.completeError(
+          const YorksV1DomainException(YorksV1DomainErrorCode.unauthorized),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Submitted for approval'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'renders only the server-supplied request event in the inspector',
@@ -273,6 +342,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _historyRequest),
             yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
               repository,
             ),
@@ -300,6 +372,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            yorksV1MaterialRequestDetailProvider(
+              'request-1',
+            ).overrideWith((ref) async => _historyRequest),
             yorksV1MaterialRequestHistoryRepositoryProvider.overrideWithValue(
               _PagingFailureHistoryRepository(),
             ),
@@ -436,3 +511,15 @@ Map<String, dynamic> _historyFixture() => {
   'next_before_occurred_at': null,
   'next_before_id': null,
 };
+
+class _CountingHistoryRepository extends _FixtureHistoryRepository {
+  int calls = 0;
+  Completer<YorksV1MaterialRequestHistoryPage>? pending;
+  @override
+  Future<YorksV1MaterialRequestHistoryPage> getHistory(
+    YorksV1MaterialRequestHistoryQuery query,
+  ) {
+    calls++;
+    return pending?.future ?? super.getHistory(query);
+  }
+}

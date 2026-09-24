@@ -943,6 +943,18 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'درخواست میں ترمیم کریں',
     hi: 'अनुरोध संपादित करें',
   );
+  static const allProcurementUsers = TranslatableString(
+    en: 'All Procurement users',
+    ar: 'جميع مستخدمي المشتريات',
+    ur: 'تمام پروکیورمنٹ صارفین',
+    hi: 'सभी खरीद उपयोगकर्ता',
+  );
+  static const editingAccessUpdated = TranslatableString(
+    en: 'Editing access updated',
+    ar: 'تم تحديث صلاحية التعديل',
+    ur: 'ترمیم کی رسائی اپ ڈیٹ ہو گئی',
+    hi: 'संपादन की अनुमति अपडेट की गई',
+  );
   static const editingAccess = TranslatableString(
     en: 'Editing access',
     ar: 'صلاحية التعديل',

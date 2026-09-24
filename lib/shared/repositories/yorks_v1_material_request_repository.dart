@@ -134,6 +134,7 @@ abstract interface class YorksV1MaterialRequestPostApprovalEditRepository {
     required int expectedVersion,
     required bool enabled,
     String? procurementEditorAuthUserId,
+    bool procurementRoleEditEnabled = false,
     required String idempotencyKey,
   });
 }
@@ -265,23 +266,58 @@ class YorksV1SupabaseMaterialRequestRepository
     required int expectedVersion,
     required bool enabled,
     String? procurementEditorAuthUserId,
+    bool procurementRoleEditEnabled = false,
     required String idempotencyKey,
   }) async {
-    final response = await _invoke(
-      functionName: 'v1_set_material_request_post_approval_edit',
-      parameters: {
-        'p_payload': {
-          'request_id': requestId,
-          'expected_version': expectedVersion,
-          'enabled': enabled,
-          'procurement_editor_auth_user_id': enabled
-              ? procurementEditorAuthUserId
-              : null,
-        },
-        'p_idempotency_key': idempotencyKey,
-      },
+    final properties = <AnalyticsProperty, Object?>{
+      AnalyticsProperty.actionType: !enabled
+          ? 'disable_editing'
+          : procurementRoleEditEnabled
+          ? 'grant_procurement_role_editing'
+          : procurementEditorAuthUserId == null
+          ? 'approvers_only'
+          : 'grant_procurement_editing',
+    };
+    final operation = _analytics.beginOperation(
+      'material_request_editing_access',
+      properties: const {AnalyticsProperty.workflow: 'material_request'},
     );
-    return _single(response);
+    try {
+      final response = await _invoke(
+        functionName: 'v1_set_material_request_post_approval_edit',
+        parameters: {
+          'p_payload': {
+            'request_id': requestId,
+            'expected_version': expectedVersion,
+            'enabled': enabled,
+            'procurement_role_edit_enabled':
+                enabled && procurementRoleEditEnabled,
+            'procurement_editor_auth_user_id': enabled
+                ? procurementEditorAuthUserId
+                : null,
+          },
+          'p_idempotency_key': idempotencyKey,
+        },
+      );
+      final request = _single(response);
+      operation.complete();
+      _analytics.capture(
+        AnalyticsEvent.materialRequestEditingAccessChanged,
+        properties: {...properties, AnalyticsProperty.success: true},
+      );
+      return request;
+    } catch (error) {
+      operation.fail(error);
+      _analytics.capture(
+        AnalyticsEvent.materialRequestEditingAccessFailed,
+        properties: {
+          ...properties,
+          AnalyticsProperty.success: false,
+          AnalyticsProperty.errorCategory: analyticsErrorCategory(error),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
