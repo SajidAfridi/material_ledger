@@ -7590,13 +7590,13 @@ class _RequestFormFields extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: title),
+                    Expanded(flex: 3, child: title),
                     const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: project),
+                    Expanded(flex: 4, child: project),
                     const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: scope),
+                    Expanded(flex: 3, child: scope),
                     const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: timing),
+                    Expanded(flex: 2, child: timing),
                   ],
                 ),
                 if (draft.timing == YorksV1MaterialRequestTiming.scheduled) ...[
@@ -7607,16 +7607,16 @@ class _RequestFormFields extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: title),
+                    Expanded(flex: 5, child: title),
                     const SizedBox(width: AppSpacing.lg),
-                    Expanded(child: project),
+                    Expanded(flex: 7, child: project),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: scope),
+                    Expanded(flex: 2, child: scope),
                     const SizedBox(width: AppSpacing.lg),
                     Expanded(child: timing),
                   ],
@@ -7664,8 +7664,28 @@ class _RequestFieldBlock extends StatelessWidget {
         ),
       ),
       const SizedBox(height: AppSpacing.xs),
-      ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 56),
+      Theme(
+        data: Theme.of(context).copyWith(
+          textTheme: Theme.of(
+            context,
+          ).textTheme.copyWith(titleMedium: AppTypography.bodyLarge),
+          inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+            isDense: true,
+            constraints: const BoxConstraints(minHeight: 48),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 48,
+              minHeight: 48,
+            ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 48,
+              minHeight: 48,
+            ),
+          ),
+        ),
         child: child,
       ),
     ],
@@ -8262,6 +8282,7 @@ class _TimingPicker extends StatelessWidget {
   Widget build(BuildContext context) =>
       DropdownButtonFormField<YorksV1MaterialRequestTiming>(
         key: const ValueKey('mr-timing-picker'),
+        isExpanded: true,
         initialValue: draft.timing,
         decoration: InputDecoration(
           hintText: YorksV1MaterialRequestStrings.requestTiming.primary,
