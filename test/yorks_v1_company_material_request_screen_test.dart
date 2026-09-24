@@ -33,6 +33,65 @@ void main() {
       ..addFont(Future.value(ByteData.sublistView(bytes)));
     await Future.wait([fonts.load(), arabic.load(), icons.load()]);
   });
+
+  for (final width in [360.0, 1366.0]) {
+    testWidgets(
+      'Cancellation requires a reason before calling server at $width',
+      (tester) async {
+        final repository = _CompanyRequestRepository(request: _editableRequest);
+        await _pumpApproval(
+          tester,
+          repository: repository,
+          size: Size(width, 900),
+          child: const YorksV1CompanyMaterialRequestApprovalScreen(
+            requestId: 'editable',
+          ),
+        );
+        await _tapVisible(tester, find.text('Cancel request').first);
+        await tester.tap(find.widgetWithText(FilledButton, 'Cancel request'));
+        await tester.pumpAndSettle();
+        expect(repository.cancellationCalls, 0);
+        await tester.enterText(
+          find.byKey(const ValueKey('company-change-reason')),
+          'No longer needed',
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Cancel request'));
+        await tester.pumpAndSettle();
+        expect(repository.cancellationCalls, 1);
+        expect(repository.lastReason, 'No longer needed');
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets('Requester selects an eligible approver and saves the choice', (
+    tester,
+  ) async {
+    final repository = _CompanyRequestRepository()..offerChoices = true;
+    await _pumpComposer(
+      tester,
+      repository: repository,
+      size: const Size(1366, 900),
+    );
+    await _completeDetails(tester);
+    await _tapVisible(
+      tester,
+      find.byWidgetPredicate(
+        (w) =>
+            w is DropdownButtonFormField<String> &&
+            w.key.toString().contains('company-approver-'),
+      ),
+    );
+    await tester.tap(find.text('Senior Mechanical Engineer').last);
+    await tester.pumpAndSettle();
+    expect(repository.selectedApprover, 'senior');
+    await _completeFirstLine(tester);
+    await _tapVisible(
+      tester,
+      find.byKey(const ValueKey('company-material-request-save-draft')),
+    );
+    expect(repository.savedApprover, 'senior');
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'saved company draft reopens with its protected details and lines',
     (tester) async {
@@ -980,6 +1039,11 @@ class _CompanyRequestRepository
   _CompanyRequestRepository({this.request});
 
   final YorksV1CompanyMaterialRequest? request;
+  bool offerChoices = false;
+  int cancellationCalls = 0;
+  String? lastReason;
+  String? selectedApprover;
+  String? savedApprover;
   bool failFirstDispatch = false;
   bool failDraftOptions = false;
   final List<String> dispatchKeys = [];
@@ -1061,6 +1125,18 @@ class _CompanyRequestRepository
   );
 
   @override
+  Future<YorksV1CompanyMaterialRequest> cancel({
+    required String requestId,
+    required int expectedVersion,
+    required String reason,
+    required String idempotencyKey,
+  }) async {
+    cancellationCalls++;
+    lastReason = reason;
+    return request!;
+  }
+
+  @override
   Future<List<YorksV1CompanyMaterialRequestDraftOption>>
   listDraftOptions() async {
     if (failDraftOptions) throw Exception('temporary options outage');
@@ -1104,10 +1180,25 @@ class _CompanyRequestRepository
     String? selectedApproverAuthUserId,
   }) async {
     preflightCalls++;
-    return const YorksV1CompanyMaterialRequestApprovalPreflight(
+    selectedApprover = selectedApproverAuthUserId;
+    return YorksV1CompanyMaterialRequestApprovalPreflight(
       approvalRouteId: 'c1000000-0000-4000-8000-000000000003',
       policyVersion: 'cmr-test-v1',
-      approver: _approver,
+      eligibleApprovers: offerChoices
+          ? const [
+              _approver,
+              YorksV1CompanyMaterialRequestPerson(
+                authUserId: 'senior',
+                displayName: 'Senior Mechanical Engineer',
+              ),
+            ]
+          : const [],
+      approver: selectedApproverAuthUserId == 'senior'
+          ? const YorksV1CompanyMaterialRequestPerson(
+              authUserId: 'senior',
+              displayName: 'Senior Mechanical Engineer',
+            )
+          : _approver,
     );
   }
 
@@ -1124,6 +1215,7 @@ class _CompanyRequestRepository
     YorksV1CompanyMaterialRequestDraft draft,
   ) async {
     saveCalls++;
+    savedApprover = draft.selectedApproverAuthUserId;
     return _result(draft, state: 'draft');
   }
 
@@ -1358,4 +1450,24 @@ const _handoverRequest = YorksV1CompanyMaterialRequest(
   unallocatedReceiptLines: [
     {'id': 'receipt-line', 'request_line_id': 'line', 'available_qty': '3'},
   ],
+);
+
+const _editableRequest = YorksV1CompanyMaterialRequest(
+  id: 'editable',
+  recordVersion: 3,
+  state: 'approved_for_procurement',
+  categoryName: 'PPE',
+  responsibleUnitName: 'Workshop',
+  purpose: 'Safety helmets',
+  timing: YorksV1MaterialRequestTiming.normal,
+  deliveryCollectionPoint: 'Workshop',
+  beneficiary: _CompanyRequestRepository._person,
+  authorizedReceiver: _CompanyRequestRepository._person,
+  requesterDisplayName: 'Engineer',
+  requesterExactRole: 'site_engineer',
+  lines: [],
+  canRevise: true,
+  canCancel: true,
+  requestNumber: 'CMR-EDIT',
+  approver: _CompanyRequestRepository._approver,
 );

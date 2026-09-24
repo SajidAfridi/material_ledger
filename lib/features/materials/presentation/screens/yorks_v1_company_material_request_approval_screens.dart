@@ -1108,7 +1108,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
       for (final line in widget.request.lines)
         line.id: TextEditingController(text: line.quantity),
     };
-    final confirmed = await showDialog<bool>(
+    final dialog = DialogRoute<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
@@ -1153,6 +1153,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
                   ),
                 ),
                 TextFormField(
+                  key: const ValueKey("company-change-reason"),
                   controller: reason,
                   decoration: InputDecoration(
                     labelText: YorksV1CompanyMaterialRequestStrings.changeReason
@@ -1208,8 +1209,9 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
           ),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate())
+              if (formKey.currentState!.validate()) {
                 Navigator.pop(dialogContext, true);
+              }
             },
             child: Text(
               YorksV1CompanyMaterialRequestStrings.reviseAndResubmit.active(
@@ -1220,6 +1222,11 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
         ],
       ),
     );
+    final confirmed = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(dialog);
+    await dialog.completed;
     if (confirmed == true && mounted) {
       await _run(
         () => ref
@@ -1266,7 +1273,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
   Future<void> _cancelRequest() async {
     final reason = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final confirmed = await showDialog<bool>(
+    final dialog = DialogRoute<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
@@ -1277,6 +1284,7 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
         content: Form(
           key: formKey,
           child: TextFormField(
+            key: const ValueKey("company-change-reason"),
             controller: reason,
             autofocus: true,
             maxLines: 3,
@@ -1301,8 +1309,9 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
           ),
           FilledButton(
             onPressed: () {
-              if (formKey.currentState!.validate())
+              if (formKey.currentState!.validate()) {
                 Navigator.pop(dialogContext, true);
+              }
             },
             child: Text(
               YorksV1CompanyMaterialRequestStrings.cancelRequest.active(
@@ -1313,6 +1322,11 @@ class _FulfilmentActionsState extends ConsumerState<_FulfilmentActions> {
         ],
       ),
     );
+    final confirmed = await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(dialog);
+    await dialog.completed;
     final explanation = reason.text.trim();
     reason.dispose();
     if (confirmed != true || !mounted) return;

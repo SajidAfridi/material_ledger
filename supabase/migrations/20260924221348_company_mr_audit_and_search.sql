@@ -39,10 +39,10 @@ create or replace function public.v1_bridge_company_audit_event(p_event_id uuid,
 returns void language plpgsql security definer set search_path='' as $$
 begin
   insert into public.v1_audit_events(id,event_type,entity_type,entity_id,
-    actor_auth_user_id,actor_role,actor_exact_role,occurred_at,idempotency_key,after_data,reason)
+    actor_auth_user_id,actor_role,actor_exact_role,occurred_at,idempotency_key,before_data,after_data,reason)
   select e.id,e.event_type,'company_material_request',e.request_id,
     e.actor_auth_user_id,public.v1_canonical_role_from_exact_role(e.actor_exact_role),
-    e.actor_exact_role,e.occurred_at,e.id,
+    e.actor_exact_role,e.occurred_at,e.id,e.data->'before',
     jsonb_strip_nulls(jsonb_build_object(
       'request_number',r.request_number,
       'state',case when p_historical then e.data->>'state' else r.state end,
@@ -51,7 +51,7 @@ begin
       'line_count',e.data->'line_count',
       'snapshot_source',case when p_historical then 'company_history_import' else 'company_event' end,
       'source_event_id',e.id
-    )),e.data->>'reason'
+    )) || coalesce(e.data->'after','{}'::jsonb),e.data->>'reason'
   from public.v1_company_material_request_events e
   join public.v1_company_material_requests r on r.id=e.request_id
   where e.id=p_event_id

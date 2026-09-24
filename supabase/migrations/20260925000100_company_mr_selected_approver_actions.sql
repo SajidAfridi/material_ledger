@@ -290,7 +290,7 @@ declare
   v_actor uuid:=auth.uid(); v_request_id uuid; v_expected integer; v_purpose text;
   v_delivery text; v_lines jsonb; v_request public.v1_company_material_requests%rowtype;
   v_existing jsonb; v_route record; v_line jsonb; v_line_id uuid; v_qty numeric(18,4);
-  v_description text; v_brand text; v_unit text; v_count integer;
+  v_description text; v_brand text; v_unit text; v_count integer; v_before jsonb;
 begin
   perform public.v1_assert_object_keys(p_payload,array['request_id','expected_version',
     'purpose','delivery_collection_point','lines','reason'],'company_request_revision');
@@ -324,6 +324,10 @@ begin
     v_request.category_id,v_request.responsible_unit_id,array[v_request.created_by_auth_user_id,v_actor,
     v_request.beneficiary_auth_user_id,v_request.authorized_receiver_auth_user_id],v_request.selected_approver_auth_user_id);
   if not found then raise exception 'V1_COMPANY_REVISION_ROUTE_UNAVAILABLE' using errcode='42501'; end if;
+  select jsonb_build_object('purpose',v_request.purpose,'delivery_collection_point',v_request.delivery_collection_point,
+    'lines',coalesce(jsonb_agg(jsonb_build_object('id',l.id,'item_description',l.item_description,'brand_origin',l.brand_origin,
+      'requested_qty',l.requested_qty::text,'unit',l.unit) order by l.display_order),'[]'::jsonb))
+    into v_before from public.v1_company_material_request_lines l where l.request_id=v_request_id;
   if v_request.state<>'returned_for_changes' and (nullif(btrim(p_payload->>'reason'),'') is null or char_length(p_payload->>'reason')>2000) then
     raise exception 'V1_COMPANY_REVISION_REASON_REQUIRED' using errcode='22023'; end if;
   update public.v1_inventory_reservations set state='released',released_at=clock_timestamp(),released_by_auth_user_id=v_actor,
@@ -361,7 +365,8 @@ begin
   insert into public.v1_company_material_request_events(request_id,event_type,actor_auth_user_id,
     actor_exact_role,data,idempotency_key) values(v_request_id,'company_request_resubmitted',
     v_actor,public.v1_current_role(),jsonb_build_object('approval_route_id',v_route.route_id,
-    'approval_policy_version',v_route.policy_version,'reason',p_payload->>'reason','previous_state',v_request.state),p_idempotency_key);
+    'approval_policy_version',v_route.policy_version,'reason',p_payload->>'reason','previous_state',v_request.state,'before',v_before,
+    'after',jsonb_build_object('purpose',v_purpose,'delivery_collection_point',v_delivery,'lines',v_lines)),p_idempotency_key);
   perform public.v1_complete_idempotency('v1_revise_and_resubmit_company_material_request',
     p_idempotency_key,public.v1_company_material_request_projection(v_request_id));
   return public.v1_company_material_request_projection(v_request_id);
