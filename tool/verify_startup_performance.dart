@@ -10,7 +10,10 @@ import 'dart:io';
 // The approved MR post-approval editor adds a named-grant dialog and role-safe
 // recovery copy; its staged artifact measured 10,255,834 raw / 2,767,999
 // gzip bytes. Allow 15 kB for that slice and keep the transfer ceiling unchanged.
-const _mainDartJsRawBudget = 10265000;
+// The approved inline delegation switch and ordered record actions add 2.6 kB
+// to the staging baseline. Reserve 5 kB for this UI slice; retain the 2.9 MB
+// compressed transfer ceiling and every route/asset verification gate.
+const _mainDartJsRawBudget = 10270000;
 const _mainDartJsGzipBudget = 2900000;
 const _indexHtmlRawBudget = 40000;
 

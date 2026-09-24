@@ -29,12 +29,23 @@ include a download cue and keep the existing protected download command.
 
 Submitted Material Request headers have two stable action lanes:
 
-1. the current workflow command and authorized decision actions; and
-2. Excel, PDF, Print, Request Information, request cancellation and Refresh.
+1. authorized Cancel request, Edit request, then Arrange Items (or the current
+   workflow decision), in that order; and
+2. Excel, PDF, Print and Refresh, with Request Information at the directional end.
 
-Cancellation remains permission-controlled and moves under More actions so an
-exception command does not compete visually with daily work. The existing
-confirmation and trusted server command remain unchanged.
+The 25 September 2026 user-approved header refinement makes Cancel request
+visible beside Edit while preserving its destructive styling, confirmation and
+trusted server command. Approvers see a separate, default-off Allow Procurement
+to edit switch. Enabling requires one eligible named Procurement editor and a
+server-confirmed grant; disabling removes only that named delegation and keeps
+any approver edit window. Editing access exposes the existing complete window
+settings. Edit remains discoverable to eligible approvers while the window is
+closed and opens that explicit settings confirmation before navigation.
+
+No grant is inferred from a switch interaction or an optimistic local state.
+Stale-version, revocation and arrangement-cutoff rules remain server enforced.
+Mobile places grant settings in content rather than enlarging sticky workflow
+actions. Narrow headers wrap action groups without squeezing record identity.
 
 Desktop aligns both lanes at the end of the header. Narrow desktop and tablet
 stack them below the request identity without changing their order. Mobile

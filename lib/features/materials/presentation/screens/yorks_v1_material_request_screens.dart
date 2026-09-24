@@ -10553,9 +10553,11 @@ class _RequestDetailBody extends ConsumerWidget {
     // The request grant is distinct from general edit capability, including
     // for a named Procurement editor. The RPC revalidates both on every save.
     final showEditAction =
+        request.canManagePostApprovalEdit ||
         request.canEditPostApproval ||
         (request.canEditBeforeApproval && editAccess.isVisible);
-    final canEditAction = request.canEditPostApproval
+    final canEditAction =
+        request.canEditPostApproval || request.canManagePostApprovalEdit
         ? permissionState.isTrustedForWrites
         : editAccess.canWrite;
     final showGrantAction = request.canManagePostApprovalEdit;
@@ -10693,7 +10695,7 @@ class _RequestDetailBody extends ConsumerWidget {
         ? _RequestApprovalActions(
             request: request,
             showEdit: showEditAction,
-            showGrant: showGrantAction,
+            showGrant: false,
             showApprove: approveAccess.isVisible,
             showReturnForChanges: returnForChangesAccess.isVisible,
             canEdit: canEditAction,
@@ -10707,6 +10709,19 @@ class _RequestDetailBody extends ConsumerWidget {
         ? _RequestArrangementApprovalActions(
             workspace: arrangementWorkspace!,
             arrangement: arrangementForApproval,
+          )
+        : null;
+    final editingAccess = showGrantAction
+        ? _RequestApprovalActions(
+            request: request,
+            showEdit: false,
+            showGrant: true,
+            showApprove: false,
+            showReturnForChanges: false,
+            canEdit: false,
+            canGrant: permissionState.isTrustedForWrites,
+            canApprove: false,
+            canReturnForChanges: false,
           )
         : null;
     // Measure the effective record canvas, not just the browser width. This
@@ -10736,14 +10751,15 @@ class _RequestDetailBody extends ConsumerWidget {
         );
     if (YorksMobileUi.isActive(context)) {
       final mobileInlineApprovalActions =
-          featureFlags.legacyArrangementReview &&
-              arrangementWorkspace?.canDecide == true &&
-              arrangementForApproval != null
-          ? _RequestArrangementApprovalActions(
-              workspace: arrangementWorkspace!,
-              arrangement: arrangementForApproval,
-            )
-          : null;
+          editingAccess ??
+          (featureFlags.legacyArrangementReview &&
+                  arrangementWorkspace?.canDecide == true &&
+                  arrangementForApproval != null
+              ? _RequestArrangementApprovalActions(
+                  workspace: arrangementWorkspace!,
+                  arrangement: arrangementForApproval,
+                )
+              : null);
       return _MobileMaterialRequestLifecycle(
         request: request,
         language: language,
@@ -10761,7 +10777,7 @@ class _RequestDetailBody extends ConsumerWidget {
             ? _RequestApprovalActions(
                 request: request,
                 showEdit: showEditAction,
-                showGrant: showGrantAction,
+                showGrant: false,
                 showApprove: approveAccess.isVisible,
                 showReturnForChanges: returnForChangesAccess.isVisible,
                 canEdit: canEditAction,
@@ -10769,6 +10785,12 @@ class _RequestDetailBody extends ConsumerWidget {
                 canApprove: approveAccess.canWrite,
                 canReturnForChanges: returnForChangesAccess.canWrite,
                 mobileSticky: true,
+                trailingAction: primaryAction == null
+                    ? null
+                    : _RequestPrimaryActionButton(
+                        action: primaryAction,
+                        onPressed: onPrimaryAction,
+                      ),
               )
             : null,
         showCancel: cancelAccess.isVisible,
@@ -10866,6 +10888,7 @@ class _RequestDetailBody extends ConsumerWidget {
                   },
                   requestInformationActive: inspectorExpanded,
                   editAction: null,
+                  editingAccess: editingAccess,
                   approvalActions: approvalActions,
                   showCancel: cancelAccess.isVisible,
                   onCancel: cancelAccess.canWrite
@@ -11664,6 +11687,10 @@ class _MobileMaterialRequestLifecycleState
                         language: language,
                       ),
                     ),
+                    if (approvalActions != null) ...[
+                      const SizedBox(height: 14),
+                      approvalActions!,
+                    ],
                     const SizedBox(height: 12),
                     Semantics(
                       label: YorksV1MaterialRequestStrings.requestView.active(
@@ -11824,10 +11851,6 @@ class _MobileMaterialRequestLifecycleState
                           ],
                         ),
                       ),
-                    ],
-                    if (approvalActions != null) ...[
-                      const SizedBox(height: 14),
-                      approvalActions!,
                     ],
                     if (_showFullDetails &&
                         (onOpenLogistics != null ||
@@ -12267,6 +12290,7 @@ class _RequestApprovalActions extends ConsumerStatefulWidget {
     required this.canApprove,
     required this.canReturnForChanges,
     this.mobileSticky = false,
+    this.trailingAction,
   });
 
   final YorksV1MaterialRequest request;
@@ -12279,6 +12303,7 @@ class _RequestApprovalActions extends ConsumerStatefulWidget {
   final bool canApprove;
   final bool canReturnForChanges;
   final bool mobileSticky;
+  final Widget? trailingAction;
 
   @override
   ConsumerState<_RequestApprovalActions> createState() =>
@@ -12295,27 +12320,71 @@ class _RequestApprovalActionsState
     final actions = <Widget>[
       if (widget.showEdit &&
           (widget.request.canEditBeforeApproval ||
-              widget.request.canEditPostApproval))
+              widget.request.canEditPostApproval ||
+              widget.request.canManagePostApprovalEdit))
         _RecordActionButton(
           label: YorksV1MaterialRequestStrings.editRequest.primary,
           icon: Icons.edit_outlined,
           onPressed: _busy || !widget.canEdit
               ? null
-              : () => context.push(
-                  RoutePaths.yorksV1MaterialRequestDraftPath(
-                    widget.request.id,
-                    projectId: widget.request.projectId,
-                    entryMode: YorksV1MaterialRequestDraftEntryMode
-                        .editExistingRequest,
-                  ),
-                ),
+              : () {
+                  if (!widget.request.canEditBeforeApproval &&
+                      !widget.request.canEditPostApproval) {
+                    _configureEditGrant(openEditor: true);
+                  } else {
+                    _openEditor();
+                  }
+                },
         ),
       if (widget.showGrant)
-        _RecordActionButton(
-          key: const ValueKey('material-request-editing-access-action'),
-          label: YorksV1MaterialRequestStrings.editingAccess.active(language),
-          icon: Icons.manage_accounts_outlined,
-          onPressed: _busy || !widget.canGrant ? null : _configureEditGrant,
+        Wrap(
+          key: const ValueKey('material-request-editing-access-controls'),
+          spacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Tooltip(
+              message: YorksV1MaterialRequestStrings.editingAccessHelp.active(
+                language,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Semantics(
+                    label: YorksV1MaterialRequestStrings.allowProcurementEditing
+                        .active(language),
+                    child: Switch.adaptive(
+                      key: const ValueKey(
+                        'material-request-procurement-edit-switch',
+                      ),
+                      value:
+                          widget.request.postApprovalEditEnabled &&
+                          widget.request.procurementEditorAuthUserId != null,
+                      onChanged: _busy || !widget.canGrant
+                          ? null
+                          : (value) => _configureEditGrant(
+                              procurementOnly: value,
+                              revokeProcurement: !value,
+                            ),
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      YorksV1MaterialRequestStrings.allowProcurementEditing
+                          .active(language),
+                      style: AppTypography.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('material-request-editing-access-action'),
+              onPressed: _busy || !widget.canGrant ? null : _configureEditGrant,
+              child: Text(
+                YorksV1MaterialRequestStrings.editingAccess.active(language),
+              ),
+            ),
+          ],
         ),
       if (widget.showApprove && widget.request.canDecideRequest)
         _RecordActionButton(
@@ -12334,6 +12403,7 @@ class _RequestApprovalActionsState
               ? null
               : () => _decide(YorksV1MaterialRequestReviewDecision.returned),
         ),
+      ?widget.trailingAction,
     ];
     if (widget.mobileSticky) {
       return YorksMobileStickyActions(
@@ -12349,7 +12419,19 @@ class _RequestApprovalActionsState
     );
   }
 
-  Future<void> _configureEditGrant() async {
+  void _openEditor() => context.push(
+    RoutePaths.yorksV1MaterialRequestDraftPath(
+      widget.request.id,
+      projectId: widget.request.projectId,
+      entryMode: YorksV1MaterialRequestDraftEntryMode.editExistingRequest,
+    ),
+  );
+
+  Future<void> _configureEditGrant({
+    bool procurementOnly = false,
+    bool revokeProcurement = false,
+    bool openEditor = false,
+  }) async {
     final repository = ref.read(yorksV1MaterialRequestRepositoryProvider);
     if (repository is! YorksV1MaterialRequestPostApprovalEditRepository) {
       return;
@@ -12358,11 +12440,26 @@ class _RequestApprovalActionsState
         repository as YorksV1MaterialRequestPostApprovalEditRepository;
     setState(() => _busy = true);
     try {
+      if (revokeProcurement) {
+        await editRepository.setPostApprovalEdit(
+          requestId: widget.request.id,
+          expectedVersion: widget.request.recordVersion,
+          enabled: widget.request.postApprovalEditEnabled,
+          procurementEditorAuthUserId: null,
+          idempotencyKey: const Uuid().v4(),
+        );
+        ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
+        ref.invalidate(yorksV1MaterialRequestListProvider);
+        return;
+      }
       final candidates = await editRepository.listProcurementEditors(
         widget.request.id,
       );
       if (!mounted) return;
-      var enabled = widget.request.postApprovalEditEnabled;
+      var enabled =
+          widget.request.postApprovalEditEnabled ||
+          procurementOnly ||
+          openEditor;
       var editorId =
           candidates.any(
             (candidate) =>
@@ -12392,22 +12489,25 @@ class _RequestApprovalActionsState
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      YorksV1MaterialRequestStrings.allowEditingAfterApproval
-                          .active(language),
+                  if (!procurementOnly)
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        YorksV1MaterialRequestStrings.allowEditingAfterApproval
+                            .active(language),
+                      ),
+                      value: enabled,
+                      onChanged: (value) => setDialogState(() {
+                        enabled = value;
+                        if (!value) editorId = '';
+                      }),
                     ),
-                    value: enabled,
-                    onChanged: (value) => setDialogState(() {
-                      enabled = value;
-                      if (!value) editorId = '';
-                    }),
-                  ),
                   if (enabled) ...[
                     const SizedBox(height: AppSpacing.sm),
                     DropdownButtonFormField<String>(
-                      initialValue: editorId,
+                      initialValue: procurementOnly && editorId.isEmpty
+                          ? null
+                          : editorId,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: YorksV1MaterialRequestStrings
@@ -12415,14 +12515,14 @@ class _RequestApprovalActionsState
                             .active(language),
                       ),
                       items: [
-                        DropdownMenuItem(
-                          value: '',
-                          child: Text(
-                            YorksV1MaterialRequestStrings.approversOnly.active(
-                              language,
+                        if (!procurementOnly)
+                          DropdownMenuItem(
+                            value: '',
+                            child: Text(
+                              YorksV1MaterialRequestStrings.approversOnly
+                                  .active(language),
                             ),
                           ),
-                        ),
                         for (final candidate in candidates)
                           DropdownMenuItem(
                             value: candidate.authUserId,
@@ -12444,9 +12544,11 @@ class _RequestApprovalActionsState
                 ),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(
-                  dialogContext,
-                ).pop((enabled: enabled, editorId: editorId)),
+                onPressed: procurementOnly && editorId.isEmpty
+                    ? null
+                    : () => Navigator.of(
+                        dialogContext,
+                      ).pop((enabled: enabled, editorId: editorId)),
                 child: Text(
                   YorksV1MaterialRequestStrings.saveEditingAccess.active(
                     language,
@@ -12458,7 +12560,7 @@ class _RequestApprovalActionsState
         ),
       );
       if (selected == null || !mounted) return;
-      await editRepository.setPostApprovalEdit(
+      final updated = await editRepository.setPostApprovalEdit(
         requestId: widget.request.id,
         expectedVersion: widget.request.recordVersion,
         enabled: selected.enabled,
@@ -12469,12 +12571,17 @@ class _RequestApprovalActionsState
       );
       ref.invalidate(yorksV1MaterialRequestDetailProvider(widget.request.id));
       ref.invalidate(yorksV1MaterialRequestListProvider);
+      if (mounted && openEditor && updated.canEditPostApproval) _openEditor();
     } on YorksV1DomainException catch (error) {
       if (mounted) {
         _snack(
           context,
           YorksV1MaterialRequestStrings.commandFailure(error.code).primary,
         );
+      }
+    } catch (_) {
+      if (mounted) {
+        _snack(context, YorksV1MaterialRequestStrings.saveFailed.primary);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -14261,6 +14368,7 @@ class _RequestRecordHeader extends StatelessWidget {
     required this.onRequestInformation,
     required this.requestInformationActive,
     this.editAction,
+    this.editingAccess,
     required this.approvalActions,
     required this.showCancel,
     required this.onCancel,
@@ -14277,6 +14385,7 @@ class _RequestRecordHeader extends StatelessWidget {
   final VoidCallback onRequestInformation;
   final bool requestInformationActive;
   final Widget? editAction;
+  final Widget? editingAccess;
   final Widget? approvalActions;
   final bool showCancel;
   final VoidCallback? onCancel;
@@ -14285,12 +14394,13 @@ class _RequestRecordHeader extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final hasWorkflowActions =
-          primaryAction != null || approvalActions != null;
+          primaryAction != null || approvalActions != null || showCancel;
       // Keep the decision group in the familiar top-right position whenever
       // the record canvas can still leave a useful title column. Supporting
       // utilities occupy their own row, so their combined width no longer
       // forces a 14-inch office layout into the stacked action treatment.
-      final decisionsInline = hasWorkflowActions && constraints.maxWidth >= 760;
+      final decisionsInline =
+          hasWorkflowActions && constraints.maxWidth >= 1100;
       final utilitiesInline = constraints.maxWidth >= 900;
       final title =
           request.requestNumber ??
@@ -14342,19 +14452,29 @@ class _RequestRecordHeader extends StatelessWidget {
         key: const ValueKey('material-request-workflow-actions'),
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
-        alignment: decisionsInline ? WrapAlignment.end : WrapAlignment.start,
+        alignment: WrapAlignment.end,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          if (showCancel)
+            _RecordActionButton(
+              key: const ValueKey('material-request-cancel-action'),
+              label: YorksV1MaterialRequestStrings.cancelRequest.active(
+                language,
+              ),
+              icon: Icons.close_rounded,
+              onPressed: onCancel,
+              destructive: true,
+            ),
+          ?editAction,
+          ?approvalActions,
           if (primaryAction != null)
             _RequestPrimaryActionButton(
               action: primaryAction!,
               onPressed: onPrimaryAction,
             ),
-          ?approvalActions,
         ],
       );
       final supportingActionItems = <Widget>[
-        ?editAction,
         _RecordActionButton(
           label: YorksV1MaterialRequestStrings.exportExcel.primary,
           leading: const YorksFileTypeIcon(
@@ -14378,14 +14498,6 @@ class _RequestRecordHeader extends StatelessWidget {
             label: YorksV1MaterialRequestStrings.print.primary,
             icon: Icons.print_outlined,
             onPressed: onPrint!,
-          ),
-        if (showCancel)
-          _RecordActionButton(
-            key: const ValueKey('material-request-cancel-action'),
-            label: YorksV1MaterialRequestStrings.cancelRequest.active(language),
-            icon: Icons.close_rounded,
-            onPressed: onCancel,
-            destructive: true,
           ),
         IconButton(
           tooltip: YorksV1MaterialRequestStrings.refresh.primary,
@@ -14427,11 +14539,14 @@ class _RequestRecordHeader extends StatelessWidget {
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: heading),
+                Expanded(flex: 4, child: heading),
                 const SizedBox(width: AppSpacing.xl),
-                Align(
-                  alignment: AlignmentDirectional.topEnd,
-                  child: workflowActions,
+                Flexible(
+                  flex: 5,
+                  child: Align(
+                    alignment: AlignmentDirectional.topEnd,
+                    child: workflowActions,
+                  ),
                 ),
               ],
             )
@@ -14442,7 +14557,7 @@ class _RequestRecordHeader extends StatelessWidget {
                 if (hasWorkflowActions) ...[
                   const SizedBox(height: AppSpacing.lg),
                   Align(
-                    alignment: AlignmentDirectional.centerStart,
+                    alignment: AlignmentDirectional.centerEnd,
                     child: workflowActions,
                   ),
                 ],
@@ -14472,6 +14587,10 @@ class _RequestRecordHeader extends StatelessWidget {
           headingAndDecisions,
           const SizedBox(height: AppSpacing.lg),
           utilityRow,
+          if (editingAccess != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            editingAccess!,
+          ],
         ],
       );
     },

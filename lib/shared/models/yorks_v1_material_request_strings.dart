@@ -955,6 +955,12 @@ abstract final class YorksV1MaterialRequestStrings {
     ur: 'منظوری کے بعد ترمیم کی اجازت دیں',
     hi: 'अनुमोदन के बाद संपादन की अनुमति दें',
   );
+  static const allowProcurementEditing = TranslatableString(
+    en: 'Allow Procurement to edit',
+    ar: 'السماح للمشتريات بتعديل الطلب',
+    ur: 'پروکیورمنٹ کو ترمیم کی اجازت دیں',
+    hi: 'खरीद विभाग को संपादन की अनुमति दें',
+  );
   static const editingAccessHelp = TranslatableString(
     en: 'Off by default. Available only before Procurement starts arrangement. Any saved change returns this request for Engineering approval.',
     ar: 'معطّل افتراضياً. يتاح فقط قبل بدء ترتيبات المشتريات. أي تعديل محفوظ يعيد الطلب لموافقة الهندسة.',
